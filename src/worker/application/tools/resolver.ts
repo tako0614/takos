@@ -12,7 +12,6 @@ import {
   getCustomTool,
   isCustomTool,
 } from "./custom/index.ts";
-import type { McpClient } from "./mcp-client.ts";
 import { loadMcpTools } from "./mcp-tools.ts";
 import { logWarn } from "../../shared/utils/logger.ts";
 
@@ -26,7 +25,6 @@ export interface ToolResolverOptions {
 
 export class ToolResolver {
   private mcpTools: Map<string, RegisteredTool> = new Map();
-  private mcpClients: Map<string, McpClient> = new Map();
   private initialized = false;
   private disabledCustomTools: Set<string>;
   private _mcpFailedServers: string[] = [];
@@ -60,7 +58,6 @@ export class ToolResolver {
         this.mcpExposureContext,
       );
       this.mcpTools = mcpResult.tools;
-      this.mcpClients = mcpResult.clients;
       this._mcpFailedServers = mcpResult.failedServers;
     }
 

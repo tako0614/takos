@@ -9,17 +9,13 @@ import type { Space, Thread, User, View } from "../../types/index.ts";
 
 const ROW_BASE =
   "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[36px]";
-const ROW_DEFAULT =
-  `${ROW_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
-const ROW_ACTIVE =
-  `${ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
+const ROW_DEFAULT = `${ROW_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
+const ROW_ACTIVE = `${ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
 
 const PRIMARY_ROW_BASE =
   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors";
-const PRIMARY_ROW_DEFAULT =
-  `${PRIMARY_ROW_BASE} text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
-const PRIMARY_ROW_ACTIVE =
-  `${PRIMARY_ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
+const PRIMARY_ROW_DEFAULT = `${PRIMARY_ROW_BASE} text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
+const PRIMARY_ROW_ACTIVE = `${PRIMARY_ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
 
 const SECTION_LABEL = "text-xs font-medium text-zinc-500 dark:text-zinc-400";
 
@@ -44,6 +40,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
   const isNewChatActive = () =>
     props.activeView === "chat" && props.selectedThreadId === null;
   const isMemoryActive = () => props.activeView === "memory";
+  const isConnectionsActive = () => props.activeView === "connections";
   const isWsSettingsActive = () => props.activeView === "space-settings";
   const isChatActive = () => props.activeView === "chat";
 
@@ -58,9 +55,9 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
   createEffect(() => {
     const sid = props.spaceId;
     if (!sid) return;
-    setExpandedSpaceIds((
-      prev,
-    ) => (prev[sid] ? prev : { ...prev, [sid]: true }));
+    setExpandedSpaceIds((prev) =>
+      prev[sid] ? prev : { ...prev, [sid]: true },
+    );
   });
 
   // ── Space mode ───────────────────────────────────────────────────────────
@@ -94,9 +91,9 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="px-3 pb-2">
               <button
                 type="button"
-                class={isChatActive()
-                  ? PRIMARY_ROW_ACTIVE
-                  : PRIMARY_ROW_DEFAULT}
+                class={
+                  isChatActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT
+                }
                 onClick={callbacks.onNavigateSpaceChat}
               >
                 <Icons.MessageSquare class="w-4 h-4 shrink-0" />
@@ -113,6 +110,14 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
               >
                 <Icons.Database class="w-4 h-4 shrink-0" />
                 <span>{t("memory")}</span>
+              </button>
+              <button
+                type="button"
+                class={isConnectionsActive() ? ROW_ACTIVE : ROW_DEFAULT}
+                onClick={callbacks.onNavigateSpaceConnections}
+              >
+                <Icons.Link class="w-4 h-4 shrink-0" />
+                <span>{t("connections")}</span>
               </button>
             </div>
 
@@ -181,6 +186,14 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <Icons.Database class="w-4 h-4 shrink-0" />
             <span>{t("memory")}</span>
           </button>
+          <button
+            type="button"
+            class={isConnectionsActive() ? ROW_ACTIVE : ROW_DEFAULT}
+            onClick={callbacks.onNavigateConnections}
+          >
+            <Icons.Link class="w-4 h-4 shrink-0" />
+            <span>{t("connections")}</span>
+          </button>
         </div>
 
         <div class="px-3 space-y-0.5">
@@ -238,13 +251,17 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                           e.stopPropagation();
                           toggleSpaceAccordion(id);
                         }}
-                        aria-label={isExpanded()
-                          ? t("collapseThreads")
-                          : t("expandThreads")}
+                        aria-label={
+                          isExpanded()
+                            ? t("collapseThreads")
+                            : t("expandThreads")
+                        }
                         aria-expanded={isExpanded()}
-                        title={isExpanded()
-                          ? t("collapseThreads")
-                          : t("expandThreads")}
+                        title={
+                          isExpanded()
+                            ? t("collapseThreads")
+                            : t("expandThreads")
+                        }
                       >
                         <Icons.ChevronDown
                           class={`w-3 h-3 transition-transform ${
@@ -279,9 +296,11 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                             {(thread) => (
                               <button
                                 type="button"
-                                class={props.selectedThreadId === thread.id
-                                  ? "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                  : "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"}
+                                class={
+                                  props.selectedThreadId === thread.id
+                                    ? "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                                    : "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                                }
                                 onClick={() => callbacks.onSelectThread(thread)}
                               >
                                 <Icons.MessageSquare class="w-3 h-3 shrink-0 opacity-70" />

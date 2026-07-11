@@ -7,7 +7,7 @@
  *
  * Architecture:
  *   takos-worker → POST /dispatch → this worker → container.dispatchStart(...)
- *   container → POST /api/internal/v1/agent-control/* → this worker → takosumi
+ *   container → POST /api/internal/v1/agent-control/* → Takos Worker handlers
  *
  * Implementation is split across focused modules:
  *   - executor-utils.ts        — types, response helpers, error classification, proxy usage
@@ -73,6 +73,13 @@ import {
   getRequiredProxyCapability,
   isProxyRequestAuthorized,
 } from "./executor-auth.ts";
+import { assertRunExecutionAccess } from "./executor-run-state.ts";
+import {
+  abortRemoteToolExecutorsForLease,
+  abortRemoteToolExecutorsForRun,
+  abortSupersededRemoteToolExecutors,
+  ensureRunLease,
+} from "./executor-control-rpc.ts";
 
 // ---------------------------------------------------------------------------
 // Public executor-host helper exports
@@ -80,6 +87,210 @@ import {
 
 export type { AgentExecutorEnv, ProxyTokenInfo };
 export { getRequiredProxyCapability };
+
+export const STALE_PROXY_TOKEN_MS = 15 * 60 * 1000;
+
+const DEFAULT_AGENT_CONTROL_BODY_BYTES = 2 * 1024 * 1024;
+const AGENT_CONTROL_BODY_LIMITS: Readonly<Record<string, number>> = {
+  "/api/internal/v1/agent-control/run-event": 128 * 1024,
+  "/api/internal/v1/agent-control/tool-execute": 512 * 1024,
+  "/api/internal/v1/agent-control/engine-checkpoint-save": 2 * 1024 * 1024,
+  "/api/internal/v1/agent-control/complete-run": 10 * 1024 * 1024,
+  "/api/internal/v1/agent-control/engine-checkpoint-save": 17 * 1024 * 1024,
+};
+
+export class AgentControlBodyError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 413,
+  ) {
+    super(message);
+  }
+}
+
+/** Read a control body without letting chunked requests bypass endpoint caps. */
+export async function readBoundedAgentControlJson(
+  request: Request,
+  maxBytes: number,
+): Promise<Record<string, unknown>> {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new AgentControlBodyError("Control RPC body is too large", 413);
+  }
+  if (!request.body) {
+    throw new AgentControlBodyError("Invalid control RPC JSON", 400);
+  }
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new AgentControlBodyError("Control RPC body is too large", 413);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new AgentControlBodyError("Invalid control RPC JSON", 400);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new AgentControlBodyError(
+      "Control RPC body must be a JSON object",
+      400,
+    );
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * Read the protocol advertised by a successfully started container image.
+ * Missing/invalid fields deliberately remain v1-compatible during a rolling
+ * deployment; only the exact v2 contract upgrades the reserved token.
+ */
+export function runtimeProtocolVersionFromStartResult(result: {
+  ok: boolean;
+  body: string;
+}): 2 | undefined {
+  if (!result.ok) return undefined;
+  try {
+    const payload = JSON.parse(result.body) as Record<string, unknown>;
+    return payload.runtimeProtocolVersion === 2 ? 2 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Upgrade only the random token that received the matching `/start`. */
+export function upgradeProxyTokenRuntimeProtocol(
+  tokens: Map<string, ProxyTokenInfo>,
+  token: string,
+  expected: Pick<ProxyTokenInfo, "runId" | "serviceId" | "leaseVersion">,
+  version: 2,
+): boolean {
+  const info = tokens.get(token);
+  if (
+    !info ||
+    !proxyTokenMatchesLease(
+      info,
+      expected.runId,
+      expected.serviceId,
+      expected.leaseVersion,
+    ) ||
+    info.runtimeProtocolVersion === version
+  ) {
+    return false;
+  }
+  tokens.set(token, { ...info, runtimeProtocolVersion: version });
+  return true;
+}
+
+/** The run lease identity that makes a proxy token authoritative. */
+export function proxyTokenMatchesLease(
+  info: Pick<ProxyTokenInfo, "runId" | "serviceId" | "leaseVersion">,
+  runId: string,
+  serviceId: string,
+  leaseVersion?: number,
+): boolean {
+  return (
+    info.runId === runId &&
+    info.serviceId === serviceId &&
+    info.leaseVersion === leaseVersion
+  );
+}
+
+/** Remove every token for a run, returning the number removed. */
+export function removeProxyTokensForRun(
+  tokens: Map<string, ProxyTokenInfo>,
+  runId: string,
+): number {
+  let removed = 0;
+  for (const [token, info] of tokens) {
+    if (info.runId !== runId) continue;
+    tokens.delete(token);
+    removed++;
+  }
+  return removed;
+}
+
+/** Remove tokens whose last verified heartbeat is older than the TTL. */
+export function removeStaleProxyTokens(
+  tokens: Map<string, ProxyTokenInfo>,
+  nowMs = Date.now(),
+): number {
+  let removed = 0;
+  for (const [token, info] of tokens) {
+    const lastSeen = info.lastHeartbeatAt ?? info.startedAt;
+    if (
+      typeof lastSeen !== "number" ||
+      !Number.isFinite(lastSeen) ||
+      lastSeen > nowMs + 60_000 ||
+      nowMs - lastSeen > STALE_PROXY_TOKEN_MS
+    ) {
+      tokens.delete(token);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** Remove every token for one exact (possibly stale) run lease. */
+export function removeProxyTokensForLease(
+  tokens: Map<string, ProxyTokenInfo>,
+  runId: string,
+  serviceId: string,
+  leaseVersion?: number,
+): number {
+  let removed = 0;
+  for (const [token, info] of tokens) {
+    if (!proxyTokenMatchesLease(info, runId, serviceId, leaseVersion)) {
+      continue;
+    }
+    tokens.delete(token);
+    removed++;
+  }
+  return removed;
+}
+
+/**
+ * Remove leases older than the newly claimed one without ever deleting a
+ * higher-version token. That monotonic guard makes a delayed /dispatch safe:
+ * if lease N+1 is claimed while lease N is sweeping the pool, N cannot revoke
+ * N+1's token. Equal-version mismatches are invalid and are fenced by the DB
+ * check before and after the sweep.
+ */
+export function removeSupersededProxyTokens(
+  tokens: Map<string, ProxyTokenInfo>,
+  runId: string,
+  serviceId: string,
+  leaseVersion?: number,
+): number {
+  let removed = 0;
+  for (const [token, info] of tokens) {
+    if (info.runId !== runId) continue;
+    if (proxyTokenMatchesLease(info, runId, serviceId, leaseVersion)) continue;
+
+    const isHigherVersion =
+      typeof info.leaseVersion === "number" &&
+      (typeof leaseVersion !== "number" || info.leaseVersion > leaseVersion);
+    if (isHigherVersion) continue;
+
+    tokens.delete(token);
+    removed++;
+  }
+  return removed;
+}
 
 // ---------------------------------------------------------------------------
 // Durable Objects — Tiered executor containers
@@ -144,19 +355,7 @@ function createExecutorContainerClass(
 
     /** Remove tokens past STALE_PROXY_TOKEN_MS in place; true if any removed. */
     private removeStaleTokens(tokens: Map<string, ProxyTokenInfo>): boolean {
-      const now = Date.now();
-      let changed = false;
-      for (const [token, info] of tokens) {
-        const lastSeen = info.lastHeartbeatAt ?? info.startedAt;
-        if (
-          typeof lastSeen === "number" &&
-          now - lastSeen > STALE_PROXY_TOKEN_MS
-        ) {
-          tokens.delete(token);
-          changed = true;
-        }
-      }
-      return changed;
+      return removeStaleProxyTokens(tokens) > 0;
     }
 
     private async pruneStaleTokens(
@@ -206,7 +405,11 @@ function createExecutorContainerClass(
       // DO could both observe size < capacity and both admit, overshooting
       // MAX_CONCURRENT_RUNS. The token insert itself is the reservation.
       const reserved = await this.doState.blockConcurrencyWhile(async () => {
-        const tokens = await this.loadTokenMap();
+        // Expired reservations do not consume capacity. Pruning must happen
+        // before the size check, not only after a successful heartbeat or on a
+        // separate load endpoint, otherwise an idle container can report false
+        // exhaustion for up to the lifetime of the Durable Object.
+        const tokens = await this.pruneStaleTokens(await this.loadTokenMap());
         const capacity = resolveExecutorTierCapacity(this.env, tier);
         if (tokens.size >= capacity) {
           return { admitted: false as const, active: tokens.size, capacity };
@@ -215,6 +418,7 @@ function createExecutorContainerClass(
         tokens.set(controlConfig.controlRpcToken, {
           runId: body.runId,
           serviceId,
+          leaseVersion: body.leaseVersion,
           // Mint the least-privilege scope SET for this run kind. Agent runs
           // get the full scope set; workflow runs get the reduced set (no
           // conversation / memory / skills). Defaults to the agent set when
@@ -262,6 +466,26 @@ function createExecutorContainerClass(
           },
           controlConfig,
         );
+        const negotiatedVersion = runtimeProtocolVersionFromStartResult(result);
+        if (negotiatedVersion === 2) {
+          await this.doState.blockConcurrencyWhile(async () => {
+            const tokens = await this.loadTokenMap();
+            if (
+              upgradeProxyTokenRuntimeProtocol(
+                tokens,
+                controlConfig.controlRpcToken,
+                {
+                  runId: body.runId,
+                  serviceId,
+                  leaseVersion: body.leaseVersion,
+                },
+                negotiatedVersion,
+              )
+            ) {
+              await this.persistTokenMap(tokens);
+            }
+          });
+        }
         if (!result.ok) {
           await this.revokeProxyToken(controlConfig.controlRpcToken);
         }
@@ -273,33 +497,93 @@ function createExecutorContainerClass(
     }
 
     async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
-      const tokens = await this.loadTokenMap();
-      for (const [storedToken, info] of tokens) {
-        if (constantTimeEqualsString(token, storedToken)) return info;
-      }
-      return null;
+      return await this.doState.blockConcurrencyWhile(async () => {
+        // Verification is the authorization boundary, so TTL expiry is
+        // enforced here as well as on dispatch/heartbeat maintenance paths.
+        const tokens = await this.pruneStaleTokens(await this.loadTokenMap());
+        for (const [storedToken, info] of tokens) {
+          if (constantTimeEqualsString(token, storedToken)) return info;
+        }
+        return null;
+      });
     }
 
     async touchProxyToken(token: string): Promise<void> {
-      const tokens = await this.loadTokenMap();
-      const info = tokens.get(token);
-      if (!info) return;
-      tokens.set(token, { ...info, lastHeartbeatAt: Date.now() });
-      // Reap stale tokens on the heartbeat path so GC no longer depends on
-      // dispatch traffic. This path already persists, so it adds no extra write.
-      this.removeStaleTokens(tokens);
-      await this.persistTokenMap(tokens);
+      await this.doState.blockConcurrencyWhile(async () => {
+        const tokens = await this.loadTokenMap();
+        const info = tokens.get(token);
+        if (!info) return;
+        // The agent runs in the container after /start has already returned.
+        // Custom Durable Object RPCs do not renew Container activity
+        // automatically, so a healthy background run would otherwise be stopped
+        // at sleepAfter (3m on tier 3) despite its control heartbeat. Treat a
+        // verified, successful run heartbeat as container activity.
+        this.renewActivityTimeout();
+        tokens.set(token, { ...info, lastHeartbeatAt: Date.now() });
+        // Reap stale tokens on the heartbeat path so GC no longer depends on
+        // dispatch traffic. This path already persists, so it adds no extra write.
+        this.removeStaleTokens(tokens);
+        await this.persistTokenMap(tokens);
+      });
     }
 
     async revokeProxyToken(token: string): Promise<void> {
-      const tokens = await this.loadTokenMap();
-      tokens.delete(token);
-      await this.persistTokenMap(tokens);
+      await this.doState.blockConcurrencyWhile(async () => {
+        const tokens = await this.loadTokenMap();
+        if (tokens.delete(token)) await this.persistTokenMap(tokens);
+      });
+    }
+
+    async revokeProxyTokensForRun(runId: string): Promise<number> {
+      return await this.doState.blockConcurrencyWhile(async () => {
+        const tokens = await this.loadTokenMap();
+        const removed = removeProxyTokensForRun(tokens, runId);
+        if (removed > 0) await this.persistTokenMap(tokens);
+        return removed;
+      });
+    }
+
+    async revokeProxyTokensForLease(
+      runId: string,
+      serviceId: string,
+      leaseVersion?: number,
+    ): Promise<number> {
+      return await this.doState.blockConcurrencyWhile(async () => {
+        const tokens = await this.loadTokenMap();
+        const removed = removeProxyTokensForLease(
+          tokens,
+          runId,
+          serviceId,
+          leaseVersion,
+        );
+        if (removed > 0) await this.persistTokenMap(tokens);
+        return removed;
+      });
+    }
+
+    async revokeSupersededProxyTokens(
+      runId: string,
+      serviceId: string,
+      leaseVersion?: number,
+    ): Promise<number> {
+      return await this.doState.blockConcurrencyWhile(async () => {
+        const tokens = await this.loadTokenMap();
+        const removed = removeSupersededProxyTokens(
+          tokens,
+          runId,
+          serviceId,
+          leaseVersion,
+        );
+        if (removed > 0) await this.persistTokenMap(tokens);
+        return removed;
+      });
     }
 
     async revokeProxyTokens(): Promise<void> {
-      await this.ctx.storage.delete("proxyTokens");
-      this.cachedTokens = new Map();
+      await this.doState.blockConcurrencyWhile(async () => {
+        await this.ctx.storage.delete("proxyTokens");
+        this.cachedTokens = new Map();
+      });
     }
   };
 }
@@ -329,7 +613,6 @@ export const TakosAgentExecutorContainer = ExecutorContainerTier1;
 
 // Cached environment validation guard.
 const envGuard = createEnvGuard(validateExecutorHostEnv);
-const STALE_PROXY_TOKEN_MS = 15 * 60 * 1000;
 
 function poolSlotId(env: Env, tier: ExecutorTier, index: number): string {
   const suffix = normalizePoolRevision(env.EXECUTOR_POOL_REVISION);
@@ -393,19 +676,150 @@ async function readPoolLoad(
 
 async function collectExecutorPoolLoads(env: Env): Promise<ExecutorPoolLoad[]> {
   const config = getExecutorPoolConfig(env);
-  const loads: ExecutorPoolLoad[] = [];
-
+  const targets: Array<{ tier: ExecutorTier; containerId: string }> = [];
   for (let i = 0; i < config.tier1WarmPoolSize; i++) {
-    loads.push((await readPoolLoad(env, 1, poolSlotId(env, 1, i))).load);
+    targets.push({ tier: 1, containerId: poolSlotId(env, 1, i) });
   }
-
   if (env.EXECUTOR_CONTAINER_TIER3) {
     for (let i = 0; i < config.tier3PoolSize; i++) {
-      loads.push((await readPoolLoad(env, 3, poolSlotId(env, 3, i))).load);
+      targets.push({ tier: 3, containerId: poolSlotId(env, 3, i) });
+    }
+  }
+  return await Promise.all(
+    targets.map(
+      async ({ tier, containerId }) =>
+        (await readPoolLoad(env, tier, containerId)).load,
+    ),
+  );
+}
+
+type ProxyTokenContainerTarget = {
+  tier: ExecutorTier;
+  containerId: string;
+  stub: ExecutorContainerStub;
+};
+
+function collectProxyTokenContainerTargets(
+  env: Env,
+  runId: string,
+  additional?: { tier: ExecutorTier; containerId: string },
+): ProxyTokenContainerTarget[] {
+  const config = getExecutorPoolConfig(env);
+  const targets = new Map<string, ProxyTokenContainerTarget>();
+  const add = (tier: ExecutorTier, containerId: string) => {
+    const key = `${tier}:${containerId}`;
+    if (targets.has(key)) return;
+    targets.set(key, {
+      tier,
+      containerId,
+      stub: resolveContainerNamespace(env, tier).getByName(containerId),
+    });
+  };
+
+  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
+    add(1, poolSlotId(env, 1, i));
+  }
+  if (env.EXECUTOR_CONTAINER_TIER3) {
+    for (let i = 0; i < config.tier3PoolSize; i++) {
+      add(3, poolSlotId(env, 3, i));
     }
   }
 
-  return loads;
+  // Explicit-tier dispatches historically defaulted their container id to the
+  // run id. Include those stable names as well as the managed pool. A caller
+  // that supplies a custom explicit id is included through `additional`.
+  add(1, runId);
+  if (env.EXECUTOR_CONTAINER_TIER2) add(2, runId);
+  if (env.EXECUTOR_CONTAINER_TIER3) add(3, runId);
+  if (additional) add(additional.tier, additional.containerId);
+  return [...targets.values()];
+}
+
+async function revokeAcrossProxyTokenContainers(
+  targets: ProxyTokenContainerTarget[],
+  revoke: (stub: ExecutorContainerStub) => Promise<number>,
+  operation: string,
+  runId: string,
+): Promise<number> {
+  const settled = await Promise.allSettled(
+    targets.map(({ stub }) => revoke(stub)),
+  );
+  let removed = 0;
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i];
+    if (result.status === "fulfilled") {
+      removed += result.value;
+      continue;
+    }
+    const target = targets[i];
+    logError(`Proxy token ${operation} failed`, result.reason, {
+      module: "executor-host",
+      runId,
+      tier: target.tier,
+      executorContainerId: target.containerId,
+    });
+  }
+  return removed;
+}
+
+/** Revoke all known proxy credentials after cancellation or terminal status. */
+export async function revokeRunProxyTokens(
+  env: Env,
+  runId: string,
+  additional?: { tier: ExecutorTier; containerId: string },
+): Promise<number> {
+  abortRemoteToolExecutorsForRun(runId);
+  const targets = collectProxyTokenContainerTargets(env, runId, additional);
+  return await revokeAcrossProxyTokenContainers(
+    targets,
+    async (stub) => (await stub.revokeProxyTokensForRun?.(runId)) ?? 0,
+    "run revoke",
+    runId,
+  );
+}
+
+async function revokeRunLeaseProxyTokens(
+  env: Env,
+  runId: string,
+  serviceId: string,
+  leaseVersion: number | undefined,
+  additional?: { tier: ExecutorTier; containerId: string },
+): Promise<number> {
+  abortRemoteToolExecutorsForLease({ runId, serviceId, leaseVersion });
+  const targets = collectProxyTokenContainerTargets(env, runId, additional);
+  return await revokeAcrossProxyTokenContainers(
+    targets,
+    async (stub) =>
+      (await stub.revokeProxyTokensForLease?.(
+        runId,
+        serviceId,
+        leaseVersion,
+      )) ?? 0,
+    "lease revoke",
+    runId,
+  );
+}
+
+async function revokeSupersededRunProxyTokens(
+  env: Env,
+  runId: string,
+  serviceId: string,
+  leaseVersion: number | undefined,
+  additional?: { tier: ExecutorTier; containerId: string },
+): Promise<number> {
+  abortSupersededRemoteToolExecutors({ runId, serviceId, leaseVersion });
+  const targets = collectProxyTokenContainerTargets(env, runId, additional);
+  return await revokeAcrossProxyTokenContainers(
+    targets,
+    async (stub) =>
+      (await stub.revokeSupersededProxyTokens?.(
+        runId,
+        serviceId,
+        leaseVersion,
+      )) ?? 0,
+    "superseded lease revoke",
+    runId,
+  );
 }
 
 async function selectExecutorPoolSlot(env: Env): Promise<{
@@ -414,11 +828,25 @@ async function selectExecutorPoolSlot(env: Env): Promise<{
   stub: ExecutorContainerStub;
 } | null> {
   const config = getExecutorPoolConfig(env);
-
-  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
-    const containerId = poolSlotId(env, 1, i);
-    const { stub, load } = await readPoolLoad(env, 1, containerId);
-    if (load.active < load.capacity) return { tier: 1, containerId, stub };
+  const tier1 = await Promise.all(
+    Array.from({ length: config.tier1WarmPoolSize }, (_, index) => {
+      const containerId = poolSlotId(env, 1, index);
+      return readPoolLoad(env, 1, containerId);
+    }),
+  );
+  const availableTier1 = tier1
+    .filter(({ load }) => load.active < load.capacity)
+    .sort(
+      (left, right) =>
+        left.load.active - right.load.active ||
+        left.load.containerId.localeCompare(right.load.containerId),
+    )[0];
+  if (availableTier1) {
+    return {
+      tier: 1,
+      containerId: availableTier1.load.containerId,
+      stub: availableTier1.stub,
+    };
   }
 
   // Tier 2 is intentionally skipped: it has no pool sizing and receives no
@@ -426,41 +854,41 @@ async function selectExecutorPoolSlot(env: Env): Promise<{
   // scales tier 1 → tier 3 only.
   if (!env.EXECUTOR_CONTAINER_TIER3) return null;
 
-  let best: {
-    tier: ExecutorTier;
-    containerId: string;
-    stub: ExecutorContainerStub;
-    load: ExecutorPoolLoad;
-  } | null = null;
-  for (let i = 0; i < config.tier3PoolSize; i++) {
-    const containerId = poolSlotId(env, 3, i);
-    const { stub, load } = await readPoolLoad(env, 3, containerId);
-    if (load.active >= load.capacity) continue;
-    if (!best || load.active < best.load.active) {
-      best = { tier: 3, containerId, stub, load };
-    }
-  }
+  const best = (
+    await Promise.all(
+      Array.from({ length: config.tier3PoolSize }, (_, index) => {
+        const containerId = poolSlotId(env, 3, index);
+        return readPoolLoad(env, 3, containerId);
+      }),
+    )
+  )
+    .filter(({ load }) => load.active < load.capacity)
+    .sort(
+      (left, right) =>
+        left.load.active - right.load.active ||
+        left.load.containerId.localeCompare(right.load.containerId),
+    )[0];
 
   if (!best) return null;
   return {
-    tier: best.tier,
-    containerId: best.containerId,
+    tier: 3,
+    containerId: best.load.containerId,
     stub: best.stub,
   };
 }
 
 async function warmTier1Pool(env: Env): Promise<ExecutorPoolLoad[]> {
   const config = getExecutorPoolConfig(env);
-  const warmed: ExecutorPoolLoad[] = [];
-  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
-    const containerId = poolSlotId(env, 1, i);
-    const { stub } = await readPoolLoad(env, 1, containerId);
-    const load = stub.warm
-      ? await stub.warm()
-      : (await readPoolLoad(env, 1, containerId)).load;
-    warmed.push({ ...load, tier: 1, containerId });
-  }
-  return warmed;
+  return await Promise.all(
+    Array.from({ length: config.tier1WarmPoolSize }, async (_, index) => {
+      const containerId = poolSlotId(env, 1, index);
+      const { stub } = await readPoolLoad(env, 1, containerId);
+      const load = stub.warm
+        ? await stub.warm()
+        : (await readPoolLoad(env, 1, containerId)).load;
+      return { ...load, tier: 1 as const, containerId };
+    }),
+  );
 }
 
 export default {
@@ -511,14 +939,38 @@ export default {
       if (!runId) {
         return errorJsonResponse("Missing runId", 400);
       }
-      if (!resolveAgentExecutorServiceId(body)) {
+      const serviceId = resolveAgentExecutorServiceId(body);
+      if (!serviceId) {
         return errorJsonResponse("Missing serviceId or workerId", 400);
       }
 
-      if (body.tier !== undefined || body.executorTier !== undefined) {
-        const tier = parseExecutorTier(body.executorTier ?? body.tier);
+      const explicitTarget =
+        body.tier !== undefined || body.executorTier !== undefined
+          ? {
+              tier: parseExecutorTier(body.executorTier ?? body.tier),
+              containerId: body.executorContainerId || runId,
+            }
+          : undefined;
+
+      // A delayed dispatch must never mint authority for a lease that has
+      // already been replaced or cancelled. Validate before touching tokens,
+      // sweep only older monotonic lease versions, then validate again so a
+      // lease transition during the cross-DO sweep cannot start stale work.
+      const leaseError = await ensureRunLease(env, runId, body);
+      if (leaseError) return leaseError;
+      await revokeSupersededRunProxyTokens(
+        env,
+        runId,
+        serviceId,
+        body.leaseVersion,
+        explicitTarget,
+      );
+      const leaseRecheck = await ensureRunLease(env, runId, body);
+      if (leaseRecheck) return leaseRecheck;
+
+      if (explicitTarget) {
+        const { tier, containerId } = explicitTarget;
         const ns = resolveContainerNamespace(env, tier);
-        const containerId = body.executorContainerId || runId;
         const stub = ns.getByName(containerId);
         return await forwardAgentExecutorDispatch(
           stub,
@@ -589,10 +1041,22 @@ export default {
         return err("Method not allowed", 405);
       }
 
-      const body =
-        request.method === "POST"
-          ? ((await request.json()) as Record<string, unknown>)
-          : Object.fromEntries(url.searchParams.entries());
+      let body: Record<string, unknown>;
+      try {
+        body =
+          request.method === "POST"
+            ? await readBoundedAgentControlJson(
+                request,
+                AGENT_CONTROL_BODY_LIMITS[path] ??
+                  DEFAULT_AGENT_CONTROL_BODY_BYTES,
+              )
+            : Object.fromEntries(url.searchParams.entries());
+      } catch (error) {
+        if (error instanceof AgentControlBodyError) {
+          return err(error.message, error.status);
+        }
+        return err("Invalid control RPC JSON", 400);
+      }
 
       // Fail closed: bind the request target to the verified proxy token rather
       // than trusting caller-supplied ids. The container holds only this token,
@@ -602,6 +1066,14 @@ export default {
       // sends only threadId, so without this it could be steered at any thread.
       body.runId = tokenInfo.runId;
       body.serviceId = tokenInfo.serviceId;
+      if (typeof tokenInfo.leaseVersion === "number") {
+        body.leaseVersion = tokenInfo.leaseVersion;
+      } else {
+        // Never preserve a caller-supplied lease version when an older stored
+        // token has no version metadata. serviceId still fences that legacy
+        // token, while an attacker cannot claim a newer version in the body.
+        delete body.leaseVersion;
+      }
       if (typeof body.workerId === "string") {
         body.workerId = tokenInfo.serviceId;
       }
@@ -615,10 +1087,29 @@ export default {
         return unauthorized();
       }
 
+      // Membership is mutable authority. Revalidate it for every control RPC
+      // so a queued or already-running container loses history, provider-key,
+      // and tool access as soon as its requester is removed from the Workspace.
+      try {
+        await assertRunExecutionAccess(env, tokenInfo.runId);
+      } catch {
+        abortRemoteToolExecutorsForRun(tokenInfo.runId);
+        return err("Run requester no longer has Workspace access", 403);
+      }
+
+      // Existing v1 tokens may finish during the Container rollout grace
+      // window. Every newly minted v2 token is fenced to the atomic completion
+      // protocol, so split transcript/status mutations are not a convention a
+      // current container can bypass. Remove the v1 routes after the rollout
+      // window no longer needs compatibility.
+      if (rejectsLegacySplitFinalization(tokenInfo, path)) {
+        return err("Legacy split finalization is not available", 410);
+      }
+
       recordProxyUsage(path);
 
       if (isControlRpcPath(path)) {
-        // Dispatch in-process: takos / takosumi / the executor-host share this
+        // Dispatch in-process: the Takos Worker and executor-host share this
         // worker isolate, so there is no service-binding hop. The proxy token +
         // scope are already verified and body.runId/serviceId are token-bound.
         const dispatched = dispatchControlRpc(path, body, env);
@@ -632,8 +1123,38 @@ export default {
         ) {
           await stub.touchProxyToken?.(token);
         }
-        if (shouldRevokeProxyTokensAfterControlForward(path, body)) {
-          await revokeProxyTokenAfterTerminalResponse(forwarded, stub, token);
+        const target = {
+          tier,
+          containerId: executorContainerId || runId,
+        };
+        if (await responseSignalsLeaseLost(forwarded)) {
+          await revokeProxyTokenBestEffort(stub, token, "lease-lost RPC");
+          await revokeRunLeaseProxyTokens(
+            env,
+            tokenInfo.runId,
+            tokenInfo.serviceId,
+            tokenInfo.leaseVersion,
+            target,
+          );
+        } else if (
+          forwarded.ok &&
+          shouldRevokeProxyTokensAfterControlForward(path, body)
+        ) {
+          await revokeProxyTokenBestEffort(stub, token, "terminal RPC");
+          if (path === "/api/internal/v1/agent-control/run-reset") {
+            // reset makes the row queued and a fresh lease may be claimed
+            // immediately. Revoke only this old identity so a delayed cleanup
+            // cannot delete an already-minted replacement token.
+            await revokeRunLeaseProxyTokens(
+              env,
+              tokenInfo.runId,
+              tokenInfo.serviceId,
+              tokenInfo.leaseVersion,
+              target,
+            );
+          } else {
+            await revokeRunProxyTokens(env, tokenInfo.runId, target);
+          }
         }
         return forwarded;
       }
@@ -663,27 +1184,20 @@ function isTerminalRunStatus(status: unknown): boolean {
   );
 }
 
-function isTerminalRunEvent(type: unknown, data: unknown): boolean {
-  if (
-    type === "completed" ||
-    type === "error" ||
-    type === "cancelled" ||
-    type === "run.failed"
-  ) {
-    return true;
-  }
-  if (type !== "run_status" || !data || typeof data !== "object") {
-    return false;
-  }
-  const payload = data as Record<string, unknown>;
-  if (isTerminalRunStatus(payload.status)) {
-    return true;
-  }
-  const run = payload.run;
-  return Boolean(
-    run &&
-    typeof run === "object" &&
-    isTerminalRunStatus((run as Record<string, unknown>).status),
+const LEGACY_SPLIT_FINALIZATION_PATHS = new Set([
+  "/api/internal/v1/agent-control/add-message",
+  "/api/internal/v1/agent-control/update-run-status",
+  "/api/internal/v1/agent-control/run-fail",
+  "/api/internal/v1/agent-control/run-reset",
+]);
+
+export function rejectsLegacySplitFinalization(
+  tokenInfo: Pick<ProxyTokenInfo, "runtimeProtocolVersion">,
+  path: string,
+): boolean {
+  return (
+    (tokenInfo.runtimeProtocolVersion ?? 1) >= 2 &&
+    LEGACY_SPLIT_FINALIZATION_PATHS.has(path)
   );
 }
 
@@ -693,40 +1207,50 @@ function shouldRevokeProxyTokensAfterControlForward(
 ): boolean {
   if (
     path === "/api/internal/v1/agent-control/run-fail" ||
-    path === "/api/internal/v1/agent-control/run-reset" ||
-    path === "/api/internal/v1/agent-control/no-llm-complete"
+    path === "/api/internal/v1/agent-control/run-reset"
   ) {
     return true;
   }
-  if (path === "/api/internal/v1/agent-control/run-event") {
-    return isTerminalRunEvent(body.type, body.data);
-  }
   if (path === "/api/internal/v1/agent-control/update-run-status") {
+    return isTerminalRunStatus(body.status);
+  }
+  if (path === "/api/internal/v1/agent-control/complete-run") {
     return isTerminalRunStatus(body.status);
   }
   return false;
 }
 
-async function revokeProxyTokenAfterTerminalResponse(
-  response: Response,
-  stub: {
-    revokeProxyToken?(token: string): Promise<void>;
-    revokeProxyTokens?(): Promise<void>;
-  },
-  token: string,
-): Promise<void> {
-  if (!response.ok) {
-    return;
+async function responseSignalsLeaseLost(response: Response): Promise<boolean> {
+  if (response.status !== 409) return false;
+  try {
+    const payload = (await response.clone().json()) as Record<string, unknown>;
+    const error =
+      typeof payload.error === "string"
+        ? payload.error.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_")
+        : "";
+    return (
+      error.startsWith("lease_lost") ||
+      error === "run_service_mismatch" ||
+      error === "run_is_not_active"
+    );
+  } catch {
+    return false;
   }
+}
+
+async function revokeProxyTokenBestEffort(
+  stub: ExecutorContainerStub,
+  token: string,
+  reason: string,
+): Promise<void> {
   try {
     if (stub.revokeProxyToken) {
       await stub.revokeProxyToken(token);
-      return;
     }
-    await stub.revokeProxyTokens?.();
   } catch (error) {
-    logError("Proxy token revoke failed after terminal control RPC", error, {
+    logError("Proxy token revoke failed", error, {
       module: "executor-host",
+      reason,
     });
   }
 }

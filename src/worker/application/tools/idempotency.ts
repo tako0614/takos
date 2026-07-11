@@ -1,11 +1,14 @@
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
-import { getDb, toolOperations } from "../../infra/db/index.ts";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { getDb, runs, toolOperations } from "../../infra/db/index.ts";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { generateId } from "../../shared/utils/index.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 
-const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+// Longer than the 5-minute tool/MCP transport timeout and the lease-loss poll
+// grace. Re-executing exactly at the transport boundary can duplicate a remote
+// side effect when the handler ignored cancellation but is still completing.
+export const STALE_PENDING_THRESHOLD_MS = 30 * 60 * 1000;
 
 /**
  * Generate a deterministic operation key for a tool call.
@@ -20,9 +23,8 @@ export async function generateOperationKey(
   const encoded = new TextEncoder().encode(payload);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   const hashArray = new Uint8Array(hashBuffer);
-  return Array.from(
-    hashArray.slice(0, 16),
-    (b) => b.toString(16).padStart(2, "0"),
+  return Array.from(hashArray.slice(0, 16), (b) =>
+    b.toString(16).padStart(2, "0"),
   ).join("");
 }
 
@@ -58,7 +60,8 @@ export async function checkIdempotency(
   const drizzleDb = getDb(db);
   const operationKey = await generateOperationKey(runId, toolName, args);
 
-  const existing = await drizzleDb.select()
+  const existing = await drizzleDb
+    .select()
     .from(toolOperations)
     .where(
       and(
@@ -77,20 +80,44 @@ export async function checkIdempotency(
       };
     }
 
+    if (existing.status === "uncertain") {
+      return {
+        action: "cached",
+        cachedOutput: "",
+        cachedError:
+          existing.resultError ??
+          `The previous ${toolName} call may have completed, but Takos could not confirm its outcome. Automatic replay is blocked to avoid duplicating a side effect. Verify the remote system and use a new explicit operation if needed.`,
+      };
+    }
+
     if (existing.status === "failed") {
       // Delete failed record and allow re-execution
-      await drizzleDb.delete(toolOperations).where(
-        eq(toolOperations.id, existing.id),
-      );
+      await drizzleDb
+        .delete(toolOperations)
+        .where(eq(toolOperations.id, existing.id));
       // Fall through to create new pending record
     } else if (existing.status === "pending") {
       const createdAt = new Date(existing.createdAt).getTime();
       if (clock.now() - createdAt > STALE_PENDING_THRESHOLD_MS) {
-        // Stale pending — delete and allow re-execution
-        await drizzleDb.delete(toolOperations).where(
-          eq(toolOperations.id, existing.id),
-        );
-        // Fall through to create new pending record
+        // The executor disappeared without recording whether dispatch occurred.
+        // Treat the outcome as unknown; replaying after an arbitrary age can
+        // duplicate a remote mutation that completed before the crash.
+        const uncertainError =
+          `The previous ${toolName} call lost its executor before an outcome was recorded. ` +
+          "Automatic replay is blocked to avoid duplicating a side effect; verify the remote system before issuing a new operation.";
+        await drizzleDb
+          .update(toolOperations)
+          .set({
+            status: "uncertain",
+            resultError: uncertainError,
+            completedAt: new Date(clock.now()).toISOString(),
+          })
+          .where(eq(toolOperations.id, existing.id));
+        return {
+          action: "cached",
+          cachedOutput: "",
+          cachedError: uncertainError,
+        };
       } else {
         return { action: "in_progress" };
       }
@@ -106,7 +133,8 @@ export async function checkIdempotency(
 
   if (affectedRowCount(insertResult) === 0) {
     // Another request inserted first — re-check status
-    const raceCheck = await drizzleDb.select()
+    const raceCheck = await drizzleDb
+      .select()
       .from(toolOperations)
       .where(
         and(
@@ -120,6 +148,15 @@ export async function checkIdempotency(
         action: "cached",
         cachedOutput: raceCheck.resultOutput ?? undefined,
         cachedError: raceCheck.resultError ?? undefined,
+      };
+    }
+    if (raceCheck?.status === "uncertain") {
+      return {
+        action: "cached",
+        cachedOutput: "",
+        cachedError:
+          raceCheck.resultError ??
+          `The previous ${toolName} call has an unknown outcome; automatic replay is blocked.`,
       };
     }
     return { action: "in_progress" };
@@ -138,11 +175,30 @@ export async function completeOperation(
   error?: string,
 ): Promise<void> {
   const drizzleDb = getDb(db);
-  await drizzleDb.update(toolOperations)
+  await drizzleDb
+    .update(toolOperations)
     .set({
       status: error ? "failed" : "completed",
       resultOutput: output,
       resultError: error ?? null,
+      completedAt: new Date().toISOString(),
+    })
+    .where(eq(toolOperations.id, operationId));
+}
+
+/** Permanently fence an operation whose remote commit outcome is unknown. */
+export async function markOperationUncertain(
+  db: SqlDatabaseBinding,
+  operationId: string,
+  error: string,
+): Promise<void> {
+  const drizzleDb = getDb(db);
+  await drizzleDb
+    .update(toolOperations)
+    .set({
+      status: "uncertain",
+      resultOutput: "",
+      resultError: error,
       completedAt: new Date().toISOString(),
     })
     .where(eq(toolOperations.id, operationId));
@@ -158,7 +214,17 @@ export async function cleanupStaleOperations(
 ): Promise<number> {
   const drizzleDb = getDb(db);
   const threshold = new Date(clock.now() - 24 * 60 * 60 * 1000).toISOString();
-  const result = await drizzleDb.delete(toolOperations)
-    .where(lt(toolOperations.createdAt, threshold));
+  const terminalRunIds = drizzleDb
+    .select({ id: runs.id })
+    .from(runs)
+    .where(inArray(runs.status, ["completed", "failed", "cancelled"]));
+  const result = await drizzleDb
+    .delete(toolOperations)
+    .where(
+      and(
+        lt(toolOperations.createdAt, threshold),
+        inArray(toolOperations.runId, terminalRunIds),
+      ),
+    );
   return affectedRowCount(result);
 }

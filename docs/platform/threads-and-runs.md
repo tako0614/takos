@@ -14,16 +14,20 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 - **Takos product API と agent runtime profile** が Thread / Run
   のライフサイクル、キュー、DB、認証、Workspace の状態を管理します
 - **`takos-agent`** (ランタイムコンテナ)
-  が実際のプロンプト構築、スキル選択、ツール実行を担当します
+  がcanonical historyを受け取り、bounded model/tool loopを実行します
 - agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
-Run の起動には current API では Workspace を指す legacy field `spaceId` が必須です。Capsule/app 経由の Run では
-Capsule/app context と `runtimeNamespace` が追加され、メモリストアが app 単位で隔離されます。
+Thread message、summary、memory、skill/tool catalogのdurable authorityはTakos Workerです。engine checkpointもRunに
+lease-fenced保存し、restart / 別pool slotではidempotent nodeからresumeできます。ただしcheckpointはconversationやmemoryの第二の
+正本ではありません。model request中断点はprovider-neutralなexactly-onceを保証できないため、自動再発行せずfail closedします。
+`tool_calls` / `tool_call_id`はstructured transcriptとしてprovider、tool execution、eventまで同じIDを保ちます。
 
-managed skill は Takos app / API gateway から渡されたカタログが優先されます。
-control payload に managed skill が無い場合だけ、`takos-agent` 内のローカル
-フォールバックカタログを使います。custom skill は Takos app 層の永続化データを
-ソースとし、同じ skill id / name がある場合は managed skill が先に解決されます。
+Run の起動には current API では Workspace を指す legacy field `spaceId` が必須です。Capsule/app 経由の Run では
+移行互換の Capsule/app context と `runtimeNamespace` が wire metadata として追加される場合があります。これらは container
+disk や別の memory authority を選ぶためには使いません。
+
+managed/custom skillとinstalled Capsule / external MCP tool catalogはTakos Workerが正本です。container image内の
+snapshotはmodel-visible catalogや実行authorityではありません。
 
 ## Thread
 
@@ -65,14 +69,15 @@ pending (生成直後) → queued (実行待ち) → running → completed
 
 ### 主要フィールド
 
-| field                           | 説明                |
-| ------------------------------- | ------------------- |
-| `id` / `thread_id` / `space_id` | 識別子              |
-| `status`                        | 上記の status       |
-| `agent_type`                    | 使用する agent type |
-| `parent_run_id` / `root_run_id` | 親子関係の追跡      |
-| `session_id`                    | 実行セッション ID   |
-| `usage`                         | トークン使用量      |
+| field                           | 説明                                                                  |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `id` / `thread_id` / `space_id` | 識別子                                                                |
+| `status`                        | 上記の status                                                         |
+| `agent_type`                    | 使用する agent type                                                   |
+| `model`                         | Run作成時に解決・固定したprovider model。stale recoveryでも変更しない |
+| `parent_run_id` / `root_run_id` | 親子関係の追跡                                                        |
+| `session_id`                    | 実行セッション ID                                                     |
+| `usage`                         | トークン使用量                                                        |
 
 ### イベントストリーミング
 
@@ -94,5 +99,8 @@ Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other
 - **Memory** — agent の記憶単位。`episode` / `semantic` / `procedural`
   の型を持ちます
 - **Reminder** — `time` / `condition` / `context` のトリガー型を持ちます
+- **Info unit / Thread context index** — 完了した Run と古い Thread message から作る検索用の派生データ。Run の terminal
+  transaction が durable outbox を作り、index queue が後処理します。再生成可能な index であり、Thread message や明示的な
+  Memory の正本ではありません
 
 Memory / Reminder の取得と更新は Web UI と public API から行います。

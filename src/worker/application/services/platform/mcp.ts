@@ -17,8 +17,8 @@ export type {
   McpEndpointUrlOptions,
   McpOAuthCompletionParams,
   McpOAuthPendingParams,
+  McpOAuthRegistrationMode,
   McpServerRecord,
-  OAuthMetadata,
   RegisterExternalMcpServerResult,
 } from "./mcp/mcp-models.ts";
 
@@ -37,11 +37,14 @@ export {
 
 // OAuth flow
 export {
+  beginMcpAuthorization,
   completeMcpOAuthFlow,
   consumeMcpOAuthPending,
   createMcpOAuthPending,
   decryptAccessToken,
-  discoverOAuthMetadata,
+  getMcpOAuthPendingForStart,
+  McpOAuthBrowserBindingError,
+  McpOAuthPendingUpgradeRequiredError,
   mcpServiceDeps,
   refreshMcpToken,
 } from "./mcp/oauth.ts";
@@ -59,3 +62,26 @@ export {
   updateMcpServer,
   upsertManagedMcpServer,
 } from "./mcp/crud.ts";
+
+// Registry discovery sources + bounded live search
+export type {
+  CustomMcpRegistrySourceKind,
+  McpRegistrySearchCandidate,
+  McpRegistrySearchFailure,
+  McpRegistrySearchResult,
+  McpRegistrySourceInput,
+  McpRegistrySourceKind,
+  McpRegistrySourcePatch,
+  McpRegistrySourceRecord,
+} from "./mcp/registry-sources.ts";
+export {
+  createMcpRegistrySource,
+  CUSTOM_MCP_REGISTRY_SOURCE_KINDS,
+  deleteMcpRegistrySource,
+  listMcpRegistrySources,
+  normalizeMcpRegistryBaseUrl,
+  OFFICIAL_MCP_REGISTRY_BASE_URL,
+  OFFICIAL_MCP_REGISTRY_SOURCE_ID,
+  searchMcpRegistrySources,
+  updateMcpRegistrySource,
+} from "./mcp/registry-sources.ts";

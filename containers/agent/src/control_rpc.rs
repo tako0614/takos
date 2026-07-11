@@ -1,36 +1,38 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, io};
 
-use chrono::Utc;
+use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
+use takos_agent_engine::domain::LoopState;
+use takos_agent_engine::ids::{LoopId, SessionId};
+use takos_agent_engine::storage::LoopStateRepository;
+use takos_agent_engine::{EngineError, Result as EngineResult};
 
-use crate::internal_rpc::{sign_internal_rpc, InternalRpcSignInput, TakosActorContext};
 use crate::AppResult;
 
 /// Connect + read timeout for control-plane RPC calls. Picked to be short
 /// enough that a stalled control plane can't keep an agent run wedged forever
 /// while still giving room for normal Cloudflare round-trips.
 const CONTROL_RPC_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+/// Tool execution includes long-running computer/MCP/sub-agent waits. The
+/// Worker contract allows five minutes, so only this endpoint receives the
+/// longer transport budget; heartbeats and status RPCs remain fail-fast.
+const CONTROL_RPC_TOOL_TIMEOUT: Duration = Duration::from_secs(305);
+/// Atomic terminal writes can include the full bounded transcript and may
+/// cross a cold Worker/R2 path. Give finalization a larger per-attempt budget
+/// than ordinary control RPCs without allowing it to wait forever.
+const CONTROL_RPC_FINALIZATION_TIMEOUT: Duration = Duration::from_secs(120);
+const FINALIZATION_MAX_ATTEMPTS: usize = 3;
+const FINALIZATION_RETRY_BASE_DELAY: Duration = Duration::from_millis(100);
 
 const CONTROL_RPC_BASE_URL_ENV_KEY: &str = "TAKOS_AGENT_CONTROL_RPC_BASE_URL";
 const CONTROL_RPC_TOKEN_ENV_KEY: &str = "TAKOS_AGENT_CONTROL_RPC_TOKEN";
 const AGENT_CONTROL_RPC_PATH_PREFIX: &str = "/api/internal/v1/agent-control";
-/// Operator-provided HMAC key for signing outbound control-plane RPC requests
-/// using the shared `takos-internal-v3` envelope. When set, every `post_json`
-/// caller signs its body with this key. The receiver (`takos`) MUST
-/// independently configure the same key and run `verify_internal_rpc` over
-/// incoming requests before trusting the bearer token — without that, this
-/// header is purely advisory and any plain-bearer leak would still let an
-/// attacker forge calls.
-const CONTROL_RPC_INTERNAL_KEY_ENV_KEY: &str = "TAKOS_AGENT_INTERNAL_RPC_KEY";
-const CONTROL_RPC_INTERNAL_CALLER: &str = "takos-agent";
-const CONTROL_RPC_INTERNAL_AUDIENCE: &str = "takos-worker";
-const CONTROL_RPC_INTERNAL_CAPABILITY: &str = "agent-control.rpc";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,8 +74,6 @@ pub struct RunBootstrap {
     pub installation_id: Option<String>,
     #[serde(default, alias = "runtimeNamespace")]
     pub runtime_namespace: Option<String>,
-    #[serde(alias = "sessionId")]
-    pub session_id: Option<String>,
     #[serde(alias = "threadId")]
     pub thread_id: String,
     #[serde(alias = "userId")]
@@ -82,22 +82,14 @@ pub struct RunBootstrap {
     pub agent_type: Option<String>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct RunContext {
-    pub status: Option<String>,
-    #[serde(alias = "threadId")]
-    pub thread_id: Option<String>,
-    #[serde(alias = "sessionId")]
-    pub session_id: Option<String>,
-    #[serde(alias = "lastUserMessage")]
-    pub last_user_message: Option<String>,
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HistoryMessage {
     pub role: String,
     pub content: String,
+    #[serde(default)]
+    pub tool_calls: Vec<Value>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -195,26 +187,20 @@ pub struct SkillRuntimeContextResponse {
 #[derive(Debug, Clone, Default)]
 pub struct RunConfigResponse {
     pub system_prompt: String,
-    pub max_iterations: Option<u32>,
     pub max_graph_steps: Option<u32>,
     pub max_tool_rounds: Option<u32>,
     pub temperature: Option<f32>,
-    pub rate_limit: Option<u32>,
-    pub embedding_provider: Option<String>,
-    pub embedding_model: Option<String>,
-    pub embedding_base_url: Option<String>,
-    pub embedding_api_key: Option<String>,
-    pub embedding_dimensions: Option<u32>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ApiKeysResponse {
+    /// The runtime model adapter uses one OpenAI-compatible transport. Native
+    /// vendor credentials are resolved by the configured gateway/endpoint,
+    /// not deserialized into unused container fields.
     pub openai: Option<String>,
     #[serde(default, alias = "openaiEndpoint")]
     pub openai_endpoint: Option<String>,
-    pub anthropic: Option<String>,
-    pub google: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -222,6 +208,10 @@ pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub parameters: Value,
+    #[serde(default)]
+    pub risk_level: Option<String>,
+    #[serde(default)]
+    pub side_effects: Option<bool>,
 }
 
 #[allow(dead_code)]
@@ -235,8 +225,15 @@ pub struct ToolCatalogResponse {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RpcToolResult {
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
     pub output: String,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EngineCheckpointLoadResponse {
+    checkpoint: Option<LoopState>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -260,22 +257,19 @@ pub struct ControlRpcClient {
     executor_tier: Option<u8>,
     executor_container_id: Option<String>,
     sequence: Arc<AtomicU64>,
-    internal_rpc_key: Option<String>,
-    nonce_counter: Arc<AtomicU64>,
 }
 
 impl ControlRpcClient {
     pub fn new(payload: &StartPayload) -> AppResult<Self> {
         let http = reqwest::Client::builder()
             .user_agent("takos-agent/0.1.0")
-            .timeout(CONTROL_RPC_HTTP_TIMEOUT)
+            .connect_timeout(Duration::from_secs(10))
             .build()?;
         let (base_url, token) = resolve_control_rpc_config(
             payload,
             nonempty_env(CONTROL_RPC_BASE_URL_ENV_KEY),
             nonempty_env(CONTROL_RPC_TOKEN_ENV_KEY),
         )?;
-        let internal_rpc_key = nonempty_env(CONTROL_RPC_INTERNAL_KEY_ENV_KEY);
         Ok(Self {
             http,
             base_url,
@@ -286,8 +280,6 @@ impl ControlRpcClient {
             executor_tier: payload.executor_tier,
             executor_container_id: payload.executor_container_id.clone(),
             sequence: Arc::new(AtomicU64::new(1)),
-            internal_rpc_key,
-            nonce_counter: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -302,16 +294,6 @@ impl ControlRpcClient {
     pub async fn run_bootstrap(&self) -> AppResult<RunBootstrap> {
         self.post_control_json(
             "run-bootstrap",
-            json!({
-                "runId": self.run_id,
-            }),
-        )
-        .await
-    }
-
-    pub async fn run_context(&self) -> AppResult<RunContext> {
-        self.post_control_json(
-            "run-context",
             json!({
                 "runId": self.run_id,
             }),
@@ -412,19 +394,52 @@ impl ControlRpcClient {
         .await
     }
 
-    pub async fn tool_execute(&self, name: &str, arguments: Value) -> AppResult<RpcToolResult> {
+    pub async fn tool_execute(
+        &self,
+        tool_call_id: &str,
+        name: &str,
+        arguments: Value,
+    ) -> AppResult<RpcToolResult> {
         self.post_control_json(
             "tool-execute",
             json!({
                 "runId": self.run_id,
+                "leaseVersion": self.lease_version,
                 "toolCall": {
-                    "id": format!("takos-agent-{}", uuid::Uuid::new_v4()),
+                    "id": tool_call_id,
                     "name": name,
                     "arguments": arguments,
                 }
             }),
         )
         .await
+    }
+
+    pub async fn save_engine_checkpoint(&self, checkpoint: &LoopState) -> AppResult<()> {
+        let _: Value = self
+            .post_control_json(
+                "engine-checkpoint-save",
+                json!({
+                    "runId": self.run_id,
+                    "leaseVersion": self.lease_version,
+                    "checkpoint": checkpoint,
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn load_engine_checkpoint(&self) -> AppResult<Option<LoopState>> {
+        let response: EngineCheckpointLoadResponse = self
+            .post_control_json(
+                "engine-checkpoint-load",
+                json!({
+                    "runId": self.run_id,
+                    "leaseVersion": self.lease_version,
+                }),
+            )
+            .await?;
+        Ok(response.checkpoint)
     }
 
     pub async fn tool_cleanup(&self) -> AppResult<()> {
@@ -464,44 +479,102 @@ impl ControlRpcClient {
         .await
     }
 
-    pub async fn add_assistant_message(
+    pub async fn complete_run(
         &self,
-        thread_id: &str,
-        content: &str,
-        metadata: Option<Value>,
+        status: &str,
+        usage: UsagePayload,
+        output: Option<&str>,
+        error_message: Option<&str>,
+        messages: Vec<Value>,
+        legacy_thread_id: Option<&str>,
     ) -> AppResult<()> {
-        let idempotency_key = format!(
-            "run:{}:assistant-message:{}",
-            self.run_id,
-            crate::hash::fnv1a_hex(content)
-        );
-        let mut body = json!({
-            "threadId": thread_id,
-            "idempotencyKey": idempotency_key,
-            "message": {
-                "role": "assistant",
-                "content": content,
-            },
+        let payload = json!({
+            "runId": self.run_id,
+            "serviceId": self.service_id,
+            "leaseVersion": self.lease_version,
+            "status": status,
+            "usage": usage,
+            "output": output,
+            "error": error_message,
+            "messages": messages,
         });
-        if let Some(metadata) = metadata {
-            body["metadata"] = metadata;
+        // `complete-run` is atomic and idempotent for this run/lease/payload.
+        // A timeout after the Worker committed is indistinguishable from a
+        // pre-commit transport failure, so retry the exact same payload only;
+        // never downgrade an ambiguous commit to the legacy split writes.
+        let mut attempt = 1;
+        let completion = loop {
+            let completion = self
+                .post_control_json::<Value>("complete-run", payload.clone())
+                .await;
+            match completion {
+                Err(ref error)
+                    if attempt < FINALIZATION_MAX_ATTEMPTS
+                        && is_retryable_control_rpc_error(error.as_ref()) =>
+                {
+                    tokio::time::sleep(finalization_retry_delay(attempt)).await;
+                    attempt += 1;
+                }
+                result => break result,
+            }
+        };
+        match completion {
+            Ok(_response) => Ok(()),
+            Err(rpc_error) if is_missing_complete_run_endpoint(rpc_error.as_ref()) => {
+                self.complete_run_legacy(
+                    status,
+                    usage,
+                    output,
+                    error_message,
+                    messages,
+                    legacy_thread_id,
+                )
+                .await
+            }
+            Err(rpc_error) => Err(rpc_error),
         }
-        let _: Value = self.post_control_json("add-message", body).await?;
-        Ok(())
     }
 
-    pub async fn update_run_status(
+    /// One-release rollback bridge for a new container that reaches an older
+    /// Worker without the atomic `complete-run` endpoint. It is entered only
+    /// for an unambiguous 404/405 endpoint-missing response; conflicts, 410,
+    /// auth failures, and 5xx responses never downgrade to split writes.
+    async fn complete_run_legacy(
         &self,
         status: &str,
         usage: UsagePayload,
         output: Option<&str>,
         error: Option<&str>,
+        messages: Vec<Value>,
+        legacy_thread_id: Option<&str>,
     ) -> AppResult<()> {
+        if let Some(thread_id) = legacy_thread_id.filter(|value| !value.trim().is_empty()) {
+            for (index, message) in messages.into_iter().enumerate() {
+                let _: Value = self
+                    .post_control_json(
+                        "add-message",
+                        json!({
+                            "runId": self.run_id,
+                            "threadId": thread_id,
+                            "serviceId": self.service_id,
+                            "leaseVersion": self.lease_version,
+                            "message": message,
+                            "idempotencyKey": format!(
+                                "legacy-complete:{}:{status}:{index}",
+                                self.run_id
+                            ),
+                        }),
+                    )
+                    .await?;
+            }
+        }
         let _: Value = self
             .post_control_json(
                 "update-run-status",
                 json!({
                     "runId": self.run_id,
+                    "serviceId": self.service_id,
+                    "leaseVersion": self.lease_version,
                     "status": status,
                     "usage": usage,
                     "output": output,
@@ -521,6 +594,7 @@ impl ControlRpcClient {
                     "type": event_type,
                     "data": data,
                     "sequence": self.next_sequence(),
+                    "leaseVersion": self.lease_version,
                 }),
             )
             .await?;
@@ -537,24 +611,31 @@ impl ControlRpcClient {
             AGENT_CONTROL_RPC_PATH_PREFIX,
             endpoint.trim_start_matches('/')
         );
-        self.post_json(&path, body).await
+        let timeout = match endpoint.trim_start_matches('/') {
+            "tool-execute" => CONTROL_RPC_TOOL_TIMEOUT,
+            "complete-run" => CONTROL_RPC_FINALIZATION_TIMEOUT,
+            _ => CONTROL_RPC_HTTP_TIMEOUT,
+        };
+        self.post_json(&path, body, timeout).await
     }
 
-    async fn post_json<T: DeserializeOwned>(&self, path: &str, body: Value) -> AppResult<T> {
+    async fn post_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: Value,
+        timeout: Duration,
+    ) -> AppResult<T> {
         let url = format!("{}{}", self.base_url, path);
-        // Serialize the body to a deterministic JSON string so the HMAC body
-        // digest covers exactly the bytes we send on the wire.
+        // Serialize once per attempt; callers that retry pass the same Value,
+        // preserving the same atomic completion rather than manufacturing a
+        // second terminal outcome.
         let body_bytes = serde_json::to_vec(&body).map_err(|err| {
             io::Error::other(format!("failed to encode {path} request body: {err}"))
         })?;
-        let body_string = std::str::from_utf8(&body_bytes)
-            .map_err(|err| {
-                io::Error::other(format!("{path} request body is not valid utf-8: {err}"))
-            })?
-            .to_string();
         let mut request = self
             .http
             .post(url)
+            .timeout(timeout)
             .bearer_auth(&self.token)
             .header("Content-Type", "application/json")
             .header("X-Takos-Run-Id", &self.run_id);
@@ -564,47 +645,13 @@ impl ControlRpcClient {
         if let Some(executor_container_id) = &self.executor_container_id {
             request = request.header("X-Takos-Executor-Container-Id", executor_container_id);
         }
-        // When the operator has provisioned an internal HMAC key, attach a
-        // signed envelope (capability, actor context, body digest, nonce,
-        // timestamp). The receiver on takos must independently verify the
-        // signature via `verify_internal_rpc` before trusting the bearer.
-        if let Some(secret) = self.internal_rpc_key.as_deref() {
-            let request_id = format!("agent-{}-{}", self.run_id, uuid::Uuid::new_v4());
-            let nonce = format!(
-                "agent-{}-{}",
-                self.run_id,
-                self.nonce_counter.fetch_add(1, Ordering::Relaxed),
-            );
-            let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-            let actor = TakosActorContext {
-                actor_account_id: CONTROL_RPC_INTERNAL_CALLER.into(),
-                space_id: None,
-                roles: vec!["agent".into()],
-                request_id: request_id.clone(),
-                principal_kind: Some("service".into()),
-                service_id: Some(self.service_id.clone()),
-                agent_id: Some(self.run_id.clone()),
-            };
-            let signed = sign_internal_rpc(&InternalRpcSignInput {
-                method: "POST",
-                path,
-                query: None,
-                body: &body_string,
-                actor: &actor,
-                caller: CONTROL_RPC_INTERNAL_CALLER,
-                audience: CONTROL_RPC_INTERNAL_AUDIENCE,
-                capabilities: &[CONTROL_RPC_INTERNAL_CAPABILITY],
-                request_id: Some(&request_id),
-                nonce: &nonce,
-                timestamp: &timestamp,
-                secret,
-            })
-            .map_err(io::Error::other)?;
-            for (name, value) in signed.headers {
-                request = request.header(name, value);
-            }
-        }
-        let response = request.body(body_bytes).send().await?;
+        let response = request.body(body_bytes).send().await.map_err(|err| {
+            Box::new(ControlRpcError {
+                kind: ControlRpcErrorKind::Network,
+                status: err.status(),
+                message: format!("{path} request failed: {err}"),
+            }) as Box<dyn std::error::Error + Send + Sync>
+        })?;
         match Self::decode_response::<T>(path, response).await {
             Ok(value) => Ok(value),
             Err(err) => Err(Box::new(err) as Box<dyn std::error::Error + Send + Sync>),
@@ -617,7 +664,11 @@ impl ControlRpcClient {
     ) -> Result<T, ControlRpcError> {
         let status = response.status();
         let text = response.text().await.map_err(|err| ControlRpcError {
-            kind: ControlRpcErrorKind::Network,
+            kind: if status.is_success() {
+                ControlRpcErrorKind::ResponseAmbiguous
+            } else {
+                ControlRpcErrorKind::Network
+            },
             status: Some(status),
             message: format!("{path} response read failed: {err}"),
         })?;
@@ -635,10 +686,76 @@ impl ControlRpcClient {
             });
         }
         serde_json::from_str(&text).map_err(|err| ControlRpcError {
-            kind: ControlRpcErrorKind::Other,
+            // A successful status with a truncated/malformed response is
+            // commit-ambiguous. `complete-run` may safely replay the identical
+            // atomic payload; ordinary RPC callers still surface the error.
+            kind: ControlRpcErrorKind::ResponseAmbiguous,
             status: Some(status),
             message: format!("failed to decode {path} response: {err}; body={text}"),
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct ControlRpcLoopStateRepository {
+    client: ControlRpcClient,
+}
+
+impl ControlRpcLoopStateRepository {
+    pub const fn new(client: ControlRpcClient) -> Self {
+        Self { client }
+    }
+
+    pub async fn load_current(&self) -> AppResult<Option<LoopState>> {
+        self.client.load_engine_checkpoint().await
+    }
+}
+
+#[async_trait]
+impl LoopStateRepository for ControlRpcLoopStateRepository {
+    async fn save_checkpoint(&self, state: LoopState) -> EngineResult<()> {
+        self.client
+            .save_engine_checkpoint(&state)
+            .await
+            .map_err(|error| {
+                EngineError::Storage(format!("control-plane checkpoint save failed: {error}"))
+            })
+    }
+
+    async fn load_checkpoint(
+        &self,
+        session_id: &SessionId,
+        loop_id: &LoopId,
+    ) -> EngineResult<Option<LoopState>> {
+        let checkpoint = self
+            .client
+            .load_engine_checkpoint()
+            .await
+            .map_err(|error| {
+                EngineError::Storage(format!("control-plane checkpoint load failed: {error}"))
+            })?;
+        match checkpoint {
+            Some(checkpoint)
+                if checkpoint.session_id != *session_id || checkpoint.loop_id != *loop_id =>
+            {
+                Err(EngineError::Storage(
+                    "control-plane checkpoint identity does not match the requested loop"
+                        .to_string(),
+                ))
+            }
+            value => Ok(value),
+        }
+    }
+
+    async fn clear_checkpoint(
+        &self,
+        _session_id: &SessionId,
+        _loop_id: &LoopId,
+    ) -> EngineResult<()> {
+        // Keep the final pre-node checkpoint until complete-run atomically
+        // commits the transcript and terminal Run ledger. Clearing here would
+        // reopen a crash window between engine completion and that commit.
+        Ok(())
     }
 }
 
@@ -656,6 +773,9 @@ pub enum ControlRpcErrorKind {
     NotFound,
     /// Transport / I/O failure before a structured status was obtained.
     Network,
+    /// The server may have committed, but its successful response could not be
+    /// decoded. Safe only for replaying an idempotent atomic request.
+    ResponseAmbiguous,
     /// Any other failure.
     Other,
 }
@@ -717,21 +837,85 @@ impl ControlRpcError {
     pub fn is_lease_lost(&self) -> bool {
         matches!(self.kind, ControlRpcErrorKind::LeaseLost)
     }
+
+    /// A physically revoked proxy token returns 401/403, while a deleted run
+    /// may return 404. These are equivalent to the structured 409 lease-lost
+    /// signal for a run-scoped agent: it no longer has authority to continue or
+    /// attempt terminal writes with this credential.
+    pub fn is_run_authority_lost(&self) -> bool {
+        self.is_lease_lost()
+            || matches!(
+                self.status,
+                Some(StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND)
+            )
+    }
+}
+
+fn is_missing_complete_run_endpoint(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(source) = current {
+        if let Some(typed) = source.downcast_ref::<ControlRpcError>() {
+            if typed.status == Some(StatusCode::METHOD_NOT_ALLOWED) {
+                return true;
+            }
+            if typed.status != Some(StatusCode::NOT_FOUND) {
+                return false;
+            }
+            let message = typed.message.trim().to_ascii_lowercase();
+            return message.contains("unknown control rpc path")
+                || message.ends_with("404 not found")
+                || message.ends_with(r#"404 {"error":"not found"}"#);
+        }
+        current = source.source();
+    }
+    false
+}
+
+fn is_retryable_control_rpc_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(source) = current {
+        if let Some(typed) = source.downcast_ref::<ControlRpcError>() {
+            return match typed.kind {
+                ControlRpcErrorKind::Network => typed.status.is_none_or(|status| {
+                    status.is_server_error()
+                        || status == StatusCode::REQUEST_TIMEOUT
+                        || status == StatusCode::TOO_MANY_REQUESTS
+                }),
+                ControlRpcErrorKind::ResponseAmbiguous => true,
+                ControlRpcErrorKind::Other => typed.status.is_some_and(|status| {
+                    status.is_server_error()
+                        || status == StatusCode::REQUEST_TIMEOUT
+                        || status == StatusCode::TOO_MANY_REQUESTS
+                }),
+                ControlRpcErrorKind::LeaseLost
+                | ControlRpcErrorKind::Conflict
+                | ControlRpcErrorKind::NotFound => false,
+            };
+        }
+        current = source.source();
+    }
+    false
+}
+
+fn finalization_retry_delay(failed_attempt: usize) -> Duration {
+    let exponent = u32::try_from(failed_attempt.saturating_sub(1)).unwrap_or(u32::MAX);
+    let multiplier = 2_u32.saturating_pow(exponent.min(8));
+    let base = FINALIZATION_RETRY_BASE_DELAY.saturating_mul(multiplier);
+    let jitter_bound_ms = u64::try_from(base.as_millis() / 2)
+        .unwrap_or(u64::MAX)
+        .max(1);
+    let entropy = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| u64::from(duration.subsec_nanos()));
+    base.saturating_add(Duration::from_millis(entropy % jitter_bound_ms))
 }
 
 fn parse_run_config_response(payload: &Value) -> RunConfigResponse {
     RunConfigResponse {
         system_prompt: string_field(payload, &["systemPrompt"]).unwrap_or_default(),
-        max_iterations: u32_field(payload, &["maxIterations"]),
         max_graph_steps: u32_field(payload, &["maxGraphSteps"]),
         max_tool_rounds: u32_field(payload, &["maxToolRounds"]),
         temperature: f32_field(payload, &["temperature"]),
-        rate_limit: u32_field(payload, &["rateLimit"]),
-        embedding_provider: string_field(payload, &["embeddingProvider"]),
-        embedding_model: string_field(payload, &["embeddingModel"]),
-        embedding_base_url: string_field(payload, &["embeddingBaseUrl"]),
-        embedding_api_key: string_field(payload, &["embeddingApiKey"]),
-        embedding_dimensions: u32_field(payload, &["embeddingDimensions"]),
     }
 }
 
@@ -805,6 +989,24 @@ pub fn is_lease_lost(error: &(dyn std::error::Error + 'static)) -> bool {
         || message.contains(&format!("status:{conflict_code}"))
 }
 
+/// Returns true when the run-scoped control credential is no longer
+/// authoritative. This includes the canonical lease-lost response and HTTP
+/// authentication/authorization failures produced by immediate token
+/// revocation after cancellation, replacement, or terminal completion.
+pub fn is_run_authority_lost(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(source) = current {
+        if let Some(typed) = source.downcast_ref::<ControlRpcError>() {
+            return typed.is_run_authority_lost();
+        }
+        current = source.source();
+    }
+    // Retain compatibility for legacy wrapped errors that predate the typed
+    // ControlRpcError path. Exact 401/403/404 parsing is intentionally omitted
+    // here to avoid cancelling on an unrelated nested error string.
+    is_lease_lost(error)
+}
+
 fn string_field(payload: &Value, keys: &[&str]) -> Option<String> {
     keys.iter().find_map(|key| {
         payload
@@ -866,8 +1068,9 @@ fn activated_skill_array_field(payload: &Value, keys: &[&str]) -> Vec<ActivatedS
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lease_lost, parse_run_config_response, resolve_control_rpc_config, ControlRpcClient,
-        ControlRpcError, ControlRpcErrorKind, RunBootstrap, StartPayload,
+        is_lease_lost, is_missing_complete_run_endpoint, is_run_authority_lost,
+        parse_run_config_response, resolve_control_rpc_config, ControlRpcClient, ControlRpcError,
+        ControlRpcErrorKind, RunBootstrap, StartPayload,
     };
     use reqwest::StatusCode;
     use serde_json::json;
@@ -878,6 +1081,32 @@ mod tests {
     use std::thread;
 
     static CONTROL_RPC_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn legacy_completion_fallback_is_limited_to_missing_endpoint_responses() {
+        let error = |status: StatusCode, message: &str| ControlRpcError {
+            kind: ControlRpcErrorKind::from_response(status, message),
+            status: Some(status),
+            message: format!("complete-run failed: {status} {message}"),
+        };
+
+        assert!(is_missing_complete_run_endpoint(&error(
+            StatusCode::NOT_FOUND,
+            r#"{"error":"Unknown control RPC path: complete-run"}"#,
+        )));
+        assert!(is_missing_complete_run_endpoint(&error(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "method not allowed",
+        )));
+        for (status, message) in [
+            (StatusCode::NOT_FOUND, r#"{"error":"Run not found"}"#),
+            (StatusCode::CONFLICT, r#"{"error":"lease_lost"}"#),
+            (StatusCode::GONE, "legacy split disabled"),
+            (StatusCode::INTERNAL_SERVER_ERROR, "boom"),
+        ] {
+            assert!(!is_missing_complete_run_endpoint(&error(status, message)));
+        }
+    }
 
     #[test]
     fn control_rpc_error_kind_classifies_structured_lease_lost_payload() {
@@ -926,13 +1155,35 @@ mod tests {
     }
 
     #[test]
+    fn run_authority_lost_includes_revoked_token_statuses_but_not_generic_conflict() {
+        for status in [
+            StatusCode::UNAUTHORIZED,
+            StatusCode::FORBIDDEN,
+            StatusCode::NOT_FOUND,
+        ] {
+            let revoked: Box<dyn std::error::Error + Send + Sync> = Box::new(ControlRpcError {
+                kind: ControlRpcErrorKind::from_response(status, ""),
+                status: Some(status),
+                message: "run credential rejected".to_string(),
+            });
+            assert!(is_run_authority_lost(revoked.as_ref()));
+        }
+
+        let conflict: Box<dyn std::error::Error + Send + Sync> = Box::new(ControlRpcError {
+            kind: ControlRpcErrorKind::Conflict,
+            status: Some(StatusCode::CONFLICT),
+            message: "ordinary state conflict".to_string(),
+        });
+        assert!(!is_run_authority_lost(conflict.as_ref()));
+    }
+
+    #[test]
     fn run_bootstrap_accepts_app_installation_context() {
         let bootstrap: RunBootstrap = serde_json::from_value(json!({
             "status": "running",
             "spaceId": "space_1",
             "installationId": "inst_1",
             "runtimeNamespace": "shared-cell://tokyo-cell-01/namespaces/inst_1",
-            "sessionId": "session_1",
             "threadId": "thread_1",
             "userId": "user_1",
             "agentType": "default"
@@ -951,33 +1202,13 @@ mod tests {
     fn run_config_parser_uses_current_camel_case_fields_only() {
         let config = parse_run_config_response(&json!({
             "systemPrompt": "control prompt",
-            "maxIterations": 9,
             "maxGraphSteps": 7,
-            "maxToolRounds": 3,
-            "rateLimit": 2,
-            "embeddingProvider": "openai",
-            "embeddingModel": "text-embedding-3-small",
-            "embeddingBaseUrl": "https://api.example/v1",
-            "embeddingApiKey": "secret",
-            "embeddingDimensions": 1536
+            "maxToolRounds": 3
         }));
 
         assert_eq!(config.system_prompt, "control prompt");
-        assert_eq!(config.max_iterations, Some(9));
         assert_eq!(config.max_graph_steps, Some(7));
         assert_eq!(config.max_tool_rounds, Some(3));
-        assert_eq!(config.rate_limit, Some(2));
-        assert_eq!(config.embedding_provider.as_deref(), Some("openai"));
-        assert_eq!(
-            config.embedding_model.as_deref(),
-            Some("text-embedding-3-small")
-        );
-        assert_eq!(
-            config.embedding_base_url.as_deref(),
-            Some("https://api.example/v1")
-        );
-        assert_eq!(config.embedding_api_key.as_deref(), Some("secret"));
-        assert_eq!(config.embedding_dimensions, Some(1536));
     }
 
     #[test]
@@ -996,15 +1227,8 @@ mod tests {
         }));
 
         assert_eq!(config.system_prompt, "");
-        assert_eq!(config.max_iterations, None);
         assert_eq!(config.max_graph_steps, None);
         assert_eq!(config.max_tool_rounds, None);
-        assert_eq!(config.rate_limit, None);
-        assert_eq!(config.embedding_provider, None);
-        assert_eq!(config.embedding_model, None);
-        assert_eq!(config.embedding_base_url, None);
-        assert_eq!(config.embedding_api_key, None);
-        assert_eq!(config.embedding_dimensions, None);
     }
 
     #[tokio::test]
@@ -1081,7 +1305,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn control_rpc_client_add_assistant_message_includes_metadata() {
+    async fn control_rpc_client_complete_run_carries_atomic_transcript() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
         let address = listener.local_addr().expect("test listener address");
         let handle = thread::spawn(move || {
@@ -1140,21 +1364,19 @@ mod tests {
         .expect("control RPC client should build");
 
         client
-            .add_assistant_message(
-                "thread-1",
-                "done",
-                Some(json!({
-                    "tool_executions": [{
-                        "tool_call_id": "rust-tool-1",
-                        "name": "repo_list",
-                        "summary": "repo_list output=ok",
-                        "output": "ok",
-                        "error": null,
-                    }]
-                })),
+            .complete_run(
+                "completed",
+                super::UsagePayload::default(),
+                Some("done"),
+                None,
+                vec![json!({
+                    "role": "assistant",
+                    "content": "done"
+                })],
+                Some("thread-test"),
             )
             .await
-            .expect("assistant message should succeed");
+            .expect("complete-run should succeed");
 
         let request = handle.join().expect("test server should join");
         let body = request
@@ -1164,13 +1386,242 @@ mod tests {
         let parsed: serde_json::Value =
             serde_json::from_str(body).expect("request body should be json");
 
-        assert_eq!(parsed["threadId"], "thread-1");
-        assert_eq!(parsed["message"]["content"], "done");
-        assert!(parsed["message"]["metadata"].is_null());
-        assert_eq!(
-            parsed["metadata"]["tool_executions"][0]["tool_call_id"],
-            "rust-tool-1",
-        );
+        assert_eq!(parsed["status"], "completed");
+        assert_eq!(parsed["output"], "done");
+        assert_eq!(parsed["serviceId"], "service-test");
+        assert_eq!(parsed["leaseVersion"], 7);
+        assert_eq!(parsed["messages"][0]["content"], "done");
+    }
+
+    #[tokio::test]
+    async fn complete_run_replays_the_same_atomic_payload_on_transient_and_ambiguous_failures() {
+        use axum::body::{to_bytes, Body};
+        use axum::extract::State;
+        use axum::http::Request;
+        use axum::response::{IntoResponse, Response};
+        use axum::routing::post;
+        use axum::{Json, Router};
+        use std::sync::Arc;
+        use tokio::sync::Mutex as AsyncMutex;
+
+        type Captured = Arc<AsyncMutex<Vec<serde_json::Value>>>;
+        async fn handler(State(captured): State<Captured>, request: Request<Body>) -> Response {
+            let bytes = to_bytes(request.into_body(), 1024 * 1024)
+                .await
+                .expect("request body");
+            let body = serde_json::from_slice(&bytes).expect("request JSON");
+            let mut captured = captured.lock().await;
+            captured.push(body);
+            match captured.len() {
+                1 => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({ "error": "temporary" })),
+                )
+                    .into_response(),
+                // A malformed success response is commit-ambiguous. Replaying
+                // the same atomic completion is the only safe recovery.
+                2 => (StatusCode::OK, "not-json").into_response(),
+                _ => Json(json!({})).into_response(),
+            }
+        }
+
+        let captured: Captured = Arc::new(AsyncMutex::new(Vec::new()));
+        let app = Router::new()
+            .fallback(post(handler))
+            .with_state(captured.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("test server");
+        });
+        let client = control_rpc_client_with_env_cleared(&StartPayload {
+            run_id: "run-complete-retry".to_string(),
+            worker_id: "worker-complete-retry".to_string(),
+            service_id: Some("service-complete-retry".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(11),
+            executor_tier: Some(1),
+            executor_container_id: Some("retry-container".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+
+        client
+            .complete_run(
+                "completed",
+                super::UsagePayload::default(),
+                Some("done"),
+                None,
+                vec![json!({ "role": "assistant", "content": "done" })],
+                Some("thread-complete-retry"),
+            )
+            .await
+            .expect("third identical atomic completion should succeed");
+
+        server.abort();
+        let captured = captured.lock().await;
+        assert_eq!(captured.len(), 3);
+        assert!(captured.iter().all(|payload| payload == &captured[0]));
+        assert_eq!(captured[0]["status"], "completed");
+    }
+
+    #[tokio::test]
+    async fn control_rpc_client_round_trips_engine_checkpoint_with_lease() {
+        use axum::body::{to_bytes, Body};
+        use axum::extract::State;
+        use axum::http::Request;
+        use axum::response::{IntoResponse, Response};
+        use axum::routing::post;
+        use axum::{Json, Router};
+        use std::sync::Arc;
+        use takos_agent_engine::domain::{LoopState, LoopStatus};
+        use takos_agent_engine::ids::{LoopId, SessionId};
+        use tokio::sync::Mutex as AsyncMutex;
+
+        type Stored = Arc<AsyncMutex<Option<serde_json::Value>>>;
+        async fn handler(State(stored): State<Stored>, request: Request<Body>) -> Response {
+            let path = request.uri().path().to_string();
+            let bytes = to_bytes(request.into_body(), 3 * 1024 * 1024)
+                .await
+                .expect("request body");
+            let body: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("checkpoint request JSON");
+            if path.ends_with("engine-checkpoint-save") {
+                assert_eq!(body["leaseVersion"], 13);
+                *stored.lock().await = Some(body["checkpoint"].clone());
+                return Json(json!({ "saved": true })).into_response();
+            }
+            Json(json!({ "checkpoint": stored.lock().await.clone() })).into_response()
+        }
+
+        let stored: Stored = Arc::new(AsyncMutex::new(None));
+        let app = Router::new()
+            .fallback(post(handler))
+            .with_state(stored.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("test server");
+        });
+        let client = control_rpc_client_with_env_cleared(&StartPayload {
+            run_id: "run-checkpoint".to_string(),
+            worker_id: "worker-checkpoint".to_string(),
+            service_id: Some("service-checkpoint".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(13),
+            executor_tier: Some(1),
+            executor_container_id: Some("checkpoint-container".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+        let session_id = SessionId::new();
+        let loop_id = LoopId::new();
+        let checkpoint = LoopState {
+            session_id,
+            loop_id,
+            current_node: "execute_tools".to_string(),
+            status: LoopStatus::Running,
+            state_json: json!({
+                "session_id": session_id,
+                "loop_id": loop_id,
+                "execution_profile": "external_context",
+            }),
+        };
+
+        client
+            .save_engine_checkpoint(&checkpoint)
+            .await
+            .expect("checkpoint save");
+        let loaded = client
+            .load_engine_checkpoint()
+            .await
+            .expect("checkpoint load")
+            .expect("stored checkpoint");
+
+        server.abort();
+        assert_eq!(loaded, checkpoint);
+    }
+
+    #[tokio::test]
+    async fn missing_complete_run_endpoint_uses_one_release_legacy_bridge() {
+        use axum::body::{to_bytes, Body};
+        use axum::extract::State;
+        use axum::http::Request;
+        use axum::response::{IntoResponse, Response};
+        use axum::routing::post;
+        use axum::{Json, Router};
+        use std::sync::Arc;
+        use tokio::sync::Mutex as AsyncMutex;
+
+        type Captured = Arc<AsyncMutex<Vec<(String, serde_json::Value)>>>;
+        async fn handler(State(captured): State<Captured>, request: Request<Body>) -> Response {
+            let path = request.uri().path().to_string();
+            let bytes = to_bytes(request.into_body(), 1024 * 1024)
+                .await
+                .expect("request body");
+            let body = serde_json::from_slice(&bytes).expect("request JSON");
+            captured.lock().await.push((path.clone(), body));
+            if path.ends_with("/complete-run") {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({ "error": "Unknown control RPC path: complete-run" })),
+                )
+                    .into_response();
+            }
+            Json(json!({})).into_response()
+        }
+
+        let captured: Captured = Arc::new(AsyncMutex::new(Vec::new()));
+        let app = Router::new()
+            .fallback(post(handler))
+            .with_state(captured.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("test server");
+        });
+        let client = control_rpc_client_with_env_cleared(&StartPayload {
+            run_id: "run-legacy-bridge".to_string(),
+            worker_id: "worker-legacy-bridge".to_string(),
+            service_id: Some("service-legacy-bridge".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(9),
+            executor_tier: Some(1),
+            executor_container_id: Some("legacy-container".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "legacy-token".to_string(),
+        })
+        .expect("control RPC client");
+
+        client
+            .complete_run(
+                "completed",
+                super::UsagePayload::default(),
+                Some("done"),
+                None,
+                vec![json!({ "role": "assistant", "content": "done" })],
+                Some("thread-legacy-bridge"),
+            )
+            .await
+            .expect("legacy bridge should complete");
+        server.abort();
+
+        let captured = captured.lock().await;
+        assert_eq!(captured.len(), 3);
+        assert!(captured[0].0.ends_with("/complete-run"));
+        assert!(captured[1].0.ends_with("/add-message"));
+        assert!(captured[2].0.ends_with("/update-run-status"));
+        assert_eq!(captured[1].1["threadId"], "thread-legacy-bridge");
+        assert_eq!(captured[1].1["message"]["content"], "done");
+        assert_eq!(captured[2].1["status"], "completed");
     }
 
     #[tokio::test]
@@ -1211,7 +1662,8 @@ mod tests {
                     break;
                 }
             }
-            let response_body = r#"{"systemPrompt":"control prompt","maxIterations":9,"maxGraphSteps":7,"maxToolRounds":3}"#;
+            let response_body =
+                r#"{"systemPrompt":"control prompt","maxGraphSteps":7,"maxToolRounds":3}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 response_body.len(),
@@ -1250,7 +1702,6 @@ mod tests {
 
         assert_eq!(parsed["agentType"], "implementer");
         assert_eq!(run_config.system_prompt, "control prompt");
-        assert_eq!(run_config.max_iterations, Some(9));
         assert_eq!(run_config.max_graph_steps, Some(7));
         assert_eq!(run_config.max_tool_rounds, Some(3));
     }

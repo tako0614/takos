@@ -1,19 +1,16 @@
-import { createEffect, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { Icons } from "../lib/Icons.tsx";
-import type { Space } from "../types/index.ts";
 import { SkillsTab } from "./agent/SkillsTab.tsx";
 import { MemoryTab } from "./agent/MemoryTab.tsx";
 import { ModelTab } from "./agent/ModelTab.tsx";
 import { WorkTab } from "./agent/WorkTab.tsx";
-import { McpServersSection } from "./hub/McpServersSection.tsx";
 
-type AgentTab = "skills" | "memory" | "model" | "work" | "tools";
+type AgentTab = "skills" | "memory" | "model" | "work";
 
 export interface AgentModalProps {
   spaceId: string;
-  spaces: Space[];
   onClose: () => void;
 }
 
@@ -36,12 +33,6 @@ const TAB_CONFIG: {
     descriptionKey: "tabModelDescription",
   },
   {
-    id: "tools",
-    icon: <Icons.Wrench />,
-    labelKey: "tabTools",
-    descriptionKey: "tabToolsDescription",
-  },
-  {
     id: "skills",
     icon: <Icons.Code />,
     labelKey: "tabSkills",
@@ -58,15 +49,8 @@ const TAB_CONFIG: {
 export function AgentModal(props: AgentModalProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<AgentTab>("work");
-  const [selectedToolsWsId, setSelectedToolsWsId] = createSignal<string>(
-    props.spaceId,
-  );
   const activeTabMeta = () =>
     TAB_CONFIG.find((tab) => tab.id === activeTab()) ?? TAB_CONFIG[0];
-
-  createEffect(() => {
-    setSelectedToolsWsId(props.spaceId);
-  });
 
   return (
     <div
@@ -139,13 +123,6 @@ export function AgentModal(props: AgentModalProps) {
           {activeTab() === "memory" && <MemoryTab spaceId={props.spaceId} />}
           {activeTab() === "model" && <ModelTab spaceId={props.spaceId} />}
           {activeTab() === "work" && <WorkTab spaceId={props.spaceId} />}
-          {activeTab() === "tools" && (
-            <McpServersSection
-              spaces={props.spaces}
-              selectedSpaceId={selectedToolsWsId()}
-              setSelectedSpaceId={setSelectedToolsWsId}
-            />
-          )}
         </div>
       </div>
     </div>

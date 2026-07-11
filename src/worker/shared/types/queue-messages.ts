@@ -3,18 +3,19 @@ export const WORKFLOW_QUEUE_MESSAGE_VERSION = 3;
 export const DEPLOYMENT_QUEUE_MESSAGE_VERSION = 1;
 export const INDEX_QUEUE_MESSAGE_VERSION = 1;
 export type WorkflowShell =
-  | "bash"
-  | "pwsh"
-  | "python"
-  | "sh"
-  | "cmd"
-  | "powershell";
+  "bash" | "pwsh" | "python" | "sh" | "cmd" | "powershell";
 
 export interface RunQueueMessage {
   version: typeof RUN_QUEUE_MESSAGE_VERSION;
   runId: string;
   timestamp: number;
   retryCount?: number;
+  /**
+   * Number of times dispatch was deferred because every executor slot was
+   * occupied. This is deliberately independent from Cloudflare delivery
+   * attempts: capacity is normal backpressure, not a failed run attempt.
+   */
+  backpressureCount?: number;
   model?: string;
 }
 
@@ -26,21 +27,29 @@ export interface RunQueueMessage {
  * run via `scheduleBackground` (in-process tail). They are intentionally
  * excluded from this union so producers cannot accidentally enqueue them.
  */
-export type IndexJobQueueType =
-  | "vectorize"
-  | "info_unit"
-  | "thread_context"
-  | "repo_code_index"
-  | "memory_build_paths";
+export const INDEX_JOB_QUEUE_TYPES = [
+  "vectorize",
+  "info_unit",
+  "thread_context",
+  "repo_code_index",
+  "memory_build_paths",
+] as const;
+export type IndexJobQueueType = (typeof INDEX_JOB_QUEUE_TYPES)[number];
 
 export interface IndexJobQueueMessage {
   version: typeof INDEX_QUEUE_MESSAGE_VERSION;
   jobId: string;
+  /** Portable logical delivery owner; stable across transport retries. */
+  deliveryId: string;
   spaceId: string;
   type: IndexJobQueueType;
   targetId?: string;
   repoId?: string;
   timestamp: number;
+}
+
+export function indexJobDeliveryId(jobId: string): string {
+  return `index-delivery:${jobId}`;
 }
 
 export interface WorkflowStep {

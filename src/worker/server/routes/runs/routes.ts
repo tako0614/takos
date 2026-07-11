@@ -4,22 +4,25 @@ import type {
   Artifact,
   ArtifactType,
   Env,
+  RunStatus,
 } from "../../../shared/types/index.ts";
 import { artifacts, runs } from "../../../infra/db/schema.ts";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
   buildTerminalPayload,
   RUN_TERMINAL_STATUSES,
+  transitionRunTerminalAtomically,
 } from "../../../application/services/run-notifier/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 import {
   AppError,
   BadRequestError,
+  ConflictError,
   ErrorCodes,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
-import { persistAndEmitEvent } from "../../../application/services/execution/run-events.ts";
+import { emitCommittedRunEvent } from "../../../application/services/execution/run-events.ts";
 import { registerRunCreateRoutes } from "./create.ts";
 import { registerRunListRoutes } from "./list.ts";
 import type { BaseVariables } from "../route-auth.ts";
@@ -27,6 +30,8 @@ import { getDb } from "../../../infra/db/index.ts";
 import { checkRunAccess } from "./access.ts";
 import { loadRunObservation } from "./observation.ts";
 import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-header-utils.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import type { AgentExecutorEnv } from "../../../runtime/container-hosts/executor-utils.ts";
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
@@ -132,37 +137,94 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await checkRunAccess(
-      c.env.DB,
-      runId,
-      user.id,
-      ["owner", "admin", "editor"],
-    );
+    const access = await checkRunAccess(c.env.DB, runId, user.id, [
+      "owner",
+      "admin",
+      "editor",
+    ]);
     if (!access) {
       throw new NotFoundError("Run");
     }
 
-    if (RUN_TERMINAL_STATUSES.has(access.run.status)) {
-      throw new BadRequestError("Run is already finished");
-    }
-
     const db = getDb(c.env.DB);
     const completedAt = new Date().toISOString();
-    await db.update(runs).set({ status: "cancelled", completedAt }).where(
-      eq(runs.id, runId),
-    );
-
+    let expectedStatus: RunStatus = access.run.status;
     const cancellationPayload = buildTerminalPayload(
       runId,
       "cancelled",
       {},
       access.run.session_id ?? null,
     );
-    await persistAndEmitEvent(
+    let cancellation: Awaited<
+      ReturnType<typeof transitionRunTerminalAtomically>
+    > | null = null;
+
+    // Compare-and-set the observed active status instead of unconditionally
+    // overwriting the row. Completion and cancellation can race: without the
+    // status predicate a completion that lands after checkRunAccess() but
+    // before this UPDATE is incorrectly rewritten as cancelled. Retry a small
+    // number of active-to-active transitions (normally queued -> running), but
+    // never overwrite a terminal state.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (RUN_TERMINAL_STATUSES.has(expectedStatus)) {
+        throw new BadRequestError("Run is already finished");
+      }
+
+      const result = await transitionRunTerminalAtomically(c.env.DB, {
+        runId,
+        status: "cancelled",
+        expectedStatuses: [expectedStatus as "pending" | "queued" | "running"],
+        completedAt,
+        error: null,
+        eventType: "cancelled",
+        terminalEvent: cancellationPayload,
+      });
+      if (result.committed) {
+        cancellation = result;
+        break;
+      }
+
+      const current = await db
+        .select({ status: runs.status })
+        .from(runs)
+        .where(eq(runs.id, runId))
+        .get();
+      if (!current) {
+        throw new NotFoundError("Run");
+      }
+      expectedStatus = current.status as RunStatus;
+    }
+
+    if (!cancellation) {
+      throw new ConflictError("Run state changed while cancelling; retry");
+    }
+
+    // The DB compare-and-set is the authority revocation. Remove every known
+    // pooled/container credential immediately afterwards so a cancelled agent
+    // does not retain a usable bearer token until its next heartbeat or the
+    // 15-minute token TTL. This is best-effort availability cleanup: the
+    // central lease fence still denies every RPC if a container DO is
+    // temporarily unavailable.
+    if (c.env.EXECUTOR_CONTAINER) {
+      try {
+        const { revokeRunProxyTokens } =
+          await import("../../../runtime/container-hosts/executor-host.ts");
+        await revokeRunProxyTokens(c.env as unknown as AgentExecutorEnv, runId);
+      } catch (error) {
+        logWarn("Cancelled run proxy-token revoke failed", {
+          module: "run_routes",
+          runId,
+          error: String(error),
+        });
+      }
+    }
+
+    await emitCommittedRunEvent(
       c.env,
       runId,
       "cancelled",
       cancellationPayload,
+      cancellation.eventId,
       true,
     );
 
@@ -187,11 +249,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
         throw new BadRequestError("Invalid last_event_id");
       }
 
-      const access = await checkRunAccess(
-        c.env.DB,
-        runId,
-        user.id,
-      );
+      const access = await checkRunAccess(c.env.DB, runId, user.id);
       if (!access) {
         throw new NotFoundError("Run");
       }
@@ -245,8 +303,8 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
   app.get("/runs/:id/replay", async (c) => {
     const user = c.get("user");
     const runId = c.req.param("id");
-    const rawCursor = c.req.query("last_event_id") ?? c.req.query("after") ??
-      "0";
+    const rawCursor =
+      c.req.query("last_event_id") ?? c.req.query("after") ?? "0";
     const lastEventId = Number.parseInt(rawCursor, 10);
 
     if (!Number.isFinite(lastEventId) || lastEventId < 0) {
@@ -282,9 +340,12 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     }
 
     const db = getDb(c.env.DB);
-    const rows = await db.select().from(artifacts).where(
-      eq(artifacts.runId, runId),
-    ).orderBy(asc(artifacts.createdAt)).all();
+    const rows = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.runId, runId))
+      .orderBy(asc(artifacts.createdAt))
+      .all();
 
     return c.json({
       artifacts: rows.map((row) => artifactRowToApi(asArtifactRow(row))),
@@ -314,12 +375,11 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         metadata?: Record<string, unknown>;
       };
 
-      const access = await checkRunAccess(
-        c.env.DB,
-        runId,
-        user.id,
-        ["owner", "admin", "editor"],
-      );
+      const access = await checkRunAccess(c.env.DB, runId, user.id, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
       if (!access) {
         throw new NotFoundError("Run");
       }
@@ -329,21 +389,28 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
       }
 
       const db = getDb(c.env.DB);
-      const created = await db.insert(artifacts).values({
-        id: generateId(),
-        runId,
-        accountId: access.run.space_id,
-        type: body.type,
-        title: body.title ?? null,
-        content: body.content ?? null,
-        fileId: body.file_id ?? null,
-        metadata: JSON.stringify(body.metadata ?? {}),
-        createdAt: new Date().toISOString(),
-      }).returning().get();
+      const created = await db
+        .insert(artifacts)
+        .values({
+          id: generateId(),
+          runId,
+          accountId: access.run.space_id,
+          type: body.type,
+          title: body.title ?? null,
+          content: body.content ?? null,
+          fileId: body.file_id ?? null,
+          metadata: JSON.stringify(body.metadata ?? {}),
+          createdAt: new Date().toISOString(),
+        })
+        .returning()
+        .get();
 
-      return c.json({
-        artifact: artifactRowToApi(asArtifactRow(created)),
-      }, 201);
+      return c.json(
+        {
+          artifact: artifactRowToApi(asArtifactRow(created)),
+        },
+        201,
+      );
     },
   );
 
@@ -351,9 +418,11 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const artifactId = c.req.param("id");
     const db = getDb(c.env.DB);
-    const artifactRow = await db.select().from(artifacts).where(
-      eq(artifacts.id, artifactId),
-    ).get();
+    const artifactRow = await db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.id, artifactId))
+      .get();
 
     if (!artifactRow) {
       throw new NotFoundError("Artifact");

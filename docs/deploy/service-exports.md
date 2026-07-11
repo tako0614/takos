@@ -47,8 +47,9 @@ output "service_exports" {
 }
 ```
 
-The token value is not an OpenTofu output. Runtime authority is delivered
-through the workload runtime secret materialization path.
+The token value is not a public OpenTofu output. A publication may keep its signing authority in a sensitive Output;
+Takosumi's bind-time grant broker resolves that protected value and injects only a scoped consumer credential through
+the Run's dispatch-only environment.
 
 ## Takos Capabilities
 
@@ -59,30 +60,37 @@ Takos uses the Capsule output projection capability catalog directly:
 | MCP tools                        | app-provided `protocol.mcp.server` publications                             |
 | launcher / embedded UI           | app-provided `interface.ui.surface` publications                            |
 | file handlers                    | app-provided `interface.file.handler` publications                          |
-| Workspace file storage           | `storage.filesystem`                                                        |
-| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`                        |
-| Git                              | `source.repository`, `source.git.smart_http`                                |
+| Takos product-internal Workspace APIs | `storage.filesystem`, `source.repository` runtime projections          |
+| Workspace file and object tools  | installable `takos-storage`: `storage.object` + `protocol.mcp.server`       |
+| key-value / SQL storage          | app-provided `storage.key_value`, `storage.sql`                             |
+| Git                              | installable `takos-git`: `source.git.smart_http` + `protocol.mcp.server`   |
+| sandbox computer                 | installable `takos-computer`: `protocol.mcp.server`                         |
 | agent runtime                    | `automation.agent_runtime`, `automation.tool_provider`                      |
 | same-Workspace output/control access | `deployment.outputs`, `auth.bootstrap_token`, `control.api`             |
 
+`storage.filesystem` and `source.repository` remain internal Takos product projections. They do not add static agent
+tools; agent file/Git operations are discovered from the installed MCP servers above.
+
 ## Bindings And Grants
 
-Consumers do not receive API keys from outputs. Takos records which projected
-service capability it consumes, and Takosumi keeps the Capsule Output, policy,
-and audit evidence that authorized the run.
+Consumers do not receive API keys from public outputs. A consumer declares the publication, requested scopes, and env
+injection names. Takosumi keeps the Capsule Output, policy, and audit evidence, resolves one producer in the Workspace,
+and mints a prefix-scoped credential during the plan Run for supported service capabilities.
 
 Endpoint discovery and runtime authority are separate facts:
 
 - `service_exports` describes what a producer Capsule exposes.
 - `service_bindings` or product-side runtime config records what a consumer app requests.
-- Scoped runtime authority is delivered through workload runtime secret materialization, not through OpenTofu Outputs.
+- `storage.object` and `source.git.smart_http` scoped authority is minted at bind time from protected producer signing
+  material and delivered through the dispatch-only Run environment.
 
-Takos runtime services use product-neutral service-form identities where they exist. For example, a document app should
-consume `storage.filesystem` and request `files:read` / `files:write`.
+Takos runtime services use product-neutral service-form identities where they exist. For example, `takos-office`
+consumes the independently installed `storage.object` publication and requests `files:read` / `files:write`.
 
-That consume maps the storage endpoint URL. It does not mint a bearer token from OpenTofu Outputs; storage authority
-must arrive through workload runtime secret materialization such as `TAKOS_STORAGE_ACCESS_TOKEN` or
-`TAKOS_ACCESS_TOKEN`.
+That consume injects `OBJECT_STORAGE_API_URL`, a consumer-scoped `OBJECT_STORAGE_ACCESS_TOKEN`, and
+`OBJECT_STORAGE_KEY_PREFIX`. For Git, `takos-computer` requests `repos:read` / `repos:write` and receives
+`TAKOS_GIT_BASE_URL`, `TAKOS_GIT_ACCESS_TOKEN`, and `TAKOS_GIT_REPO_PREFIX`. These credentials never become public
+Output values.
 
 ## Source Detection
 

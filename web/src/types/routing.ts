@@ -8,6 +8,7 @@ export type View =
   | "memory"
   | "deploy"
   | "apps"
+  | "connections"
   | "store"
   | "chat"
   | "storage"
@@ -16,10 +17,7 @@ export type View =
   | "space-settings"
   | "settings";
 
-export const DEPLOY_SECTIONS = [
-  "workers",
-  "resources",
-] as const;
+export const DEPLOY_SECTIONS = ["workers", "resources"] as const;
 export type DeploySection = (typeof DEPLOY_SECTIONS)[number];
 export const DEPLOY_NAV_SECTIONS = [
   "workers",
@@ -54,6 +52,7 @@ export interface RouteState {
   repoName?: string;
   deploySection?: DeploySection;
   storeTab?: "discover" | "installed";
+  connectionServer?: string;
   storagePath?: string;
   legalPage?: LegalPageType;
 }

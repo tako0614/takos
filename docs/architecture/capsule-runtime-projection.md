@@ -12,19 +12,20 @@ Takosumi manages OpenTofu Capsules, Runs, StateVersions, Outputs, ProviderConnec
 also expose runtime services: HTTP APIs, MCP servers, Git endpoints, object stores, SQL endpoints, agent runtimes, OIDC
 clients, and event webhooks.
 
-Takosumi OSS does **not** keep a service-graph ledger. There is no `ServiceExport` / `ServiceBinding` / `ServiceGrant`
-table, no capability-token grant issuance, and no vault-minted runtime service token in OSS. Instead, a Capsule may
-publish non-secret service descriptors through well-known OpenTofu Outputs, and a host like Takos **projects** those
-Outputs into transient, read-only runtime objects:
+Takosumi OSS does **not** keep a service-graph ledger or persist `ServiceExport` / `ServiceBinding` / `ServiceGrant` as
+public ledger entities. Instead, a Capsule may publish non-secret service descriptors through well-known OpenTofu
+Outputs, and a host like Takos **projects** those Outputs into transient, read-only runtime objects:
 
 - a producer Capsule publishes services through the `service_exports` (or the `app_deployment` publish convenience) Output;
 - a consumer Capsule requests services through the `service_bindings` (or `app_deployment` consume) Output;
 - Takos reads the deployed Outputs and projects them into `ProjectedServiceExport` / `ProjectedServiceBinding` objects
   that drive its launcher, MCP registry, file handling, storage, Git, and agent surfaces.
 
-The projection is pure and store-free: it reads Output values and shapes them. It writes no ledger rows, issues no
-credentials, and grants no runtime authority. Runtime authority for a deployed workload comes from that workload's own
-runtime (and from the operator/Cloud secret boundary), not from a Takosumi-issued grant record.
+The projection parser is pure and store-free: it reads Output values and shapes them. Credential materialization is a
+separate deploy-control concern. For supported `storage.object` and `source.git.smart_http` consumes, Takosumi resolves
+one same-Workspace producer, derives verbs from requested scopes, mints a prefix-scoped credential from the producer's
+protected signing output, and injects it through the plan Run credential channel. This does not recreate a Service Graph
+ledger, and the credential never enters public Outputs or logs.
 
 The reference implementation is `takosumi/core/domains/output-projection/service-projection.ts`
 (`projectServicesFromOutputs`, `validateProjectedServiceExportsFromOutput`,
@@ -37,14 +38,16 @@ The reference implementation is `takosumi/core/domains/output-projection/service
 | Producer identity    | `Capsule` + successful `Run` + `StateVersion` + `Output`             |
 | Producer data source | `tofu output -json`, filtered through the Capsule output allowlist   |
 | Consumer dependency  | output-to-input wiring pinned at plan time                           |
-| Runtime authority    | the deployed workload's own runtime / operator-Cloud secret boundary |
+| Runtime authority    | workload runtime plus Takosumi bind-time scoped grants where supported |
 | Audit                | `Run` / `AuditEvent`                                                 |
 | Projection           | Takos host (transient, read-only; outside the Takosumi ledger)       |
 
 Takos consumes these projections to build its app launcher, MCP registry, file handling, storage, Git, and agent
 experiences. Takos may also publish first-party services through the same Outputs, but it does not define a separate
-Takosumi public standard. Where a product-neutral service-form identity exists, Takos uses it directly; for example
-Workspace file storage is published as `storage.filesystem`.
+Takosumi public standard. Takos still projects its product-internal `storage.filesystem` and `source.repository` APIs.
+Those are not static agent tools: agent-facing storage and Git operations are supplied by normal installable Capsules.
+`takos-storage` publishes `storage.object` and an MCP server, `takos-git` publishes `source.git.smart_http` and an MCP
+server, and `takos-computer` publishes its sandbox MCP server.
 
 ## 3. Non-Goals
 
@@ -91,9 +94,10 @@ consume) Output. It is read-only configuration, not a required repo manifest.
 | `dependencyMode` | `variable_injection`, `remote_state`, or `published_output`              |
 | `grantRequest`   | requested scopes / audience / env names / ttl hints (descriptive)        |
 
-`grantRequest` records what a consumer asks for. In OSS it is descriptive projection metadata only: Takos uses it to wire
-non-secret endpoint values into the consumer and to know which env name should receive a secret the deployed workload
-already holds. It does not cause Takosumi to mint a credential.
+`grantRequest` records what a consumer asks for. The projection parser only normalizes it. During a plan Run, the
+deploy-control grant broker recognizes supported publications, converts `files:*` or `repos:*` scopes into the producer's
+verbs, and injects the resulting endpoint, token, prefix, and Workspace context through declared OpenTofu variables.
+Other bindings still require an explicit runtime credential path; arbitrary capability metadata does not mint a token.
 
 When the host wires a binding into the plan lifecycle, the selected export must be pinned into the consumer's plan-time
 output-to-input snapshot. Secret values fail closed and must move through the workload's own runtime secret delivery, not
@@ -120,7 +124,7 @@ Standard capabilities (`STANDARD_PROJECTED_CAPABILITIES`):
 | `interface.ui.surface`     | embeddable or launchable UI surface              |
 | `interface.file.handler`   | file open/edit handler metadata                  |
 | `storage.object`           | object/blob storage API                          |
-| `storage.filesystem`       | file-tree storage API                            |
+| `storage.filesystem`       | Takos product-internal Workspace file-tree projection; not an agent tool |
 | `storage.key_value`        | key-value storage API                            |
 | `storage.sql`              | SQL/database API                                 |
 | `storage.vector`           | vector index or vector-search API                |
@@ -205,15 +209,16 @@ Rules:
 
 ## 7. Binding resolution
 
-Projection-time binding resolution is fail-closed and host-driven. Takos:
+Binding resolution is fail-closed. Takosumi:
 
 1. Selects candidate exports by Workspace, visibility, capability, producer constraints, and policy.
 2. Rejects ambiguous matches unless the binding selector is explicit enough.
 3. Checks the producer Output generation, the successful apply Run, and dependency policy.
 4. Pins the selected export into the consumer's plan-time output-to-input snapshot when wiring it into a plan.
-5. Materializes only non-secret endpoint values into generated-root variables or consumer runtime env, as requested by
-   the binding. Secret values fail closed; the projection may name the env var that will receive the secret, but the
-   secret value itself comes from the workload runtime / operator-Cloud secret boundary.
+5. Materializes non-secret endpoint values into generated-root variables or consumer runtime env.
+6. For supported scoped-token publications, resolves protected producer signing material, mints the consumer-specific
+   credential, and injects it through the dispatch-only plan environment. Missing/ambiguous producers and unavailable
+   signing authority fail closed.
 
 Endpoint discovery and runtime authority stay separate facts: a consumer should not learn a secret just because it can
 discover an endpoint.
@@ -234,11 +239,16 @@ Takos is a first-party consumer/producer profile over this projection:
 | MCP registry                     | app-provided `protocol.mcp.server` publications             |
 | app launcher / embedded UI       | app-provided `interface.ui.surface` publications            |
 | file handlers                    | app-provided `interface.file.handler` publications          |
-| Workspace file storage           | `storage.filesystem`                                        |
-| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`        |
-| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                |
+| Takos product-internal Workspace APIs | `storage.filesystem`, `source.repository` projections  |
+| Workspace file and object UX     | installable `takos-storage`: `storage.object` + MCP         |
+| key-value / SQL storage          | app-provided `storage.key_value`, `storage.sql`             |
+| Git UX / clone / refs            | installable `takos-git`: `source.git.smart_http` + MCP      |
+| sandbox computer                 | installable `takos-computer`: `protocol.mcp.server`         |
 | agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |
 | same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
+
+The internal Workspace projections remain product APIs, while the agent discovers file/repository actions from the
+installed MCP publications.
 
 Takos-specific UI decisions, launcher ranking, explicit app install UX, chat/agent UX, and memory behavior stay in Takos.
 Output capture, output-to-input wiring, dependency pinning, and audit stay in Takosumi. MCP is represented by the
@@ -247,9 +257,10 @@ Output capture, output-to-input wiring, dependency pinning, and audit stay in Ta
 ## 10. Security invariants
 
 - No secret literal in `service_exports` / `service_bindings` / `app_deployment` Outputs.
-- The projection is read-only and store-free: it issues no credentials and grants no runtime authority.
-- Runtime service tokens come from the deployed workload's own runtime (and the operator/Cloud secret boundary), not from
-  OpenTofu Outputs and not from a Takosumi grant ledger.
+- The projection parser is read-only and store-free; bind-time credential issuance stays in Takosumi deploy-control and
+  does not create a public Service Graph ledger.
+- Scoped runtime tokens come from protected producer signing material, are injected only into the consumer Run, and do
+  not appear in public OpenTofu Outputs, logs, or audit payloads.
 - Provider credentials remain in ProviderConnection / CredentialRecipe / ProviderBinding / vault / runner phase
   boundaries.
 

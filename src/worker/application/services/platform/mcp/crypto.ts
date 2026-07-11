@@ -40,7 +40,7 @@ export function generateState(): string {
 
 export function saltFor(
   serverId: string,
-  field: "access" | "refresh" | "verifier",
+  field: "access" | "refresh" | "verifier" | "client-secret" | "browser-nonce",
 ): string {
   return `mcp:token:${field}:${serverId}`;
 }

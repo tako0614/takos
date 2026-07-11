@@ -130,12 +130,6 @@ test("executor auth maps current dispatch-issued RPC paths to per-purpose scopes
     "conversation",
   );
   assertEquals(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/memory-activation",
-    ),
-    "memory",
-  );
-  assertEquals(
     getRequiredProxyCapability("/api/internal/v1/agent-control/skill-catalog"),
     "skills",
   );
@@ -207,10 +201,7 @@ test("a workflow run token is denied conversation / memory / skill endpoints", (
   // Denied: conversation, memory, and skill endpoints a workflow does not need.
   for (const endpoint of [
     "conversation-history",
-    "current-session",
     "add-message",
-    "memory-activation",
-    "memory-finalize",
     "skill-catalog",
     "skill-plan",
     "skill-runtime-context",
@@ -308,6 +299,7 @@ test("api-keys hands out provider keys for an active token-bound run", async () 
     { runId: "run_1" },
     {
       OPENAI_API_KEY: "openai-test-key",
+      TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY: "true",
       DB: createRunStatusDb("running"),
     },
   );
@@ -316,8 +308,6 @@ test("api-keys hands out provider keys for an active token-bound run", async () 
   assertEquals(await res.json(), {
     openai: "openai-test-key",
     openaiEndpoint: null,
-    anthropic: null,
-    google: null,
   });
 });
 
@@ -326,6 +316,7 @@ test("api-keys projects a configured OpenAI-compatible base URL", async () => {
     { runId: "run_direct" },
     {
       OPENAI_API_KEY: "openai-test-key",
+      TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY: "true",
       OPENAI_BASE_URL: "https://models.example.test/v1/",
       DB: createRunStatusDb("running"),
     },
@@ -335,9 +326,23 @@ test("api-keys projects a configured OpenAI-compatible base URL", async () => {
   assertEquals(await res.json(), {
     openai: "openai-test-key",
     openaiEndpoint: "https://models.example.test/v1/chat/completions",
-    anthropic: null,
-    google: null,
   });
+});
+
+test("api-keys denies deployment-global provider keys by default", async () => {
+  const res = await apiKeysDispatch(
+    { runId: "run_secure_default" },
+    {
+      OPENAI_API_KEY: "openai-test-key",
+      DB: createRunStatusDb("running"),
+    },
+  );
+
+  assertEquals(res.status, 503);
+  assertEquals(
+    ((await res.json()) as { error?: string }).error,
+    "Shared provider-key handout is disabled; configure short-lived AI Gateway credentials",
+  );
 });
 
 test("runtime AI credential is minted for the run owner's Capsule", async () => {

@@ -10,31 +10,34 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  assertAllowedMcpEndpointUrl,
   completeMcpOAuthFlow,
   consumeMcpOAuthPending,
-  decryptAccessToken,
   deleteMcpServer,
-  getMcpServerWithTokens,
+  getMcpEndpointUrlOptions,
+  getMcpOAuthPendingForStart,
   listMcpServers,
+  McpOAuthBrowserBindingError,
+  McpOAuthPendingUpgradeRequiredError,
   reauthorizeExternalMcpServer,
-  refreshMcpToken,
   registerExternalMcpServer,
-  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
 } from "../../../application/services/platform/mcp.ts";
-import { McpClient } from "../../../application/tools/mcp-client.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import { escapeHtml } from "../auth/html.ts";
-import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 import {
-  BadGatewayError,
   BadRequestError,
-  GatewayTimeoutError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { ok } from "../response-utils.ts";
+import registrySourceRoutes from "./registry-sources.ts";
+import mcpToolPolicyRoutes from "./tool-policies.ts";
+import mcpToolConfirmationRoutes from "./tool-confirmations.ts";
+import mcpServerCardRoutes from "./server-cards.ts";
+import portableConnectionRoutes from "./portable-connections.ts";
 
 const createServerSchema = z.object({
   name: z.string(),
@@ -47,6 +50,10 @@ const updateServerSchema = z.object({
 });
 
 const mcpRoutes = new Hono<SpaceAccessRouteEnv>();
+const MCP_OAUTH_STATE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+const MCP_OAUTH_BROWSER_NONCE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
+const MCP_OAUTH_COOKIE_PATH = "/api/mcp/oauth";
+const MCP_OAUTH_PENDING_TTL_SECONDS = 10 * 60;
 
 const MCP_LIST_ROLES = getSpaceOperationPolicy("mcp_server.list").allowed_roles;
 const MCP_CREATE_ROLES =
@@ -55,6 +62,12 @@ const MCP_UPDATE_ROLES =
   getSpaceOperationPolicy("mcp_server.update").allowed_roles;
 const MCP_DELETE_ROLES =
   getSpaceOperationPolicy("mcp_server.delete").allowed_roles;
+
+mcpRoutes.route("/", registrySourceRoutes);
+mcpRoutes.route("/", mcpToolPolicyRoutes);
+mcpRoutes.route("/", mcpToolConfirmationRoutes);
+mcpRoutes.route("/", mcpServerCardRoutes);
+mcpRoutes.route("/", portableConnectionRoutes);
 
 function serializeMcpServer(
   server: Awaited<ReturnType<typeof listMcpServers>>[number],
@@ -74,49 +87,157 @@ function serializeMcpServer(
     managed: server.sourceType !== "external",
     scope: server.oauthScope,
     issuer_url: server.oauthIssuerUrl,
+    registration_mode: server.oauthRegistrationMode,
+    authorization_status: server.authorizationStatus,
     token_expires_at: server.oauthTokenExpiresAt,
     created_at: server.createdAt,
     updated_at: server.updatedAt,
   };
 }
 
+function mcpOAuthBrowserCookieName(state: string): string {
+  return `__Secure-takos_mcp_oauth_${state}`;
+}
+
+function readCookie(
+  cookieHeader: string | undefined,
+  name: string,
+): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const cookie = part.trim();
+    const separator = cookie.indexOf("=");
+    if (separator <= 0 || cookie.slice(0, separator) !== name) continue;
+    return cookie.slice(separator + 1);
+  }
+  return null;
+}
+
+function setMcpOAuthBrowserCookie(
+  state: string,
+  nonce: string,
+  maxAgeSeconds: number,
+): string {
+  return `${mcpOAuthBrowserCookieName(state)}=${nonce}; Path=${MCP_OAUTH_COOKIE_PATH}; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+}
+
+function clearMcpOAuthBrowserCookie(state: string): string {
+  return `${mcpOAuthBrowserCookieName(state)}=; Path=${MCP_OAUTH_COOKIE_PATH}; Secure; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+mcpRoutes.get("/oauth/start", async (c) => {
+  const state = c.req.query("state") ?? "";
+  if (!MCP_OAUTH_STATE_PATTERN.test(state)) {
+    return c.html(errorPage("Invalid OAuth state"), 400);
+  }
+  let pending: Awaited<ReturnType<typeof getMcpOAuthPendingForStart>>;
+  try {
+    pending = await getMcpOAuthPendingForStart(c.env.DB, c.env, state);
+  } catch (error) {
+    if (error instanceof McpOAuthPendingUpgradeRequiredError) {
+      return c.html(errorPage(error.message), 400);
+    }
+    throw error;
+  }
+  if (!pending) {
+    return c.html(errorPage("Invalid or expired OAuth state"), 400);
+  }
+  if (pending.initiatorUserId !== c.get("user").id) {
+    return c.html(errorPage("OAuth request belongs to another user"), 403);
+  }
+  if (!MCP_OAUTH_BROWSER_NONCE_PATTERN.test(pending.browserNonce)) {
+    return c.html(errorPage("Invalid OAuth browser binding"), 400);
+  }
+  const authorizationUrl = assertAllowedMcpEndpointUrl(
+    pending.authorizationUrl,
+    getMcpEndpointUrlOptions(c.env),
+    "OAuth authorization endpoint",
+  );
+  const remainingSeconds = Math.max(
+    1,
+    Math.min(
+      MCP_OAUTH_PENDING_TTL_SECONDS,
+      Math.ceil((new Date(pending.expiresAt).getTime() - Date.now()) / 1000),
+    ),
+  );
+  c.header(
+    "Set-Cookie",
+    setMcpOAuthBrowserCookie(state, pending.browserNonce, remainingSeconds),
+  );
+  c.header("Cache-Control", "no-store");
+  c.header("Referrer-Policy", "no-referrer");
+  return c.redirect(authorizationUrl.href, 302);
+});
+
 mcpRoutes.get("/oauth/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
+  const issuer = c.req.query("iss");
   const error = c.req.query("error");
-  if (error) {
-    return c.html(errorPage(`OAuth authorization failed: ${error}`), 400);
+  if (!state || !issuer) {
+    return c.html(errorPage("Missing state or issuer parameter"), 400);
   }
-  if (!code || !state) {
-    return c.html(errorPage("Missing code or state parameter"), 400);
+  if (!MCP_OAUTH_STATE_PATTERN.test(state)) {
+    return c.html(errorPage("Invalid OAuth state"), 400);
+  }
+  const browserNonce = readCookie(
+    c.req.header("Cookie"),
+    mcpOAuthBrowserCookieName(state),
+  );
+  if (!browserNonce || !MCP_OAUTH_BROWSER_NONCE_PATTERN.test(browserNonce)) {
+    return c.html(errorPage("Missing OAuth browser binding"), 400);
   }
   let pending: Awaited<ReturnType<typeof consumeMcpOAuthPending>>;
   try {
-    pending = await consumeMcpOAuthPending(c.env.DB, c.env, state);
+    pending = await consumeMcpOAuthPending(c.env.DB, c.env, {
+      state,
+      browserNonce,
+      issuer,
+    });
   } catch (err) {
+    if (
+      err instanceof McpOAuthBrowserBindingError ||
+      err instanceof McpOAuthPendingUpgradeRequiredError
+    ) {
+      return c.html(errorPage(err.message), 400);
+    }
     logError("consumeMcpOAuthPending error", err, { module: "mcp-oauth" });
     return c.html(errorPage("Internal error processing OAuth callback"), 500);
   }
   if (!pending) {
+    c.header("Set-Cookie", clearMcpOAuthBrowserCookie(state));
     return c.html(
       errorPage("Invalid or expired OAuth state. Please try again."),
       400,
     );
   }
-  const baseHostname =
-    c.env.ADMIN_DOMAIN || c.env.TENANT_BASE_DOMAIN || "localhost";
-  const redirectUri = `https://${baseHostname}/api/mcp/oauth/callback`;
+  c.header("Set-Cookie", clearMcpOAuthBrowserCookie(state));
+  if (error) {
+    return c.html(errorPage(`OAuth authorization failed: ${error}`), 400);
+  }
+  if (!code) {
+    return c.html(errorPage("Missing authorization code"), 400);
+  }
   try {
     await completeMcpOAuthFlow(c.env.DB, c.env, {
       spaceId: pending.spaceId,
       serverName: pending.serverName,
       serverUrl: pending.serverUrl,
+      issuerUrl: pending.issuerUrl,
+      authorizationEndpoint: pending.authorizationEndpoint,
       tokenEndpoint: pending.tokenEndpoint,
+      redirectUri: pending.redirectUri,
+      resourceUri: pending.resourceUri,
+      resourceMetadataUrl: pending.resourceMetadataUrl,
+      clientId: pending.clientId,
+      clientSecret: pending.clientSecret,
+      clientIdIssuedAt: pending.clientIdIssuedAt,
+      clientSecretExpiresAt: pending.clientSecretExpiresAt,
+      registrationMode: pending.registrationMode,
+      tokenEndpointAuthMethod: pending.tokenEndpointAuthMethod,
       code,
       codeVerifier: pending.codeVerifier,
-      redirectUri,
       scope: pending.scope,
-      issuerUrl: pending.issuerUrl ?? pending.serverUrl,
     });
   } catch (err) {
     logError("completeMcpOAuthFlow error", err, { module: "mcp-oauth" });
@@ -142,6 +263,7 @@ mcpRoutes.post(
     }
     const result = await registerExternalMcpServer(c.env.DB, c.env, {
       spaceId,
+      initiatorUserId: c.get("user").id,
       name: body.name,
       url: body.url,
       scope: body.scope,
@@ -165,6 +287,7 @@ mcpRoutes.post(
     const result = await reauthorizeExternalMcpServer(c.env.DB, c.env, {
       spaceId: c.get("spaceId"),
       serverId: c.req.param("id"),
+      initiatorUserId: c.get("user").id,
     });
     return c.json({
       data: {
@@ -211,83 +334,6 @@ mcpRoutes.patch(
     );
     if (!updated) throw new NotFoundError("MCP server");
     return c.json({ data: serializeMcpServer(updated) });
-  },
-);
-
-mcpRoutes.get(
-  "/servers/:id/tools",
-  spaceAccess({ roles: MCP_LIST_ROLES }),
-  async (c) => {
-    const spaceId = c.get("spaceId");
-    const serverId = c.req.param("id");
-    const server = await getMcpServerWithTokens(c.env.DB, spaceId, serverId);
-    if (!server) throw new NotFoundError("MCP server");
-    let accessToken: string | null = null;
-    if (server.sourceType === "external") {
-      accessToken = await decryptAccessToken(c.env.DB, c.env, {
-        id: server.id,
-        oauthAccessToken: server.oauthAccessToken,
-      });
-      if (
-        server.oauthTokenExpiresAt &&
-        new Date(server.oauthTokenExpiresAt) < new Date()
-      ) {
-        await refreshMcpToken(c.env.DB, c.env, {
-          id: server.id,
-          oauthRefreshToken: server.oauthRefreshToken,
-          oauthIssuerUrl: server.oauthIssuerUrl,
-        });
-        const refreshed = await getMcpServerWithTokens(
-          c.env.DB,
-          spaceId,
-          serverId,
-        );
-        if (refreshed) {
-          accessToken = await decryptAccessToken(c.env.DB, c.env, {
-            id: refreshed.id,
-            oauthAccessToken: refreshed.oauthAccessToken,
-          });
-        }
-      }
-    } else if (server.sourceType === "publication") {
-      accessToken = await resolvePublicationMcpServerAccessToken(
-        c.env.DB,
-        c.env,
-        { spaceId, serverId },
-      );
-    }
-    const client = new McpClient(
-      server.url,
-      accessToken,
-      server.name,
-      c.env.TAKOS_EGRESS,
-    );
-    try {
-      await client.connect();
-      const tools = await client.listTools();
-      return c.json({
-        data: {
-          tools: tools.map((t) => ({
-            name: t.sdkTool.name,
-            description: t.sdkTool.description ?? "",
-            inputSchema: t.sdkTool.inputSchema,
-          })),
-        },
-      });
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      logError("MCP tool listing failed", err, { module: "mcp", serverId });
-      if (detail.includes("timeout") || detail.includes("Timeout"))
-        throw new GatewayTimeoutError("MCP server connection timed out");
-      throw new BadGatewayError("Failed to connect to MCP server");
-    } finally {
-      await client.close().catch((e) => {
-        logWarn("MCP client close failed (non-critical)", {
-          module: "mcp",
-          error: e instanceof Error ? e.message : String(e),
-        });
-      });
-    }
   },
 );
 

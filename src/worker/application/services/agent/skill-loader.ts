@@ -37,9 +37,12 @@ import { resolveSkillPlan } from "./skill-resolution.ts";
 
 // ── Constants ───────────────────────────────────────────────────────────
 
-// Skill loading limits - balanced for security and usability
-const MAX_TOTAL_INSTRUCTIONS_SIZE = 1_000_000; // 1MB total for selected detailed skill instructions
-const MAX_PER_SKILL_INSTRUCTIONS_SIZE = 50_000; // 50KB per skill
+// Conversation history reserves 16K model tokens for the system prompt, tool
+// schemas, selected skills, current turn, and completion. Skill instructions
+// therefore get a conservative byte budget inside that same reserve instead
+// of an independent 1 MiB allowance that could overflow the model window.
+export const MAX_TOTAL_SKILL_INSTRUCTION_BYTES = 8 * 1024;
+export const MAX_PER_SKILL_INSTRUCTION_BYTES = 4 * 1024;
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -84,18 +87,18 @@ async function loadEquippedSkillsWithAvailability(
       ...(skillContext.conversation ?? []),
       skillContext.threadTitle ?? "",
       skillContext.threadSummary ?? "",
-      ...((skillContext.threadKeyPoints ?? []).slice(0, 8)),
+      ...(skillContext.threadKeyPoints ?? []).slice(0, 8),
     ].filter(Boolean);
     const preferredLocale =
       typeof skillContext.runInput?.skill_locale === "string"
         ? skillContext.runInput.skill_locale
         : typeof skillContext.runInput?.locale === "string"
-        ? skillContext.runInput.locale
-        : skillContext.preferredLocale ??
-          skillContext.spaceLocale ??
-          (typeof skillContext.runInput?.accept_language === "string"
-            ? skillContext.runInput.accept_language
-            : null);
+          ? skillContext.runInput.locale
+          : (skillContext.preferredLocale ??
+            skillContext.spaceLocale ??
+            (typeof skillContext.runInput?.accept_language === "string"
+              ? skillContext.runInput.accept_language
+              : null));
     const skillLocale = resolveSkillLocale({
       preferredLocale,
       acceptLanguage: skillContext.acceptLanguage,
@@ -104,54 +107,48 @@ async function loadEquippedSkillsWithAvailability(
     const availableMcpServerNames = (await listMcpServers(db, spaceId))
       .filter((server) => server.enabled)
       .map((server) => server.name);
-    const availableTemplateIds = listSkillTemplates().map((template) =>
-      template.id
+    const availableTemplateIds = listSkillTemplates().map(
+      (template) => template.id,
     );
-    const managedSkills = listLocalizedManagedSkills(skillLocale).map((
-      skill,
-    ) => ({
-      id: skill.id,
-      locale: skill.locale,
-      version: skill.version,
-      name: skill.name,
-      description: skill.description,
-      instructions: skill.instructions,
-      triggers: [...skill.triggers],
-      source: "managed" as const,
-      category: skill.category,
-      priority: skill.priority,
-      activation_tags: [...skill.activation_tags],
-      execution_contract: {
-        preferred_tools: [...skill.execution_contract.preferred_tools],
-        durable_output_hints: [
-          ...skill.execution_contract.durable_output_hints,
-        ],
-        output_modes: [...skill.execution_contract.output_modes],
-        required_mcp_servers: [
-          ...skill.execution_contract.required_mcp_servers,
-        ],
-        template_ids: [...skill.execution_contract.template_ids],
-      },
-      availability: "available" as const,
-      availability_reasons: [],
-    }));
+    const managedSkills = listLocalizedManagedSkills(skillLocale).map(
+      (skill) => ({
+        id: skill.id,
+        locale: skill.locale,
+        version: skill.version,
+        name: skill.name,
+        description: skill.description,
+        instructions: skill.instructions,
+        triggers: [...skill.triggers],
+        source: "managed" as const,
+        category: skill.category,
+        priority: skill.priority,
+        activation_tags: [...skill.activation_tags],
+        execution_contract: {
+          preferred_tools: [...skill.execution_contract.preferred_tools],
+          durable_output_hints: [
+            ...skill.execution_contract.durable_output_hints,
+          ],
+          output_modes: [...skill.execution_contract.output_modes],
+          required_mcp_servers: [
+            ...skill.execution_contract.required_mcp_servers,
+          ],
+          template_ids: [...skill.execution_contract.template_ids],
+        },
+        availability: "available" as const,
+        availability_reasons: [],
+      }),
+    );
     const customSkills = await listEnabledCustomSkillContext(db, spaceId);
 
-    const plan = resolveSkillPlan(
-      [
-        ...managedSkills,
-        ...customSkills,
-      ],
-      {
-        ...skillContext,
-        locale: skillLocale,
-        availableToolNames: input.availableToolNames,
-        availableMcpServerNames,
-        availableTemplateIds,
-        maxTotalInstructionBytes: MAX_TOTAL_INSTRUCTIONS_SIZE,
-        maxPerSkillInstructionBytes: MAX_PER_SKILL_INSTRUCTIONS_SIZE,
-      },
-    );
+    const plan = resolveSkillPlan([...managedSkills, ...customSkills], {
+      ...skillContext,
+      locale: skillLocale,
+      availableToolNames: input.availableToolNames,
+      availableMcpServerNames,
+      availableTemplateIds,
+      maxTotalInstructionBytes: MAX_TOTAL_SKILL_INSTRUCTION_BYTES,
+      maxPerSkillInstructionBytes: MAX_PER_SKILL_INSTRUCTION_BYTES,
+    });
 
     return {
       success: true,
@@ -176,16 +173,10 @@ export async function loadEquippedSkills(
   config: AgentConfig,
   skillContext: SkillResolutionContext,
 ): Promise<SkillLoadResult> {
-  return loadEquippedSkillsWithAvailability(
-    db,
-    spaceId,
-    config,
-    skillContext,
-    {
-      availableToolNames:
-        toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
-    },
-  );
+  return loadEquippedSkillsWithAvailability(db, spaceId, config, skillContext, {
+    availableToolNames:
+      toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
+  });
 }
 
 /**
@@ -202,16 +193,24 @@ export async function buildSkillResolutionContext(
     .filter((message) => message.role === "user")
     .map((message) => message.content);
 
-  const thread = await drizzleDb.select({
-    title: threads.title,
-    locale: threads.locale,
-    summary: threads.summary,
-    keyPoints: threads.keyPoints,
-  }).from(threads).where(eq(threads.id, context.threadId)).get();
+  const thread = await drizzleDb
+    .select({
+      title: threads.title,
+      locale: threads.locale,
+      summary: threads.summary,
+      keyPoints: threads.keyPoints,
+    })
+    .from(threads)
+    .where(eq(threads.id, context.threadId))
+    .get();
 
-  const runRow = await drizzleDb.select({
-    input: runs.input,
-  }).from(runs).where(eq(runs.id, context.runId)).get();
+  const runRow = await drizzleDb
+    .select({
+      input: runs.input,
+    })
+    .from(runs)
+    .where(eq(runs.id, context.runId))
+    .get();
 
   let parsedRunInput: Record<string, unknown> = {};
   try {
@@ -230,9 +229,9 @@ export async function buildSkillResolutionContext(
   try {
     const parsed = JSON.parse(thread?.keyPoints || "[]") as unknown;
     if (Array.isArray(parsed)) {
-      threadKeyPoints = parsed.map((item) => String(item).trim()).filter(
-        Boolean,
-      );
+      threadKeyPoints = parsed
+        .map((item) => String(item).trim())
+        .filter(Boolean);
     }
   } catch (error) {
     logWarn("Failed to parse thread key points for skill resolution", {
@@ -242,7 +241,8 @@ export async function buildSkillResolutionContext(
   }
 
   const delegationPacket = getDelegationPacketFromRunInput(parsedRunInput);
-  const preferredLocale = delegationPacket?.locale ??
+  const preferredLocale =
+    delegationPacket?.locale ??
     (isDelegationLocale(thread?.locale) ? thread.locale : null);
 
   return {
@@ -254,11 +254,12 @@ export async function buildSkillResolutionContext(
     agentType: config.type,
     preferredLocale,
     spaceLocale: await getSpaceLocale(db, context.spaceId),
-    acceptLanguage: typeof parsedRunInput.accept_language === "string"
-      ? parsedRunInput.accept_language
-      : typeof parsedRunInput.acceptLanguage === "string"
-      ? parsedRunInput.acceptLanguage
-      : null,
+    acceptLanguage:
+      typeof parsedRunInput.accept_language === "string"
+        ? parsedRunInput.accept_language
+        : typeof parsedRunInput.acceptLanguage === "string"
+          ? parsedRunInput.acceptLanguage
+          : null,
   };
 }
 
@@ -314,27 +315,24 @@ export async function emitSkillLoadOutcome(
   ) => Promise<void>,
 ): Promise<void> {
   if (result.success && result.availableSkills.length > 0) {
-    const managedCount = result.availableSkills.filter((skill) =>
-      skill.source === "managed"
+    const managedCount = result.availableSkills.filter(
+      (skill) => skill.source === "managed",
     ).length;
-    const customCount = result.availableSkills.filter((skill) =>
-      skill.source === "custom"
+    const customCount = result.availableSkills.filter(
+      (skill) => skill.source === "custom",
     ).length;
     await emitEvent("thinking", {
-      message:
-        `Loaded ${result.availableSkills.length} manual(s) for on-demand reference`,
+      message: `Loaded ${result.availableSkills.length} manual(s) for on-demand reference`,
       skill_locale: result.skillLocale,
       available_skill_count: result.availableSkills.length,
-      selectable_skill_count: result.availableSkills.filter((skill) =>
-        skill.availability !== "unavailable"
+      selectable_skill_count: result.availableSkills.filter(
+        (skill) => skill.availability !== "unavailable",
       ).length,
       selected_skill_count: result.selectedSkills.length,
       activated_skill_count: result.activatedSkills.length,
       managed_skill_count: managedCount,
       custom_skill_count: customCount,
-      available_skill_ids: result.availableSkills.map((skill) =>
-        skill.id
-      ),
+      available_skill_ids: result.availableSkills.map((skill) => skill.id),
       selectable_skill_ids: result.availableSkills
         .filter((skill) => skill.availability !== "unavailable")
         .map((skill) => skill.id),

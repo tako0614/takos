@@ -83,7 +83,14 @@ export const API_BEARER_SCOPES: Record<string, ApiBearerScope> = {
   },
   "mcp:invoke": {
     name: "mcp:invoke",
-    description: "Invoke MCP servers",
+    description:
+      "Discover and read MCP connections, invoke tools, and decide own confirmations",
+    category: "resource",
+  },
+  "mcp:manage": {
+    name: "mcp:manage",
+    description:
+      "Manage MCP connections, Registry credentials, and tool policy",
     category: "resource",
   },
   "events:subscribe": {

@@ -33,6 +33,7 @@ export type WorkerEnv = DbEnv & {
   VECTORIZE?: VectorizeIndex;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
+  TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   GIT_OBJECTS?: ObjectStoreBinding;
@@ -45,6 +46,7 @@ export type WorkerEnv = DbEnv & {
   ENCRYPTION_KEY?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
+  TAKOS_MCP_OAUTH_PREREGISTRATIONS_JSON?: string;
   PROXY_BASE_URL?: string;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   TAKOS_EGRESS?: { fetch(request: Request): Promise<Response> };

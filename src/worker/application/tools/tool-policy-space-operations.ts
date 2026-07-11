@@ -209,12 +209,6 @@ export const SPACE_OPERATION_POLICIES: Record<
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
-  "deploy.frontend": {
-    id: "deploy.frontend",
-    user_surface: "Takos-managed deploy_frontend",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "none",
-  },
   "mcp_server.list": {
     id: "mcp_server.list",
     user_surface: "GET /api/mcp/servers?spaceId=...",

@@ -7,11 +7,11 @@ services:
       POSTGRES_PASSWORD: takos
       POSTGRES_DB: takos_app
     ports:
-      - '${TAKOS_POSTGRES_PORT:-15432}:5432'
+      - "127.0.0.1:${TAKOS_POSTGRES_PORT:-15432}:5432"
     volumes:
       - takos-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U takos -d takos_app']
+      test: ["CMD-SHELL", "pg_isready -U takos -d takos_app"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -21,24 +21,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    restart: 'no'
+    restart: "no"
     environment:
       PGPASSWORD: takos
     entrypoint:
       - /bin/sh
       - -c
       - |
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takosumi'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takosumi"
+        psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takosumi'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takosumi"
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - '${TAKOS_REDIS_PORT:-16379}:6379'
+      - "127.0.0.1:${TAKOS_REDIS_PORT:-16379}:6379"
     volumes:
       - takos-redis:/data
     healthcheck:
-      test: ['CMD-SHELL', 'redis-cli ping | grep -q PONG']
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -50,29 +50,29 @@ services:
       postgres-init:
         condition: service_completed_successfully
     working_dir: /workspace
-    command: ['bun', 'run', 'dev']
+    command: ["bun", "run", "dev"]
     healthcheck:
       test:
-        - 'CMD'
-        - 'bun'
-        - '-e'
+        - "CMD"
+        - "bun"
+        - "-e"
         - 'const r = await fetch(`http://localhost:$${process.env.PORT ?? "8787"}/health`); if (!r.ok) process.exit(1);'
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
     environment:
-      PORT: '${TAKOS_WORKER_PORT:-8787}'
-      TAKOS_WORKER_URL: '${TAKOS_WORKER_URL:-http://localhost:8787}'
-      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
-      TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
-      TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_WORKER_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
-      DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
+      PORT: "${TAKOS_WORKER_PORT:-8787}"
+      TAKOS_WORKER_URL: "${TAKOS_WORKER_URL:-http://localhost:8787}"
+      TAKOSUMI_INTERNAL_URL: "http://takosumi:${TAKOSUMI_PORT:-8788}"
+      TAKOS_AGENT_INTERNAL_URL: "http://takos-agent:${TAKOS_AGENT_PORT:-8789}"
+      TAKOS_AGENT_START_TOKEN: "${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_INTERNAL_API_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_WORKER_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_app"
+      DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_app"
     ports:
-      - '${TAKOS_WORKER_PORT:-8787}:${TAKOS_WORKER_PORT:-8787}'
+      - "127.0.0.1:${TAKOS_WORKER_HOST_PORT:-${TAKOS_WORKER_PORT:-8787}}:${TAKOS_WORKER_PORT:-8787}"
     volumes:
       - .:/workspace
       - ../takosumi:/takosumi:ro
@@ -84,10 +84,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    command: ['bun', 'core/index.ts']
+    command: ["bun", "core/index.ts"]
     healthcheck:
       test:
-        - 'CMD-SHELL'
+        - "CMD-SHELL"
         - 'bun -e ''const r = await fetch("http://localhost:$${PORT:-8788}/health"); if (!r.ok) throw new Error("unhealthy")'''
       interval: 10s
       timeout: 5s
@@ -95,16 +95,16 @@ services:
       start_period: 30s
     working_dir: /workspace
     environment:
-      PORT: '${TAKOSUMI_PORT:-8788}'
-      TAKOS_WORKER_URL: '${TAKOS_WORKER_URL:-http://takos-worker:8787}'
-      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOSUMI_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOSUMI_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
-      DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
-      TAKOSUMI_DEV_MODE: '${TAKOSUMI_DEV_MODE:-1}'
+      PORT: "${TAKOSUMI_PORT:-8788}"
+      TAKOS_WORKER_URL: "${TAKOS_WORKER_URL:-http://takos-worker:8787}"
+      TAKOSUMI_INTERNAL_URL: "http://takosumi:${TAKOSUMI_PORT:-8788}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOSUMI_INTERNAL_API_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOSUMI_DATABASE_URL: "postgres://takos:takos@postgres:5432/takosumi"
+      DATABASE_URL: "postgres://takos:takos@postgres:5432/takosumi"
+      TAKOSUMI_DEV_MODE: "${TAKOSUMI_DEV_MODE:-1}"
     ports:
-      - '${TAKOSUMI_PORT:-8788}:${TAKOSUMI_PORT:-8788}'
+      - "127.0.0.1:${TAKOSUMI_HOST_PORT:-${TAKOSUMI_PORT:-8788}}:${TAKOSUMI_PORT:-8788}"
     volumes:
       - ../takosumi:/workspace
 
@@ -116,14 +116,18 @@ services:
       takosumi:
         condition: service_healthy
     environment:
-      PORT: '${TAKOS_AGENT_PORT:-8789}'
-      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
+      PORT: "${TAKOS_AGENT_PORT:-8789}"
+      TAKOSUMI_INTERNAL_URL: "http://takosumi:${TAKOSUMI_PORT:-8788}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_AGENT_START_TOKEN: "${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}"
     ports:
-      - '${TAKOS_AGENT_PORT:-8789}:${TAKOS_AGENT_PORT:-8789}'
+      - "127.0.0.1:${TAKOS_AGENT_HOST_PORT:-${TAKOS_AGENT_PORT:-8789}}:${TAKOS_AGENT_PORT:-8789}"
     healthcheck:
-      test: ['CMD-SHELL', 'curl -fsS http://localhost:$${PORT:-8789}/health || exit 1']
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:$${PORT:-8789}/health || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10

@@ -49,9 +49,10 @@ export type ApiVariables = {
   user?: User;
 };
 
-type ApiAuthMiddleware = MiddlewareHandler<
-  { Bindings: Env; Variables: ApiVariables }
->;
+type ApiAuthMiddleware = MiddlewareHandler<{
+  Bindings: Env;
+  Variables: ApiVariables;
+}>;
 
 // ---------------------------------------------------------------------------
 // Middleware ordering helpers
@@ -125,8 +126,23 @@ function requiredApiScopesForRequest(
   ) {
     return readWriteScope(c, "repos:read", "repos:write");
   }
-  if (pathMatches(pathname, "/mcp/servers")) {
+  if (
+    pathMatches(pathname, "/mcp/search") ||
+    pathMatches(pathname, "/mcp/discover") ||
+    pathMatches(pathname, "/mcp/tool-confirmations")
+  ) {
     return ["mcp:invoke"];
+  }
+  if (pathMatches(pathname, "/mcp/servers")) {
+    return c.req.method.toUpperCase() === "GET"
+      ? ["mcp:invoke"]
+      : ["mcp:manage"];
+  }
+  if (
+    pathMatches(pathname, "/mcp/registry-sources") ||
+    pathMatches(pathname, "/mcp/connections")
+  ) {
+    return ["mcp:manage"];
   }
   if (
     pathMatches(pathname, "/me") ||
@@ -219,32 +235,32 @@ export function createApiRouter({
   // ================================================================
 
   // Reject malformed opaque IDs before they can reach lookup queries.
-  for (
-    const pattern of [
-      "/spaces/:spaceId",
-      "/spaces/:spaceId/*",
-      "/threads/:id",
-      "/threads/:id/*",
-      "/runs/:id",
-      "/runs/:id/*",
-      "/artifacts/:id",
-      "/artifacts/:id/*",
-      "/repos/:id",
-      "/repos/:id/*",
-      "/services/:id",
-      "/services/:id/*",
-      "/resources/:id",
-      "/resources/:id/*",
-      "/sessions/:id",
-      "/sessions/:id/*",
-      "/agent-tasks/:id",
-      "/agent-tasks/:id/*",
-      "/apps/:id",
-      "/apps/:id/*",
-      "/notifications/:id",
-      "/notifications/:id/*",
-    ]
-  ) {
+  for (const pattern of [
+    "/spaces/:spaceId",
+    "/spaces/:spaceId/*",
+    "/threads/:id",
+    "/threads/:id/*",
+    "/runs/:id",
+    "/runs/:id/*",
+    "/artifacts/:id",
+    "/artifacts/:id/*",
+    "/repos/:id",
+    "/repos/:id/*",
+    "/services/:id",
+    "/services/:id/*",
+    "/resources/:id",
+    "/resources/:id/*",
+    "/sessions/:id",
+    "/sessions/:id/*",
+    "/agent-tasks/:id",
+    "/agent-tasks/:id/*",
+    "/apps/:id",
+    "/apps/:id/*",
+    "/notifications/:id",
+    "/notifications/:id/*",
+    "/mcp/registry-sources/:id",
+    "/mcp/tool-confirmations/:id",
+  ]) {
     apiRouter.use(pattern, validateApiOpaqueRouteParams);
   }
 
@@ -261,8 +277,20 @@ export function createApiRouter({
   apiRouter.route("/public", publicShare);
 
   // MCP management routes (authenticated)
+  apiRouter.use(
+    "/mcp/oauth/start",
+    requireAnyAuth(["mcp:manage"]) as ApiAuthMiddleware,
+  );
   apiRouter.use("/mcp/servers", scopedApiAuth);
   apiRouter.use("/mcp/servers/*", scopedApiAuth);
+  apiRouter.use("/mcp/registry-sources", scopedApiAuth);
+  apiRouter.use("/mcp/registry-sources/*", scopedApiAuth);
+  apiRouter.use("/mcp/search", scopedApiAuth);
+  apiRouter.use("/mcp/discover", scopedApiAuth);
+  apiRouter.use("/mcp/tool-confirmations", scopedApiAuth);
+  apiRouter.use("/mcp/tool-confirmations/*", scopedApiAuth);
+  apiRouter.use("/mcp/connections", scopedApiAuth);
+  apiRouter.use("/mcp/connections/*", scopedApiAuth);
 
   // MCP OAuth callback/public routes + authenticated management routes
   apiRouter.route("/mcp", mcpRoutes);

@@ -19,6 +19,7 @@ import type {
   IndexJobQueueMessage,
   StorageEnv,
 } from "../../shared/types/index.ts";
+import { DEFAULT_EXECUTOR_POOL_CAPACITY } from "./executor-capacity.ts";
 
 // ---------------------------------------------------------------------------
 // Environment types
@@ -57,7 +58,6 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
    * Opt-in escape hatch to inject durable provider keys directly into pooled
    * executor containers. Defaults to OFF; see buildAgentExecutorContainerEnvVars.
    */
-  EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT?: string;
 }
 
 // Local alias for internal usage across sub-modules
@@ -76,6 +76,13 @@ import type {
 export interface ProxyTokenInfo {
   runId: string;
   serviceId: string;
+  /** Token-bound run lease. New tokens always carry this value. */
+  leaseVersion?: number;
+  /**
+   * Agent control protocol minted with this token. Version 2 requires the
+   * atomic `complete-run` terminal path. Missing means a rollout-era v1 token.
+   */
+  runtimeProtocolVersion?: number;
   /**
    * The scope set this token grants. Minted as an array of least-privilege
    * scopes (see proxyScopesForRunKind). A single concrete scope is accepted for
@@ -98,6 +105,17 @@ export interface ExecutorContainerStub {
   verifyProxyToken(token: string): Promise<ProxyTokenInfo | null>;
   touchProxyToken?(token: string): Promise<void>;
   revokeProxyToken?(token: string): Promise<void>;
+  revokeProxyTokensForRun?(runId: string): Promise<number>;
+  revokeProxyTokensForLease?(
+    runId: string,
+    serviceId: string,
+    leaseVersion?: number,
+  ): Promise<number>;
+  revokeSupersededProxyTokens?(
+    runId: string,
+    serviceId: string,
+    leaseVersion?: number,
+  ): Promise<number>;
   revokeProxyTokens?(): Promise<void>;
 }
 
@@ -168,21 +186,25 @@ export function getExecutorPoolConfig(
   return {
     tier1WarmPoolSize: parsePositiveInteger(
       env.EXECUTOR_TIER1_WARM_POOL_SIZE,
-      1,
+      DEFAULT_EXECUTOR_POOL_CAPACITY.tier1WarmPoolSize,
       { min: 1, max: 100 },
     ),
     tier1MaxConcurrentRuns: parsePositiveInteger(
       env.EXECUTOR_TIER1_MAX_CONCURRENT_RUNS,
-      4,
+      DEFAULT_EXECUTOR_POOL_CAPACITY.tier1MaxConcurrentRuns,
       { min: 1, max: 100 },
     ),
-    tier3PoolSize: parsePositiveInteger(env.EXECUTOR_TIER3_POOL_SIZE, 25, {
-      min: 1,
-      max: 500,
-    }),
+    tier3PoolSize: parsePositiveInteger(
+      env.EXECUTOR_TIER3_POOL_SIZE,
+      DEFAULT_EXECUTOR_POOL_CAPACITY.tier3PoolSize,
+      {
+        min: 1,
+        max: 500,
+      },
+    ),
     tier3MaxConcurrentRuns: parsePositiveInteger(
       env.EXECUTOR_TIER3_MAX_CONCURRENT_RUNS,
-      32,
+      DEFAULT_EXECUTOR_POOL_CAPACITY.tier3MaxConcurrentRuns,
       { min: 1, max: 500 },
     ),
   };
@@ -216,7 +238,6 @@ export interface AiRunBinding {
 export type ProxyScope =
   | "run-lifecycle"
   | "conversation"
-  | "memory"
   | "tools"
   | "skills"
   | "provider-keys";
@@ -227,7 +248,6 @@ export type ProxyCapability = ProxyScope;
 export const AGENT_PROXY_SCOPES: readonly ProxyScope[] = [
   "run-lifecycle",
   "conversation",
-  "memory",
   "tools",
   "skills",
   "provider-keys",
@@ -442,20 +462,18 @@ export const CONTROL_RPC_ENDPOINTS: readonly ControlRpcEndpoint[] = [
   { name: "run-bootstrap", scope: "run-lifecycle" },
   { name: "run-fail", scope: "run-lifecycle" },
   { name: "run-reset", scope: "run-lifecycle" },
-  { name: "run-context", scope: "run-lifecycle" },
   { name: "run-config", scope: "run-lifecycle" },
-  { name: "no-llm-complete", scope: "run-lifecycle" },
   { name: "is-cancelled", scope: "run-lifecycle" },
   { name: "update-run-status", scope: "run-lifecycle" },
+  { name: "complete-run", scope: "run-lifecycle" },
+  { name: "engine-checkpoint-load", scope: "run-lifecycle" },
+  { name: "engine-checkpoint-save", scope: "run-lifecycle" },
   { name: "run-event", scope: "run-lifecycle" },
   { name: "run-usage", scope: "run-lifecycle" },
   // conversation / session / messages
-  { name: "current-session", scope: "conversation" },
   { name: "conversation-history", scope: "conversation" },
   { name: "add-message", scope: "conversation" },
   // memory
-  { name: "memory-activation", scope: "memory" },
-  { name: "memory-finalize", scope: "memory" },
   // skills
   { name: "skill-runtime-context", scope: "skills" },
   { name: "skill-catalog", scope: "skills" },

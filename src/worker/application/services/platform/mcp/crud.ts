@@ -21,12 +21,11 @@ import type {
 } from "./mcp-models.ts";
 import { getInternalMcpIssuer, mapMcpServerRow } from "./mcp-models.ts";
 import {
-  assertAllowedMcpEndpointUrl,
   getMcpEndpointUrlOptions,
+  normalizeMcpEndpointUrl,
 } from "./validation.ts";
 import { encryptToken, saltFor } from "./crypto.ts";
-import { createMcpOAuthPending, discoverOAuthMetadata } from "./oauth.ts";
-import { mcpServiceDeps } from "./oauth.ts";
+import { beginMcpAuthorization, mcpServiceDeps } from "./oauth.ts";
 import {
   isPublicationType,
   listPublications,
@@ -144,6 +143,14 @@ export async function upsertManagedMcpServer(
         oauthScope: null,
         oauthIssuerUrl:
           authMode === "takos_oidc" ? getInternalMcpIssuer(env) : null,
+        oauthResourceUri: null,
+        oauthResourceMetadataUrl: null,
+        oauthClientId: null,
+        oauthClientSecret: null,
+        oauthClientIdIssuedAt: null,
+        oauthClientSecretExpiresAt: null,
+        oauthRegistrationMode: null,
+        oauthTokenEndpointAuthMethod: null,
         enabled: true,
         updatedAt: nowIso,
       },
@@ -227,13 +234,18 @@ export async function registerExternalMcpServer(
   env: Env,
   params: {
     spaceId: string;
+    initiatorUserId: string;
     name: string;
     url: string;
     scope?: string;
   },
 ): Promise<RegisterExternalMcpServerResult> {
   const urlOptions = getMcpEndpointUrlOptions(env);
-  assertAllowedMcpEndpointUrl(params.url, urlOptions, "MCP server");
+  const normalizedRequestedUrl = normalizeMcpEndpointUrl(
+    params.url,
+    urlOptions,
+    "MCP server",
+  );
 
   if (!params.name || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(params.name)) {
     throw new BadRequestError(
@@ -251,6 +263,8 @@ export async function registerExternalMcpServer(
   const existing = await db
     .select({
       id: mcpServers.id,
+      url: mcpServers.url,
+      sourceType: mcpServers.sourceType,
       oauthAccessToken: mcpServers.oauthAccessToken,
     })
     .from(mcpServers)
@@ -262,77 +276,99 @@ export async function registerExternalMcpServer(
     )
     .get();
 
+  if (existing?.sourceType && existing.sourceType !== "external") {
+    throw new ConflictError(
+      `MCP server "${params.name}" is managed by another source in this Workspace`,
+    );
+  }
+
+  if (
+    existing &&
+    normalizeMcpEndpointUrl(existing.url, urlOptions, "Existing MCP server") !==
+      normalizedRequestedUrl
+  ) {
+    throw new ConflictError(
+      `MCP server "${params.name}" is already bound to a different endpoint`,
+    );
+  }
+
+  // Preserve the exact stored spelling for an existing row. OAuth pending
+  // state carries this value into the callback, which then uses exact
+  // workspace + name + URL matching before attaching credentials.
+  const serverUrl = existing?.url ?? normalizedRequestedUrl;
+
   if (existing && existing.oauthAccessToken) {
     return {
       status: "already_registered",
       name: params.name,
-      url: params.url,
-      message: `MCP server "${params.name}" is already registered with an active OAuth token.`,
+      url: serverUrl,
+      message: `MCP server "${params.name}" is already registered for this endpoint with an active OAuth token.`,
     };
   }
 
-  try {
-    const meta = await discoverOAuthMetadata(params.url, env, urlOptions);
-    const redirectUri = `https://${
-      env.ADMIN_DOMAIN || env.TENANT_BASE_DOMAIN || "localhost"
-    }/api/mcp/oauth/callback`;
-    const { authUrl } = await createMcpOAuthPending(dbBinding, env, {
-      spaceId: params.spaceId,
-      serverName: params.name,
-      serverUrl: params.url,
-      issuerUrl: meta.issuer,
-      tokenEndpoint: meta.token_endpoint,
-      authorizationEndpoint: meta.authorization_endpoint,
-      scope: params.scope,
-      redirectUri,
-    });
-
+  const authorization = await beginMcpAuthorization(dbBinding, env, {
+    spaceId: params.spaceId,
+    initiatorUserId: params.initiatorUserId,
+    serverName: params.name,
+    serverUrl,
+    scope: params.scope,
+  });
+  if (authorization.kind === "oauth") {
     return {
       status: "pending_oauth",
       name: params.name,
-      url: params.url,
-      authUrl,
+      url: serverUrl,
+      authUrl: authorization.authUrl,
       message: `Authorize MCP server "${params.name}" to finish registration.`,
     };
-  } catch (err) {
-    const nowIso = new Date().toISOString();
-    const serverId = existing?.id ?? generateId(16);
-    // Use upsert to avoid race between concurrent registrations
-    await db
-      .insert(mcpServers)
-      .values({
-        id: serverId,
-        accountId: params.spaceId,
-        name: params.name,
-        url: params.url,
+  }
+
+  const nowIso = new Date().toISOString();
+  const serverId = existing?.id ?? generateId(16);
+  await db
+    .insert(mcpServers)
+    .values({
+      id: serverId,
+      accountId: params.spaceId,
+      name: params.name,
+      url: serverUrl,
+      transport: "streamable-http",
+      sourceType: "external",
+      authMode: "none",
+      enabled: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    })
+    .onConflictDoUpdate({
+      target: mcpServers.id,
+      set: {
+        url: serverUrl,
         transport: "streamable-http",
         sourceType: "external",
-        authMode: "oauth_pkce",
+        authMode: "none",
+        oauthAccessToken: null,
+        oauthRefreshToken: null,
+        oauthTokenExpiresAt: null,
+        oauthScope: null,
+        oauthIssuerUrl: null,
+        oauthResourceUri: null,
+        oauthResourceMetadataUrl: null,
+        oauthClientId: null,
+        oauthClientSecret: null,
+        oauthClientIdIssuedAt: null,
+        oauthClientSecretExpiresAt: null,
+        oauthRegistrationMode: null,
+        oauthTokenEndpointAuthMethod: null,
         enabled: true,
-        createdAt: nowIso,
         updatedAt: nowIso,
-      })
-      .onConflictDoUpdate({
-        target: mcpServers.id,
-        set: {
-          url: params.url,
-          transport: "streamable-http",
-          sourceType: "external",
-          authMode: "oauth_pkce",
-          enabled: true,
-          updatedAt: nowIso,
-        },
-      });
-
-    return {
-      status: "registered",
-      name: params.name,
-      url: params.url,
-      message: `MCP server "${params.name}" registered without OAuth metadata (${String(
-        err,
-      )}).`,
-    };
-  }
+      },
+    });
+  return {
+    status: "registered",
+    name: params.name,
+    url: serverUrl,
+    message: `Public MCP server "${params.name}" registered without authorization.`,
+  };
 }
 
 /**
@@ -344,7 +380,7 @@ export async function registerExternalMcpServer(
 export async function reauthorizeExternalMcpServer(
   dbBinding: SqlDatabaseBinding,
   env: Env,
-  params: { spaceId: string; serverId: string },
+  params: { spaceId: string; serverId: string; initiatorUserId: string },
 ): Promise<RegisterExternalMcpServerResult> {
   const server = await getMcpServerWithTokens(
     dbBinding,
@@ -354,29 +390,66 @@ export async function reauthorizeExternalMcpServer(
   if (!server || server.sourceType !== "external") {
     throw new BadRequestError("MCP server not found");
   }
-  const urlOptions = getMcpEndpointUrlOptions(env);
-  assertAllowedMcpEndpointUrl(server.url, urlOptions, "MCP server");
-
-  const meta = await discoverOAuthMetadata(server.url, env, urlOptions);
-  const redirectUri = `https://${
-    env.ADMIN_DOMAIN || env.TENANT_BASE_DOMAIN || "localhost"
-  }/api/mcp/oauth/callback`;
-  const { authUrl } = await createMcpOAuthPending(dbBinding, env, {
+  const result = await beginMcpAuthorization(dbBinding, env, {
     spaceId: params.spaceId,
+    initiatorUserId: params.initiatorUserId,
     serverName: server.name,
     serverUrl: server.url,
-    issuerUrl: meta.issuer,
-    tokenEndpoint: meta.token_endpoint,
-    authorizationEndpoint: meta.authorization_endpoint,
     scope: server.oauthScope ?? undefined,
-    redirectUri,
+    existingClient: {
+      serverId: server.id,
+      issuerUrl: server.oauthIssuerUrl,
+      clientId: server.oauthClientId,
+      encryptedClientSecret: server.oauthClientSecret,
+      clientIdIssuedAt: server.oauthClientIdIssuedAt,
+      clientSecretExpiresAt: server.oauthClientSecretExpiresAt,
+      registrationMode: server.oauthRegistrationMode,
+      tokenEndpointAuthMethod: server.oauthTokenEndpointAuthMethod,
+    },
   });
+  if (result.kind === "public") {
+    const nowIso = new Date().toISOString();
+    await mcpServiceDeps
+      .getDb(dbBinding)
+      .update(mcpServers)
+      .set({
+        authMode: "none",
+        oauthAccessToken: null,
+        oauthRefreshToken: null,
+        oauthTokenExpiresAt: null,
+        oauthScope: null,
+        oauthIssuerUrl: null,
+        oauthResourceUri: null,
+        oauthResourceMetadataUrl: null,
+        oauthClientId: null,
+        oauthClientSecret: null,
+        oauthClientIdIssuedAt: null,
+        oauthClientSecretExpiresAt: null,
+        oauthRegistrationMode: null,
+        oauthTokenEndpointAuthMethod: null,
+        updatedAt: nowIso,
+      })
+      .where(
+        and(
+          eq(mcpServers.id, server.id),
+          eq(mcpServers.accountId, params.spaceId),
+          eq(mcpServers.url, server.url),
+          eq(mcpServers.sourceType, "external"),
+        ),
+      );
+    return {
+      status: "registered",
+      name: server.name,
+      url: server.url,
+      message: `Public MCP server "${server.name}" no longer requires authorization.`,
+    };
+  }
 
   return {
     status: "pending_oauth",
     name: server.name,
     url: server.url,
-    authUrl,
+    authUrl: result.authUrl,
     message: `Re-authorize MCP server "${server.name}" to refresh access.`,
   };
 }
@@ -422,6 +495,14 @@ export async function getMcpServerWithTokens(
       oauthTokenExpiresAt: null,
       oauthScope: null,
       oauthIssuerUrl: null,
+      oauthResourceUri: null,
+      oauthResourceMetadataUrl: null,
+      oauthClientId: null,
+      oauthClientSecret: null,
+      oauthClientIdIssuedAt: null,
+      oauthClientSecretExpiresAt: null,
+      oauthRegistrationMode: null,
+      oauthTokenEndpointAuthMethod: null,
       enabled: true,
       createdAt: publication.createdAt,
       updatedAt: publication.updatedAt,
@@ -502,7 +583,9 @@ export async function listMcpServers(
         bundleDeploymentId: null,
         oauthScope: null,
         oauthIssuerUrl: null,
+        oauthRegistrationMode: null,
         oauthTokenExpiresAt: null,
+        authorizationStatus: "managed",
         enabled: true,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,

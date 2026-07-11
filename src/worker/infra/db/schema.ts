@@ -78,6 +78,15 @@ export {
 // OAuth
 export { mcpOauthPending, mcpServers } from "./schema-oauth.ts";
 
+// MCP Registry discovery
+export { mcpRegistrySources } from "./schema-mcp-registry.ts";
+
+// External MCP tool exposure snapshots
+export {
+  mcpToolConfirmations,
+  mcpToolPolicies,
+} from "./schema-mcp-tool-policies.ts";
+
 // Platform
 export {
   featuredAppCatalogConfig,

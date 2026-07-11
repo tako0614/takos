@@ -30,6 +30,10 @@ import {
   getDelegationPacketFromRunInput,
 } from "./delegation.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import {
+  type MessageAttachmentRef,
+  parseMessageAttachmentRefs,
+} from "./message-attachments.ts";
 
 // ── Run status persistence ──────────────────────────────────────────
 
@@ -77,9 +81,8 @@ export async function updateRunStatusImpl(
     typeof lease?.serviceId === "string" && lease.serviceId.length > 0
       ? lease.serviceId
       : null;
-  const leaseVersion = typeof lease?.leaseVersion === "number"
-    ? lease.leaseVersion
-    : null;
+  const leaseVersion =
+    typeof lease?.leaseVersion === "number" ? lease.leaseVersion : null;
 
   const updateData: {
     status: string;
@@ -110,20 +113,25 @@ export async function updateRunStatusImpl(
   }
 
   if (status === "completed" || status === "failed" || status === "cancelled") {
-    const existing = await drizzleDb.select({
-      status: runs.status,
-      usage: runs.usage,
-      output: runs.output,
-      error: runs.error,
-      serviceId: runs.serviceId,
-      leaseVersion: runs.leaseVersion,
-    }).from(runs).where(eq(runs.id, runId)).get();
+    const existing = await drizzleDb
+      .select({
+        status: runs.status,
+        usage: runs.usage,
+        output: runs.output,
+        error: runs.error,
+        serviceId: runs.serviceId,
+        leaseVersion: runs.leaseVersion,
+      })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .get();
 
     // Lease fence: reject a terminal write from a superseded lease before it
     // can flip a reclaimed run's status / output / usage.
     if (leaseServiceId !== null) {
       if (
-        !existing || existing.serviceId !== leaseServiceId ||
+        !existing ||
+        existing.serviceId !== leaseServiceId ||
         (leaseVersion !== null && existing.leaseVersion !== leaseVersion)
       ) {
         return { updated: false, leaseLost: true };
@@ -141,8 +149,15 @@ export async function updateRunStatusImpl(
   }
 
   const conditions = [eq(runs.id, runId)];
-  if (status !== "cancelled") {
-    conditions.push(sql`${runs.status} != 'cancelled'`);
+  if (status === "completed" || status === "failed" || status === "cancelled") {
+    // Every terminal transition is a compare-and-set from the active executor
+    // state. This prevents two terminal reporters on the same lease (or a
+    // user cancellation racing completion) from rewriting one another.
+    conditions.push(eq(runs.status, "running"));
+  } else {
+    conditions.push(
+      sql`${runs.status} NOT IN ('completed', 'failed', 'cancelled')`,
+    );
   }
   if (leaseServiceId !== null) {
     conditions.push(eq(runs.serviceId, leaseServiceId));
@@ -151,23 +166,30 @@ export async function updateRunStatusImpl(
     }
   }
 
-  const result = await drizzleDb.update(runs).set(updateData).where(
-    and(...conditions),
-  );
+  const result = await drizzleDb
+    .update(runs)
+    .set(updateData)
+    .where(and(...conditions));
   const updated = affectedRowCount(result) > 0;
   if (updated || leaseServiceId === null) {
     return { updated, leaseLost: false };
   }
 
-  // 0 rows with a lease present: distinguish a lost lease (the run was reclaimed
-  // under a new serviceId/leaseVersion) from a benign no-op (the run was already
-  // cancelled, which the `status != 'cancelled'` guard filters). Only a genuine
-  // lease mismatch surfaces as lease-lost / 409.
-  const current = await drizzleDb.select({
-    serviceId: runs.serviceId,
-    leaseVersion: runs.leaseVersion,
-  }).from(runs).where(eq(runs.id, runId)).get();
-  const leaseLost = !current || current.serviceId !== leaseServiceId ||
+  // 0 rows with a lease present: distinguish a lost lease (the run was
+  // reclaimed under a new serviceId/leaseVersion) from a rejected state
+  // transition. The caller treats `updated: false` as a conflict even when the
+  // lease still matches, so terminal states cannot be overwritten.
+  const current = await drizzleDb
+    .select({
+      serviceId: runs.serviceId,
+      leaseVersion: runs.leaseVersion,
+    })
+    .from(runs)
+    .where(eq(runs.id, runId))
+    .get();
+  const leaseLost =
+    !current ||
+    current.serviceId !== leaseServiceId ||
     (leaseVersion !== null && current.leaseVersion !== leaseVersion);
   return { updated: false, leaseLost };
 }
@@ -181,12 +203,86 @@ export function isValidToolCallsArray(value: unknown): value is ToolCall[] {
     if (typeof item !== "object" || item === null) return false;
     const obj = item as Record<string, unknown>;
     return (
-      typeof obj.id === "string" &&
-      typeof obj.name === "string" &&
+      typeof obj.id === "string" && obj.id.trim().length > 0 &&
+      typeof obj.name === "string" && obj.name.trim().length > 0 &&
       typeof obj.arguments === "object" &&
-      obj.arguments !== null
+      obj.arguments !== null &&
+      !Array.isArray(obj.arguments)
     );
   });
+}
+
+export interface ConversationHistoryCandidate {
+  msg: AgentMessage;
+  sequence: number;
+  tokens: number;
+}
+
+/**
+ * Group persisted history into provider-valid units. An assistant tool-call
+ * message and all of its matching tool results are indivisible: trimming only
+ * part of that exchange produces orphan tool messages that OpenAI-compatible
+ * providers reject. Corrupt/incomplete exchanges are omitted; assistant text
+ * is retained as a plain message when possible.
+ */
+export function groupCoherentHistoryCandidates(
+  candidates: readonly ConversationHistoryCandidate[],
+): ConversationHistoryCandidate[][] {
+  const groups: ConversationHistoryCandidate[][] = [];
+  let index = 0;
+
+  while (index < candidates.length) {
+    const candidate = candidates[index];
+    if (candidate.msg.role === "tool") {
+      // A tool result without the immediately preceding assistant call is not
+      // valid provider history.
+      index++;
+      continue;
+    }
+
+    const calls = candidate.msg.role === "assistant"
+      ? candidate.msg.tool_calls ?? []
+      : [];
+    if (calls.length === 0) {
+      groups.push([candidate]);
+      index++;
+      continue;
+    }
+
+    const callIds = calls.map((call) => call.id);
+    const expectedIds = new Set(callIds);
+    const matchedResults: ConversationHistoryCandidate[] = [];
+    const seenIds = new Set<string>();
+    let nextIndex = index + 1;
+    while (
+      nextIndex < candidates.length &&
+      candidates[nextIndex].msg.role === "tool"
+    ) {
+      const result = candidates[nextIndex];
+      const id = result.msg.tool_call_id;
+      if (id && expectedIds.has(id) && !seenIds.has(id)) {
+        matchedResults.push(result);
+        seenIds.add(id);
+      }
+      nextIndex++;
+    }
+
+    const complete = expectedIds.size === callIds.length &&
+      seenIds.size === expectedIds.size;
+    if (complete) {
+      groups.push([candidate, ...matchedResults]);
+    } else if (candidate.msg.content.trim()) {
+      const { tool_calls: _discarded, ...plainMessage } = candidate.msg;
+      groups.push([{
+        ...candidate,
+        msg: plainMessage,
+        tokens: estimateTokens(plainMessage.content),
+      }]);
+    }
+    index = nextIndex;
+  }
+
+  return groups;
 }
 
 export interface ConversationHistoryDeps {
@@ -198,46 +294,6 @@ export interface ConversationHistoryDeps {
   aiModel: string;
 }
 
-type MessageAttachmentRef = {
-  file_id: string;
-  path?: string;
-  name: string;
-  mime_type?: string | null;
-  size?: number;
-};
-
-function parseMessageAttachmentRefs(
-  metadata: string | null | undefined,
-): MessageAttachmentRef[] {
-  if (!metadata) return [];
-  try {
-    const parsed = JSON.parse(metadata) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return [];
-    }
-    const attachments = (parsed as Record<string, unknown>).attachments;
-    if (!Array.isArray(attachments)) return [];
-    const parsedAttachments: MessageAttachmentRef[] = [];
-    for (const entry of attachments) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-      const value = entry as Record<string, unknown>;
-      if (typeof value.file_id !== "string" || typeof value.name !== "string") {
-        continue;
-      }
-      parsedAttachments.push({
-        file_id: value.file_id,
-        path: typeof value.path === "string" ? value.path : undefined,
-        name: value.name,
-        mime_type: typeof value.mime_type === "string" ? value.mime_type : null,
-        size: typeof value.size === "number" ? value.size : undefined,
-      });
-    }
-    return parsedAttachments;
-  } catch {
-    return [];
-  }
-}
-
 function appendAttachmentContext(
   content: string,
   attachments: MessageAttachmentRef[],
@@ -245,8 +301,8 @@ function appendAttachmentContext(
   if (attachments.length === 0) return content;
 
   const lines = [
-    "Attached space storage files are available for this message.",
-    "Use space_files_read with file_id or path if you need to inspect them.",
+    "Takos chat attachment metadata is available for this message.",
+    "Use toolbox action=call with tool_name=chat_attachment_read and arguments containing the file_id below. Do not use an installed storage MCP for this Takos-owned attachment.",
     ...attachments.map((attachment) => {
       const parts = [
         attachment.path || attachment.name,
@@ -278,10 +334,14 @@ export async function buildConversationHistory(
   let threadSummary: string | null = null;
   let threadKeyPointsJson = "[]";
 
-  const thread = await db.select({
-    summary: threads.summary,
-    keyPoints: threads.keyPoints,
-  }).from(threads).where(eq(threads.id, threadId)).get();
+  const thread = await db
+    .select({
+      summary: threads.summary,
+      keyPoints: threads.keyPoints,
+    })
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .get();
 
   if (thread) {
     threadSummary = thread.summary ?? null;
@@ -295,16 +355,19 @@ export async function buildConversationHistory(
 
   // Fetch recent messages (generous upper bound; trimmed by token budget below)
   const MAX_FETCH = 500;
-  const rows = await db.select({
-    id: messages.id,
-    role: messages.role,
-    content: messages.content,
-    r2Key: messages.r2Key,
-    toolCalls: messages.toolCalls,
-    toolCallId: messages.toolCallId,
-    metadata: messages.metadata,
-    sequence: messages.sequence,
-  }).from(messages).where(eq(messages.threadId, threadId))
+  const rows = await db
+    .select({
+      id: messages.id,
+      role: messages.role,
+      content: messages.content,
+      r2Key: messages.r2Key,
+      toolCalls: messages.toolCalls,
+      toolCallId: messages.toolCallId,
+      metadata: messages.metadata,
+      sequence: messages.sequence,
+    })
+    .from(messages)
+    .where(eq(messages.threadId, threadId))
     .orderBy(desc(messages.sequence))
     .limit(MAX_FETCH)
     .all();
@@ -316,23 +379,26 @@ export async function buildConversationHistory(
     const bucket = env.TAKOS_OFFLOAD;
     const candidates = rows
       .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<
-        { idx: number; key: string }
-      >;
+      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<{
+      idx: number;
+      key: string;
+    }>;
 
     const concurrency = 20;
     for (let i = 0; i < candidates.length; i += concurrency) {
       const batch = candidates.slice(i, i + concurrency);
-      await Promise.all(batch.map(async ({ idx, key }) => {
-        const persisted = await readMessageFromR2(bucket, key);
-        if (!persisted) return;
-        if (persisted.id !== rows[idx].id) return;
-        if (persisted.thread_id !== threadId) return;
-        rows[idx].content = persisted.content;
-        rows[idx].toolCalls = persisted.tool_calls;
-        rows[idx].toolCallId = persisted.tool_call_id;
-        rows[idx].metadata = persisted.metadata;
-      }));
+      await Promise.all(
+        batch.map(async ({ idx, key }) => {
+          const persisted = await readMessageFromR2(bucket, key);
+          if (!persisted) return;
+          if (persisted.id !== rows[idx].id) return;
+          if (persisted.thread_id !== threadId) return;
+          rows[idx].content = persisted.content;
+          rows[idx].toolCalls = persisted.tool_calls;
+          rows[idx].toolCallId = persisted.tool_call_id;
+          rows[idx].metadata = persisted.metadata;
+        }),
+      );
     }
   }
 
@@ -340,12 +406,7 @@ export async function buildConversationHistory(
   let lastUserQuery = "";
 
   // Build all candidate messages (newest first in rows, but rows is already reversed to chronological)
-  interface CandidateMessage {
-    msg: AgentMessage;
-    sequence: number;
-    tokens: number;
-  }
-  const candidates: CandidateMessage[] = [];
+  const candidates: ConversationHistoryCandidate[] = [];
 
   for (const msg of rows) {
     excludeSequences.add(msg.sequence);
@@ -356,9 +417,8 @@ export async function buildConversationHistory(
       );
     }
 
-    const attachments = msg.role === "user"
-      ? parseMessageAttachmentRefs(msg.metadata)
-      : [];
+    const attachments =
+      msg.role === "user" ? parseMessageAttachmentRefs(msg.metadata) : [];
     const agentMsg: AgentMessage = {
       role: msg.role as AgentMessage["role"],
       content: appendAttachmentContext(msg.content, attachments),
@@ -377,9 +437,10 @@ export async function buildConversationHistory(
       } catch (parseError) {
         logWarn("Failed to parse tool_calls from message", {
           module: "services/agent/conversation-history",
-          error: parseError instanceof Error
-            ? parseError.message
-            : String(parseError),
+          error:
+            parseError instanceof Error
+              ? parseError.message
+              : String(parseError),
         });
       }
     }
@@ -388,28 +449,34 @@ export async function buildConversationHistory(
       agentMsg.tool_call_id = msg.toolCallId;
     }
 
-    const tokens = estimateTokens(agentMsg.content || "") +
+    const tokens =
+      estimateTokens(agentMsg.content || "") +
       (agentMsg.tool_calls
         ? estimateTokens(JSON.stringify(agentMsg.tool_calls))
         : 0);
     candidates.push({ msg: agentMsg, sequence: msg.sequence, tokens });
   }
 
-  // Trim from the front (oldest) to fit within token budget, keeping most recent messages
-  let totalTokens = 0;
-  for (const c of candidates) totalTokens += c.tokens;
-
-  let trimIndex = 0;
-  while (trimIndex < candidates.length - 1 && totalTokens > tokenBudget) {
-    totalTokens -= candidates[trimIndex].tokens;
-    trimIndex++;
+  // Trim whole provider-valid units from the front. Never split an assistant
+  // tool-call message from its corresponding result messages.
+  const groups = groupCoherentHistoryCandidates(candidates);
+  let totalTokens = groups.reduce(
+    (sum, group) => sum + group.reduce((groupSum, c) => groupSum + c.tokens, 0),
+    0,
+  );
+  let trimGroupIndex = 0;
+  while (trimGroupIndex < groups.length - 1 && totalTokens > tokenBudget) {
+    totalTokens -= groups[trimGroupIndex].reduce(
+      (sum, candidate) => sum + candidate.tokens,
+      0,
+    );
+    trimGroupIndex++;
   }
 
-  const trimmed = candidates.slice(trimIndex);
+  const trimmed = groups.slice(trimGroupIndex).flat();
   const agentMessages = trimmed.map((c) => c.msg);
-  const oldestRecentSequence = trimmed.length > 0
-    ? trimmed[0].sequence
-    : undefined;
+  const oldestRecentSequence =
+    trimmed.length > 0 ? trimmed[0].sequence : undefined;
 
   let retrieved: Awaited<ReturnType<typeof queryRelevantThreadMessages>> = [];
   try {
@@ -442,10 +509,14 @@ export async function buildConversationHistory(
 
   // For sub-agent runs: prefer the structured delegation packet over broad parent history inheritance.
   try {
-    const runRow = await db.select({
-      parentRunId: runs.parentRunId,
-      input: runs.input,
-    }).from(runs).where(eq(runs.id, runId)).get();
+    const runRow = await db
+      .select({
+        parentRunId: runs.parentRunId,
+        input: runs.input,
+      })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .get();
     if (runRow?.parentRunId) {
       const delegationPacket = getDelegationPacketFromRunInput(runRow.input);
       if (delegationPacket) {

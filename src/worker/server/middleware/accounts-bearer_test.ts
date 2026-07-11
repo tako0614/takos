@@ -31,4 +31,5 @@ test("expandTakosumiAccountsPatScopes maps admin bucket to all API scopes", () =
   assertEquals(scopes.includes("threads:write"), true);
   assertEquals(scopes.includes("agents:execute"), true);
   assertEquals(scopes.includes("mcp:invoke"), true);
+  assertEquals(scopes.includes("mcp:manage"), true);
 });

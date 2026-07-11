@@ -5,7 +5,10 @@
  */
 
 import type { Env } from "../../../../shared/types/index.ts";
-import { isLocalhost, isPrivateIP } from "@takos/worker-platform-utils/validation";
+import {
+  isLocalhost,
+  isPrivateIP,
+} from "@takos/worker-platform-utils/validation";
 import type { McpEndpointUrlOptions } from "./mcp-models.ts";
 
 // ---------------------------------------------------------------------------
@@ -65,7 +68,8 @@ export function assertAllowedMcpEndpointUrl(
   // Block bare hostnames (no dots) and IPv6 addresses without dots
   // that could bypass the isLocalhost/isPrivateIP checks above
   if (
-    !options.allowLocalhost && !normalizedHost.includes(".") &&
+    !options.allowLocalhost &&
+    !normalizedHost.includes(".") &&
     !normalizedHost.includes(":")
   ) {
     throw new Error(`${label} URL host must be publicly routable`);
@@ -79,4 +83,23 @@ export function assertAllowedMcpEndpointUrl(
   }
 
   return parsed;
+}
+
+/**
+ * Return the comparison form of an MCP endpoint URL.
+ *
+ * `URL#fragment` and `URL` address the same HTTP resource because fragments are
+ * never sent to the server. Everything else that can affect routing (path,
+ * query string, and a non-default port) is deliberately preserved. The URL
+ * parser also applies the safe built-in normalizations such as lower-casing the
+ * host and removing a default `:443` port.
+ */
+export function normalizeMcpEndpointUrl(
+  rawUrl: string,
+  options: McpEndpointUrlOptions,
+  label: string,
+): string {
+  const parsed = assertAllowedMcpEndpointUrl(rawUrl, options, label);
+  parsed.hash = "";
+  return parsed.toString();
 }

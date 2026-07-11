@@ -1,4 +1,9 @@
-import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import {
+  deleteEnv,
+  envObject,
+  getEnv,
+  setEnv,
+} from "@takos/worker-platform-utils/runtime-env";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { WorkerEnv } from "../runtime/worker/env.ts";
@@ -71,18 +76,34 @@ async function updateHeartbeat(
   );
 }
 
+export function buildForwardedRequest(
+  baseUrl: string,
+  request: Request,
+  bearerToken?: string,
+): Request {
+  const incoming = new URL(request.url);
+  const target = new URL(
+    incoming.pathname.replace(/^\//, ""),
+    baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
+  );
+  target.search = incoming.search;
+  const forwarded = new Request(target, request);
+  const normalizedToken = bearerToken?.trim();
+  if (!normalizedToken) return forwarded;
+  const headers = new Headers(forwarded.headers);
+  headers.set("authorization", `Bearer ${normalizedToken}`);
+  return new Request(forwarded, { headers });
+}
+
 function createForwardingBinding(
   baseUrl: string,
+  bearerToken?: string,
 ): { fetch(request: Request): Promise<Response> } {
   return {
     async fetch(request: Request): Promise<Response> {
-      const incoming = new URL(request.url);
-      const target = new URL(
-        incoming.pathname.replace(/^\//, ""),
-        baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
+      return globalThis.fetch(
+        buildForwardedRequest(baseUrl, request, bearerToken),
       );
-      target.search = incoming.search;
-      return globalThis.fetch(new Request(target, request));
     },
   };
 }
@@ -149,10 +170,9 @@ async function dispatchRecord(
     return true;
   }
 
-  await (queue as { sendBatch(messages: Iterable<unknown>): Promise<void> })
-    .sendBatch([
-      { ...record, attempts: nextAttempts },
-    ]);
+  await (
+    queue as { sendBatch(messages: Iterable<unknown>): Promise<void> }
+  ).sendBatch([{ ...record, attempts: nextAttempts }]);
   return true;
 }
 
@@ -172,11 +192,17 @@ export async function runLocalWorkerIteration(
 export async function createLocalWorkerEnv(): Promise<WorkerEnv> {
   const baseEnv = await createNodeWebEnv();
   const executorHostUrl = getEnv("TAKOS_LOCAL_EXECUTOR_HOST_URL");
+  const executorHostAuthToken = getEnv("TAKOS_LOCAL_EXECUTOR_HOST_AUTH_TOKEN");
   const runtimeHostUrl = getEnv("TAKOS_LOCAL_RUNTIME_HOST_URL");
   return {
     ...baseEnv,
     ...(executorHostUrl
-      ? { EXECUTOR_HOST: createForwardingBinding(executorHostUrl) }
+      ? {
+          EXECUTOR_HOST: createForwardingBinding(
+            executorHostUrl,
+            executorHostAuthToken,
+          ),
+        }
       : {}),
     ...(runtimeHostUrl
       ? { RUNTIME_HOST: createForwardingBinding(runtimeHostUrl) }

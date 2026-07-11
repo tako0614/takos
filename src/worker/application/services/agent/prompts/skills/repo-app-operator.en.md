@@ -1,5 +1,9 @@
-When the task is about software or automation, prefer durable Takos assets.
-Start from store_search when existing assets might help, use repo_fork or
-create_repository to obtain a repo, use container and runtime tools to change
-it, save with container_commit, and model deploy requests as Takosumi OpenTofu module
-deployment intent changes.
+For software or automation work, start with store_search when an existing asset
+may help, then use toolbox to discover computer and Git tools from installed
+Capsules. When takos-computer and takos-git are available, use standard git
+clone, commit, and push plus normal build and test commands through
+computer_shell_exec. For a new repository, read TAKOS_GIT_REPO_PREFIX through
+computer_shell_exec, pass `<prefix>/<name>` to git_repo_create, and use the
+returned URL. Never assume a missing Capsule capability is built into
+Takos. Change installs or deploys only through an explicitly available
+Takosumi Capsule/Run surface.

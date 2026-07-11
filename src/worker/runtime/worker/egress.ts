@@ -58,7 +58,10 @@ function isBlockedHostname(hostname: string): boolean {
   return false;
 }
 
-async function dohResolve(name: string, type: "A" | "AAAA" | "CNAME"): Promise<{
+async function dohResolve(
+  name: string,
+  type: "A" | "AAAA" | "CNAME",
+): Promise<{
   status: number;
   answers: Array<{ type: number; data: string }>;
 }> {
@@ -70,7 +73,7 @@ async function dohResolve(name: string, type: "A" | "AAAA" | "CNAME"): Promise<{
   if (!res.ok) {
     throw new Error(`DoH query failed: ${res.status}`);
   }
-  const json = await res.json() as {
+  const json = (await res.json()) as {
     Status?: number;
     Answer?: Array<{ type: number; data: string }>;
   };
@@ -130,15 +133,22 @@ function sanitizeOutboundHeaders(incoming: Headers): Headers {
     const k = key.toLowerCase();
 
     if (
-      k === "connection" || k === "keep-alive" || k === "proxy-connection" ||
-      k === "transfer-encoding" || k === "upgrade"
-    ) return;
+      k === "connection" ||
+      k === "keep-alive" ||
+      k === "proxy-connection" ||
+      k === "transfer-encoding" ||
+      k === "upgrade"
+    )
+      return;
     if (k === "host" || k === "content-length" || k === "expect") return;
     if (k.startsWith("cf-")) return;
     if (k.startsWith("x-takos-")) return;
     if (
-      k === "x-forwarded-for" || k === "x-forwarded-host" || k === "x-real-ip"
-    ) return;
+      k === "x-forwarded-for" ||
+      k === "x-forwarded-host" ||
+      k === "x-real-ip"
+    )
+      return;
 
     out.set(key, value);
   });
@@ -164,13 +174,15 @@ async function rateLimitIfConfigured(
   );
   const algorithmRaw = String(env.EGRESS_RATE_LIMIT_ALGORITHM || "").trim();
   const algorithm =
-    (algorithmRaw === "sliding_window" || algorithmRaw === "token_bucket" ||
-        algorithmRaw === "shadow")
+    algorithmRaw === "sliding_window" ||
+    algorithmRaw === "token_bucket" ||
+    algorithmRaw === "shadow"
       ? algorithmRaw
       : null;
-  const shadowSampleRateValue = env.EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE != null
-    ? Number.parseFloat(String(env.EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE))
-    : Number.NaN;
+  const shadowSampleRateValue =
+    env.EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE != null
+      ? Number.parseFloat(String(env.EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE))
+      : Number.NaN;
 
   try {
     const namespace = env.RATE_LIMITER_DO;
@@ -192,7 +204,7 @@ async function rateLimitIfConfigured(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = await res.json() as {
+    const json = (await res.json()) as {
       allowed?: boolean;
       remaining?: number;
       reset?: number;
@@ -210,9 +222,7 @@ async function rateLimitIfConfigured(
   }
 }
 
-function safeLogUrl(
-  url: URL,
-): {
+function safeLogUrl(url: URL): {
   protocol: string;
   hostname: string;
   port: number;
@@ -374,14 +384,18 @@ export default {
       });
     } catch (e) {
       const elapsedMs = Date.now() - startedAt;
-      logError("upstream fetch failed", {
-        url: safeLogUrl(url),
-        spaceId,
-        runId,
-        mode,
-        elapsedMs,
-        err: String(e),
-      }, { module: "egress" });
+      logError(
+        "upstream fetch failed",
+        {
+          url: safeLogUrl(url),
+          spaceId,
+          runId,
+          mode,
+          elapsedMs,
+          err: String(e),
+        },
+        { module: "egress" },
+      );
       return errorJsonResponse("Upstream fetch failed", 502);
     } finally {
       clearTimeout(timeoutId);
@@ -405,7 +419,8 @@ export default {
     // Early rejection if Content-Length exceeds limit
     const upstreamContentLength = upstream.headers.get("content-length");
     if (
-      upstreamContentLength && parseInt(upstreamContentLength, 10) > maxBytes
+      upstreamContentLength &&
+      parseInt(upstreamContentLength, 10) > maxBytes
     ) {
       return errorJsonResponse("Response too large", 502);
     }
@@ -413,6 +428,13 @@ export default {
     const resHeaders = new Headers();
     const contentType = upstream.headers.get("content-type");
     if (contentType) resHeaders.set("Content-Type", contentType);
+    // MCP authorization discovery and Streamable HTTP session setup require
+    // these protocol response headers. The egress service is binding-only, so
+    // forwarding them returns them solely to the trusted calling worker.
+    for (const header of ["WWW-Authenticate", "Mcp-Session-Id"] as const) {
+      const value = upstream.headers.get(header);
+      if (value) resHeaders.set(header, value);
+    }
     resHeaders.set("Cache-Control", "no-store");
 
     if (!upstream.body) {

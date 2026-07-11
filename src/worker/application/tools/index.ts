@@ -1,9 +1,5 @@
 export type {
-  DeployRequest,
-  DeployResponse,
   RegisteredTool,
-  RuntimeExecRequest,
-  RuntimeExecResponse,
   ToolCall,
   ToolCategory,
   ToolContext,
@@ -22,7 +18,7 @@ export {
 } from "./custom/index.ts";
 
 export { ToolExecutor } from "./executor.ts";
-export { createToolExecutor, SessionState } from "./executor-setup.ts";
+export { createToolExecutor } from "./executor-setup.ts";
 export {
   buildPerRunCapabilityRegistry,
   toOpenAIFunctions,

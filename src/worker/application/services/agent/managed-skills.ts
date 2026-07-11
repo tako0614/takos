@@ -63,7 +63,7 @@ const MANAGED_SKILLS: ManagedSkillDefinition[] = [
     execution_contract: {
       preferred_tools: [
         "web_fetch",
-        "search",
+        "toolbox",
         "create_artifact",
       ],
       durable_output_hints: ["artifact"],
@@ -207,7 +207,7 @@ const MANAGED_SKILLS: ManagedSkillDefinition[] = [
     priority: 95,
     activation_tags: ["slides", "presentation", "deck", "narrative"],
     execution_contract: {
-      preferred_tools: ["create_artifact", "space_files_write"],
+      preferred_tools: ["create_artifact", "toolbox"],
       durable_output_hints: ["artifact", "workspace_file"],
       output_modes: ["chat", "artifact", "workspace_file"],
       required_mcp_servers: [],
@@ -254,11 +254,8 @@ const MANAGED_SKILLS: ManagedSkillDefinition[] = [
     execution_contract: {
       preferred_tools: [
         "store_search",
-        "repo_fork",
-        "create_repository",
-        "container_start",
-        "runtime_exec",
-        "container_commit",
+        "toolbox",
+        "create_artifact",
       ],
       durable_output_hints: ["repo", "app", "artifact"],
       output_modes: ["chat", "repo", "app", "artifact"],

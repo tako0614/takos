@@ -1,19 +1,10 @@
 use std::collections::HashSet;
 
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::control_rpc::{
     ActivatedSkill, SkillCatalogResponse, SkillResolutionContext, SkillRuntimeContextResponse,
 };
-use crate::managed_skills::localized_managed_skills;
-
-pub const LOCAL_SKILL_TOOL_NAMES: [&str; 5] = [
-    "skill_list",
-    "skill_get",
-    "skill_context",
-    "skill_catalog",
-    "skill_describe",
-];
 
 pub fn build_skill_catalog(
     runtime_context: &SkillRuntimeContextResponse,
@@ -51,9 +42,13 @@ pub fn build_skill_catalog(
         merge_unique_skills(&mut combined, runtime_context.custom_skills.clone());
         (combined, Some("control".to_string()))
     } else {
-        let mut combined = localized_managed_skills(&locale);
-        merge_unique_skills(&mut combined, runtime_context.custom_skills.clone());
-        (combined, Some("fallback_local".to_string()))
+        // The Worker catalog is the authority. A container-image snapshot must
+        // never silently become model-visible when the control response is
+        // empty or during a partial rollout.
+        (
+            runtime_context.custom_skills.clone(),
+            Some("control".to_string()),
+        )
     };
     merge_unique_skills(&mut skills, runtime_context.skills.clone());
     merge_unique_skills(&mut skills, runtime_context.custom_skills.clone());
@@ -83,6 +78,32 @@ pub fn build_skill_catalog(
     }
 }
 
+#[must_use]
+pub fn render_available_skill_context(catalog: &SkillCatalogResponse) -> Option<String> {
+    let sections = catalog
+        .skills
+        .iter()
+        .filter(|skill| skill.availability != "unavailable")
+        .filter(|skill| !skill.instructions.trim().is_empty())
+        .map(|skill| {
+            format!(
+                "## {} ({})\n{}",
+                skill.name,
+                skill.id,
+                skill.instructions.trim()
+            )
+        })
+        .collect::<Vec<_>>();
+    if sections.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "Active Workspace skills supplied by Takos Worker:\n\n{}",
+            sections.join("\n\n")
+        ))
+    }
+}
+
 fn merge_unique_skills(target: &mut Vec<ActivatedSkill>, extra: Vec<ActivatedSkill>) {
     let mut known = target
         .iter()
@@ -94,65 +115,6 @@ fn merge_unique_skills(target: &mut Vec<ActivatedSkill>, extra: Vec<ActivatedSki
         if known.insert(key) {
             target.push(skill);
         }
-    }
-}
-
-pub fn execute_local_skill_tool(
-    name: &str,
-    arguments: &Value,
-    catalog: &SkillCatalogResponse,
-) -> Option<String> {
-    match name {
-        "skill_list" => Some(
-            json!({
-                "skills": catalog.skills.iter().filter(|skill| skill.source == "custom").map(format_skill).collect::<Vec<_>>(),
-                "count": catalog.skills.iter().filter(|skill| skill.source == "custom").count(),
-            })
-            .to_string(),
-        ),
-        "skill_get" => {
-            let skill_id = string_arg(arguments, "skill_id");
-            let skill = catalog
-                .skills
-                .iter()
-                .filter(|skill| skill.source == "custom")
-                .find(|skill| skill_id.as_deref().is_some_and(|id| skill.id == id))?;
-            Some(json!({ "skill": format_skill(skill) }).to_string())
-        }
-        "skill_context" => {
-            let locale = string_arg(arguments, "locale").unwrap_or_else(|| catalog.locale.clone());
-            let summary = summarize_catalog(catalog, &locale);
-            Some(
-                json!({
-                    "locale": summary.locale,
-                    "available_skills": summary.entries,
-                    "context": summary.entries,
-                    "count": summary.count,
-                })
-                .to_string(),
-            )
-        }
-        "skill_catalog" => {
-            let locale = string_arg(arguments, "locale").unwrap_or_else(|| catalog.locale.clone());
-            let summary = summarize_catalog(catalog, &locale);
-            Some(
-                json!({
-                    "locale": summary.locale,
-                    "available_skills": summary.entries,
-                    "count": summary.count,
-                })
-                .to_string(),
-            )
-        }
-        "skill_describe" => {
-            let locale = string_arg(arguments, "locale").unwrap_or_else(|| catalog.locale.clone());
-            let skill_ref = string_arg(arguments, "skill_ref")?;
-            let source_hint = string_arg(arguments, "source");
-            let localized_catalog = localized_catalog_for_locale(catalog, &locale);
-            let skill = describe_skill(&localized_catalog, &skill_ref, source_hint.as_deref())?;
-            Some(json!({ "skill": format_skill(skill) }).to_string())
-        }
-        _ => None,
     }
 }
 
@@ -286,141 +248,6 @@ fn evaluate_skill_availability(
     }
 }
 
-#[derive(Debug)]
-struct CatalogSummary {
-    locale: String,
-    entries: Vec<Value>,
-    count: usize,
-}
-
-fn summarize_catalog(catalog: &SkillCatalogResponse, locale: &str) -> CatalogSummary {
-    let localized_catalog = localized_catalog_for_locale(catalog, locale);
-    let entries = localized_catalog
-        .skills
-        .iter()
-        .map(summarize_skill)
-        .collect::<Vec<_>>();
-    CatalogSummary {
-        locale: localized_catalog.locale,
-        count: entries.len(),
-        entries,
-    }
-}
-
-fn localized_catalog_for_locale(
-    catalog: &SkillCatalogResponse,
-    locale: &str,
-) -> SkillCatalogResponse {
-    if locale == catalog.locale {
-        return catalog.clone();
-    }
-    if catalog.managed_source.as_deref() == Some("control") {
-        return catalog.clone();
-    }
-
-    let skills = localized_managed_skills(locale)
-        .into_iter()
-        .map(|mut skill| {
-            if let Some(existing) = catalog
-                .skills
-                .iter()
-                .find(|existing| existing.source == "managed" && existing.id == skill.id)
-            {
-                skill.availability = existing.availability.clone();
-                skill.availability_reasons = existing.availability_reasons.clone();
-            }
-            skill
-        })
-        .chain(
-            catalog
-                .skills
-                .iter()
-                .filter(|skill| skill.source == "custom")
-                .cloned(),
-        )
-        .collect::<Vec<_>>();
-
-    SkillCatalogResponse {
-        locale: locale.to_string(),
-        skills,
-        resolution_context: catalog.resolution_context.clone(),
-        managed_source: catalog.managed_source.clone(),
-    }
-}
-
-fn summarize_skill(skill: &ActivatedSkill) -> Value {
-    json!({
-        "id": skill.id,
-        "name": skill.name,
-        "description": skill.description,
-        "triggers": skill.triggers,
-        "source": skill.source,
-        "category": skill.category,
-        "locale": skill.locale,
-        "version": skill.version,
-        "activation_tags": skill.activation_tags,
-        "execution_contract": skill.execution_contract,
-        "availability": skill.availability,
-        "availability_reasons": skill.availability_reasons,
-    })
-}
-
-fn format_skill(skill: &ActivatedSkill) -> Value {
-    json!({
-        "id": skill.id,
-        "name": skill.name,
-        "description": skill.description,
-        "instructions": skill.instructions,
-        "triggers": skill.triggers,
-        "metadata": {
-            "locale": skill.locale,
-            "category": skill.category,
-            "activation_tags": skill.activation_tags,
-            "execution_contract": skill.execution_contract,
-        },
-        "source": skill.source,
-        "editable": skill.source == "custom",
-        "enabled": true,
-        "availability": skill.availability,
-        "availability_reasons": skill.availability_reasons,
-    })
-}
-
-fn describe_skill<'a>(
-    catalog: &'a SkillCatalogResponse,
-    skill_ref: &str,
-    source_hint: Option<&str>,
-) -> Option<&'a ActivatedSkill> {
-    let skill_ref = skill_ref.trim();
-    match source_hint {
-        Some("managed") => catalog
-            .skills
-            .iter()
-            .find(|skill| skill.source == "managed" && skill.id == skill_ref),
-        Some("custom") => catalog.skills.iter().find(|skill| {
-            skill.source == "custom" && (skill.id == skill_ref || skill.name == skill_ref)
-        }),
-        _ => catalog
-            .skills
-            .iter()
-            .find(|skill| skill.source == "managed" && skill.id == skill_ref)
-            .or_else(|| {
-                catalog.skills.iter().find(|skill| {
-                    skill.source == "custom" && (skill.id == skill_ref || skill.name == skill_ref)
-                })
-            }),
-    }
-}
-
-fn string_arg(arguments: &Value, key: &str) -> Option<String> {
-    arguments
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn build_skill_catalog_merges_managed_and_custom_skills() {
+    fn build_skill_catalog_evaluates_control_supplied_custom_skills() {
         let context = runtime_context(
             &["このAPIをリポジトリからデプロイしたい"],
             json!({}),
@@ -556,7 +383,7 @@ mod tests {
                     "software",
                     "Requires a private MCP server.",
                     &["secure"],
-                    &["runtime_exec"],
+                    &["web_fetch"],
                     &["private-server"],
                     &["missing-template"],
                 ),
@@ -565,22 +392,10 @@ mod tests {
 
         let catalog = build_skill_catalog(
             &context,
-            &tool_names(&[
-                "create_artifact",
-                "runtime_exec",
-                "store_search",
-                "repo_fork",
-                "create_repository",
-                "container_start",
-                "container_commit",
-            ]),
+            &tool_names(&["create_artifact", "web_fetch", "store_search", "toolbox"]),
         );
 
         assert_eq!(catalog.locale, "ja");
-        assert!(catalog
-            .skills
-            .iter()
-            .any(|skill| skill.id == "research-brief"));
         let planner = catalog
             .skills
             .iter()
@@ -602,15 +417,22 @@ mod tests {
             .availability_reasons
             .iter()
             .any(|reason| reason.contains("missing required templates")));
-        assert_eq!(catalog.managed_source.as_deref(), Some("fallback_local"));
+        assert_eq!(catalog.managed_source.as_deref(), Some("control"));
     }
 
     #[test]
     fn build_skill_catalog_prefers_control_managed_skills_when_available() {
-        let mut control_managed = localized_managed_skills("en")
-            .into_iter()
-            .find(|skill| skill.id == "research-brief")
-            .expect("research-brief fallback skill should exist");
+        let mut control_managed = custom_skill(
+            "research-brief",
+            "Research Brief",
+            "research",
+            "Research with citations.",
+            &["research"],
+            &["web_fetch"],
+            &[],
+            &[],
+        );
+        control_managed.source = "managed".to_string();
         control_managed.name = "Control Managed Research".to_string();
 
         let context =
@@ -627,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn build_skill_catalog_uses_local_fallback_when_control_has_no_managed_skills() {
+    fn build_skill_catalog_does_not_inject_local_fallback() {
         let custom = custom_skill(
             "custom-plan",
             "Space Planner",
@@ -642,92 +464,41 @@ mod tests {
             runtime_context_with_control_skills(Some("en"), vec![custom.clone()], vec![custom]);
         let catalog = build_skill_catalog(&context, &tool_names(&["create_artifact"]));
 
-        assert!(catalog
+        assert!(!catalog
             .skills
             .iter()
             .any(|skill| skill.id == "research-brief" && skill.source == "managed"));
-        assert_eq!(catalog.managed_source.as_deref(), Some("fallback_local"));
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.id == "custom-plan" && skill.source == "custom"));
+        assert_eq!(catalog.managed_source.as_deref(), Some("control"));
     }
 
     #[test]
-    fn local_skill_tools_expose_only_custom_entries_for_list_and_get() {
-        let context = runtime_context(
-            &["Need a space plan"],
-            json!({}),
-            vec![custom_skill(
-                "custom-plan",
-                "Space Planner",
-                "planning",
-                "Create space-specific plans.",
-                &["space", "plan"],
-                &["create_artifact"],
-                &[],
-                &[],
-            )],
+    fn render_available_skill_context_excludes_unavailable_skills() {
+        let mut available = custom_skill(
+            "available",
+            "Available",
+            "test",
+            "Follow this instruction.",
+            &[],
+            &[],
+            &[],
+            &[],
         );
-        let catalog = build_skill_catalog(&context, &tool_names(&["create_artifact"]));
+        available.availability = "available".to_string();
+        let mut unavailable = available.clone();
+        unavailable.id = "unavailable".to_string();
+        unavailable.name = "Unavailable".to_string();
+        unavailable.availability = "unavailable".to_string();
+        let rendered = render_available_skill_context(&SkillCatalogResponse {
+            skills: vec![available, unavailable],
+            ..SkillCatalogResponse::default()
+        })
+        .expect("available skill context");
 
-        let list_payload = execute_local_skill_tool("skill_list", &json!({}), &catalog)
-            .expect("skill_list should return a payload");
-        let list_value: Value = serde_json::from_str(&list_payload).expect("valid JSON payload");
-        assert_eq!(list_value["count"].as_u64(), Some(1));
-
-        let get_payload =
-            execute_local_skill_tool("skill_get", &json!({ "skill_id": "custom-plan" }), &catalog)
-                .expect("skill_get should return a payload");
-        let get_value: Value = serde_json::from_str(&get_payload).expect("valid JSON payload");
-        assert_eq!(get_value["skill"]["id"].as_str(), Some("custom-plan"));
-        assert_eq!(get_value["skill"]["source"].as_str(), Some("custom"));
-    }
-
-    #[test]
-    fn skill_describe_supports_locale_override_for_managed_skills() {
-        let context = runtime_context(&["Need research"], json!({}), vec![]);
-        let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
-
-        let payload = execute_local_skill_tool(
-            "skill_describe",
-            &json!({
-                "skill_ref": "research-brief",
-                "source": "managed",
-                "locale": "ja",
-            }),
-            &catalog,
-        )
-        .expect("skill_describe should return a payload");
-        let value: Value = serde_json::from_str(&payload).expect("valid JSON payload");
-        assert_eq!(value["skill"]["id"].as_str(), Some("research-brief"));
-        assert_eq!(value["skill"]["name"].as_str(), Some("調査ブリーフ"));
-        assert_eq!(value["skill"]["source"].as_str(), Some("managed"));
-    }
-
-    #[test]
-    fn skill_describe_keeps_control_managed_content_when_locale_overridden() {
-        let mut control_managed = localized_managed_skills("en")
-            .into_iter()
-            .find(|skill| skill.id == "research-brief")
-            .expect("research-brief fallback skill should exist");
-        control_managed.name = "Control Managed Research".to_string();
-
-        let context =
-            runtime_context_with_control_skills(Some("en"), vec![control_managed], vec![]);
-        let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
-
-        let payload = execute_local_skill_tool(
-            "skill_describe",
-            &json!({
-                "skill_ref": "research-brief",
-                "source": "managed",
-                "locale": "ja",
-            }),
-            &catalog,
-        )
-        .expect("skill_describe should return a payload");
-        let value: Value = serde_json::from_str(&payload).expect("valid JSON payload");
-
-        assert_eq!(
-            value["skill"]["name"].as_str(),
-            Some("Control Managed Research")
-        );
+        assert!(rendered.contains("Follow this instruction."));
+        assert!(!rendered.contains("Unavailable"));
     }
 }

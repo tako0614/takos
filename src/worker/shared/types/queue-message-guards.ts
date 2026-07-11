@@ -1,5 +1,6 @@
 import {
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
+  INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
@@ -17,7 +18,18 @@ export function isValidRunQueueMessage(msg: unknown): msg is RunQueueMessage {
   return (
     m.version === RUN_QUEUE_MESSAGE_VERSION &&
     typeof m.runId === "string" &&
-    typeof m.timestamp === "number"
+    m.runId.length > 0 &&
+    m.runId.length <= 512 &&
+    typeof m.timestamp === "number" &&
+    Number.isFinite(m.timestamp) &&
+    (m.model === undefined ||
+      (typeof m.model === "string" &&
+        m.model.length > 0 &&
+        m.model.length <= 128)) &&
+    (m.backpressureCount === undefined ||
+      (typeof m.backpressureCount === "number" &&
+        Number.isSafeInteger(m.backpressureCount) &&
+        m.backpressureCount >= 0))
   );
 }
 
@@ -29,16 +41,30 @@ export function isValidIndexJobQueueMessage(
   return (
     m.version === INDEX_QUEUE_MESSAGE_VERSION &&
     typeof m.jobId === "string" &&
+    m.jobId.length > 0 &&
+    m.jobId.length <= 512 &&
+    // One-release rolling compatibility: old in-flight v1 queue bodies have
+    // no deliveryId and the consumer falls back to transport message.id.
+    (m.deliveryId === undefined ||
+      (typeof m.deliveryId === "string" &&
+        m.deliveryId.length > 0 &&
+        m.deliveryId.length <= 1024)) &&
     typeof m.spaceId === "string" &&
+    m.spaceId.length > 0 &&
+    m.spaceId.length <= 512 &&
     typeof m.type === "string" &&
-    [
-      "vectorize",
-      "info_unit",
-      "thread_context",
-      "repo_code_index",
-      "memory_build_paths",
-    ].includes(m.type as string) &&
-    typeof m.timestamp === "number"
+    (INDEX_JOB_QUEUE_TYPES as readonly string[]).includes(m.type as string) &&
+    (m.targetId === undefined ||
+      (typeof m.targetId === "string" &&
+        m.targetId.length > 0 &&
+        m.targetId.length <= 512)) &&
+    (m.repoId === undefined ||
+      (typeof m.repoId === "string" &&
+        m.repoId.length > 0 &&
+        m.repoId.length <= 512)) &&
+    typeof m.timestamp === "number" &&
+    Number.isFinite(m.timestamp) &&
+    m.timestamp >= 0
   );
 }
 
@@ -78,8 +104,9 @@ export function isValidDeploymentQueueMessage(
   const m = msg as Record<string, unknown>;
   if (m.version !== DEPLOYMENT_QUEUE_MESSAGE_VERSION) return false;
   if (m.type === "deployment") {
-    return typeof m.deploymentId === "string" &&
-      typeof m.timestamp === "number";
+    return (
+      typeof m.deploymentId === "string" && typeof m.timestamp === "number"
+    );
   }
   return false;
 }

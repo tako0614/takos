@@ -3,20 +3,18 @@
 > Internal service of [Takos](../README.md). 公開 product overview と Quickstart
 > は親 README を参照してください。
 
-`takos-agent` は Takos の agent execution service です。`takos-agent-engine` を
-Rust library として利用し、agent loop、managed skills の Rust runtime copy、
-prompt construction、tool bridge を service process 内で扱います。Takosumi-owned
-agent-control RPC と接続します。
+`takos-agent` はTakosのrun-scoped agent execution serviceです。`takos-agent-engine`をRust libraryとして利用し、
+bounded agent loop、structured conversation/tool transcript、Worker提供contextのmodel request化、model adapter、tool bridgeを扱います。
+Takos Workerが所有するagent-control RPCと接続します。
 
 このディレクトリの正本責務は次です。
 
 - agent loop orchestration
-- memory substrate と local memory tools
-- managed skill 定義
-- skill catalog 合成と selection
-- skill prompt / system prompt 構築
+- engine checkpointの生成・resume (durable保存とlease authorityはWorker)
+- Workerが組み立てたcanonical history / memory contextのstructured model入力化
+- Worker提供のsystem prompt / skill contextをmodel requestへ反映
 - model runner wiring
-- Takosumi control plane との agent-control RPC client
+- Takos Workerとのagent-control RPC client
 - remote tool 実行の bridge
 
 ## 境界
@@ -24,46 +22,50 @@ agent-control RPC と接続します。
 Takos の agent architecture では、「all Rust」にする対象を container
 の内側に限定します。
 
-Rust container が正本として持つもの:
+Rust container がrun中に持つもの:
 
 - 推論ループ
-- memory / context assembly
-- local tool execution internals
-- skill activation
-- prompt construction
+- canonical historyを入力にしたcontext assembly
+- Worker提供contextのstructured model request化
 - model runner wiring
 
-Takosumi / control plane 側に残すもの:
+Takos Workerが正本として持つもの:
 
 - run queue と run lifecycle 管理
-- DB / billing / auth / space state
-- remote tool の実体
-- custom skill の CRUD と永続化
+- lease-fenced engine checkpointのdurable保存とterminal時の消去
+- Thread / summary / durable memory and retrieval state / Workspace state
+- remote tool catalog、authorization、execution、idempotency
+- managed/custom skill catalogと永続化
 - agent container を起動する executor pool host process
 
-この分離により、agent の思考と実行本体は Rust で固定しつつ、Takos product の
-stateful backend と tool backend は Takos app / Takosumi kernel control plane 側で運用できます。
+Container diskやpool slotはproduct stateの正本ではありません。restart / 別slot後も、in-flight RunはWorker-owned checkpointから
+idempotent nodeをresumeし、別RunのconversationはTakos Workerのcanonical historyから構築します。TakosumiはCapsule / ContainerServiceのdeploy、credential、OpenTofu Run ledgerを
+管理しますが、Takos固有のconversation / memory / skill / tool-control RPCはTakos Workerが所有します。
 
 ## 主要モジュール
 
 - `src/main.rs`
-  - `/start` entrypoint。Takosumi-owned agent-control RPC から bootstrap して agent loop を起動
+  - `/start` entrypoint。Takos Worker agent-control RPCからbootstrapしてagent loopを起動
 - `src/engine_support.rs`
   - agent engine support wiring
 - `src/skills.rs`
-  - managed/custom skill catalog 合成、selection、local skill tools
-- `src/managed_skills.rs`
-  - managed skill の Rust runtime copy
-- `src/prompts.rs`
-  - agent type ごとの system prompt 正本
+  - Workerから取得したskill metadataのruntime context helper
 - `src/tool_bridge.rs`
-  - local memory/skill tools と remote tool catalog の合成
+  - correlated tool callをTakos Workerのremote tool executionへbridge
 - `src/control_rpc.rs`
-  - Takosumi-owned agent-control RPC contract client
+  - Takos Worker agent-control RPC contract client
 
 ## Contract
 
 `takos-agent` は remote tool backend を内包しません。tool 実行は次の 2 層です。
+
+Workerのtool catalogは`side_effects` / `risk_level`をwrapperまで保持します。明示的なlow-risk read-only toolだけを
+parallel実行し、未分類・high-risk・side-effecting toolはprovider順に直列実行します。外部MCPのannotationだけで
+read-onlyへ昇格させません。
+
+tool observabilityはbounded `tool_call` / `tool_result` run eventに集約し、`tool_result`は`duration_ms`と4KiB以下のpreviewを
+持ちます。terminal assistant message metadataへ全tool executionを再添付しないため、exact correlated transcriptとeventを
+二重保存せず、大量tool callでも`complete-run` metadata上限を超えません。
 
 `/start` は executor pool host から渡される `executorTier` / `executorContainerId`
 を受け取り、全 agent-control RPC に `X-Takos-Executor-Tier` /
@@ -77,15 +79,18 @@ contract で動きます。
 `503`、bearer token が欠落または不一致の場合は `401` を返します。
 
 同時実行上限は `MAX_CONCURRENT_RUNS` で指定します。未設定時の既定値は `5`
-です。tiered executor pool では tier1 に `4`、tier3 に `32`
-を注入します。同じ `runId` の duplicate `/start` は accepted として扱い、別の
-run が上限を超えた場合は `503 At capacity` を返します。
+です。tiered executor pool では tier1 container に `4`、tier3 の各 container に `32`
+を注入し、tier3 pool 自体は最大 `25` instance です。同じ`runId`かつ同じservice/leaseのduplicate `/start`はacceptedとして扱います。異なる新leaseなら
+旧taskをcancelしてreplacementを起動します。別runが上限を超えた場合は`503 At capacity`を返します。
 
-agent-control RPC の canonical path は Takosumi contract export
-`takosumi-contract` の
-`/api/internal/v1/agent-control/*` です。`takos-agent` はこの path family を
-一次 surface として呼びます。他の path family は current `takos-agent` の RPC
-surface ではありません。
+current imageのaccepted `/start` responseは`runtimeProtocolVersion: 2`を返します。executor hostは予約時点ではtokenをversionless
+(rolling v1-compatible)にし、exact tokenを受け取ったresponseがv2を明示した場合だけそのtokenをv2へ昇格します。v2 tokenはatomic
+`complete-run`を必須とします。rollback用に、`complete-run` endpointが明確な404/405の場合だけnew wrapperがlegacy
+`add-message` + `update-run-status`へ一時fallbackします。409 / 410 / auth error / 5xxではfallbackしません。このbridgeは1 release後に
+削除対象です。
+
+agent-control RPCのcanonical pathはTakos Workerの`/api/internal/v1/agent-control/*`です。containerはrun-scoped
+tokenでこのpath familyを呼び、Workerがtenant/thread/run/leaseをtoken-bound stateから解決します。
 
 - `TAKOS_AGENT_CONTROL_RPC_BASE_URL` / `TAKOS_AGENT_CONTROL_RPC_TOKEN`
   - `/api/internal/v1/agent-control/*` 用の明示的な設定名
@@ -95,37 +100,25 @@ surface ではありません。
   - tenant/platform Takosumi internal API 用。agent-control RPC の bearer-token transport
     base としては使わない
 
-Takosumi 側の contract export では、run bootstrap / context / config / tool catalog /
-tool execute / heartbeat / status update / run event などの surface を明示します。
-`run-bootstrap` は `spaceId` を必須 context とし、shared-cell / Installation
-経由で起動された run では `installationId` と `runtimeNamespace` を任意で返せます。
-`takos-agent` は Accounts ledger や Installation runtime mode を所有せず、この context を
-消費して local memory store を `spaces/<spaceId>/installations/<installationId>`
-に隔離します。`installationId` が無い run は space-scoped local run として
-`spaces/<spaceId>` を使います。
+Takos Workerはrun bootstrap / context / config / conversation history / memory activation / tool catalog /
+tool execute / engine checkpoint save・load / heartbeat / status update / run eventを公開します。
+`run-config.systemPrompt` は必須のWorker-owned policyで、空ならwrapperはlocal copyへfallbackせずrunを失敗させます。
+`run-bootstrap` は `spaceId` を必須 context とし、Capsule/app経由で起動されたrunでは移行中のwire field
+`installationId` と `runtimeNamespace` を任意で返せます。`Installation`をcurrent product entityとして再導入しません。
+`takos-agent`はAccounts ledgerやCapsule lifecycleを所有しません。engineは
+`ExecutionProfile::ExternalContext`を明示し、local ingest / activation / distillation / session overflowを通さないbounded model/tool
+loopだけを使います。engine checkpointのdurable authorityはWorkerのRun ledgerで、container diskをrecovery authorityにしません。
+idempotent tool nodeはresumeできますが、provider-neutralなidempotency contractがないmodel nodeは自動再発行せずfail closedします。
+`spaceId` / `installationId`をdurable filesystem namespaceとして使いません。
 
 `/api/internal/v1/agent-control/run-config` の budget は `maxGraphSteps` / `maxToolRounds`
-を正本の field name として読みます。snake_case alias は current contract ではありません。
+を正本の field name として読みます。未設定時は engine default (`64` / `8`) を使います。
+snake_case alias、旧 `maxIterations` / `rateLimit`、tool catalog、embedding credential は
+current run-config contract ではありません。
 
-memory embedding backend は未設定時に smoke/test 用の Rust hash embedder を使います。
-`/api/internal/v1/agent-control/run-config` または env で `embeddingProvider` に `openai` /
-`openai-compatible` を指定すると、`takos-agent-engine` の
-`OpenAiCompatibleEmbedder` を使います。設定名は `embeddingModel` /
-`embeddingBaseUrl` / `embeddingApiKey` / `embeddingDimensions` です。env は
-`TAKOS_EMBEDDING_PROVIDER`、`TAKOS_EMBEDDING_MODEL`、
-`TAKOS_EMBEDDING_BASE_URL`、`TAKOS_EMBEDDING_API_KEY`、
-`TAKOS_EMBEDDING_DIMENSIONS` を優先します。API key は control plane の
-`/api/internal/v1/agent-control/api-keys` の OpenAI-compatible key、最後に `OPENAI_API_KEY` も fallback
-として使います。
-
-Production では `TAKOS_EMBEDDING_PROVIDER=openai-compatible` または `openai` と、
-`TAKOS_EMBEDDING_API_KEY` / `OPENAI_EMBEDDING_API_KEY` / control plane の
-OpenAI key のいずれかを設定します。`TAKOS_EMBEDDING_MODEL` は未指定時
-`text-embedding-3-small`、`TAKOS_EMBEDDING_BASE_URL` は OpenAI-compatible endpoint
-を差し替える場合のみ、`TAKOS_EMBEDDING_DIMENSIONS` は provider が dimension 指定を
-受ける場合のみ設定します。embedding provider が全く設定されていない場合、service は
-WARN を出して Rust hash embedder に fallback します。これは smoke/test 用であり
-production memory retrieval の backend として扱いません。
+Durable semantic retrievalはTakos Workerがconversation historyを組み立てる際に実行します。production wrapperの
+external-context profileはengine-local embedding / memory repositoryへturnを複製せず、消えるper-container indexを第二のmemory
+authorityにしません。memory-aware engine profileとdeterministic hash embedderはlibrary/test supportとして残します。
 
 ## Repository layout
 
@@ -151,6 +144,13 @@ Docker image は ecosystem root から作成します。
 docker build -f takos/containers/agent/Dockerfile -t takos-agent .
 ```
 
+release前は`containers/agent/engine-source.json`のpin、sibling checkoutのHEAD/clean state、wrapper compatibilityを
+一体で検証します。未commit engine差分を古いSHAで表現しません。
+
+```sh
+bun run validate:agent-engine-source
+```
+
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。
 
@@ -165,27 +165,14 @@ bash scripts/check-local-engine.sh
 ```
 
 - model-visible catalog / tool discovery
-  - control plane の remote catalog が正本
-  - `CompositeToolExecutor::exposed_tools()` は remote_tools のみを返し、model
-    に渡す tool list も remote catalog を前提にします
-- local runtime execution
-  - `semantic_search_memory`
-  - `graph_search_memory`
-  - `provenance_lookup`
-  - `timeline_search`
-  - `skill_list`
-  - `skill_get`
-  - `skill_context`
-  - `skill_catalog`
-  - `skill_describe`
-- remote
-  - Takos control plane が catalog / execution を提供する tool 群
+  - Takos Worker の remote catalog が正本
+  - `CompositeToolExecutor::exposed_tools()` は remote tools のみを返し、tool
+    実行も control RPC を通します
+- skill context
+  - Rust はTakos Workerから受け取ったavailable managed/custom skill instructionsを
+    structured system contextとしてrun promptへ渡します
+  - `skill_list` / `skill_get` / CRUD は remote tool として実行し、Rust 側で
+    同名 call を intercept しません
 
-tool discovery は control plane の catalog を正としつつ、`skill_*` の実行は
-Rust 側で local intercept します。`skill_list` / `skill_get` は custom skill
-のみを返し、managed skill を含む合成 catalog は `skill_context` /
-`skill_catalog` / `skill_describe` が返します。local memory tools と `skill_*`
-は model-visible catalog に直接追加されるとは限らず、remote catalog の同名
-call や local execution path を Rust container が intercept / execute します。
-同名 tool がある場合に local execution が優先されるのは runtime dispatch
-の話で、`exposed_tools()` が local tools を常に返すという意味ではありません。
+container imageにはmanaged skill snapshotを持ちません。tool/skillの追加・削除・annotations・認可はTakos Worker側の
+catalogを正本として扱います。

@@ -3,8 +3,8 @@
  *
  * The executor-host verifies the per-run proxy token + scope, then dispatches
  * each container Control RPC into the matching handler IN-PROCESS via
- * `dispatchControlRpc` below. takos / takosumi / the executor-host all live in
- * the same worker isolate, so there is no service-binding hop: the request body
+ * `dispatchControlRpc` below. The Takos agent handlers and executor-host live
+ * in the same Takos Worker isolate, so there is no service-binding hop: the request body
  * is already a parsed record, the run is already token-bound, and the handlers
  * read DB / services directly. All handlers keep their original behavior; only
  * the redundant self-HTTP round-trip + internal-token recheck are gone.
@@ -14,15 +14,12 @@ import type { Env } from "../shared/types/index.ts";
 import { logError } from "../shared/utils/logger.ts";
 
 // Handler imports from the existing executor subsystem — these contain the
-// actual business logic (DB queries, tool execution, memory graph, billing, etc.)
+// actual business logic (DB queries, tool execution, memory retrieval, billing, etc.)
 import {
   getRunBootstrap,
-  handleCurrentSession,
   handleHeartbeat,
   handleIsCancelled,
-  handleNoLlmComplete,
   handleRunBootstrap,
-  handleRunContext,
   handleRunFail,
   handleRunRecord,
   handleRunReset,
@@ -37,10 +34,12 @@ import {
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
 
 import {
+  abortRemoteToolExecutorsForLease,
   handleAddMessage,
+  handleCompleteRun,
   handleConversationHistory,
-  handleMemoryActivation,
-  handleMemoryFinalize,
+  handleEngineCheckpointLoad,
+  handleEngineCheckpointSave,
   handleRunConfig,
   handleRunEvent,
   handleSkillCatalog,
@@ -50,6 +49,7 @@ import {
   handleToolCleanup,
   handleToolExecute,
   handleUpdateRunStatus,
+  ensureRunLease,
 } from "./container-hosts/executor-control-rpc.ts";
 
 import { recordRunUsageBatch } from "../application/services/app-usage/usage-recorder.ts";
@@ -160,19 +160,17 @@ const CONTROL_RPC_HANDLERS: Record<
   "run-bootstrap": handleRunBootstrap,
   "run-fail": handleRunFail,
   "run-reset": handleRunReset,
-  "run-context": handleRunContext,
   "run-config": handleRunConfig,
-  "no-llm-complete": handleNoLlmComplete,
-  "current-session": handleCurrentSession,
   "is-cancelled": handleIsCancelled,
   "update-run-status": handleUpdateRunStatus,
+  "complete-run": handleCompleteRun,
+  "engine-checkpoint-load": handleEngineCheckpointLoad,
+  "engine-checkpoint-save": handleEngineCheckpointSave,
   "run-event": handleRunEvent,
   // conversation / session / messages
   "conversation-history": handleConversationHistory,
   "add-message": handleAddMessage,
   // memory
-  "memory-activation": handleMemoryActivation,
-  "memory-finalize": handleMemoryFinalize,
   // skills
   "skill-runtime-context": handleSkillRuntimeContext,
   "skill-catalog": handleSkillCatalog,
@@ -215,34 +213,60 @@ async function handleApiKeys(
   const inactive = await rejectApiKeysIfRunInactive(body, env);
   if (inactive) return inactive;
 
-  const directOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
-  let openAiCredential: OpenAiRuntimeCredential | undefined;
+  const configuredDirectOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
+  const allowSharedProviderKey =
+    env.ENVIRONMENT === "development" ||
+    nonEmptyString(env.TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY)?.toLowerCase() ===
+      "true";
+  const directOpenAiKey = allowSharedProviderKey
+    ? configuredDirectOpenAiKey
+    : undefined;
   if (directOpenAiKey) {
-    const endpoint = openAiChatCompletionsEndpoint(env.OPENAI_BASE_URL);
-    openAiCredential = endpoint
-      ? { apiKey: directOpenAiKey, endpoint }
-      : undefined;
-  } else {
-    const runId = nonEmptyString(body.runId)!;
-    try {
-      openAiCredential = await resolveRunOpenAiRuntimeCredential(
-        { runId, env },
-        runtimeCredentialDeps,
-      );
-    } catch (error) {
-      logError("Takosumi AI Gateway runtime credential mint failed", error, {
-        module: "executor-proxy-api",
-        runId,
-      });
-      return err("Takosumi AI Gateway authorization is unavailable", 503);
-    }
+    return ok({
+      openai: directOpenAiKey,
+      openaiEndpoint:
+        openAiChatCompletionsEndpoint(env.OPENAI_BASE_URL) ?? null,
+    });
+  }
+  if (configuredDirectOpenAiKey) {
+    logError(
+      "Refusing to hand a deployment-global provider key to the agent container; configure short-lived Takosumi AI Gateway credentials or explicitly opt into the self-host security downgrade",
+      undefined,
+      { module: "executor-proxy-api" },
+    );
+  }
+  const runId = nonEmptyString(body.runId)!;
+  let openAiCredential: OpenAiRuntimeCredential | undefined;
+  try {
+    openAiCredential = await resolveRunOpenAiRuntimeCredential(
+      { runId, env },
+      runtimeCredentialDeps,
+    );
+  } catch (error) {
+    logError("Takosumi AI Gateway runtime credential mint failed", error, {
+      module: "executor-proxy-api",
+      runId,
+    });
+    return err(
+      configuredDirectOpenAiKey
+        ? "Shared provider-key handout is disabled; configure short-lived AI Gateway credentials"
+        : "Takosumi AI Gateway authorization is unavailable",
+      503,
+    );
+  }
+
+  if (!openAiCredential) {
+    return err(
+      configuredDirectOpenAiKey
+        ? "Shared provider-key handout is disabled; configure short-lived AI Gateway credentials"
+        : "No short-lived AI runtime credential is available",
+      503,
+    );
   }
 
   return ok({
-    openai: directOpenAiKey ?? openAiCredential?.apiKey ?? null,
-    openaiEndpoint: openAiCredential?.endpoint ?? null,
-    anthropic: env.ANTHROPIC_API_KEY ?? null,
-    google: env.GOOGLE_API_KEY ?? null,
+    openai: openAiCredential.apiKey,
+    openaiEndpoint: openAiCredential.endpoint,
   });
 }
 
@@ -420,6 +444,8 @@ const CONTROL_RPC_DISPATCH: ReadonlyMap<
   }),
 );
 
+const TOOL_CLEANUP_PATH = agentControlRpcPath("tool-cleanup");
+
 /**
  * Dispatch a verified container Control RPC to its handler IN-PROCESS.
  *
@@ -438,5 +464,25 @@ export function dispatchControlRpc(
 ): Response | Promise<Response> | null {
   const handler = CONTROL_RPC_DISPATCH.get(path);
   if (!handler) return null;
-  return handler(body, env);
+  return (async () => {
+    // One central request-boundary fence covers both read and write RPCs. A
+    // proxy token is an authentication credential, but the DB run lease is the
+    // live authorization decision; stale-recovery and user cancellation can
+    // revoke that authority while the token still exists in Durable Object
+    // storage. Local/in-process callers omit serviceId and retain the legacy
+    // single-process behavior because ensureRunLease deliberately skips them.
+    //
+    // tool-cleanup is the sole exception: it only releases the cache entry
+    // keyed by this exact run/service/lease identity. Letting a superseded
+    // lease clean up its own resources is safe and prevents an hour-long TTL
+    // leak; it cannot touch the replacement lease's executor.
+    if (path !== TOOL_CLEANUP_PATH && typeof body.runId === "string") {
+      const leaseError = await ensureRunLease(env, body.runId, body);
+      if (leaseError) {
+        abortRemoteToolExecutorsForLease(body);
+        return leaseError;
+      }
+    }
+    return await handler(body, env);
+  })();
 }

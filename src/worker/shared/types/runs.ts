@@ -31,6 +31,7 @@ export interface Run {
   root_thread_id: string;
   root_run_id: string | null;
   agent_type: string;
+  model: string | null;
   status: RunStatus;
   input: string;
   output: string | null;
@@ -53,6 +54,7 @@ export type RunRow = {
   rootThreadId: string | null;
   rootRunId: string | null;
   agentType: string;
+  model?: string | null;
   status: string;
   input: string;
   output: string | null;
@@ -121,6 +123,7 @@ export function asRunRow(row: Record<string, unknown>): RunRow {
     rootThreadId: nullableStringField(row, 'rootThreadId'),
     rootRunId: nullableStringField(row, 'rootRunId'),
     agentType: stringField(row, 'agentType'),
+    model: nullableStringField(row, 'model'),
     status: stringField(row, 'status'),
     input: stringField(row, 'input'),
     output: nullableStringField(row, 'output'),
@@ -151,6 +154,7 @@ export function runRowToApi(row: RunRow): Run {
     root_thread_id: rootThreadId,
     root_run_id: rootRunId,
     agent_type: row.agentType,
+    model: row.model ?? null,
     status: row.status as RunStatus,
     input: row.input,
     output: row.output,

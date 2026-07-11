@@ -99,6 +99,7 @@ export const source = {
   installFromGitUrl: "Git URLからインストール",
   gitUrlLabel: "Git URL",
   gitRefLabel: "参照",
+  gitModulePathLabel: "Module path",
   planInstall: "プラン",
   installApp: "インストール",
   installPlanFailed: "インストールプランの作成に失敗しました",

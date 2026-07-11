@@ -41,6 +41,7 @@ type CreatePendingRunParams = {
   rootThreadId: string;
   rootRunId: string;
   agentType: string;
+  model: string;
   input: string;
   createdAt: string;
 };
@@ -306,6 +307,7 @@ async function getRunResponseFallback(
       root_thread_id AS rootThreadId,
       root_run_id AS rootRunId,
       agent_type AS agentType,
+      model,
       status,
       input,
       output,
@@ -346,6 +348,7 @@ export async function getRunResponse(
         rootThreadId: row.rootThreadId,
         rootRunId: row.rootRunId,
         agentType: row.agentType,
+        model: row.model,
         status: row.status,
         input: row.input,
         output: row.output,
@@ -378,11 +381,12 @@ async function createPendingRunFallback(
       root_thread_id,
       root_run_id,
       agent_type,
+      model,
       status,
       input,
       usage,
       created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, 'pending', ?, '{}', ?)
+    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'pending', ?, '{}', ?)
   `).bind(
     params.runId,
     params.threadId,
@@ -393,6 +397,7 @@ async function createPendingRunFallback(
     params.rootThreadId,
     params.rootRunId,
     params.agentType,
+    params.model,
     params.input,
     params.createdAt,
   ).run();
@@ -417,6 +422,7 @@ export async function createPendingRun(
         rootThreadId: params.rootThreadId,
         rootRunId: params.rootRunId,
         agentType: params.agentType,
+        model: params.model,
         status: "pending",
         input: params.input,
         usage: "{}",

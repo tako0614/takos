@@ -17,7 +17,7 @@
 # directory (takos/deploy/cloudflare/), per wrangler semantics.
 name = "takos"
 account_id = "replace-with-account-id"
-main = "../../src/worker/index.ts"
+main = "../../src/worker/cloudflare-entrypoint.ts"
 workers_dev = true
 compatibility_date = "2026-04-01"
 # Takos consumes Takosumi Accounts over its public OIDC origin. Cloudflare
@@ -52,9 +52,9 @@ AUTH_PUBLIC_BASE_URL = "https://app.your-domain.example"
 PROXY_BASE_URL = "https://app.your-domain.example"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.your-domain.example"
 # Remote-tool allowlist for the agent runtime. The agent container fails closed
-# when this is empty, so the bundled distribution defaults to "*" (all
-# first-party tools: file read/write, runtime exec, web fetch, repo ops). Narrow
-# it to a comma-separated list (e.g. "file_read,web_fetch") to restrict which
+# when this is empty, so the bundled distribution defaults to "*" (the current
+# policy-filtered Takos + installed Capsule + registered MCP catalog). Narrow
+# it to a comma-separated list (e.g. "web_fetch,create_artifact") to restrict which
 # tools the agent may call. Leave unset to keep the all-tools default.
 # TAKOS_AGENT_TOOL_ALLOWLIST = "*"
 # OIDC redirect/return-to targets are validated from server-managed config:
@@ -188,6 +188,7 @@ image = "../../containers/runtime/Dockerfile"
 image_build_context = "../../containers/runtime"
 instance_type = "standard-2"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
@@ -195,6 +196,7 @@ image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = "lite"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
@@ -202,13 +204,15 @@ image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = "basic"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
 image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
-max_instances = 1
+max_instances = 25
+rollout_active_grace_period = 900
 
 # R2 Bucket for worker bundles (optional - for production)
 [[r2_buckets]]
@@ -287,7 +291,9 @@ binding = "DEPLOY_QUEUE"
 queue = "takos-runs"
 max_batch_size = 1
 max_batch_timeout = 1
-max_retries = 3
+max_retries = 5
+max_concurrency = 250
+retry_delay = 5
 dead_letter_queue = "takos-runs-dlq"
 
 [[queues.consumers]]
@@ -344,6 +350,7 @@ binding = "AI"
 [[services]]
 binding = "TAKOS_EGRESS"
 service = "takos"
+entrypoint = "TakosEgressEntrypoint"
 
 [env.staging]
 name = "takos-staging"
@@ -426,6 +433,7 @@ image = "../../containers/runtime/Dockerfile"
 image_build_context = "../../containers/runtime"
 instance_type = "standard-2"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
@@ -433,6 +441,7 @@ image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = "lite"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
@@ -440,13 +449,15 @@ image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = "basic"
 max_instances = 1
+rollout_active_grace_period = 900
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
 image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
-max_instances = 1
+max_instances = 25
+rollout_active_grace_period = 900
 
 [[env.staging.r2_buckets]]
 binding = "WORKER_BUNDLES"
@@ -488,7 +499,9 @@ binding = "DEPLOY_QUEUE"
 queue = "takos-runs-staging"
 max_batch_size = 1
 max_batch_timeout = 1
-max_retries = 3
+max_retries = 5
+max_concurrency = 250
+retry_delay = 5
 dead_letter_queue = "takos-runs-dlq-staging"
 
 [[env.staging.queues.consumers]]
@@ -542,3 +555,4 @@ binding = "AI"
 [[env.staging.services]]
 binding = "TAKOS_EGRESS"
 service = "takos-staging"
+entrypoint = "TakosEgressEntrypoint"

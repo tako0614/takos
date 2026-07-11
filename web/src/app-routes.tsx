@@ -55,6 +55,11 @@ const AppsPage = lazy(() =>
     default: module.AppsPage,
   })),
 );
+const ConnectionsPage = lazy(() =>
+  import("./views/connections/ConnectionsPage.tsx").then((module) => ({
+    default: module.ConnectionsPage,
+  })),
+);
 const ReposPanel = lazy(() =>
   import("./views/repos/ReposPanel.tsx").then((module) => ({
     default: module.ReposPanel,
@@ -553,6 +558,61 @@ function AppsRoute() {
   );
 }
 
+function ConnectionsRoute() {
+  const auth = useAuth();
+  const navigation = useNavigation();
+  const route = createMemo(() => navigation.route);
+  const connectionsSpaceId = createMemo(
+    () => navigation.routeSpaceId ?? navigation.preferredSpaceId,
+  );
+  const guard = useSpaceRouteGuard(
+    () => ({
+      view: "connections",
+      spaceId: connectionsSpaceId() ?? undefined,
+      connectionServer: route().connectionServer,
+    }),
+    route,
+  );
+
+  return (
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        {(href) => <Navigate href={href()} />}
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!connectionsSpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={!connectionsSpaceId()}>
+        <NoSpaceAvailableMessage />
+      </Match>
+      <Match when={connectionsSpaceId()}>
+        {(spaceId) => (
+          <RouteSurface>
+            <ConnectionsPage
+              spaceId={spaceId()}
+              spaces={auth.spaces}
+              initialServer={route().connectionServer}
+              onSpaceChange={(nextSpaceId, connectionServer) =>
+                navigation.navigate({
+                  view: "connections",
+                  spaceId: nextSpaceId,
+                  connectionServer,
+                })
+              }
+            />
+          </RouteSurface>
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
 function SpaceSettingsRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
@@ -690,6 +750,7 @@ const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   repos: ReposRoute,
   storage: StorageRoute,
   apps: AppsRoute,
+  connections: ConnectionsRoute,
   deploy: DeployRoute,
   memory: MemoryRoute,
   settings: SettingsRoute,

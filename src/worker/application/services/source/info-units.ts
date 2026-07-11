@@ -6,15 +6,13 @@ import type {
 } from "../../../shared/types/bindings.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import {
-  edges,
   infoUnits,
-  nodes,
   repositories,
   runEvents,
   runs,
   sessionRepos,
 } from "../../../infra/db/index.ts";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 import { sourceServiceDeps } from "./deps.ts";
@@ -64,17 +62,19 @@ function formatEvent(event: RunEventRecord): string | null {
   if (event.type === "tool_call") {
     const tool = data.tool || data.name || "unknown";
     const args = data.arguments || data.args || {};
-    return `[tool_call] ${tool} ${
-      truncateText(stringifySafe(args), MAX_EVENT_TEXT_CHARS)
-    }`;
+    return `[tool_call] ${tool} ${truncateText(
+      stringifySafe(args),
+      MAX_EVENT_TEXT_CHARS,
+    )}`;
   }
 
   if (event.type === "tool_result") {
     const tool = data.tool || data.name || "unknown";
     const output = data.output || data.result || data.error || "";
-    return `[tool_result] ${tool} ${
-      truncateText(stringifySafe(output), MAX_EVENT_TEXT_CHARS)
-    }`;
+    return `[tool_result] ${tool} ${truncateText(
+      stringifySafe(output),
+      MAX_EVENT_TEXT_CHARS,
+    )}`;
   }
 
   if (event.type === "error") {
@@ -124,9 +124,9 @@ async function upsertVector(
   segmentCount: number,
   repoIds?: string[],
 ): Promise<string> {
-  const result = await ai.run(EMBEDDING_MODEL, {
+  const result = (await ai.run(EMBEDDING_MODEL, {
     text: [content],
-  }) as { data: number[][] };
+  })) as { data: number[][] };
 
   if (!result.data || result.data.length === 0) {
     throw new Error(
@@ -135,91 +135,24 @@ async function upsertVector(
   }
 
   const vectorId = `info_unit:${spaceId}:${infoUnitId}`;
-  await vectorize.upsert([{
-    id: vectorId,
-    values: result.data[0],
-    metadata: {
-      kind: "info_unit",
-      spaceId,
-      ...(runId ? { runId } : {}),
-      ...(threadId ? { threadId } : {}),
-      segmentIndex,
-      segmentCount,
-      repoIds: repoIds || [],
-      content: content.slice(0, 1000),
+  await vectorize.upsert([
+    {
+      id: vectorId,
+      values: result.data[0],
+      metadata: {
+        kind: "info_unit",
+        spaceId,
+        ...(runId ? { runId } : {}),
+        ...(threadId ? { threadId } : {}),
+        segmentIndex,
+        segmentCount,
+        repoIds: repoIds || [],
+        content: content.slice(0, 1000),
+      },
     },
-  }]);
+  ]);
 
   return vectorId;
-}
-
-async function ensureNode(
-  dbBinding: SqlDatabaseBinding,
-  spaceId: string,
-  type: string,
-  refId: string,
-  label?: string,
-  metadata?: Record<string, unknown>,
-): Promise<string> {
-  const db = sourceServiceDeps.getDb(dbBinding);
-  const existing = await db.select({ id: nodes.id })
-    .from(nodes)
-    .where(and(
-      eq(nodes.accountId, spaceId),
-      eq(nodes.type, type),
-      eq(nodes.refId, refId),
-    ))
-    .get();
-
-  if (existing) {
-    return existing.id;
-  }
-
-  const id = sourceServiceDeps.generateId();
-  await db.insert(nodes).values({
-    id,
-    accountId: spaceId,
-    type,
-    refId,
-    label: label || null,
-    metadata: JSON.stringify(metadata || {}),
-    createdAt: new Date().toISOString(),
-  });
-
-  return id;
-}
-
-async function ensureEdge(
-  dbBinding: SqlDatabaseBinding,
-  spaceId: string,
-  sourceId: string,
-  targetId: string,
-  type: string,
-  metadata?: Record<string, unknown>,
-): Promise<void> {
-  const db = sourceServiceDeps.getDb(dbBinding);
-  const existing = await db.select({ id: edges.id })
-    .from(edges)
-    .where(and(
-      eq(edges.accountId, spaceId),
-      eq(edges.sourceId, sourceId),
-      eq(edges.targetId, targetId),
-      eq(edges.type, type),
-    ))
-    .get();
-
-  if (existing) return;
-
-  await db.insert(edges).values({
-    id: sourceServiceDeps.generateId(),
-    accountId: spaceId,
-    sourceId,
-    targetId,
-    type,
-    weight: 1.0,
-    metadata: JSON.stringify(metadata || {}),
-    createdAt: new Date().toISOString(),
-  });
 }
 
 export class InfoUnitIndexer {
@@ -238,15 +171,19 @@ export class InfoUnitIndexer {
   async indexRun(spaceId: string, runId: string): Promise<void> {
     const db = sourceServiceDeps.getDb(this.dbBinding);
 
-    const run = await db.select({
-      id: runs.id,
-      accountId: runs.accountId,
-      threadId: runs.threadId,
-      sessionId: runs.sessionId,
-      status: runs.status,
-      startedAt: runs.startedAt,
-      completedAt: runs.completedAt,
-    }).from(runs)
+    const run = await db
+      .select({
+        id: runs.id,
+        accountId: runs.accountId,
+        threadId: runs.threadId,
+        sessionId: runs.sessionId,
+        status: runs.status,
+        output: runs.output,
+        error: runs.error,
+        startedAt: runs.startedAt,
+        completedAt: runs.completedAt,
+      })
+      .from(runs)
       .where(eq(runs.id, runId))
       .get();
 
@@ -254,40 +191,59 @@ export class InfoUnitIndexer {
       return;
     }
 
-    const existing = await db.select({ id: infoUnits.id })
-      .from(infoUnits)
-      .where(eq(infoUnits.runId, runId))
-      .get();
-    if (existing) return;
-
-    const events = this.offloadBucket
-      ? (await sourceServiceDeps.getRunEventsAfterFromR2(
+    // SQL remains the terminal-event fallback even when intermediate events
+    // are offloaded. Merge both stores by event id just like the public Run
+    // observation path; choosing R2 exclusively would lose atomic completion
+    // evidence whenever the post-commit notifier failed.
+    const eventsById = new Map<number, RunEventRecord>();
+    const sqlEvents = await db
+      .select()
+      .from(runEvents)
+      .where(eq(runEvents.runId, runId))
+      .orderBy(asc(runEvents.id))
+      .all();
+    for (const event of sqlEvents) {
+      eventsById.set(event.id, {
+        ...event,
+        createdAt:
+          textDateNullable(event.createdAt) ?? new Date(0).toISOString(),
+      });
+    }
+    if (this.offloadBucket) {
+      const offloaded = await sourceServiceDeps.getRunEventsAfterFromR2(
         this.offloadBucket,
         runId,
         0,
         5000,
-      )).map((e) => ({
-        id: e.event_id,
-        type: e.type,
-        data: e.data,
-        createdAt: e.created_at,
-      }))
-      : (await db.select().from(runEvents)
-        .where(eq(runEvents.runId, runId))
-        .orderBy(asc(runEvents.id))
-        .all()).map((event) => ({
-          ...event,
-          createdAt: textDateNullable(event.createdAt) ??
-            new Date(0).toISOString(),
-        }));
+      );
+      for (const event of offloaded) {
+        eventsById.set(event.event_id, {
+          id: event.event_id,
+          type: event.type,
+          data: event.data,
+          createdAt: event.created_at,
+        });
+      }
+    }
+    const events = [...eventsById.values()].sort(
+      (left, right) => left.id - right.id,
+    );
 
     const entries = events
       .map(formatEvent)
       .filter((entry): entry is string => Boolean(entry));
 
-    const fallback = entries.length === 0
-      ? `[summary] run ${runId} (${run.status})`
-      : null;
+    if (run.output && !events.some((event) => event.type === "message")) {
+      entries.push(
+        `[assistant] ${truncateText(run.output, MAX_EVENT_TEXT_CHARS)}`,
+      );
+    }
+    if (run.error && !events.some((event) => event.type === "error")) {
+      entries.push(`[error] ${truncateText(run.error, MAX_EVENT_TEXT_CHARS)}`);
+    }
+
+    const fallback =
+      entries.length === 0 ? `[summary] run ${runId} (${run.status})` : null;
 
     if (fallback) {
       entries.push(fallback);
@@ -296,18 +252,33 @@ export class InfoUnitIndexer {
     const segments = buildSegments(entries);
     const segmentCount = Math.max(1, segments.length);
     const createdAt = new Date().toISOString();
+    const existingSegments = new Map(
+      (
+        await db
+          .select({
+            id: infoUnits.id,
+            segmentIndex: infoUnits.segmentIndex,
+            vectorId: infoUnits.vectorId,
+          })
+          .from(infoUnits)
+          .where(eq(infoUnits.runId, runId))
+          .all()
+      ).map((unit) => [unit.segmentIndex, unit]),
+    );
 
     const sessionRepoResults = run.sessionId
-      ? await db.select({
-        repoId: sessionRepos.repoId,
-        branch: sessionRepos.branch,
-        mountPath: sessionRepos.mountPath,
-        isPrimary: sessionRepos.isPrimary,
-        repoName: repositories.name,
-      }).from(sessionRepos)
-        .leftJoin(repositories, eq(sessionRepos.repoId, repositories.id))
-        .where(eq(sessionRepos.sessionId, run.sessionId))
-        .all()
+      ? await db
+          .select({
+            repoId: sessionRepos.repoId,
+            branch: sessionRepos.branch,
+            mountPath: sessionRepos.mountPath,
+            isPrimary: sessionRepos.isPrimary,
+            repoName: repositories.name,
+          })
+          .from(sessionRepos)
+          .leftJoin(repositories, eq(sessionRepos.repoId, repositories.id))
+          .where(eq(sessionRepos.sessionId, run.sessionId))
+          .all()
       : [];
     const repoMetadata = sessionRepoResults.map((repo) => ({
       repo_id: repo.repoId,
@@ -317,12 +288,18 @@ export class InfoUnitIndexer {
       is_primary: repo.isPrimary,
     }));
 
+    const embeddingFailures: number[] = [];
     for (let index = 0; index < segments.length; index++) {
       const content = segments[index];
       const tokenCount = estimateTokens(content);
-      const infoUnitId = sourceServiceDeps.generateId();
+      // Stable identity makes a crash after vector upsert or after one segment
+      // retryable. Preserve an older random id when migrating an existing
+      // partially indexed run; new segments use the deterministic form.
+      const existingSegment = existingSegments.get(index);
+      const infoUnitId =
+        existingSegment?.id ?? `run-info:${spaceId}:${runId}:${index}`;
 
-      let vectorId: string | null = null;
+      let vectorId: string | null = existingSegment?.vectorId ?? null;
       if (this.ai && this.vectorize) {
         try {
           vectorId = await upsertVector(
@@ -338,6 +315,7 @@ export class InfoUnitIndexer {
             repoMetadata.map((repo) => repo.repo_id),
           );
         } catch (err) {
+          embeddingFailures.push(index);
           sourceServiceDeps.logWarn(`Embedding failed for run ${runId}`, {
             module: "info_unit",
             detail: err,
@@ -345,8 +323,7 @@ export class InfoUnitIndexer {
         }
       }
 
-      await db.insert(infoUnits).values({
-        id: infoUnitId,
+      const values = {
         accountId: spaceId,
         threadId: run.threadId,
         runId,
@@ -366,37 +343,20 @@ export class InfoUnitIndexer {
           segment_count: segmentCount,
           repos: repoMetadata,
         }),
-        createdAt,
         updatedAt: createdAt,
-      });
-
-      const infoNodeId = await ensureNode(
-        this.dbBinding,
-        spaceId,
-        "info_unit",
-        infoUnitId,
-        `Run ${runId} (${index + 1}/${segmentCount})`,
-        { runId, segmentIndex: index, segmentCount, repos: repoMetadata },
+      };
+      await db
+        .insert(infoUnits)
+        .values({ id: infoUnitId, ...values, createdAt })
+        .onConflictDoUpdate({
+          target: infoUnits.id,
+          set: values,
+        });
+    }
+    if (embeddingFailures.length > 0) {
+      throw new Error(
+        `Info unit embedding incomplete for run ${runId}: segments ${embeddingFailures.join(",")}`,
       );
-
-      if (run.threadId) {
-        const threadNodeId = await ensureNode(
-          this.dbBinding,
-          spaceId,
-          "thread",
-          run.threadId,
-          `Thread ${run.threadId}`,
-          {},
-        );
-        await ensureEdge(
-          this.dbBinding,
-          spaceId,
-          infoNodeId,
-          threadNodeId,
-          "generated_from",
-          { runId },
-        );
-      }
     }
   }
 }

@@ -9,17 +9,22 @@
 // Tool execution
 // ---------------------------------------------------------------------------
 
-/** Maximum size of a single tool output (bytes). */
-export const MAX_TOOL_OUTPUT_SIZE = 10 * 1024 * 1024; // 10 MB
+/**
+ * Maximum UTF-8 size of a single model-visible tool output.
+ *
+ * A run can contain up to 16 calls in each of 8 tool rounds. Keeping one
+ * result at 32 KiB bounds the worst-case result transcript to 4 MiB, leaving
+ * room for call arguments and JSON framing inside the 8 MiB atomic
+ * complete-run contract. Large files and command output belong in a Capsule
+ * artifact/object with a bounded preview, not inline in the model transcript.
+ */
+export const MAX_TOOL_OUTPUT_SIZE = 32 * 1024;
+
+/** Maximum UTF-8 size persisted or returned for a tool failure detail. */
+export const MAX_TOOL_ERROR_SIZE = 16 * 1024;
 
 /** Maximum number of tools executed in parallel within a single step. */
 export const MAX_PARALLEL_TOOL_EXECUTIONS = 5;
-
-/** Hard cap on the total number of tool calls allowed in a single run. */
-export const MAX_TOTAL_TOOL_CALLS_PER_RUN = 1000;
-
-/** Number of recent tool executions retained in the history window. */
-export const MAX_TOOL_EXECUTIONS_HISTORY = 50;
 
 // ---------------------------------------------------------------------------
 // Web fetch
@@ -30,19 +35,6 @@ export const MAX_WEB_RESPONSE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 /** Timeout for a single web-fetch request (ms). */
 export const WEB_FETCH_TIMEOUT_MS = 300_000; // 5 min
-
-// ---------------------------------------------------------------------------
-// Agent
-// ---------------------------------------------------------------------------
-
-/** Maximum iterations the agent loop may perform before aborting. */
-export const MAX_AGENT_ITERATIONS = 10_000;
-
-/** Default sampling temperature for agent LLM calls. */
-export const DEFAULT_AGENT_TEMPERATURE = 0.5;
-
-/** Tolerable consecutive event-emission errors before the run is aborted. */
-export const MAX_EVENT_EMISSION_ERRORS = 10;
 
 // ---------------------------------------------------------------------------
 // Memory

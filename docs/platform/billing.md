@@ -96,7 +96,6 @@ bundled / third-party app usage は `capsuleId` と app id を別 metadata
 | `embedding_count`     | 200    |
 | `vector_search_count` | 100    |
 | `exec_seconds`        | 600    |
-| `web_search_count`    | 20     |
 | `r2_storage_gb_month` | 1 GB   |
 | `wfp_requests`        | 100    |
 | `queue_messages`      | 100    |
@@ -110,7 +109,6 @@ bundled / third-party app usage は `capsuleId` と app id を別 metadata
 | `embedding_count`     | 2,500   |
 | `vector_search_count` | 1,250   |
 | `exec_seconds`        | 1,800   |
-| `web_search_count`    | 400     |
 | `r2_storage_gb_month` | 5 GB    |
 | `wfp_requests`        | 1,000   |
 | `queue_messages`      | 1,000   |
@@ -129,7 +127,6 @@ bundled / third-party app usage は `capsuleId` と app id を別 metadata
 | `embedding_count`     | 1            |
 | `vector_search_count` | 2            |
 | `exec_seconds`        | 5            |
-| `web_search_count`    | 5            |
 | `r2_storage_gb_month` | 2,300        |
 | `wfp_requests`        | 1            |
 | `queue_messages`      | 1            |
@@ -229,10 +226,13 @@ WEEKLY_RUNTIME_LIMIT_SECONDS = 5 * 60 * 60; // 18,000
 | `embedding_count`             | エンベディング生成回数 |
 | `vector_search_count`         | セマンティック検索回数 |
 | `exec_seconds`                | セッション実行時間     |
-| `web_search_count`            | Web 検索回数           |
 | `r2_storage_gb_month`         | R2 ストレージ (GB/月)  |
 | `wfp_requests`                | Worker リクエスト数    |
 | `queue_messages`              | キューメッセージ数     |
+
+Web検索はTakos組み込みserviceではなく、Workspaceへ登録された外部MCP
+serverが提供します。その上流利用量はTakosのquota・usage meter・従量課金には
+含めません。URL取得の`web_fetch`もWeb検索meterとして数えません。
 
 ## クォータ超過時
 
@@ -258,7 +258,7 @@ period_start: "2026-04-01"  → 4月分 (2026-04-01 00:00 UTC ～ 2026-05-01 00:
 
 毎月 1 日 (UTC) に新しいロールアップ行が作成され、すべてのメーター
 (`llm_tokens_input` / `llm_tokens_output` / `embedding_count` /
-`vector_search_count` / `exec_seconds` / `web_search_count` / `wfp_requests` /
+`vector_search_count` / `exec_seconds` / `wfp_requests` /
 `queue_messages`) のカウントが 0 からスタートします。
 
 ::: info `r2_storage_gb_month` の扱い `r2_storage_gb_month`

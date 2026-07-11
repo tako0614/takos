@@ -7,23 +7,17 @@
 
 import type { ToolContext, ToolDefinition } from "./tool-definitions.ts";
 import { canRoleAccessTool, filterToolsForRole } from "./tool-policy.ts";
-import { getRequiredCapabilitiesForTool } from "./capabilities.ts";
 import { ErrorCodes, ToolError } from "./tool-error-classifier.ts";
 
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-/** Merge static capability mapping with per-definition required_capabilities. */
-export function getAllRequiredCapabilities(
-  tool: { name: string; required_capabilities?: string[] },
-): string[] {
-  return Array.from(
-    new Set([
-      ...getRequiredCapabilitiesForTool(tool.name),
-      ...(tool.required_capabilities || []),
-    ]),
-  );
+/** Read the capabilities authored on the tool definition itself. */
+export function getAllRequiredCapabilities(tool: {
+  required_capabilities?: string[];
+}): string[] {
+  return Array.from(new Set(tool.required_capabilities || []));
 }
 
 /** Check whether the caller's role satisfies the tool's `required_roles` list. */
@@ -84,9 +78,9 @@ export function assertToolPermission(
     const missing = requiredCapabilities.filter((cap) => !granted.has(cap));
     if (missing.length > 0) {
       throw new ToolError(
-        `Permission denied for tool "${toolName}": missing capabilities: ${
-          missing.join(", ")
-        }`,
+        `Permission denied for tool "${toolName}": missing capabilities: ${missing.join(
+          ", ",
+        )}`,
         ErrorCodes.PERMISSION_DENIED,
       );
     }

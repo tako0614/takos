@@ -15,11 +15,7 @@
 pub mod control_rpc;
 pub mod engine_support;
 pub mod hash;
-pub mod internal_rpc;
-pub mod managed_skills;
 pub mod model;
-pub mod prompt_assets;
-pub mod prompts;
 pub mod redaction;
 pub mod skills;
 pub mod tool_bridge;

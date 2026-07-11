@@ -64,6 +64,14 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'validate:migration-safety'],
   },
   {
+    name: 'validate-agent-runtime-release',
+    command: ['bun', 'run', 'validate:agent-runtime-release'],
+  },
+  {
+    name: 'validate-agent-engine-source',
+    command: ['bun', 'run', 'validate:agent-engine-source'],
+  },
+  {
     name: 'validate-legal-docs',
     command: ['bun', 'run', 'validate:legal-docs'],
   },
@@ -72,11 +80,8 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'validate:opentofu-secrets'],
   },
   {
-    name: 'release-manifest',
-    command: [
-      'bun',
-      'scripts/build-release-manifest.ts',
-    ],
+    name: 'release-manifest-source-readiness',
+    command: ['bun', 'run', 'release-manifest:check-clean'],
   },
   {
     name: 'local-config',
@@ -121,6 +126,8 @@ const failed = results.filter((result) => result.status === 'failed');
 const finishedAt = new Date();
 const summary = {
   ok: failed.length === 0,
+  scope:
+    'source readiness; published image digests and Cloudflare Container refs are enforced by release-artifacts CI',
   keepGoing,
   startedAt: startedAt.toISOString(),
   finishedAt: finishedAt.toISOString(),

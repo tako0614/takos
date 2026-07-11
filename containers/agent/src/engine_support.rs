@@ -1,5 +1,3 @@
-use std::env;
-use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
@@ -16,41 +14,63 @@ use takos_agent_engine::memory::distillation::{
 };
 use takos_agent_engine::memory::DefaultScoringPolicy;
 use takos_agent_engine::model::{
-    Embedder, Embedding, OpenAiCompatibleEmbedder, OpenAiEmbeddingConfig,
+    ConversationMessage, ConversationRole, Embedder, Embedding, ToolCallRequest,
 };
 use takos_agent_engine::storage::{
-    FileObjectStore, ObjectGraphRepository, ObjectLoopStateRepository, ObjectNodeRepository,
-    ObjectVectorIndex, RawLifecyclePatch,
+    InMemoryGraphRepository, InMemoryNodeRepository, InMemoryVectorIndex, LoopStateRepository,
+    RawLifecyclePatch,
 };
-use takos_agent_engine::tools::memory_tools::MemoryTools;
 use takos_agent_engine::{Result, SessionRequest};
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::control_rpc::{RunConfigResponse, ToolDefinition};
 use crate::model::TakosModelRunner;
-use crate::prompts::system_prompt_for_agent_type;
 use crate::tool_bridge::CompositeToolExecutor;
 use crate::AppResult;
 
-const DEFAULT_OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmbeddingBackendConfig {
-    pub provider: String,
-    pub model: String,
-    pub base_url: Option<String>,
-    pub api_key: String,
-    pub dimensions: Option<u32>,
-}
+// Product transport budgets are intentionally owned by this wrapper rather
+// than changing the generic engine library defaults. Leave enough outer
+// margin for response decoding and cancellation propagation.
+const TAKOS_MODEL_TIMEOUT_MS: u64 = 125_000;
+const TAKOS_TOOL_TIMEOUT_MS: u64 = 310_000;
 
 #[derive(Debug, Clone, Copy)]
-pub struct RustWhitespaceTokenEstimator;
+pub struct RustHeuristicTokenEstimator;
 
-impl TokenEstimator for RustWhitespaceTokenEstimator {
+impl TokenEstimator for RustHeuristicTokenEstimator {
     fn estimate_text(&self, text: &str) -> usize {
-        text.split_whitespace().count().max(1)
+        estimate_tokens(text)
     }
+}
+
+/// Conservative tokenizer-independent estimate used before provider usage is
+/// available. CJK code points commonly occupy at least one token while dense
+/// JSON/code/identifiers need a character-based fallback because they may have
+/// no whitespace at all.
+#[must_use]
+pub fn estimate_tokens(text: &str) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+    let mut cjk = 0usize;
+    let mut other_non_whitespace = 0usize;
+    for ch in text.chars() {
+        if is_cjk(ch) {
+            cjk = cjk.saturating_add(1);
+        } else if !ch.is_whitespace() {
+            other_non_whitespace = other_non_whitespace.saturating_add(1);
+        }
+    }
+    cjk.saturating_add(other_non_whitespace.saturating_add(3) / 4)
+        .max(1)
+}
+
+const fn is_cjk(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x3000..=0x9fff | 0xf900..=0xfaff | 0xfe30..=0xfe6f
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -283,54 +303,54 @@ fn build_distillation_graph(input: &DistillationInput) -> GraphFragment {
     }
 }
 
-pub fn build_engine_config(run_config: &RunConfigResponse, agent_type: &str) -> EngineConfig {
+pub fn build_engine_config(run_config: &RunConfigResponse) -> AppResult<EngineConfig> {
+    if run_config.system_prompt.trim().is_empty() {
+        return Err(std::io::Error::other(
+            "Takos Worker returned an empty system prompt for the agent run",
+        )
+        .into());
+    }
     let mut config = EngineConfig {
-        system_prompt: if run_config.system_prompt.trim().is_empty() {
-            system_prompt_for_agent_type(agent_type)
-        } else {
-            run_config.system_prompt.clone()
-        },
+        system_prompt: run_config.system_prompt.clone(),
         ..EngineConfig::default()
     };
-    if let Some(max_graph_steps) = run_config
-        .max_graph_steps
-        .or(run_config.max_iterations)
-        .filter(|value| *value > 0)
-    {
+    config.runtime.model_timeout_ms = TAKOS_MODEL_TIMEOUT_MS;
+    config.runtime.tool_timeout_ms = TAKOS_TOOL_TIMEOUT_MS;
+    if let Some(max_graph_steps) = run_config.max_graph_steps.filter(|value| *value > 0) {
         config.runtime.max_graph_steps = max_graph_steps.min(128);
     }
-    if let Some(max_tool_rounds) = run_config
-        .max_tool_rounds
-        .or(run_config.max_iterations)
-        .filter(|value| *value > 0)
-    {
+    if let Some(max_tool_rounds) = run_config.max_tool_rounds.filter(|value| *value > 0) {
         config.runtime.max_tool_rounds = max_tool_rounds.min(16);
     }
-    config
+    Ok(config)
 }
 
 pub fn build_engine_deps(
-    root: &Path,
     model_runner: TakosModelRunner,
     tool_executor: CompositeToolExecutor,
-    embedding_config: Option<EmbeddingBackendConfig>,
+    loop_state_repository: Arc<dyn LoopStateRepository>,
 ) -> AppResult<EngineDeps> {
-    let store = FileObjectStore::open(root)?;
-    let repository = Arc::new(ObjectNodeRepository::new(store.clone()));
-    let vector_index = Arc::new(ObjectVectorIndex::new(store.clone()));
-    let graph_repository = Arc::new(ObjectGraphRepository::new(store.clone()));
-    let loop_state_repository = Arc::new(ObjectLoopStateRepository::new(store));
-    let embedder = build_embedder(embedding_config)?;
+    // Takos Worker owns durable thread history and memory. The production call
+    // opts into ExecutionProfile::ExternalContext, so only the loop checkpoint
+    // repository is exercised; the remaining in-memory dependencies satisfy
+    // the engine's profile-neutral trait bundle without becoming a second
+    // memory authority under `/tmp`.
+    let repository = Arc::new(InMemoryNodeRepository::default());
+    let vector_index = Arc::new(InMemoryVectorIndex::default());
+    let graph_repository = Arc::new(InMemoryGraphRepository::default());
+    // Durable semantic retrieval is already performed by the Takos Worker.
+    // The external-context graph never invokes this deterministic fallback;
+    // retaining it keeps EngineDeps usable in focused library/test scenarios
+    // without introducing a provider embedding credential.
+    let embedder: Arc<dyn Embedder> = Arc::new(RustHashEmbedder::default());
     let scoring_policy = Arc::new(DefaultScoringPolicy::default());
-    let token_estimator = Arc::new(RustWhitespaceTokenEstimator);
+    let token_estimator = Arc::new(RustHeuristicTokenEstimator);
     let distiller = Arc::new(RustSimpleDistiller);
-    let memory_tools = MemoryTools::new(
-        repository.clone(),
-        vector_index.clone(),
-        graph_repository.clone(),
-        embedder.clone(),
-    );
-    let tool_executor = Arc::new(tool_executor.with_local_memory_tools(memory_tools));
+    // Every product-visible tool, including memory and timeline operations,
+    // is Worker-owned and must cross the remote control-RPC policy boundary.
+    // The external-context graph does not expose or persist through the unused
+    // memory repositories above.
+    let tool_executor = Arc::new(tool_executor);
 
     Ok(EngineDeps {
         repository,
@@ -346,74 +366,11 @@ pub fn build_engine_deps(
     })
 }
 
-pub fn resolve_embedding_backend_config(
-    run_config: &RunConfigResponse,
-    control_openai_api_key: Option<&str>,
-) -> AppResult<Option<EmbeddingBackendConfig>> {
-    resolve_embedding_backend_config_from_values(
-        run_config,
-        control_openai_api_key,
-        &EnvEmbeddingConfig {
-            provider: first_nonempty_env(&["TAKOS_EMBEDDING_PROVIDER", "EMBEDDING_PROVIDER"]),
-            model: first_nonempty_env(&[
-                "TAKOS_EMBEDDING_MODEL",
-                "EMBEDDING_MODEL",
-                "OPENAI_EMBEDDING_MODEL",
-            ]),
-            base_url: first_nonempty_env(&[
-                "TAKOS_EMBEDDING_BASE_URL",
-                "EMBEDDING_BASE_URL",
-                "OPENAI_EMBEDDING_BASE_URL",
-            ]),
-            api_key: first_nonempty_env(&[
-                "TAKOS_EMBEDDING_API_KEY",
-                "EMBEDDING_API_KEY",
-                "OPENAI_EMBEDDING_API_KEY",
-                "OPENAI_API_KEY",
-            ]),
-            dimensions: first_nonempty_env(&[
-                "TAKOS_EMBEDDING_DIMENSIONS",
-                "EMBEDDING_DIMENSIONS",
-                "OPENAI_EMBEDDING_DIMENSIONS",
-            ])
-            .and_then(|value| value.parse::<u32>().ok()),
-        },
-    )
-}
-
-fn build_embedder(config: Option<EmbeddingBackendConfig>) -> AppResult<Arc<dyn Embedder>> {
-    let Some(config) = config else {
-        warn!(
-            "embedding backend is not configured; falling back to Rust hash embedder for smoke/test use"
-        );
-        return Ok(Arc::new(RustHashEmbedder::default()));
-    };
-
-    let provider = config.provider.trim().to_ascii_lowercase();
-    if !matches!(
-        provider.as_str(),
-        "openai" | "openai-compatible" | "openai_compatible"
-    ) {
-        return Err(format!("unsupported embedding provider {}", config.provider).into());
-    }
-
-    let mut openai_config = OpenAiEmbeddingConfig::new(config.model, config.api_key);
-    if let Some(base_url) = config.base_url {
-        openai_config = openai_config.with_base_url(base_url);
-    }
-    if let Some(dimensions) = config.dimensions {
-        openai_config = openai_config.with_dimensions(dimensions);
-    }
-    Ok(Arc::new(OpenAiCompatibleEmbedder::with_config(
-        openai_config,
-    )?))
-}
-
-pub fn derive_engine_session_id(bootstrap_session_id: Option<&str>, thread_id: &str) -> SessionId {
-    let seed = bootstrap_session_id
-        .filter(|value| !value.is_empty())
-        .unwrap_or(thread_id);
-    SessionId(Uuid::new_v5(&Uuid::NAMESPACE_URL, seed.as_bytes()))
+pub fn derive_engine_session_id(thread_id: &str) -> SessionId {
+    // The Takos Thread is the durable conversation authority. A run/bootstrap
+    // session id is execution metadata and may rotate between leases, so using
+    // it here would split one thread across unrelated engine session identities.
+    SessionId(Uuid::new_v5(&Uuid::NAMESPACE_URL, thread_id.as_bytes()))
 }
 
 pub fn last_user_message(
@@ -426,6 +383,147 @@ pub fn last_user_message(
         .find(|message| message.role == "user" && !message.content.trim().is_empty())
         .map(|message| message.content.clone())
         .or_else(|| fallback.map(str::to_string))
+}
+
+/// Normalize the control-plane's canonical history into the engine's
+/// provider-neutral transcript and exclude the current user message. The
+/// current message is carried separately by `SessionRequest`, so keeping it in
+/// both places would duplicate the prompt and break tool-message ordering.
+#[must_use]
+pub fn durable_history_before_current(
+    history: &[crate::control_rpc::HistoryMessage],
+    current_user_message: &str,
+) -> Vec<ConversationMessage> {
+    let last_user_index = history
+        .iter()
+        .rposition(|message| message.role == "user" && !message.content.trim().is_empty());
+    let current_user_index = last_user_index
+        .filter(|&index| history[index].content.trim() == current_user_message.trim());
+    let prior = current_user_index.map_or(history, |index| &history[..index]);
+    let normalized = prior.iter().filter_map(normalize_history_message).collect();
+    coherent_conversation_history(normalized)
+}
+
+fn coherent_conversation_history(messages: Vec<ConversationMessage>) -> Vec<ConversationMessage> {
+    let mut coherent = Vec::with_capacity(messages.len());
+    let mut index = 0;
+    while index < messages.len() {
+        let message = &messages[index];
+        if message.role == ConversationRole::Tool {
+            index += 1;
+            continue;
+        }
+        if message.role != ConversationRole::Assistant || message.tool_calls.is_empty() {
+            coherent.push(message.clone());
+            index += 1;
+            continue;
+        }
+
+        let call_ids = message
+            .tool_calls
+            .iter()
+            .filter_map(|call| call.id.as_deref())
+            .filter(|id| !id.is_empty())
+            .collect::<Vec<_>>();
+        let expected_ids = call_ids
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>();
+        let mut seen_ids = std::collections::HashSet::new();
+        let mut matched_results = Vec::new();
+        let mut next_index = index + 1;
+        while next_index < messages.len() && messages[next_index].role == ConversationRole::Tool {
+            let result = &messages[next_index];
+            if let Some(id) = result.tool_call_id.as_deref() {
+                if expected_ids.contains(id) && seen_ids.insert(id) {
+                    matched_results.push(result.clone());
+                }
+            }
+            next_index += 1;
+        }
+
+        let complete = call_ids.len() == message.tool_calls.len()
+            && expected_ids.len() == call_ids.len()
+            && seen_ids.len() == expected_ids.len();
+        if complete {
+            coherent.push(message.clone());
+            coherent.extend(matched_results);
+        } else if !message.content.trim().is_empty() {
+            let mut plain = message.clone();
+            plain.tool_calls.clear();
+            coherent.push(plain);
+        }
+        index = next_index;
+    }
+    coherent
+}
+
+fn normalize_history_message(
+    message: &crate::control_rpc::HistoryMessage,
+) -> Option<ConversationMessage> {
+    let role = match message.role.as_str() {
+        "system" => ConversationRole::System,
+        "user" => ConversationRole::User,
+        "assistant" => ConversationRole::Assistant,
+        "tool" => ConversationRole::Tool,
+        _ => return None,
+    };
+    let tool_calls = message
+        .tool_calls
+        .iter()
+        .filter_map(normalize_history_tool_call)
+        .collect();
+    Some(ConversationMessage {
+        role,
+        content: message.content.clone(),
+        tool_call_id: message.tool_call_id.clone(),
+        tool_calls,
+    })
+}
+
+fn normalize_history_tool_call(value: &serde_json::Value) -> Option<ToolCallRequest> {
+    let object = value.as_object()?;
+    // The Takos canonical wire shape is flat `{ id, name, arguments }`.
+    // Accept the older OpenAI-shaped nested form while persisted pre-migration
+    // history ages out, but never emit it as the product contract.
+    let legacy_function = object
+        .get("function")
+        .and_then(serde_json::Value::as_object);
+    let name = object
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            legacy_function?
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+        })?
+        .trim();
+    if name.is_empty() {
+        return None;
+    }
+    let arguments_value = object
+        .get("arguments")
+        .or_else(|| legacy_function.and_then(|function| function.get("arguments")));
+    let arguments = match arguments_value {
+        Some(serde_json::Value::String(raw)) => {
+            serde_json::from_str(raw).unwrap_or_else(|_| serde_json::json!({ "_raw": raw }))
+        }
+        Some(value) => value.clone(),
+        None => serde_json::json!({}),
+    };
+    let arguments = if arguments.is_object() {
+        arguments
+    } else {
+        serde_json::json!({ "_raw": arguments })
+    };
+    Some(ToolCallRequest {
+        id: object
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        name: name.to_string(),
+        arguments,
+    })
 }
 
 pub fn build_session_request(
@@ -450,125 +548,6 @@ pub fn build_session_request(
         session_id: Some(session_id),
         user_message,
         plan,
-    }
-}
-
-fn safe_storage_slug(value: &str) -> String {
-    let mut slug = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    if slug.is_empty() || slug == "." || slug == ".." {
-        slug = "_".to_string();
-    }
-    slug
-}
-
-pub fn safe_space_path(root: &Path, space_id: &str) -> std::path::PathBuf {
-    root.join("spaces").join(safe_storage_slug(space_id))
-}
-
-pub fn safe_run_store_path(
-    root: &Path,
-    space_id: &str,
-    installation_id: Option<&str>,
-) -> std::path::PathBuf {
-    if let Some(installation_id) = installation_id.filter(|value| !value.trim().is_empty()) {
-        return safe_space_path(root, space_id)
-            .join("installations")
-            .join(safe_storage_slug(installation_id));
-    }
-    safe_space_path(root, space_id)
-}
-
-#[derive(Debug, Clone, Default)]
-struct EnvEmbeddingConfig {
-    provider: Option<String>,
-    model: Option<String>,
-    base_url: Option<String>,
-    api_key: Option<String>,
-    dimensions: Option<u32>,
-}
-
-fn resolve_embedding_backend_config_from_values(
-    run_config: &RunConfigResponse,
-    control_openai_api_key: Option<&str>,
-    env_config: &EnvEmbeddingConfig,
-) -> AppResult<Option<EmbeddingBackendConfig>> {
-    let provider = first_nonempty([
-        env_config.provider.as_deref(),
-        run_config.embedding_provider.as_deref(),
-    ]);
-    if matches!(
-        provider.as_deref().map(str::to_ascii_lowercase).as_deref(),
-        Some("hash" | "local" | "rust-hash")
-    ) {
-        return Ok(None);
-    }
-
-    let model = first_nonempty([
-        env_config.model.as_deref(),
-        run_config.embedding_model.as_deref(),
-    ]);
-    let base_url = first_nonempty([
-        env_config.base_url.as_deref(),
-        run_config.embedding_base_url.as_deref(),
-    ]);
-    let api_key = first_nonempty([
-        env_config.api_key.as_deref(),
-        run_config.embedding_api_key.as_deref(),
-        control_openai_api_key,
-    ]);
-    let dimensions = env_config.dimensions.or(run_config.embedding_dimensions);
-    let openai_configured = provider.is_some()
-        || model.is_some()
-        || base_url.is_some()
-        || api_key.is_some()
-        || dimensions.is_some();
-    if !openai_configured {
-        return Ok(None);
-    }
-
-    let provider = provider.unwrap_or_else(|| "openai-compatible".to_string());
-    let normalized_provider = provider.trim().to_ascii_lowercase();
-    if !matches!(
-        normalized_provider.as_str(),
-        "openai" | "openai-compatible" | "openai_compatible"
-    ) {
-        return Err(format!("unsupported embedding provider {provider}").into());
-    }
-    let api_key = api_key.ok_or("OpenAI-compatible embedding api key is not configured")?;
-
-    Ok(Some(EmbeddingBackendConfig {
-        provider,
-        model: model.unwrap_or_else(|| DEFAULT_OPENAI_EMBEDDING_MODEL.to_string()),
-        base_url,
-        api_key,
-        dimensions,
-    }))
-}
-
-fn first_nonempty_env(keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .find_map(|key| env::var(key).ok().and_then(|value| nonempty_string(&value)))
-}
-
-fn first_nonempty<'a>(values: impl IntoIterator<Item = Option<&'a str>>) -> Option<String> {
-    values.into_iter().flatten().find_map(nonempty_string)
-}
-
-fn nonempty_string(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
     }
 }
 
@@ -597,17 +576,13 @@ fn truncate_title(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_embedder, build_engine_config, resolve_embedding_backend_config_from_values,
-        safe_run_store_path, truncate_title, EmbeddingBackendConfig, EnvEmbeddingConfig,
+        build_engine_config, derive_engine_session_id, durable_history_before_current,
+        estimate_tokens, normalize_history_tool_call, truncate_title, TAKOS_MODEL_TIMEOUT_MS,
+        TAKOS_TOOL_TIMEOUT_MS,
     };
-    use crate::control_rpc::RunConfigResponse;
-    use crate::prompts::system_prompt_for_agent_type;
+    use crate::control_rpc::{HistoryMessage, RunConfigResponse};
     use serde_json::json;
-    use std::path::{Path, PathBuf};
-    use takos_agent_engine::model::Embedding;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-    use tokio::task::JoinHandle;
+    use takos_agent_engine::model::ConversationRole;
 
     #[test]
     fn truncate_title_preserves_short_ascii_input() {
@@ -638,249 +613,176 @@ mod tests {
     }
 
     #[test]
-    fn build_engine_config_prefers_control_system_prompt() {
-        let config = build_engine_config(
-            &RunConfigResponse {
-                system_prompt: "control prompt".to_string(),
+    fn token_estimator_accounts_for_japanese_and_dense_json() {
+        assert_eq!(estimate_tokens("日本語の長い入力"), 8);
+        let dense_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(400));
+        assert!(estimate_tokens(&dense_json) >= 100);
+        assert_eq!(estimate_tokens(""), 0);
+    }
+
+    #[test]
+    fn engine_session_identity_is_thread_scoped_and_deterministic() {
+        let first = derive_engine_session_id("thread-1");
+        let same_thread = derive_engine_session_id("thread-1");
+        let other_thread = derive_engine_session_id("thread-2");
+
+        assert_eq!(first, same_thread);
+        assert_ne!(first, other_thread);
+    }
+
+    #[test]
+    fn durable_history_is_structured_and_excludes_current_user() {
+        let history = vec![
+            HistoryMessage {
+                role: "system".to_string(),
+                content: "summary".to_string(),
                 ..Default::default()
             },
-            "implementer",
-        );
+            HistoryMessage {
+                role: "assistant".to_string(),
+                content: String::new(),
+                tool_calls: vec![json!({
+                    "id": "call-1",
+                    "name": "web_fetch",
+                    "arguments": { "url": "https://example.com" }
+                })],
+                tool_call_id: None,
+            },
+            HistoryMessage {
+                role: "tool".to_string(),
+                content: "ok".to_string(),
+                tool_calls: Vec::new(),
+                tool_call_id: Some("call-1".to_string()),
+            },
+            HistoryMessage {
+                role: "user".to_string(),
+                content: "current request".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let normalized = durable_history_before_current(&history, "current request");
+        assert_eq!(normalized.len(), 3);
+        assert_eq!(normalized[0].role, ConversationRole::System);
+        assert_eq!(normalized[1].tool_calls[0].id.as_deref(), Some("call-1"));
+        assert_eq!(normalized[2].tool_call_id.as_deref(), Some("call-1"));
+        assert!(normalized
+            .iter()
+            .all(|message| message.content != "current request"));
+    }
+
+    #[test]
+    fn history_tool_call_normalizer_accepts_flat_and_legacy_nested_shapes() {
+        let flat = normalize_history_tool_call(&json!({
+            "id": "flat-1",
+            "name": "web_fetch",
+            "arguments": { "url": "https://example.com" }
+        }))
+        .expect("flat canonical call must parse");
+        assert_eq!(flat.id.as_deref(), Some("flat-1"));
+        assert_eq!(flat.name, "web_fetch");
+        assert_eq!(flat.arguments["url"], "https://example.com");
+
+        let legacy = normalize_history_tool_call(&json!({
+            "id": "legacy-1",
+            "type": "function",
+            "function": {
+                "name": "web_fetch",
+                "arguments": "{\"url\":\"https://example.org\"}"
+            }
+        }))
+        .expect("legacy nested call must remain readable during migration");
+        assert_eq!(legacy.id.as_deref(), Some("legacy-1"));
+        assert_eq!(legacy.arguments["url"], "https://example.org");
+    }
+
+    #[test]
+    fn durable_history_drops_orphan_and_incomplete_tool_messages() {
+        let history = vec![
+            HistoryMessage {
+                role: "tool".to_string(),
+                content: "orphan".to_string(),
+                tool_call_id: Some("old".to_string()),
+                ..Default::default()
+            },
+            HistoryMessage {
+                role: "assistant".to_string(),
+                content: String::new(),
+                tool_calls: vec![
+                    json!({ "id": "call-a", "name": "read_a", "arguments": {} }),
+                    json!({ "id": "call-b", "name": "read_b", "arguments": {} }),
+                ],
+                tool_call_id: None,
+            },
+            HistoryMessage {
+                role: "tool".to_string(),
+                content: "only a".to_string(),
+                tool_call_id: Some("call-a".to_string()),
+                ..Default::default()
+            },
+            HistoryMessage {
+                role: "user".to_string(),
+                content: "previous request".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let normalized = durable_history_before_current(&history, "current request");
+
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].role, ConversationRole::User);
+        assert_eq!(normalized[0].content, "previous request");
+    }
+
+    #[test]
+    fn durable_history_keeps_last_user_when_current_message_is_not_in_history() {
+        let history = vec![HistoryMessage {
+            role: "user".to_string(),
+            content: "previous request".to_string(),
+            ..Default::default()
+        }];
+
+        let normalized = durable_history_before_current(&history, "current request");
+
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].content, "previous request");
+    }
+
+    #[test]
+    fn build_engine_config_prefers_control_system_prompt() {
+        let config = build_engine_config(&RunConfigResponse {
+            system_prompt: "control prompt".to_string(),
+            ..Default::default()
+        })
+        .expect("control prompt must be accepted");
 
         assert_eq!(config.system_prompt, "control prompt");
     }
 
     #[test]
-    fn build_engine_config_falls_back_to_local_prompt_when_control_prompt_empty() {
-        let config = build_engine_config(
-            &RunConfigResponse {
-                system_prompt: "  ".to_string(),
-                ..Default::default()
-            },
-            "implementer",
-        );
+    fn build_engine_config_rejects_empty_control_prompt() {
+        let error = build_engine_config(&RunConfigResponse {
+            system_prompt: "  ".to_string(),
+            ..Default::default()
+        })
+        .expect_err("the Worker-owned prompt is required");
 
-        assert_eq!(
-            config.system_prompt,
-            system_prompt_for_agent_type("implementer")
-        );
+        assert!(error.to_string().contains("empty system prompt"));
     }
 
     #[test]
     fn build_engine_config_applies_control_budget_fields() {
-        let config = build_engine_config(
-            &RunConfigResponse {
-                max_graph_steps: Some(7),
-                max_tool_rounds: Some(3),
-                ..Default::default()
-            },
-            "implementer",
-        );
+        let config = build_engine_config(&RunConfigResponse {
+            system_prompt: "control prompt".to_string(),
+            max_graph_steps: Some(7),
+            max_tool_rounds: Some(3),
+            ..Default::default()
+        })
+        .expect("control config must be accepted");
 
         assert_eq!(config.runtime.max_graph_steps, 7);
         assert_eq!(config.runtime.max_tool_rounds, 3);
-    }
-
-    #[test]
-    fn run_store_path_uses_installation_namespace_when_present() {
-        let root = PathBuf::from("/tmp/takos-agent-test");
-
-        assert_eq!(
-            safe_run_store_path(&root, "space_1", Some("inst_1"))
-                .strip_prefix(&root)
-                .unwrap(),
-            Path::new("spaces/space_1/installations/inst_1"),
-        );
-        assert_eq!(
-            safe_run_store_path(&root, "space_1", Some("../inst"))
-                .strip_prefix(&root)
-                .unwrap(),
-            Path::new("spaces/space_1/installations/.._inst"),
-        );
-        assert_eq!(
-            safe_run_store_path(&root, "space_1", Some(""))
-                .strip_prefix(&root)
-                .unwrap(),
-            Path::new("spaces/space_1"),
-        );
-    }
-
-    #[test]
-    fn embedding_backend_config_uses_hash_when_unset() {
-        let config = resolve_embedding_backend_config_from_values(
-            &RunConfigResponse::default(),
-            None,
-            &EnvEmbeddingConfig::default(),
-        )
-        .expect("embedding config should resolve");
-
-        assert_eq!(config, None);
-    }
-
-    #[test]
-    fn embedding_backend_config_prefers_env_over_control() {
-        let config = resolve_embedding_backend_config_from_values(
-            &RunConfigResponse {
-                embedding_provider: Some("openai".to_string()),
-                embedding_model: Some("control-model".to_string()),
-                embedding_base_url: Some("https://control.example/v1".to_string()),
-                embedding_api_key: Some("control-key".to_string()),
-                embedding_dimensions: Some(128),
-                ..Default::default()
-            },
-            Some("api-key-from-control-secret"),
-            &EnvEmbeddingConfig {
-                provider: Some("openai-compatible".to_string()),
-                model: Some("env-model".to_string()),
-                base_url: Some("https://env.example/v1".to_string()),
-                api_key: Some("env-key".to_string()),
-                dimensions: Some(256),
-            },
-        )
-        .expect("embedding config should resolve")
-        .expect("OpenAI embedding config should be enabled");
-
-        assert_eq!(
-            config,
-            EmbeddingBackendConfig {
-                provider: "openai-compatible".to_string(),
-                model: "env-model".to_string(),
-                base_url: Some("https://env.example/v1".to_string()),
-                api_key: "env-key".to_string(),
-                dimensions: Some(256),
-            }
-        );
-    }
-
-    #[tokio::test]
-    async fn openai_embedding_backend_sends_request_to_configured_server() {
-        let server =
-            FakeEmbeddingServer::spawn(r#"{"data":[{"index":0,"embedding":[0.25,0.75]}]}"#).await;
-        let embedder = build_embedder(Some(EmbeddingBackendConfig {
-            provider: "openai-compatible".to_string(),
-            model: "embedding-test-model".to_string(),
-            base_url: Some(server.base_url()),
-            api_key: "embedding-test-key".to_string(),
-            dimensions: Some(2),
-        }))
-        .expect("OpenAI embedding backend should build");
-
-        let embedding = embedder
-            .embed_text("agent service wiring")
-            .await
-            .expect("embedding request should succeed");
-
-        assert_eq!(embedding, Embedding(vec![0.25, 0.75]));
-        let request = server.request().await;
-        assert!(request.starts_with("POST /embeddings HTTP/1.1"));
-        assert!(request
-            .to_ascii_lowercase()
-            .contains("authorization: bearer embedding-test-key"));
-        let body: serde_json::Value =
-            serde_json::from_str(request_body(&request)).expect("request body should be json");
-        assert_eq!(
-            body,
-            json!({
-                "model": "embedding-test-model",
-                "input": "agent service wiring",
-                "dimensions": 2
-            })
-        );
-    }
-
-    struct FakeEmbeddingServer {
-        address: std::net::SocketAddr,
-        handle: JoinHandle<String>,
-    }
-
-    impl FakeEmbeddingServer {
-        async fn spawn(response_body: &'static str) -> Self {
-            let listener = TcpListener::bind("127.0.0.1:0")
-                .await
-                .expect("fake embedding server should bind");
-            let address = listener
-                .local_addr()
-                .expect("fake embedding server address should resolve");
-            let handle = tokio::spawn(async move {
-                let (mut stream, _) = listener
-                    .accept()
-                    .await
-                    .expect("fake embedding server should accept");
-                let request = read_http_request(&mut stream).await;
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                    response_body.len(),
-                    response_body
-                );
-                stream
-                    .write_all(response.as_bytes())
-                    .await
-                    .expect("fake embedding server should respond");
-                request
-            });
-            Self { address, handle }
-        }
-
-        fn base_url(&self) -> String {
-            format!("http://{}", self.address)
-        }
-
-        async fn request(self) -> String {
-            self.handle
-                .await
-                .expect("fake embedding server task should join")
-        }
-    }
-
-    async fn read_http_request(stream: &mut tokio::net::TcpStream) -> String {
-        let mut buffer = Vec::new();
-        let mut temp = [0; 1024];
-        let header_end;
-        loop {
-            let read = stream.read(&mut temp).await.expect("request should read");
-            assert_ne!(read, 0, "client closed before request headers");
-            buffer.extend_from_slice(&temp[..read]);
-            if let Some(position) = find_header_end(&buffer) {
-                header_end = position;
-                break;
-            }
-        }
-
-        let headers =
-            std::str::from_utf8(&buffer[..header_end]).expect("request headers should be utf8");
-        let content_length = headers
-            .lines()
-            .find_map(|line| {
-                let (name, value) = line.split_once(':')?;
-                if name.eq_ignore_ascii_case("content-length") {
-                    value.trim().parse::<usize>().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-        let body_start = header_end + 4;
-        while buffer.len() < body_start + content_length {
-            let read = stream
-                .read(&mut temp)
-                .await
-                .expect("request body should read");
-            assert_ne!(read, 0, "client closed before request body");
-            buffer.extend_from_slice(&temp[..read]);
-        }
-
-        String::from_utf8(buffer[..body_start + content_length].to_vec())
-            .expect("request should be utf8")
-    }
-
-    fn find_header_end(buffer: &[u8]) -> Option<usize> {
-        buffer.windows(4).position(|window| window == b"\r\n\r\n")
-    }
-
-    fn request_body(request: &str) -> &str {
-        request
-            .split_once("\r\n\r\n")
-            .map(|(_, body)| body)
-            .expect("request should include body")
+        assert_eq!(config.runtime.model_timeout_ms, TAKOS_MODEL_TIMEOUT_MS);
+        assert_eq!(config.runtime.tool_timeout_ms, TAKOS_TOOL_TIMEOUT_MS);
     }
 }

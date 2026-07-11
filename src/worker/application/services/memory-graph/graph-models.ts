@@ -31,10 +31,7 @@ export interface ClaimInsert {
 
 export type EvidenceKind = "supports" | "contradicts" | "context";
 export type EvidenceSourceType =
-  | "tool_result"
-  | "user_message"
-  | "agent_inference"
-  | "memory_recall";
+  "tool_result" | "user_message" | "agent_inference" | "memory_recall";
 
 export interface Evidence {
   id: string;
@@ -62,11 +59,7 @@ export interface EvidenceInsert {
 }
 
 export type ClaimRelation =
-  | "depends_on"
-  | "contradicts"
-  | "supports"
-  | "supersedes"
-  | "related_to";
+  "depends_on" | "contradicts" | "supports" | "supersedes" | "related_to";
 
 export interface ClaimEdge {
   id: string;
@@ -89,31 +82,4 @@ export interface ClaimPath {
   pathSummary: string | null;
   minConfidence: number;
   createdAt: string;
-}
-
-export interface ActivationBundle {
-  claim: Claim;
-  evidenceCount: number;
-  paths: ClaimPath[];
-}
-
-export interface ActivationResult {
-  bundles: ActivationBundle[];
-  segment: string;
-  hasContent: boolean;
-}
-
-export interface ToolObservation {
-  toolName: string;
-  arguments: Record<string, unknown>;
-  result: string;
-  error?: string;
-  timestamp: number;
-  duration?: number;
-}
-
-export interface ToolObserver {
-  observe(record: ToolObservation): void;
-  getOverlayClaims(): Claim[];
-  getOverlayEvidence(): Evidence[];
 }

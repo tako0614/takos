@@ -16,6 +16,7 @@ import { buildStorageNavigationState } from "../../views/storage/storage-page-st
 import { useModals } from "../../store/modal.tsx";
 import { useNavigation } from "../../store/navigation.ts";
 import type { View } from "../../types/index.ts";
+import { McpToolConfirmationCenter } from "./McpToolConfirmationCenter.tsx";
 
 function getMobileActiveItem(view: View): NavItem | undefined {
   switch (view) {
@@ -23,7 +24,7 @@ function getMobileActiveItem(view: View): NavItem | undefined {
       return "memory";
     case "chat":
       return "chat";
-    // Views without a bottom-nav tab (apps / storage / deploy / repos /
+    // Views without a bottom-nav tab (apps / connections / storage / deploy / repos /
     // store / settings /
     // profile / legal …) highlight nothing rather than falsely lighting chat.
     default:
@@ -81,6 +82,17 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
           threadId: undefined,
         });
       }),
+    onNavigateConnections: () =>
+      navigation.runSidebarAction(() => {
+        navigation.navigate({
+          view: "connections",
+          spaceId:
+            navigation.selectedSpaceId ??
+            navigation.preferredSpaceId ??
+            undefined,
+          connectionServer: undefined,
+        });
+      }),
     onNavigateMemory: () =>
       navigation.runSidebarAction(() => {
         navigation.navigate({ view: "memory" });
@@ -120,7 +132,7 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
       }),
     onOpenSettings: () =>
       navigation.runSidebarAction(() =>
-        navigation.navigate({ view: "settings" })
+        navigation.navigate({ view: "settings" }),
       ),
     onLogout: () => navigation.runSidebarAction(handleLogout),
     onEnterSpace: (ws) =>
@@ -175,6 +187,15 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
           view: "apps",
           spaceId: getSpaceIdentifier(navigation.sidebarSpace),
           threadId: undefined,
+        });
+      }),
+    onNavigateSpaceConnections: () =>
+      navigation.runSidebarAction(() => {
+        if (!navigation.sidebarSpace) return;
+        navigation.navigate({
+          view: "connections",
+          spaceId: getSpaceIdentifier(navigation.sidebarSpace),
+          connectionServer: undefined,
         });
       }),
     onNavigateSpaceSettings: () =>
@@ -238,6 +259,11 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
           onNavigate={handleMobileNavigate}
         />
       </Show>
+      <McpToolConfirmationCenter
+        spaceId={() =>
+          navigation.selectedSpaceId ?? navigation.preferredSpaceId ?? null
+        }
+      />
     </div>
   );
 }

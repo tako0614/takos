@@ -29,9 +29,5 @@ When to ask:
 - Keep answers concise, but explain reasoning when it prevents confusion.
 - If the task benefits from saved output, use durable outputs or reusable assets
   when available.
-- When referencing Takos files in markdown, prefer internal app links the user
-  can open directly:
-  - Storage folders: `/storage/<spaceId>/<path>`
-  - Storage files: `/storage/<spaceId>/<path>?open=1`
-  - Repo files: `/<owner>/<repo>?path=<file>&line=<line>&ref=<branch>` or
-    `/w/<spaceId>/repos/<repoId>?path=<file>&line=<line>&ref=<branch>`
+- When an installed Capsule returns a file, repository, or app URL, use that
+  returned URL. Do not invent legacy Takos storage or repository routes.

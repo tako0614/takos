@@ -76,7 +76,7 @@ export const agent = {
 
   // Managed / Custom skills
   managedSkills: "管理対象スキル",
-  managedSkillsHint: "このワークスペースへデフォルト注入される管理対象スキル",
+  managedSkillsHint: "Run に関連するとき選択される Takos 管理のガイダンス",
   customSkills: "カスタムスキル",
 
   // Model Settings

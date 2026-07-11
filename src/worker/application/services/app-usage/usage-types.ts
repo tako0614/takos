@@ -4,7 +4,6 @@ export const APP_USAGE_METER_TYPES = [
   "embedding_count",
   "vector_search_count",
   "exec_seconds",
-  "web_search_count",
   "r2_storage_gb_month",
   "wfp_requests",
   "queue_messages",

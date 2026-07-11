@@ -21,11 +21,13 @@ export { buildRunNotifierEmitPayload } from "./run-notifier-payload.ts";
 export type { RunNotifierEmitPayload } from "./run-notifier-payload.ts";
 
 // run-failure-events
-export {
-  notifyRunFailedEvent,
-  persistRunFailedEvent,
-} from "./run-failure-events.ts";
+export { notifyRunFailedEvent } from "./run-failure-events.ts";
+
+export { transitionRunTerminalAtomically } from "./terminal-transition.ts";
 export type {
-  PersistedRunFailedEvent,
-  PersistRunFailedEventOptions,
-} from "./run-failure-events.ts";
+  ActiveRunStatus,
+  ControlTerminalStatus,
+  ControlTerminalTransitionInput,
+  ControlTerminalTransitionResult,
+} from "./terminal-transition.ts";
+export type { PersistedRunFailedEvent } from "./run-failure-events.ts";

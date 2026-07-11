@@ -2,9 +2,11 @@ export type { InsertOf, SelectOf } from "./drizzle-utils.ts";
 
 export {
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
+  INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
+  indexJobDeliveryId,
 } from "./queue-messages.ts";
 export type {
   DeploymentQueueMessage,

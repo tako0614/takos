@@ -9,6 +9,7 @@ import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
 import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
+import { dispatchTerminalIndexOutbox } from "../../application/services/run-notifier/index-outbox.ts";
 
 /** Injectable deps (model resolution) for deterministic testing. */
 export const cronHandlerDeps = {
@@ -18,20 +19,21 @@ export const cronHandlerDeps = {
 type StaleRun = {
   id: string;
   accountId: string;
+  model: string | null;
 };
 
 async function sendRunQueueMessage(env: Env, run: StaleRun): Promise<void> {
-  // The model is NOT stored on the Run record, and the executor dispatches the
-  // queue message's model verbatim with NO re-resolution. An empty/missing model
-  // degrades the agent container into "local-smoke" mode, where the user's raw
-  // message becomes a direct tool-dispatch channel. So re-resolve the workspace
-  // model here (same path as run creation) and always enqueue a concrete model.
-  const model = await cronHandlerDeps.resolveRunModel(
-    env.DB,
-    run.accountId,
-    undefined,
-    env,
-  );
+  // New Runs persist their resolved model so crash recovery preserves the
+  // original provider/audit/billing identity. Resolve the current Workspace
+  // default only for rows created before the model column was populated.
+  const model =
+    run.model ??
+    (await cronHandlerDeps.resolveRunModel(
+      env.DB,
+      run.accountId,
+      undefined,
+      env,
+    ));
   await env.RUN_QUEUE.send({
     version: RUN_QUEUE_MESSAGE_VERSION,
     runId: run.id,
@@ -48,7 +50,7 @@ export async function reenqueueStaleRunningRuns(
   const db = getDb(env.DB);
 
   const staleRuns = await db
-    .select({ id: runs.id, accountId: runs.accountId })
+    .select({ id: runs.id, accountId: runs.accountId, model: runs.model })
     .from(runs)
     .where(
       and(
@@ -73,6 +75,8 @@ export async function reenqueueStaleRunningRuns(
         status: "queued",
         serviceId: null,
         serviceHeartbeat: null,
+        completionKey: null,
+        completedAt: null,
       })
       .where(
         and(
@@ -127,6 +131,7 @@ export async function reenqueueStaleUnclaimedRuns(
       id: runs.id,
       accountId: runs.accountId,
       status: runs.status,
+      model: runs.model,
     })
     .from(runs)
     .where(
@@ -201,6 +206,21 @@ export async function handleScheduled(
     return;
   }
 
+  const staleThreshold = new Date(
+    Date.now() - STALE_WORKER_THRESHOLD_MS,
+  ).toISOString();
+
+  // Terminal commits write search work to index_jobs in the same transaction.
+  // The immediate post-commit flush is only a latency optimization; this cron
+  // is the durable recovery path for queued rows and crash-left enqueued rows.
+  try {
+    await dispatchTerminalIndexOutbox(env, { staleBefore: staleThreshold });
+  } catch (error) {
+    logError("Failed to dispatch terminal index outbox", error, {
+      module: "runner_cron",
+    });
+  }
+
   if (!env.EXECUTOR_HOST) {
     logError(
       "EXECUTOR_HOST binding is missing; stale run recovery is disabled",
@@ -210,9 +230,6 @@ export async function handleScheduled(
     return;
   }
 
-  const staleThreshold = new Date(
-    Date.now() - STALE_WORKER_THRESHOLD_MS,
-  ).toISOString();
   await reenqueueStaleRunningRuns(env, staleThreshold);
   await reenqueueStaleUnclaimedRuns(env, staleThreshold);
 

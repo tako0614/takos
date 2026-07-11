@@ -68,7 +68,7 @@ test("buildActiveRunActivityGroups - restores saved thinking for active runs", (
   const groups = buildActiveRunActivityGroups(
     [
       entry("run-1", 1, "thinking", "Reading context"),
-      entry("run-1", 2, "tool_call", "Tool call: file_read"),
+      entry("run-1", 2, "tool_call", "Tool call: web_fetch"),
     ],
     {
       "run-1": {
@@ -84,7 +84,7 @@ test("buildActiveRunActivityGroups - restores saved thinking for active runs", (
   assertEquals(groups[0].status, "running");
   assertEquals(groups[0].entries.map((item) => item.message), [
     "Reading context",
-    "Tool call: file_read",
+    "Tool call: web_fetch",
   ]);
 });
 

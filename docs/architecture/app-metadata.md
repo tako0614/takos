@@ -16,7 +16,9 @@ Takos 固有の service class として扱わず、Capsule が公開する well-
 `service_bindings` / `app_deployment`) の first-party profile として扱います。詳細は
 [Capsule Runtime Projection](./capsule-runtime-projection) を参照。Output capture と output-to-input wiring の正本は
 Takosumi が所有し、Takos はそれらの Output を app launcher、MCP registry、file handling、Git UX、storage UX、agent UX に
-投影します（read-only / store-free。Takosumi OSS は service-graph ledger も runtime grant も持ちません）。
+投影します。projection parser 自体は read-only / store-free で、Takosumi OSS は Service Graph ledger を持ちません。一方、
+`storage.object` / `source.git.smart_http` の consume では、Takosumi deploy-control が requested scopes を検証し、
+producer の protected signing material から prefix-scoped credential を bind time に生成して consumer Run へ注入します。
 
 - explicitly installed app の launcher metadata（Git URL / ref / module path から追加された app の表示情報）
 - file-handler metadata（どのファイル種別をどのアプリで開くか）
@@ -26,7 +28,9 @@ Takosumi が所有し、Takos はそれらの Output を app launcher、MCP regi
 - chat / agent / memory / Workspace に紐づくアプリ内データ
 
 これらは Takos product の DB / UI に閉じた特殊機能ではなく、Capsule output projection に投影されます。app は通常の
-AppInstallation として記録され、ユーザーが uninstall できます。
+Capsule として記録され、ユーザーが uninstall できます。`takos-storage` / `takos-git` / `takos-computer` も同じ通常の
+installable Capsule であり、その agent tool を Takos static catalog に複製しません。Takos product 内部の
+`storage.filesystem` / `source.repository` runtime projection とは別の境界です。
 
 OpenTofu Capsule が producer-neutral service metadata を渡す場合は Capsule output projection の optional well-known output
 `service_exports`、または service-side InstallConfig mapping を使います。標準 capability id は Capsule output projection の

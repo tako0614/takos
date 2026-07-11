@@ -12,23 +12,10 @@ export interface ToolExecutorLike {
   getAvailableTools?(): ToolDefinition[];
 }
 
-const NO_REGISTRY_ERROR = JSON.stringify({
-  error:
-    "All tools are already available. Call the tool you need directly by name.",
-});
-
-const ROUTER_TOOL_NAMES = new Set([
-  "toolbox",
-  "capability_search",
-  "capability_families",
-  "capability_describe",
-  "capability_invoke",
-]);
-
 export const TOOLBOX: ToolDefinition = {
   name: "toolbox",
   description:
-    "Search and use the full tool/manual catalog. Use this proactively when the direct tools do not obviously cover the task: action=search to find tools or manuals, describe to inspect schemas or instructions, call to execute a tool, and families to list capability groups.",
+    "Search and use tools from Takos, installed Capsules, registered external MCP servers, and workflow manuals. Use search, describe, call, or families.",
   category: "space",
   namespace: "discovery",
   family: "discovery.toolbox",
@@ -39,421 +26,229 @@ export const TOOLBOX: ToolDefinition = {
     properties: {
       action: {
         type: "string",
-        description: "Toolbox operation to run.",
+        description: "Toolbox operation",
         enum: ["search", "describe", "call", "families"],
       },
       query: {
         type: "string",
-        description: "Natural language search query for action=search.",
+        description: "Natural-language query for search",
       },
-      limit: {
-        type: "number",
-        description: "Maximum search results. Default: 10.",
-      },
+      limit: { type: "number", description: "Maximum search results" },
       tool_name: {
         type: "string",
-        description:
-          "Tool name for action=describe or action=call. For action=describe this may also be a manual id or name returned by search.",
+        description: "Tool or manual name for describe/call",
       },
       tool_names: {
         type: "array",
-        description: "Tool or manual names for action=describe.",
-        items: {
-          type: "string",
-          description: "Tool or manual name.",
-        },
+        description: "Tool or manual names for describe",
+        items: { type: "string", description: "Tool or manual name" },
       },
       arguments: {
         type: "object",
-        description: "Arguments passed to the target tool for action=call.",
+        description: "Arguments passed to a target tool for call",
       },
     },
     required: ["action"],
   },
 };
 
-export const CAPABILITY_SEARCH: ToolDefinition = {
-  name: "capability_search",
-  description:
-    "Search for tools or manuals by capability or intent. Use this early when you need to find the right tool quickly or verify whether a broader capability exists.",
-  category: "space",
-  namespace: "discovery",
-  family: "discovery.search",
-  risk_level: "none",
-  side_effects: false,
-  parameters: {
-    type: "object",
-    properties: {
-      query: {
-        type: "string",
-        description:
-          'Natural language query describing the capability you need (e.g., "upload file to object store", "create kv store").',
-      },
-      limit: {
-        type: "number",
-        description: "Maximum number of results to return. Default: 10.",
-      },
-    },
-    required: ["query"],
-  },
-};
+const NO_REGISTRY = JSON.stringify({
+  error: "No additional tools or manuals are available in this run.",
+});
 
-export const capabilitySearchHandler: ToolHandler = async (args, ctx) => {
-  return toolboxHandler({ ...args, action: "search" }, ctx);
-};
-
-export const CAPABILITY_FAMILIES: ToolDefinition = {
-  name: "capability_families",
-  description:
-    "List all tool/skill families and their sizes. Use this to explore what categories of capabilities are available.",
-  category: "space",
-  namespace: "discovery",
-  family: "discovery.search",
-  risk_level: "none",
-  side_effects: false,
-  parameters: {
-    type: "object",
-    properties: {},
-  },
-};
-
-export const capabilityFamiliesHandler: ToolHandler = async (_args, ctx) => {
-  return toolboxHandler({ action: "families" }, ctx);
-};
-
-export const CAPABILITY_INVOKE: ToolDefinition = {
-  name: "capability_invoke",
-  description:
-    "Execute a tool discovered via capability_search or described via capability_describe. The tool is resolved and executed with the same permission checks as direct calls.",
-  category: "space",
-  namespace: "discovery",
-  family: "discovery.invoke",
-  risk_level: "medium",
-  side_effects: true,
-  parameters: {
-    type: "object",
-    properties: {
-      tool_name: {
-        type: "string",
-        description:
-          "The name of the tool to execute (as returned by capability_search).",
-      },
-      arguments: {
-        type: "object",
-        description:
-          "Arguments to pass to the tool. Use capability_describe first when you need the tool's input schema.",
-      },
-    },
-    required: ["tool_name"],
-  },
-};
-
-export const CAPABILITY_DESCRIBE: ToolDefinition = {
-  name: "capability_describe",
-  description:
-    "Get full descriptions and input schemas for tools discovered via capability_search. Use this before capability_invoke when arguments are not obvious.",
-  category: "space",
-  namespace: "discovery",
-  family: "discovery.describe",
-  risk_level: "none",
-  side_effects: false,
-  parameters: {
-    type: "object",
-    properties: {
-      tool_name: {
-        type: "string",
-        description:
-          "Single tool or manual name to describe. Use tool_names for multiple entries.",
-      },
-      tool_names: {
-        type: "array",
-        description:
-          "Tool or manual names to describe. Keep this small and describe only candidates you may use.",
-        items: {
-          type: "string",
-          description: "Tool or manual name returned by capability_search.",
-        },
-      },
-    },
-  },
-};
-
-export const capabilityDescribeHandler: ToolHandler = async (args, ctx) => {
-  return toolboxHandler({ ...args, action: "describe" }, ctx);
-};
-
-export const capabilityInvokeHandler: ToolHandler = async (args, ctx) => {
-  return toolboxHandler({ ...args, action: "call" }, ctx);
-};
-
-export const toolboxHandler: ToolHandler = async (args, ctx) => {
-  const action = String(args.action ?? "").trim();
-  switch (action) {
-    case "search":
-      return toolboxSearch(args, ctx);
-    case "families":
-      return toolboxFamilies(ctx);
-    case "describe":
-      return toolboxDescribe(args, ctx);
-    case "call":
-      return toolboxCall(args, ctx);
-    default:
-      throw new Error(
-        "toolbox: action must be one of search, describe, call, families.",
-      );
-  }
-};
-
-async function toolboxSearch(
-  args: Record<string, unknown>,
-  ctx: ToolContext,
-): Promise<string> {
-  const registry = ctx.capabilityRegistry;
-  if (!registry) return NO_REGISTRY_ERROR;
-
-  const query = String(args.query ?? "");
-  const limit = typeof args.limit === "number" && args.limit > 0
-    ? Math.min(args.limit, 50)
-    : 10;
-
-  const results = registry
-    .search(query, { limit: limit + ROUTER_TOOL_NAMES.size })
-    .filter((d) => d.discoverable && !ROUTER_TOOL_NAMES.has(d.name))
-    .slice(0, limit);
-
-  return JSON.stringify({
-    results: results.map((d) => ({
-      id: d.id,
-      kind: displayKind(d),
-      name: d.name,
-      summary: d.summary,
-      family: d.family,
-      namespace: d.namespace,
-      risk_level: d.risk_level,
-    })),
-    total_available: registry.all().filter((d) =>
-      d.discoverable && !ROUTER_TOOL_NAMES.has(d.name)
-    ).length,
-    hint:
-      "Use toolbox action=describe to inspect likely tool schemas or manual instructions, then action=call to execute tools. Search again with a narrower query if the first results are not enough.",
-  });
-}
-
-async function toolboxFamilies(ctx: ToolContext): Promise<string> {
-  const registry = ctx.capabilityRegistry;
-  if (!registry) return NO_REGISTRY_ERROR;
-
-  const counts = new Map<string, number>();
-  for (const descriptor of registry.all()) {
-    if (
-      ROUTER_TOOL_NAMES.has(descriptor.name) || !descriptor.family ||
-      !descriptor.discoverable
-    ) continue;
-    counts.set(descriptor.family, (counts.get(descriptor.family) ?? 0) + 1);
-  }
-
-  return JSON.stringify({
-    families: [...counts.entries()]
-      .map(([family, count]) => ({ family, count }))
-      .sort((a, b) => a.family.localeCompare(b.family)),
-    total_capabilities: registry.all().filter((d) =>
-      d.discoverable && !ROUTER_TOOL_NAMES.has(d.name)
-    ).length,
-  });
-}
-
-async function toolboxDescribe(
-  args: Record<string, unknown>,
-  ctx: ToolContext,
-): Promise<string> {
-  const toolNames = normalizeToolNames(args);
-  if (toolNames.length === 0) {
-    throw new Error("toolbox describe: tool_name or tool_names is required.");
-  }
-
-  const executor =
-    (ctx as ToolContext & { _toolExecutor?: ToolExecutorLike })._toolExecutor;
-  if (!executor?.getAvailableTools) {
-    throw new Error("toolbox describe: Tool catalog not available.");
-  }
-
-  const toolsByName = new Map(
-    executor.getAvailableTools().map((tool) => [tool.name, tool]),
-  );
-  const registry = ctx.capabilityRegistry;
-
-  const manuals: Array<ReturnType<typeof formatManualDescriptor>> = [];
-  return JSON.stringify({
-    tools: toolNames.flatMap((name) => {
-      const manual = findManualDescriptor(registry, name);
-      if (manual) {
-        manuals.push(formatManualDescriptor(manual));
-        return [];
-      }
-      const tool = toolsByName.get(name);
-      if (!tool) {
-        return [{ name, available: false }];
-      }
-      const descriptor = registry?.get(`tool:${tool.name}`);
-      if (descriptor && !descriptor.discoverable) {
-        return [{ name, available: false }];
-      }
-      return [{
-        name: tool.name,
-        available: true,
-        description: tool.description,
-        category: tool.category,
-        namespace: tool.namespace,
-        family: tool.family,
-        risk_level: tool.risk_level,
-        side_effects: tool.side_effects,
-        required_roles: tool.required_roles,
-        required_capabilities: tool.required_capabilities,
-        parameters: tool.parameters,
-      }];
-    }),
-    manuals,
-    hint:
-      "Use toolbox action=call with tool_name and arguments matching described tool parameters when a described tool advances the task. Manuals are guidance only and are not callable.",
-  });
-}
-
-async function toolboxCall(
-  args: Record<string, unknown>,
-  ctx: ToolContext,
-): Promise<string> {
-  const toolName = String(args.tool_name ?? "");
-  if (!toolName) {
-    throw new Error("toolbox call: tool_name is required.");
-  }
-
-  if (ROUTER_TOOL_NAMES.has(toolName)) {
-    throw new Error(`toolbox call: cannot invoke router tool "${toolName}".`);
-  }
-
-  const registry = ctx.capabilityRegistry;
-  if (registry) {
-    const descriptor = registry.get(`tool:${toolName}`);
-    if (!descriptor) {
-      throw new Error(
-        `toolbox call: tool "${toolName}" is missing a capability descriptor.`,
-      );
-    }
-    if (
-      descriptor.kind !== "tool" ||
-      (descriptor.discoverable === false || descriptor.selectable === false)
-    ) {
-      throw new Error(
-        `toolbox call: tool "${toolName}" is not available for invocation.`,
-      );
-    }
-  }
-
-  const executor =
-    (ctx as ToolContext & { _toolExecutor?: ToolExecutorLike })._toolExecutor;
-  if (!executor) {
-    throw new Error("toolbox call: Tool executor not available.");
-  }
-
-  if (!executor.getAvailableTools) {
-    throw new Error("toolbox call: Tool catalog not available.");
-  }
-
-  const availableTool = executor.getAvailableTools()
-    .find((tool) => tool.name === toolName);
-  if (!availableTool) {
-    throw new Error(
-      `toolbox call: tool "${toolName}" is not in the available tool catalog.`,
-    );
-  }
-
-  const toolArgs =
-    (typeof args.arguments === "object" && args.arguments != null)
-      ? args.arguments as Record<string, unknown>
-      : {};
-
-  const result = await executor.execute({
-    id: `invoke_${Date.now()}`,
-    name: toolName,
-    arguments: toolArgs,
-  });
-
-  if (result.error) {
-    throw new Error(`toolbox call "${toolName}": ${result.error}`);
-  }
-  return result.output;
-}
-
-export const { tools: DISCOVERY_TOOLS, handlers: DISCOVERY_HANDLERS } =
-  defineTools([
-    [TOOLBOX, toolboxHandler],
-    [CAPABILITY_SEARCH, capabilitySearchHandler],
-    [CAPABILITY_FAMILIES, capabilityFamiliesHandler],
-    [CAPABILITY_DESCRIBE, capabilityDescribeHandler],
-    [CAPABILITY_INVOKE, capabilityInvokeHandler],
-  ]);
-
-function normalizeToolNames(args: Record<string, unknown>): string[] {
-  const values: unknown[] = [];
-  if (typeof args.tool_name === "string") {
-    values.push(args.tool_name);
-  }
-  if (typeof args.manual_ref === "string") {
-    values.push(args.manual_ref);
-  }
-  if (Array.isArray(args.tool_names)) {
-    values.push(...args.tool_names);
-  }
-  if (Array.isArray(args.manual_refs)) {
-    values.push(...args.manual_refs);
-  }
-
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (const value of values) {
-    if (typeof value !== "string") continue;
-    const name = value.trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    names.push(name);
-    if (names.length >= 20) break;
-  }
-  return names;
+function executorFrom(context: ToolContext): ToolExecutorLike | undefined {
+  return (context as ToolContext & { _toolExecutor?: ToolExecutorLike })
+    ._toolExecutor;
 }
 
 function displayKind(descriptor: { kind: string }): string {
   return descriptor.kind === "skill" ? "manual" : descriptor.kind;
 }
 
-function findManualDescriptor(
-  registry: ToolContext["capabilityRegistry"] | undefined,
-  ref: string,
-) {
-  if (!registry) return undefined;
+function findManual(context: ToolContext, ref: string) {
   const normalized = ref.trim().toLowerCase();
-  return registry.all().find((descriptor) => {
-    if (descriptor.kind !== "skill" || !descriptor.discoverable) return false;
-    return descriptor.id.toLowerCase() === normalized ||
+  return context.capabilityRegistry?.all().find((descriptor) =>
+    descriptor.kind === "skill" && descriptor.discoverable &&
+    (descriptor.id.toLowerCase() === normalized ||
       descriptor.name.toLowerCase() === normalized ||
-      descriptor.id.toLowerCase() === `skill:${normalized}`;
+      descriptor.id.toLowerCase() === `skill:${normalized}`)
+  );
+}
+
+function toolNames(args: Record<string, unknown>): string[] {
+  const values = [
+    typeof args.tool_name === "string" ? args.tool_name : undefined,
+    ...(Array.isArray(args.tool_names) ? args.tool_names : []),
+  ];
+  return [...new Set(values.filter((value): value is string =>
+    typeof value === "string" && value.trim().length > 0
+  ).map((value) => value.trim()))].slice(0, 20);
+}
+
+async function search(
+  args: Record<string, unknown>,
+  context: ToolContext,
+): Promise<string> {
+  const registry = context.capabilityRegistry;
+  if (!registry) return NO_REGISTRY;
+  const limit = typeof args.limit === "number" && args.limit > 0
+    ? Math.min(args.limit, 50)
+    : 10;
+  const results = registry.search(String(args.query ?? ""), { limit: limit + 1 })
+    .filter((descriptor) =>
+      descriptor.discoverable && descriptor.name !== TOOLBOX.name
+    ).slice(0, limit);
+  return JSON.stringify({
+    results: results.map((descriptor) => ({
+      id: descriptor.id,
+      kind: displayKind(descriptor),
+      name: descriptor.name,
+      summary: descriptor.summary,
+      family: descriptor.family,
+      namespace: descriptor.namespace,
+      risk_level: descriptor.risk_level,
+      side_effects: descriptor.side_effects,
+    })),
+    total_available: registry.all().filter((descriptor) =>
+      descriptor.discoverable && descriptor.name !== TOOLBOX.name
+    ).length,
+    hint:
+      "Use toolbox action=describe for likely results, then action=call when a tool advances the task.",
   });
 }
 
-function formatManualDescriptor(
-  descriptor: NonNullable<ReturnType<typeof findManualDescriptor>>,
-) {
-  return {
-    id: descriptor.id,
-    kind: displayKind(descriptor),
-    name: descriptor.name,
-    available: true,
-    summary: descriptor.summary,
-    family: descriptor.family,
-    namespace: descriptor.namespace,
-    triggers: descriptor.triggers ?? [],
-    recommended_tools: descriptor.recommended_tools ?? [],
-    output_modes: descriptor.output_modes ?? [],
-    durable_output_hints: descriptor.durable_output_hints ?? [],
-    instructions: descriptor.instructions ?? "",
-  };
+function families(context: ToolContext): string {
+  const registry = context.capabilityRegistry;
+  if (!registry) return NO_REGISTRY;
+  const counts = new Map<string, number>();
+  for (const descriptor of registry.all()) {
+    if (
+      !descriptor.discoverable || descriptor.name === TOOLBOX.name ||
+      !descriptor.family
+    ) continue;
+    counts.set(
+      descriptor.family,
+      (counts.get(descriptor.family) ?? 0) + 1,
+    );
+  }
+  return JSON.stringify({
+    families: [...counts].map(([family, count]) => ({ family, count }))
+      .sort((left, right) => left.family.localeCompare(right.family)),
+  });
 }
+
+function describe(
+  args: Record<string, unknown>,
+  context: ToolContext,
+): string {
+  const names = toolNames(args);
+  if (names.length === 0) {
+    throw new Error("toolbox describe: tool_name or tool_names is required");
+  }
+  const executor = executorFrom(context);
+  if (!executor?.getAvailableTools) {
+    throw new Error("toolbox describe: tool catalog is unavailable");
+  }
+  const available = new Map(
+    executor.getAvailableTools().map((tool) => [tool.name, tool]),
+  );
+  const manuals: unknown[] = [];
+  const tools = names.flatMap((name) => {
+    const manual = findManual(context, name);
+    if (manual) {
+      manuals.push({
+        id: manual.id,
+        kind: "manual",
+        name: manual.name,
+        summary: manual.summary,
+        family: manual.family,
+        triggers: manual.triggers ?? [],
+        recommended_tools: manual.recommended_tools ?? [],
+        output_modes: manual.output_modes ?? [],
+        instructions: manual.instructions ?? "",
+      });
+      return [];
+    }
+    const tool = available.get(name);
+    if (!tool) return [{ name, available: false }];
+    return [{
+      name: tool.name,
+      available: true,
+      description: tool.description,
+      category: tool.category,
+      namespace: tool.namespace,
+      family: tool.family,
+      risk_level: tool.risk_level,
+      side_effects: tool.side_effects,
+      annotations: tool.annotations,
+      parameters: tool.parameters,
+    }];
+  });
+  return JSON.stringify({
+    tools,
+    manuals,
+    hint: "Use toolbox action=call with arguments matching the described schema.",
+  });
+}
+
+async function call(
+  args: Record<string, unknown>,
+  context: ToolContext,
+): Promise<string> {
+  const name = typeof args.tool_name === "string" ? args.tool_name.trim() : "";
+  if (!name) throw new Error("toolbox call: tool_name is required");
+  if (name === TOOLBOX.name) throw new Error("toolbox cannot call itself");
+
+  const executor = executorFrom(context);
+  const available = executor?.getAvailableTools?.().some((tool) =>
+    tool.name === name
+  );
+  if (!executor || !available) {
+    throw new Error(
+      `toolbox call: tool "${name}" is not in the available tool catalog`,
+    );
+  }
+  const registry = context.capabilityRegistry;
+  const descriptor = registry?.get(`tool:${name}`);
+  if (registry && !descriptor) {
+    throw new Error(
+      `toolbox call: tool "${name}" is missing a capability descriptor`,
+    );
+  }
+  if (
+    descriptor &&
+    (descriptor.kind !== "tool" || !descriptor.discoverable ||
+      !descriptor.selectable)
+  ) {
+    throw new Error(`toolbox call: tool "${name}" is not selectable`);
+  }
+  const result = await executor.execute({
+    id: `toolbox_${crypto.randomUUID()}`,
+    name,
+    arguments: typeof args.arguments === "object" && args.arguments !== null
+      ? args.arguments as Record<string, unknown>
+      : {},
+  });
+  if (result.error) throw new Error(`toolbox call "${name}": ${result.error}`);
+  return result.output;
+}
+
+export const toolboxHandler: ToolHandler = async (args, context) => {
+  switch (String(args.action ?? "").trim()) {
+    case "search":
+      return search(args, context);
+    case "families":
+      return families(context);
+    case "describe":
+      return describe(args, context);
+    case "call":
+      return call(args, context);
+    default:
+      throw new Error(
+        "toolbox action must be one of search, describe, call, families",
+      );
+  }
+};
+
+export const { tools: DISCOVERY_TOOLS, handlers: DISCOVERY_HANDLERS } =
+  defineTools([[TOOLBOX, toolboxHandler]]);

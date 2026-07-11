@@ -10,11 +10,48 @@ import {
 } from "../offload/messages.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { reserveThreadMessageSequence } from "../threads/message-sequence.ts";
 
 export interface MessagePersistenceDeps {
   db: SqlDatabaseBinding;
   env: Env;
   threadId: string;
+}
+
+function databaseErrorDetail(error: unknown): string {
+  const details: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && current && !seen.has(current); depth++) {
+    seen.add(current);
+    if (current instanceof Error) {
+      details.push(current.message);
+      current = current.cause;
+      continue;
+    }
+    if (typeof current === "object") {
+      const record = current as Record<string, unknown>;
+      if (typeof record.message === "string") details.push(record.message);
+      if (typeof record.code === "string") details.push(record.code);
+      current = record.cause;
+      continue;
+    }
+    details.push(String(current));
+    break;
+  }
+  return details.join(" ");
+}
+
+function isUniqueConstraintError(detail: string): boolean {
+  return /(?:unique|duplicate key|constraint|23505)/i.test(detail);
+}
+
+function isMessageSequenceConflict(detail: string): boolean {
+  return (
+    detail.includes("idx_messages_thread_sequence") ||
+    /messages\.thread_id[^\n]*messages\.sequence/i.test(detail) ||
+    /thread_id[^\n]*sequence/i.test(detail)
+  );
 }
 
 function stableIdHash(value: string): string {
@@ -34,46 +71,60 @@ export async function persistMessage(
   const { db: dbBinding, env, threadId } = deps;
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
-  const maxRetries = 5;
-  const baseDelayMs = 10;
-  const maxDelayMs = 500;
+  const maxRetries = 16;
+  const baseDelayMs = 5;
+  const maxDelayMs = 100;
 
-  const idempotencyKey = typeof metadata?.idempotencyKey === "string"
-    ? metadata.idempotencyKey.trim()
-    : "";
+  const idempotencyKey =
+    typeof metadata?.idempotencyKey === "string"
+      ? metadata.idempotencyKey.trim()
+      : "";
   const id = idempotencyKey
     ? `msg_idem_${stableIdHash(`${threadId}\0${idempotencyKey}`)}`
-    : `msg_${
-      stableIdHash(JSON.stringify({
-        threadId,
-        role: message.role,
-        content: message.content?.slice(0, 1000),
-        toolCalls: message.tool_calls
-          ? JSON.stringify(message.tool_calls).slice(0, 500)
-          : null,
-        toolCallId: message.tool_call_id || null,
-        timestamp: now.slice(0, 16),
-      }))
-    }_${generateId(4)}`;
+    : `msg_${stableIdHash(
+        JSON.stringify({
+          threadId,
+          role: message.role,
+          content: message.content?.slice(0, 1000),
+          toolCalls: message.tool_calls
+            ? JSON.stringify(message.tool_calls).slice(0, 500)
+            : null,
+          toolCallId: message.tool_call_id || null,
+          timestamp: now.slice(0, 16),
+        }),
+      )}_${generateId(4)}`;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       // Idempotency: skip if a previous retry already inserted this message
-      const existing = await db.select({
-        id: messages.id,
-      }).from(messages).where(eq(messages.id, id)).get();
+      const existing = await db
+        .select({
+          id: messages.id,
+        })
+        .from(messages)
+        .where(eq(messages.id, id))
+        .get();
 
       if (existing) {
         // Message already exists (previous retry succeeded), skip
         return;
       }
 
-      // Get max sequence
-      const maxSeqResult = await db.select({
-        maxSeq: sql<number>`max(${messages.sequence})`,
-      }).from(messages).where(eq(messages.threadId, threadId)).get();
-
-      const nextSequence = (maxSeqResult?.maxSeq ?? -1) + 1;
+      const reservedSequence = await reserveThreadMessageSequence(
+        dbBinding,
+        threadId,
+      );
+      const maxSeqResult =
+        reservedSequence === null
+          ? await db
+              .select({
+                maxSeq: sql<number>`max(${messages.sequence})`,
+              })
+              .from(messages)
+              .where(eq(messages.threadId, threadId))
+              .get()
+          : null;
+      const nextSequence = reservedSequence ?? (maxSeqResult?.maxSeq ?? -1) + 1;
 
       const toolCallsStr = message.tool_calls
         ? JSON.stringify(message.tool_calls)
@@ -136,22 +187,24 @@ export async function persistMessage(
 
       return; // Success
     } catch (error) {
-      const errorMessage = error instanceof Error
-        ? error.message
-        : String(error);
+      const errorMessage = databaseErrorDetail(error);
 
-      // Duplicate ID means a previous retry already succeeded
-      if (
-        errorMessage.includes("UNIQUE constraint") &&
-        errorMessage.includes("id")
-      ) {
-        return;
+      if (isUniqueConstraintError(errorMessage)) {
+        // Identify an idempotent duplicate by the actual primary-key row, not
+        // by the substring "id" (which also appears in "thread_id").
+        const inserted = await db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(eq(messages.id, id))
+          .get();
+        if (inserted) return;
       }
 
       // Check if it's a sequence conflict (need to retry with new sequence)
-      const isSequenceConflict = errorMessage.includes("UNIQUE constraint");
-      const isRetryable = isSequenceConflict ||
-        errorMessage.includes("SQLITE_BUSY");
+      const isSequenceConflict = isMessageSequenceConflict(errorMessage);
+      const isRetryable =
+        isSequenceConflict ||
+        /(?:SQLITE_BUSY|database is locked)/i.test(errorMessage);
 
       if (isRetryable && attempt < maxRetries - 1) {
         const exponentialDelay = Math.min(

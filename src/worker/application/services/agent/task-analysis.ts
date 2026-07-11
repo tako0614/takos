@@ -43,7 +43,7 @@ Available tools: {tools}
 Analyze the task and return a JSON object with:
 - type: "conversation" | "tool_only" | "code_change" | "composite"
   - conversation: Simple Q&A, explanations, discussions
-  - tool_only: Tasks that only need tool calls (web search, file reading, etc.)
+  - tool_only: Tasks that only need listed tool calls (for example, an external MCP Web search or attachment read)
   - code_change: Tasks requiring file modifications
   - composite: Complex tasks needing multiple approaches
 - tools: Array of tool names that might be needed

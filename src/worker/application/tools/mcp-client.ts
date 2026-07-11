@@ -8,11 +8,24 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
-import type { ToolDefinition } from "./tool-definitions.ts";
+import {
+  ToolExecutionUncertainError,
+  type ToolDefinition,
+} from "./tool-definitions.ts";
 import type { FetchBinding } from "../../shared/types/env.ts";
-import { logWarn } from "../../shared/utils/logger.ts";
+import { combineSignals } from "@takos/worker-platform-utils/abort";
+import {
+  MAX_TOOL_ERROR_SIZE,
+  MAX_TOOL_OUTPUT_SIZE,
+} from "../../shared/config/limits.ts";
 
 export type { McpTool };
+
+export interface McpEgressContext {
+  spaceId: string;
+  runId?: string;
+  mode: "mcp-catalog" | "mcp-tool" | "mcp-policy-review";
+}
 
 /** Convert an MCP tool schema to a ToolDefinition for the resolver. */
 export function convertMcpSchema(tool: McpTool): ToolDefinition {
@@ -21,6 +34,7 @@ export function convertMcpSchema(tool: McpTool): ToolDefinition {
     name: tool.name,
     description: tool.description ?? "",
     category: "mcp",
+    annotations: tool.annotations,
     parameters: schema ?? { type: "object", properties: {} },
   };
 }
@@ -32,6 +46,77 @@ export function convertMcpSchema(tool: McpTool): ToolDefinition {
  * `setClientForTest` without `as unknown as` laundering.
  */
 type McpClientHandle = Pick<Client, "listTools" | "callTool" | "close">;
+
+const MAX_TOOL_LIST_PAGES = 64;
+const MAX_TOOLS_PER_SERVER = 512;
+const MAX_MCP_TOOL_SNAPSHOT_BYTES = 128 * 1024;
+const MAX_MCP_SERVER_CATALOG_BYTES = 4 * 1024 * 1024;
+const MAX_MCP_HTTP_RESPONSE_BYTES = 5 * 1024 * 1024;
+
+function boundMcpHttpResponse(response: Response): Response {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_MCP_HTTP_RESPONSE_BYTES) {
+    return new Response("MCP response body exceeds the Takos transport limit", {
+      status: 502,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+  if (!response.body) return response;
+  let received = 0;
+  const limiter = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      received += chunk.byteLength;
+      if (received > MAX_MCP_HTTP_RESPONSE_BYTES) {
+        controller.error(
+          new Error("MCP response body exceeds the Takos transport limit"),
+        );
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  });
+  return new Response(response.body.pipeThrough(limiter), {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+function jsonUtf8Bytes(value: unknown): number {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    throw new Error("MCP tool snapshot is not serializable JSON");
+  }
+  return new TextEncoder().encode(serialized).byteLength;
+}
+
+function boundedUtf8Prefix(value: string, maxBytes: number): string {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.byteLength <= maxBytes) return value;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let end = maxBytes; end >= Math.max(0, maxBytes - 4); end--) {
+    try {
+      return decoder.decode(encoded.subarray(0, end));
+    } catch {
+      // Retry past a partial trailing code point.
+    }
+  }
+  return "";
+}
+
+function boundedMcpText(
+  value: string,
+  maxBytes: number,
+  label: string,
+): string {
+  const encodedBytes = new TextEncoder().encode(value).byteLength;
+  if (encodedBytes <= maxBytes) return value;
+  const notice = `\n... [${label} TRUNCATED: ${encodedBytes} UTF-8 bytes total]`;
+  const noticeBytes = new TextEncoder().encode(notice).byteLength;
+  return boundedUtf8Prefix(value, Math.max(0, maxBytes - noticeBytes)) + notice;
+}
 
 export class McpClient {
   private client: McpClientHandle | null = null;
@@ -50,6 +135,8 @@ export class McpClient {
      * into the internal network.
      */
     private readonly egress?: FetchBinding,
+    private readonly egressContext?: McpEgressContext,
+    private readonly allowDirectEgress = false,
   ) {}
 
   /**
@@ -71,7 +158,7 @@ export class McpClient {
    * protocol / credential / redirect blocking after DNS resolution); when it is
    * absent we still force `redirect: "manual"` on the direct fetch.
    */
-  private egressFetch = (
+  private egressFetch = async (
     url: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> => {
@@ -85,48 +172,46 @@ export class McpClient {
       redirect: "manual",
     };
     if (this.egress) {
-      return this.egress.fetch(url as RequestInfo | URL, finalInit);
+      // These internal attribution headers are consumed and stripped by the
+      // binding-only egress entrypoint. Never attach them to a direct network
+      // request, where workspace/run identifiers would leak to the MCP server.
+      if (this.egressContext) {
+        headers.set("X-Takos-Space-Id", this.egressContext.spaceId);
+        headers.set("X-Takos-Egress-Mode", this.egressContext.mode);
+        if (this.egressContext.runId) {
+          headers.set("X-Takos-Run-Id", this.egressContext.runId);
+        }
+      }
+      return boundMcpHttpResponse(
+        await this.egress.fetch(url as RequestInfo | URL, finalInit),
+      );
     }
-    return fetch(url, finalInit);
+    if (!this.allowDirectEgress) {
+      return Promise.reject(
+        new Error(
+          `McpClient(${this.serverName}) safe egress binding is unavailable`,
+        ),
+      );
+    }
+    return boundMcpHttpResponse(await fetch(url, finalInit));
   };
 
-  /** Connect to the MCP server. Tries StreamableHTTP; falls back to SSE path. */
-  async connect(): Promise<void> {
-    const authFetch = this.egressFetch;
+  /** Connect to the MCP server using the current Streamable HTTP transport. */
+  async connect(signal?: AbortSignal): Promise<void> {
+    const authFetch: typeof fetch = signal
+      ? (((url, init) =>
+          this.egressFetch(url, {
+            ...init,
+            signal: init?.signal ? combineSignals(init.signal, signal) : signal,
+          })) as typeof fetch)
+      : (this.egressFetch as typeof fetch);
 
-    // Try StreamableHTTP first (preferred for fetch-based runtimes)
-    try {
-      const transport = new StreamableHTTPClientTransport(
-        new URL(this.serverUrl),
-        {
-          fetch: authFetch as typeof fetch,
-        },
-      );
-      const client = new Client(
-        { name: "takos-mcp-client", version: "1.0.0" },
-        { capabilities: {} },
-      );
-      await client.connect(transport);
-      this.client = client;
-      return;
-    } catch (streamErr) {
-      logWarn(`StreamableHTTP failed, falling back to SSE`, {
-        module: `mcpclient:${this.serverName}`,
-        detail: streamErr,
-      });
-    }
-
-    // Fallback: SSE transport (append /sse to the server URL).
-    // Pass the same egress-aware fetch so the SSE path also routes through the
-    // SSRF proxy and never auto-follows redirects. The Authorization header is
-    // injected by egressFetch, so requestInit no longer needs to carry it.
-    const { SSEClientTransport } = await import(
-      "@modelcontextprotocol/sdk/client/sse.js"
+    const transport = new StreamableHTTPClientTransport(
+      new URL(this.serverUrl),
+      {
+        fetch: authFetch as typeof fetch,
+      },
     );
-    const sseUrl = new URL("/sse", this.serverUrl);
-    const transport = new SSEClientTransport(sseUrl, {
-      fetch: authFetch as typeof fetch,
-    });
     const client = new Client(
       { name: "takos-mcp-client", version: "1.0.0" },
       { capabilities: {} },
@@ -136,17 +221,59 @@ export class McpClient {
   }
 
   /** List all tools advertised by the connected MCP server. */
-  async listTools(): Promise<
-    Array<{ sdkTool: McpTool; definition: ToolDefinition }>
-  > {
+  async listTools(
+    signal?: AbortSignal,
+  ): Promise<Array<{ sdkTool: McpTool; definition: ToolDefinition }>> {
     if (!this.client) {
       throw new Error(`McpClient(${this.serverName}) not connected`);
     }
-    const { tools } = await this.client.listTools();
-    return tools.map((sdkTool: McpTool) => ({
-      sdkTool,
-      definition: convertMcpSchema(sdkTool),
-    }));
+    const tools: McpTool[] = [];
+    let catalogBytes = 0;
+    const seenCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_TOOL_LIST_PAGES; page++) {
+      const result = await this.client.listTools(
+        cursor ? { cursor } : undefined,
+        signal ? { signal } : undefined,
+      );
+      for (const tool of result.tools) {
+        const toolBytes = jsonUtf8Bytes(tool);
+        if (toolBytes > MAX_MCP_TOOL_SNAPSHOT_BYTES) {
+          throw new Error(
+            `McpClient(${this.serverName}) advertised a tool snapshot larger than ${MAX_MCP_TOOL_SNAPSHOT_BYTES} bytes`,
+          );
+        }
+        catalogBytes += toolBytes;
+        if (catalogBytes > MAX_MCP_SERVER_CATALOG_BYTES) {
+          throw new Error(
+            `McpClient(${this.serverName}) tool catalog exceeds ${MAX_MCP_SERVER_CATALOG_BYTES} bytes`,
+          );
+        }
+        tools.push(tool);
+      }
+      if (tools.length > MAX_TOOLS_PER_SERVER) {
+        throw new Error(
+          `McpClient(${this.serverName}) advertised more than ${MAX_TOOLS_PER_SERVER} tools`,
+        );
+      }
+      const nextCursor = result.nextCursor?.trim();
+      if (!nextCursor) {
+        return tools.map((sdkTool: McpTool) => ({
+          sdkTool,
+          definition: convertMcpSchema(sdkTool),
+        }));
+      }
+      if (seenCursors.has(nextCursor)) {
+        throw new Error(
+          `McpClient(${this.serverName}) repeated a tools/list cursor`,
+        );
+      }
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+    throw new Error(
+      `McpClient(${this.serverName}) exceeded ${MAX_TOOL_LIST_PAGES} tools/list pages`,
+    );
   }
 
   /** Call a tool on the MCP server and return the result as a string. */
@@ -158,23 +285,50 @@ export class McpClient {
     if (!this.client) {
       throw new Error(`McpClient(${this.serverName}) not connected`);
     }
-    const result = await this.client.callTool(
-      { name: toolName, arguments: args },
-      undefined,
-      { signal },
-    );
-    const content = Array.isArray((result as { content?: unknown }).content)
-      ? (result as { content: Array<{ type?: unknown; text?: unknown }> })
-        .content
+    let result: Awaited<ReturnType<McpClientHandle["callTool"]>>;
+    try {
+      result = await this.client.callTool(
+        { name: toolName, arguments: args },
+        undefined,
+        { signal },
+      );
+    } catch (error) {
+      const detail = boundedMcpText(
+        error instanceof Error ? error.message : String(error),
+        MAX_TOOL_ERROR_SIZE,
+        "MCP ERROR",
+      );
+      throw new ToolExecutionUncertainError(
+        `MCP tool ${toolName} was dispatched, but its outcome is unknown: ${detail}`,
+        { cause: error },
+      );
+    }
+    const payload = result as {
+      content?: unknown;
+      structuredContent?: unknown;
+      isError?: unknown;
+    };
+    const content = Array.isArray(payload.content)
+      ? (payload.content as Array<{ type?: unknown; text?: unknown }>)
       : [];
-    if (content.length === 0) return "";
-    return content
-      .map((item) => (
-        item.type === "text" && typeof item.text === "string"
-          ? item.text
-          : JSON.stringify(item)
-      ))
-      .join("\n");
+    const parts = content.map((item) =>
+      item.type === "text" && typeof item.text === "string"
+        ? item.text
+        : JSON.stringify(item),
+    );
+    if (payload.structuredContent !== undefined) {
+      parts.push(JSON.stringify(payload.structuredContent));
+    }
+    const output = parts.join("\n");
+    if (payload.isError === true) {
+      const detail = boundedMcpText(output, MAX_TOOL_ERROR_SIZE, "MCP ERROR");
+      throw new ToolExecutionUncertainError(
+        detail.trim()
+          ? `MCP tool ${toolName} reported an error after dispatch: ${detail}`
+          : `MCP tool ${toolName} reported an error after dispatch; its side-effect outcome is unknown`,
+      );
+    }
+    return boundedMcpText(output, MAX_TOOL_OUTPUT_SIZE, "MCP OUTPUT");
   }
 
   async close(): Promise<void> {

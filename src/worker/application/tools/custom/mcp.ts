@@ -25,14 +25,15 @@ import { and, eq } from "drizzle-orm";
 export const MCP_ADD_SERVER: ToolDefinition = {
   name: "mcp_add_server",
   description:
-    "Register an external MCP (Model Context Protocol) server so its tools become available in this space. " +
+    "Register an external MCP (Model Context Protocol) server so its tools become available in this Workspace. " +
     "If the server requires OAuth authentication, this tool will return an auth_url that the user must visit to grant access. " +
-    "Once authorized, the server's tools will be available in the next conversation turn.",
+    "After authorization, the user must review and enable each external tool in Connections before the agent can use it.",
   category: "mcp",
   namespace: "mcp",
   family: "mcp.manage",
   risk_level: "medium",
   side_effects: true,
+  required_capabilities: ["egress.http"],
   tool_class: "space_mapped",
   operation_id: "mcp_server.create",
   parameters: {
@@ -62,6 +63,7 @@ export const mcpAddServerHandler: ToolHandler = async (args, context) => {
   const scope = args.scope as string | undefined;
   const result = await registerExternalMcpServer(context.db, context.env, {
     spaceId: context.spaceId,
+    initiatorUserId: context.userId,
     name,
     url,
     scope,
@@ -87,7 +89,7 @@ export const mcpAddServerHandler: ToolHandler = async (args, context) => {
 export const MCP_LIST_SERVERS: ToolDefinition = {
   name: "mcp_list_servers",
   description:
-    "List all registered MCP servers for this space, including their status.",
+    "List all registered MCP servers for this Workspace, including their status.",
   category: "mcp",
   namespace: "mcp",
   family: "mcp.manage",
@@ -118,6 +120,8 @@ export const mcpListServersHandler: ToolHandler = async (_args, context) => {
         bundle_deployment_id: s.bundleDeploymentId,
         managed: s.sourceType !== "external",
         scope: s.oauthScope,
+        registration_mode: s.oauthRegistrationMode,
+        authorization_status: s.authorizationStatus,
         token_expires_at: s.oauthTokenExpiresAt,
         created_at: s.createdAt,
       })),
@@ -134,7 +138,7 @@ export const mcpListServersHandler: ToolHandler = async (_args, context) => {
 
 export const MCP_REMOVE_SERVER: ToolDefinition = {
   name: "mcp_remove_server",
-  description: "Remove a registered MCP server from this space by id.",
+  description: "Remove a registered MCP server from this Workspace by id.",
   category: "mcp",
   namespace: "mcp",
   family: "mcp.manage",
@@ -161,13 +165,13 @@ export const mcpRemoveServerHandler: ToolHandler = async (args, context) => {
   }
 
   const db = getDb(context.db);
-  const server = await db.select({ id: mcpServers.id, name: mcpServers.name })
-    .from(mcpServers).where(
-      and(
-        eq(mcpServers.accountId, context.spaceId),
-        eq(mcpServers.id, id),
-      ),
-    ).get();
+  const server = await db
+    .select({ id: mcpServers.id, name: mcpServers.name })
+    .from(mcpServers)
+    .where(
+      and(eq(mcpServers.accountId, context.spaceId), eq(mcpServers.id, id)),
+    )
+    .get();
 
   if (!server) {
     return JSON.stringify(
@@ -250,9 +254,8 @@ export const mcpUpdateServerHandler: ToolHandler = async (args, context) => {
         url: updated.url,
         transport: updated.transport,
         enabled: updated.enabled,
-        source_type: updated.sourceType === "worker"
-          ? "service"
-          : updated.sourceType,
+        source_type:
+          updated.sourceType === "worker" ? "service" : updated.sourceType,
         auth_mode: updated.authMode,
         service_id: updated.serviceId,
         bundle_deployment_id: updated.bundleDeploymentId,

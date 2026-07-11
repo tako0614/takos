@@ -1,76 +1,41 @@
 use std::collections::HashSet;
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use takos_agent_engine::model::ToolCallRequest;
-use takos_agent_engine::tools::executor::{DefaultToolExecutor, ToolCallResult, ToolExecutor};
-use takos_agent_engine::tools::memory_tools::MemoryTools;
+use takos_agent_engine::tools::executor::{ToolCallResult, ToolExecutionKind, ToolExecutor};
 use takos_agent_engine::{EngineError, Result};
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
 
-use crate::control_rpc::{ControlRpcClient, RpcToolResult, SkillCatalogResponse, ToolDefinition};
-use crate::skills::{execute_local_skill_tool, LOCAL_SKILL_TOOL_NAMES};
-
-const LOCAL_MEMORY_TOOL_NAMES: [&str; 4] = [
-    "semantic_search_memory",
-    "graph_search_memory",
-    "provenance_lookup",
-    "timeline_search",
-];
+use crate::control_rpc::{ControlRpcClient, RpcToolResult, ToolDefinition};
 
 /// Operator-managed allowlist of tool names that the agent is permitted to
 /// dispatch. Read from `TAKOS_AGENT_TOOL_ALLOWLIST` (comma-separated) at the
 /// time each call is evaluated. **The default is empty** — operators MUST opt
-/// in, otherwise every non-local tool call is rejected with the
+/// in, otherwise every remote tool is rejected with the
 /// `tool_not_permitted` error. Set the env to `*` to allow every remote tool.
 const TOOL_ALLOWLIST_ENV_KEY: &str = "TAKOS_AGENT_TOOL_ALLOWLIST";
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ToolExecutionRecord {
-    pub tool_call_id: String,
-    pub name: String,
-    pub arguments: serde_json::Value,
-    pub summary: String,
-    pub result: Option<String>,
-    pub output: String,
-    pub error: Option<String>,
-}
 
 #[derive(Clone)]
 pub struct CompositeToolExecutor {
     client: ControlRpcClient,
     remote_tools: Arc<Vec<ToolDefinition>>,
-    local_skill_catalog: Arc<SkillCatalogResponse>,
-    local_executor: Option<Arc<DefaultToolExecutor>>,
-    tool_executions: Arc<Mutex<Vec<ToolExecutionRecord>>>,
     tool_call_sequence: Arc<AtomicU64>,
     cancellation_token: Option<CancellationToken>,
 }
 
 impl CompositeToolExecutor {
-    pub fn new(
-        client: ControlRpcClient,
-        remote_tools: Vec<ToolDefinition>,
-        local_skill_catalog: SkillCatalogResponse,
-    ) -> Self {
+    pub fn new(client: ControlRpcClient, remote_tools: Vec<ToolDefinition>) -> Self {
         Self {
             client,
             remote_tools: Arc::new(remote_tools),
-            local_skill_catalog: Arc::new(local_skill_catalog),
-            local_executor: None,
-            tool_executions: Arc::new(Mutex::new(Vec::new())),
             tool_call_sequence: Arc::new(AtomicU64::new(1)),
             cancellation_token: None,
         }
-    }
-
-    pub fn with_local_memory_tools(mut self, memory_tools: MemoryTools) -> Self {
-        self.local_executor = Some(Arc::new(DefaultToolExecutor::new(memory_tools)));
-        self
     }
 
     /// Wire the run's cancellation token so in-flight remote tool dispatches
@@ -83,19 +48,13 @@ impl CompositeToolExecutor {
     pub fn exposed_tools(&self) -> Vec<ToolDefinition> {
         self.remote_tools.as_ref().clone()
     }
-
-    pub fn take_tool_executions(&self) -> Vec<ToolExecutionRecord> {
-        let mut guard = lock_tool_executions(&self.tool_executions);
-        std::mem::take(&mut *guard)
-    }
 }
 
 /// Compute the active allowlist for remote tool dispatch. `None` indicates
 /// the operator has not configured the env so every remote tool MUST be
 /// rejected. `Some(set)` with a literal `*` entry means "allow every remote
-/// tool"; otherwise the set holds the exact allowed names. Local memory and
-/// local skill tools are always permitted (they execute in-process under the
-/// agent's own authority).
+/// tool"; otherwise the set holds the exact allowed names. Memory and timeline
+/// tools are remote catalog entries and follow this same policy.
 fn resolve_tool_allowlist() -> Option<HashSet<String>> {
     let raw = env::var(TOOL_ALLOWLIST_ENV_KEY).ok()?;
     let entries: HashSet<String> = raw
@@ -122,30 +81,28 @@ fn is_tool_allowed(tool_name: &str, allowlist: Option<&HashSet<String>>) -> bool
 
 #[async_trait]
 impl ToolExecutor for CompositeToolExecutor {
-    async fn execute(&self, call: ToolCallRequest) -> Result<ToolCallResult> {
-        if LOCAL_MEMORY_TOOL_NAMES.contains(&call.name.as_str()) {
-            let executor = self.local_executor.as_ref().ok_or_else(|| {
-                EngineError::Tool(format!(
-                    "local tool executor is not configured for {}",
-                    call.name
-                ))
-            })?;
-            return executor.execute(call).await;
-        }
+    fn execution_kind(&self, call: &ToolCallRequest) -> ToolExecutionKind {
+        self.remote_tools
+            .iter()
+            .find(|tool| tool.name == call.name)
+            .filter(|tool| {
+                tool.side_effects == Some(false) && tool.risk_level.as_deref() != Some("high")
+            })
+            .map_or(ToolExecutionKind::SideEffecting, |_| {
+                ToolExecutionKind::ReadOnly
+            })
+    }
 
+    async fn execute(&self, call: ToolCallRequest) -> Result<ToolCallResult> {
         let tool_name = call.name.clone();
         let tool_arguments = call.arguments.clone();
-        let tool_call_id = stable_tool_call_id(
-            self.tool_call_sequence.fetch_add(1, Ordering::Relaxed),
-            &tool_name,
-            &tool_arguments,
-        );
-
-        if LOCAL_SKILL_TOOL_NAMES.contains(&tool_name.as_str()) {
-            return self
-                .execute_local_skill(&tool_call_id, &tool_name, &tool_arguments)
-                .await;
-        }
+        let tool_call_id = call.id.clone().unwrap_or_else(|| {
+            stable_tool_call_id(
+                self.tool_call_sequence.fetch_add(1, Ordering::Relaxed),
+                &tool_name,
+                &tool_arguments,
+            )
+        });
 
         // Remote tool dispatch is gated by the operator-managed allowlist.
         // An unset / empty `TAKOS_AGENT_TOOL_ALLOWLIST` means *no* remote
@@ -156,19 +113,10 @@ impl ToolExecutor for CompositeToolExecutor {
             self.client
                 .emit_run_event(
                     "tool_result",
-                    tool_result_event(&tool_call_id, &tool_name, &error, "", Some(&error)),
+                    tool_result_event(&tool_call_id, &tool_name, &error, "", Some(&error), 0),
                 )
                 .await
                 .ok();
-            self.record_tool_execution(ToolExecutionRecord {
-                tool_call_id: tool_call_id.clone(),
-                name: tool_name.clone(),
-                arguments: tool_arguments.clone(),
-                summary: error.clone(),
-                result: None,
-                output: String::new(),
-                error: Some(error.clone()),
-            });
             return Err(EngineError::Tool(error));
         }
 
@@ -178,61 +126,14 @@ impl ToolExecutor for CompositeToolExecutor {
 }
 
 impl CompositeToolExecutor {
-    async fn execute_local_skill(
-        &self,
-        tool_call_id: &str,
-        tool_name: &str,
-        tool_arguments: &Value,
-    ) -> Result<ToolCallResult> {
-        emit_tool_call_event(&self.client, tool_call_id, tool_name, tool_arguments)
-            .await
-            .ok();
-        emit_thinking_event(&self.client, format!("Running tool {tool_name}"))
-            .await
-            .ok();
-        let output =
-            execute_local_skill_tool(tool_name, tool_arguments, self.local_skill_catalog.as_ref())
-                .ok_or_else(|| {
-                    EngineError::Tool(format!("unsupported local skill tool {tool_name}"))
-                })?;
-        let summary = format!("{} output={}", tool_name, truncate_summary(&output));
-        self.client
-            .emit_run_event(
-                "tool_result",
-                tool_result_event(tool_call_id, tool_name, &summary, &output, None),
-            )
-            .await
-            .ok();
-        self.record_tool_execution(ToolExecutionRecord {
-            tool_call_id: tool_call_id.to_string(),
-            name: tool_name.to_string(),
-            arguments: tool_arguments.clone(),
-            summary: summary.clone(),
-            result: Some(output.clone()),
-            output: output.clone(),
-            error: None,
-        });
-        emit_thinking_event(&self.client, format!("Tool {tool_name} finished"))
-            .await
-            .ok();
-        Ok(ToolCallResult {
-            name: tool_name.to_string(),
-            content: json!({ "output": output }),
-            summary,
-        })
-    }
-
     async fn execute_remote_tool(
         &self,
         tool_call_id: &str,
         tool_name: &str,
         tool_arguments: &Value,
     ) -> Result<ToolCallResult> {
-        self.client
-            .emit_run_event(
-                "tool_call",
-                tool_call_event(tool_call_id, tool_name, tool_arguments),
-            )
+        let started_at = Instant::now();
+        emit_tool_call_event(&self.client, tool_call_id, tool_name, tool_arguments)
             .await
             .ok();
         emit_thinking_event(&self.client, format!("Running tool {tool_name}"))
@@ -243,7 +144,9 @@ impl CompositeToolExecutor {
         // cancellation token so an executor lease loss or a cancelled run
         // aborts the in-flight request future instead of waiting for the HTTP
         // timeout. When no token is wired (test paths) we simply await.
-        let execute_future = self.client.tool_execute(tool_name, tool_arguments.clone());
+        let execute_future =
+            self.client
+                .tool_execute(tool_call_id, tool_name, tool_arguments.clone());
         let rpc_outcome = if let Some(token) = self.cancellation_token.clone() {
             tokio::select! {
                 biased;
@@ -259,19 +162,11 @@ impl CompositeToolExecutor {
                                 &summary,
                                 "",
                                 Some(&error),
+                                elapsed_millis(started_at),
                             ),
                         )
                         .await
                         .ok();
-                    self.record_tool_execution(ToolExecutionRecord {
-                        tool_call_id: tool_call_id.to_string(),
-                        name: tool_name.to_string(),
-                        arguments: tool_arguments.clone(),
-                        summary,
-                        result: None,
-                        output: String::new(),
-                        error: Some(error.clone()),
-                    });
                     return Err(EngineError::Tool(error));
                 }
                 outcome = execute_future => outcome,
@@ -288,7 +183,14 @@ impl CompositeToolExecutor {
                 self.client
                     .emit_run_event(
                         "tool_result",
-                        tool_result_event(tool_call_id, tool_name, &summary, "", Some(&error)),
+                        tool_result_event(
+                            tool_call_id,
+                            tool_name,
+                            &summary,
+                            "",
+                            Some(&error),
+                            elapsed_millis(started_at),
+                        ),
                     )
                     .await
                     .ok();
@@ -299,7 +201,7 @@ impl CompositeToolExecutor {
             }
         };
 
-        let result = rpc_tool_result_to_engine(tool_name, rpc_result.clone());
+        let result = rpc_tool_result_to_engine(tool_call_id, tool_name, rpc_result.clone())?;
         let (output, error) = rpc_tool_result_output_and_error(&rpc_result);
         self.client
             .emit_run_event(
@@ -310,23 +212,11 @@ impl CompositeToolExecutor {
                     &result.summary,
                     &output,
                     error.as_deref(),
+                    elapsed_millis(started_at),
                 ),
             )
             .await
             .ok();
-        self.record_tool_execution(ToolExecutionRecord {
-            tool_call_id: tool_call_id.to_string(),
-            name: result.name.clone(),
-            arguments: tool_arguments.clone(),
-            summary: result.summary.clone(),
-            result: if error.is_none() {
-                Some(output.clone())
-            } else {
-                None
-            },
-            output: output.clone(),
-            error,
-        });
         emit_thinking_event(&self.client, format!("Tool {} finished", result.name))
             .await
             .ok();
@@ -335,23 +225,16 @@ impl CompositeToolExecutor {
     }
 }
 
-impl CompositeToolExecutor {
-    fn record_tool_execution(&self, record: ToolExecutionRecord) {
-        let mut guard = lock_tool_executions(&self.tool_executions);
-        guard.push(record);
+fn rpc_tool_result_to_engine(
+    tool_call_id: &str,
+    name: &str,
+    rpc: RpcToolResult,
+) -> Result<ToolCallResult> {
+    if rpc.tool_call_id.as_deref() != Some(tool_call_id) {
+        return Err(EngineError::Tool(format!(
+            "tool result correlation mismatch for {name}"
+        )));
     }
-}
-
-fn lock_tool_executions(
-    tool_executions: &Mutex<Vec<ToolExecutionRecord>>,
-) -> MutexGuard<'_, Vec<ToolExecutionRecord>> {
-    tool_executions.lock().unwrap_or_else(|poisoned| {
-        warn!("tool execution buffer lock poisoned; recovering current buffer");
-        poisoned.into_inner()
-    })
-}
-
-fn rpc_tool_result_to_engine(name: &str, rpc: RpcToolResult) -> ToolCallResult {
     let output = rpc.output.clone();
     let error = rpc.error;
     let content = if let Some(error) = error.clone() {
@@ -371,11 +254,12 @@ fn rpc_tool_result_to_engine(name: &str, rpc: RpcToolResult) -> ToolCallResult {
         format!("{name} output={}", truncate_summary(&output))
     };
 
-    ToolCallResult {
+    Ok(ToolCallResult {
+        tool_call_id: Some(tool_call_id.to_string()),
         name: name.to_string(),
         content,
         summary,
-    }
+    })
 }
 
 fn rpc_tool_result_output_and_error(rpc: &RpcToolResult) -> (String, Option<String>) {
@@ -391,6 +275,34 @@ fn stable_tool_call_id(sequence: u64, name: &str, arguments: &serde_json::Value)
     format!("rust-tool-{}", crate::hash::fnv1a_hex(&payload.to_string()))
 }
 
+const EVENT_PREVIEW_BYTES: usize = 4 * 1024;
+
+fn truncate_event_text(value: &str) -> String {
+    if value.len() <= EVENT_PREVIEW_BYTES {
+        return value.to_string();
+    }
+    let mut end = EVENT_PREVIEW_BYTES.saturating_sub(3);
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &value[..end])
+}
+
+fn bounded_event_json(value: &Value) -> Value {
+    let serialized = value.to_string();
+    if serialized.len() <= EVENT_PREVIEW_BYTES {
+        return value.clone();
+    }
+    json!({
+        "_truncated": true,
+        "preview": truncate_event_text(&serialized),
+    })
+}
+
+fn elapsed_millis(started_at: Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 fn tool_call_event(
     tool_call_id: &str,
     name: &str,
@@ -400,7 +312,7 @@ fn tool_call_event(
         "id": tool_call_id,
         "tool_call_id": tool_call_id,
         "name": name,
-        "arguments": arguments,
+        "arguments": bounded_event_json(arguments),
     })
 }
 
@@ -410,15 +322,16 @@ fn tool_result_event(
     summary: &str,
     output: &str,
     error: Option<&str>,
+    duration_ms: u64,
 ) -> serde_json::Value {
     json!({
         "id": tool_call_id,
         "tool_call_id": tool_call_id,
         "name": name,
         "summary": summary,
-        "result": if error.is_none() { json!(output) } else { serde_json::Value::Null },
-        "output": output,
-        "error": error,
+        "result": if error.is_none() { json!(truncate_event_text(output)) } else { serde_json::Value::Null },
+        "error": error.map(truncate_event_text),
+        "duration_ms": duration_ms,
     })
 }
 
@@ -468,13 +381,12 @@ mod tests {
     use super::{
         is_tool_allowed, rpc_tool_result_output_and_error, rpc_tool_result_to_engine,
         stable_tool_call_id, tool_result_event, truncate_summary, CompositeToolExecutor,
-        ToolExecutionRecord,
+        EVENT_PREVIEW_BYTES,
     };
-    use crate::control_rpc::{
-        ControlRpcClient, SkillCatalogResponse, StartPayload, ToolDefinition,
-    };
+    use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition};
     use serde_json::json;
-    use std::panic::{self, AssertUnwindSafe};
+    use takos_agent_engine::model::ToolCallRequest;
+    use takos_agent_engine::tools::executor::{ToolExecutionKind, ToolExecutor};
 
     fn test_client() -> ControlRpcClient {
         ControlRpcClient::new(&StartPayload {
@@ -508,14 +420,17 @@ mod tests {
                     name: "skill_list".to_string(),
                     description: "duplicate remote skill list".to_string(),
                     parameters: json!({ "type": "object" }),
+                    risk_level: Some("low".to_string()),
+                    side_effects: Some(false),
                 },
                 ToolDefinition {
-                    name: "repo_list".to_string(),
+                    name: "example_read".to_string(),
                     description: "remote repo tool".to_string(),
                     parameters: json!({ "type": "object" }),
+                    risk_level: Some("low".to_string()),
+                    side_effects: Some(false),
                 },
             ],
-            SkillCatalogResponse::default(),
         );
 
         let tools = executor.exposed_tools();
@@ -524,15 +439,72 @@ mod tests {
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>();
 
-        assert_eq!(names, vec!["skill_list", "repo_list"]);
+        assert_eq!(names, vec!["skill_list", "example_read"]);
+    }
+
+    #[test]
+    fn remote_execution_policy_fails_closed_and_allows_explicit_read_only() {
+        let executor = CompositeToolExecutor::new(
+            test_client(),
+            vec![
+                ToolDefinition {
+                    name: "safe_read".to_string(),
+                    description: "read".to_string(),
+                    parameters: json!({ "type": "object" }),
+                    risk_level: Some("low".to_string()),
+                    side_effects: Some(false),
+                },
+                ToolDefinition {
+                    name: "timeline_search".to_string(),
+                    description: "Worker-owned timeline read".to_string(),
+                    parameters: json!({ "type": "object" }),
+                    risk_level: Some("low".to_string()),
+                    side_effects: Some(false),
+                },
+                ToolDefinition {
+                    name: "destructive_read_hint".to_string(),
+                    description: "not actually safe".to_string(),
+                    parameters: json!({ "type": "object" }),
+                    risk_level: Some("high".to_string()),
+                    side_effects: Some(false),
+                },
+            ],
+        );
+        let call = |name: &str| ToolCallRequest {
+            id: None,
+            name: name.to_string(),
+            arguments: json!({}),
+        };
+
+        assert_eq!(
+            executor.execution_kind(&call("safe_read")),
+            ToolExecutionKind::ReadOnly,
+        );
+        assert_eq!(
+            executor.execution_kind(&call("timeline_search")),
+            ToolExecutionKind::ReadOnly,
+        );
+        assert_eq!(
+            executor.execution_kind(&call("destructive_read_hint")),
+            ToolExecutionKind::SideEffecting,
+        );
+        assert_eq!(
+            executor.execution_kind(&call("missing_metadata")),
+            ToolExecutionKind::SideEffecting,
+        );
+        assert_eq!(
+            executor.execution_kind(&call("semantic_search_memory")),
+            ToolExecutionKind::SideEffecting,
+            "memory names receive no hidden local read-only authority",
+        );
     }
 
     #[test]
     fn stable_tool_call_id_depends_on_call_details() {
-        let id1 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/tmp" }));
-        let id2 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/tmp" }));
-        let id3 = stable_tool_call_id(2, "repo_list", &json!({ "path": "/tmp" }));
-        let id4 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/var" }));
+        let id1 = stable_tool_call_id(1, "example_read", &json!({ "path": "/tmp" }));
+        let id2 = stable_tool_call_id(1, "example_read", &json!({ "path": "/tmp" }));
+        let id3 = stable_tool_call_id(2, "example_read", &json!({ "path": "/tmp" }));
+        let id4 = stable_tool_call_id(1, "example_read", &json!({ "path": "/var" }));
 
         assert_eq!(id1, id2);
         assert_ne!(id1, id3);
@@ -540,36 +512,54 @@ mod tests {
     }
 
     #[test]
-    fn tool_result_event_includes_result_output_error_and_summary() {
+    fn tool_result_event_keeps_one_bounded_observability_preview() {
         let payload = tool_result_event(
             "rust-tool-1",
-            "repo_list",
-            "repo_list output=ok",
+            "example_read",
+            "example_read output=ok",
             "ok",
             Some("boom"),
+            17,
         );
 
         assert_eq!(payload["id"], "rust-tool-1");
         assert_eq!(payload["tool_call_id"], "rust-tool-1");
-        assert_eq!(payload["name"], "repo_list");
-        assert_eq!(payload["summary"], "repo_list output=ok");
-        assert_eq!(payload["output"], "ok");
+        assert_eq!(payload["name"], "example_read");
+        assert_eq!(payload["summary"], "example_read output=ok");
+        assert!(payload.get("output").is_none());
         assert_eq!(payload["error"], "boom");
         assert!(payload["result"].is_null());
+        assert_eq!(payload["duration_ms"], 17);
+
+        let large = "界".repeat(3_000);
+        let success = tool_result_event(
+            "rust-tool-2",
+            "example_read",
+            "large result",
+            &large,
+            None,
+            42,
+        );
+        let preview = success["result"].as_str().expect("result preview");
+        assert!(preview.len() <= EVENT_PREVIEW_BYTES);
+        assert!(preview.ends_with("..."));
     }
 
     #[test]
     fn rpc_tool_result_to_engine_preserves_output_and_error() {
         let result = rpc_tool_result_to_engine(
-            "repo_list",
+            "call-example-1",
+            "example_read",
             crate::control_rpc::RpcToolResult {
+                tool_call_id: Some("call-example-1".to_string()),
                 output: "ok".to_string(),
                 error: Some("boom".to_string()),
             },
-        );
+        )
+        .expect("matching tool result correlation");
 
-        assert_eq!(result.name, "repo_list");
-        assert_eq!(result.summary, "repo_list error=boom");
+        assert_eq!(result.name, "example_read");
+        assert_eq!(result.summary, "example_read error=boom");
         assert_eq!(result.content["output"], "ok");
         assert_eq!(result.content["error"], "boom");
     }
@@ -577,6 +567,7 @@ mod tests {
     #[test]
     fn rpc_tool_result_output_and_error_extracts_both_fields() {
         let rpc = crate::control_rpc::RpcToolResult {
+            tool_call_id: Some("call-example-1".to_string()),
             output: "ok".to_string(),
             error: Some("boom".to_string()),
         };
@@ -587,57 +578,35 @@ mod tests {
     }
 
     #[test]
-    fn tool_execution_buffer_recovers_from_poisoned_lock() {
-        let executor = CompositeToolExecutor::new(
-            test_client(),
-            vec![ToolDefinition {
-                name: "repo_list".to_string(),
-                description: "remote repo tool".to_string(),
-                parameters: json!({ "type": "object" }),
-            }],
-            SkillCatalogResponse::default(),
-        );
+    fn rpc_tool_result_rejects_mismatched_correlation() {
+        let error = rpc_tool_result_to_engine(
+            "call-expected",
+            "example_read",
+            crate::control_rpc::RpcToolResult {
+                tool_call_id: Some("call-other".to_string()),
+                output: "ok".to_string(),
+                error: None,
+            },
+        )
+        .expect_err("the Worker must echo the requested tool call id");
 
-        let tool_executions = executor.tool_executions.clone();
-        let panic_result = panic::catch_unwind(AssertUnwindSafe(move || {
-            let _guard = tool_executions
-                .lock()
-                .expect("tool execution buffer lock should acquire for poison test");
-            panic!("poison tool execution buffer");
-        }));
-        assert!(panic_result.is_err());
-
-        executor.record_tool_execution(ToolExecutionRecord {
-            tool_call_id: "rust-tool-1".to_string(),
-            name: "repo_list".to_string(),
-            arguments: json!({ "path": "/tmp" }),
-            summary: "repo_list output=ok".to_string(),
-            result: Some("ok".to_string()),
-            output: "ok".to_string(),
-            error: None,
-        });
-
-        let records = executor.take_tool_executions();
-        assert_eq!(records.len(), 1);
-        assert_eq!(records[0].tool_call_id, "rust-tool-1");
-        assert_eq!(records[0].name, "repo_list");
-        assert_eq!(records[0].result.as_deref(), Some("ok"));
-
-        assert!(executor.take_tool_executions().is_empty());
+        assert!(error.to_string().contains("correlation mismatch"));
     }
 
     #[test]
     fn tool_allowlist_defaults_to_denying_every_remote_tool() {
-        assert!(!is_tool_allowed("repo_list", None));
-        assert!(!is_tool_allowed("file_read", None));
+        assert!(!is_tool_allowed("web_fetch", None));
+        assert!(!is_tool_allowed("create_artifact", None));
+        assert!(!is_tool_allowed("semantic_search_memory", None));
+        assert!(!is_tool_allowed("timeline_search", None));
     }
 
     #[test]
     fn tool_allowlist_honours_explicit_names_and_wildcard() {
         let mut set = std::collections::HashSet::new();
-        set.insert("repo_list".to_string());
-        assert!(is_tool_allowed("repo_list", Some(&set)));
-        assert!(!is_tool_allowed("runtime_exec", Some(&set)));
+        set.insert("web_fetch".to_string());
+        assert!(is_tool_allowed("web_fetch", Some(&set)));
+        assert!(!is_tool_allowed("create_artifact", Some(&set)));
 
         let mut wildcard = std::collections::HashSet::new();
         wildcard.insert("*".to_string());

@@ -7,8 +7,11 @@ import type {
 } from "../../../shared/types/index.ts";
 import { RUN_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
 import { checkThreadAccess } from "../threads/thread-service.ts";
-import { buildRunFailedPayload } from "../run-notifier/index.ts";
-import { persistAndEmitEvent } from "./run-events.ts";
+import {
+  buildRunFailedPayload,
+  transitionRunTerminalAtomically,
+} from "../run-notifier/index.ts";
+import { emitCommittedRunEvent } from "./run-events.ts";
 import {
   checkRunRateLimits,
   createPendingRun,
@@ -131,6 +134,7 @@ export async function createThreadRun(
     rootThreadId,
     rootRunId,
     agentType,
+    model: validatedModel,
     input: runInput,
     createdAt,
   });
@@ -152,17 +156,29 @@ export async function createThreadRun(
     logError("Failed to enqueue run", err, {
       module: "services/execution/run-creation",
     });
-    await updateRunStatus(env.DB, {
-      runId,
-      status: "failed",
-      error: "Failed to enqueue run for execution",
-    });
-
+    const completedAt = new Date().toISOString();
     const failedPayload = buildRunFailedPayload(
       runId,
       "Failed to enqueue run for execution",
     );
-    await persistAndEmitEvent(env, runId, "run.failed", failedPayload);
+    const transition = await transitionRunTerminalAtomically(env.DB, {
+      runId,
+      status: "failed",
+      expectedStatuses: ["pending", "queued"],
+      completedAt,
+      error: "Failed to enqueue run for execution",
+      eventType: "run.failed",
+      terminalEvent: failedPayload,
+    });
+    if (transition.committed) {
+      await emitCommittedRunEvent(
+        env,
+        runId,
+        "run.failed",
+        failedPayload,
+        transition.eventId,
+      );
+    }
 
     return { ok: false, status: 500, error: "Failed to queue run" };
   }

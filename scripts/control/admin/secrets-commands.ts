@@ -3,11 +3,11 @@ import * as runtime from "../../runtime.ts";
  * Secrets management commands: status, sync, put, prune, generate-jwt.
  */
 
-import { execFile, spawn } from 'node:child_process';
-import { Buffer } from 'node:buffer';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { promisify } from 'node:util';
+import { execFile, spawn } from "node:child_process";
+import { Buffer } from "node:buffer";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { promisify } from "node:util";
 import {
   CONTROL_APP_DIR,
   type DeployEnvironment,
@@ -17,7 +17,7 @@ import {
   SCRIPTS_DIR,
   takeFlag,
   takeOption,
-} from './index.ts';
+} from "./index.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,38 +42,37 @@ export type WorkerSecretSpec = {
 
 export const WORKER_SECRETS: WorkerSecretSpec[] = [
   {
-    alias: 'worker',
-    config: 'deploy/cloudflare/wrangler.toml',
+    alias: "worker",
+    config: "deploy/cloudflare/wrangler.toml",
     required: [
-      'OIDC_CLIENT_SECRET',
-      'PLATFORM_PRIVATE_KEY',
-      'PLATFORM_PUBLIC_KEY',
-      'CF_API_TOKEN',
-      'ENCRYPTION_KEY',
+      "OIDC_CLIENT_SECRET",
+      "PLATFORM_PRIVATE_KEY",
+      "PLATFORM_PUBLIC_KEY",
+      "CF_API_TOKEN",
+      "ENCRYPTION_KEY",
     ],
     optional: [
-      'OPENAI_API_KEY',
-      'ANTHROPIC_API_KEY',
-      'GOOGLE_API_KEY',
-      'SERPER_API_KEY',
-      'AUDIT_IP_HASH_KEY',
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GOOGLE_API_KEY",
+      "AUDIT_IP_HASH_KEY",
     ],
   },
 ];
 
 /** Known retired secrets that should be removed */
 export const RETIRED_SECRETS = new Set([
-  'BUILD_SERVICE_TOKEN',
-  'JWT_SECRET',
-  'SERVICE_API_KEY',
-  'SERVICE_SIGNING_ACTIVE_KID',
-  'SERVICE_SIGNING_KEYS',
-  'YURUCOMMU_HOSTED_API_KEY',
-  'HOSTED_SERVICE_SECRET',
-  'JWT_PUBLIC_KEY',
+  "BUILD_SERVICE_TOKEN",
+  "JWT_SECRET",
+  "SERVICE_API_KEY",
+  "SERVICE_SIGNING_ACTIVE_KID",
+  "SERVICE_SIGNING_KEYS",
+  "YURUCOMMU_HOSTED_API_KEY",
+  "HOSTED_SERVICE_SECRET",
+  "JWT_PUBLIC_KEY",
 ]);
 
-const SECRETS_DIR_BASE = path.resolve(CONTROL_APP_DIR, '.secrets');
+const SECRETS_DIR_BASE = path.resolve(CONTROL_APP_DIR, ".secrets");
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -86,16 +85,16 @@ function resolveSecretsDir(environment: DeployEnvironment): string {
 function readSecretFile(dir: string, name: string): string | null {
   const filePath = path.join(dir, name);
   if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n').trim();
+  return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n").trim();
 }
 
 function isPlaceholder(value: string): boolean {
   return (
     !value ||
-    value.includes('REPLACE_WITH_') ||
-    value.includes('your-') ||
-    value === 'placeholder-secret' ||
-    value === 'local-dev-jwt-secret'
+    value.includes("REPLACE_WITH_") ||
+    value.includes("your-") ||
+    value === "placeholder-secret" ||
+    value === "local-dev-jwt-secret"
   );
 }
 
@@ -103,16 +102,16 @@ function wranglerEnvArgs(
   configFile: string,
   environment: DeployEnvironment,
 ): string[] {
-  const args = ['--config', configFile];
+  const args = ["--config", configFile];
   // production uses default env (no --env flag) in wrangler
-  if (environment !== 'production') {
-    args.push('--env', environment);
+  if (environment !== "production") {
+    args.push("--env", environment);
   }
   return args;
 }
 
 async function runWranglerSecret(
-  action: 'put' | 'delete',
+  action: "put" | "delete",
   secretName: string,
   configFile: string,
   environment: DeployEnvironment,
@@ -120,38 +119,38 @@ async function runWranglerSecret(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
-      'wrangler',
-      'secret',
+      "wrangler",
+      "secret",
       action,
       secretName,
       ...wranglerEnvArgs(configFile, environment),
     ];
 
-    const child = spawn('bunx', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const child = spawn("bunx", args, {
+      stdio: ["pipe", "pipe", "pipe"],
       env: runtime.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 
-    let stderr = '';
-    child.stderr.on('data', (d: Buffer) => {
+    let stderr = "";
+    child.stderr.on("data", (d: Buffer) => {
       stderr += d.toString();
     });
 
-    if (action === 'put' && value != null) {
+    if (action === "put" && value != null) {
       child.stdin.write(`${value}\n`);
     }
     child.stdin.end();
 
-    child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on("error", reject);
+    child.on("exit", (code) => {
       if (code === 0) {
         resolve();
         return;
       }
       reject(
         new Error(
-          `wrangler secret ${action} ${secretName} failed (exit ${code ?? '?'}): ${stderr.trim()}`,
+          `wrangler secret ${action} ${secretName} failed (exit ${code ?? "?"}): ${stderr.trim()}`,
         ),
       );
     });
@@ -163,16 +162,16 @@ async function listWranglerSecrets(
   environment: DeployEnvironment,
 ): Promise<string[]> {
   const args = [
-    'exec',
-    'wrangler',
-    'secret',
-    'list',
+    "exec",
+    "wrangler",
+    "secret",
+    "list",
     ...wranglerEnvArgs(configFile, environment),
   ];
 
   let stdout: string;
   try {
-    const result = await execFileAsync('bunx', args, {
+    const result = await execFileAsync("bunx", args, {
       env: runtime.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
@@ -180,12 +179,13 @@ async function listWranglerSecrets(
   } catch (err) {
     const e = err as ExecFileError;
     // Spawn-time failure surfaces without a numeric exit code: rethrow as-is.
-    if (e.code === undefined || typeof e.code === 'string') {
+    if (e.code === undefined || typeof e.code === "string") {
       throw err;
     }
-    const stderr = typeof e.stderr === 'string' ? e.stderr : e.stderr?.toString() ?? '';
+    const stderr =
+      typeof e.stderr === "string" ? e.stderr : (e.stderr?.toString() ?? "");
     // Worker may not exist yet
-    if (stderr.includes('not found')) {
+    if (stderr.includes("not found")) {
       return [];
     }
     throw new Error(`wrangler secret list failed: ${stderr.trim()}`);
@@ -231,7 +231,9 @@ export async function cmdSecretsStatus(
     const allExpected = new Set([...spec.required, ...spec.optional]);
     const missing = spec.required.filter((s) => !deployed.includes(s));
     const retired = deployed.filter((s) => RETIRED_SECRETS.has(s));
-    const localFiles = hasDir ? [...allExpected].filter((s) => fs.existsSync(path.join(secretsDir, s))) : [];
+    const localFiles = hasDir
+      ? [...allExpected].filter((s) => fs.existsSync(path.join(secretsDir, s)))
+      : [];
 
     statuses.push({
       worker: spec.alias,
@@ -250,23 +252,23 @@ export async function cmdSecretsStatus(
   } else {
     console.log(`\nSecrets status for [${env}]`);
     console.log(
-      `Local secrets dir: ${secretsDir} ${hasDir ? '(exists)' : '(not found)'}\n`,
+      `Local secrets dir: ${secretsDir} ${hasDir ? "(exists)" : "(not found)"}\n`,
     );
 
     for (const s of statuses) {
-      const tag = s.missing.length > 0 ? ' ⚠' : ' ✓';
+      const tag = s.missing.length > 0 ? " ⚠" : " ✓";
       console.log(`${tag} ${s.worker} (${s.config})`);
       console.log(
         `    deployed: ${s.deployed.length}  required: ${s.required.length}  optional: ${s.optional.length}`,
       );
       if (s.missing.length > 0) {
-        console.log(`    MISSING:  ${s.missing.join(', ')}`);
+        console.log(`    MISSING:  ${s.missing.join(", ")}`);
       }
       if (s.retired.length > 0) {
-        console.log(`    RETIRED:  ${s.retired.join(', ')}`);
+        console.log(`    RETIRED:  ${s.retired.join(", ")}`);
       }
       if (s.localFiles.length > 0) {
-        console.log(`    local:    ${s.localFiles.join(', ')}`);
+        console.log(`    local:    ${s.localFiles.join(", ")}`);
       }
     }
   }
@@ -280,8 +282,8 @@ export async function cmdSecretsSync(
   args: string[],
 ): Promise<number> {
   const env = options.environment;
-  const dryRun = takeFlag(args, '--dry-run');
-  const workerFilter = takeOption(args, '--worker');
+  const dryRun = takeFlag(args, "--dry-run");
+  const workerFilter = takeOption(args, "--worker");
   const secretsDir = resolveSecretsDir(env);
 
   if (!fs.existsSync(secretsDir)) {
@@ -290,11 +292,13 @@ export async function cmdSecretsSync(
     );
   }
 
-  const specs = workerFilter ? WORKER_SECRETS.filter((s) => s.alias === workerFilter) : WORKER_SECRETS;
+  const specs = workerFilter
+    ? WORKER_SECRETS.filter((s) => s.alias === workerFilter)
+    : WORKER_SECRETS;
 
   if (workerFilter && specs.length === 0) {
     fail(
-      `Unknown worker alias: ${workerFilter}. Available: ${WORKER_SECRETS.map((s) => s.alias).join(', ')}`,
+      `Unknown worker alias: ${workerFilter}. Available: ${WORKER_SECRETS.map((s) => s.alias).join(", ")}`,
     );
   }
 
@@ -315,21 +319,21 @@ export async function cmdSecretsSync(
       }
 
       const exists = deployed.includes(secretName);
-      const action = exists ? 'UPDATE' : 'CREATE';
+      const action = exists ? "UPDATE" : "CREATE";
 
       if (dryRun) {
         console.log(`  [dry-run] ${action} ${spec.alias}/${secretName}`);
       } else {
         process.stdout.write(`  ${action} ${spec.alias}/${secretName} ... `);
-        await runWranglerSecret('put', secretName, spec.config, env, value);
-        console.log('ok');
+        await runWranglerSecret("put", secretName, spec.config, env, value);
+        console.log("ok");
       }
       totalPut++;
     }
   }
 
   console.log(
-    `\n${dryRun ? '[dry-run] Would sync' : 'Synced'} ${totalPut} secret(s)`,
+    `\n${dryRun ? "[dry-run] Would sync" : "Synced"} ${totalPut} secret(s)`,
   );
   return totalPut;
 }
@@ -343,22 +347,22 @@ export async function cmdSecretsPut(
   const secretName = args.shift();
   if (!secretName) {
     fail(
-      'Usage: secrets put <SECRET_NAME> [--value-file <path>] [--worker <alias>]',
+      "Usage: secrets put <SECRET_NAME> [--value-file <path>] [--worker <alias>]",
     );
   }
 
-  const valueFile = takeOption(args, '--value-file');
-  const workerFilter = takeOption(args, '--worker');
+  const valueFile = takeOption(args, "--value-file");
+  const workerFilter = takeOption(args, "--worker");
 
   let value: string;
   if (valueFile) {
-    value = fs.readFileSync(valueFile, 'utf8').replace(/\r\n/g, '\n').trim();
+    value = fs.readFileSync(valueFile, "utf8").replace(/\r\n/g, "\n").trim();
   } else if (!process.stdin.isTTY) {
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) {
       chunks.push(Buffer.from(chunk));
     }
-    value = Buffer.concat(chunks).toString('utf8').trim();
+    value = Buffer.concat(chunks).toString("utf8").trim();
   } else {
     // Try .secrets/<env>/<name>
     const secretsDir = resolveSecretsDir(env);
@@ -372,11 +376,13 @@ export async function cmdSecretsPut(
     }
   }
 
-  if (isPlaceholder(value)) fail('Refusing to upload placeholder value');
+  if (isPlaceholder(value)) fail("Refusing to upload placeholder value");
 
   const specs = workerFilter
     ? WORKER_SECRETS.filter((s) => s.alias === workerFilter)
-    : WORKER_SECRETS.filter((s) => [...s.required, ...s.optional].includes(secretName));
+    : WORKER_SECRETS.filter((s) =>
+        [...s.required, ...s.optional].includes(secretName),
+      );
 
   if (specs.length === 0) {
     fail(
@@ -387,8 +393,8 @@ export async function cmdSecretsPut(
   let count = 0;
   for (const spec of specs) {
     process.stdout.write(`  PUT ${spec.alias}/${secretName} ... `);
-    await runWranglerSecret('put', secretName, spec.config, env, value);
-    console.log('ok');
+    await runWranglerSecret("put", secretName, spec.config, env, value);
+    console.log("ok");
     count++;
   }
 
@@ -401,10 +407,12 @@ export async function cmdSecretsPrune(
   args: string[],
 ): Promise<number> {
   const env = options.environment;
-  const dryRun = takeFlag(args, '--dry-run');
-  const workerFilter = takeOption(args, '--worker');
+  const dryRun = takeFlag(args, "--dry-run");
+  const workerFilter = takeOption(args, "--worker");
 
-  const specs = workerFilter ? WORKER_SECRETS.filter((s) => s.alias === workerFilter) : WORKER_SECRETS;
+  const specs = workerFilter
+    ? WORKER_SECRETS.filter((s) => s.alias === workerFilter)
+    : WORKER_SECRETS;
 
   let totalDeleted = 0;
 
@@ -417,18 +425,18 @@ export async function cmdSecretsPrune(
         console.log(`  [dry-run] DELETE ${spec.alias}/${secretName}`);
       } else {
         process.stdout.write(`  DELETE ${spec.alias}/${secretName} ... `);
-        await runWranglerSecret('delete', secretName, spec.config, env);
-        console.log('ok');
+        await runWranglerSecret("delete", secretName, spec.config, env);
+        console.log("ok");
       }
       totalDeleted++;
     }
   }
 
   if (totalDeleted === 0) {
-    console.log('No retired secrets found.');
+    console.log("No retired secrets found.");
   } else {
     console.log(
-      `\n${dryRun ? '[dry-run] Would prune' : 'Pruned'} ${totalDeleted} retired secret(s)`,
+      `\n${dryRun ? "[dry-run] Would prune" : "Pruned"} ${totalDeleted} retired secret(s)`,
     );
   }
 
@@ -441,60 +449,60 @@ export async function cmdSecretsGenerateJwt(
   args: string[],
 ): Promise<number> {
   const env = options.environment;
-  const prefix = takeOption(args, '--prefix') || 'platform';
-  const outputDir = takeOption(args, '--output-dir') || resolveSecretsDir(env);
-  const upload = takeFlag(args, '--upload');
+  const prefix = takeOption(args, "--prefix") || "platform";
+  const outputDir = takeOption(args, "--output-dir") || resolveSecretsDir(env);
+  const upload = takeFlag(args, "--upload");
 
-  const { generateKeyPairSync } = await import('crypto');
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+  const { generateKeyPairSync } = await import("crypto");
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
   });
 
-  const privateKeyName = 'PLATFORM_PRIVATE_KEY';
-  const publicKeyName = 'PLATFORM_PUBLIC_KEY';
+  const privateKeyName = "PLATFORM_PRIVATE_KEY";
+  const publicKeyName = "PLATFORM_PUBLIC_KEY";
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(
     path.join(outputDir, privateKeyName),
     String(privateKey),
-    'utf8',
+    "utf8",
   );
   fs.writeFileSync(
     path.join(outputDir, publicKeyName),
     String(publicKey),
-    'utf8',
+    "utf8",
   );
   console.log(`Generated ${prefix} JWT key pair:`);
   console.log(`  ${outputDir}/${privateKeyName}`);
   console.log(`  ${outputDir}/${publicKeyName}`);
 
   if (upload) {
-    const specs = WORKER_SECRETS.filter(
-      (s) => [...s.required, ...s.optional].includes(privateKeyName),
+    const specs = WORKER_SECRETS.filter((s) =>
+      [...s.required, ...s.optional].includes(privateKeyName),
     );
     for (const spec of specs) {
       process.stdout.write(`  PUT ${spec.alias}/${privateKeyName} ... `);
       await runWranglerSecret(
-        'put',
+        "put",
         privateKeyName,
         spec.config,
         env,
         String(privateKey),
       );
-      console.log('ok');
+      console.log("ok");
 
       if ([...spec.required, ...spec.optional].includes(publicKeyName)) {
         process.stdout.write(`  PUT ${spec.alias}/${publicKeyName} ... `);
         await runWranglerSecret(
-          'put',
+          "put",
           publicKeyName,
           spec.config,
           env,
           String(publicKey),
         );
-        console.log('ok');
+        console.log("ok");
       }
     }
   }

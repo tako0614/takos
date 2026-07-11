@@ -12,24 +12,37 @@ import type { mcpServers } from "../../../../infra/db/index.ts";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface OAuthMetadata {
-  issuer: string;
-  authorization_endpoint: string;
-  token_endpoint: string;
-  scopes_supported?: string[];
-  response_types_supported?: string[];
-  code_challenge_methods_supported?: string[];
-}
+export type McpOAuthRegistrationMode =
+  "preregistered" | "client_metadata_document" | "dynamic";
+
+export type McpAuthorizationStatus =
+  | "not_required"
+  | "authorized"
+  | "authorization_required"
+  | "reauthorization_required"
+  | "managed";
 
 export interface McpOAuthPendingParams {
   spaceId: string;
+  initiatorUserId: string;
   serverName: string;
   serverUrl: string;
   issuerUrl: string;
   tokenEndpoint: string;
   authorizationEndpoint: string;
+  authorizationUrl: string;
+  resourceUri: string;
+  resourceMetadataUrl: string;
+  clientId: string;
+  clientSecret?: string;
+  clientIdIssuedAt?: number;
+  clientSecretExpiresAt?: number;
+  registrationMode: McpOAuthRegistrationMode;
+  tokenEndpointAuthMethod:
+    "none" | "client_secret_basic" | "client_secret_post";
   scope?: string;
   redirectUri: string;
+  browserNonce: string;
 }
 
 export interface McpOAuthCompletionParams {
@@ -50,7 +63,9 @@ export interface McpServerRecord {
   bundleDeploymentId: string | null;
   oauthScope: string | null;
   oauthIssuerUrl: string | null;
+  oauthRegistrationMode: string | null;
   oauthTokenExpiresAt: string | null;
+  authorizationStatus: McpAuthorizationStatus;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -68,14 +83,6 @@ export interface McpEndpointUrlOptions {
   allowHttp: boolean;
   allowLocalhost: boolean;
   allowPrivateIp: boolean;
-}
-
-export interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in?: number;
-  refresh_token?: string;
-  scope?: string;
 }
 
 export type McpIssuerEnv = Pick<
@@ -106,6 +113,22 @@ export function getInternalMcpIssuer(
 export function mapMcpServerRow(
   row: SelectOf<typeof mcpServers>,
 ): McpServerRecord {
+  const tokenExpired = row.oauthTokenExpiresAt
+    ? new Date(row.oauthTokenExpiresAt).getTime() <= Date.now()
+    : false;
+  const authorizationStatus: McpAuthorizationStatus =
+    row.authMode === "none"
+      ? "not_required"
+      : row.authMode === "oauth_pkce"
+        ? !row.oauthAccessToken
+          ? row.oauthIssuerUrl
+            ? "reauthorization_required"
+            : "authorization_required"
+          : tokenExpired && !row.oauthRefreshToken
+            ? "reauthorization_required"
+            : "authorized"
+        : "managed";
+
   return {
     id: row.id,
     spaceId: row.accountId,
@@ -118,7 +141,9 @@ export function mapMcpServerRow(
     bundleDeploymentId: row.bundleDeploymentId,
     oauthScope: row.oauthScope,
     oauthIssuerUrl: row.oauthIssuerUrl,
+    oauthRegistrationMode: row.oauthRegistrationMode,
     oauthTokenExpiresAt: row.oauthTokenExpiresAt ?? null,
+    authorizationStatus,
     enabled: row.enabled,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

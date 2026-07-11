@@ -98,6 +98,7 @@ export const source = {
   installFromGitUrl: "Install from Git URL",
   gitUrlLabel: "Git URL",
   gitRefLabel: "Ref",
+  gitModulePathLabel: "Module path",
   planInstall: "Plan",
   installApp: "Install",
   installPlanFailed: "Failed to create install plan",

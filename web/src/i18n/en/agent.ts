@@ -76,7 +76,7 @@ export const agent = {
   // Managed / Custom skills
   managedSkills: "Managed Skills",
   managedSkillsHint:
-    "Default-injected managed skills available in this workspace",
+    "Takos-managed guidance selected when it is relevant to the run",
   customSkills: "Custom Skills",
 
   // Model Settings

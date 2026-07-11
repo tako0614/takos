@@ -6,8 +6,7 @@ import type {
 } from "../shared/types/bindings.ts";
 import {
   normalizeArgs,
-  normalizePostgresArgs,
-  normalizePostgresSql,
+  normalizePostgresStatement,
   type PostgresRunner,
   queryResultToSqlResult,
   resultSetToSqlResult,
@@ -33,12 +32,12 @@ export function createPreparedStatement(
   async function raw<T = unknown[]>(options?: {
     columnNames?: false;
   }): Promise<T[]>;
-  async function raw<T = unknown[]>(
-    options?: { columnNames?: boolean },
-  ): Promise<T[] | [string[], ...T[]]> {
+  async function raw<T = unknown[]>(options?: {
+    columnNames?: boolean;
+  }): Promise<T[] | [string[], ...T[]]> {
     const result = await execute();
     const rows = result.rows.map((row) =>
-      result.columns.map((column) => row[column])
+      result.columns.map((column) => row[column]),
     ) as T[];
     if (options?.columnNames) {
       return [result.columns, ...rows] as [string[], ...T[]];
@@ -78,8 +77,8 @@ export function createPostgresPreparedStatement(
   servedBy = "local-postgres",
 ): SqlPreparedStatementBinding {
   const execute = async (): Promise<QueryResult<Record<string, unknown>>> => {
-    const normalized = normalizePostgresSql(query);
-    return runner.query(normalized, normalizePostgresArgs(boundArgs));
+    const normalized = normalizePostgresStatement(query, boundArgs);
+    return runner.query(normalized.query, normalized.values);
   };
 
   async function raw<T = unknown[]>(options: {
@@ -88,16 +87,16 @@ export function createPostgresPreparedStatement(
   async function raw<T = unknown[]>(options?: {
     columnNames?: false;
   }): Promise<T[]>;
-  async function raw<T = unknown[]>(
-    options?: { columnNames?: boolean },
-  ): Promise<T[] | [string[], ...T[]]> {
+  async function raw<T = unknown[]>(options?: {
+    columnNames?: boolean;
+  }): Promise<T[] | [string[], ...T[]]> {
     const result = await execute();
     if (options?.columnNames) {
       return toPgRawRows(result) as [string[], ...T[]];
     }
     const columns = result.fields.map((field: { name: string }) => field.name);
     return result.rows.map((row: Record<string, unknown>) =>
-      columns.map((column: string) => row[column])
+      columns.map((column: string) => row[column]),
     ) as T[];
   }
 
@@ -112,8 +111,8 @@ export function createPostgresPreparedStatement(
       const row = result.rows[0] as Record<string, unknown> | undefined;
       if (!row) return null;
       if (colName) return row[colName] as T;
-      const columns = result.fields.map((field: { name: string }) =>
-        field.name
+      const columns = result.fields.map(
+        (field: { name: string }) => field.name,
       );
       return rowToObjectFromRecord(row, columns) as T;
     },

@@ -7,17 +7,13 @@ import { defineTools } from "./define-tools.ts";
 import {
   createSkill,
   deleteSkillByName,
-  describeAgentSkill,
   formatSkill,
   getSkill,
   getSkillByName,
-  listSkillCatalog,
-  listSkillContext,
   listSkills,
   updateSkill,
   updateSkillEnabled,
 } from "../../services/source/skills.ts";
-import { resolveSkillLocale } from "../../services/agent/managed-skills.ts";
 import { normalizeSkillOutputMode } from "../../services/agent/skill-contracts.ts";
 
 const SKILL_OUTPUT_MODE_SCHEMA_ENUM = [
@@ -111,10 +107,10 @@ const SKILL_METADATA_SCHEMA: ToolParameter = {
 
 export const SKILL_LIST: ToolDefinition = {
   name: "skill_list",
-  description: "List custom skills configured for this space.",
+  description: "List custom skills configured for this Workspace.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "none",
   side_effects: false,
   tool_class: "space_mapped",
@@ -127,10 +123,10 @@ export const SKILL_LIST: ToolDefinition = {
 
 export const SKILL_GET: ToolDefinition = {
   name: "skill_get",
-  description: "Get a custom skill in this space by id.",
+  description: "Get a custom skill in this Workspace by id.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "none",
   side_effects: false,
   tool_class: "space_mapped",
@@ -149,10 +145,10 @@ export const SKILL_GET: ToolDefinition = {
 
 export const SKILL_CREATE: ToolDefinition = {
   name: "skill_create",
-  description: "Create a new custom skill in this space.",
+  description: "Create a new custom skill in this Workspace.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "low",
   side_effects: true,
   tool_class: "space_mapped",
@@ -188,10 +184,10 @@ export const SKILL_CREATE: ToolDefinition = {
 
 export const SKILL_UPDATE: ToolDefinition = {
   name: "skill_update",
-  description: "Update an existing custom skill in this space by id.",
+  description: "Update an existing custom skill in this Workspace by id.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "low",
   side_effects: true,
   tool_class: "space_mapped",
@@ -235,10 +231,10 @@ export const SKILL_UPDATE: ToolDefinition = {
 
 export const SKILL_TOGGLE: ToolDefinition = {
   name: "skill_toggle",
-  description: "Enable or disable a custom skill in this space by id.",
+  description: "Enable or disable a custom skill in this Workspace by id.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "low",
   side_effects: true,
   tool_class: "space_mapped",
@@ -261,10 +257,10 @@ export const SKILL_TOGGLE: ToolDefinition = {
 
 export const SKILL_DELETE: ToolDefinition = {
   name: "skill_delete",
-  description: "Delete a custom skill in this space by id.",
+  description: "Delete a custom skill in this Workspace by id.",
   category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
+  namespace: "workspace.skills",
+  family: "workspace.skills.ops",
   risk_level: "medium",
   side_effects: true,
   tool_class: "space_mapped",
@@ -278,87 +274,6 @@ export const SKILL_DELETE: ToolDefinition = {
       },
     },
     required: ["skill_id"],
-  },
-};
-
-export const SKILL_CONTEXT: ToolDefinition = {
-  name: "skill_context",
-  description:
-    "List the agent-visible skill catalog, including managed skills and enabled custom skills.",
-  category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
-  risk_level: "none",
-  side_effects: false,
-  tool_class: "space_mapped",
-  operation_id: "skill.context",
-  parameters: {
-    type: "object",
-    properties: {
-      locale: {
-        type: "string",
-        description:
-          "Optional locale for localized managed skill text (ja or en).",
-        enum: ["ja", "en"],
-      },
-    },
-  },
-};
-
-export const SKILL_CATALOG: ToolDefinition = {
-  name: "skill_catalog",
-  description:
-    "List the full agent-visible skill catalog, including managed skills and enabled custom skills.",
-  category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
-  risk_level: "none",
-  side_effects: false,
-  tool_class: "space_mapped",
-  operation_id: "skill.catalog",
-  parameters: {
-    type: "object",
-    properties: {
-      locale: {
-        type: "string",
-        description:
-          "Optional locale for localized managed skill text (ja or en).",
-        enum: ["ja", "en"],
-      },
-    },
-  },
-};
-
-export const SKILL_DESCRIBE: ToolDefinition = {
-  name: "skill_describe",
-  description: "Describe one managed or custom skill in detail.",
-  category: "space",
-  namespace: "space.skills",
-  family: "space.skills.ops",
-  risk_level: "none",
-  side_effects: false,
-  tool_class: "space_mapped",
-  operation_id: "skill.describe",
-  parameters: {
-    type: "object",
-    properties: {
-      skill_ref: {
-        type: "string",
-        description:
-          "Skill reference. Managed skills use the managed skill id; custom skills should use the skill id. When source is omitted, Takos resolves managed first, then custom by id, then custom by name.",
-      },
-      source: {
-        type: "string",
-        description: "Optional skill source hint.",
-        enum: ["managed", "custom"],
-      },
-      locale: {
-        type: "string",
-        description:
-          "Optional locale for localized managed skill text (ja or en).",
-        enum: ["ja", "en"],
-      },
-    },
   },
 };
 
@@ -511,64 +426,6 @@ export const skillDeleteHandler: ToolHandler = async (args, context) => {
   );
 };
 
-export const skillContextHandler: ToolHandler = async (args, context) => {
-  const locale = resolveSkillLocale({
-    preferredLocale: typeof args.locale === "string" ? args.locale : undefined,
-  });
-  const catalog = await listSkillContext(context.db, context.spaceId, {
-    preferredLocale: locale,
-  });
-  return JSON.stringify(
-    {
-      locale: catalog.locale,
-      available_skills: catalog.available_skills,
-      context: catalog.available_skills,
-      count: catalog.available_skills.length,
-    },
-    null,
-    2,
-  );
-};
-
-export const skillCatalogHandler: ToolHandler = async (args, context) => {
-  const locale = resolveSkillLocale({
-    preferredLocale: typeof args.locale === "string" ? args.locale : undefined,
-  });
-  const catalog = await listSkillCatalog(context.db, context.spaceId, {
-    preferredLocale: locale,
-  });
-  return JSON.stringify(
-    {
-      locale: catalog.locale,
-      available_skills: catalog.available_skills,
-      count: catalog.available_skills.length,
-    },
-    null,
-    2,
-  );
-};
-
-export const skillDescribeHandler: ToolHandler = async (args, context) => {
-  const locale = resolveSkillLocale({
-    preferredLocale: typeof args.locale === "string" ? args.locale : undefined,
-  });
-  const skill = await describeAgentSkill(context.db, context.spaceId, {
-    source: args.source === "managed" || args.source === "custom"
-      ? args.source
-      : undefined,
-    skillRef: typeof args.skill_ref === "string" ? args.skill_ref : undefined,
-    locale,
-  });
-
-  return JSON.stringify(
-    {
-      skill,
-    },
-    null,
-    2,
-  );
-};
-
 export const {
   tools: WORKSPACE_SKILL_TOOLS,
   handlers: WORKSPACE_SKILL_HANDLERS,
@@ -579,7 +436,4 @@ export const {
   [SKILL_UPDATE, skillUpdateHandler],
   [SKILL_TOGGLE, skillToggleHandler],
   [SKILL_DELETE, skillDeleteHandler],
-  [SKILL_CONTEXT, skillContextHandler],
-  [SKILL_CATALOG, skillCatalogHandler],
-  [SKILL_DESCRIBE, skillDescribeHandler],
 ]);

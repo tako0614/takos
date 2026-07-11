@@ -139,16 +139,37 @@ function withFallbackSource(
 }
 
 function fallbackModels(env: ModelCatalogEnv): ReadonlyArray<ModelOption> {
-  if (!usesTakosumiManagedAiGateway(env)) return OPENAI_COMPATIBLE_MODELS;
-
   const allowed = parseAllowedModels(env.TAKOS_ALLOWED_MODELS);
-  if (!allowed) {
-    return OPENAI_COMPATIBLE_MODELS.filter(
-      (option) => option.id === TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID,
+  if (usesTakosumiManagedAiGateway(env)) {
+    const ids = new Set<string>([TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID]);
+    for (const id of allowed ?? []) ids.add(id);
+    return [...ids].map(
+      (id) =>
+        OPENAI_COMPATIBLE_MODELS.find((option) => option.id === id) ?? {
+          id,
+          name: modelDisplayName(id),
+          description: "Operator-allowed OpenAI-compatible model alias",
+        },
     );
   }
-  allowed.add(TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID);
-  return OPENAI_COMPATIBLE_MODELS.filter((option) => allowed.has(option.id));
+
+  // An explicitly configured allowlist is an execution policy, including for
+  // direct OpenAI and custom OpenAI-compatible gateways. Keep the fallback UI
+  // aligned with that policy when /models is unavailable.
+  if (allowed) {
+    if (allowed.size === 0) {
+      throw new Error("TAKOS_ALLOWED_MODELS contains no valid model IDs");
+    }
+    return [...allowed].map(
+      (id) =>
+        OPENAI_COMPATIBLE_MODELS.find((option) => option.id === id) ?? {
+          id,
+          name: modelDisplayName(id),
+          description: "Operator-allowed OpenAI-compatible model",
+        },
+    );
+  }
+  return OPENAI_COMPATIBLE_MODELS;
 }
 
 function fallbackModelCatalog(
@@ -188,13 +209,23 @@ export function resolveExecutionModel(
   requestedModel?: string | null,
 ): string {
   const normalized = normalizeModelId(requestedModel) ?? DEFAULT_MODEL_ID;
-  if (!usesTakosumiManagedAiGateway(env)) return normalized;
-  if (normalized === TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID) return normalized;
-
   const allowed = parseAllowedModels(env.TAKOS_ALLOWED_MODELS);
-  return allowed?.has(normalized)
-    ? normalized
-    : TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID;
+  if (usesTakosumiManagedAiGateway(env)) {
+    if (normalized === TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID) return normalized;
+    return allowed?.has(normalized)
+      ? normalized
+      : TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID;
+  }
+
+  if (!allowed) return normalized;
+  if (allowed.size === 0) {
+    throw new Error("TAKOS_ALLOWED_MODELS contains no valid model IDs");
+  }
+  if (allowed.has(normalized)) return normalized;
+  // Preserve configured order so an operator can choose the fallback without
+  // a second environment field. The parser rejects invalid IDs and returns
+  // null only when there is no usable policy.
+  return allowed.values().next().value ?? DEFAULT_MODEL_ID;
 }
 
 function parseAllowedModels(value?: string | null): Set<string> | null {
@@ -218,7 +249,7 @@ function parseAllowedModels(value?: string | null): Set<string> | null {
     const normalized = normalizeModelId(part);
     if (normalized) allowed.add(normalized);
   }
-  return allowed.size > 0 ? allowed : null;
+  return allowed;
 }
 
 function openAiModelsUrl(baseUrl?: string): string {

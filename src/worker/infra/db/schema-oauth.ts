@@ -20,52 +20,87 @@ import { accounts } from "./schema-accounts.ts";
  */
 
 // 50. McpOAuthPending
-export const mcpOauthPending = sqliteTable("mcp_oauth_pending", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull().references(() => accounts.id),
-  serverName: text("server_name").notNull(),
-  serverUrl: text("server_url").notNull(),
-  state: text("state").notNull().unique(),
-  codeVerifier: text("code_verifier").notNull(),
-  issuerUrl: text("issuer_url").notNull(),
-  tokenEndpoint: text("token_endpoint").notNull(),
-  scope: text("scope"),
-  expiresAt: text("expires_at").notNull(),
-  ...createdAtColumn,
-}, (table) => ({
-  idxState: index("idx_mcp_oauth_pending_state").on(table.state),
-  idxAccount: index("idx_mcp_oauth_pending_account_id").on(table.accountId),
-}));
+export const mcpOauthPending = sqliteTable(
+  "mcp_oauth_pending",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    serverName: text("server_name").notNull(),
+    serverUrl: text("server_url").notNull(),
+    state: text("state").notNull().unique(),
+    codeVerifier: text("code_verifier").notNull(),
+    issuerUrl: text("issuer_url").notNull(),
+    authorizationEndpoint: text("authorization_endpoint"),
+    authorizationUrl: text("authorization_url"),
+    tokenEndpoint: text("token_endpoint").notNull(),
+    redirectUri: text("redirect_uri"),
+    resourceUri: text("resource_uri"),
+    resourceMetadataUrl: text("resource_metadata_url"),
+    oauthClientId: text("oauth_client_id"),
+    oauthClientSecret: text("oauth_client_secret"),
+    oauthClientIdIssuedAt: integer("oauth_client_id_issued_at"),
+    oauthClientSecretExpiresAt: integer("oauth_client_secret_expires_at"),
+    registrationMode: text("registration_mode"),
+    tokenEndpointAuthMethod: text("token_endpoint_auth_method"),
+    initiatorUserId: text("initiator_user_id").references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    browserNonce: text("browser_nonce"),
+    scope: text("scope"),
+    expiresAt: text("expires_at").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    idxState: index("idx_mcp_oauth_pending_state").on(table.state),
+    idxAccount: index("idx_mcp_oauth_pending_account_id").on(table.accountId),
+  }),
+);
 
 // 51. McpServer
-const mcpServersTable = sqliteTable("mcp_servers", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull().references(() => accounts.id),
-  name: text("name").notNull(),
-  url: text("url").notNull(),
-  transport: text("transport").notNull().default("streamable-http"),
-  sourceType: text("source_type").notNull().default("external"),
-  authMode: text("auth_mode").notNull().default("oauth_pkce"),
-  serviceId: text("service_id"),
-  bundleDeploymentId: text("bundle_deployment_id"),
-  oauthAccessToken: text("oauth_access_token"),
-  oauthRefreshToken: text("oauth_refresh_token"),
-  oauthTokenExpiresAt: text("oauth_token_expires_at"),
-  oauthScope: text("oauth_scope"),
-  oauthIssuerUrl: text("oauth_issuer_url"),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  ...timestamps,
-}, (table) => ({
-  uniqAccountName: uniqueIndex("idx_mcp_servers_account_name").on(
-    table.accountId,
-    table.name,
-  ),
-  idxService: index("idx_mcp_servers_service_id").on(table.serviceId),
-  idxBundleDeployment: index("idx_mcp_servers_bundle_deployment_id").on(
-    table.bundleDeploymentId,
-  ),
-  idxAccount: index("idx_mcp_servers_account_id").on(table.accountId),
-}));
+const mcpServersTable = sqliteTable(
+  "mcp_servers",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    name: text("name").notNull(),
+    url: text("url").notNull(),
+    transport: text("transport").notNull().default("streamable-http"),
+    sourceType: text("source_type").notNull().default("external"),
+    authMode: text("auth_mode").notNull().default("oauth_pkce"),
+    serviceId: text("service_id"),
+    bundleDeploymentId: text("bundle_deployment_id"),
+    oauthAccessToken: text("oauth_access_token"),
+    oauthRefreshToken: text("oauth_refresh_token"),
+    oauthTokenExpiresAt: text("oauth_token_expires_at"),
+    oauthScope: text("oauth_scope"),
+    oauthIssuerUrl: text("oauth_issuer_url"),
+    oauthResourceUri: text("oauth_resource_uri"),
+    oauthResourceMetadataUrl: text("oauth_resource_metadata_url"),
+    oauthClientId: text("oauth_client_id"),
+    oauthClientSecret: text("oauth_client_secret"),
+    oauthClientIdIssuedAt: integer("oauth_client_id_issued_at"),
+    oauthClientSecretExpiresAt: integer("oauth_client_secret_expires_at"),
+    oauthRegistrationMode: text("oauth_registration_mode"),
+    oauthTokenEndpointAuthMethod: text("oauth_token_endpoint_auth_method"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqAccountName: uniqueIndex("idx_mcp_servers_account_name").on(
+      table.accountId,
+      table.name,
+    ),
+    idxService: index("idx_mcp_servers_service_id").on(table.serviceId),
+    idxBundleDeployment: index("idx_mcp_servers_bundle_deployment_id").on(
+      table.bundleDeploymentId,
+    ),
+    idxAccount: index("idx_mcp_servers_account_id").on(table.accountId),
+  }),
+);
 
 export const mcpServers = Object.assign(mcpServersTable, {
   workerId: mcpServersTable.serviceId,

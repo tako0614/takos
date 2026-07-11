@@ -91,6 +91,17 @@ function validateModel(model: string | undefined): string {
   }
 
   const normalized = createThreadRunValidationDeps.normalizeModelId(model);
+  // `local-smoke` is an in-process test affordance in the Rust wrapper, not a
+  // provider model. Never let a public run request or saved Workspace setting
+  // select it; the wrapper also fails closed unless an explicit test-only env
+  // switch is present, but the Worker is the model-selection authority.
+  if (normalized === "local-smoke") {
+    createThreadRunValidationDeps.logWarn(
+      "Test-only local-smoke model rejected for a product run",
+      { module: "security" },
+    );
+    return createThreadRunValidationDeps.defaultModelId;
+  }
   if (normalized) {
     return normalized;
   }

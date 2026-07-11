@@ -22,18 +22,18 @@ class MockD1PreparedStatement {
     return null;
   }
 
-  async all<T = unknown>(): Promise<
-    { results: T[]; success: boolean; meta: Record<string, unknown> }
-  > {
+  async all<T = unknown>(): Promise<{
+    results: T[];
+    success: boolean;
+    meta: Record<string, unknown>;
+  }> {
     return { results: [], success: true, meta: {} };
   }
 
-  async run(): Promise<
-    {
-      success: boolean;
-      meta: { changes: number; last_row_id: number; duration: number };
-    }
-  > {
+  async run(): Promise<{
+    success: boolean;
+    meta: { changes: number; last_row_id: number; duration: number };
+  }> {
     return { success: true, meta: { changes: 0, last_row_id: 0, duration: 0 } };
   }
 
@@ -199,15 +199,88 @@ test("protected API denies Accounts bearer tokens missing the route family read 
   }
 });
 
+test("MCP management mutations require mcp:manage rather than mcp:invoke", async () => {
+  oauthAuthDeps.resolveSelfIssuedBearer = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
+    userId: "user-1",
+    subject: "acct_subject",
+    scopes: ["mcp:invoke"],
+  })) as typeof oauthAuthDeps.resolveSelfIssuedBearer;
+
+  try {
+    const response = await createApp().fetch(
+      new Request(
+        "https://takos.jp/api/mcp/registry-sources?workspaceId=workspace_1",
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer takpat_invoke_only",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Registry",
+            base_url: "https://registry.example",
+          }),
+        },
+      ),
+      createEnv(),
+      {} as ExecutionContext,
+    );
+    assertEquals(response.status, 403);
+    assertEquals(await response.json(), {
+      error: {
+        code: "FORBIDDEN",
+        message: "Required scopes: mcp:manage",
+      },
+    });
+  } finally {
+    restoreOauthAuthDeps();
+  }
+});
+
+test("MCP discovery requires mcp:invoke rather than management authority", async () => {
+  oauthAuthDeps.resolveSelfIssuedBearer = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
+    userId: "user-1",
+    subject: "acct_subject",
+    scopes: ["mcp:manage"],
+  })) as typeof oauthAuthDeps.resolveSelfIssuedBearer;
+
+  try {
+    const response = await createApp().fetch(
+      new Request(
+        "https://takos.jp/api/mcp/search?workspaceId=workspace_1&q=docs",
+        { headers: { Authorization: "Bearer takpat_manage_only" } },
+      ),
+      createEnv(),
+      {} as ExecutionContext,
+    );
+    assertEquals(response.status, 403);
+    assertEquals(await response.json(), {
+      error: {
+        code: "FORBIDDEN",
+        message: "Required scopes: mcp:invoke",
+      },
+    });
+  } finally {
+    restoreOauthAuthDeps();
+  }
+});
+
 test("protected API does not treat tak_oat as scoped API auth", async () => {
   const requireAuthSpy = spy(
     async (
       c: Parameters<ApiRequireAuth>[0],
       _next: Parameters<ApiRequireAuth>[1],
     ) =>
-      c.json({
-        error: { code: "UNAUTHORIZED", message: "Authentication required" },
-      }, 401),
+      c.json(
+        {
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        },
+        401,
+      ),
   );
 
   const response = await createApp(requireAuthSpy).fetch(
@@ -234,9 +307,12 @@ test("protected API does not treat legacy tak_pat as scoped API auth", async () 
       c: Parameters<ApiRequireAuth>[0],
       _next: Parameters<ApiRequireAuth>[1],
     ) =>
-      c.json({
-        error: { code: "UNAUTHORIZED", message: "Authentication required" },
-      }, 401),
+      c.json(
+        {
+          error: { code: "UNAUTHORIZED", message: "Authentication required" },
+        },
+        401,
+      ),
   );
 
   const response = await createApp(requireAuthSpy).fetch(
@@ -279,7 +355,7 @@ test("protected API allows Accounts bearer tokens with the route family scope", 
     );
 
     assertEquals(response.status, 200);
-    const body = await response.json() as { username: string };
+    const body = (await response.json()) as { username: string };
     assertEquals(body.username, "user1");
   } finally {
     restoreOauthAuthDeps();
@@ -368,9 +444,7 @@ test("billing API is not mounted before retired bearer auth fallback", async () 
 });
 
 test("billing API is not mounted before browser auth fallback", async () => {
-  const resolveSelfIssuedBearerSpy = spy(
-    oauthAuthDeps.resolveSelfIssuedBearer,
-  );
+  const resolveSelfIssuedBearerSpy = spy(oauthAuthDeps.resolveSelfIssuedBearer);
   oauthAuthDeps.resolveSelfIssuedBearer =
     resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
   const requireAuthSpy = spy(
@@ -399,9 +473,7 @@ test("billing API is not mounted before browser auth fallback", async () => {
 });
 
 test("protected API keeps browser sessions at full access without token scopes", async () => {
-  const resolveSelfIssuedBearerSpy = spy(
-    oauthAuthDeps.resolveSelfIssuedBearer,
-  );
+  const resolveSelfIssuedBearerSpy = spy(oauthAuthDeps.resolveSelfIssuedBearer);
   oauthAuthDeps.resolveSelfIssuedBearer =
     resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
   try {
@@ -421,7 +493,7 @@ test("protected API keeps browser sessions at full access without token scopes",
     );
 
     assertEquals(response.status, 200);
-    const body = await response.json() as { username: string };
+    const body = (await response.json()) as { username: string };
     assertEquals(body.username, "user1");
     assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
   } finally {

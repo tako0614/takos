@@ -1,6 +1,7 @@
 import {
   deepStrictEqual as assertEquals,
   strictEqual as assertStrictEquals,
+  throws as assertThrows,
 } from "node:assert/strict";
 import { test } from "bun:test";
 import {
@@ -69,6 +70,50 @@ test("managed Takosumi Gateway accepts only aliases the operator explicitly allo
     "deepseek/chat",
   );
   assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takosumi/default");
+});
+
+test("direct and custom OpenAI-compatible paths enforce the operator model allowlist", async () => {
+  const direct = {
+    OPENAI_API_KEY: "sk-test",
+    TAKOS_ALLOWED_MODELS: "o4-mini,gpt-5.5",
+  };
+  assertStrictEquals(resolveExecutionModel(direct, "o4-mini"), "o4-mini");
+  assertStrictEquals(resolveExecutionModel(direct, "gpt-unapproved"), "o4-mini");
+
+  clearModelCatalogCacheForTests();
+  const fallback = await resolveModelCatalog(
+    {
+      OPENAI_API_KEY: "gateway-key",
+      OPENAI_BASE_URL: "https://gateway.example.test/v1",
+      TAKOS_ALLOWED_MODELS: "private/chat",
+    },
+    {
+      fetchImpl: async () => jsonResponse({ error: "offline" }, 503),
+    },
+  );
+  assertEquals(
+    fallback.availableModelsByBackend.openai.map((model) => model.id),
+    ["private/chat"],
+  );
+  assertStrictEquals(
+    resolveExecutionModel(
+      {
+        OPENAI_API_KEY: "gateway-key",
+        OPENAI_BASE_URL: "https://gateway.example.test/v1",
+        TAKOS_ALLOWED_MODELS: "private/chat",
+      },
+      "unapproved/chat",
+    ),
+    "private/chat",
+  );
+  assertThrows(
+    () =>
+      resolveExecutionModel(
+        { OPENAI_API_KEY: "sk-test", TAKOS_ALLOWED_MODELS: "[]" },
+        "gpt-5.5",
+      ),
+    /contains no valid model IDs/,
+  );
 });
 
 test("model catalog fetches direct OpenAI models and filters non-chat model ids", async () => {

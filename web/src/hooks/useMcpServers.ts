@@ -4,7 +4,11 @@ import { useI18n } from "../store/i18n.ts";
 import { getErrorMessage } from "@takos/worker-platform-utils/errors";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
-import type { McpServerRecord } from "../types/index.ts";
+import type { McpServerRecord, McpServerTool } from "../types/index.ts";
+import {
+  buildMcpToolPolicyPatch,
+  buildMcpToolPolicyPath,
+} from "./mcp-server-paths.ts";
 
 interface UseMcpServersOptions {
   spaceId: Accessor<string>;
@@ -16,7 +20,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   const { confirm } = useConfirmDialog();
   const currentSpaceId = () => spaceId().trim();
   const basePath = () =>
-    `/api/mcp/servers?spaceId=${encodeURIComponent(currentSpaceId())}`;
+    `/api/mcp/servers?workspaceId=${encodeURIComponent(currentSpaceId())}`;
   const [servers, setServers] = createSignal<McpServerRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
@@ -37,7 +41,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     setError(null);
     try {
       const res = await fetch(
-        `/api/mcp/servers?spaceId=${encodeURIComponent(targetSpaceId)}`,
+        `/api/mcp/servers?workspaceId=${encodeURIComponent(targetSpaceId)}`,
       );
       if (!res.ok) throw new Error(t("failedToFetchMcpServers"));
       const data = await res.json();
@@ -60,18 +64,22 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     }
   };
 
-  createEffect(on(spaceId, (nextSpaceId) => {
-    if (nextSpaceId.trim()) {
-      void refresh();
-    } else {
-      setServers([]);
-      setLoading(false);
-    }
-  }));
+  createEffect(
+    on(spaceId, (nextSpaceId) => {
+      if (nextSpaceId.trim()) {
+        void refresh();
+      } else {
+        setServers([]);
+        setLoading(false);
+      }
+    }),
+  );
 
-  const createExternalServer = async (
-    input: { name: string; url: string; scope?: string },
-  ) => {
+  const createExternalServer = async (input: {
+    name: string;
+    url: string;
+    scope?: string;
+  }) => {
     if (!currentSpaceId()) {
       throw new Error(t("missingSpaceId"));
     }
@@ -100,9 +108,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(
-      `/api/mcp/servers/${serverId}/reauthorize?spaceId=${
-        encodeURIComponent(targetSpaceId)
-      }`,
+      `/api/mcp/servers/${serverId}/reauthorize?workspaceId=${encodeURIComponent(
+        targetSpaceId,
+      )}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,9 +137,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(
-      `/api/mcp/servers/${serverId}?spaceId=${
-        encodeURIComponent(targetSpaceId)
-      }`,
+      `/api/mcp/servers/${serverId}?workspaceId=${encodeURIComponent(
+        targetSpaceId,
+      )}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -170,9 +178,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
 
     try {
       const res = await fetch(
-        `/api/mcp/servers/${server.id}?spaceId=${
-          encodeURIComponent(targetSpaceId)
-        }`,
+        `/api/mcp/servers/${server.id}?workspaceId=${encodeURIComponent(
+          targetSpaceId,
+        )}`,
         {
           method: "DELETE",
         },
@@ -191,24 +199,111 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
 
   const fetchServerTools = async (
     serverId: string,
-  ): Promise<{ name: string; description: string }[]> => {
+  ): Promise<McpServerTool[]> => {
     const targetSpaceId = currentSpaceId();
     if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(
-      `/api/mcp/servers/${serverId}/tools?spaceId=${
-        encodeURIComponent(targetSpaceId)
-      }`,
+      `/api/mcp/servers/${serverId}/tools?workspaceId=${encodeURIComponent(
+        targetSpaceId,
+      )}`,
     );
     if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(data.error || t("failedToFetchTools"));
     }
-    const data = await res.json() as {
-      data: { tools: { name: string; description: string }[] };
+    const data = (await res.json()) as {
+      data: { tools: McpServerTool[] };
     };
     return data.data.tools;
+  };
+
+  const updateServerToolPolicy = async (
+    serverId: string,
+    toolName: string,
+    enabled: boolean,
+    schemaHash: string,
+    invocationPolicy: "automatic" | "confirm_each_time",
+  ): Promise<McpServerTool> => {
+    const targetSpaceId = currentSpaceId();
+    if (!targetSpaceId) {
+      throw new Error(t("missingSpaceId"));
+    }
+    const res = await fetch(
+      buildMcpToolPolicyPath(serverId, toolName, targetSpaceId),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          buildMcpToolPolicyPatch(enabled, schemaHash, invocationPolicy),
+        ),
+      },
+    );
+    const data = (await res.json().catch(() => ({}))) as {
+      data?: McpServerTool;
+      error?: unknown;
+    };
+    if (res.status === 409) {
+      throw new Error(t("mcpToolPolicyRefreshRequired"));
+    }
+    if (!res.ok || !data.data) {
+      throw new Error(
+        getErrorMessage(data.error, t("failedToUpdateMcpToolPolicy")),
+      );
+    }
+    return data.data;
+  };
+
+  const exportConnections = async (): Promise<unknown> => {
+    const targetSpaceId = currentSpaceId();
+    if (!targetSpaceId) throw new Error(t("missingSpaceId"));
+    const response = await fetch(
+      `/api/mcp/connections/export?workspaceId=${encodeURIComponent(targetSpaceId)}`,
+    );
+    const body = (await response.json().catch(() => ({}))) as {
+      data?: unknown;
+      error?: unknown;
+    };
+    if (!response.ok || body.data === undefined) {
+      throw new Error(
+        getErrorMessage(body.error, t("connectionsExportFailed")),
+      );
+    }
+    return body.data;
+  };
+
+  const importConnections = async (document: unknown) => {
+    const targetSpaceId = currentSpaceId();
+    if (!targetSpaceId) throw new Error(t("missingSpaceId"));
+    const response = await fetch(
+      `/api/mcp/connections/import?workspaceId=${encodeURIComponent(targetSpaceId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(document),
+      },
+    );
+    const body = (await response.json().catch(() => ({}))) as {
+      data?: {
+        registry_sources: Array<{ status: string }>;
+        connections: Array<{
+          name: string;
+          status: string;
+          authorization_url?: string;
+          tool_policies_require_review: number;
+          message?: string;
+        }>;
+      };
+      error?: unknown;
+    };
+    if (!response.ok || !body.data) {
+      throw new Error(
+        getErrorMessage(body.error, t("connectionsImportFailed")),
+      );
+    }
+    await refresh();
+    return body.data;
   };
 
   return {
@@ -221,5 +316,8 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     toggleServer,
     deleteServer,
     fetchServerTools,
+    updateServerToolPolicy,
+    exportConnections,
+    importConnections,
   };
 }

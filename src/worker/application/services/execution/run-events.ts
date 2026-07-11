@@ -1,4 +1,3 @@
-import { getDb, runEvents } from "../../../infra/db/index.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import { getSseNotifier } from "../../../platform/sse-notifier-access.ts";
 
@@ -9,26 +8,6 @@ import {
   type RunNotifierEmitPayload,
 } from "../run-notifier/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
-
-// ---------------------------------------------------------------------------
-// Persist a run event to SQL store (when not using object store offload)
-// ---------------------------------------------------------------------------
-
-export async function persistRunEvent(
-  env: Env,
-  runId: string,
-  type: string,
-  data: unknown,
-): Promise<number> {
-  const db = getDb(env.DB);
-  const event = await db.insert(runEvents).values({
-    runId,
-    type,
-    data: JSON.stringify(data),
-    createdAt: new Date().toISOString(),
-  }).returning({ id: runEvents.id }).get();
-  return event.id;
-}
 
 // ---------------------------------------------------------------------------
 // Emit an event to the RUN_NOTIFIER Durable Object for a given run
@@ -49,22 +28,15 @@ export async function emitToNotifier(
   return notifierStub.fetch(request);
 }
 
-// ---------------------------------------------------------------------------
-// Persist an event (when not using object store offload) and emit it to the notifier DO.
-// Silently catches notifier failures so callers can fire-and-forget.
-// ---------------------------------------------------------------------------
-
-export async function persistAndEmitEvent(
+/** Emit an event whose SQL row was already committed by the caller. */
+export async function emitCommittedRunEvent(
   env: Env,
   runId: string,
   type: string,
   data: unknown,
+  eventId: number | null,
   useTimeout: boolean = false,
 ): Promise<void> {
-  const eventId = env.TAKOS_OFFLOAD
-    ? null
-    : await persistRunEvent(env, runId, type, data);
-
   try {
     await emitToNotifier(
       env,
@@ -79,7 +51,7 @@ export async function persistAndEmitEvent(
     });
   }
 
-  // Also emit via SSE notifier for Node.js / k8s environments
+  // Also emit via SSE notifier for Node.js / k8s environments.
   const sseNotifier = getSseNotifier(env);
   if (sseNotifier) {
     try {

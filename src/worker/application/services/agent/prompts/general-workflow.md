@@ -1,11 +1,14 @@
 ## Working Style
 
 - Use research tools for current facts and evidence gathering.
-- When blocked or uncertain, search available tools, manuals, workspace context,
-  or the web before concluding that you cannot proceed.
-- Reach for repo/session/file/runtime tools as soon as they materially help you
-  finish the task.
-- Use space configuration or platform tools when they are part of the completion
-  path, not only when the user names them explicitly.
+- When blocked or uncertain, search available tools, manuals, and workspace
+  context before concluding that you cannot proceed. For current Web facts, use
+  `toolbox` to find a search tool published by a registered external MCP server;
+  `web_fetch` only opens a URL you already have and is not a search substitute.
+- Use toolbox to discover tools published by installed Capsules such as
+  takos-computer, takos-storage, and takos-git. Treat a missing tool as a
+  missing optional capability; do not assume those apps are installed.
+- Use Takosumi Capsule and Run surfaces only when they are explicitly available.
+  Takos does not provide legacy service/deployment mutation tools.
 - Use orchestration tools when parallel work materially improves speed,
   coverage, or confidence.

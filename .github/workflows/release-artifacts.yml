@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "SemVer used for the dry-run release manifest on manual runs"
+        description: "Optional assertion; package.json takosRelease.version remains authoritative"
         required: false
-        default: "0.0.0-dev"
+        default: ""
         type: string
       publish:
         description: "Publish OCI images instead of dry-run build only"
@@ -34,6 +34,12 @@ jobs:
     name: Release gate inputs
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      release_version: ${{ steps.source.outputs.release_version }}
+      release_tag: ${{ steps.source.outputs.release_tag }}
+      agent_engine_repository: ${{ steps.source.outputs.agent_engine_repository }}
+      agent_engine_commit: ${{ steps.source.outputs.agent_engine_commit }}
+      release_tag_commit: ${{ steps.source.outputs.release_tag_commit }}
     permissions:
       contents: read
     steps:
@@ -41,6 +47,61 @@ jobs:
         with:
           path: takos
           persist-credentials: false
+
+      - name: Read immutable release source contract
+        id: source
+        shell: bash
+        working-directory: takos
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          release_version="$(jq -er '.takosRelease.version // .version' package.json)"
+          agent_engine_repository="$(jq -er 'select(.schemaVersion == 1) | .repository' containers/agent/engine-source.json)"
+          agent_engine_commit="$(jq -er 'select(.schemaVersion == 1) | .commit' containers/agent/engine-source.json)"
+          if [[ ! "${release_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "package.json takosRelease.version is not SemVer: ${release_version}" >&2
+            exit 1
+          fi
+          if [[ -n "${REQUESTED_VERSION}" && "${REQUESTED_VERSION}" != "${release_version}" ]]; then
+            echo "Requested version ${REQUESTED_VERSION} must match package.json release version ${release_version}" >&2
+            exit 1
+          fi
+          if [[ ! "${agent_engine_repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "Invalid agent engine repository pin: ${agent_engine_repository}" >&2
+            exit 1
+          fi
+          if [[ ! "${agent_engine_commit}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Agent engine source must be pinned to a full Git SHA: ${agent_engine_commit}" >&2
+            exit 1
+          fi
+          release_tag="v${release_version}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* && "${GITHUB_REF_NAME}" != "${release_tag}" ]]; then
+            echo "Git tag ${GITHUB_REF_NAME} must match package.json release version ${release_tag}" >&2
+            exit 1
+          fi
+          release_tag_commit=""
+          if [[ "${GITHUB_REF}" == refs/tags/v* || "${REQUESTED_PUBLISH}" == "true" ]]; then
+            remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${release_tag}" "refs/tags/${release_tag}^{}")"
+            release_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 ~ /\^\{\}$/ { print $1; exit }')"
+            if [[ -z "${release_tag_commit}" ]]; then
+              release_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 !~ /\^\{\}$/ { print $1; exit }')"
+            fi
+            if [[ -z "${release_tag_commit}" ]]; then
+              echo "Release tag ${release_tag} must already exist before publishing." >&2
+              exit 1
+            fi
+            if [[ "${release_tag_commit}" != "${GITHUB_SHA}" ]]; then
+              echo "Release tag ${release_tag} resolves to ${release_tag_commit}, not workflow commit ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+          fi
+          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "agent_engine_repository=${agent_engine_repository}" >> "${GITHUB_OUTPUT}"
+          echo "agent_engine_commit=${agent_engine_commit}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag_commit=${release_tag_commit}" >> "${GITHUB_OUTPUT}"
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -68,19 +129,13 @@ jobs:
         shell: bash
         working-directory: takos
         env:
-          VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ steps.source.outputs.release_version }}
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            release_version="${GITHUB_REF_NAME#v}"
-            release_tag="${GITHUB_REF_NAME}"
-          else
-            release_version="${VERSION}"
-            release_tag="v${VERSION}"
-          fi
           bun scripts/build-release-manifest.ts \
-            --release-version "${release_version}" \
-            --release-tag "${release_tag}" \
+            --release-version "${RELEASE_VERSION}" \
+            --release-tag "${RELEASE_TAG}" \
             --output /tmp/takos-release-identity-check.json
       - run: bun run check
         working-directory: takos
@@ -175,7 +230,6 @@ jobs:
             dockerfile: takos/containers/runtime/Dockerfile
             prebuild: bun run containers:build:runtime
             cloudflare_container: true
-            cloudflare_build_path: containers/runtime
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -191,9 +245,30 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          repository: tako0614/takos-agent-engine
+          repository: ${{ needs.validate.outputs.agent_engine_repository }}
+          ref: ${{ needs.validate.outputs.agent_engine_commit }}
           path: takos-agent-engine
           persist-credentials: false
+
+      - name: Verify agent engine source pin
+        shell: bash
+        env:
+          EXPECTED_AGENT_ENGINE_COMMIT: ${{ needs.validate.outputs.agent_engine_commit }}
+        run: |
+          set -euo pipefail
+          actual="$(git -C takos-agent-engine rev-parse HEAD)"
+          if [[ "${actual}" != "${EXPECTED_AGENT_ENGINE_COMMIT}" ]]; then
+            echo "Agent engine checkout ${actual} does not match ${EXPECTED_AGENT_ENGINE_COMMIT}" >&2
+            exit 1
+          fi
+
+      - name: Compile agent wrapper against pinned engine
+        if: matrix.image == 'takos-agent'
+        shell: bash
+        working-directory: takos
+        env:
+          TAKOS_AGENT_ENGINE_CHECKOUT: ${{ github.workspace }}/takos-agent-engine
+        run: bun run validate:agent-engine-source
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
 
@@ -235,7 +310,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+            type=raw,value=${{ needs.validate.outputs.release_version }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
             type=sha,prefix=sha-
 
       - name: Build and publish OCI image
@@ -257,6 +332,7 @@ jobs:
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          AGENT_ENGINE_COMMIT: ${{ needs.validate.outputs.agent_engine_commit }}
         run: |
           set -euo pipefail
           if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
@@ -271,9 +347,10 @@ jobs:
             --arg digest "${IMAGE_DIGEST}" \
             --arg digestRef "${IMAGE_NAME}@${IMAGE_DIGEST}" \
             --arg commit "${GITHUB_SHA}" \
+            --arg agentEngineCommit "${AGENT_ENGINE_COMMIT}" \
             --arg workflowRun "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --argjson tags "${tags_json}" \
-            '{
+            '({
               name: $name,
               image: $image,
               digest: $digest,
@@ -283,7 +360,9 @@ jobs:
               workflowRun: $workflowRun,
               sbom: true,
               provenance: true
-            }' > "dist/image-digests/${{ matrix.image }}.json"
+            } + (if $name == "takos-agent" then {
+              agentEngineCommit: $agentEngineCommit
+            } else {} end))' > "dist/image-digests/${{ matrix.image }}.json"
 
       - name: Build and publish Cloudflare Container image
         if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true
@@ -293,10 +372,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_CONTAINERS_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.release_version }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
-          CLOUDFLARE_BUILD_PATH: ${{ matrix.cloudflare_build_path }}
         run: |
           set -euo pipefail
           effective_token="${CLOUDFLARE_CONTAINERS_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
@@ -309,26 +387,17 @@ jobs:
           else
             echo "Using fallback CLOUDFLARE_API_TOKEN for Cloudflare Container image publish."
           fi
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            release_version="${GITHUB_REF_NAME#v}"
-          else
-            release_version="${INPUT_VERSION}"
-          fi
-          cf_tag="${release_version}-${GITHUB_SHA::12}"
+          cf_tag="${RELEASE_VERSION}-${GITHUB_SHA::12}"
           local_tag="${{ matrix.image }}:${cf_tag}"
-          set +e
-          if [[ -n "${CLOUDFLARE_BUILD_PATH}" ]]; then
-            output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers build -p -t "${local_tag}" "${CLOUDFLARE_BUILD_PATH}" 2>&1)"
-          else
-            if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "Invalid OCI image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
-              exit 1
-            fi
-            source_ref="${GHCR_IMAGE}@${IMAGE_DIGEST}"
-            docker pull "${source_ref}"
-            docker tag "${source_ref}" "${local_tag}"
-            output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers push "${local_tag}" 2>&1)"
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid OCI image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
+            exit 1
           fi
+          source_ref="${GHCR_IMAGE}@${IMAGE_DIGEST}"
+          docker pull "${source_ref}"
+          docker tag "${source_ref}" "${local_tag}"
+          set +e
+          output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers push "${local_tag}" 2>&1)"
           status=$?
           set -e
           printf '%s\n' "${output}"
@@ -408,15 +477,9 @@ jobs:
         shell: bash
         working-directory: takos
         env:
-          VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            release_tag="${GITHUB_REF_NAME}"
-          else
-            release_tag="v${VERSION}"
-          fi
-
           bun run build
           runtime_ref="$(jq -r 'select(.name == "takos-worker-runtime") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
           executor_ref="$(jq -r 'select(.name == "takos-agent") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
@@ -442,7 +505,7 @@ jobs:
           export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
 
           bun scripts/build-worker-release-artifact.ts \
-            --release-tag "${release_tag}" \
+            --release-tag "${RELEASE_TAG}" \
             --bundle-dir /tmp/takos-worker-bundle \
             --assets-dir dist \
             --image-digest-dir ../release-inputs/image-digests \
@@ -453,24 +516,14 @@ jobs:
         shell: bash
         working-directory: takos
         env:
-          VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.release_version }}
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            release_version="${GITHUB_REF_NAME#v}"
-            release_tag="${GITHUB_REF_NAME}"
-          else
-            release_version="${VERSION}"
-            release_tag="v${VERSION}"
-          fi
-          if [[ ! "${release_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid SemVer release version: ${release_version}" >&2
-            exit 1
-          fi
           bun scripts/build-release-manifest.ts \
             --image-digest-dir ../release-inputs/image-digests \
-            --release-version "${release_version}" \
-            --release-tag "${release_tag}" \
+            --release-version "${RELEASE_VERSION}" \
+            --release-tag "${RELEASE_TAG}" \
             --require-image-digests \
             --require-clean-git \
             --require-cloudflare-container-images \
@@ -489,23 +542,50 @@ jobs:
         working-directory: takos
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+          EXPECTED_RELEASE_COMMIT: ${{ needs.validate.outputs.release_tag_commit }}
         run: |
           set -euo pipefail
+          remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}^{}")"
+          current_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 ~ /\^\{\}$/ { print $1; exit }')"
+          if [[ -z "${current_tag_commit}" ]]; then
+            current_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 !~ /\^\{\}$/ { print $1; exit }')"
+          fi
+          if [[ -z "${current_tag_commit}" || "${current_tag_commit}" != "${GITHUB_SHA}" || "${current_tag_commit}" != "${EXPECTED_RELEASE_COMMIT}" ]]; then
+            echo "Release tag ${RELEASE_TAG} must exist and resolve to workflow commit ${GITHUB_SHA}; got ${current_tag_commit:-missing}." >&2
+            exit 1
+          fi
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            release_tag="${GITHUB_REF_NAME}"
             prerelease_flag=()
           else
-            release_tag="v${VERSION}"
             prerelease_flag=(--prerelease)
           fi
-          if ! gh release view "${release_tag}" >/dev/null 2>&1; then
-            gh release create "${release_tag}" \
-              --title "Takos ${release_tag}" \
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            existing_assets="$(gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name')"
+            if grep -Fxq 'release-manifest.json' <<<"${existing_assets}"; then
+              existing_dir="$(mktemp -d)"
+              trap 'rm -rf "${existing_dir}"' EXIT
+              gh release download "${RELEASE_TAG}" --pattern release-manifest.json --dir "${existing_dir}"
+              if ! existing_commit="$(jq -er '.git.commit | select(type == "string" and length == 40)' "${existing_dir}/release-manifest.json")"; then
+                echo "Existing ${RELEASE_TAG} release-manifest.json does not contain a valid source commit; refusing to clobber assets." >&2
+                exit 1
+              fi
+              if [[ "${existing_commit}" != "${GITHUB_SHA}" ]]; then
+                echo "Existing ${RELEASE_TAG} assets belong to ${existing_commit}, not ${GITHUB_SHA}; refusing to clobber." >&2
+                exit 1
+              fi
+            elif grep -Eq '^(takos-worker-release\.tar\.gz|takos-worker-release\.tar\.gz\.sha256|takosumi-artifact\.json)$' <<<"${existing_assets}"; then
+              echo "Existing ${RELEASE_TAG} assets have no release-manifest.json provenance; refusing to clobber." >&2
+              exit 1
+            fi
+          else
+            gh release create "${RELEASE_TAG}" \
+              --verify-tag \
+              --title "Takos ${RELEASE_TAG}" \
               --notes "Takosumi/OpenTofu release artifacts for ${GITHUB_SHA}." \
               "${prerelease_flag[@]}"
           fi
-          gh release upload "${release_tag}" \
+          gh release upload "${RELEASE_TAG}" \
             dist/release-manifest.json \
             dist/takosumi-artifact/takos-worker-release.tar.gz \
             dist/takosumi-artifact/takos-worker-release.tar.gz.sha256 \

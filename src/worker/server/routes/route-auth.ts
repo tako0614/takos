@@ -162,7 +162,8 @@ export type { SpaceAccess };
  *
  * Checks, in order:
  * 1. URL param `:spaceId`
- * 2. Query params `spaceId` or `space_id`
+ * 2. Query params `workspaceId` or `workspace_id`
+ * 3. Legacy query params `spaceId` or `space_id`
  *
  * Returns `null` if none found.
  */
@@ -172,7 +173,11 @@ function resolveSpaceIdentifier(c: RouteHelperContext): string | null {
   if (paramSpaceId) return paramSpaceId;
 
   // Query params
-  const querySpaceId = c.req.query("spaceId") || c.req.query("space_id");
+  const querySpaceId =
+    c.req.query("workspaceId") ||
+    c.req.query("workspace_id") ||
+    c.req.query("spaceId") ||
+    c.req.query("space_id");
   if (querySpaceId) return querySpaceId;
 
   return null;

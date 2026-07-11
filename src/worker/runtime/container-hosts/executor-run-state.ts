@@ -14,19 +14,13 @@ import {
   AuthorizationError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
-import { persistMessage } from "../../application/services/agent/message-persistence.ts";
-import {
-  buildRunNotifierEmitPayload,
-  buildRunNotifierEmitRequest,
-  buildTerminalPayload,
-  getRunNotifierStub,
-} from "../../application/services/run-notifier/index.ts";
 import {
   classifyProxyError,
   err,
   ok,
   readRunServiceId,
 } from "./executor-utils.ts";
+import { resolveSpaceRole } from "../../application/services/platform/capabilities.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,7 +31,6 @@ export type RunBootstrap = {
   spaceId: string;
   installationId?: string;
   runtimeNamespace?: string;
-  sessionId: string | null;
   threadId: string;
   userId: string;
   agentType: string;
@@ -58,20 +51,24 @@ export function readRunBootstrapInstallationContext(
   const parsed = parseRunInputObject(input);
   if (!parsed) return {};
 
-  const installationId = readStringValue(parsed, [
-    "installationId",
-    "installation_id",
-    "appInstallationId",
-    "app_installation_id",
-  ]) ?? readNestedStringValue(parsed, ["installation", "id"]) ??
+  const installationId =
+    readStringValue(parsed, [
+      "installationId",
+      "installation_id",
+      "appInstallationId",
+      "app_installation_id",
+    ]) ??
+    readNestedStringValue(parsed, ["installation", "id"]) ??
     readNestedStringValue(parsed, ["appInstallation", "id"]) ??
     readNestedStringValue(parsed, ["accounts", "installationId"]);
-  const runtimeNamespace = readStringValue(parsed, [
-    "runtimeNamespace",
-    "runtime_namespace",
-    "runtimeTargetId",
-    "runtime_target_id",
-  ]) ?? readNestedStringValue(parsed, ["runtime", "namespace"]) ??
+  const runtimeNamespace =
+    readStringValue(parsed, [
+      "runtimeNamespace",
+      "runtime_namespace",
+      "runtimeTargetId",
+      "runtime_target_id",
+    ]) ??
+    readNestedStringValue(parsed, ["runtime", "namespace"]) ??
     readNestedStringValue(parsed, ["runtime", "targetId"]) ??
     readNestedStringValue(parsed, ["runtimeBinding", "targetId"]) ??
     readNestedStringValue(parsed, ["runtimeBinding", "target_id"]);
@@ -89,7 +86,9 @@ function parseRunInputObject(
   try {
     const parsed = JSON.parse(input) as unknown;
     if (
-      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed)
     ) {
       return parsed as Record<string, unknown>;
     }
@@ -119,7 +118,8 @@ function readNestedStringValue(
   let current: unknown = source;
   for (const segment of path) {
     if (
-      typeof current !== "object" || current === null ||
+      typeof current !== "object" ||
+      current === null ||
       Array.isArray(current)
     ) {
       return undefined;
@@ -136,10 +136,14 @@ export async function resolveExecutionUserIdForRun(
   runId: string,
 ): Promise<string> {
   const db = getDb(env.DB);
-  const runRow = await db.select({
-    accountId: runs.accountId,
-    requesterAccountId: runs.requesterAccountId,
-  }).from(runs).where(eq(runs.id, runId)).get();
+  const runRow = await db
+    .select({
+      accountId: runs.accountId,
+      requesterAccountId: runs.requesterAccountId,
+    })
+    .from(runs)
+    .where(eq(runs.id, runId))
+    .get();
 
   if (!runRow?.accountId) {
     throw new NotFoundError(`Run ${runId} while resolving execution user`);
@@ -149,10 +153,14 @@ export async function resolveExecutionUserIdForRun(
     return runRow.requesterAccountId;
   }
 
-  const workspace = await db.select({
-    type: accounts.type,
-    ownerAccountId: accounts.ownerAccountId,
-  }).from(accounts).where(eq(accounts.id, runRow.accountId)).get();
+  const workspace = await db
+    .select({
+      type: accounts.type,
+      ownerAccountId: accounts.ownerAccountId,
+    })
+    .from(accounts)
+    .where(eq(accounts.id, runRow.accountId))
+    .get();
 
   if (workspace?.ownerAccountId) {
     logWarn(
@@ -173,28 +181,64 @@ export async function resolveExecutionUserIdForRun(
   return runRow.accountId;
 }
 
+/**
+ * Revalidate the requester represented by a durable Run against current
+ * Workspace membership. Queued runs and long-lived containers must not retain
+ * the viewer fallback after the requester is removed or suspended.
+ */
+export async function assertRunExecutionAccess(
+  env: Env,
+  runId: string,
+): Promise<{
+  userId: string;
+  role: NonNullable<Awaited<ReturnType<typeof resolveSpaceRole>>>;
+}> {
+  const db = getDb(env.DB);
+  const run = await db
+    .select({ accountId: runs.accountId })
+    .from(runs)
+    .where(eq(runs.id, runId))
+    .get();
+  if (!run) throw new NotFoundError(`Run ${runId}`);
+  const userId = await resolveExecutionUserIdForRun(env, runId);
+  const role = await resolveSpaceRole(env.DB, run.accountId, userId);
+  if (!role) {
+    throw new AuthorizationError(
+      `Run requester ${userId} no longer has access to account ${run.accountId}`,
+    );
+  }
+  return { userId, role };
+}
+
 export async function getRunBootstrap(
   env: Env,
   runId: string,
 ): Promise<RunBootstrap> {
   const db = getDb(env.DB);
-  const run = await db.select({
-    id: runs.id,
-    status: runs.status,
-    accountId: runs.accountId,
-    input: runs.input,
-    sessionId: runs.sessionId,
-    threadId: runs.threadId,
-    agentType: runs.agentType,
-  }).from(runs).where(eq(runs.id, runId)).get();
+  const run = await db
+    .select({
+      id: runs.id,
+      status: runs.status,
+      accountId: runs.accountId,
+      input: runs.input,
+      threadId: runs.threadId,
+      agentType: runs.agentType,
+    })
+    .from(runs)
+    .where(eq(runs.id, runId))
+    .get();
 
   if (!run) {
     throw new NotFoundError(`Run ${runId}`);
   }
 
-  const thread = await db.select({
-    accountId: threads.accountId,
-  }).from(threads).where(eq(threads.id, run.threadId)).get();
+  const thread = await db
+    .select({
+      accountId: threads.accountId,
+    })
+    .from(threads)
+    .where(eq(threads.id, run.threadId))
+    .get();
 
   if (!thread) {
     throw new NotFoundError(`Thread ${run.threadId}`);
@@ -206,13 +250,12 @@ export async function getRunBootstrap(
     );
   }
 
-  const userId = await resolveExecutionUserIdForRun(env, runId);
+  const { userId } = await assertRunExecutionAccess(env, runId);
 
   return {
     status: run.status,
     spaceId: run.accountId,
     ...readRunBootstrapInstallationContext(run.input),
-    sessionId: run.sessionId ?? null,
     threadId: run.threadId,
     userId,
     agentType: run.agentType,
@@ -237,11 +280,16 @@ export async function handleHeartbeat(
   try {
     const db = getDb(env.DB);
     const now = new Date().toISOString();
-    const conditions = [eq(runs.id, runId), eq(runs.serviceId, serviceId)];
+    const conditions = [
+      eq(runs.id, runId),
+      eq(runs.serviceId, serviceId),
+      eq(runs.status, "running"),
+    ];
     if (typeof leaseVersion === "number") {
       conditions.push(eq(runs.leaseVersion, leaseVersion));
     }
-    const result = await db.update(runs)
+    const result = await db
+      .update(runs)
       .set({ serviceHeartbeat: now })
       .where(and(...conditions));
     if (affectedRowCount(result) === 0) {
@@ -264,7 +312,8 @@ export async function handleRunStatus(
 
   try {
     const db = getDb(env.DB);
-    const row = await db.select({ status: runs.status })
+    const row = await db
+      .select({ status: runs.status })
       .from(runs)
       .where(eq(runs.id, runId))
       .limit(1);
@@ -285,11 +334,15 @@ export async function handleRunRecord(
 
   try {
     const db = getDb(env.DB);
-    const run = await db.select({
-      status: runs.status,
-      input: runs.input,
-      parentRunId: runs.parentRunId,
-    }).from(runs).where(eq(runs.id, runId)).get();
+    const run = await db
+      .select({
+        status: runs.status,
+        input: runs.input,
+        parentRunId: runs.parentRunId,
+      })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .get();
     return ok({
       status: run?.status ?? null,
       input: run?.input ?? null,
@@ -347,14 +400,16 @@ export async function handleRunFail(
     if (typeof leaseVersion === "number") {
       conditions.push(eq(runs.leaseVersion, leaseVersion));
     }
-    const result = await db.update(runs)
+    const result = await db
+      .update(runs)
       .set({
         status: "failed",
         error: errorMessage,
         completedAt: new Date().toISOString(),
       })
       .where(and(...conditions));
-    return ok({ success: true, updated: affectedRowCount(result) > 0 });
+    if (affectedRowCount(result) === 0) return err("Lease lost", 409);
+    return ok({ success: true, updated: true });
   } catch (e: unknown) {
     logError(`Run fail error`, e, { module: "executor-host" });
     const classified = classifyProxyError(e);
@@ -366,169 +421,37 @@ export async function handleRunReset(
   body: Record<string, unknown>,
   env: Env,
 ): Promise<Response> {
-  const { runId } = body as { runId: string };
-  const serviceId = readRunServiceId(body);
-  if (!runId || !serviceId) return err("Missing runId or serviceId", 400);
-
-  try {
-    const db = getDb(env.DB);
-    await db.update(runs)
-      .set({ status: "queued", serviceId: null, serviceHeartbeat: null })
-      .where(
-        and(
-          eq(runs.id, runId),
-          eq(runs.serviceId, serviceId),
-          eq(runs.status, "running"),
-        ),
-      );
-    return ok({ success: true });
-  } catch (e: unknown) {
-    logError(`Run reset error`, e, { module: "executor-host" });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
-}
-
-export async function handleRunContext(
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response> {
-  const { runId } = body as { runId?: string };
-  if (!runId) return err("Missing runId", 400);
-
-  try {
-    const db = getDb(env.DB);
-    const run = await db.select({
-      status: runs.status,
-      threadId: runs.threadId,
-      sessionId: runs.sessionId,
-    }).from(runs).where(eq(runs.id, runId)).get();
-
-    if (!run) {
-      return ok({
-        status: null,
-        threadId: null,
-        sessionId: null,
-        lastUserMessage: null,
-      });
-    }
-
-    const latestUserMessage = run.threadId
-      ? await db.select({ content: messages.content })
-        .from(messages)
-        .where(
-          and(eq(messages.threadId, run.threadId), eq(messages.role, "user")),
-        )
-        .orderBy(desc(messages.sequence))
-        .get()
-      : null;
-
-    return ok({
-      status: run.status ?? null,
-      threadId: run.threadId ?? null,
-      sessionId: run.sessionId ?? null,
-      lastUserMessage: latestUserMessage?.content ?? null,
-    });
-  } catch (e: unknown) {
-    logError("Run context error", e, { module: "executor-host" });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
-}
-
-export async function handleNoLlmComplete(
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response> {
-  const { runId, response } = body as {
-    runId?: string;
-    response?: string;
+  const { runId, leaseVersion } = body as {
+    runId: string;
+    leaseVersion?: number;
   };
   const serviceId = readRunServiceId(body);
   if (!runId || !serviceId) return err("Missing runId or serviceId", 400);
-  if (typeof response !== "string" || response.trim().length === 0) {
-    return err("Missing response", 400);
-  }
 
   try {
     const db = getDb(env.DB);
-    const run = await db.select({
-      id: runs.id,
-      status: runs.status,
-      threadId: runs.threadId,
-      sessionId: runs.sessionId,
-      serviceId: runs.serviceId,
-    }).from(runs).where(eq(runs.id, runId)).get();
-
-    if (!run) return err("Run not found", 404);
-    if (run.serviceId !== serviceId) return err("Run service mismatch", 409);
-
-    if (run.threadId) {
-      await persistMessage(
-        {
-          db: env.DB,
-          env,
-          threadId: run.threadId,
-        },
-        { role: "assistant", content: response },
-      );
+    const conditions = [
+      eq(runs.id, runId),
+      eq(runs.serviceId, serviceId),
+      eq(runs.status, "running"),
+    ];
+    if (typeof leaseVersion === "number") {
+      conditions.push(eq(runs.leaseVersion, leaseVersion));
     }
-
-    const completedAt = new Date().toISOString();
-    await db.update(runs)
+    const result = await db
+      .update(runs)
       .set({
-        status: "completed",
-        output: JSON.stringify({ response, mode: "no-llm" }),
-        usage: JSON.stringify({ inputTokens: 0, outputTokens: 0 }),
-        completedAt,
+        status: "queued",
+        serviceId: null,
+        serviceHeartbeat: null,
+        completionKey: null,
+        completedAt: null,
       })
-      .where(and(eq(runs.id, runId), eq(runs.serviceId, serviceId)));
-
-    try {
-      const stub = getRunNotifierStub(env, runId);
-      await stub.fetch(buildRunNotifierEmitRequest(
-        buildRunNotifierEmitPayload(runId, "message", { content: response }),
-      ));
-      await stub.fetch(buildRunNotifierEmitRequest(
-        buildRunNotifierEmitPayload(
-          runId,
-          "completed",
-          buildTerminalPayload(runId, "completed", {
-            success: true,
-            mode: "no-llm",
-          }, run.sessionId ?? null),
-        ),
-      ));
-    } catch (notifyError) {
-      logError("No-LLM completion notifier emit failed", notifyError, {
-        module: "executor-host",
-      });
-    }
-
+      .where(and(...conditions));
+    if (affectedRowCount(result) === 0) return err("Lease lost", 409);
     return ok({ success: true });
   } catch (e: unknown) {
-    logError("No-LLM completion error", e, { module: "executor-host" });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
-}
-
-export async function handleCurrentSession(
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response> {
-  const { runId, spaceId } = body as { runId?: string; spaceId?: string };
-  if (!runId || !spaceId) return err("Missing runId or spaceId", 400);
-
-  try {
-    const db = getDb(env.DB);
-    const run = await db.select({
-      sessionId: runs.sessionId,
-    }).from(runs).where(and(eq(runs.id, runId), eq(runs.accountId, spaceId)))
-      .get();
-    return ok({ sessionId: run?.sessionId ?? null });
-  } catch (e: unknown) {
-    logError("Current session RPC error", e, { module: "executor-host" });
+    logError(`Run reset error`, e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
   }
@@ -543,9 +466,13 @@ export async function handleIsCancelled(
 
   try {
     const db = getDb(env.DB);
-    const run = await db.select({
-      status: runs.status,
-    }).from(runs).where(eq(runs.id, runId)).get();
+    const run = await db
+      .select({
+        status: runs.status,
+      })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .get();
     return ok({ cancelled: run?.status === "cancelled" });
   } catch (e: unknown) {
     logError("Is cancelled RPC error", e, { module: "executor-host" });

@@ -4,7 +4,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from "@takos/test/a
 import { CapabilityRegistry } from "../../capability-registry.ts";
 import type { CapabilityDescriptor } from "../../capability-types.ts";
 import type { ToolContext, ToolDefinition } from "../../tool-definitions.ts";
-import { capabilityDescribeHandler, toolboxHandler } from "../discovery.ts";
+import { toolboxHandler } from "../discovery.ts";
 
 test("toolbox search hides router tools and points agents back to toolbox", async () => {
   const registry = new CapabilityRegistry();
@@ -247,34 +247,4 @@ test("toolbox call rejects tools missing capability descriptors when registry is
     Error,
     "missing a capability descriptor",
   );
-});
-
-test("capability aliases delegate to toolbox behavior", async () => {
-  const tools: ToolDefinition[] = [
-    {
-      name: "slide_create",
-      description: "Create a slide deck.",
-      category: "mcp",
-      parameters: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "Slide deck title." },
-        },
-      },
-    },
-  ];
-
-  const output = JSON.parse(
-    await capabilityDescribeHandler(
-      { tool_name: "slide_create" },
-      {
-        _toolExecutor: {
-          getAvailableTools: () => tools,
-          execute: async () => ({ output: "" }),
-        },
-      } as unknown as ToolContext,
-    ),
-  );
-
-  assertEquals(output.tools[0].name, "slide_create");
 });

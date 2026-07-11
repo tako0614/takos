@@ -12,7 +12,10 @@ import {
   isEmbeddingsAvailable,
 } from "../../../application/services/execution/embeddings.ts";
 import type { IndexJobQueueMessage } from "../../../shared/types/index.ts";
-import { INDEX_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
+import {
+  INDEX_QUEUE_MESSAGE_VERSION,
+  indexJobDeliveryId,
+} from "../../../shared/types/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 import { logError, logInfo } from "../../../shared/utils/logger.ts";
@@ -40,34 +43,49 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
 
   const db = getDb(c.env.DB);
   const { isNotNull } = await import("drizzle-orm");
-  const totalFilesResult = await db.select({ count: count() }).from(files)
-    .where(
-      and(eq(files.accountId, spaceId), ne(files.origin, "system")),
-    ).get();
+  const totalFilesResult = await db
+    .select({ count: count() })
+    .from(files)
+    .where(and(eq(files.accountId, spaceId), ne(files.origin, "system")))
+    .get();
   const totalFiles = totalFilesResult?.count ?? 0;
-  const indexedFilesResult = await db.select({ count: count() }).from(files)
+  const indexedFilesResult = await db
+    .select({ count: count() })
+    .from(files)
     .where(
       and(
         eq(files.accountId, spaceId),
         ne(files.origin, "system"),
         isNotNull(files.indexedAt),
       ),
-    ).get();
+    )
+    .get();
   const indexedFiles = indexedFilesResult?.count ?? 0;
-  const chunkCountResult = await db.select({ count: count() }).from(chunks)
-    .where(eq(chunks.accountId, spaceId)).get();
+  const chunkCountResult = await db
+    .select({ count: count() })
+    .from(chunks)
+    .where(eq(chunks.accountId, spaceId))
+    .get();
   const chunkCount = chunkCountResult?.count ?? 0;
-  const nodeCountResult = await db.select({ count: count() }).from(nodes).where(
-    eq(nodes.accountId, spaceId),
-  ).get();
+  const nodeCountResult = await db
+    .select({ count: count() })
+    .from(nodes)
+    .where(eq(nodes.accountId, spaceId))
+    .get();
   const nodeCount = nodeCountResult?.count ?? 0;
-  const edgeCountResult = await db.select({ count: count() }).from(edges).where(
-    eq(edges.accountId, spaceId),
-  ).get();
+  const edgeCountResult = await db
+    .select({ count: count() })
+    .from(edges)
+    .where(eq(edges.accountId, spaceId))
+    .get();
   const edgeCount = edgeCountResult?.count ?? 0;
   const latestJob =
-    await db.select().from(indexJobs).where(eq(indexJobs.accountId, spaceId))
-      .orderBy(desc(indexJobs.createdAt)).get() ?? null;
+    (await db
+      .select()
+      .from(indexJobs)
+      .where(eq(indexJobs.accountId, spaceId))
+      .orderBy(desc(indexJobs.createdAt))
+      .get()) ?? null;
 
   return c.json({
     totalFiles,
@@ -105,6 +123,7 @@ export async function handleVectorizeIndex(
       const message: IndexJobQueueMessage = {
         version: INDEX_QUEUE_MESSAGE_VERSION,
         jobId,
+        deliveryId: indexJobDeliveryId(jobId),
         spaceId,
         type: "vectorize",
         timestamp: Date.now(),
@@ -135,7 +154,7 @@ export async function handleVectorizeIndex(
           logError("Vectorize index error", err, {
             action: "vectorize_index",
             spaceId,
-          })
+          }),
         ),
     );
   }
@@ -163,36 +182,48 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
   }
 
   const db = getDb(c.env.DB);
-  const runningJob = await db.select().from(indexJobs).where(
-    and(
-      eq(indexJobs.accountId, spaceId),
-      inArray(indexJobs.status, ["queued", "running"]),
-    ),
-  ).get();
+  const runningJob = await db
+    .select()
+    .from(indexJobs)
+    .where(
+      and(
+        eq(indexJobs.accountId, spaceId),
+        inArray(indexJobs.status, ["queued", "running"]),
+      ),
+    )
+    .get();
   if (runningJob) {
     throw new BadRequestError("Index job already in progress");
   }
 
-  const fileCountResult = await db.select({ count: count() }).from(files).where(
-    and(
-      eq(files.accountId, spaceId),
-      ne(files.origin, "system"),
-      inArray(files.kind, ["source", "config", "doc"]),
-    ),
-  ).get();
+  const fileCountResult = await db
+    .select({ count: count() })
+    .from(files)
+    .where(
+      and(
+        eq(files.accountId, spaceId),
+        ne(files.origin, "system"),
+        inArray(files.kind, ["source", "config", "doc"]),
+      ),
+    )
+    .get();
   const fileCount = fileCountResult?.count ?? 0;
 
   const jobId = generateId();
   const timestamp = new Date().toISOString();
-  const job = await db.insert(indexJobs).values({
-    id: jobId,
-    accountId: spaceId,
-    type: "full",
-    status: "queued",
-    totalFiles: fileCount,
-    processedFiles: 0,
-    createdAt: timestamp,
-  }).returning().get();
+  const job = await db
+    .insert(indexJobs)
+    .values({
+      id: jobId,
+      accountId: spaceId,
+      type: "full",
+      status: "queued",
+      totalFiles: fileCount,
+      processedFiles: 0,
+      createdAt: timestamp,
+    })
+    .returning()
+    .get();
 
   scheduleBackground(
     c,
@@ -206,7 +237,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
         action: "index_rebuild",
         jobId,
         spaceId,
-      })
+      }),
     ),
   );
 
@@ -237,25 +268,31 @@ export async function handleIndexFile(
   }
 
   const db = getDb(c.env.DB);
-  const file = await db.select().from(files).where(
-    and(eq(files.accountId, spaceId), eq(files.path, body.path)),
-  ).get();
+  const file = await db
+    .select()
+    .from(files)
+    .where(and(eq(files.accountId, spaceId), eq(files.path, body.path)))
+    .get();
   if (!file) {
     throw new NotFoundError("File");
   }
 
   const jobId = generateId();
   const timestamp = new Date().toISOString();
-  const job = await db.insert(indexJobs).values({
-    id: jobId,
-    accountId: spaceId,
-    type: "file",
-    targetId: file.id,
-    status: "queued",
-    totalFiles: 1,
-    processedFiles: 0,
-    createdAt: timestamp,
-  }).returning().get();
+  const job = await db
+    .insert(indexJobs)
+    .values({
+      id: jobId,
+      accountId: spaceId,
+      type: "file",
+      targetId: file.id,
+      status: "queued",
+      totalFiles: 1,
+      processedFiles: 0,
+      createdAt: timestamp,
+    })
+    .returning()
+    .get();
 
   scheduleBackground(
     c,
@@ -272,7 +309,7 @@ export async function handleIndexFile(
         jobId,
         spaceId,
         fileId: file.id,
-      })
+      }),
     ),
   );
 

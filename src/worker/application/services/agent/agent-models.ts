@@ -9,7 +9,7 @@ export type { ToolCall, ToolResult };
 
 export type AgentContext = Pick<
   ToolContext,
-  "spaceId" | "sessionId" | "threadId" | "runId" | "userId"
+  "spaceId" | "threadId" | "runId" | "userId"
 >;
 
 export interface AgentMessage {
@@ -61,10 +61,9 @@ export interface AgentTool {
 export interface AgentConfig {
   type: string;
   systemPrompt: string;
-  tools: AgentTool[];
-  maxIterations?: number;
+  maxGraphSteps?: number;
+  maxToolRounds?: number;
   temperature?: number;
-  rateLimit?: number;
 }
 
 export type AgentEventType =

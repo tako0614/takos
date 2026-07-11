@@ -6,12 +6,6 @@ import type {
 import type { LocalizedManagedSkill } from "../services/agent/managed-skills.ts";
 import type { SkillExecutionContract } from "../services/agent/skill-contracts.ts";
 
-const HIDDEN_DISCOVERY_COMPAT_TOOLS = new Set([
-  "skill_context",
-  "skill_catalog",
-  "skill_describe",
-]);
-
 /** Derive tags from a tool's category + namespace metadata. */
 function deriveToolTags(tool: ToolDefinition): string[] {
   const tags: string[] = [tool.category];
@@ -36,8 +30,6 @@ export function buildToolDescriptor(
   const family = tool.family;
   const risk_level = tool.risk_level ?? "none";
   const side_effects = tool.side_effects ?? false;
-  const visible = !HIDDEN_DISCOVERY_COMPAT_TOOLS.has(tool.name);
-
   return {
     id: `tool:${tool.name}`,
     kind: "tool",
@@ -51,8 +43,8 @@ export function buildToolDescriptor(
     required_roles: tool.required_roles,
     required_capabilities: tool.required_capabilities,
     source: "custom",
-    discoverable: visible,
-    selectable: visible,
+    discoverable: true,
+    selectable: true,
   };
 }
 

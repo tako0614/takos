@@ -1,38 +1,142 @@
 import { test } from "bun:test";
 import { assert, assertEquals, assertRejects } from "@takos/test/assert";
+import {
+  INDEX_QUEUE_MESSAGE_VERSION,
+  indexJobDeliveryId,
+} from "../../../shared/types/index.ts";
 
-import { handleIndexJobDlq, handleMemoryBuildPaths } from "../handlers.ts";
+import {
+  handleIndexJobDlq,
+  handleInfoUnit,
+  handleMemoryBuildPaths,
+  handleRepoCodeIndex,
+  handleThreadContext,
+  handleVectorize,
+} from "../handlers.ts";
 
-function makeDb(insertRun: (row: Record<string, unknown>) => Promise<void>) {
+type CapturedStatement = {
+  sql: string;
+  args: unknown[];
+  bind(...args: unknown[]): CapturedStatement;
+  first<T>(): Promise<T | null>;
+};
+
+function makeDb(
+  runBatch: (statements: CapturedStatement[]) => Promise<unknown>,
+) {
   return {
-    select: () => ({}),
-    update: () => ({}),
-    delete: () => ({}),
-    insert: () => ({
-      values: (row: Record<string, unknown>) => ({
-        run: () => insertRun(row),
-      }),
-    }),
+    prepare(sql: string): CapturedStatement {
+      return {
+        sql,
+        args: [],
+        bind(...args: unknown[]) {
+          return { ...this, args };
+        },
+        async first<T>() {
+          return null as T | null;
+        },
+      };
+    },
+    batch: runBatch,
   };
 }
 
 test("handleIndexJobDlq persists the actual queue name", async () => {
-  const persisted: Record<string, unknown>[] = [];
+  let captured: CapturedStatement[] = [];
   await handleIndexJobDlq(
     { jobId: "job_1" },
     {
-      DB: makeDb(async (row) => {
-        persisted.push(row);
+      DB: makeDb(async (statements) => {
+        captured = statements;
       }),
     } as never,
     3,
     "takos-selfhost-index-jobs-dlq-staging",
   );
 
-  const row = persisted[0];
-  if (!row) throw new Error("expected DLQ row to be persisted");
-  assertEquals(row.queue, "takos-selfhost-index-jobs-dlq-staging");
-  assertEquals(row.retryCount, 3);
+  assertEquals(captured.length, 1);
+  assertEquals(captured[0].args[1], "takos-selfhost-index-jobs-dlq-staging");
+  assertEquals(captured[0].args[4], 3);
+  // A body that merely contains jobId is not a valid queue message and must
+  // not be allowed to steer an index_jobs update.
+  assertEquals(captured[0].sql.includes('UPDATE "index_jobs"'), false);
+});
+
+test("valid index DLQ body atomically records the ledger and fails the job", async () => {
+  let captured: CapturedStatement[] = [];
+  const body = {
+    version: INDEX_QUEUE_MESSAGE_VERSION,
+    jobId: "job_valid",
+    deliveryId: indexJobDeliveryId("job_valid"),
+    spaceId: "account-1",
+    type: "info_unit" as const,
+    targetId: "run-1",
+    timestamp: Date.now(),
+  };
+  await handleIndexJobDlq(
+    body,
+    {
+      DB: makeDb(async (statements) => {
+        captured = statements;
+      }),
+    } as never,
+    5,
+  );
+
+  assertEquals(captured.length, 2);
+  assertEquals(captured[0].sql.includes('INSERT INTO "dlq_entries"'), true);
+  assertEquals(captured[1].sql.includes('UPDATE "index_jobs"'), true);
+  assertEquals(captured[1].args[2], body.jobId);
+  assertEquals(captured[1].args[3], body.spaceId);
+  assertEquals(captured[1].args[4], body.type);
+  assertEquals(captured[1].sql.includes("'failed'"), true);
+  assertEquals(captured[1].sql.includes("'completed'"), false);
+  assertEquals(String(captured[1].args[0]).includes("after 5 attempts"), true);
+});
+
+test("Postgres index DLQ uses one dedicated transaction", async () => {
+  let transactionCalls = 0;
+  let outerBatchCalls = 0;
+  let captured: CapturedStatement[] = [];
+  const statementFactory = makeDb(async () => {
+    outerBatchCalls++;
+  });
+  const db = {
+    ...statementFactory,
+    async withTransaction(
+      callback: (tx: {
+        prepare: typeof statementFactory.prepare;
+        batch(statements: CapturedStatement[]): Promise<void>;
+      }) => Promise<void>,
+    ) {
+      transactionCalls++;
+      await callback({
+        prepare: statementFactory.prepare,
+        async batch(statements) {
+          captured = statements;
+        },
+      });
+    },
+  };
+
+  await handleIndexJobDlq(
+    {
+      version: INDEX_QUEUE_MESSAGE_VERSION,
+      jobId: "job_postgres",
+      deliveryId: indexJobDeliveryId("job_postgres"),
+      spaceId: "account-1",
+      type: "thread_context",
+      targetId: "thread-1",
+      timestamp: Date.now(),
+    },
+    { DB: db } as never,
+    4,
+  );
+
+  assertEquals(transactionCalls, 1);
+  assertEquals(outerBatchCalls, 0);
+  assertEquals(captured.length, 2);
+  assertEquals(captured[1].args[2], "job_postgres");
 });
 
 test("handleIndexJobDlq retries through caller when persistence fails", async () => {
@@ -49,6 +153,64 @@ test("handleIndexJobDlq retries through caller when persistence fails", async ()
       ),
     Error,
     "db unavailable",
+  );
+});
+
+test("missing targets and unavailable index backends return explicit failure outcomes", async () => {
+  const emptyDb = makeDb(async () => {});
+  assertEquals(
+    await handleInfoUnit(
+      { DB: emptyDb } as never,
+      "job-info",
+      "account-1",
+      undefined,
+    ),
+    {
+      processed: false,
+      reason: "missing_info_unit_run_id",
+      retryable: false,
+    },
+  );
+  assertEquals(
+    await handleThreadContext(
+      { DB: emptyDb } as never,
+      "job-thread",
+      "account-1",
+      undefined,
+    ),
+    {
+      processed: false,
+      reason: "missing_thread_context_thread_id",
+      retryable: false,
+    },
+  );
+  assertEquals(
+    await handleRepoCodeIndex(
+      { DB: emptyDb } as never,
+      "job-repo",
+      {
+        version: INDEX_QUEUE_MESSAGE_VERSION,
+        jobId: "job-repo",
+        deliveryId: indexJobDeliveryId("job-repo"),
+        spaceId: "account-1",
+        type: "repo_code_index",
+        timestamp: Date.now(),
+      },
+      undefined,
+    ),
+    {
+      processed: false,
+      reason: "missing_repo_code_index_target",
+      retryable: false,
+    },
+  );
+  assertEquals(
+    await handleVectorize({ DB: emptyDb } as never, "job-vector", "account-1"),
+    {
+      processed: false,
+      reason: "embeddings_service_unavailable",
+      retryable: false,
+    },
   );
 });
 
@@ -121,9 +283,11 @@ function makeMemoryDb(input: {
               : null;
             const limit = Number(bound[sourceRunId ? 2 : 1]);
             const claims = input.claims
-              .filter((claim) =>
-                claim.account_id === accountId && claim.status === "active" &&
-                (!sourceRunId || claim.source_run_id === sourceRunId)
+              .filter(
+                (claim) =>
+                  claim.account_id === accountId &&
+                  claim.status === "active" &&
+                  (!sourceRunId || claim.source_run_id === sourceRunId),
               )
               .sort((a, b) => b.confidence - a.confidence)
               .slice(0, limit);
@@ -239,8 +403,8 @@ test("handleMemoryBuildPaths materializes direct and multi-hop memory paths", as
   assertEquals(memoryDb.deleteCount, 1);
   assertEquals(memoryDb.insertedPaths.length, 3);
 
-  const twoHopPath = memoryDb.insertedPaths.find((path) =>
-    path.start_claim_id === "c1" && path.end_claim_id === "c3"
+  const twoHopPath = memoryDb.insertedPaths.find(
+    (path) => path.start_claim_id === "c1" && path.end_claim_id === "c3",
   );
   assert(twoHopPath);
   assertEquals(twoHopPath.hop_count, 2);

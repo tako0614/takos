@@ -33,7 +33,7 @@ materialization** of this same topology, converging onto the Takosumi-applied mo
 ```mermaid
 flowchart TB
   Edge["Public edge<br/>web.fetch (admin domain)"]
-  W["Takos Worker<br/>src/worker/index.ts"]
+  W["Takos Worker<br/>cloudflare-entrypoint.ts → index.ts"]
   DO["Own Durable Objects<br/>(Session / RunNotifier / RateLimiter / Routing / container-host)"]
   Eg["Egress proxy<br/>TAKOS_EGRESS (binding-only)"]
   RH["container callback endpoints<br/>(URL-reachable, per-run token)"]

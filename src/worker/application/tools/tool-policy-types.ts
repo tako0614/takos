@@ -53,10 +53,6 @@ export const SKILL_OPS = [
   "skill.describe",
 ] as const;
 
-export const DEPLOY_OPS = [
-  "deploy.frontend",
-] as const;
-
 export const MCP_SERVER_OPS = [
   "mcp_server.list",
   "mcp_server.create",
@@ -71,7 +67,6 @@ export type SpaceOperationId =
   | (typeof CUSTOM_DOMAIN_OPS)[number]
   | (typeof DEPLOYMENT_OPS)[number]
   | (typeof SKILL_OPS)[number]
-  | (typeof DEPLOY_OPS)[number]
   | (typeof MCP_SERVER_OPS)[number];
 
 export interface SpaceOperationPolicy {

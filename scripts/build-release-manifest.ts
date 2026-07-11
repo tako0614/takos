@@ -1,6 +1,11 @@
 #!/usr/bin/env -S bun
 import { dirname } from "node:path";
 import * as runtime from "./runtime.ts";
+import {
+  AGENT_ENGINE_SOURCE_PATH,
+  type AgentEngineSource,
+  validateAgentEngineSource,
+} from "./validate-agent-runtime-release.ts";
 
 type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -110,6 +115,7 @@ type ImageDigestRecord = {
   workflowRun?: string;
   sbom?: boolean;
   provenance?: boolean;
+  agentEngineCommit?: string;
 };
 
 const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
@@ -166,6 +172,7 @@ const gitInfo = await collectGitInfo();
 const canonicalLayout = await collectCanonicalLayout();
 assertCleanGitState(gitInfo, canonicalLayout, options);
 const release = await collectReleaseIdentity(options);
+const agentEngineSource = await collectAgentEngineSource();
 
 const manifest = {
   schemaVersion: 1,
@@ -174,9 +181,19 @@ const manifest = {
   package: await collectPackageManifest(),
   releaseComponents: await collectReleaseComponents(),
   git: gitInfo,
+  sourceProvenance: collectSourceProvenance(
+    gitInfo,
+    release,
+    agentEngineSource,
+  ),
   canonicalLayout,
   validationCommands: commands,
-  officialImages: await collectOfficialImages(gitInfo, options, release),
+  officialImages: await collectOfficialImages(
+    gitInfo,
+    options,
+    release,
+    agentEngineSource,
+  ),
   distributionContract: await collectDistributionContract(),
   distributions: await collectDistributionManifests(),
   serviceSet: await collectServiceSet(),
@@ -308,6 +325,48 @@ async function collectReleaseIdentity(
     tag: canonicalTag,
     requestedVersion: options.releaseVersion,
     requestedTag: options.releaseTag,
+  };
+}
+
+async function collectAgentEngineSource(): Promise<AgentEngineSource> {
+  let parsed: unknown;
+  try {
+    parsed = await readJson<unknown>(AGENT_ENGINE_SOURCE_PATH);
+  } catch (error) {
+    console.error(
+      `Agent engine source validation failed:\n- ${AGENT_ENGINE_SOURCE_PATH} could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    runtime.exit(1);
+  }
+  const validation = validateAgentEngineSource(parsed);
+  if (!validation.source) {
+    console.error("Agent engine source validation failed:");
+    for (const error of validation.errors) console.error(`- ${error}`);
+    runtime.exit(1);
+  }
+  return validation.source;
+}
+
+function collectSourceProvenance(
+  gitInfo: GitInfo,
+  release: ReleaseIdentity,
+  agentEngineSource: AgentEngineSource,
+): JsonValue {
+  return {
+    releaseVersion: {
+      source: "package.json#takosRelease.version",
+      value: release.version,
+    },
+    takos: {
+      commit: gitInfo.commit ?? null,
+    },
+    agentEngine: {
+      repository: agentEngineSource.repository,
+      commit: agentEngineSource.commit,
+      pin: AGENT_ENGINE_SOURCE_PATH,
+    },
   };
 }
 
@@ -520,6 +579,7 @@ async function collectOfficialImages(
   gitInfo: GitInfo,
   options: BuildReleaseManifestOptions,
   release: ReleaseIdentity,
+  agentEngineSource: AgentEngineSource,
 ): Promise<JsonValue> {
   const owner = await collectGitHubOwner();
   const digestRecords = await collectImageDigestRecords(options.imageDigestDir);
@@ -544,6 +604,7 @@ async function collectOfficialImages(
         release.version,
         cloudflareContainerImageRequired,
         options.requireCloudflareContainerImages,
+        image.name === "takos-agent" ? agentEngineSource.commit : null,
         errors,
       );
     }
@@ -552,6 +613,12 @@ async function collectOfficialImages(
       ...image,
       repository,
       commitPin: gitInfo.commit ?? null,
+      sourceCommits: {
+        takos: gitInfo.commit ?? null,
+        ...(image.name === "takos-agent"
+          ? { agentEngine: agentEngineSource.commit }
+          : {}),
+      },
       tagPolicy: ["semver", `sha-${gitInfo.shortCommit ?? "<commit>"}`],
       digest,
       digestRef,
@@ -630,6 +697,7 @@ function validateImageDigestRecord(
   releaseVersion: string | null,
   cloudflareContainerImageRequired: boolean,
   requireCloudflareContainerImages: boolean,
+  expectedAgentEngineCommit: string | null,
   errors: string[],
 ): void {
   if (record.image !== repository) {
@@ -657,6 +725,14 @@ function validateImageDigestRecord(
   }
   if (gitInfo.commit && record.commit !== gitInfo.commit) {
     errors.push(`${name}: commit must match ${gitInfo.commit}`);
+  }
+  if (
+    expectedAgentEngineCommit &&
+    record.agentEngineCommit !== expectedAgentEngineCommit
+  ) {
+    errors.push(
+      `${name}: agentEngineCommit must match ${expectedAgentEngineCommit}`,
+    );
   }
   if (record.sbom !== true) {
     errors.push(`${name}: SBOM attestation must be recorded`);
@@ -725,6 +801,10 @@ function validationCommands(): CommandManifest[] {
       command: ["bun", "scripts/release-gate.ts", "--keep-going"],
     },
     {
+      name: "validate-agent-runtime-release",
+      command: ["bun", "run", "validate:agent-runtime-release"],
+    },
+    {
       name: "release-manifest",
       command: ["bun", "scripts/build-release-manifest.ts"],
     },
@@ -741,6 +821,11 @@ function assertRequiredValidationCommands(
     "opentofu-plan-gate": ["bun", "run", "opentofu:plan-gate"],
     "opentofu-secret-policy": ["bun", "run", "validate:opentofu-secrets"],
     "lint:docs": ["bun", "run", "lint:docs"],
+    "validate-agent-runtime-release": [
+      "bun",
+      "run",
+      "validate:agent-runtime-release",
+    ],
   };
   const errors: string[] = [];
 

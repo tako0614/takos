@@ -30,14 +30,15 @@ export function normalizeNavigationState(
     const filePath = nextFilePathSpecified
       ? nextState.filePath
       : stayingInStorage
-      ? previous.filePath
-      : undefined;
-    const storagePath = nextState.storagePath ??
+        ? previous.filePath
+        : undefined;
+    const storagePath =
+      nextState.storagePath ??
       (filePath
         ? getRouteParentPath(filePath)
         : stayingInStorage
-        ? previous.storagePath
-        : "/");
+          ? previous.storagePath
+          : "/");
 
     return {
       ...merged,
@@ -46,8 +47,8 @@ export function normalizeNavigationState(
       fileLine: nextFileLineSpecified
         ? nextState.fileLine
         : stayingInStorage
-        ? previous.fileLine
-        : undefined,
+          ? previous.fileLine
+          : undefined,
       ref: undefined,
       threadId: undefined,
       runId: undefined,
@@ -65,18 +66,18 @@ export function normalizeNavigationState(
       threadId: nextThreadIdSpecified
         ? nextState.threadId
         : stayingInChat
-        ? previous.threadId
-        : undefined,
+          ? previous.threadId
+          : undefined,
       runId: nextRunIdSpecified
         ? nextState.runId
         : stayingInChat
-        ? previous.runId
-        : undefined,
+          ? previous.runId
+          : undefined,
       messageId: nextMessageIdSpecified
         ? nextState.messageId
         : stayingInChat
-        ? previous.messageId
-        : undefined,
+          ? previous.messageId
+          : undefined,
       storagePath: undefined,
       filePath: undefined,
       fileLine: undefined,
@@ -94,19 +95,42 @@ export function normalizeNavigationState(
       filePath: nextFilePathSpecified
         ? nextState.filePath
         : stayingInRepo
-        ? previous.filePath
-        : undefined,
+          ? previous.filePath
+          : undefined,
       fileLine: nextFileLineSpecified
         ? nextState.fileLine
         : stayingInRepo
-        ? previous.fileLine
-        : undefined,
+          ? previous.fileLine
+          : undefined,
       ref: nextRefSpecified
         ? nextState.ref
         : stayingInRepo
-        ? previous.ref
-        : undefined,
+          ? previous.ref
+          : undefined,
       storagePath: undefined,
+      threadId: undefined,
+      runId: undefined,
+      messageId: undefined,
+    };
+  }
+
+  if (nextView === "connections") {
+    const stayingInConnections = previous.view === "connections";
+    const nextConnectionServerSpecified = hasRouteStateField(
+      nextState,
+      "connectionServer",
+    );
+    return {
+      ...merged,
+      connectionServer: nextConnectionServerSpecified
+        ? nextState.connectionServer
+        : stayingInConnections
+          ? previous.connectionServer
+          : undefined,
+      storagePath: undefined,
+      filePath: undefined,
+      fileLine: undefined,
+      ref: undefined,
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
@@ -128,6 +152,7 @@ export function normalizeNavigationState(
 
   return {
     ...merged,
+    connectionServer: undefined,
     storagePath: undefined,
     filePath: undefined,
     fileLine: undefined,

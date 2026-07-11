@@ -1,15 +1,13 @@
 import type { AgentExecutorControlConfig } from "./executor-dispatch.ts";
 import { base64UrlEncode } from "../../shared/utils/encoding-utils.ts";
-import { logError, logWarn } from "../../shared/utils/logger.ts";
 
 /**
  * Default remote-tool allowlist for the bundled Takos distribution. The agent
  * container fails closed when `TAKOS_AGENT_TOOL_ALLOWLIST` is unset (no remote
- * tool runs), so without a default the agent ships unable to read/write files,
- * exec, fetch, or touch repos out of the box. The remote tools are all
- * first-party Takos tools served by the same control plane, so the product
- * default is "all first-party tools" (`*`); operators can narrow this by
- * setting the env to an explicit comma-separated list.
+ * tool runs), so the product default is the current policy-filtered catalog
+ * (`*`). That catalog can include Takos core tools, installed Capsule MCP
+ * tools, and registered external MCP tools; role/capability checks still apply.
+ * Operators can narrow it to explicit tool names.
  */
 export const DEFAULT_AGENT_TOOL_ALLOWLIST = "*";
 
@@ -18,26 +16,11 @@ export interface AgentExecutorProxyConfigEnv {
   TAKOS_AGENT_START_TOKEN?: string;
   /**
    * Comma-separated remote-tool allowlist forwarded to the agent container as
-   * `TAKOS_AGENT_TOOL_ALLOWLIST`. `*` allows every first-party tool. When unset
-   * the bundled distribution falls back to {@link DEFAULT_AGENT_TOOL_ALLOWLIST}.
+   * `TAKOS_AGENT_TOOL_ALLOWLIST`. `*` allows every tool already admitted to the
+   * run catalog by policy. When unset the bundled distribution falls back to
+   * {@link DEFAULT_AGENT_TOOL_ALLOWLIST}.
    */
   TAKOS_AGENT_TOOL_ALLOWLIST?: string;
-  OPENAI_API_KEY?: string;
-  ANTHROPIC_API_KEY?: string;
-  GOOGLE_API_KEY?: string;
-  /** Deployment environment label (e.g. "production" / "development"). */
-  ENVIRONMENT?: string;
-  /**
-   * Opt-in escape hatch for injecting the durable provider keys directly into
-   * every executor container's env. Defaults to OFF (proxy mode): the agent
-   * fetches provider keys at runtime via the per-run-token-scoped `api-keys`
-   * control RPC, so the durable keys never touch a pooled/reused container env.
-   *
-   * Set to "1" / "true" only when a deployment cannot reach the control-plane
-   * `api-keys` endpoint. Accepts a single durable key leak across all tenants
-   * sharing the executor pool, so it should stay disabled in production.
-   */
-  EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT?: string;
 }
 
 export interface AgentExecutorContainerEnvVars extends Record<string, string> {
@@ -78,16 +61,9 @@ export function buildAgentExecutorProxyConfig(
 /**
  * Build the env injected into every (pooled / reused) executor container.
  *
- * By default the durable provider keys (OPENAI/ANTHROPIC/GOOGLE) are NOT
- * injected: containers are pooled and reused across runs and tenants, so a
- * single container compromise (or a tool reading its own env) would otherwise
- * leak every tenant's provider key. The agent instead fetches the provider key
- * at runtime over the per-run-token-scoped `api-keys` control RPC, which the
- * control plane authorizes against the active run. Only the per-run proxy
- * token + control-RPC URL are scoped into the container.
- *
- * `EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT` is an opt-in escape hatch for
- * deployments that cannot reach the control-plane `api-keys` endpoint.
+ * Durable provider keys are never injected: containers are pooled and reused
+ * across runs and tenants. The agent obtains one OpenAI-compatible runtime
+ * credential through the active-run-scoped `api-keys` control RPC.
  */
 export function buildAgentExecutorContainerEnvVars(
   env: AgentExecutorProxyConfigEnv,
@@ -96,11 +72,11 @@ export function buildAgentExecutorContainerEnvVars(
     // Cloudflare and OCI container ingress reaches the process over the
     // container's private network, not the loopback interface.
     TAKOS_AGENT_BIND_HOST: "0.0.0.0",
-    TAKOS_AGENT_CONTROL_RPC_BASE_URL: env.TAKOS_AGENT_CONTROL_RPC_BASE_URL ||
-      "",
+    TAKOS_AGENT_CONTROL_RPC_BASE_URL:
+      env.TAKOS_AGENT_CONTROL_RPC_BASE_URL || "",
     // Operator-configured allowlist wins; otherwise the bundled distribution
-    // ships with first-party tools enabled so the agent is usable out of the
-    // box. The container still fails closed if this resolves to empty.
+    // ships with the policy-filtered run catalog enabled. The container still
+    // fails closed if this resolves to empty.
     TAKOS_AGENT_TOOL_ALLOWLIST:
       (env.TAKOS_AGENT_TOOL_ALLOWLIST ?? "").trim() ||
       DEFAULT_AGENT_TOOL_ALLOWLIST,
@@ -110,43 +86,7 @@ export function buildAgentExecutorContainerEnvVars(
     "TAKOS_AGENT_START_TOKEN",
     env.TAKOS_AGENT_START_TOKEN,
   );
-  if (
-    shouldInjectProviderKeysDirect(env.EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT)
-  ) {
-    // This durable, cross-tenant key exposure must never be silent. Log it on
-    // every build; escalate to CRITICAL outside an explicit dev environment so a
-    // production deploy that flips it on is loud in logs/audit.
-    const environment = (env.ENVIRONMENT ?? "").trim().toLowerCase();
-    const isDev = environment === "development" || environment === "dev" ||
-      environment === "local" || environment === "test";
-    const message =
-      "EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT is ON: durable provider keys are " +
-      "injected into every pooled executor container env and are shared across " +
-      "all tenants on the pool — use only on isolated/single-tenant deployments.";
-    const ctx = {
-      module: "container-hosts/executor-proxy-config",
-      environment: environment || "unset",
-    };
-    if (isDev) logWarn(message, ctx);
-    else logError(message, undefined, { ...ctx, severity: "critical" });
-
-    copyOptionalEnvVar(vars, "OPENAI_API_KEY", env.OPENAI_API_KEY);
-    copyOptionalEnvVar(vars, "ANTHROPIC_API_KEY", env.ANTHROPIC_API_KEY);
-    copyOptionalEnvVar(vars, "GOOGLE_API_KEY", env.GOOGLE_API_KEY);
-  }
   return vars;
-}
-
-/**
- * Resolve the direct-key-injection escape hatch. Defaults to false (proxy
- * mode) for any unset/empty/unrecognized value.
- */
-export function shouldInjectProviderKeysDirect(
-  value: string | undefined,
-): boolean {
-  if (typeof value !== "string") return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
 function copyOptionalEnvVar(

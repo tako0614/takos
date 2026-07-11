@@ -19,10 +19,7 @@ test("every custom tool carries co-located namespace metadata", () => {
       tool.namespace !== undefined,
       `tool "${tool.name}" is missing namespace`,
     );
-    assert(
-      tool.family !== undefined,
-      `tool "${tool.name}" is missing family`,
-    );
+    assert(tool.family !== undefined, `tool "${tool.name}" is missing family`);
     assert(
       tool.risk_level !== undefined,
       `tool "${tool.name}" is missing risk_level`,
@@ -72,5 +69,13 @@ test("descriptor metadata is derived from the tool's own fields", () => {
       tool.side_effects,
       `descriptor side_effects drift for "${tool.name}"`,
     );
+  }
+});
+
+test("network tools carry their egress capability on the definition", () => {
+  for (const name of ["web_fetch", "mcp_add_server"]) {
+    const tool = CUSTOM_TOOLS.find((candidate) => candidate.name === name);
+    assert(tool !== undefined, `missing tool "${name}"`);
+    assertEquals(tool.required_capabilities, ["egress.http"]);
   }
 });

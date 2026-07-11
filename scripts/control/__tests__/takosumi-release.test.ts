@@ -333,7 +333,7 @@ case "$*" in
   *"consumer list takos-test-runs "*)
     printf 'Resolving dependencies\\n'
     printf 'Resolved, downloaded and extracted [2]\\n'
-    printf '[{"script_name":"takos-test"}]\\n'
+    printf '[{"script_name":"takos-test","type":"worker","dead_letter_queue":"takos-test-runs-dlq","settings":{"batch_size":1,"max_wait_time_ms":1000,"max_retries":5,"max_concurrency":250,"retry_delay":5}}]\\n'
     ;;
   *"consumer list "*)
     printf '[]\\n'
@@ -409,7 +409,7 @@ esac
   }
 });
 
-test("ensure-queue-consumers replaces a stale Worker consumer", async () => {
+test("ensure-queue-consumers replaces a matching Worker when settings drift", async () => {
   const root = mkdtempSync(resolve(tmpdir(), "takos-release-queue-rebind-"));
   const bin = resolve(root, "bin");
   const log = resolve(root, "commands.log");
@@ -424,13 +424,13 @@ case "$*" in
     if [ -f '${removed}' ]; then
       printf '[]\\n'
     else
-      printf '[{"script":"takos","type":"worker"}]\\n'
+      printf '[{"script":"takos-test","type":"worker","dead_letter_queue":"takos-test-runs-dlq","settings":{"batch_size":1,"max_wait_time_ms":1000,"max_retries":3,"max_concurrency":1,"retry_delay":0}}]\\n'
     fi
     ;;
   *"consumer list "*)
     printf '[]\\n'
     ;;
-  *"consumer remove takos-test-runs takos "*)
+  *"consumer remove takos-test-runs takos-test "*)
     touch '${removed}'
     ;;
   *"consumer add "*)
@@ -473,12 +473,99 @@ esac
     const commands = readFileSync(log, "utf8");
     assert.match(
       commands,
-      /queues consumer remove takos-test-runs takos --config/,
+      /queues consumer remove takos-test-runs takos-test --config/,
     );
     assert.match(
       commands,
       /queues consumer add takos-test-runs takos-test --batch-size 1 --batch-timeout 1 --config/,
     );
+    assert.match(
+      commands,
+      /--message-retries 5 --dead-letter-queue takos-test-runs-dlq --max-concurrency 250 --retry-delay-secs 5/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("ensure-queue-consumers does not accept stale settings after a duplicate add race", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-queue-duplicate-"));
+  const bin = resolve(root, "bin");
+  const log = resolve(root, "commands.log");
+  const removed = resolve(root, "stale-consumer-removed");
+  const duplicateSeen = resolve(root, "duplicate-seen");
+  const replacementAdded = resolve(root, "replacement-added");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\n' "$*" >> '${log}'
+case "$*" in
+  *"consumer list takos-test-runs "*)
+    if [ ! -f '${removed}' ] || { [ -f '${duplicateSeen}' ] && [ ! -f '${replacementAdded}' ]; }; then
+      printf '[{"script":"takos-test","type":"worker","dead_letter_queue":"takos-test-runs-dlq","settings":{"batch_size":1,"max_wait_time_ms":1000,"max_retries":3,"max_concurrency":1,"retry_delay":0}}]\n'
+    else
+      printf '[]\n'
+    fi
+    ;;
+  *"consumer list "*)
+    printf '[]\n'
+    ;;
+  *"consumer remove takos-test-runs takos-test "*)
+    touch '${removed}'
+    ;;
+  *"consumer add takos-test-runs takos-test "*)
+    if [ ! -f '${duplicateSeen}' ]; then
+      touch '${duplicateSeen}'
+      echo 'consumer already exists' >&2
+      exit 1
+    fi
+    touch '${replacementAdded}'
+    ;;
+  *"consumer add "*)
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 1
+    ;;
+esac
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "scripts/control/ensure-queue-consumers.mjs",
+        "production",
+        "--config",
+        productionWranglerConfig,
+      ],
+      {
+        cwd: repoRoot,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
+        },
+      },
+    );
+    const [status, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+
+    assert.equal(status, 0, `${stdout}\n${stderr}`.trim());
+    const commands = readFileSync(log, "utf8");
+    assert.equal(
+      (commands.match(/queues consumer add takos-test-runs takos-test/g) ?? [])
+        .length,
+      2,
+    );
+    assert.match(stdout, /still exposes the stale Worker consumer/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -1614,7 +1701,7 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
       productionWranglerConfig,
       [
         'name = "takos-test"',
-        'main = "../../src/worker/index.ts"',
+        'main = "../../src/worker/cloudflare-entrypoint.ts"',
         'compatibility_date = "2026-04-01"',
         'compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]',
         "",

@@ -43,22 +43,34 @@ docker compose --env-file .env.local -f compose.local.yml up --build -d
 ```bash
 bun run check          # ツールと canonical layout の診断
 bun run local:config   # compose 設定のレンダリング確認
-bun run local:e2e      # E2E スモークテスト
+bun run local:e2e      # public API -> queue -> agent container の実 Run E2E
+bun run validate:agent-local-proof # component + 上記の実 Run 証跡
 ```
+
+`local:e2e` は通常の `compose.local.yml` に検証専用 override を重ね、ローカル OIDC issuer、決定的な
+OpenAI-compatible stub、executor bridge を一時的に起動します。外部 API key は不要です。公開 API から
+Workspace / Thread / user message / Run を作成し、Run が `completed` になるまで status、output、event、assistant message を
+poll します。health check だけでは成功になりません。
+
+Docker daemon を使えない場合、`validate:agent-local-proof` は live proof を成功扱いにせず、JSON の
+`local-compose-public-api-run` を `unavailable` として理由を表示します。Docker を使わない component 確認だけを明示的に
+行う場合は `bun run validate:agent-local-proof:components` を使えますが、出力の `complete` は `false` であり実 Run 証跡には
+なりません。
 
 ## ローカルで起動するサービス
 
-| サービス       | 役割                                    |
-| -------------- | --------------------------------------- |
+| サービス       | 役割                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------- |
 | `takos-worker` | Web UI / API / queue / scheduled Worker / Git ホスティング (worker-native Smart HTTP) |
-| `takos-agent`  | エージェント実行                        |
-| `takosumi`     | デプロイエンジン                        |
-| `postgres`     | データベース                            |
-| `redis`        | キュー / キャッシュ                     |
+| `takos-agent`  | エージェント実行                                                                      |
+| `takosumi`     | デプロイエンジン                                                                      |
+| `postgres`     | データベース                                                                          |
+| `redis`        | キュー / キャッシュ                                                                   |
 
 Takos product の public/control Worker は `takos-worker` 1 つです。local / self-host
 stack で container callback helper endpoint が見える場合も、これは container
 接続用の実装 detail であり、追加の Takos product Worker 境界ではありません。
+`local:e2e` の `agent-proof-runtime` も検証時だけ使う harness で、通常の local stack や product service には含めません。
 
 ## 個別のプロセスを起動する
 

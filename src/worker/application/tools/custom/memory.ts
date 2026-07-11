@@ -81,7 +81,7 @@ export const RECALL: ToolDefinition = {
 export const SET_REMINDER: ToolDefinition = {
   name: "set_reminder",
   description:
-    "Set a reminder for future. Can be time-based, condition-based, or context-based.",
+    "Create a reminder record for the user to review later. This stores the trigger metadata but does not promise automatic notification or condition evaluation.",
   category: "memory",
   namespace: "memory",
   family: "memory.core",
@@ -147,13 +147,9 @@ export const rememberHandler: ToolHandler = async (args, context) => {
     importance,
   });
 
-  let result = `Remembered (${type}): ${content.substring(0, 50)}${
+  return `Remembered (${type}): ${content.substring(0, 50)}${
     content.length > 50 ? "..." : ""
   }`;
-  if (context.sessionId) {
-    result += ` [session: ${context.sessionId.slice(0, 8)}...]`;
-  }
-  return result;
 };
 
 export const recallHandler: ToolHandler = async (args, context) => {
@@ -179,11 +175,8 @@ export const recallHandler: ToolHandler = async (args, context) => {
   );
 
   const lines = memoryResults.map((m) => {
-    const typeEmoji = m.type === "episode"
-      ? "📅"
-      : m.type === "semantic"
-      ? "💡"
-      : "📋";
+    const typeEmoji =
+      m.type === "episode" ? "📅" : m.type === "semantic" ? "💡" : "📋";
     const categoryStr = m.category ? ` [${m.category}]` : "";
     return `${typeEmoji}${categoryStr} ${m.content.substring(0, 100)}${
       m.content.length > 100 ? "..." : ""
@@ -233,12 +226,7 @@ export const setReminderHandler: ToolHandler = async (args, context) => {
       break;
   }
 
-  let result =
-    `Reminder set (${priority}): "${content}" - ${triggerDescription}`;
-  if (context.sessionId) {
-    result += ` [session: ${context.sessionId.slice(0, 8)}...]`;
-  }
-  return result;
+  return `Reminder set (${priority}): "${content}" - ${triggerDescription}`;
 };
 
 export const { tools: MEMORY_TOOLS, handlers: MEMORY_HANDLERS } = defineTools([

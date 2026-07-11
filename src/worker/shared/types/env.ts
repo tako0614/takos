@@ -41,19 +41,22 @@ export interface AiEnv {
   OPENAI_BASE_URL?: string;
   /** Optional comma-separated or JSON array allowlist for selectable chat models. */
   TAKOS_ALLOWED_MODELS?: string;
+  /**
+   * Explicit security downgrade for self-host operators that choose to hand a
+   * deployment-global provider key to an untrusted agent container. Disabled
+   * by default outside development; prefer a short-lived AI Gateway token.
+   */
+  TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
-  SERPER_API_KEY?: string;
 }
 
 export interface AgentConfigEnv {
-  MAX_AGENT_ITERATIONS?: string;
+  TAKOS_AGENT_MAX_GRAPH_STEPS?: string;
+  TAKOS_AGENT_MAX_TOOL_ROUNDS?: string;
   AGENT_TEMPERATURE?: string;
-  AGENT_RATE_LIMIT?: string;
-  AGENT_ITERATION_TIMEOUT?: string;
-  AGENT_TOTAL_TIMEOUT?: string;
-  TOOL_EXECUTION_TIMEOUT?: string;
-  LANGGRAPH_TIMEOUT?: string;
+  /** Cross-isolate run-lease poll cadence for in-flight tools (max 5000ms). */
+  TAKOS_AGENT_RUN_LEASE_POLL_INTERVAL_MS?: string;
   APP_DEPLOY_REMOTE_MAX_PACKFILE_BYTES?: string;
   APP_DEPLOY_REMOTE_MAX_OBJECTS?: string;
   APP_DEPLOY_REMOTE_MAX_INFLATED_TOTAL_BYTES?: string;
@@ -63,6 +66,12 @@ export interface AgentConfigEnv {
   APP_DEPLOY_REMOTE_MAX_ARCHIVE_BYTES?: string;
   /** JSON object mapping model IDs to context window sizes, e.g. {"gpt-5.5":200} */
   MODEL_CONTEXT_WINDOWS?: string;
+  /**
+   * Operator-controlled JSON array or comma-separated list of local MCP server
+   * IDs whose readOnlyHint may disable side-effect de-duplication. External MCP
+   * servers are never eligible, even when an ID is listed.
+   */
+  TAKOS_TRUSTED_LOCAL_MCP_READONLY_SERVER_IDS?: string;
 }
 
 export type FetchBinding = {
@@ -166,6 +175,13 @@ export interface Env
   TAKOSUMI_ACCOUNTS_SUBJECT?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
+  /**
+   * Operator secret: JSON object keyed by an exact MCP resource or OAuth
+   * authorization-server URL. Values contain preregistered OAuth client
+   * information (`client_id`, optional `client_secret`, and optional
+   * `token_endpoint_auth_method`).
+   */
+  TAKOS_MCP_OAUTH_PREREGISTRATIONS_JSON?: string;
   /**
    * Optional operator-controlled origin for server-to-server calls from tenant
    * workers back into Takos. ADMIN_DOMAIN remains the public Takos admin

@@ -14,10 +14,9 @@
 //!   3. Usage tracking (`prompt_tokens` / `completion_tokens`) flows through
 //!      to `TakosModelRunner.usage_payload()`.
 //!   4. The `local-smoke` model precedence rule still triggers when the model
-//!      name is `local-smoke`: the mock server is never called and the
-//!      built-in directives (`memory:` / `tool:`) intercept the prompt before
-//!      any HTTP request fires. This is the same precedence that guards
-//!      `skill_resolution` / memory tool short-circuits in production.
+//!      name is `local-smoke`: the mock server is never called and the generic
+//!      `tool:` directive is handled before any HTTP request fires. Memory and
+//!      timeline names have no wrapper-local directive or execution authority.
 //!
 //! Run with:
 //!   cd takos/containers/agent
@@ -36,16 +35,13 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde_json::{json, Value};
-use takos_agent::control_rpc::{
-    ControlRpcClient, RunConfigResponse, SkillCatalogResponse, StartPayload, ToolDefinition,
-};
-use takos_agent::engine_support::{
-    build_engine_deps, resolve_embedding_backend_config, UsageTracker,
-};
+use takos_agent::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition};
+use takos_agent::engine_support::{build_engine_deps, UsageTracker};
 use takos_agent::model::TakosModelRunner;
 use takos_agent::tool_bridge::CompositeToolExecutor;
 use takos_agent_engine::ids::{LoopId, SessionId};
-use takos_agent_engine::model::{Embedding, ModelInput, ModelRunner};
+use takos_agent_engine::model::{ConversationMessage, ConversationRole, ModelInput, ModelRunner};
+use takos_agent_engine::storage::InMemoryLoopStateRepository;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -109,10 +105,6 @@ impl MockOpenAiServer {
 
     fn endpoint(&self) -> String {
         format!("http://{}/v1/chat/completions", self.addr)
-    }
-
-    fn embedding_base_url(&self) -> String {
-        format!("http://{}", self.addr)
     }
 
     async fn set_response(&self, response: Value) {
@@ -190,6 +182,8 @@ fn echo_tool() -> ToolDefinition {
             },
             "required": ["text"]
         }),
+        risk_level: Some("low".to_string()),
+        side_effects: Some(false),
     }
 }
 
@@ -201,6 +195,8 @@ fn sample_input(prompt: &str) -> ModelInput {
         session_context: Vec::new(),
         memory_context: Vec::new(),
         tool_context: Vec::new(),
+        conversation_history: Vec::new(),
+        turn_messages: Vec::new(),
         user_message: prompt.to_string(),
         plan: None,
     }
@@ -318,11 +314,7 @@ fn embedding_response() -> Value {
 
 #[tokio::test(flavor = "current_thread")]
 async fn mock_llm_emits_tool_call_for_echo_tool() {
-    let server = MockOpenAiServer::start_sequence(vec![
-        assistant_message_response("__TAKOS_NEEDS_TOOLS__"),
-        tool_call_response(),
-    ])
-    .await;
+    let server = MockOpenAiServer::start(tool_call_response()).await;
     let usage = Arc::new(UsageTracker::default());
     let runner = TakosModelRunner::new_with_endpoint(
         server.endpoint(),
@@ -348,6 +340,7 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
         "expected exactly one tool_call to be decoded"
     );
     let call = &output.tool_calls[0];
+    assert_eq!(call.id.as_deref(), Some("call_echo_1"));
     assert_eq!(call.name, "echo");
     assert_eq!(
         call.arguments,
@@ -373,7 +366,20 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
         .await;
 
     let mut next_input = sample_input("Say hello via the echo tool.");
-    next_input.tool_context.push(tool_result.clone());
+    next_input.turn_messages.extend([
+        ConversationMessage {
+            role: ConversationRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: vec![call.clone()],
+        },
+        ConversationMessage {
+            role: ConversationRole::Tool,
+            content: tool_result.clone(),
+            tool_call_id: call.id.clone(),
+            tool_calls: Vec::new(),
+        },
+    ]);
 
     let final_output = runner
         .run(next_input)
@@ -394,19 +400,18 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
 
     // Usage tracker should accumulate across both turns.
     let payload = runner.usage_payload();
-    assert_eq!(payload.input_tokens, 23 + 17 + 23);
-    assert_eq!(payload.output_tokens, 9 + 5 + 9);
+    assert_eq!(payload.input_tokens, 17 + 23);
+    assert_eq!(payload.output_tokens, 5 + 9);
 
     // Verify the request shape sent to the mock server included our tool
     // catalog and bearer auth header.
     let captured = server.captured_requests().await;
     assert_eq!(
         captured.len(),
-        3,
-        "router, tool call, and final answer should reach the mock server"
+        2,
+        "tool call and final answer should reach the mock server"
     );
-    assert!(captured[0].body.get("tools").is_none());
-    let first = &captured[1];
+    let first = &captured[0];
     assert_eq!(
         first.auth_header.as_deref(),
         Some("Bearer sk-mock-key"),
@@ -430,12 +435,33 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
         vec!["echo"],
         "echo tool must be advertised to the LLM"
     );
+    let second_messages = captured[1].body["messages"]
+        .as_array()
+        .expect("second request messages");
+    assert_eq!(second_messages.len(), 4);
+    assert_eq!(
+        second_messages
+            .iter()
+            .filter(|message| {
+                message["role"] == "assistant" && message["tool_calls"][0]["id"] == "call_echo_1"
+            })
+            .count(),
+        1,
+    );
+    assert_eq!(
+        second_messages
+            .iter()
+            .filter(|message| {
+                message["role"] == "tool" && message["tool_call_id"] == "call_echo_1"
+            })
+            .count(),
+        1
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn unavailable_tool_call_retries_once_without_tools() {
     let server = MockOpenAiServer::start_sequence(vec![
-        assistant_message_response("__TAKOS_NEEDS_TOOLS__"),
         unavailable_tool_call_response(),
         assistant_message_response("103"),
     ])
@@ -457,23 +483,22 @@ async fn unavailable_tool_call_retries_once_without_tools() {
 
     assert_eq!(output.assistant_message.as_deref(), Some("103"));
     assert!(output.tool_calls.is_empty());
-    assert_eq!(usage.snapshot().input_tokens, 23 + 17 + 23);
-    assert_eq!(usage.snapshot().output_tokens, 9 + 5 + 9);
+    assert_eq!(usage.snapshot().input_tokens, 17 + 23);
+    assert_eq!(usage.snapshot().output_tokens, 5 + 9);
 
     let requests = server.captured_requests().await;
-    assert_eq!(requests.len(), 3);
-    assert!(requests[0].body.get("tools").is_none());
-    assert!(requests[1].body.get("tools").is_some());
-    assert!(requests[2].body.get("tools").is_none());
-    assert!(requests[2].body.get("tool_choice").is_none());
-    let retry_system_prompt = requests[2].body["messages"][0]["content"]
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].body.get("tools").is_some());
+    assert!(requests[1].body.get("tools").is_none());
+    assert!(requests[1].body.get("tool_choice").is_none());
+    let retry_system_prompt = requests[1].body["messages"][0]["content"]
         .as_str()
         .expect("retry system prompt");
     assert!(retry_system_prompt.contains("not available in this runtime"));
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn direct_answer_with_tools_available_uses_one_tool_free_request() {
+async fn direct_answer_with_tools_available_uses_one_auto_tool_request() {
     let server = MockOpenAiServer::start(assistant_message_response("107")).await;
     let usage = Arc::new(UsageTracker::default());
     let runner = TakosModelRunner::new_with_endpoint(
@@ -488,7 +513,7 @@ async fn direct_answer_with_tools_available_uses_one_tool_free_request() {
     let output = runner
         .run(sample_input("Return only the answer to 51 + 56."))
         .await
-        .expect("reasoning-only request should finish without advertising tools");
+        .expect("reasoning-only request should finish with auto tool choice");
 
     assert_eq!(output.assistant_message.as_deref(), Some("107"));
     assert!(output.tool_calls.is_empty());
@@ -497,21 +522,14 @@ async fn direct_answer_with_tools_available_uses_one_tool_free_request() {
 
     let requests = server.captured_requests().await;
     assert_eq!(requests.len(), 1);
-    assert!(requests[0].body.get("tools").is_none());
-    assert!(requests[0].body.get("tool_choice").is_none());
-    let system_prompt = requests[0].body["messages"][0]["content"]
-        .as_str()
-        .expect("router system prompt");
-    assert!(system_prompt.contains("__TAKOS_NEEDS_TOOLS__"));
+    assert!(requests[0].body.get("tools").is_some());
+    assert_eq!(requests[0].body["tool_choice"], "auto");
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn local_smoke_model_intercepts_directives_before_hitting_mock_endpoint() {
-    // Skill resolution / memory tool intercept precedence: when the model is
-    // `local-smoke`, the runner short-circuits to the in-process directive
-    // parser regardless of the endpoint configuration. This proves that
-    // production memory-tool / skill-resolution intercepts cannot be
-    // accidentally bypassed by an attacker swapping the endpoint.
+async fn local_smoke_only_intercepts_generic_tool_directive() {
+    // `memory:` and `timeline:` are plain user text. Durable memory/timeline
+    // tools are Worker-owned remote catalog entries, not wrapper directives.
     let server = MockOpenAiServer::start(json!({"unreachable": true})).await;
     let usage = Arc::new(UsageTracker::default());
     let runner = TakosModelRunner::new_with_endpoint(
@@ -523,28 +541,33 @@ async fn local_smoke_model_intercepts_directives_before_hitting_mock_endpoint() 
         usage.clone(),
     );
 
-    let output = runner
+    let memory_text = runner
         .run(sample_input("memory:hello world"))
         .await
-        .expect("local-smoke directive should resolve in-process");
+        .expect("local-smoke response should remain in-process");
 
-    assert!(output.assistant_message.is_none());
-    assert_eq!(output.tool_calls.len(), 1);
-    assert_eq!(output.tool_calls[0].name, "semantic_search_memory");
-    assert_eq!(
-        output.tool_calls[0]
-            .arguments
-            .get("query")
-            .and_then(|v| v.as_str()),
-        Some("hello world"),
-    );
+    assert!(memory_text
+        .assistant_message
+        .as_deref()
+        .is_some_and(|message| message.contains("user=memory:hello world")));
+    assert!(memory_text.tool_calls.is_empty());
+
+    let timeline_text = runner
+        .run(sample_input("timeline:session-1"))
+        .await
+        .expect("timeline text should remain in-process");
+    assert!(timeline_text
+        .assistant_message
+        .as_deref()
+        .is_some_and(|message| message.contains("user=timeline:session-1")));
+    assert!(timeline_text.tool_calls.is_empty());
     assert_eq!(
         server.captured_requests().await.len(),
         0,
         "local-smoke must NOT touch the mock OpenAI endpoint"
     );
 
-    // `tool:` directive — also intercepted before any HTTP traffic.
+    // The one generic dev/test directive remains available.
     let tool_output = runner
         .run(sample_input("tool:echo {\"text\":\"direct\"}"))
         .await
@@ -558,7 +581,7 @@ async fn local_smoke_model_intercepts_directives_before_hitting_mock_endpoint() 
     assert_eq!(
         server.captured_requests().await.len(),
         0,
-        "second local-smoke turn must also stay in-process",
+        "local-smoke turns must stay in-process",
     );
 }
 
@@ -586,19 +609,75 @@ async fn mock_llm_assistant_message_only_response_decodes_to_engine_output() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn mock_openai_embedding_config_wires_engine_embedder() {
+async fn durable_history_reaches_provider_as_structured_messages() {
+    let server = MockOpenAiServer::start(assistant_message_response("continued")).await;
+    let runner = TakosModelRunner::new_with_endpoint(
+        server.endpoint(),
+        "gpt-mock",
+        None,
+        vec!["sk-mock-key".to_string()],
+        Vec::new(),
+        Arc::new(UsageTracker::default()),
+    );
+    let mut input = sample_input("current question");
+    input.conversation_history = vec![
+        ConversationMessage {
+            role: ConversationRole::System,
+            content: "thread summary".to_string(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+        },
+        ConversationMessage {
+            role: ConversationRole::User,
+            content: "earlier question".to_string(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+        },
+        ConversationMessage {
+            role: ConversationRole::Assistant,
+            content: "earlier answer".to_string(),
+            tool_call_id: None,
+            tool_calls: Vec::new(),
+        },
+    ];
+
+    let output = runner
+        .run(input)
+        .await
+        .expect("history request should succeed");
+    assert_eq!(output.assistant_message.as_deref(), Some("continued"));
+    let captured = server.captured_requests().await;
+    let messages = captured[0].body["messages"]
+        .as_array()
+        .expect("request messages");
+    assert_eq!(messages.len(), 5);
+    assert_eq!(messages[0]["role"], "system");
+    assert_eq!(messages[1]["content"], "thread summary");
+    assert_eq!(messages[2]["role"], "user");
+    assert_eq!(messages[2]["content"], "earlier question");
+    assert_eq!(messages[3]["role"], "assistant");
+    assert_eq!(messages[3]["content"], "earlier answer");
+    assert_eq!(messages[4]["role"], "user");
+    assert!(messages[4]["content"]
+        .as_str()
+        .is_some_and(|content| content.contains("current question")));
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| {
+                message["content"]
+                    .as_str()
+                    .is_some_and(|content| content.contains("current question"))
+            })
+            .count(),
+        1,
+        "the current user message must reach the provider exactly once",
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn stateless_engine_does_not_build_a_remote_ephemeral_embedding_index() {
     let server = MockOpenAiServer::start(embedding_response()).await;
-    let run_config = RunConfigResponse {
-        embedding_provider: Some("openai".to_string()),
-        embedding_model: Some("embedding-mock".to_string()),
-        embedding_base_url: Some(server.embedding_base_url()),
-        embedding_dimensions: Some(2),
-        ..Default::default()
-    };
-    let embedding_config =
-        resolve_embedding_backend_config(&run_config, Some("sk-embedding-control"))
-            .expect("embedding config should resolve")
-            .expect("OpenAI-compatible embedding config should be enabled");
     let usage = Arc::new(UsageTracker::default());
     let model_runner = TakosModelRunner::new_with_endpoint(
         server.endpoint(),
@@ -620,48 +699,25 @@ async fn mock_openai_embedding_config_wires_engine_embedder() {
         control_rpc_token: "control-token".to_string(),
     })
     .expect("control RPC client should build for test wiring");
-    let tool_executor =
-        CompositeToolExecutor::new(client, Vec::new(), SkillCatalogResponse::default());
-    let root = unique_temp_dir("takos-agent-embedding");
-    std::fs::create_dir_all(&root).expect("test engine root should be created");
-    let deps = build_engine_deps(&root, model_runner, tool_executor, Some(embedding_config))
-        .expect("engine deps should build with OpenAI-compatible embedder");
+    let tool_executor = CompositeToolExecutor::new(client, Vec::new());
+    let deps = build_engine_deps(
+        model_runner,
+        tool_executor,
+        Arc::new(InMemoryLoopStateRepository::default()),
+    )
+    .expect("stateless engine deps should build");
 
     let embedding = deps
         .embedder
         .embed_text("remember agent memory")
         .await
-        .expect("embedding request should succeed");
-    assert_eq!(embedding, Embedding(vec![0.125, 0.875]));
+        .expect("scratch embedding should succeed");
+    assert_eq!(embedding.0.len(), 48);
 
     let captured = server.captured_requests().await;
     assert_eq!(
         captured.len(),
-        1,
-        "embedding request should hit mock server"
+        0,
+        "turn-local scratch memory must not call a remote embedding backend"
     );
-    let request = &captured[0];
-    assert_eq!(
-        request.auth_header.as_deref(),
-        Some("Bearer sk-embedding-control"),
-        "control-plane OpenAI key should be used for embeddings",
-    );
-    assert_eq!(
-        request.body,
-        json!({
-            "model": "embedding-mock",
-            "input": "remember agent memory",
-            "dimensions": 2
-        }),
-    );
-
-    std::fs::remove_dir_all(root).expect("test engine root should be removed");
-}
-
-fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time should be after epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}-{nanos}"))
 }

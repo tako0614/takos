@@ -50,4 +50,20 @@ export type {
 
 export type { StorageFile } from "./storage.ts";
 
-export type { McpServerRecord } from "./hub.ts";
+export type {
+  McpDiscoverySourceKind,
+  McpRegistryAuthType,
+  McpRegistryPackage,
+  McpRegistryProvenance,
+  McpRegistrySearchCandidate,
+  McpRegistrySearchFailure,
+  McpRegistrySearchResult,
+  McpRegistrySearchSourceResult,
+  McpRegistrySource,
+  McpRegistrySourceKind,
+  McpAuthorizationStatus,
+  McpServerRecord,
+  McpServerCardDiscoveryResult,
+  McpServerTool,
+  McpToolConfirmation,
+} from "./hub.ts";

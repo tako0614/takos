@@ -4,7 +4,6 @@ import { ChatSearchModal } from "../../views/chat/ChatSearchModal.tsx";
 import { AgentModal } from "../../views/AgentModal.tsx";
 import { useModals } from "../../store/modal.tsx";
 import { useNavigation } from "../../store/navigation.ts";
-import { useAuth } from "../../hooks/useAuth.tsx";
 import { buildChatSearchNavigationState } from "./app-modal-state.ts";
 
 interface AppModalsProps {
@@ -18,9 +17,8 @@ interface AppModalsProps {
 export function AppModals(props: AppModalsProps) {
   const modal = useModals();
   const navigation = useNavigation();
-  const auth = useAuth();
-  const resolvedSpaceId = createMemo(() =>
-    navigation.selectedSpaceId ?? navigation.preferredSpaceId
+  const resolvedSpaceId = createMemo(
+    () => navigation.selectedSpaceId ?? navigation.preferredSpaceId,
   );
 
   return (
@@ -52,7 +50,6 @@ export function AppModals(props: AppModalsProps) {
       <Show when={modal.showAgentModal && navigation.selectedSpaceId}>
         <AgentModal
           spaceId={navigation.selectedSpaceId!}
-          spaces={auth.spaces}
           onClose={() => modal.setShowAgentModal(false)}
         />
       </Show>

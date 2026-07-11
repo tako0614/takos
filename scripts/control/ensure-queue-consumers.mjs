@@ -1,57 +1,7 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
 import process from "node:process";
-
-const QUEUE_CONSUMERS = [
-  {
-    queueKey: "runs",
-    batchSize: 1,
-    batchTimeout: 1,
-    messageRetries: 3,
-    deadLetterQueueKey: "runs_dlq",
-  },
-  {
-    queueKey: "runs_dlq",
-    batchSize: 10,
-    batchTimeout: 60,
-  },
-  {
-    queueKey: "index_jobs",
-    batchSize: 5,
-    batchTimeout: 60,
-    messageRetries: 2,
-    deadLetterQueueKey: "index_jobs_dlq",
-  },
-  {
-    queueKey: "index_jobs_dlq",
-    batchSize: 10,
-    batchTimeout: 60,
-  },
-  {
-    queueKey: "workflow",
-    batchSize: 1,
-    batchTimeout: 1,
-    messageRetries: 3,
-    deadLetterQueueKey: "workflow_dlq",
-  },
-  {
-    queueKey: "workflow_dlq",
-    batchSize: 10,
-    batchTimeout: 60,
-  },
-  {
-    queueKey: "deployment",
-    batchSize: 1,
-    batchTimeout: 1,
-    messageRetries: 3,
-    deadLetterQueueKey: "deployment_dlq",
-  },
-  {
-    queueKey: "deployment_dlq",
-    batchSize: 10,
-    batchTimeout: 60,
-  },
-];
+import { QUEUE_CONSUMERS } from "./queue-consumer-config.ts";
 
 // The Workers API may accept an upload before the Queues API can resolve the
 // same Worker. Each compat request is bounded independently, so retry the
@@ -101,13 +51,23 @@ for (const consumer of QUEUE_CONSUMERS) {
     queueName,
     wranglerGlobalArgs,
   );
+  const currentWorkerConsumer = currentConsumers.find((entry) =>
+    consumerMatchesWorker(entry, workerName),
+  );
   if (
-    currentConsumers.some((entry) => consumerMatchesWorker(entry, workerName))
+    currentWorkerConsumer &&
+    consumerSettingsMatch(currentWorkerConsumer, consumer, queues)
   ) {
     console.log(
-      `Queue ${queueName} already has Worker consumer ${workerName}; continuing.`,
+      `Queue ${queueName} already has the desired Worker consumer ${workerName}; continuing.`,
     );
     continue;
+  }
+
+  if (currentWorkerConsumer) {
+    console.log(
+      `Queue ${queueName} Worker consumer ${workerName} settings drifted; replacing it.`,
+    );
   }
 
   for (const current of currentConsumers) {
@@ -142,11 +102,19 @@ for (const consumer of QUEUE_CONSUMERS) {
       requireStringProperty(queues, consumer.deadLetterQueueKey, "queues"),
     );
   }
+  if (consumer.maxConcurrency != null) {
+    addArgs.push("--max-concurrency", String(consumer.maxConcurrency));
+  }
+  if (consumer.retryDelaySeconds != null) {
+    addArgs.push("--retry-delay-secs", String(consumer.retryDelaySeconds));
+  }
   await addQueueConsumerWithRetry(
     addArgs,
     workerName,
     queueName,
     wranglerGlobalArgs,
+    consumer,
+    queues,
   );
 }
 
@@ -155,6 +123,8 @@ async function addQueueConsumerWithRetry(
   workerName,
   queueName,
   globalArgs,
+  desired,
+  queues,
 ) {
   for (let attempt = 0; ; attempt += 1) {
     const result = spawnSync("bunx", addArgs, {
@@ -171,8 +141,24 @@ async function addQueueConsumerWithRetry(
       /already has|already exists|duplicate|consumer .* exists/i.test(combined)
     ) {
       const consumers = await listQueueConsumers(queueName, globalArgs);
-      if (consumers.some((entry) => consumerMatchesWorker(entry, workerName))) {
+      const matching = consumers.find((entry) =>
+        consumerMatchesWorker(entry, workerName),
+      );
+      if (matching && consumerSettingsMatch(matching, desired, queues)) {
         return;
+      }
+      if (matching) {
+        const duplicateDelay = WORKER_PROPAGATION_RETRY_DELAYS_MS[attempt];
+        if (duplicateDelay === undefined) {
+          throw new Error(
+            `Queue ${queueName} still exposes stale settings for Worker consumer ${workerName} after replacement`,
+          );
+        }
+        console.log(
+          `Queue ${queueName} still exposes the stale Worker consumer ${workerName}; waiting for replacement propagation.`,
+        );
+        if (duplicateDelay > 0) await sleep(duplicateDelay);
+        continue;
       }
     }
     const delay = WORKER_PROPAGATION_RETRY_DELAYS_MS[attempt];
@@ -316,6 +302,57 @@ function parseJsonFromCommandOutput(output) {
 
 function consumerMatchesWorker(consumer, workerName) {
   return consumerWorkerName(consumer) === workerName;
+}
+
+function consumerSettingsMatch(current, desired, queues) {
+  const settings =
+    current?.settings && typeof current.settings === "object"
+      ? current.settings
+      : current;
+  const expectedDeadLetterQueue = desired.deadLetterQueueKey
+    ? requireStringProperty(queues, desired.deadLetterQueueKey, "queues")
+    : "";
+  const currentDeadLetterQueue =
+    stringValue(current?.dead_letter_queue) ??
+    stringValue(current?.deadLetterQueue) ??
+    "";
+
+  return (
+    currentDeadLetterQueue === expectedDeadLetterQueue &&
+    numberValue(settings?.batch_size, settings?.batchSize) ===
+      desired.batchSize &&
+    numberValue(settings?.max_wait_time_ms, settings?.maxWaitTimeMs) ===
+      desired.batchTimeout * 1000 &&
+    numberValue(settings?.max_retries, settings?.maxRetries, 3) ===
+      (desired.messageRetries ?? 3) &&
+    numberValue(settings?.retry_delay, settings?.retryDelay, 0) ===
+      (desired.retryDelaySeconds ?? 0) &&
+    nullableNumberValue(settings?.max_concurrency, settings?.maxConcurrency) ===
+      (desired.maxConcurrency ?? null)
+  );
+}
+
+function stringValue(value) {
+  return typeof value === "string" ? value : null;
+}
+
+function numberValue(...values) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
+function nullableNumberValue(...values) {
+  if (values.some((value) => value === null || value === undefined)) {
+    const numeric = numberValue(...values);
+    return numeric ?? null;
+  }
+  return numberValue(...values);
 }
 
 function consumerWorkerName(consumer) {

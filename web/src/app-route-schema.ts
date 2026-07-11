@@ -18,6 +18,7 @@ export type AppRouteComponentKey =
   | "repos"
   | "storage"
   | "apps"
+  | "connections"
   | "deploy"
   | "memory"
   | "settings"
@@ -53,9 +54,7 @@ const DEPLOY_ALIAS_SECTIONS = {
   services: "workers",
 } as const satisfies Partial<Record<string, DeploySection>>;
 
-export function normalizeStoreTab(
-  value?: string,
-): "discover" | "installed" {
+export function normalizeStoreTab(value?: string): "discover" | "installed" {
   return value === "installed" ? "installed" : "discover";
 }
 
@@ -79,10 +78,7 @@ function parseDeploySection(
   return isDeploySection(value) ? value : undefined;
 }
 
-function appendSearchParams(
-  pathname: string,
-  params: URLSearchParams,
-): string {
+function appendSearchParams(pathname: string, params: URLSearchParams): string {
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
@@ -129,7 +125,8 @@ function applyRouteSearchParams(route: RouteState, search: string): RouteState {
   if (route.view === "storage") {
     const explicitFilePath = params.get("file") || undefined;
     const shouldOpenCurrentPath = params.get("open") === "1";
-    const filePath = explicitFilePath ||
+    const filePath =
+      explicitFilePath ||
       (shouldOpenCurrentPath && route.storagePath && route.storagePath !== "/"
         ? route.storagePath
         : undefined);
@@ -143,6 +140,11 @@ function applyRouteSearchParams(route: RouteState, search: string): RouteState {
       storagePath: getRouteParentPath(filePath),
       filePath,
     };
+  }
+
+  if (route.view === "connections") {
+    const connectionServer = params.get("server")?.trim() || undefined;
+    return connectionServer ? { ...route, connectionServer } : route;
   }
 
   return route;
@@ -211,6 +213,20 @@ function buildAppsPath(state: RouteState): string {
   return "/apps";
 }
 
+function buildConnectionsPath(state: RouteState): string {
+  if (state.connectionServer) {
+    const params = new URLSearchParams({ server: state.connectionServer });
+    const path = state.spaceId
+      ? `/connections/${state.spaceId}`
+      : "/connections/new";
+    return appendSearchParams(path, params);
+  }
+  if (state.spaceId) {
+    return `/connections/${state.spaceId}`;
+  }
+  return "/connections";
+}
+
 function buildStoragePath(state: RouteState): string {
   const params = new URLSearchParams();
   const effectivePath = state.filePath || state.storagePath;
@@ -219,9 +235,10 @@ function buildStoragePath(state: RouteState): string {
   }
 
   if (state.spaceId) {
-    const basePath = effectivePath && effectivePath !== "/"
-      ? `/storage/${state.spaceId}${effectivePath}`
-      : `/storage/${state.spaceId}`;
+    const basePath =
+      effectivePath && effectivePath !== "/"
+        ? `/storage/${state.spaceId}${effectivePath}`
+        : `/storage/${state.spaceId}`;
     return appendSearchParams(basePath, params);
   }
 
@@ -243,7 +260,8 @@ function buildRepoPath(state: RouteState): string | undefined {
     params.set("path", state.filePath);
   }
   if (
-    typeof state.fileLine === "number" && Number.isFinite(state.fileLine) &&
+    typeof state.fileLine === "number" &&
+    Number.isFinite(state.fileLine) &&
     state.fileLine > 0
   ) {
     params.set("line", String(state.fileLine));
@@ -329,7 +347,7 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
         SIMPLE_TOP_LEVEL_VIEWS[parts[0] as keyof typeof SIMPLE_TOP_LEVEL_VIEWS];
       return view ? { view } : undefined;
     },
-    build: (state) => state.view === "memory" ? "/memory" : undefined,
+    build: (state) => (state.view === "memory" ? "/memory" : undefined),
   },
   {
     key: "store",
@@ -383,7 +401,8 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
       }
       return undefined;
     },
-    build: (state) => state.view === "chat" ? buildChatPath(state) : undefined,
+    build: (state) =>
+      state.view === "chat" ? buildChatPath(state) : undefined,
   },
   {
     key: "repos",
@@ -412,13 +431,14 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     match: (parts) =>
       parts[0] === "w" && parts[1] && parts[2] === "repos" && parts[3]
         ? {
-          view: "repo",
-          spaceId: parts[1],
-          spaceSlug: parts[1],
-          repoId: parts[3],
-        }
+            view: "repo",
+            spaceId: parts[1],
+            spaceSlug: parts[1],
+            repoId: parts[3],
+          }
         : undefined,
-    build: (state) => state.view === "repo" ? buildRepoPath(state) : undefined,
+    build: (state) =>
+      state.view === "repo" ? buildRepoPath(state) : undefined,
   },
   {
     key: "storage",
@@ -436,16 +456,14 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
         if (!parts[1]) {
           return { view: "storage" };
         }
-        const storagePath = parts.length > 2
-          ? `/${parts.slice(2).join("/")}`
-          : "/";
+        const storagePath =
+          parts.length > 2 ? `/${parts.slice(2).join("/")}` : "/";
         return { view: "storage", spaceId: parts[1], storagePath };
       }
 
       if (parts[0] === "w" && parts[1] && parts[2] === "files") {
-        const storagePath = parts.length > 3
-          ? `/${parts.slice(3).join("/")}`
-          : "/";
+        const storagePath =
+          parts.length > 3 ? `/${parts.slice(3).join("/")}` : "/";
         return {
           view: "storage",
           spaceId: parts[1],
@@ -466,9 +484,27 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     placement: "protected",
     match: (parts) =>
       parts[0] === "apps"
-        ? parts[1] ? { view: "apps", spaceId: parts[1] } : { view: "apps" }
+        ? parts[1]
+          ? { view: "apps", spaceId: parts[1] }
+          : { view: "apps" }
         : undefined,
-    build: (state) => state.view === "apps" ? buildAppsPath(state) : undefined,
+    build: (state) =>
+      state.view === "apps" ? buildAppsPath(state) : undefined,
+  },
+  {
+    key: "connections",
+    componentKey: "connections",
+    componentPatterns: ["/connections/new", "/connections/:spaceId?"],
+    placement: "protected",
+    match: (parts) => {
+      if (parts[0] !== "connections") return undefined;
+      if (parts[1] === "new") return { view: "connections" };
+      return parts[1]
+        ? { view: "connections", spaceId: parts[1] }
+        : { view: "connections" };
+    },
+    build: (state) =>
+      state.view === "connections" ? buildConnectionsPath(state) : undefined,
   },
   {
     key: "deploy",
@@ -536,7 +572,7 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     placement: "protected",
     match: (parts) =>
       parts[0] === "settings" ? { view: "settings" } : undefined,
-    build: (state) => state.view === "settings" ? "/settings" : undefined,
+    build: (state) => (state.view === "settings" ? "/settings" : undefined),
   },
   {
     key: "space-settings",
@@ -549,12 +585,14 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
         : undefined,
     build: (state) =>
       state.view === "space-settings"
-        ? state.spaceId ? `/space-settings/${state.spaceId}` : "/space-settings"
+        ? state.spaceId
+          ? `/space-settings/${state.spaceId}`
+          : "/space-settings"
         : undefined,
   },
   {
     key: "retired-app-shortcuts",
-    match: (parts) => parts[0] === "app" ? { view: "home" } : undefined,
+    match: (parts) => (parts[0] === "app" ? { view: "home" } : undefined),
   },
   {
     key: "home",
@@ -562,15 +600,14 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     componentPatterns: ["/", "*rest"],
     placement: "fallback",
     match: (parts) => (parts.length === 0 ? { view: "home" } : undefined),
-    build: (state) => state.view === "home" ? "/" : undefined,
+    build: (state) => (state.view === "home" ? "/" : undefined),
   },
 ];
 
 function hasComponentRoute(
   schema: AppRouteSchema,
-): schema is
-  & AppRouteSchema
-  & Required<Pick<AppRouteSchema, "componentKey" | "componentPatterns">> {
+): schema is AppRouteSchema &
+  Required<Pick<AppRouteSchema, "componentKey" | "componentPatterns">> {
   return Boolean(schema.componentKey && schema.componentPatterns?.length);
 }
 
@@ -581,8 +618,8 @@ function hasRouteBuilder(
 }
 
 function filterComponentSchemas(placement: AppRoutePlacement) {
-  return APP_ROUTE_SCHEMAS.filter((schema) =>
-    schema.placement === placement && hasComponentRoute(schema)
+  return APP_ROUTE_SCHEMAS.filter(
+    (schema) => schema.placement === placement && hasComponentRoute(schema),
   );
 }
 

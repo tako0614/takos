@@ -3,7 +3,6 @@ import { assertEquals } from "@takos/test/assert";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   handleConversationHistory,
-  handleMemoryActivation,
   handleSkillCatalog,
   handleSkillPlan,
   handleSkillRuntimeContext,
@@ -66,7 +65,6 @@ const HANDLERS: Array<
   ["skill-plan", handleSkillPlan],
   ["skill-catalog", handleSkillCatalog],
   ["skill-runtime-context", handleSkillRuntimeContext],
-  ["memory-activation", handleMemoryActivation],
 ];
 
 for (const [name, handler] of HANDLERS) {
@@ -86,7 +84,7 @@ for (const [name, handler] of HANDLERS) {
       env,
     );
     assertEquals(response.status, 404);
-    const body = await response.json() as { error?: string };
+    const body = (await response.json()) as { error?: string };
     assertEquals(body.error, "Run not found");
   });
 }

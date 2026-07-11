@@ -359,7 +359,7 @@ export function SkillFormView(props: {
           label={t("skillPreferredTools")}
           value={props.form.preferredTools}
           onChange={(v) => updateField("preferredTools", v)}
-          placeholder="create_artifact, space_files_write"
+          placeholder="create_artifact, toolbox"
         />
         <MetadataInput
           label={t("skillDurableOutputs")}

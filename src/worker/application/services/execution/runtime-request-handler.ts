@@ -243,7 +243,7 @@ async function recordRuntimeUsage(
       spaceId,
       meterType: "exec_seconds",
       units: seconds,
-      referenceType: "runtime_exec",
+      referenceType: "agent_execution",
       metadata: { endpoint },
     });
   };

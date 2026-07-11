@@ -13,6 +13,43 @@ import { classifyWorkerQueueName } from "../queues/queue-names.ts";
 
 // Lazy imports to keep cold-start fast — only load what's needed per invocation.
 
+type ScheduledRuntimeModule = {
+  scheduled(event: ScheduledEvent, env: Env): void | Promise<void>;
+};
+
+export type WorkerRuntimeScheduledDeps = {
+  loadRunner(): Promise<ScheduledRuntimeModule>;
+  loadExecutorHost(): Promise<ScheduledRuntimeModule>;
+};
+
+const defaultScheduledDeps: WorkerRuntimeScheduledDeps = {
+  async loadRunner() {
+    const { default: runner } = await import("../runner/index.ts");
+    return runner;
+  },
+  async loadExecutorHost() {
+    const { default: executorHost } =
+      await import("../container-hosts/executor-host.ts");
+    return executorHost as unknown as ScheduledRuntimeModule;
+  },
+};
+
+/** Run independent cron responsibilities even when one of them fails. */
+export async function runWorkerRuntimeScheduled(
+  event: ScheduledEvent,
+  env: Env,
+  deps: WorkerRuntimeScheduledDeps = defaultScheduledDeps,
+): Promise<void> {
+  const [runner, executorHost] = await Promise.all([
+    deps.loadRunner(),
+    deps.loadExecutorHost(),
+  ]);
+  await Promise.all([
+    runner.scheduled(event, env),
+    executorHost.scheduled(event, env),
+  ]);
+}
+
 export function createWorkerRuntime(
   buildPlatform: (
     env: Env,
@@ -60,13 +97,18 @@ export function createWorkerRuntime(
         const { handleIndexJobDlq } = await import("../indexer/index.ts");
         for (const message of batch.messages) {
           try {
-            await handleIndexJobDlq(
+            const outcome = await handleIndexJobDlq(
               message.body,
               bindings,
               message.attempts,
               batch.queue,
+              message.id,
             );
-            message.ack();
+            if (outcome.action === "retry") {
+              message.retry({ delaySeconds: outcome.delaySeconds });
+            } else {
+              message.ack();
+            }
           } catch (err) {
             logError("Handler failed", err, { module: "index_dlq" });
             message.retry();
@@ -97,13 +139,12 @@ export function createWorkerRuntime(
     },
 
     // ---------------------------------------------------------------------------
-    // scheduled: stale run recovery (from runner)
+    // scheduled: stale run recovery + executor warm-pool maintenance
     // ---------------------------------------------------------------------------
     async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
       const platform = await buildPlatform(env);
       const bindings = { ...platform.bindings, PLATFORM: platform };
-      const { default: runner } = await import("../runner/index.ts");
-      return runner.scheduled(event, bindings);
+      return runWorkerRuntimeScheduled(event, bindings);
     },
   };
 }

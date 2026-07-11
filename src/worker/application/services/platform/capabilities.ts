@@ -7,6 +7,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import type { SpaceRole } from "../../../shared/types/index.ts";
 import { resolveActorPrincipalId } from "../identity/principals.ts";
+import { AuthorizationError } from "@takos/worker-platform-utils/errors";
 
 export type StandardCapabilityId =
   | "storage.read"
@@ -39,28 +40,10 @@ function normalizeSpaceRole(role: SpaceRole | null | undefined): SpaceRole {
   return role && WORKSPACE_ROLE_ORDER.includes(role) ? role : "viewer";
 }
 
-function applySpaceRoleFloor(
-  role: SpaceRole,
-  minimumRole?: SpaceRole,
-): SpaceRole {
-  const normalizedRole = normalizeSpaceRole(role);
-  if (!minimumRole) {
-    return normalizedRole;
-  }
-
-  const normalizedFloor = normalizeSpaceRole(minimumRole);
-  const currentIndex = WORKSPACE_ROLE_ORDER.indexOf(normalizedRole);
-  const floorIndex = WORKSPACE_ROLE_ORDER.indexOf(normalizedFloor);
-  return currentIndex >= floorIndex ? normalizedRole : normalizedFloor;
-}
-
 export function selectAllowedCapabilities(
   ctx: CapabilityPolicyContext,
 ): Set<StandardCapabilityId> {
-  const allowed = new Set<StandardCapabilityId>([
-    "repo.read",
-    "storage.read",
-  ]);
+  const allowed = new Set<StandardCapabilityId>(["repo.read", "storage.read"]);
 
   if (ctx.role === "owner" || ctx.role === "admin" || ctx.role === "editor") {
     allowed.add("repo.write");
@@ -86,39 +69,48 @@ export async function resolveSpaceRole(
   db: SqlDatabaseLike,
   spaceId: string,
   userId: string,
-): Promise<SpaceRole> {
+): Promise<SpaceRole | null> {
   const drizzle = getDb(db);
   const principalId = await resolveActorPrincipalId(db, userId);
   if (!principalId) {
-    return "viewer";
+    return null;
   }
 
-  const workspace = await drizzle.select({
-    ownerAccountId: accounts.ownerAccountId,
-  }).from(accounts).where(eq(accounts.id, spaceId)).get();
+  const workspace = await drizzle
+    .select({
+      ownerAccountId: accounts.ownerAccountId,
+    })
+    .from(accounts)
+    .where(eq(accounts.id, spaceId))
+    .get();
 
   if (workspace?.ownerAccountId === principalId) {
     return "owner";
   }
 
-  const member = await drizzle.select({ role: accountMemberships.role }).from(
-    accountMemberships,
-  ).where(
-    and(
-      eq(accountMemberships.accountId, spaceId),
-      eq(accountMemberships.memberId, principalId),
-    ),
-  ).get();
+  const member = await drizzle
+    .select({ role: accountMemberships.role })
+    .from(accountMemberships)
+    .where(
+      and(
+        eq(accountMemberships.accountId, spaceId),
+        eq(accountMemberships.memberId, principalId),
+        eq(accountMemberships.status, "active"),
+      ),
+    )
+    .get();
 
   const role = (member?.role || "").toLowerCase();
   if (
-    role === "owner" || role === "admin" || role === "editor" ||
+    role === "owner" ||
+    role === "admin" ||
+    role === "editor" ||
     role === "viewer"
   ) {
     return role;
   }
 
-  return "viewer";
+  return null;
 }
 
 export async function resolveAllowedCapabilities(params: {
@@ -126,7 +118,6 @@ export async function resolveAllowedCapabilities(params: {
   spaceId: string;
   userId: string;
   securityPosture?: SecurityPosture;
-  minimumRole?: SpaceRole;
 }): Promise<{
   ctx: CapabilityPolicyContext;
   allowed: Set<StandardCapabilityId>;
@@ -137,16 +128,23 @@ export async function resolveAllowedCapabilities(params: {
     params.spaceId,
     params.userId,
   );
-  const role = applySpaceRoleFloor(resolvedRole, params.minimumRole);
-  const workspace = await drizzle.select({
-    securityPosture: accounts.securityPosture,
-  })
+  if (!resolvedRole) {
+    throw new AuthorizationError(
+      `User ${params.userId} no longer has access to Workspace ${params.spaceId}`,
+    );
+  }
+  const role = normalizeSpaceRole(resolvedRole);
+  const workspace = await drizzle
+    .select({
+      securityPosture: accounts.securityPosture,
+    })
     .from(accounts)
     .where(eq(accounts.id, params.spaceId))
     .get();
   const ctx: CapabilityPolicyContext = {
     role,
-    securityPosture: params.securityPosture ??
+    securityPosture:
+      params.securityPosture ??
       (workspace?.securityPosture === "restricted_egress"
         ? "restricted_egress"
         : "standard"),

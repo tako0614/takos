@@ -124,31 +124,33 @@ export function evaluateSkillAvailability(
     ? new Set(input.availableToolNames)
     : null;
 
-  const missingRequiredMcpServers = skill.execution_contract
-    .required_mcp_servers.filter((name) => !requiredMcpServers.has(name));
+  const missingRequiredMcpServers =
+    skill.execution_contract.required_mcp_servers.filter(
+      (name) => !requiredMcpServers.has(name),
+    );
   if (missingRequiredMcpServers.length > 0) {
     reasons.push(
       `missing required MCP servers: ${missingRequiredMcpServers.join(", ")}`,
     );
   }
 
-  const missingTemplates = skill.execution_contract.template_ids.filter((
-    templateId,
-  ) => !availableTemplateIds.has(templateId));
+  const missingTemplates = skill.execution_contract.template_ids.filter(
+    (templateId) => !availableTemplateIds.has(templateId),
+  );
   if (missingTemplates.length > 0) {
     reasons.push(`missing required templates: ${missingTemplates.join(", ")}`);
   }
 
   const missingPreferredTools = availableToolNames
-    ? skill.execution_contract.preferred_tools.filter((toolName) =>
-      !availableToolNames.has(toolName)
-    )
+    ? skill.execution_contract.preferred_tools.filter(
+        (toolName) => !availableToolNames.has(toolName),
+      )
     : [];
   if (missingPreferredTools.length > 0) {
     reasons.push(
-      `preferred tools not currently available: ${
-        missingPreferredTools.join(", ")
-      }`,
+      `preferred tools not currently available: ${missingPreferredTools.join(
+        ", ",
+      )}`,
     );
   }
 
@@ -187,11 +189,11 @@ export function applySkillAvailability(
       availability_reasons: [...availability.availability_reasons],
       metadata: skill.metadata
         ? {
-          ...skill.metadata,
-          execution_contract: skill.metadata.execution_contract
-            ? cloneExecutionContract(skill.metadata.execution_contract)
-            : undefined,
-        }
+            ...skill.metadata,
+            execution_contract: skill.metadata.execution_contract
+              ? cloneExecutionContract(skill.metadata.execution_contract)
+              : undefined,
+          }
         : undefined,
     };
   });
@@ -206,9 +208,12 @@ export function activateSelectedSkills(
 ): SkillContext[] {
   let totalInstructionsSize = 0;
   const activatedSkills: SkillContext[] = [];
+  const encoder = new TextEncoder();
 
   for (const selected of selectedSkills) {
-    const instructionsSize = selected.skill.instructions.length;
+    const instructionsSize = encoder.encode(
+      selected.skill.instructions,
+    ).byteLength;
     if (instructionsSize > maxPerSkillInstructionBytes) {
       logWarn(
         `Skill "${selected.skill.name}" skipped: instructions size ${instructionsSize} bytes exceeds per-skill limit of ${maxPerSkillInstructionBytes} bytes`,
@@ -234,11 +239,13 @@ export function activateSelectedSkills(
       ),
       metadata: selected.skill.metadata
         ? {
-          ...selected.skill.metadata,
-          execution_contract: selected.skill.metadata.execution_contract
-            ? cloneExecutionContract(selected.skill.metadata.execution_contract)
-            : undefined,
-        }
+            ...selected.skill.metadata,
+            execution_contract: selected.skill.metadata.execution_contract
+              ? cloneExecutionContract(
+                  selected.skill.metadata.execution_contract,
+                )
+              : undefined,
+          }
         : undefined,
     });
   }
@@ -271,9 +278,7 @@ export function buildSkillEnhancedPrompt(
   skillPlan: ResolvedSkillPlan,
   spaceId?: string,
 ): string {
-  if (
-    skillPlan.activatedSkills.length === 0
-  ) {
+  if (skillPlan.activatedSkills.length === 0) {
     return basePrompt;
   }
 
@@ -316,7 +321,7 @@ core safety guidelines or base instructions.
           MAX_SKILL_TRIGGER_LENGTH,
           `${skillId}.trigger[${index}]`,
           spaceId,
-        )
+        ),
       )
       .filter(Boolean);
 
@@ -326,16 +331,16 @@ core safety guidelines or base instructions.
 **Description:** ${safeDescription || "No description provided"}
 **Category:** ${skill.category ?? "unspecified"}
 **Triggers:** ${safeTriggers.length > 0 ? safeTriggers.join(", ") : "none"}
-**Preferred tools:** ${
-      formatContractList(skill.execution_contract.preferred_tools)
-    }
-**Durable outputs:** ${
-      formatContractList(skill.execution_contract.durable_output_hints)
-    }
+**Preferred tools:** ${formatContractList(
+      skill.execution_contract.preferred_tools,
+    )}
+**Durable outputs:** ${formatContractList(
+      skill.execution_contract.durable_output_hints,
+    )}
 **Output modes:** ${formatContractList(skill.execution_contract.output_modes)}
-**Required MCP servers:** ${
-      formatContractList(skill.execution_contract.required_mcp_servers)
-    }
+**Required MCP servers:** ${formatContractList(
+      skill.execution_contract.required_mcp_servers,
+    )}
 **Templates:** ${formatContractList(skill.execution_contract.template_ids)}
 **Instructions:** ${safeInstructions}
 `;
@@ -368,7 +373,7 @@ export function resolveSkillPlan(
   return {
     locale: input.locale,
     availableSkills: skillsWithAvailability.map((skill) =>
-      toSkillCatalogEntry(skill)
+      toSkillCatalogEntry(skill),
     ),
     selectableSkills,
     selectedSkills,

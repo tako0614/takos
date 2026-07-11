@@ -4,13 +4,21 @@ import type {
   ToolDefinition,
   ToolResult,
 } from "./tool-definitions.ts";
+import {
+  ToolExecutionTimeoutError,
+  ToolExecutionUncertainError,
+} from "./tool-definitions.ts";
 import type { ToolResolver } from "./resolver.ts";
 import { CircuitBreaker, type CircuitStats } from "./circuit-breaker.ts";
-import type { ToolObserver } from "../services/memory-graph/graph-models.ts";
-import { checkIdempotency, completeOperation } from "./idempotency.ts";
+import {
+  checkIdempotency,
+  completeOperation,
+  markOperationUncertain,
+} from "./idempotency.ts";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
 import {
   MAX_PARALLEL_TOOL_EXECUTIONS,
+  MAX_TOOL_ERROR_SIZE,
   MAX_TOOL_OUTPUT_SIZE,
 } from "../../shared/config/limits.ts";
 import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from "../../shared/config/timeouts.ts";
@@ -28,27 +36,25 @@ import {
 } from "./tool-permission.ts";
 import { ToolCircuitBreaker } from "./tool-circuit-breaker.ts";
 import { combineSignals } from "@takos/worker-platform-utils/abort";
+import { assertValidToolArguments } from "./argument-validator.ts";
 
 // Public executor setup exports.
-export { createToolExecutor, SessionState } from "./executor-setup.ts";
+export { createToolExecutor } from "./executor-setup.ts";
 export {
   buildPerRunCapabilityRegistry,
   toOpenAIFunctions,
 } from "./executor-utils.ts";
 
-import type { SessionState } from "./executor-setup.ts";
-
 export interface ToolExecutorLike {
   execute(toolCall: ToolCall): Promise<ToolResult>;
   getAvailableTools(): ToolDefinition[];
   readonly mcpFailedServers: string[];
-  setObserver(observer: ToolObserver): void;
   cleanup(): void | Promise<void>;
 }
 
-// 10MB per tool output — with MAX_PARALLEL_EXECUTIONS=5, worst-case total is
-// 50MB which stays within ~40% of the runtime 128MB heap limit.
-// MAX_TOOL_OUTPUT_SIZE imported from shared/config/limits
+// MAX_TOOL_OUTPUT_SIZE is also part of the atomic run-transcript budget. Keep
+// it aligned with complete-run's total payload bound, not merely the isolate's
+// instantaneous heap limit.
 // Keep this aligned with runner-config default (5 minutes) unless explicitly overridden.
 // AGENT_TOOL_EXECUTION_TIMEOUT_MS imported from shared/config/timeouts
 
@@ -75,13 +81,14 @@ async function withTimeout<T>(
         } catch (timeoutErr) {
           logWarn("Failed to execute timeout handler", {
             module: "tools/executor",
-            error: timeoutErr instanceof Error
-              ? timeoutErr.message
-              : String(timeoutErr),
+            error:
+              timeoutErr instanceof Error
+                ? timeoutErr.message
+                : String(timeoutErr),
           });
         }
       }
-      reject(new Error(errorMessage));
+      reject(new ToolExecutionTimeoutError(errorMessage));
     }, timeoutMs);
   });
 
@@ -98,24 +105,60 @@ interface TruncationInfo {
   truncatedLength?: number;
 }
 
-function truncateOutput(
-  output: string,
-): { output: string; truncation: TruncationInfo } {
+function decodeUtf8Prefix(bytes: Uint8Array, maxBytes: number): string {
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let end = Math.min(bytes.byteLength, maxBytes); end >= 0; end--) {
+    try {
+      return decoder.decode(bytes.subarray(0, end));
+    } catch {
+      // A UTF-8 code point is at most four bytes, so this normally retries no
+      // more than three times. Keep the loop total for defensive correctness.
+    }
+  }
+  return "";
+}
+
+function decodeUtf8Suffix(bytes: Uint8Array, maxBytes: number): string {
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const initial = Math.max(0, bytes.byteLength - maxBytes);
+  for (let start = initial; start <= bytes.byteLength; start++) {
+    try {
+      return decoder.decode(bytes.subarray(start));
+    } catch {
+      // Skip a partial leading code point.
+    }
+  }
+  return "";
+}
+
+export function truncateToolOutput(output: string): {
+  output: string;
+  truncation: TruncationInfo;
+} {
   if (typeof output !== "string") {
     output = String(output);
   }
 
-  if (output.length <= MAX_TOOL_OUTPUT_SIZE) {
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(output);
+  if (encoded.byteLength <= MAX_TOOL_OUTPUT_SIZE) {
     return { output, truncation: { wasTruncated: false } };
   }
 
-  const halfSize = Math.floor((MAX_TOOL_OUTPUT_SIZE - 200) / 2);
-  const truncated = output.slice(0, halfSize) +
-    `\n\n... [OUTPUT TRUNCATED: ${output.length} chars total, showing first and last ${halfSize} chars] ...\n\n` +
-    output.slice(-halfSize);
+  const notice = `\n\n... [OUTPUT TRUNCATED: ${encoded.byteLength} UTF-8 bytes total; showing bounded prefix and suffix] ...\n\n`;
+  const noticeBytes = encoder.encode(notice).byteLength;
+  const halfSize = Math.max(
+    0,
+    Math.floor((MAX_TOOL_OUTPUT_SIZE - noticeBytes) / 2),
+  );
+  const truncated =
+    decodeUtf8Prefix(encoded, halfSize) +
+    notice +
+    decodeUtf8Suffix(encoded, halfSize);
+  const truncatedBytes = encoder.encode(truncated).byteLength;
 
   logWarn(
-    `Tool output truncated from ${output.length} to ${truncated.length} chars`,
+    `Tool output truncated from ${encoded.byteLength} to ${truncatedBytes} UTF-8 bytes`,
     { module: "tools/executor" },
   );
 
@@ -123,54 +166,54 @@ function truncateOutput(
     output: truncated,
     truncation: {
       wasTruncated: true,
-      originalLength: output.length,
-      truncatedLength: truncated.length,
+      originalLength: encoded.byteLength,
+      truncatedLength: truncatedBytes,
     },
   };
+}
+
+export function truncateToolError(error: string): string {
+  const value = typeof error === "string" ? error : String(error);
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.byteLength <= MAX_TOOL_ERROR_SIZE) return value;
+  const notice = `\n... [ERROR TRUNCATED: ${encoded.byteLength} UTF-8 bytes total]`;
+  const budget = Math.max(
+    0,
+    MAX_TOOL_ERROR_SIZE - new TextEncoder().encode(notice).byteLength,
+  );
+  return decodeUtf8Prefix(encoded, budget) + notice;
 }
 
 export class ToolExecutor implements ToolExecutorLike {
   private resolver: ToolResolver;
   private context: ToolContext;
-  private sessionState: SessionState;
   private circuitBreaker: ToolCircuitBreaker;
   private toolExecutionTimeoutMs: number;
   private parallelExecutionCount = 0;
-  private observer: ToolObserver | null = null;
   private sideEffectTools = new Set<string>();
   private db: SqlDatabaseBinding | null = null;
-  // 5 parallel executions × 10MB max output = 50MB worst case, safely under
-  // the runtime 128MB heap limit with room for code, stack, and framework overhead.
   private static readonly MAX_PARALLEL_EXECUTIONS =
     MAX_PARALLEL_TOOL_EXECUTIONS;
 
   constructor(
     resolver: ToolResolver,
     context: ToolContext,
-    sessionState: SessionState,
     circuitBreaker?: CircuitBreaker,
     toolExecutionTimeoutMs?: number,
   ) {
     this.resolver = resolver;
     this.context = context;
-    this.sessionState = sessionState;
     this.circuitBreaker = new ToolCircuitBreaker(
       circuitBreaker || new CircuitBreaker(),
     );
-    this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ||
-      AGENT_TOOL_EXECUTION_TIMEOUT_MS;
-    this.observer = null;
+    this.toolExecutionTimeoutMs =
+      toolExecutionTimeoutMs || AGENT_TOOL_EXECUTION_TIMEOUT_MS;
     // Wire the idempotency store from the run context so the side-effect-tool
     // de-duplication guard below is actually active. Without this `this.db`
-    // stays null and the guard is dead code (side-effecting tools — create_sql,
-    // deploy_frontend, service_create, … — would re-execute on every duplicate
-    // call within a run). The side-effect tool NAME set is populated separately
+    // stays null and side-effecting Takos or dynamically loaded MCP tools could
+    // re-execute on every duplicate call within a run. The side-effect tool NAME set is populated separately
     // via setSideEffectTools() once the resolver's available tools are known.
     this.db = context.db ?? null;
-  }
-
-  setObserver(observer: ToolObserver): void {
-    this.observer = observer;
   }
 
   setSideEffectTools(toolNames: string[]): void {
@@ -184,12 +227,6 @@ export class ToolExecutor implements ToolExecutorLike {
       return blocked;
     }
 
-    const startTime = Date.now();
-    let observedOutput = "";
-    let observedError: string | undefined;
-
-    // Freeze sessionId for this execution to prevent race conditions
-    const frozenSessionId = this.sessionState.beginExecution();
     const abortController = new AbortController();
 
     const executionAbortSignal = this.context.abortSignal
@@ -198,12 +235,6 @@ export class ToolExecutor implements ToolExecutorLike {
 
     const executionContext: ToolContext = {
       ...this.context,
-      get sessionId() {
-        return frozenSessionId;
-      },
-      setSessionId: this.context.setSessionId,
-      getLastContainerStartFailure: this.context.getLastContainerStartFailure,
-      setLastContainerStartFailure: this.context.setLastContainerStartFailure,
       abortSignal: executionAbortSignal,
     };
 
@@ -220,6 +251,10 @@ export class ToolExecutor implements ToolExecutorLike {
 
       // --- Permission checks (delegated) ---
       assertToolPermission(toolCall.name, tool.definition, executionContext);
+      // Provider/MCP schemas are an execution contract, not merely model
+      // guidance. Validate the untrusted call before deriving an idempotency
+      // key or entering any handler.
+      assertValidToolArguments(toolCall.arguments, tool.definition.parameters);
 
       // Idempotency guard for side-effect tools
       const db = this.db;
@@ -232,22 +267,18 @@ export class ToolExecutor implements ToolExecutorLike {
         );
 
         if (idempotencyResult.action === "cached") {
-          observedOutput = idempotencyResult.cachedOutput ?? "";
-          observedError = idempotencyResult.cachedError;
           return {
             tool_call_id: toolCall.id,
-            output: observedOutput,
-            error: observedError,
+            output: idempotencyResult.cachedOutput ?? "",
+            error: idempotencyResult.cachedError,
           };
         }
 
         if (idempotencyResult.action === "in_progress") {
-          observedError =
-            `Tool "${toolCall.name}" is already executing with the same parameters. Please wait.`;
           return {
             tool_call_id: toolCall.id,
             output: "",
-            error: observedError,
+            error: `Tool "${toolCall.name}" is already executing with the same parameters. Please wait.`,
           };
         }
 
@@ -268,29 +299,27 @@ export class ToolExecutor implements ToolExecutorLike {
             () => abortController.abort(),
           );
 
-          const { output, truncation } = truncateOutput(rawOutput);
+          const { output } = truncateToolOutput(rawOutput);
           this.circuitBreaker.recordSuccess(toolCall.name);
           await completeOperation(db, operationId, output);
 
-          observedOutput = output;
-          const result: ToolResult = { tool_call_id: toolCall.id, output };
-          if (truncation.wasTruncated) {
-            result.error =
-              `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars.`;
-          }
-          return result;
+          return { tool_call_id: toolCall.id, output };
         } catch (sideEffectError) {
-          const errMsg = sideEffectError instanceof Error
-            ? sideEffectError.message
-            : String(sideEffectError);
-          await completeOperation(db, operationId, "", errMsg).catch(
-            (opErr) => {
-              logWarn(
-                "Failed to complete operation record after tool error (non-critical)",
-                { module: "tools", error: opErr, operationId },
-              );
-            },
+          const errMsg = truncateToolError(
+            sideEffectError instanceof Error
+              ? sideEffectError.message
+              : String(sideEffectError),
           );
+          const recordFailure =
+            sideEffectError instanceof ToolExecutionUncertainError
+              ? markOperationUncertain(db, operationId, errMsg)
+              : completeOperation(db, operationId, "", errMsg);
+          await recordFailure.catch((opErr) => {
+            logWarn(
+              "Failed to complete operation record after tool error (non-critical)",
+              { module: "tools", error: opErr, operationId },
+            );
+          });
           throw sideEffectError;
         }
       }
@@ -304,7 +333,7 @@ export class ToolExecutor implements ToolExecutorLike {
         () => abortController.abort(),
       );
 
-      const { output, truncation } = truncateOutput(rawOutput);
+      const { output } = truncateToolOutput(rawOutput);
       this.circuitBreaker.recordSuccess(toolCall.name);
 
       const result: ToolResult = {
@@ -312,19 +341,11 @@ export class ToolExecutor implements ToolExecutorLike {
         output,
       };
 
-      if (truncation.wasTruncated) {
-        result.error =
-          `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars. ` +
-          `The full output may contain additional relevant information.`;
-      }
-
-      observedOutput = output;
       return result;
     } catch (error) {
-      const errorInstance = error instanceof Error
-        ? error
-        : new Error(String(error));
-      const errorMessage = errorInstance.message;
+      const errorInstance =
+        error instanceof Error ? error : new Error(String(error));
+      const errorMessage = truncateToolError(errorInstance.message);
 
       const classification = classifyError(errorInstance);
       const errorSeverity = classification.severity;
@@ -337,41 +358,29 @@ export class ToolExecutor implements ToolExecutorLike {
         id: toolCall.id,
         argKeys: Object.keys(toolCall.arguments || {}),
         spaceId: this.context.spaceId?.slice(0, 8),
-        sessionActive: !!frozenSessionId,
       });
 
       const codePrefix = classification.code ? `[${classification.code}] ` : "";
-      const severityHint = SEVERITY_HINTS[errorSeverity] ??
+      const severityHint =
+        SEVERITY_HINTS[errorSeverity] ??
         " (This may be a temporary issue, consider retrying)";
 
-      logError(`Tool execution error: ${errorMessage}`, {
-        context: toolContext,
-        stack: errorInstance.stack,
-      }, { module: "tools/executor" });
+      logError(
+        `Tool execution error: ${errorMessage}`,
+        {
+          context: toolContext,
+          stack: errorInstance.stack
+            ? truncateToolError(errorInstance.stack)
+            : undefined,
+        },
+        { module: "tools/executor" },
+      );
 
-      observedError = errorMessage;
       return {
         tool_call_id: toolCall.id,
         output: "",
         error: codePrefix + errorMessage + severityHint,
       };
-    } finally {
-      this.sessionState.endExecution();
-
-      if (this.observer) {
-        try {
-          this.observer.observe({
-            toolName: toolCall.name,
-            arguments: toolCall.arguments,
-            result: observedOutput,
-            error: observedError,
-            timestamp: startTime,
-            duration: Date.now() - startTime,
-          });
-        } catch {
-          // best-effort observation
-        }
-      }
     }
   }
 
@@ -437,9 +446,10 @@ export class ToolExecutor implements ToolExecutorLike {
           return {
             tool_call_id: batch[index].id,
             output: "",
-            error: result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason),
+            error:
+              result.reason instanceof Error
+                ? truncateToolError(result.reason.message)
+                : truncateToolError(String(result.reason)),
           };
         }
       });
@@ -463,6 +473,7 @@ export class ToolExecutor implements ToolExecutorLike {
   }
 
   cleanup(): void {
-    this.sessionState.cleanup();
+    // MCP transports are scoped and closed by each catalog probe/tool call;
+    // the Worker keeps no container/session-local resource to tear down here.
   }
 }

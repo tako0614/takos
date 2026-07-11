@@ -17,7 +17,10 @@ import { decodeBlobContent } from "../../../shared/utils/unified-diff.ts";
 import { createEmbeddingsService } from "../../../application/services/execution/embeddings.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import type { IndexJobQueueMessage } from "../../../shared/types/index.ts";
-import { INDEX_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
+import {
+  INDEX_QUEUE_MESSAGE_VERSION,
+  indexJobDeliveryId,
+} from "../../../shared/types/index.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import {
   BadRequestError,
@@ -100,10 +103,13 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
         path_prefix,
       } = c.req.valid("query");
       const q = (qRaw || "").trim();
-      const { limit } = parsePagination({ limit: limitRaw }, {
-        limit: 50,
-        maxLimit: 200,
-      });
+      const { limit } = parsePagination(
+        { limit: limitRaw },
+        {
+          limit: 50,
+          maxLimit: 200,
+        },
+      );
       const caseSensitive = case_sensitive === "1" || case_sensitive === "true";
       const pathPrefixRaw = (path_prefix || "").trim();
 
@@ -147,9 +153,12 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
 
       try {
         const needle = caseSensitive ? q : q.toLowerCase();
-        const matches: Array<
-          { path: string; line_number: number; column: number; snippet: string }
-        > = [];
+        const matches: Array<{
+          path: string;
+          line_number: number;
+          column: number;
+          snippet: string;
+        }> = [];
         let filesScanned = 0;
         let bytesScanned = 0;
         let truncated = false;
@@ -301,8 +310,11 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       throw new InternalError("Git storage not configured");
     }
 
-    const ref = (c.req.query("ref") || repoAccess.repo.default_branch || "main")
-      .trim();
+    const ref = (
+      c.req.query("ref") ||
+      repoAccess.repo.default_branch ||
+      "main"
+    ).trim();
     const resolvedCommit = await gitStore.resolveReadableCommitFromRef(
       c.env.DB,
       bucket,
@@ -318,6 +330,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       const message: IndexJobQueueMessage = {
         version: INDEX_QUEUE_MESSAGE_VERSION,
         jobId,
+        deliveryId: indexJobDeliveryId(jobId),
         spaceId: repoAccess.repo.space_id || "",
         type: "repo_code_index",
         repoId,
@@ -421,11 +434,12 @@ async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
         message: cursor.message,
         author: { name: cursor.author.name, email: cursor.author.email },
         date: new Date(cursor.committer.timestamp * 1000).toISOString(),
-        status: parentOid === null
-          ? "added"
-          : cursorOid === null
-          ? "deleted"
-          : "modified",
+        status:
+          parentOid === null
+            ? "added"
+            : cursorOid === null
+              ? "deleted"
+              : "modified",
       });
     }
 

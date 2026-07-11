@@ -14,7 +14,6 @@ import type { CapabilityRegistry } from "./capability-registry.ts";
 
 export interface ToolContext {
   spaceId: string;
-  sessionId?: string; // Session for file isolation (container must be started)
   threadId: string;
   runId: string;
   userId: string;
@@ -25,21 +24,10 @@ export interface ToolContext {
   env: Env;
   db: SqlDatabaseBinding;
   storage?: ObjectStoreBinding;
-  // Session management - used by container tools
-  setSessionId: (sessionId: string | undefined) => void;
-  getLastContainerStartFailure: () => ContainerStartFailure | undefined;
-  setLastContainerStartFailure: (
-    failure: ContainerStartFailure | undefined,
-  ) => void;
   // Optional cancellation signal (e.g., tool timeout)
   abortSignal?: AbortSignal;
   // Capability registry for discovery tools
   capabilityRegistry?: CapabilityRegistry;
-}
-
-export interface ContainerStartFailure {
-  message: string;
-  sessionId?: string;
 }
 
 export interface ToolDefinition {
@@ -57,6 +45,14 @@ export interface ToolDefinition {
   family?: string;
   risk_level?: RiskLevel;
   side_effects?: boolean;
+  /** MCP tool behavior hints preserved for discovery and policy UX. */
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
   parameters: {
     type: "object";
     properties: Record<string, ToolParameter>;
@@ -76,15 +72,10 @@ export interface ToolParameter {
 }
 
 export type ToolCategory =
-  | "file" // file_read, file_write, file_list, file_delete
-  | "deploy" // deploy_frontend
-  | "runtime" // runtime_exec, runtime_status
-  | "storage" // key_value_*, sql_*, object_store_*, create_*
-  | "space" // space-scoped custom tools
+  | "space" // Workspace-scoped Takos tools
   | "web" // web_fetch
   | "memory" // remember, recall, set_reminder
   | "artifact" // create_artifact
-  | "container" // container_start, container_status, container_commit, container_stop
   | "agent" // spawn_agent
   | "mcp"; // mcp_add_server, mcp_list_servers, mcp_remove_server, + dynamically loaded MCP tools
 
@@ -111,31 +102,21 @@ export interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
-export interface RuntimeExecRequest {
-  commands: string[];
-  working_dir?: string;
-  timeout?: number;
-  env_vars?: Record<string, string>;
+/**
+ * The tool request was dispatched but no authoritative outcome was received.
+ * Side-effect idempotency records must become terminal-uncertain rather than
+ * permitting an automatic replay that could duplicate the remote mutation.
+ */
+export class ToolExecutionUncertainError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "ToolExecutionUncertainError";
+  }
 }
 
-export interface RuntimeExecResponse {
-  runtime_id: string;
-  status: "running" | "completed" | "failed";
-  output?: string;
-  exit_code?: number;
-  error?: string;
-}
-
-export interface DeployRequest {
-  dist_path: string;
-  service_name: string;
-  env_vars?: Record<string, string>;
-}
-
-export interface DeployResponse {
-  success: boolean;
-  service_name: string;
-  version?: string;
-  url?: string;
-  error?: string;
+export class ToolExecutionTimeoutError extends ToolExecutionUncertainError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ToolExecutionTimeoutError";
+  }
 }

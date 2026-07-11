@@ -26,24 +26,10 @@ export interface ToolPolicyMetadata {
   sensitive_read_policy?: SensitiveReadPolicy;
 }
 
-export const AGENT_DISABLED_CUSTOM_TOOLS = [
-  "key_value_get",
-  "key_value_put",
-  "key_value_delete",
-  "key_value_list",
-  "sql_query",
-  "sql_tables",
-  "sql_describe",
-  "object_store_upload",
-  "object_store_download",
-  "object_store_list",
-  "object_store_delete",
-  "object_store_info",
-  "create_sql",
-  "create_key_value",
-  "create_object_store",
-  "list_resources",
-] as const;
+// Every tool in the static Takos catalog is agent-safe after role/capability
+// policy is applied. Storage, computer, Git, and deploy tools are owned by
+// installed Capsules or Takosumi and therefore never enter this deny-list.
+export const AGENT_DISABLED_CUSTOM_TOOLS = [] as const;
 
 export const AGENT_DISABLED_TOOL_SET = new Set<string>(
   AGENT_DISABLED_CUSTOM_TOOLS,

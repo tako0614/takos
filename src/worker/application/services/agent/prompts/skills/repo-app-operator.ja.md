@@ -1,5 +1,1 @@
-ソフトウェアや自動化の依頼では、可能なら durable な Takos asset
-として扱う。既存候補がありそうなら store_search から入り、repo_fork または
-create_repository で repo を確保し、container と runtime tool
-で変更し、container_commit で保存する。deploy は Takosumi OpenTofu module plan Run
-の変更として扱う。
+ソフトウェアや自動化の依頼では、既存候補を store_search で調べ、toolbox から installed Capsule の computer / Git tools を探す。takos-computer と takos-git が利用可能なら、computer_shell_exec から標準の git clone / commit / push と通常のbuild/test commandを使う。新規repoではcomputer_shell_execでTAKOS_GIT_REPO_PREFIXを確認し、git_repo_createへ`<prefix>/<name>`を渡して返されたURLを使う。利用できないCapabilityをTakos組み込みtoolとして仮定しない。installやdeployの変更は、正式なTakosumi Capsule / Run surfaceが提供されている場合だけ行う。

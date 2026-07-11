@@ -48,7 +48,6 @@ export {
   filterAgentAllowedToolNames,
   isToolAllowedForAgent,
 } from "../../tools/tool-policy.ts";
-export { shouldResetRunToQueuedOnContainerError } from "./run-lifecycle.ts";
 export {
   createLLMClientFromEnv,
   getBackendFromModel,

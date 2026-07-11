@@ -15,11 +15,17 @@ import {
 import { mcpRemoveServerHandler } from "../../../tools/custom/mcp.ts";
 import { loadMcpTools } from "../../../tools/mcp-tools.ts";
 import { McpClient } from "../../../tools/mcp-client.ts";
-import { mcpServers, publications } from "../../../../infra/db/index.ts";
+import {
+  mcpServers,
+  mcpToolPolicies,
+  publications,
+} from "../../../../infra/db/index.ts";
 import type { Env } from "../../../../shared/types/index.ts";
+import { fingerprintMcpTool } from "../mcp/tool-policy.ts";
 
 type DbTableRows = {
   mcpServers: Array<Record<string, unknown>>;
+  mcpToolPolicies?: Array<Record<string, unknown>>;
   publications: Array<Record<string, unknown>>;
 };
 
@@ -45,14 +51,20 @@ function makeDb(rows: DbTableRows) {
     select: () => ({
       from: (table: unknown) => {
         if (table === mcpServers) return makeRowTable(rows.mcpServers);
+        if (table === mcpToolPolicies) {
+          return makeRowTable(rows.mcpToolPolicies ?? []);
+        }
         if (table === publications) return makeRowTable(rows.publications);
         return makeRowTable([]);
       },
     }),
-    insert: () => ({
-      values: () => ({
-        onConflictDoUpdate: () => undefined,
-      }),
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => {
+        if (table === mcpServers) rows.mcpServers.push(value);
+        return {
+          onConflictDoUpdate: () => undefined,
+        };
+      },
     }),
     update: () => ({
       set: () => ({
@@ -133,12 +145,112 @@ test("registerExternalMcpServer rejects a name already published in the space", 
     () =>
       registerExternalMcpServer(env.DB, env as Env, {
         spaceId: "space_1",
+        initiatorUserId: "user-1",
         name: "shared-mcp",
         url: "https://external.example/mcp",
       }),
     Error,
     'MCP server "shared-mcp" already exists as a publication in this space',
   );
+});
+
+test("registerExternalMcpServer rejects reusing a Workspace name for a different endpoint", async () => {
+  const env = makeMcpEnv({
+    mcpServers: [
+      externalRow({
+        name: "docs",
+        url: "https://connector-a.example/mcp",
+        oauthAccessToken: "encrypted-token",
+      }),
+    ],
+    publications: [],
+  }) as unknown as Env;
+
+  await assertRejects(
+    () =>
+      registerExternalMcpServer(env.DB, env, {
+        spaceId: "space_1",
+        initiatorUserId: "user-1",
+        name: "docs",
+        url: "https://connector-b.example/mcp",
+      }),
+    Error,
+    'MCP server "docs" is already bound to a different endpoint',
+  );
+});
+
+test("registerExternalMcpServer reports the stored endpoint for normalized same-URL reuse", async () => {
+  const storedUrl = "https://connector.example:443/mcp#local-fragment";
+  const env = makeMcpEnv({
+    mcpServers: [
+      externalRow({
+        name: "docs",
+        url: storedUrl,
+        oauthAccessToken: "encrypted-token",
+      }),
+    ],
+    publications: [],
+  }) as unknown as Env;
+
+  const result = await registerExternalMcpServer(env.DB, env, {
+    spaceId: "space_1",
+    initiatorUserId: "user-1",
+    name: "docs",
+    url: "HTTPS://CONNECTOR.EXAMPLE/mcp",
+  });
+
+  assertEquals(result.status, "already_registered");
+  assertEquals(result.url, storedUrl);
+  assertStringIncludes(result.message, "for this endpoint");
+});
+
+test("registerExternalMcpServer persists a validated public server as auth_mode none", async () => {
+  const rows: DbTableRows = { mcpServers: [], publications: [] };
+  const env = {
+    ...(makeMcpEnv(rows) as Record<string, unknown>),
+    ENVIRONMENT: "production",
+    ADMIN_DOMAIN: "takos.example",
+    AUTH_PUBLIC_BASE_URL: "https://takos.example",
+    TAKOS_EGRESS: {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(input.toString());
+        const message =
+          typeof init?.body === "string"
+            ? (JSON.parse(init.body) as { method?: string })
+            : null;
+        if (url.href === "https://public.example/mcp") {
+          if (message?.method === "initialize") {
+            return Response.json({
+              jsonrpc: "2.0",
+              id: "takos-oauth-discovery",
+              result: {
+                protocolVersion: "2025-11-25",
+                capabilities: {},
+                serverInfo: { name: "public", version: "1" },
+              },
+            });
+          }
+          if (message?.method === "notifications/initialized") {
+            return new Response(null, { status: 202 });
+          }
+        }
+        if (url.pathname.includes(".well-known/oauth-protected-resource")) {
+          return new Response(null, { status: 404 });
+        }
+        throw new Error(`Unexpected public MCP request: ${url}`);
+      },
+    },
+  } as unknown as Env;
+
+  const result = await registerExternalMcpServer(env.DB, env, {
+    spaceId: "space_1",
+    initiatorUserId: "user-1",
+    name: "public-tools",
+    url: "https://public.example/mcp",
+  });
+  assertEquals(result.status, "registered");
+  assertEquals(rows.mcpServers[0]?.authMode, "none");
+  assertEquals(rows.mcpServers[0]?.oauthAccessToken, undefined);
 });
 
 test("updateMcpServer rejects rename collisions with published MCP servers", async () => {
@@ -259,6 +371,22 @@ test("resolvePublicationMcpServerAccessToken rejects dangling bearer-auth public
 });
 
 test("loadMcpTools keeps same-name publication and external servers distinct", async () => {
+  const sdkTool = {
+    name: "ping",
+    description: "Ping",
+    inputSchema: { type: "object" as const, properties: {} },
+  };
+  const schemaHash = await fingerprintMcpTool(sdkTool);
+  const matchingPolicy = {
+    accountId: "space_1",
+    serverId: "srv_1",
+    toolName: "ping",
+    schemaHash,
+    enabled: true,
+    firstSeenAt: "2026-07-11T00:00:00.000Z",
+    lastSeenAt: "2026-07-11T00:00:00.000Z",
+    reviewedAt: "2026-07-11T00:00:00.000Z",
+  };
   const connectStub = stub(
     McpClient.prototype as any,
     "connect",
@@ -269,11 +397,7 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
     "listTools",
     async () => [
       {
-        sdkTool: {
-          name: "ping",
-          description: "Ping",
-          inputSchema: { type: "object", properties: {} },
-        },
+        sdkTool,
         definition: {
           name: "ping",
           description: "Ping",
@@ -289,6 +413,7 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
       (
         makeMcpEnv({
           mcpServers: [externalRow()],
+          mcpToolPolicies: [matchingPolicy],
           publications: [publicationRow()],
         }) as Env
       ).DB,
@@ -296,6 +421,7 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
       {
         DB: makeDb({
           mcpServers: [externalRow()],
+          mcpToolPolicies: [matchingPolicy],
           publications: [publicationRow()],
         }),
         ENCRYPTION_KEY: "test-key",
@@ -312,7 +438,9 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
       true,
     );
     const publicationTool = result.tools.get("ping")?.definition;
-    const externalTool = result.tools.get("shared-mcp__ping")?.definition;
+    const externalTool = result.tools.get(
+      keys.find((key) => key !== "ping")!,
+    )?.definition;
     assertEquals(publicationTool?.namespace, "mcp");
     assertEquals(publicationTool?.family, "mcp.shared-mcp");
     assertEquals(publicationTool?.risk_level, "low");

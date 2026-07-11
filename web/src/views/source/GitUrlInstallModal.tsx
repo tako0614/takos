@@ -10,6 +10,7 @@ interface GitUrlInstallModalProps {
   spaceId: string | null;
   initialGitUrl?: string | null;
   initialRef?: string | null;
+  initialModulePath?: string | null;
   revision?: {
     installationId: string;
     operation: "upgrade" | "rollback";
@@ -130,6 +131,9 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const { showToast } = useToast();
   const [gitUrl, setGitUrl] = createSignal(props.initialGitUrl ?? "");
   const [ref, setRef] = createSignal(props.initialRef ?? "");
+  const [modulePath, setModulePath] = createSignal(
+    props.initialModulePath ?? ".",
+  );
   const [mode, setMode] = createSignal("");
   const [preview, setPreview] = createSignal<GitUrlPreviewResponse | null>(
     null,
@@ -224,6 +228,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     resetPreview();
     setGitUrl("");
     setRef("");
+    setModulePath(".");
     props.onClose();
   };
 
@@ -249,7 +254,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           body: JSON.stringify({
             git_url: gitUrl().trim(),
             ref: ref().trim(),
-            module_path: ".",
+            module_path: modulePath().trim() || ".",
             ...(revision
               ? {
                   installation_id: revision.installationId,
@@ -301,7 +306,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         ? {
             git_url: gitUrl().trim(),
             ref: ref().trim(),
-            module_path: ".",
+            module_path: modulePath().trim() || ".",
             installation_id: revision.installationId,
             operation: revision.operation,
             ...(sourceCommit ? { source_commit: sourceCommit } : {}),
@@ -320,7 +325,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           : {
               git_url: gitUrl().trim(),
               ref: ref().trim(),
-              module_path: ".",
+              module_path: modulePath().trim() || ".",
               ...(mode() ? { mode: mode() } : {}),
               ...(expected ? { expected } : {}),
               expected_commit: expected?.commit ?? sourceCommit,
@@ -366,7 +371,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       size="lg"
     >
       <form onSubmit={planInstall} class="space-y-4">
-        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_9rem]">
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_9rem_12rem]">
           <label class="block space-y-1.5">
             <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
               {t("gitUrlLabel")}
@@ -396,6 +401,22 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="v1.2.3"
+              class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
+              required
+            />
+          </label>
+          <label class="block space-y-1.5">
+            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              {t("gitModulePathLabel")}
+            </span>
+            <input
+              type="text"
+              value={modulePath()}
+              onInput={(event) => {
+                setModulePath(event.currentTarget.value);
+                resetPreview();
+              }}
+              placeholder="."
               class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
               required
             />

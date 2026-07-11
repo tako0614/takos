@@ -7,6 +7,7 @@ export interface SidebarCallbacks {
   onNavigateStorage: () => void;
   onNavigateDeploy: () => void;
   onNavigateApps: () => void;
+  onNavigateConnections: () => void;
   onNavigateMemory: () => void;
   onNavigateStore: () => void;
   onNavigateRepos: () => void;
@@ -20,6 +21,7 @@ export interface SidebarCallbacks {
   onNavigateSpaceDeploy: () => void;
   onNavigateSpaceRepos: () => void;
   onNavigateSpaceApps: () => void;
+  onNavigateSpaceConnections: () => void;
   onNavigateSpaceSettings: () => void;
   onOpenSpaceSettings: (spaceId: string) => void;
   // Thread actions

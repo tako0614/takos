@@ -13,6 +13,11 @@ import {
   DOH_ENDPOINT,
 } from "../../../shared/constants/dns.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { combineSignals } from "@takos/worker-platform-utils/abort";
+import {
+  MAX_WEB_RESPONSE_SIZE,
+  WEB_FETCH_TIMEOUT_MS,
+} from "../../../shared/config/limits.ts";
 
 export const WEB_FETCH: ToolDefinition = {
   name: "web_fetch",
@@ -21,7 +26,8 @@ export const WEB_FETCH: ToolDefinition = {
   namespace: "web",
   family: "web.fetch",
   risk_level: "low",
-  side_effects: true,
+  side_effects: false,
+  required_capabilities: ["egress.http"],
   parameters: {
     type: "object",
     properties: {
@@ -35,21 +41,11 @@ export const WEB_FETCH: ToolDefinition = {
           'What to extract: "text" (all text), "main" (main content), "links" (all links)',
         enum: ["text", "main", "links"],
       },
-      render: {
-        type: "boolean",
-        description: "Render mode is not part of core Takos.",
-      },
-      timeout_ms: {
-        type: "number",
-        description: "Timeout for render mode in milliseconds (default: 30000)",
-      },
     },
     required: ["url"],
   },
 };
 
-const MAX_RESPONSE_SIZE = 25 * 1024 * 1024; // 25MB
-const FETCH_TIMEOUT_MS = 300000; // 5 minutes
 const ALLOWED_PORTS = [80, 443];
 
 const BLOCKED_HOSTNAMES = new Set([
@@ -127,7 +123,7 @@ async function dohResolve(
       throw new Error(`DoH query failed: ${response.status}`);
     }
 
-    const json = await response.json() as DohResponse;
+    const json = (await response.json()) as DohResponse;
     if ((json.Status ?? 2) !== 0) {
       return [];
     }
@@ -266,7 +262,6 @@ async function validateUrlSafety(parsed: URL): Promise<void> {
 export const webFetchHandler: ToolHandler = async (args, context) => {
   const url = args.url as string;
   const extract = (args.extract as string) || "main";
-  const render = !!args.render;
 
   let parsedUrl: URL;
   try {
@@ -277,23 +272,21 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
 
   await validateUrlSafety(parsedUrl);
 
-  if (render) {
-    return "Render mode is no longer supported in core Takos.";
-  }
-
   const egress = context.env.TAKOS_EGRESS;
   if (!egress) {
     throw new Error("Egress proxy not configured");
   }
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), WEB_FETCH_TIMEOUT_MS);
+  const signal = context.abortSignal
+    ? combineSignals(context.abortSignal, controller.signal)
+    : controller.signal;
 
   let response: Response;
   try {
     const egressHeaders: Record<string, string> = {
       "User-Agent": "Mozilla/5.0 (compatible; TakosBot/1.0)",
-      "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "X-Takos-Space-Id": context.spaceId,
       "X-Takos-User-Id": context.userId,
       "X-Takos-Run-Id": context.runId,
@@ -302,13 +295,16 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
     response = await egress.fetch(url, {
       headers: egressHeaders,
       redirect: "manual", // Don't auto-follow redirects
-      signal: controller.signal,
+      signal,
     });
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === "AbortError") {
+      if (context.abortSignal?.aborted) {
+        throw new Error("web_fetch cancelled with the agent run");
+      }
       throw new Error(
-        `Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds`,
+        `Request timed out after ${WEB_FETCH_TIMEOUT_MS / 1000} seconds`,
       );
     }
     throw error;
@@ -335,7 +331,7 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
 
     try {
       if (ct.includes("application/json")) {
-        const payload = await response.json() as {
+        const payload = (await response.json()) as {
           error?: unknown;
           message?: unknown;
         };
@@ -365,11 +361,11 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
   const contentLength = response.headers.get("content-length");
   if (contentLength) {
     const size = parseInt(contentLength, 10);
-    if (size > MAX_RESPONSE_SIZE) {
+    if (size > MAX_WEB_RESPONSE_SIZE) {
       throw new Error(
-        `Response too large: ${
-          (size / 1024 / 1024).toFixed(1)
-        }MB exceeds limit of ${MAX_RESPONSE_SIZE / 1024 / 1024}MB`,
+        `Response too large: ${(size / 1024 / 1024).toFixed(
+          1,
+        )}MB exceeds limit of ${MAX_WEB_RESPONSE_SIZE / 1024 / 1024}MB`,
       );
     }
   }
@@ -390,11 +386,11 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
       if (done) break;
 
       totalSize += value.length;
-      if (totalSize > MAX_RESPONSE_SIZE) {
+      if (totalSize > MAX_WEB_RESPONSE_SIZE) {
         reader.cancel();
         throw new Error(
           `Response too large: exceeded ${
-            MAX_RESPONSE_SIZE / 1024 / 1024
+            MAX_WEB_RESPONSE_SIZE / 1024 / 1024
           }MB limit`,
         );
       }
@@ -444,9 +440,7 @@ function extractAllText(html: string): string {
 
   text = text.replace(/<[^>]+>/g, " ");
   text = decodeHtmlEntities(text);
-  text = text
-    .replace(/\s+/g, " ")
-    .trim();
+  text = text.replace(/\s+/g, " ").trim();
 
   if (text.length > 10000) {
     text = text.substring(0, 10000) + "...\n\n(truncated)";
@@ -503,8 +497,10 @@ function extractLinks(html: string, baseUrl: string): string {
 
   const limitedLinks = links.slice(0, 50);
 
-  return `Found ${links.length} links:\n\n` +
-    limitedLinks.map((l) => `- [${l.text}](${l.url})`).join("\n");
+  return (
+    `Found ${links.length} links:\n\n` +
+    limitedLinks.map((l) => `- [${l.text}](${l.url})`).join("\n")
+  );
 }
 
 function decodeHtmlEntities(text: string): string {

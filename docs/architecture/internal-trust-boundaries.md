@@ -11,7 +11,8 @@ provisions the backing resources (D1 / KV / R2 / Queues) and the Worker-script l
 `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
 materialization of that same topology.
 
-At runtime Takos deploys as **one Worker** (`src/worker/index.ts`). Because a single worker serves both the public
+At runtime Takos deploys as **one Worker** (`src/worker/cloudflare-entrypoint.ts`, delegating the default surface to
+`src/worker/index.ts`). Because a single worker serves both the public
 internet edge (`web.fetch` on the admin domain) and self/binding traffic, "is this request internal?" **cannot** be
 decided by a header — an external client can forge any header. This page is the canonical decision for how trust is
 established for every call that crosses an isolate/process boundary.

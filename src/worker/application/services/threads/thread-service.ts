@@ -25,6 +25,7 @@ import {
   writeMessageToR2,
 } from "../offload/messages.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { reserveThreadMessageSequence } from "./message-sequence.ts";
 
 export interface ThreadAccess {
   thread: Thread;
@@ -53,7 +54,7 @@ function toThread(t: SelectOf<typeof threads>): Thread {
     id: t.id,
     space_id: t.accountId,
     title: t.title ?? null,
-    locale: (t.locale === "ja" || t.locale === "en") ? t.locale : null,
+    locale: t.locale === "ja" || t.locale === "en" ? t.locale : null,
     status: t.status as ThreadStatus,
     summary: t.summary ?? null,
     key_points: t.keyPoints ?? "[]",
@@ -91,6 +92,7 @@ function toRun(r: SelectOf<typeof runs>): Run {
     root_thread_id: rootThreadId,
     root_run_id: rootRunId,
     agent_type: r.agentType,
+    model: r.model ?? null,
     status: r.status as RunStatus,
     input: r.input,
     output: r.output ?? null,
@@ -119,7 +121,10 @@ export async function checkThreadAccess(
   }
 
   const db = getDb(dbBinding);
-  const row = await db.select().from(threads).where(eq(threads.id, threadId))
+  const row = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.id, threadId))
     .get();
 
   if (!row) {
@@ -156,7 +161,9 @@ export async function listThreads(
     conditions.push(ne(threads.status, "deleted"));
   }
 
-  const results = await db.select().from(threads)
+  const results = await db
+    .select()
+    .from(threads)
     .where(and(...conditions))
     .orderBy(desc(threads.updatedAt))
     .all();
@@ -174,15 +181,19 @@ export async function createThread(
   const timestamp = new Date().toISOString();
   const title = input.title || null;
 
-  const result = await db.insert(threads).values({
-    id,
-    accountId: spaceId,
-    title,
-    locale: input.locale ?? null,
-    status: "active",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  }).returning().get();
+  const result = await db
+    .insert(threads)
+    .values({
+      id,
+      accountId: spaceId,
+      title,
+      locale: input.locale ?? null,
+      status: "active",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .returning()
+    .get();
 
   return toThread(result);
 }
@@ -198,8 +209,10 @@ export async function updateThread(
   },
 ): Promise<Thread | null> {
   if (
-    updates.title === undefined && updates.locale === undefined &&
-    !updates.status && updates.context_window === undefined
+    updates.title === undefined &&
+    updates.locale === undefined &&
+    !updates.status &&
+    updates.context_window === undefined
   ) {
     return null;
   }
@@ -225,7 +238,8 @@ export async function updateThread(
     data.contextWindow = updates.context_window;
   }
 
-  const result = await db.update(threads)
+  const result = await db
+    .update(threads)
     .set(data)
     .where(eq(threads.id, threadId))
     .returning()
@@ -242,7 +256,8 @@ export async function updateThreadStatus(
   const db = getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
-  await db.update(threads)
+  await db
+    .update(threads)
     .set({ status, updatedAt: timestamp })
     .where(eq(threads.id, threadId));
 }
@@ -255,7 +270,8 @@ export async function deleteThread(
   const db = getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
-  await db.update(threads)
+  await db
+    .update(threads)
     .set({ status: "deleted", updatedAt: timestamp })
     .where(eq(threads.id, threadId));
 }
@@ -274,30 +290,36 @@ export async function listThreadMessages(
   const db = getDb(dbBinding);
 
   // SQL store does not support concurrent queries in a single request -- run sequentially
-  const rows = await db.select({
-    id: messages.id,
-    threadId: messages.threadId,
-    role: messages.role,
-    content: messages.content,
-    r2Key: messages.r2Key,
-    toolCalls: messages.toolCalls,
-    toolCallId: messages.toolCallId,
-    metadata: messages.metadata,
-    sequence: messages.sequence,
-    createdAt: messages.createdAt,
-  }).from(messages)
+  const rows = await db
+    .select({
+      id: messages.id,
+      threadId: messages.threadId,
+      role: messages.role,
+      content: messages.content,
+      r2Key: messages.r2Key,
+      toolCalls: messages.toolCalls,
+      toolCallId: messages.toolCallId,
+      metadata: messages.metadata,
+      sequence: messages.sequence,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
     .where(eq(messages.threadId, threadId))
     .orderBy(asc(messages.sequence))
     .limit(limit)
     .offset(offset)
     .all();
 
-  const totalResult = await db.select({ count: count() }).from(messages)
+  const totalResult = await db
+    .select({ count: count() })
+    .from(messages)
     .where(eq(messages.threadId, threadId))
     .get();
   const total = totalResult?.count ?? 0;
 
-  const runRows = await db.select().from(runs)
+  const runRows = await db
+    .select()
+    .from(runs)
     .where(eq(runs.threadId, threadId))
     .orderBy(desc(runs.createdAt))
     .limit(10)
@@ -308,29 +330,29 @@ export async function listThreadMessages(
     const bucket = env.TAKOS_OFFLOAD;
     const candidates = rows
       .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<
-        { idx: number; key: string }
-      >;
+      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<{
+      idx: number;
+      key: string;
+    }>;
 
     const concurrency = 20;
     for (let i = 0; i < candidates.length; i += concurrency) {
       const batch = candidates.slice(i, i + concurrency);
-      await Promise.all(batch.map(async ({ idx, key }) => {
-        const persisted = await readMessageFromR2(
-          bucket,
-          key,
-        );
-        if (!persisted) return;
-        if (persisted.id !== rows[idx].id) return;
-        if (persisted.thread_id !== threadId) return;
-        rows[idx] = {
-          ...rows[idx],
-          content: persisted.content,
-          toolCalls: persisted.tool_calls,
-          toolCallId: persisted.tool_call_id,
-          metadata: persisted.metadata,
-        };
-      }));
+      await Promise.all(
+        batch.map(async ({ idx, key }) => {
+          const persisted = await readMessageFromR2(bucket, key);
+          if (!persisted) return;
+          if (persisted.id !== rows[idx].id) return;
+          if (persisted.thread_id !== threadId) return;
+          rows[idx] = {
+            ...rows[idx],
+            content: persisted.content,
+            toolCalls: persisted.tool_calls,
+            toolCallId: persisted.tool_call_id,
+            metadata: persisted.metadata,
+          };
+        }),
+      );
     }
   }
 
@@ -354,12 +376,6 @@ export async function createMessage(
   },
 ): Promise<Message | null> {
   const db = getDb(dbBinding);
-
-  const agg = await db.select({ maxSeq: max(messages.sequence) }).from(messages)
-    .where(eq(messages.threadId, thread.id))
-    .get();
-
-  const sequence = (agg?.maxSeq ?? -1) + 1;
   const id = generateId();
   const timestamp = new Date().toISOString();
   const toolCallsStr = input.tool_calls
@@ -367,24 +383,33 @@ export async function createMessage(
     : null;
   const metadataStr = JSON.stringify(input.metadata || {});
 
-  let r2Key: string | null = null;
-  let contentForD1 = input.content;
-  let toolCallsForD1: string | null = toolCallsStr;
+  let sequence = -1;
+  const maxSequenceAttempts = 16;
+  for (let attempt = 0; attempt < maxSequenceAttempts; attempt++) {
+    const reservedSequence = await reserveThreadMessageSequence(
+      dbBinding,
+      thread.id,
+    );
+    const agg =
+      reservedSequence === null
+        ? await db
+            .select({ maxSeq: max(messages.sequence) })
+            .from(messages)
+            .where(eq(messages.threadId, thread.id))
+            .get()
+        : null;
+    sequence = reservedSequence ?? (agg?.maxSeq ?? -1) + 1;
 
-  const offloadBucket = env.TAKOS_OFFLOAD;
-  if (
-    offloadBucket &&
-    shouldOffloadMessage({
-      role: input.role,
-      content: input.content,
-    })
-  ) {
-    try {
-      const { key } = await writeMessageToR2(
-        offloadBucket,
-        thread.id,
-        id,
-        {
+    let r2Key: string | null = null;
+    let contentForD1 = input.content;
+    let toolCallsForD1: string | null = toolCallsStr;
+    const offloadBucket = env.TAKOS_OFFLOAD;
+    if (
+      offloadBucket &&
+      shouldOffloadMessage({ role: input.role, content: input.content })
+    ) {
+      try {
+        const { key } = await writeMessageToR2(offloadBucket, thread.id, id, {
           id,
           thread_id: thread.id,
           role: input.role,
@@ -394,40 +419,58 @@ export async function createMessage(
           metadata: metadataStr,
           sequence,
           created_at: timestamp,
-        },
-      );
-      r2Key = key;
-      contentForD1 = makeMessagePreview(input.content);
-      // Keep SQL store small; hydrate from object store on read.
-      toolCallsForD1 = null;
-    } catch (err) {
-      logWarn(
-        `Failed to persist message ${id} to object store, storing inline`,
-        { module: "message_offload", detail: err },
+        });
+        r2Key = key;
+        contentForD1 = makeMessagePreview(input.content);
+        toolCallsForD1 = null;
+      } catch (err) {
+        logWarn(
+          `Failed to persist message ${id} to object store, storing inline`,
+          { module: "message_offload", detail: err },
+        );
+      }
+    }
+
+    const createData: InsertOf<typeof messages> = {
+      id,
+      threadId: thread.id,
+      role: input.role,
+      content: contentForD1,
+      toolCalls: toolCallsForD1,
+      toolCallId: input.tool_call_id || null,
+      metadata: metadataStr,
+      sequence,
+      createdAt: timestamp,
+      ...(r2Key ? { r2Key } : {}),
+    };
+    try {
+      await db.insert(messages).values(createData);
+      break;
+    } catch (error) {
+      const detail = [
+        error instanceof Error ? error.message : String(error),
+        error instanceof Error && error.cause instanceof Error
+          ? error.cause.message
+          : "",
+      ].join(" ");
+      const sequenceConflict =
+        detail.includes("idx_messages_thread_sequence") ||
+        (detail.includes("UNIQUE") &&
+          detail.includes("thread_id") &&
+          detail.includes("sequence"));
+      if (!sequenceConflict || attempt === maxSequenceAttempts - 1) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(100, 5 * 2 ** attempt)),
       );
     }
   }
 
-  const createData: InsertOf<typeof messages> = {
-    id,
-    threadId: thread.id,
-    role: input.role,
-    content: contentForD1,
-    toolCalls: toolCallsForD1,
-    toolCallId: input.tool_call_id || null,
-    metadata: metadataStr,
-    sequence,
-    createdAt: timestamp,
-  };
-  if (r2Key) {
-    createData.r2Key = r2Key;
-  }
-
-  await db.insert(messages).values(createData);
-
   // Update thread's updatedAt (non-critical, don't let failure block message creation)
   try {
-    await db.update(threads)
+    await db
+      .update(threads)
       .set({ updatedAt: timestamp })
       .where(eq(threads.id, thread.id));
   } catch (err) {
@@ -439,10 +482,11 @@ export async function createMessage(
 
   // Auto-set title from first user message
   if (input.role === "user" && sequence === 0 && !thread.title) {
-    const autoTitle = input.content.slice(0, 50) +
-      (input.content.length > 50 ? "..." : "");
+    const autoTitle =
+      input.content.slice(0, 50) + (input.content.length > 50 ? "..." : "");
     try {
-      await db.update(threads)
+      await db
+        .update(threads)
         .set({ title: autoTitle, updatedAt: timestamp })
         .where(eq(threads.id, thread.id));
     } catch (err) {
