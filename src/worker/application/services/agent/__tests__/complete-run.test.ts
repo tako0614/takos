@@ -151,6 +151,8 @@ test("D1 path commits run, chunked transcript, and event in one bounded batch", 
   );
   assertEquals(captured[3].queryText.includes("WITH pending"), true);
   assertEquals(captured[3].queryText.includes('ON CONFLICT ("id")'), true);
+  assertEquals(captured[3].queryText.includes('r."completed_at"'), true);
+  assertEquals(captured[3].queryText.includes('p."created_at"'), false);
   assertEquals(
     captured[4].queryText.includes('INSERT INTO "index_jobs"'),
     true,
@@ -211,10 +213,7 @@ test("Postgres path uses the dedicated transaction and never outer sequential ba
   assertEquals(transactionCalls, 1);
   assertEquals(outerBatchCalls, 0);
   assertEquals(transactionStatementCount, 7);
-  assertEquals(
-    transcriptInsertSql.includes('CAST(p."ord" AS INTEGER)'),
-    true,
-  );
+  assertEquals(transcriptInsertSql.includes('CAST(p."ord" AS INTEGER)'), true);
 });
 
 test("cancel winner leaves completion uncommitted and cannot persist orphan transcript", async () => {
@@ -614,7 +613,7 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
         "thread-1",
         "service-1",
         7,
-        "{\"status\":\"running\"}",
+        '{"status":"running"}',
         "2026-07-11T00:00:00.000Z",
       ],
     });
@@ -636,10 +635,7 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       args: ["run-1"],
     });
     assertEquals(preserved.rows[0].status, "running");
-    assertEquals(
-      preserved.rows[0].engine_checkpoint,
-      '{"status":"running"}',
-    );
+    assertEquals(preserved.rows[0].engine_checkpoint, '{"status":"running"}');
 
     const result = await completeRunAtomically(db as never, completeInput(), {
       expectedEngineCheckpoint: '{"status":"running"}',

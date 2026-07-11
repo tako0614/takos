@@ -63,7 +63,6 @@ type StoredCompletionMessage = {
   toolCalls: string | null;
   toolCallId: string | null;
   metadata: string;
-  createdAt: string;
 };
 
 const MAX_INLINE_MESSAGE_BYTES = 256 * 1024;
@@ -174,7 +173,6 @@ async function stageCompletionMessages(
           toolCalls: null,
           toolCallId: message.tool_call_id ?? null,
           metadata: "{}",
-          createdAt: completedAt,
         });
         continue;
       }
@@ -196,7 +194,6 @@ async function stageCompletionMessages(
         toolCalls,
         toolCallId: message.tool_call_id ?? null,
         metadata,
-        createdAt: completedAt,
       });
     }
   } catch (error) {
@@ -317,7 +314,7 @@ function buildCompleteRunStatements(
     );
   }
   // D1 allows 100 bound parameters/query and 50 queries/invocation on the
-  // free tier. Ten rows use 90 row parameters plus the completion predicate,
+  // free tier. Ten rows use 80 row parameters plus the completion predicate,
   // keeping both limits bounded even for the accepted 256-message maximum.
   const MESSAGE_CHUNK_SIZE = 10;
   for (
@@ -329,9 +326,7 @@ function buildCompleteRunStatements(
       chunkStart,
       chunkStart + MESSAGE_CHUNK_SIZE,
     );
-    const pendingRows = chunk
-      .map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .join(", ");
+    const pendingRows = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
     const pendingArgs: unknown[] = [];
     for (let offset = 0; offset < chunk.length; offset++) {
       const message = chunk[offset];
@@ -344,7 +339,6 @@ function buildCompleteRunStatements(
         message.toolCalls,
         message.toolCallId,
         message.metadata,
-        message.createdAt,
       );
     }
     statements.push(
@@ -352,7 +346,7 @@ function buildCompleteRunStatements(
         .prepare(
           `WITH pending
              ("id", "ord", "role", "content", "r2_key", "tool_calls",
-              "tool_call_id", "metadata", "created_at") AS (
+              "tool_call_id", "metadata") AS (
              VALUES ${pendingRows}
            )
            INSERT INTO "messages"
@@ -361,7 +355,7 @@ function buildCompleteRunStatements(
            SELECT p."id", r."thread_id", p."role", p."content", p."r2_key",
                   p."tool_calls", p."tool_call_id", p."metadata",
                   r."transcript_sequence_start" + CAST(p."ord" AS INTEGER),
-                  p."created_at"
+                  r."completed_at"
            FROM "runs" r
            CROSS JOIN pending p
            WHERE ${predicate}
