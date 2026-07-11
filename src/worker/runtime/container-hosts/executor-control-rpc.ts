@@ -1455,6 +1455,48 @@ const ENGINE_CHECKPOINT_STATUSES = new Set([
   "cancelled",
 ]);
 
+type EngineCheckpointUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+};
+
+type StoredEngineCheckpoint = {
+  checkpoint: Record<string, unknown>;
+  usage: EngineCheckpointUsage;
+};
+
+const EMPTY_ENGINE_CHECKPOINT_USAGE: EngineCheckpointUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cachedInputTokens: 0,
+};
+
+function parseEngineCheckpointUsage(
+  value: unknown,
+): EngineCheckpointUsage | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const usage = value as Record<string, unknown>;
+  const inputTokens = usage.inputTokens;
+  const outputTokens = usage.outputTokens;
+  const cachedInputTokens = usage.cachedInputTokens;
+  if (
+    typeof inputTokens !== "number" ||
+    !Number.isSafeInteger(inputTokens) ||
+    inputTokens < 0 ||
+    typeof outputTokens !== "number" ||
+    !Number.isSafeInteger(outputTokens) ||
+    outputTokens < 0 ||
+    typeof cachedInputTokens !== "number" ||
+    !Number.isSafeInteger(cachedInputTokens) ||
+    cachedInputTokens < 0 ||
+    cachedInputTokens > inputTokens
+  ) {
+    return null;
+  }
+  return { inputTokens, outputTokens, cachedInputTokens };
+}
+
 function parseEngineCheckpoint(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (!isBoundedCheckpointJson(value)) return null;
@@ -1487,6 +1529,16 @@ function parseEngineCheckpoint(value: unknown): Record<string, unknown> | null {
     return null;
   }
   return checkpoint;
+}
+
+function parseStoredEngineCheckpoint(
+  value: unknown,
+): StoredEngineCheckpoint | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const stored = value as Record<string, unknown>;
+  const checkpoint = parseEngineCheckpoint(stored.checkpoint);
+  const usage = parseEngineCheckpointUsage(stored.usage);
+  return checkpoint && usage ? { checkpoint, usage } : null;
 }
 
 function isBoundedCheckpointJson(value: unknown): boolean {
@@ -1542,7 +1594,7 @@ function engineCheckpointR2KeyFromStored(
 async function loadStoredEngineCheckpoint(
   env: Env,
   stored: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<StoredEngineCheckpoint | null> {
   let serialized = stored;
   if (stored.startsWith(ENGINE_CHECKPOINT_R2_PREFIX)) {
     const key = engineCheckpointR2KeyFromStored(stored);
@@ -1558,7 +1610,7 @@ async function loadStoredEngineCheckpoint(
     return null;
   }
   try {
-    return parseEngineCheckpoint(JSON.parse(serialized));
+    return parseStoredEngineCheckpoint(JSON.parse(serialized));
   } catch {
     return null;
   }
@@ -1580,16 +1632,18 @@ export async function handleEngineCheckpointSave(
   const serviceId = readRunServiceId(body);
   const leaseVersion = body.leaseVersion;
   const checkpoint = parseEngineCheckpoint(body.checkpoint);
+  const usage = parseEngineCheckpointUsage(body.usage);
   if (
     !runId ||
     !checkpoint ||
+    !usage ||
     !validCheckpointLeaseVersion(serviceId, leaseVersion)
   ) {
     return err("Invalid engine checkpoint payload", 400);
   }
   let serialized: string;
   try {
-    serialized = JSON.stringify(checkpoint);
+    serialized = JSON.stringify({ checkpoint, usage });
   } catch {
     return err("Invalid engine checkpoint payload", 400);
   }
@@ -1693,10 +1747,15 @@ export async function handleEngineCheckpointLoad(
       .where(eq(runs.id, runId))
       .get();
     if (!row) return err("Run not found", 404);
-    if (!row.checkpoint) return ok({ checkpoint: null });
+    if (!row.checkpoint) {
+      return ok({
+        checkpoint: null,
+        usage: EMPTY_ENGINE_CHECKPOINT_USAGE,
+      });
+    }
     const parsed = await loadStoredEngineCheckpoint(env, row.checkpoint);
     if (!parsed) return err("Stored engine checkpoint is invalid", 500);
-    return ok({ checkpoint: parsed });
+    return ok(parsed);
   } catch (error) {
     logError("Engine checkpoint load failed", error, {
       module: "executor-host",

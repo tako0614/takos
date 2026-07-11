@@ -13,6 +13,7 @@ use takos_agent_engine::ids::{LoopId, SessionId};
 use takos_agent_engine::storage::LoopStateRepository;
 use takos_agent_engine::{EngineError, Result as EngineResult};
 
+use crate::engine_support::{UsageSnapshot, UsageTracker};
 use crate::AppResult;
 
 /// Connect + read timeout for control-plane RPC calls. Picked to be short
@@ -234,6 +235,7 @@ pub struct RpcToolResult {
 #[derive(Debug, Deserialize)]
 struct EngineCheckpointLoadResponse {
     checkpoint: Option<LoopState>,
+    usage: UsageSnapshot,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -415,7 +417,11 @@ impl ControlRpcClient {
         .await
     }
 
-    pub async fn save_engine_checkpoint(&self, checkpoint: &LoopState) -> AppResult<()> {
+    pub async fn save_engine_checkpoint(
+        &self,
+        checkpoint: &LoopState,
+        usage: &UsageSnapshot,
+    ) -> AppResult<()> {
         let _: Value = self
             .post_control_json(
                 "engine-checkpoint-save",
@@ -423,13 +429,14 @@ impl ControlRpcClient {
                     "runId": self.run_id,
                     "leaseVersion": self.lease_version,
                     "checkpoint": checkpoint,
+                    "usage": usage,
                 }),
             )
             .await?;
         Ok(())
     }
 
-    pub async fn load_engine_checkpoint(&self) -> AppResult<Option<LoopState>> {
+    pub async fn load_engine_checkpoint(&self) -> AppResult<(Option<LoopState>, UsageSnapshot)> {
         let response: EngineCheckpointLoadResponse = self
             .post_control_json(
                 "engine-checkpoint-load",
@@ -439,7 +446,7 @@ impl ControlRpcClient {
                 }),
             )
             .await?;
-        Ok(response.checkpoint)
+        Ok((response.checkpoint, response.usage))
     }
 
     pub async fn tool_cleanup(&self) -> AppResult<()> {
@@ -699,23 +706,30 @@ impl ControlRpcClient {
 #[derive(Clone)]
 pub struct ControlRpcLoopStateRepository {
     client: ControlRpcClient,
+    usage_tracker: Arc<UsageTracker>,
 }
 
 impl ControlRpcLoopStateRepository {
-    pub const fn new(client: ControlRpcClient) -> Self {
-        Self { client }
+    pub const fn new(client: ControlRpcClient, usage_tracker: Arc<UsageTracker>) -> Self {
+        Self {
+            client,
+            usage_tracker,
+        }
     }
 
     pub async fn load_current(&self) -> AppResult<Option<LoopState>> {
-        self.client.load_engine_checkpoint().await
+        let (checkpoint, usage) = self.client.load_engine_checkpoint().await?;
+        self.usage_tracker.restore(usage);
+        Ok(checkpoint)
     }
 }
 
 #[async_trait]
 impl LoopStateRepository for ControlRpcLoopStateRepository {
     async fn save_checkpoint(&self, state: LoopState) -> EngineResult<()> {
+        let usage = self.usage_tracker.snapshot();
         self.client
-            .save_engine_checkpoint(&state)
+            .save_engine_checkpoint(&state, &usage)
             .await
             .map_err(|error| {
                 EngineError::Storage(format!("control-plane checkpoint save failed: {error}"))
@@ -727,13 +741,9 @@ impl LoopStateRepository for ControlRpcLoopStateRepository {
         session_id: &SessionId,
         loop_id: &LoopId,
     ) -> EngineResult<Option<LoopState>> {
-        let checkpoint = self
-            .client
-            .load_engine_checkpoint()
-            .await
-            .map_err(|error| {
-                EngineError::Storage(format!("control-plane checkpoint load failed: {error}"))
-            })?;
+        let checkpoint = self.load_current().await.map_err(|error| {
+            EngineError::Storage(format!("control-plane checkpoint load failed: {error}"))
+        })?;
         match checkpoint {
             Some(checkpoint)
                 if checkpoint.session_id != *session_id || checkpoint.loop_id != *loop_id =>
@@ -1491,10 +1501,22 @@ mod tests {
                 serde_json::from_slice(&bytes).expect("checkpoint request JSON");
             if path.ends_with("engine-checkpoint-save") {
                 assert_eq!(body["leaseVersion"], 13);
-                *stored.lock().await = Some(body["checkpoint"].clone());
+                *stored.lock().await = Some(body);
                 return Json(json!({ "saved": true })).into_response();
             }
-            Json(json!({ "checkpoint": stored.lock().await.clone() })).into_response()
+            let stored = stored.lock().await;
+            Json(json!({
+                "checkpoint": stored.as_ref().map(|value| value["checkpoint"].clone()),
+                "usage": stored.as_ref().map_or_else(
+                    || json!({
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "cachedInputTokens": 0,
+                    }),
+                    |value| value["usage"].clone(),
+                ),
+            }))
+            .into_response()
         }
 
         let stored: Stored = Arc::new(AsyncMutex::new(None));
@@ -1533,19 +1555,25 @@ mod tests {
                 "execution_profile": "external_context",
             }),
         };
+        let usage = crate::engine_support::UsageSnapshot {
+            input_tokens: 120,
+            output_tokens: 30,
+            cached_input_tokens: 20,
+        };
 
         client
-            .save_engine_checkpoint(&checkpoint)
+            .save_engine_checkpoint(&checkpoint, &usage)
             .await
             .expect("checkpoint save");
-        let loaded = client
+        let (loaded, loaded_usage) = client
             .load_engine_checkpoint()
             .await
-            .expect("checkpoint load")
-            .expect("stored checkpoint");
+            .expect("checkpoint load");
+        let loaded = loaded.expect("stored checkpoint");
 
         server.abort();
         assert_eq!(loaded, checkpoint);
+        assert_eq!(loaded_usage, usage);
     }
 
     #[tokio::test]

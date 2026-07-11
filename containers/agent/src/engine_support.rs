@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use takos_agent_engine::config::EngineConfig;
 use takos_agent_engine::domain::{
     AbstractNode, AbstractNodeMetadata, DistillationState, EntityRef, GraphFragment, RawNodeKind,
@@ -108,7 +109,8 @@ impl Embedder for RustHashEmbedder {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
     pub input_tokens: usize,
     pub output_tokens: usize,
@@ -126,9 +128,19 @@ pub struct UsageTracker {
 impl UsageTracker {
     pub fn record(&self, input_tokens: usize, output_tokens: usize, cached_input_tokens: usize) {
         let mut guard = lock_usage_snapshot(&self.inner);
-        guard.input_tokens += input_tokens;
-        guard.output_tokens += output_tokens;
-        guard.cached_input_tokens += cached_input_tokens;
+        guard.input_tokens = guard.input_tokens.saturating_add(input_tokens);
+        guard.output_tokens = guard.output_tokens.saturating_add(output_tokens);
+        guard.cached_input_tokens = guard
+            .cached_input_tokens
+            .saturating_add(cached_input_tokens);
+    }
+
+    /// Restore the cumulative provider usage persisted with an engine
+    /// checkpoint. A fresh replacement container calls this exactly once
+    /// before issuing another model request, so later `record` calls extend
+    /// rather than replace the pre-crash total.
+    pub fn restore(&self, snapshot: UsageSnapshot) {
+        *lock_usage_snapshot(&self.inner) = snapshot;
     }
 
     pub fn snapshot(&self) -> UsageSnapshot {
@@ -577,8 +589,8 @@ fn truncate_title(source: &str) -> String {
 mod tests {
     use super::{
         build_engine_config, derive_engine_session_id, durable_history_before_current,
-        estimate_tokens, normalize_history_tool_call, truncate_title, TAKOS_MODEL_TIMEOUT_MS,
-        TAKOS_TOOL_TIMEOUT_MS,
+        estimate_tokens, normalize_history_tool_call, truncate_title, UsageSnapshot, UsageTracker,
+        TAKOS_MODEL_TIMEOUT_MS, TAKOS_TOOL_TIMEOUT_MS,
     };
     use crate::control_rpc::{HistoryMessage, RunConfigResponse};
     use serde_json::json;
@@ -618,6 +630,26 @@ mod tests {
         let dense_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(400));
         assert!(estimate_tokens(&dense_json) >= 100);
         assert_eq!(estimate_tokens(""), 0);
+    }
+
+    #[test]
+    fn restored_usage_is_extended_instead_of_recounted() {
+        let tracker = UsageTracker::default();
+        tracker.restore(UsageSnapshot {
+            input_tokens: 12,
+            output_tokens: 5,
+            cached_input_tokens: 2,
+        });
+        tracker.record(3, 1, 1);
+
+        assert_eq!(
+            tracker.snapshot(),
+            UsageSnapshot {
+                input_tokens: 15,
+                output_tokens: 6,
+                cached_input_tokens: 3,
+            },
+        );
     }
 
     #[test]

@@ -27,6 +27,14 @@ function checkpoint(currentNode = "execute_tools") {
   };
 }
 
+function usage() {
+  return {
+    inputTokens: 120,
+    outputTokens: 30,
+    cachedInputTokens: 20,
+  };
+}
+
 function createOffloadBucket() {
   const values = new Map<string, string>();
   const bucket = {
@@ -114,6 +122,7 @@ test("engine checkpoint is saved and loaded under the current run lease", async 
       serviceId: "service-1",
       leaseVersion: 7,
       checkpoint: checkpoint(),
+      usage: usage(),
     };
     const saved = await handleEngineCheckpointSave(body, env);
     assertEquals(saved.status, 200);
@@ -127,7 +136,10 @@ test("engine checkpoint is saved and loaded under the current run lease", async 
       env,
     );
     assertEquals(loaded.status, 200);
-    assertEquals(await loaded.json(), { checkpoint: checkpoint() });
+    assertEquals(await loaded.json(), {
+      checkpoint: checkpoint(),
+      usage: usage(),
+    });
 
     const row = await client.execute({
       sql: "SELECT engine_checkpoint_updated_at FROM runs WHERE id = ?",
@@ -147,6 +159,7 @@ test("stale engine checkpoint writes are rejected without replacing state", asyn
       serviceId: "service-1",
       leaseVersion: 7,
       checkpoint: checkpoint(),
+      usage: usage(),
     };
     assertEquals((await handleEngineCheckpointSave(current, env)).status, 200);
 
@@ -164,8 +177,12 @@ test("stale engine checkpoint writes are rejected without replacing state", asyn
       sql: "SELECT engine_checkpoint FROM runs WHERE id = ?",
       args: ["run-1"],
     });
-    const stored = JSON.parse(String(row.rows[0]?.engine_checkpoint));
-    assertEquals(stored.current_node, "execute_tools");
+    const stored = JSON.parse(String(row.rows[0]?.engine_checkpoint)) as {
+      checkpoint: ReturnType<typeof checkpoint>;
+      usage: ReturnType<typeof usage>;
+    };
+    assertEquals(stored.checkpoint.current_node, "execute_tools");
+    assertEquals(stored.usage, usage());
   } finally {
     client.close();
   }
@@ -183,6 +200,7 @@ test("a replacement lease can resume the prior container checkpoint", async () =
             serviceId: "service-1",
             leaseVersion: 7,
             checkpoint: saved,
+            usage: usage(),
           },
           env,
         )
@@ -203,7 +221,10 @@ test("a replacement lease can resume the prior container checkpoint", async () =
       env,
     );
     assertEquals(replacement.status, 200);
-    assertEquals(await replacement.json(), { checkpoint: saved });
+    assertEquals(await replacement.json(), {
+      checkpoint: saved,
+      usage: usage(),
+    });
 
     const superseded = await handleEngineCheckpointLoad(
       {
@@ -230,6 +251,30 @@ test("Takos checkpoint endpoint rejects a second memory authority", async () => 
         serviceId: "service-1",
         leaseVersion: 7,
         checkpoint: invalid,
+        usage: usage(),
+      },
+      env,
+    );
+    assertEquals(response.status, 400);
+  } finally {
+    client.close();
+  }
+});
+
+test("engine checkpoint rejects an invalid provider usage snapshot", async () => {
+  const { client, env } = await createFixture();
+  try {
+    const response = await handleEngineCheckpointSave(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+        checkpoint: checkpoint(),
+        usage: {
+          inputTokens: 5,
+          outputTokens: 1,
+          cachedInputTokens: 6,
+        },
       },
       env,
     );
@@ -251,6 +296,7 @@ test("large engine checkpoints are offloaded and transparently loaded", async ()
       serviceId: "service-1",
       leaseVersion: 7,
       checkpoint: large,
+      usage: usage(),
     };
     assertEquals((await handleEngineCheckpointSave(body, env)).status, 200);
 
@@ -291,8 +337,10 @@ test("large engine checkpoints are offloaded and transparently loaded", async ()
     assertEquals(loaded.status, 200);
     const payload = (await loaded.json()) as {
       checkpoint: typeof replacement;
+      usage: ReturnType<typeof usage>;
     };
     assertEquals(payload.checkpoint.current_node, "finalize_external_response");
+    assertEquals(payload.usage, usage());
     assertEquals(
       (payload.checkpoint.state_json as Record<string, unknown>).padding,
       (replacement.state_json as Record<string, unknown>).padding,
@@ -315,6 +363,7 @@ test("engine checkpoints with mismatched identity or excessive depth are rejecte
             serviceId: "service-1",
             leaseVersion: 7,
             checkpoint: mismatched,
+            usage: usage(),
           },
           env,
         )
@@ -338,6 +387,7 @@ test("engine checkpoints with mismatched identity or excessive depth are rejecte
             serviceId: "service-1",
             leaseVersion: 7,
             checkpoint: tooDeep,
+            usage: usage(),
           },
           env,
         )

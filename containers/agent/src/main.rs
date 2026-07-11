@@ -763,10 +763,13 @@ async fn execute_run(
         run_config.temperature,
         collect_openai_api_keys(api_keys.openai, env::var("OPENAI_API_KEY").ok()),
         exposed_tools.clone(),
-        usage_tracker,
+        usage_tracker.clone(),
         api_keys.openai_endpoint,
     );
-    let checkpoint_repository = Arc::new(ControlRpcLoopStateRepository::new(client.clone()));
+    let checkpoint_repository = Arc::new(ControlRpcLoopStateRepository::new(
+        client.clone(),
+        usage_tracker,
+    ));
     let saved_checkpoint = checkpoint_repository.load_current().await?;
     let deps = build_engine_deps(
         model_runner.clone(),
@@ -1679,6 +1682,14 @@ mod tests {
                 "openai": "sk-e2e",
                 "openaiEndpoint": format!("{}/v1/chat/completions", state.base_url)
             }),
+            "/api/internal/v1/agent-control/engine-checkpoint-load" => serde_json::json!({
+                "checkpoint": null,
+                "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cachedInputTokens": 0
+                }
+            }),
             "/v1/chat/completions" => serde_json::json!({
                 "choices": [{
                     "message": { "content": "e2e completed", "tool_calls": [] }
@@ -1744,6 +1755,19 @@ mod tests {
                 && message["content"]
                     .as_str()
                     .is_some_and(|content| content.contains("current question"))
+        }));
+        let checkpoint_saves = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/engine-checkpoint-save"))
+            .map(|(_, body)| body)
+            .collect::<Vec<_>>();
+        assert!(checkpoint_saves.iter().any(|body| {
+            body["usage"]
+                == serde_json::json!({
+                    "inputTokens": 12,
+                    "outputTokens": 3,
+                    "cachedInputTokens": 2
+                })
         }));
 
         let completion = requests
