@@ -44,6 +44,8 @@ export interface IdempotencyResult {
   cachedOutput?: string;
   cachedError?: string;
   operationId?: string;
+  /** This caller must fail the Run instead of asking the model to continue. */
+  outcomeUncertain?: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export async function checkIdempotency(
         cachedError:
           existing.resultError ??
           `The previous ${toolName} call may have completed, but Takos could not confirm its outcome. Automatic replay is blocked to avoid duplicating a side effect. Verify the remote system and use a new explicit operation if needed.`,
+        outcomeUncertain: true,
       };
     }
 
@@ -117,6 +120,7 @@ export async function checkIdempotency(
           action: "cached",
           cachedOutput: "",
           cachedError: uncertainError,
+          outcomeUncertain: true,
         };
       } else {
         return { action: "in_progress" };
@@ -157,6 +161,7 @@ export async function checkIdempotency(
         cachedError:
           raceCheck.resultError ??
           `The previous ${toolName} call has an unknown outcome; automatic replay is blocked.`,
+        outcomeUncertain: true,
       };
     }
     return { action: "in_progress" };
@@ -183,7 +188,12 @@ export async function completeOperation(
       resultError: error ?? null,
       completedAt: new Date().toISOString(),
     })
-    .where(eq(toolOperations.id, operationId));
+    .where(
+      and(
+        eq(toolOperations.id, operationId),
+        eq(toolOperations.status, "pending"),
+      ),
+    );
 }
 
 /** Permanently fence an operation whose remote commit outcome is unknown. */
@@ -201,7 +211,40 @@ export async function markOperationUncertain(
       resultError: error,
       completedAt: new Date().toISOString(),
     })
-    .where(eq(toolOperations.id, operationId));
+    .where(
+      and(
+        eq(toolOperations.id, operationId),
+        eq(toolOperations.status, "pending"),
+      ),
+    );
+}
+
+/**
+ * Fence side effects from a prior executor before a newly claimed lease can
+ * dispatch. At this point no tool from the new lease exists yet, so every
+ * pending row has an unknown pre-takeover outcome and must never be replayed.
+ */
+export async function fencePendingOperationsForClaimedRun(
+  db: SqlDatabaseBinding,
+  runId: string,
+  clock: Clock = systemClock,
+): Promise<number> {
+  const result = await getDb(db)
+    .update(toolOperations)
+    .set({
+      status: "uncertain",
+      resultOutput: "",
+      resultError:
+        "The previous executor lost its Run lease before this side effect recorded an authoritative outcome. Automatic replay is blocked; verify the remote system before issuing a new operation.",
+      completedAt: new Date(clock.now()).toISOString(),
+    })
+    .where(
+      and(
+        eq(toolOperations.runId, runId),
+        eq(toolOperations.status, "pending"),
+      ),
+    );
+  return affectedRowCount(result);
 }
 
 /**

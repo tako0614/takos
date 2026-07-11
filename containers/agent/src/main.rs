@@ -21,9 +21,10 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 use takos_agent_engine::domain::LoopStatus;
 use takos_agent_engine::model::{ConversationMessage, ConversationRole};
+use takos_agent_engine::storage::{InMemoryLoopStateRepository, LoopStateRepository};
 use takos_agent_engine::{
-    recover_interrupted_loop_with_options, run_turn_with_options, ExecutionProfile, ExecutionState,
-    RunOptions, SessionResponse,
+    recover_interrupted_loop_with_options, run_turn_with_options, EngineError, ExecutionProfile,
+    ExecutionState, RunOptions, SessionResponse,
 };
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -549,7 +550,7 @@ async fn handle_run_task_error(
     );
     if let Ok(client) = ControlRpcClient::new(payload) {
         let _ = client.tool_cleanup().await;
-        let _ = handle_failure(&client, err, UsagePayload::default(), None, None).await;
+        let _ = handle_failure(&client, err, UsagePayload::default(), None).await;
     }
 }
 
@@ -757,6 +758,7 @@ async fn execute_run(
     let composite_tool_executor =
         CompositeToolExecutor::new(client.clone(), tool_catalog.tools.clone())
             .with_cancellation_token(cancellation_token.clone());
+    let tool_execution_state = composite_tool_executor.clone();
     let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools());
     let model_runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
         payload.resolved_model(),
@@ -766,11 +768,23 @@ async fn execute_run(
         usage_tracker.clone(),
         api_keys.openai_endpoint,
     );
-    let checkpoint_repository = Arc::new(ControlRpcLoopStateRepository::new(
-        client.clone(),
-        usage_tracker,
-    ));
-    let saved_checkpoint = checkpoint_repository.load_current().await?;
+    let durable_checkpoint_repository = if payload.supports_durable_checkpoints() {
+        Some(Arc::new(ControlRpcLoopStateRepository::new(
+            client.clone(),
+            usage_tracker,
+        )))
+    } else {
+        None
+    };
+    let saved_checkpoint = match durable_checkpoint_repository.as_ref() {
+        Some(repository) => repository.load_current().await?,
+        None => None,
+    };
+    let checkpoint_repository: Arc<dyn LoopStateRepository> =
+        match durable_checkpoint_repository.as_ref() {
+            Some(repository) => repository.clone(),
+            None => Arc::new(InMemoryLoopStateRepository::default()),
+        };
     let deps = build_engine_deps(
         model_runner.clone(),
         composite_tool_executor,
@@ -832,11 +846,14 @@ async fn execute_run(
         .await
         .ok();
     let run_options = worker_context_run_options(cancellation_token.clone(), conversation_history);
-    let run_result = if let Some(checkpoint) = saved_checkpoint {
+    let mut run_result = if let Some(checkpoint) = saved_checkpoint {
         recover_interrupted_loop_with_options(&engine_config, &deps, checkpoint, run_options).await
     } else {
         run_turn_with_options(&engine_config, &deps, request, run_options).await
     };
+    if let Some(error) = tool_execution_state.fatal_error() {
+        run_result = Err(EngineError::Tool(error));
+    }
 
     let usage = model_runner.usage_payload();
     client
@@ -863,26 +880,18 @@ async fn execute_run(
         .await
         .ok();
     let finalization_result = match run_result {
-        Ok(response) => handle_success(&client, &bootstrap.thread_id, &response, usage).await,
+        Ok(response) => handle_success(&client, &response, usage).await,
         Err(err) => {
             // A model/engine failure is finalized once with its real usage.
             // `FinalizationError` keeps an unconfirmed terminal transport from
             // being rewritten as a second zero-usage failure at the task edge.
-            let checkpoint_turn_messages = checkpoint_repository
-                .load_current()
-                .await
-                .ok()
-                .flatten()
-                .and_then(|checkpoint| ExecutionState::from_checkpoint(checkpoint).ok())
-                .map(|(state, _, _)| state.turn_messages);
-            handle_failure(
-                &client,
-                &err,
-                usage,
-                Some(&bootstrap.thread_id),
-                checkpoint_turn_messages.as_deref(),
-            )
-            .await
+            let checkpoint_turn_messages = match durable_checkpoint_repository.as_ref() {
+                Some(repository) => repository.load_current().await.ok().flatten(),
+                None => None,
+            }
+            .and_then(|checkpoint| ExecutionState::from_checkpoint(checkpoint).ok())
+            .map(|(state, _, _)| state.turn_messages);
+            handle_failure(&client, &err, usage, checkpoint_turn_messages.as_deref()).await
         }
     };
 
@@ -933,7 +942,6 @@ async fn heartbeat_loop(
 
 async fn handle_success(
     client: &ControlRpcClient,
-    thread_id: &str,
     response: &SessionResponse,
     usage: UsagePayload,
 ) -> AppResult<()> {
@@ -955,7 +963,6 @@ async fn handle_success(
             Some(&output),
             terminal_error,
             messages,
-            Some(thread_id),
         )
         .await
     {
@@ -972,7 +979,6 @@ async fn handle_failure(
     client: &ControlRpcClient,
     err: &(impl std::fmt::Display + ?Sized),
     usage: UsagePayload,
-    legacy_thread_id: Option<&str>,
     turn_messages: Option<&[ConversationMessage]>,
 ) -> AppResult<()> {
     let raw_error_message = err.to_string();
@@ -989,14 +995,7 @@ async fn handle_failure(
         Some(user_visible_failure_message(&error_message)),
     )?;
     if let Err(update_err) = client
-        .complete_run(
-            status,
-            usage.clone(),
-            None,
-            Some(&error_message),
-            messages,
-            legacy_thread_id,
-        )
+        .complete_run(status, usage.clone(), None, Some(&error_message), messages)
         .await
     {
         if is_run_authority_lost(update_err.as_ref()) {
@@ -1109,6 +1108,12 @@ fn local_smoke_opt_in() -> bool {
 
 fn user_visible_failure_message(error: &str) -> String {
     let normalized = error.to_ascii_lowercase();
+    if normalized.contains("side-effect outcome is uncertain")
+        || normalized.contains("automatic replay is blocked")
+    {
+        return "A remote side effect may already have completed, but Takos could not confirm its outcome. Verify the remote system before issuing any new operation; do not retry blindly."
+            .to_string();
+    }
     if normalized.contains("takosumi accounts workspace authorization must be renewed")
         || normalized.contains("takosumi accounts authorization must be renewed")
         || normalized.contains("takosumi ai gateway authorization is unavailable")
@@ -1316,6 +1321,7 @@ mod tests {
             lease_version: Some(lease_version),
             executor_tier: Some(1),
             executor_container_id: Some("container-test".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: "http://127.0.0.1:1".to_string(),
             control_rpc_token: "test-token".to_string(),
         }
@@ -1390,6 +1396,16 @@ mod tests {
         assert!(!message.contains("model configuration"));
     }
 
+    #[test]
+    fn failure_message_for_uncertain_side_effect_never_recommends_retry() {
+        let message = user_visible_failure_message(
+            "side-effect outcome is uncertain; verify remote state before issuing a new operation: timed out",
+        );
+        assert!(message.contains("may already have completed"));
+        assert!(message.contains("Verify the remote system"));
+        assert!(message.contains("do not retry blindly"));
+    }
+
     #[tokio::test]
     async fn failure_message_and_terminal_status_use_one_complete_run_rpc() {
         type CapturedRequests = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
@@ -1428,6 +1444,7 @@ mod tests {
             lease_version: Some(1),
             executor_tier: Some(1),
             executor_container_id: Some("container-failure-order".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1437,7 +1454,6 @@ mod tests {
             &client,
             &std::io::Error::other("model request failed"),
             UsagePayload::default(),
-            Some("thread-failure-order"),
             None,
         )
         .await
@@ -1505,6 +1521,7 @@ mod tests {
             lease_version: Some(1),
             executor_tier: Some(1),
             executor_container_id: Some("container-unconfirmed-finalization".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         };
@@ -1522,7 +1539,6 @@ mod tests {
         };
         let error = handle_success(
             &ControlRpcClient::new(&payload).expect("control RPC client should build"),
-            "thread-unconfirmed-finalization",
             &response,
             UsagePayload::default(),
         )
@@ -1580,6 +1596,7 @@ mod tests {
             lease_version: Some(1),
             executor_tier: Some(1),
             executor_container_id: Some("container-heartbeat-finalization".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1616,12 +1633,7 @@ mod tests {
             );
         };
         let (finalization_result, ()) = tokio::join!(
-            handle_success(
-                &client,
-                "thread-heartbeat-finalization",
-                &response,
-                UsagePayload::default(),
-            ),
+            handle_success(&client, &response, UsagePayload::default(),),
             observe_pending_finalization,
         );
         finalization_result.expect("atomic finalization should succeed");
@@ -1730,6 +1742,7 @@ mod tests {
             lease_version: Some(1),
             executor_tier: Some(1),
             executor_container_id: Some("container-e2e".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: state.base_url,
             control_rpc_token: "token-e2e".to_string(),
         };

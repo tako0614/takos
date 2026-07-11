@@ -1352,7 +1352,10 @@ export async function handleCompleteRun(
         messages,
         terminalEvent: terminalPayload,
       },
-      { offloadBucket: env.TAKOS_OFFLOAD },
+      {
+        offloadBucket: env.TAKOS_OFFLOAD,
+        expectedEngineCheckpoint: terminalRun.engineCheckpoint,
+      },
     );
     if (!result.committed) {
       abortRemoteToolExecutorsForLease(body);
@@ -1443,9 +1446,10 @@ export async function handleCompleteRun(
 }
 
 const MAX_ENGINE_CHECKPOINT_BYTES = 16 * 1024 * 1024;
-// Cloudflare D1 limits one string/row to 2,000,000 bytes. Leave room for the
-// Run's other columns and store larger opaque engine state in TAKOS_OFFLOAD.
-const MAX_INLINE_ENGINE_CHECKPOINT_BYTES = 1024 * 1024;
+// Cloudflare D1 limits one string/table row to 2,000,000 bytes. A valid Run
+// input can already approach the product's 1 MiB request cap, so keep at least
+// ~450 KiB of row headroom and offload larger opaque state to TAKOS_OFFLOAD.
+const MAX_INLINE_ENGINE_CHECKPOINT_BYTES = 512 * 1024;
 const ENGINE_CHECKPOINT_R2_PREFIX = "r2:";
 const ENGINE_CHECKPOINT_STATUSES = new Set([
   "running",

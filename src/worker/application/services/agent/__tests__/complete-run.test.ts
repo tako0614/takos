@@ -627,7 +627,23 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       batch: createSequentialBatch(runStatement),
     };
 
-    const result = await completeRunAtomically(db as never, completeInput());
+    const stale = await completeRunAtomically(db as never, completeInput(), {
+      expectedEngineCheckpoint: "r2:agent-checkpoints/replaced.json",
+    });
+    assertEquals(stale.committed, false);
+    const preserved = await client.execute({
+      sql: "SELECT status, engine_checkpoint FROM runs WHERE id = ?",
+      args: ["run-1"],
+    });
+    assertEquals(preserved.rows[0].status, "running");
+    assertEquals(
+      preserved.rows[0].engine_checkpoint,
+      '{"status":"running"}',
+    );
+
+    const result = await completeRunAtomically(db as never, completeInput(), {
+      expectedEngineCheckpoint: '{"status":"running"}',
+    });
     assertEquals(result.committed, true);
     const run = await client.execute({
       sql: "SELECT status, output, completion_key, engine_checkpoint, engine_checkpoint_updated_at FROM runs WHERE id = ?",
@@ -669,7 +685,9 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       indexOutbox.rows.every((row) => row.status === "queued"),
       true,
     );
-    const retry = await completeRunAtomically(db as never, completeInput());
+    const retry = await completeRunAtomically(db as never, completeInput(), {
+      expectedEngineCheckpoint: '{"status":"running"}',
+    });
     assertEquals(retry.committed, true);
     assertEquals(retry.idempotent, true);
     const reservation = await client.execute(

@@ -240,6 +240,38 @@ test("a replacement lease can resume the prior container checkpoint", async () =
   }
 });
 
+test("checkpoint v1 rejects unmetered or unenveloped checkpoint state", async () => {
+  const { client, env } = await createFixture();
+  try {
+    await client.execute({
+      sql: "UPDATE runs SET engine_checkpoint = ? WHERE id = ?",
+      args: [JSON.stringify(checkpoint()), "run-1"],
+    });
+    const bareLoaded = await handleEngineCheckpointLoad(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+      },
+      env,
+    );
+    assertEquals(bareLoaded.status, 500);
+
+    const saved = await handleEngineCheckpointSave(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+        checkpoint: checkpoint("finalize_external_response"),
+      },
+      env,
+    );
+    assertEquals(saved.status, 400);
+  } finally {
+    client.close();
+  }
+});
+
 test("Takos checkpoint endpoint rejects a second memory authority", async () => {
   const { client, env } = await createFixture();
   try {
@@ -289,7 +321,7 @@ test("large engine checkpoints are offloaded and transparently loaded", async ()
   try {
     const large = checkpoint();
     (large.state_json as Record<string, unknown>).padding = "x".repeat(
-      1024 * 1024 + 1,
+      512 * 1024 + 1,
     );
     const body = {
       runId: "run-1",
@@ -313,7 +345,7 @@ test("large engine checkpoints are offloaded and transparently loaded", async ()
 
     const replacement = checkpoint("finalize_external_response");
     (replacement.state_json as Record<string, unknown>).padding = "y".repeat(
-      1024 * 1024 + 1,
+      512 * 1024 + 1,
     );
     assertEquals(
       (

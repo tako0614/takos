@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -26,6 +26,7 @@ pub struct CompositeToolExecutor {
     remote_tools: Arc<Vec<ToolDefinition>>,
     tool_call_sequence: Arc<AtomicU64>,
     cancellation_token: Option<CancellationToken>,
+    fatal_error: Arc<Mutex<Option<String>>>,
 }
 
 impl CompositeToolExecutor {
@@ -35,6 +36,7 @@ impl CompositeToolExecutor {
             remote_tools: Arc::new(remote_tools),
             tool_call_sequence: Arc::new(AtomicU64::new(1)),
             cancellation_token: None,
+            fatal_error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -47,6 +49,23 @@ impl CompositeToolExecutor {
 
     pub fn exposed_tools(&self) -> Vec<ToolDefinition> {
         self.remote_tools.as_ref().clone()
+    }
+
+    pub fn fatal_error(&self) -> Option<String> {
+        self.fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    fn fail_run_for_uncertain_outcome(&self, error: String) {
+        let mut fatal_error = self
+            .fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if fatal_error.is_none() {
+            *fatal_error = Some(error);
+        }
     }
 }
 
@@ -201,6 +220,32 @@ impl CompositeToolExecutor {
             }
         };
 
+        if rpc_result.outcome_uncertain {
+            let detail = rpc_result.error.clone().unwrap_or_else(|| {
+                format!("{tool_name} has an unknown remote side-effect outcome")
+            });
+            let error = format!(
+                "side-effect outcome is uncertain; verify remote state before issuing a new operation: {detail}"
+            );
+            self.fail_run_for_uncertain_outcome(error.clone());
+            let summary = format!("{tool_name} error={error}");
+            self.client
+                .emit_run_event(
+                    "tool_result",
+                    tool_result_event(
+                        tool_call_id,
+                        tool_name,
+                        &summary,
+                        &rpc_result.output,
+                        Some(&error),
+                        elapsed_millis(started_at),
+                    ),
+                )
+                .await
+                .ok();
+            return Err(EngineError::Cancelled);
+        }
+
         let result = rpc_tool_result_to_engine(tool_call_id, tool_name, rpc_result.clone())?;
         let (output, error) = rpc_tool_result_output_and_error(&rpc_result);
         self.client
@@ -230,6 +275,11 @@ fn rpc_tool_result_to_engine(
     name: &str,
     rpc: RpcToolResult,
 ) -> Result<ToolCallResult> {
+    if rpc.outcome_uncertain {
+        return Err(EngineError::Tool(rpc.error.clone().unwrap_or_else(|| {
+            format!("{name} has an unknown remote side-effect outcome")
+        })));
+    }
     if rpc.tool_call_id.as_deref() != Some(tool_call_id) {
         return Err(EngineError::Tool(format!(
             "tool result correlation mismatch for {name}"
@@ -397,6 +447,7 @@ mod tests {
             lease_version: None,
             executor_tier: None,
             executor_container_id: None,
+            checkpoint_protocol_version: None,
             control_rpc_base_url: "http://127.0.0.1:8790".to_string(),
             control_rpc_token: "test-token".to_string(),
         })
@@ -500,6 +551,78 @@ mod tests {
     }
 
     #[test]
+    fn uncertain_remote_outcome_preserves_the_lease_for_terminal_commit() {
+        let token = tokio_util::sync::CancellationToken::new();
+        let executor = CompositeToolExecutor::new(test_client(), Vec::new())
+            .with_cancellation_token(token.clone());
+
+        executor.fail_run_for_uncertain_outcome("remote outcome unknown".to_string());
+
+        assert!(!token.is_cancelled());
+        assert_eq!(
+            executor.fatal_error().as_deref(),
+            Some("remote outcome unknown")
+        );
+    }
+
+    #[tokio::test]
+    async fn uncertain_worker_result_aborts_engine_but_keeps_heartbeat_authority() {
+        use axum::extract::Request;
+        use axum::routing::post;
+        use axum::{Json, Router};
+
+        async fn handler(request: Request) -> Json<serde_json::Value> {
+            if request.uri().path().ends_with("tool-execute") {
+                return Json(json!({
+                    "tool_call_id": "call-uncertain",
+                    "output": "",
+                    "error": "Automatic replay is blocked until remote state is verified",
+                    "outcome_uncertain": true,
+                }));
+            }
+            Json(json!({ "success": true }))
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, Router::new().fallback(post(handler)))
+                .await
+                .expect("test server");
+        });
+        let client = ControlRpcClient::new(&StartPayload {
+            run_id: "run-uncertain".to_string(),
+            worker_id: "worker-uncertain".to_string(),
+            service_id: Some("service-uncertain".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(1),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-uncertain".to_string()),
+            checkpoint_protocol_version: None,
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client");
+        let token = tokio_util::sync::CancellationToken::new();
+        let executor =
+            CompositeToolExecutor::new(client, Vec::new()).with_cancellation_token(token.clone());
+
+        let error = executor
+            .execute_remote_tool("call-uncertain", "publish", &json!({}))
+            .await
+            .expect_err("unknown side effect must stop the engine");
+        server.abort();
+
+        assert!(matches!(error, takos_agent_engine::EngineError::Cancelled));
+        assert!(!token.is_cancelled());
+        let fatal = executor.fatal_error().expect("fatal reason");
+        assert!(fatal.contains("side-effect outcome is uncertain"));
+        assert!(fatal.contains("verify remote state"));
+    }
+
+    #[test]
     fn stable_tool_call_id_depends_on_call_details() {
         let id1 = stable_tool_call_id(1, "example_read", &json!({ "path": "/tmp" }));
         let id2 = stable_tool_call_id(1, "example_read", &json!({ "path": "/tmp" }));
@@ -554,6 +677,7 @@ mod tests {
                 tool_call_id: Some("call-example-1".to_string()),
                 output: "ok".to_string(),
                 error: Some("boom".to_string()),
+                outcome_uncertain: false,
             },
         )
         .expect("matching tool result correlation");
@@ -570,6 +694,7 @@ mod tests {
             tool_call_id: Some("call-example-1".to_string()),
             output: "ok".to_string(),
             error: Some("boom".to_string()),
+            outcome_uncertain: false,
         };
         let (output, error) = rpc_tool_result_output_and_error(&rpc);
 
@@ -586,11 +711,29 @@ mod tests {
                 tool_call_id: Some("call-other".to_string()),
                 output: "ok".to_string(),
                 error: None,
+                outcome_uncertain: false,
             },
         )
         .expect_err("the Worker must echo the requested tool call id");
 
         assert!(error.to_string().contains("correlation mismatch"));
+    }
+
+    #[test]
+    fn rpc_tool_result_never_converts_an_uncertain_side_effect_to_model_input() {
+        let error = rpc_tool_result_to_engine(
+            "call-uncertain",
+            "remote_write",
+            crate::control_rpc::RpcToolResult {
+                tool_call_id: Some("call-uncertain".to_string()),
+                output: String::new(),
+                error: Some("remote outcome unknown".to_string()),
+                outcome_uncertain: true,
+            },
+        )
+        .expect_err("an uncertain side effect must fail the Run");
+
+        assert!(error.to_string().contains("remote outcome unknown"));
     }
 
     #[test]

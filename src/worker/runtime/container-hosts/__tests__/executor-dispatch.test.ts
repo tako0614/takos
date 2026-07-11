@@ -9,7 +9,7 @@ test("per-run control URL wins over a stale container host URL", async () => {
     {
       async startAndWaitForPorts() {},
       async fetch(request) {
-        startPayload = await request.json() as Record<string, unknown>;
+        startPayload = (await request.json()) as Record<string, unknown>;
         return Response.json({ ok: true });
       },
     },
@@ -28,6 +28,7 @@ test("per-run control URL wins over a stale container host URL", async () => {
   assertEquals(result.ok, true);
   assertEquals(startPayload?.controlRpcBaseUrl, "https://current.example");
   assertEquals(startPayload?.controlRpcToken, "fresh-run-token");
+  assertEquals(startPayload?.checkpointProtocolVersion, 1);
 });
 
 test("container host control URL remains the fallback", async () => {
@@ -37,7 +38,7 @@ test("container host control URL remains the fallback", async () => {
     {
       async startAndWaitForPorts() {},
       async fetch(request) {
-        startPayload = await request.json() as Record<string, unknown>;
+        startPayload = (await request.json()) as Record<string, unknown>;
         return Response.json({ ok: true });
       },
     },

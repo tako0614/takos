@@ -271,6 +271,9 @@ export class ToolExecutor implements ToolExecutorLike {
             tool_call_id: toolCall.id,
             output: idempotencyResult.cachedOutput ?? "",
             error: idempotencyResult.cachedError,
+            ...(idempotencyResult.outcomeUncertain
+              ? { outcome_uncertain: true }
+              : {}),
           };
         }
 
@@ -279,6 +282,7 @@ export class ToolExecutor implements ToolExecutorLike {
             tool_call_id: toolCall.id,
             output: "",
             error: `Tool "${toolCall.name}" is already executing with the same parameters. Please wait.`,
+            outcome_uncertain: true,
           };
         }
 
@@ -380,6 +384,10 @@ export class ToolExecutor implements ToolExecutorLike {
         tool_call_id: toolCall.id,
         output: "",
         error: codePrefix + errorMessage + severityHint,
+        ...(this.sideEffectTools.has(toolCall.name) &&
+        errorInstance instanceof ToolExecutionUncertainError
+          ? { outcome_uncertain: true }
+          : {}),
       };
     }
   }

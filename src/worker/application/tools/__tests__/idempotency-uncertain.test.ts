@@ -7,6 +7,8 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import {
   checkIdempotency,
   cleanupStaleOperations,
+  completeOperation,
+  fencePendingOperationsForClaimedRun,
   markOperationUncertain,
   STALE_PENDING_THRESHOLD_MS,
 } from "../idempotency.ts";
@@ -125,6 +127,38 @@ test("an abandoned pending side effect becomes uncertain instead of replaying", 
   });
 });
 
+test("a replacement lease fences pending side effects before dispatch", async () => {
+  await withOperationsDb(async (db, client) => {
+    const binding = db as unknown as SqlDatabaseBinding;
+    const first = await checkIdempotency(binding, "run-recovered", "publish", {
+      target: "production",
+    });
+    expect(first.action).toBe("execute");
+
+    const fenced = await fencePendingOperationsForClaimedRun(
+      binding,
+      "run-recovered",
+      { now: () => 1234 },
+    );
+    expect(fenced).toBe(1);
+    // A late old-executor callback cannot rewrite the conservative fence.
+    await completeOperation(binding, first.operationId!, "late success");
+
+    const row = await client.execute({
+      sql: "SELECT status, result_error FROM tool_operations WHERE id = ?",
+      args: [first.operationId!],
+    });
+    expect(row.rows[0].status).toBe("uncertain");
+    expect(String(row.rows[0].result_error)).toContain("lost its Run lease");
+
+    const retry = await checkIdempotency(binding, "run-recovered", "publish", {
+      target: "production",
+    });
+    expect(retry.action).toBe("cached");
+    expect(retry.outcomeUncertain).toBe(true);
+  });
+});
+
 test("a side-effect timeout records an uncertain outcome", async () => {
   await withOperationsDb(async (db, client) => {
     const definition: ToolDefinition = {
@@ -166,6 +200,7 @@ test("a side-effect timeout records an uncertain outcome", async () => {
       arguments: {},
     });
     expect(result.error).toContain("timed out");
+    expect(result.outcome_uncertain).toBe(true);
     const row = await client.execute(
       "SELECT status FROM tool_operations WHERE run_id = 'run-timeout'",
     );

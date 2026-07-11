@@ -170,15 +170,21 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
         throw new BadRequestError("Run is already finished");
       }
 
-      const result = await transitionRunTerminalAtomically(c.env.DB, {
-        runId,
-        status: "cancelled",
-        expectedStatuses: [expectedStatus as "pending" | "queued" | "running"],
-        completedAt,
-        error: null,
-        eventType: "cancelled",
-        terminalEvent: cancellationPayload,
-      });
+      const result = await transitionRunTerminalAtomically(
+        c.env.DB,
+        {
+          runId,
+          status: "cancelled",
+          expectedStatuses: [
+            expectedStatus as "pending" | "queued" | "running",
+          ],
+          completedAt,
+          error: null,
+          eventType: "cancelled",
+          terminalEvent: cancellationPayload,
+        },
+        { offloadBucket: c.env.TAKOS_OFFLOAD },
+      );
       if (result.committed) {
         cancellation = result;
         break;

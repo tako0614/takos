@@ -39,6 +39,8 @@ export interface CompleteRunInput {
 
 export interface CompleteRunStorage {
   offloadBucket?: ObjectStoreBinding;
+  /** Checkpoint pointer observed immediately before this terminal CAS. */
+  expectedEngineCheckpoint?: string | null;
 }
 
 export interface CompleteRunResult {
@@ -231,6 +233,7 @@ function buildCompleteRunStatements(
   storedMessages: StoredCompletionMessage[],
   completionKey: string,
   completedAt: string,
+  expectedEngineCheckpoint: string | null | undefined,
 ): SqlPreparedStatementBinding[] {
   const usage = JSON.stringify(input.usage);
   const output = input.output ?? null;
@@ -240,7 +243,7 @@ function buildCompleteRunStatements(
     "\"status\" = 'running'",
     '"service_id" = ?',
     '"lease_version" = ?',
-  ].join(" AND ");
+  ];
   const updateArgs: unknown[] = [
     input.status,
     usage,
@@ -252,6 +255,12 @@ function buildCompleteRunStatements(
     input.serviceId,
     input.leaseVersion,
   ];
+  if (expectedEngineCheckpoint === null) {
+    updateConditions.push('"engine_checkpoint" IS NULL');
+  } else if (expectedEngineCheckpoint !== undefined) {
+    updateConditions.push('"engine_checkpoint" = ?');
+    updateArgs.push(expectedEngineCheckpoint);
+  }
   const statements: SqlPreparedStatementBinding[] = [
     factory
       .prepare(
@@ -260,7 +269,7 @@ function buildCompleteRunStatements(
              "completed_at" = ?, "completion_key" = ?,
              "engine_checkpoint" = NULL,
              "engine_checkpoint_updated_at" = NULL
-         WHERE ${updateConditions}`,
+         WHERE ${updateConditions.join(" AND ")}`,
       )
       .bind(...updateArgs),
   ];
@@ -402,6 +411,7 @@ async function executeAtomicBatch(
   storedMessages: StoredCompletionMessage[],
   completionKey: string,
   completedAt: string,
+  expectedEngineCheckpoint: string | null | undefined,
 ): Promise<SqlResultBinding<Record<string, unknown>>[]> {
   if (db.withTransaction) {
     return await db.withTransaction(
@@ -413,6 +423,7 @@ async function executeAtomicBatch(
             storedMessages,
             completionKey,
             completedAt,
+            expectedEngineCheckpoint,
           ),
         ),
     );
@@ -428,6 +439,7 @@ async function executeAtomicBatch(
       storedMessages,
       completionKey,
       completedAt,
+      expectedEngineCheckpoint,
     ),
   );
 }
@@ -468,6 +480,7 @@ export async function completeRunAtomically(
       stagedMessages,
       completionKey,
       completedAt,
+      storage.expectedEngineCheckpoint,
     );
   } catch (error) {
     // A transport error may be commit-ambiguous. Never delete staged objects

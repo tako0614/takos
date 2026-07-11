@@ -28,6 +28,7 @@ const CONTROL_RPC_TOOL_TIMEOUT: Duration = Duration::from_secs(305);
 /// cross a cold Worker/R2 path. Give finalization a larger per-attempt budget
 /// than ordinary control RPCs without allowing it to wait forever.
 const CONTROL_RPC_FINALIZATION_TIMEOUT: Duration = Duration::from_secs(120);
+const CONTROL_RPC_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(120);
 const FINALIZATION_MAX_ATTEMPTS: usize = 3;
 const FINALIZATION_RETRY_BASE_DELAY: Duration = Duration::from_millis(100);
 
@@ -45,6 +46,8 @@ pub struct StartPayload {
     pub lease_version: Option<u32>,
     pub executor_tier: Option<u8>,
     pub executor_container_id: Option<String>,
+    #[serde(default)]
+    pub checkpoint_protocol_version: Option<u8>,
     pub control_rpc_base_url: String,
     pub control_rpc_token: String,
 }
@@ -62,6 +65,11 @@ impl StartPayload {
             .as_deref()
             .filter(|value| !value.is_empty())
             .unwrap_or("local-smoke")
+    }
+
+    pub fn supports_durable_checkpoints(&self) -> bool {
+        self.checkpoint_protocol_version
+            .is_some_and(|version| version >= 1)
     }
 }
 
@@ -230,6 +238,8 @@ pub struct RpcToolResult {
     pub tool_call_id: Option<String>,
     pub output: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub outcome_uncertain: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -422,23 +432,21 @@ impl ControlRpcClient {
         checkpoint: &LoopState,
         usage: &UsageSnapshot,
     ) -> AppResult<()> {
+        let body = json!({
+            "runId": self.run_id,
+            "leaseVersion": self.lease_version,
+            "checkpoint": checkpoint,
+            "usage": usage,
+        });
         let _: Value = self
-            .post_control_json(
-                "engine-checkpoint-save",
-                json!({
-                    "runId": self.run_id,
-                    "leaseVersion": self.lease_version,
-                    "checkpoint": checkpoint,
-                    "usage": usage,
-                }),
-            )
+            .post_checkpoint_with_retry("engine-checkpoint-save", body)
             .await?;
         Ok(())
     }
 
     pub async fn load_engine_checkpoint(&self) -> AppResult<(Option<LoopState>, UsageSnapshot)> {
         let response: EngineCheckpointLoadResponse = self
-            .post_control_json(
+            .post_checkpoint_with_retry(
                 "engine-checkpoint-load",
                 json!({
                     "runId": self.run_id,
@@ -447,6 +455,27 @@ impl ControlRpcClient {
             )
             .await?;
         Ok((response.checkpoint, response.usage))
+    }
+
+    async fn post_checkpoint_with_retry<T: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        body: Value,
+    ) -> AppResult<T> {
+        let mut attempt = 1;
+        loop {
+            let result = self.post_control_json(endpoint, body.clone()).await;
+            match result {
+                Err(ref error)
+                    if attempt < FINALIZATION_MAX_ATTEMPTS
+                        && is_retryable_control_rpc_error(error.as_ref()) =>
+                {
+                    tokio::time::sleep(finalization_retry_delay(attempt)).await;
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
     }
 
     pub async fn tool_cleanup(&self) -> AppResult<()> {
@@ -493,7 +522,6 @@ impl ControlRpcClient {
         output: Option<&str>,
         error_message: Option<&str>,
         messages: Vec<Value>,
-        legacy_thread_id: Option<&str>,
     ) -> AppResult<()> {
         let payload = json!({
             "runId": self.run_id,
@@ -508,7 +536,7 @@ impl ControlRpcClient {
         // `complete-run` is atomic and idempotent for this run/lease/payload.
         // A timeout after the Worker committed is indistinguishable from a
         // pre-commit transport failure, so retry the exact same payload only;
-        // never downgrade an ambiguous commit to the legacy split writes.
+        // never downgrade an ambiguous commit to split writes.
         let mut attempt = 1;
         let completion = loop {
             let completion = self
@@ -525,71 +553,7 @@ impl ControlRpcClient {
                 result => break result,
             }
         };
-        match completion {
-            Ok(_response) => Ok(()),
-            Err(rpc_error) if is_missing_complete_run_endpoint(rpc_error.as_ref()) => {
-                self.complete_run_legacy(
-                    status,
-                    usage,
-                    output,
-                    error_message,
-                    messages,
-                    legacy_thread_id,
-                )
-                .await
-            }
-            Err(rpc_error) => Err(rpc_error),
-        }
-    }
-
-    /// One-release rollback bridge for a new container that reaches an older
-    /// Worker without the atomic `complete-run` endpoint. It is entered only
-    /// for an unambiguous 404/405 endpoint-missing response; conflicts, 410,
-    /// auth failures, and 5xx responses never downgrade to split writes.
-    async fn complete_run_legacy(
-        &self,
-        status: &str,
-        usage: UsagePayload,
-        output: Option<&str>,
-        error: Option<&str>,
-        messages: Vec<Value>,
-        legacy_thread_id: Option<&str>,
-    ) -> AppResult<()> {
-        if let Some(thread_id) = legacy_thread_id.filter(|value| !value.trim().is_empty()) {
-            for (index, message) in messages.into_iter().enumerate() {
-                let _: Value = self
-                    .post_control_json(
-                        "add-message",
-                        json!({
-                            "runId": self.run_id,
-                            "threadId": thread_id,
-                            "serviceId": self.service_id,
-                            "leaseVersion": self.lease_version,
-                            "message": message,
-                            "idempotencyKey": format!(
-                                "legacy-complete:{}:{status}:{index}",
-                                self.run_id
-                            ),
-                        }),
-                    )
-                    .await?;
-            }
-        }
-        let _: Value = self
-            .post_control_json(
-                "update-run-status",
-                json!({
-                    "runId": self.run_id,
-                    "serviceId": self.service_id,
-                    "leaseVersion": self.lease_version,
-                    "status": status,
-                    "usage": usage,
-                    "output": output,
-                    "error": error,
-                }),
-            )
-            .await?;
-        Ok(())
+        completion.map(|_| ())
     }
 
     pub async fn emit_run_event(&self, event_type: &str, data: Value) -> AppResult<()> {
@@ -621,6 +585,7 @@ impl ControlRpcClient {
         let timeout = match endpoint.trim_start_matches('/') {
             "tool-execute" => CONTROL_RPC_TOOL_TIMEOUT,
             "complete-run" => CONTROL_RPC_FINALIZATION_TIMEOUT,
+            "engine-checkpoint-save" => CONTROL_RPC_CHECKPOINT_TIMEOUT,
             _ => CONTROL_RPC_HTTP_TIMEOUT,
         };
         self.post_json(&path, body, timeout).await
@@ -861,26 +826,6 @@ impl ControlRpcError {
     }
 }
 
-fn is_missing_complete_run_endpoint(error: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
-    while let Some(source) = current {
-        if let Some(typed) = source.downcast_ref::<ControlRpcError>() {
-            if typed.status == Some(StatusCode::METHOD_NOT_ALLOWED) {
-                return true;
-            }
-            if typed.status != Some(StatusCode::NOT_FOUND) {
-                return false;
-            }
-            let message = typed.message.trim().to_ascii_lowercase();
-            return message.contains("unknown control rpc path")
-                || message.ends_with("404 not found")
-                || message.ends_with(r#"404 {"error":"not found"}"#);
-        }
-        current = source.source();
-    }
-    false
-}
-
 fn is_retryable_control_rpc_error(error: &(dyn std::error::Error + 'static)) -> bool {
     let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
     while let Some(source) = current {
@@ -1078,9 +1023,9 @@ fn activated_skill_array_field(payload: &Value, keys: &[&str]) -> Vec<ActivatedS
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lease_lost, is_missing_complete_run_endpoint, is_run_authority_lost,
-        parse_run_config_response, resolve_control_rpc_config, ControlRpcClient, ControlRpcError,
-        ControlRpcErrorKind, RunBootstrap, StartPayload,
+        is_lease_lost, is_run_authority_lost, parse_run_config_response,
+        resolve_control_rpc_config, ControlRpcClient, ControlRpcError, ControlRpcErrorKind,
+        RunBootstrap, StartPayload,
     };
     use reqwest::StatusCode;
     use serde_json::json;
@@ -1093,29 +1038,38 @@ mod tests {
     static CONTROL_RPC_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn legacy_completion_fallback_is_limited_to_missing_endpoint_responses() {
-        let error = |status: StatusCode, message: &str| ControlRpcError {
-            kind: ControlRpcErrorKind::from_response(status, message),
-            status: Some(status),
-            message: format!("complete-run failed: {status} {message}"),
-        };
+    fn checkpoint_capability_is_rolling_compatible() {
+        let without_capability: StartPayload = serde_json::from_value(json!({
+            "runId": "run-without-capability",
+            "workerId": "worker-without-capability",
+            "serviceId": "service-without-capability",
+            "model": "local-smoke",
+            "leaseVersion": 1,
+            "controlRpcBaseUrl": "http://127.0.0.1:1",
+            "controlRpcToken": "token",
+        }))
+        .expect("start payload without checkpoint capability");
+        assert!(!without_capability.supports_durable_checkpoints());
 
-        assert!(is_missing_complete_run_endpoint(&error(
-            StatusCode::NOT_FOUND,
-            r#"{"error":"Unknown control RPC path: complete-run"}"#,
-        )));
-        assert!(is_missing_complete_run_endpoint(&error(
-            StatusCode::METHOD_NOT_ALLOWED,
-            "method not allowed",
-        )));
-        for (status, message) in [
-            (StatusCode::NOT_FOUND, r#"{"error":"Run not found"}"#),
-            (StatusCode::CONFLICT, r#"{"error":"lease_lost"}"#),
-            (StatusCode::GONE, "legacy split disabled"),
-            (StatusCode::INTERNAL_SERVER_ERROR, "boom"),
-        ] {
-            assert!(!is_missing_complete_run_endpoint(&error(status, message)));
-        }
+        let current: StartPayload = serde_json::from_value(json!({
+            "runId": "run-current",
+            "workerId": "worker-current",
+            "serviceId": "service-current",
+            "model": "local-smoke",
+            "leaseVersion": 2,
+            "checkpointProtocolVersion": 1,
+            "controlRpcBaseUrl": "http://127.0.0.1:1",
+            "controlRpcToken": "token",
+        }))
+        .expect("current start payload");
+        assert!(current.supports_durable_checkpoints());
+
+        assert!(
+            serde_json::from_value::<super::EngineCheckpointLoadResponse>(json!({
+                "checkpoint": null
+            }))
+            .is_err()
+        );
     }
 
     #[test]
@@ -1295,6 +1249,7 @@ mod tests {
             lease_version: Some(7),
             executor_tier: Some(3),
             executor_container_id: Some("tier3-scale-0".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1368,6 +1323,7 @@ mod tests {
             lease_version: Some(7),
             executor_tier: Some(3),
             executor_container_id: Some("tier3-scale-0".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1383,7 +1339,6 @@ mod tests {
                     "role": "assistant",
                     "content": "done"
                 })],
-                Some("thread-test"),
             )
             .await
             .expect("complete-run should succeed");
@@ -1407,7 +1362,7 @@ mod tests {
     async fn complete_run_replays_the_same_atomic_payload_on_transient_and_ambiguous_failures() {
         use axum::body::{to_bytes, Body};
         use axum::extract::State;
-        use axum::http::Request;
+        use axum::http::{Request, StatusCode};
         use axum::response::{IntoResponse, Response};
         use axum::routing::post;
         use axum::{Json, Router};
@@ -1454,6 +1409,7 @@ mod tests {
             lease_version: Some(11),
             executor_tier: Some(1),
             executor_container_id: Some("retry-container".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1466,7 +1422,6 @@ mod tests {
                 Some("done"),
                 None,
                 vec![json!({ "role": "assistant", "content": "done" })],
-                Some("thread-complete-retry"),
             )
             .await
             .expect("third identical atomic completion should succeed");
@@ -1491,7 +1446,14 @@ mod tests {
         use takos_agent_engine::ids::{LoopId, SessionId};
         use tokio::sync::Mutex as AsyncMutex;
 
-        type Stored = Arc<AsyncMutex<Option<serde_json::Value>>>;
+        #[derive(Default)]
+        struct CheckpointState {
+            stored: Option<serde_json::Value>,
+            save_attempts: usize,
+            load_attempts: usize,
+            save_payloads: Vec<serde_json::Value>,
+        }
+        type Stored = Arc<AsyncMutex<CheckpointState>>;
         async fn handler(State(stored): State<Stored>, request: Request<Body>) -> Response {
             let path = request.uri().path().to_string();
             let bytes = to_bytes(request.into_body(), 3 * 1024 * 1024)
@@ -1501,13 +1463,33 @@ mod tests {
                 serde_json::from_slice(&bytes).expect("checkpoint request JSON");
             if path.ends_with("engine-checkpoint-save") {
                 assert_eq!(body["leaseVersion"], 13);
-                *stored.lock().await = Some(body);
+                let mut stored = stored.lock().await;
+                stored.save_attempts += 1;
+                stored.save_payloads.push(body.clone());
+                // Simulate a response failure after the exact checkpoint was
+                // already accepted. The retry must replay the same payload.
+                stored.stored = Some(body);
+                if stored.save_attempts == 1 {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "response lost after commit" })),
+                    )
+                        .into_response();
+                }
                 return Json(json!({ "saved": true })).into_response();
             }
-            let stored = stored.lock().await;
+            let mut stored = stored.lock().await;
+            stored.load_attempts += 1;
+            if stored.load_attempts == 1 {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(json!({ "error": "transient read failure" })),
+                )
+                    .into_response();
+            }
             Json(json!({
-                "checkpoint": stored.as_ref().map(|value| value["checkpoint"].clone()),
-                "usage": stored.as_ref().map_or_else(
+                "checkpoint": stored.stored.as_ref().map(|value| value["checkpoint"].clone()),
+                "usage": stored.stored.as_ref().map_or_else(
                     || json!({
                         "inputTokens": 0,
                         "outputTokens": 0,
@@ -1519,7 +1501,7 @@ mod tests {
             .into_response()
         }
 
-        let stored: Stored = Arc::new(AsyncMutex::new(None));
+        let stored: Stored = Arc::new(AsyncMutex::new(CheckpointState::default()));
         let app = Router::new()
             .fallback(post(handler))
             .with_state(stored.clone());
@@ -1538,6 +1520,7 @@ mod tests {
             lease_version: Some(13),
             executor_tier: Some(1),
             executor_container_id: Some("checkpoint-container".to_string()),
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1574,82 +1557,10 @@ mod tests {
         server.abort();
         assert_eq!(loaded, checkpoint);
         assert_eq!(loaded_usage, usage);
-    }
-
-    #[tokio::test]
-    async fn missing_complete_run_endpoint_uses_one_release_legacy_bridge() {
-        use axum::body::{to_bytes, Body};
-        use axum::extract::State;
-        use axum::http::Request;
-        use axum::response::{IntoResponse, Response};
-        use axum::routing::post;
-        use axum::{Json, Router};
-        use std::sync::Arc;
-        use tokio::sync::Mutex as AsyncMutex;
-
-        type Captured = Arc<AsyncMutex<Vec<(String, serde_json::Value)>>>;
-        async fn handler(State(captured): State<Captured>, request: Request<Body>) -> Response {
-            let path = request.uri().path().to_string();
-            let bytes = to_bytes(request.into_body(), 1024 * 1024)
-                .await
-                .expect("request body");
-            let body = serde_json::from_slice(&bytes).expect("request JSON");
-            captured.lock().await.push((path.clone(), body));
-            if path.ends_with("/complete-run") {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(json!({ "error": "Unknown control RPC path: complete-run" })),
-                )
-                    .into_response();
-            }
-            Json(json!({})).into_response()
-        }
-
-        let captured: Captured = Arc::new(AsyncMutex::new(Vec::new()));
-        let app = Router::new()
-            .fallback(post(handler))
-            .with_state(captured.clone());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("listener");
-        let address = listener.local_addr().expect("listener address");
-        let server = tokio::spawn(async move {
-            axum::serve(listener, app).await.expect("test server");
-        });
-        let client = control_rpc_client_with_env_cleared(&StartPayload {
-            run_id: "run-legacy-bridge".to_string(),
-            worker_id: "worker-legacy-bridge".to_string(),
-            service_id: Some("service-legacy-bridge".to_string()),
-            model: Some("local-smoke".to_string()),
-            lease_version: Some(9),
-            executor_tier: Some(1),
-            executor_container_id: Some("legacy-container".to_string()),
-            control_rpc_base_url: format!("http://{address}"),
-            control_rpc_token: "legacy-token".to_string(),
-        })
-        .expect("control RPC client");
-
-        client
-            .complete_run(
-                "completed",
-                super::UsagePayload::default(),
-                Some("done"),
-                None,
-                vec![json!({ "role": "assistant", "content": "done" })],
-                Some("thread-legacy-bridge"),
-            )
-            .await
-            .expect("legacy bridge should complete");
-        server.abort();
-
-        let captured = captured.lock().await;
-        assert_eq!(captured.len(), 3);
-        assert!(captured[0].0.ends_with("/complete-run"));
-        assert!(captured[1].0.ends_with("/add-message"));
-        assert!(captured[2].0.ends_with("/update-run-status"));
-        assert_eq!(captured[1].1["threadId"], "thread-legacy-bridge");
-        assert_eq!(captured[1].1["message"]["content"], "done");
-        assert_eq!(captured[2].1["status"], "completed");
+        let stored = stored.lock().await;
+        assert_eq!(stored.save_attempts, 2);
+        assert_eq!(stored.load_attempts, 2);
+        assert_eq!(stored.save_payloads[0], stored.save_payloads[1]);
     }
 
     #[tokio::test]
@@ -1711,6 +1622,7 @@ mod tests {
             lease_version: None,
             executor_tier: None,
             executor_container_id: None,
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1744,6 +1656,7 @@ mod tests {
             lease_version: None,
             executor_tier: None,
             executor_container_id: None,
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: "https://caller.example/".to_string(),
             control_rpc_token: "caller-token".to_string(),
         };
@@ -1769,6 +1682,7 @@ mod tests {
             lease_version: None,
             executor_tier: None,
             executor_container_id: None,
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: "   ".to_string(),
             control_rpc_token: String::new(),
         };
@@ -1801,6 +1715,7 @@ mod tests {
             lease_version: None,
             executor_tier: None,
             executor_container_id: None,
+            checkpoint_protocol_version: Some(1),
             control_rpc_base_url: "https://agent-control.example/".to_string(),
             control_rpc_token: "payload-token".to_string(),
         })

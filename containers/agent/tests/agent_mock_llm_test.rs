@@ -695,6 +695,7 @@ async fn stateless_engine_does_not_build_a_remote_ephemeral_embedding_index() {
         lease_version: None,
         executor_tier: None,
         executor_container_id: None,
+        checkpoint_protocol_version: None,
         control_rpc_base_url: "http://127.0.0.1:1".to_string(),
         control_rpc_token: "control-token".to_string(),
     })

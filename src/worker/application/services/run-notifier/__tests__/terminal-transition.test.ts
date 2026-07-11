@@ -33,14 +33,15 @@ function result(
 function statement(
   queryText: string,
   boundValues: unknown[] = [],
+  firstRow: Record<string, unknown> | null = { engineCheckpoint: null },
 ): CapturedStatement {
   return {
     queryText,
     boundValues,
     bind(...values: unknown[]) {
-      return statement(queryText, values);
+      return statement(queryText, values, firstRow);
     },
-    first: async () => null,
+    first: async () => firstRow,
     run: async () => result(0),
     all: async () => result(0),
     raw: async () => [],
@@ -152,4 +153,70 @@ test("a lost active-status CAS cannot insert an orphan terminal event", async ()
     captured[1].boundValues.includes(transition.completionKey),
     true,
   );
+});
+
+test("a committed cancellation deletes only its captured R2 checkpoint", async () => {
+  const deleted: string[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return statement(queryText, [], {
+        engineCheckpoint:
+          "r2:agent-checkpoints/run-1/service-1/7/generation.json",
+      });
+    },
+    async batch(statements: CapturedStatement[]) {
+      return statements.map((_statement, index) =>
+        index === 0
+          ? result(1)
+          : index === statements.length - 1
+            ? result(1, [{ id: 10 }])
+            : result(1),
+      );
+    },
+  };
+  const transition = await transitionRunTerminalAtomically(
+    db as never,
+    cancellation,
+    {
+      offloadBucket: {
+        delete: async (key: string | string[]) => {
+          deleted.push(...(Array.isArray(key) ? key : [key]));
+        },
+      } as never,
+    },
+  );
+
+  assertEquals(transition.committed, true);
+  assertEquals(deleted, [
+    "agent-checkpoints/run-1/service-1/7/generation.json",
+  ]);
+});
+
+test("a lost terminal checkpoint CAS preserves the referenced R2 object", async () => {
+  const deleted: string[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return statement(queryText, [], {
+        engineCheckpoint:
+          "r2:agent-checkpoints/run-1/service-1/7/generation.json",
+      });
+    },
+    async batch() {
+      return [result(0), result(0), result(0), result(0)];
+    },
+  };
+  const transition = await transitionRunTerminalAtomically(
+    db as never,
+    cancellation,
+    {
+      offloadBucket: {
+        delete: async (key: string | string[]) => {
+          deleted.push(...(Array.isArray(key) ? key : [key]));
+        },
+      } as never,
+    },
+  );
+
+  assertEquals(transition.committed, false);
+  assertEquals(deleted, []);
 });

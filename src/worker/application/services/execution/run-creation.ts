@@ -161,15 +161,19 @@ export async function createThreadRun(
       runId,
       "Failed to enqueue run for execution",
     );
-    const transition = await transitionRunTerminalAtomically(env.DB, {
-      runId,
-      status: "failed",
-      expectedStatuses: ["pending", "queued"],
-      completedAt,
-      error: "Failed to enqueue run for execution",
-      eventType: "run.failed",
-      terminalEvent: failedPayload,
-    });
+    const transition = await transitionRunTerminalAtomically(
+      env.DB,
+      {
+        runId,
+        status: "failed",
+        expectedStatuses: ["pending", "queued"],
+        completedAt,
+        error: "Failed to enqueue run for execution",
+        eventType: "run.failed",
+        terminalEvent: failedPayload,
+      },
+      { offloadBucket: env.TAKOS_OFFLOAD },
+    );
     if (transition.committed) {
       await emitCommittedRunEvent(
         env,

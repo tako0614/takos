@@ -83,6 +83,8 @@ export interface ToolResult {
   tool_call_id: string;
   output: string;
   error?: string;
+  /** Remote side-effect outcome is unknown; the agent Run must fail closed. */
+  outcome_uncertain?: boolean;
 }
 
 export type ToolHandler = (

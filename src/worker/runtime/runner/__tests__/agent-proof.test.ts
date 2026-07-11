@@ -29,6 +29,8 @@ type RunState = {
   startedAt: string | null;
   completedAt: string | null;
   completionKey: string | null;
+  engineCheckpoint: string | null;
+  engineCheckpointUpdatedAt: string | null;
   createdAt: string;
 };
 
@@ -124,6 +126,8 @@ test("run queue dispatch accepts agent container control RPC side effects", asyn
       startedAt: null,
       completedAt: null,
       completionKey: null,
+      engineCheckpoint: null,
+      engineCheckpointUpdatedAt: null,
       createdAt: "2026-06-02T00:00:00.000Z",
     },
     messages: [
@@ -246,6 +250,8 @@ test("run queue retries transient executor dispatch exceptions", async () => {
       startedAt: null,
       completedAt: null,
       completionKey: null,
+      engineCheckpoint: null,
+      engineCheckpointUpdatedAt: null,
       createdAt: "2026-06-02T00:00:00.000Z",
     },
     messages: [],
@@ -420,6 +426,8 @@ function createQueuedAgentProofState(
       startedAt: null,
       completedAt: null,
       completionKey: null,
+      engineCheckpoint: null,
+      engineCheckpointUpdatedAt: null,
       createdAt: "2026-06-02T00:00:00.000Z",
     },
     messages: [],
@@ -803,18 +811,52 @@ function createRawStatement(state: AgentProofState, sql: string) {
             sql.includes('UPDATE "runs"') &&
             sql.includes('SET "status" = ?, "completed_at" = ?')
           ) {
-            const expectedServiceId = values.at(-2);
-            const expectedLeaseVersion = values.at(-1);
-            const ownsLease =
-              state.run.status === "running" &&
-              state.run.serviceId === expectedServiceId &&
-              state.run.leaseVersion === expectedLeaseVersion;
-            if (!ownsLease) return { results: [], meta: { changes: 0 } };
+            let cursor = 3;
+            const nextError = sql.includes('"error" = ?')
+              ? values[cursor++]
+              : undefined;
+            const nextOutput = sql.includes('"output" = ?')
+              ? values[cursor++]
+              : undefined;
+            const expectedRunId = values[cursor++];
+            const statusPlaceholders =
+              /"status" IN \(([^)]+)\)/u.exec(sql)?.[1].match(/\?/gu)?.length ??
+              0;
+            const expectedStatuses = values
+              .slice(cursor, cursor + statusPlaceholders)
+              .map(String);
+            cursor += statusPlaceholders;
+            const expectedServiceId = sql.includes('"service_id" = ?')
+              ? values[cursor++]
+              : undefined;
+            const expectedLeaseVersion = sql.includes('"lease_version" = ?')
+              ? values[cursor++]
+              : undefined;
+            const expectedCheckpoint = sql.includes('"engine_checkpoint" = ?')
+              ? values[cursor++]
+              : null;
+            const ownsRun =
+              expectedRunId === state.run.id &&
+              expectedStatuses.includes(state.run.status) &&
+              (expectedServiceId === undefined ||
+                expectedServiceId === state.run.serviceId) &&
+              (expectedLeaseVersion === undefined ||
+                expectedLeaseVersion === state.run.leaseVersion) &&
+              expectedCheckpoint === state.run.engineCheckpoint;
+            if (!ownsRun) return { results: [], meta: { changes: 0 } };
             state.run.status = String(values[0]);
             state.run.completedAt = String(values[1]);
             state.run.completionKey = String(values[2]);
-            state.run.error =
-              typeof values[3] === "string" ? values[3] : null;
+            if (nextError !== undefined) {
+              state.run.error =
+                typeof nextError === "string" ? nextError : null;
+            }
+            if (nextOutput !== undefined) {
+              state.run.output =
+                typeof nextOutput === "string" ? nextOutput : null;
+            }
+            state.run.engineCheckpoint = null;
+            state.run.engineCheckpointUpdatedAt = null;
             return { results: [], meta: { changes: 1 } };
           }
           if (sql.includes('UPDATE "runs"')) {
@@ -930,7 +972,10 @@ function createRawStatement(state: AgentProofState, sql: string) {
           return { meta: { changes: 1 } };
         },
         all: async () => ({ results: [] }),
-        first: async () => null,
+        first: async () =>
+          sql.includes('SELECT "engine_checkpoint"')
+            ? { engineCheckpoint: state.run.engineCheckpoint }
+            : null,
         raw: async () => [],
       };
     },

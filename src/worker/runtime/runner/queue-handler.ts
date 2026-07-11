@@ -29,6 +29,7 @@ import {
 import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
 import { assertRunExecutionAccess } from "../container-hosts/executor-run-state.ts";
 import { AuthorizationError } from "@takos/worker-platform-utils/errors";
+import { fencePendingOperationsForClaimedRun } from "../../application/tools/idempotency.ts";
 
 function retryRunQueueMessage(message: MessageQueueMessage<unknown>): void {
   message.retry({
@@ -172,20 +173,24 @@ export async function handleQueue(
         "Run failed permanently after multiple retries",
         { permanent: true, sessionId: run?.sessionId ?? null },
       );
-      const failedTransition = await transitionRunTerminalAtomically(env.DB, {
-        runId,
-        status: "failed",
-        // A DLQ delivery carries no serviceId/leaseVersion. It may therefore
-        // be an old duplicate of a message whose sibling delivery already
-        // claimed a fresh executor lease. Never let that unauthenticated
-        // delivery overwrite a currently running owner; running-run recovery
-        // is fenced by service heartbeat + leaseVersion instead.
-        expectedStatuses: [...DLQ_TERMINALIZABLE_RUN_STATUSES],
-        completedAt: dlqNow,
-        error: dlqError,
-        eventType: "run.failed",
-        terminalEvent: failedPayload,
-      });
+      const failedTransition = await transitionRunTerminalAtomically(
+        env.DB,
+        {
+          runId,
+          status: "failed",
+          // A DLQ delivery carries no serviceId/leaseVersion. It may therefore
+          // be an old duplicate of a message whose sibling delivery already
+          // claimed a fresh executor lease. Never let that unauthenticated
+          // delivery overwrite a currently running owner; running-run recovery
+          // is fenced by service heartbeat + leaseVersion instead.
+          expectedStatuses: [...DLQ_TERMINALIZABLE_RUN_STATUSES],
+          completedAt: dlqNow,
+          error: dlqError,
+          eventType: "run.failed",
+          terminalEvent: failedPayload,
+        },
+        { offloadBucket: env.TAKOS_OFFLOAD },
+      );
 
       if (failedTransition.committed) {
         try {
@@ -294,6 +299,10 @@ export async function handleQueue(
         continue;
       }
       const leaseVersion = claimed.leaseVersion;
+      // The new lease has not reached container dispatch yet. Therefore every
+      // pending side-effect row belongs to an earlier executor with an unknown
+      // outcome; fence it before recovery can replay execute_tools.
+      await fencePendingOperationsForClaimedRun(env.DB, runId);
       try {
         await assertRunExecutionAccess(env, runId);
       } catch (accessError) {
@@ -306,17 +315,21 @@ export async function handleQueue(
         const failedPayload = buildRunFailedPayload(runId, accessMessage, {
           permanent: true,
         });
-        const failedTransition = await transitionRunTerminalAtomically(env.DB, {
-          runId,
-          status: "failed",
-          expectedStatuses: ["running"],
-          expectedServiceId: serviceId,
-          expectedLeaseVersion: leaseVersion,
-          completedAt,
-          error: accessMessage,
-          eventType: "run.failed",
-          terminalEvent: failedPayload,
-        });
+        const failedTransition = await transitionRunTerminalAtomically(
+          env.DB,
+          {
+            runId,
+            status: "failed",
+            expectedStatuses: ["running"],
+            expectedServiceId: serviceId,
+            expectedLeaseVersion: leaseVersion,
+            completedAt,
+            error: accessMessage,
+            eventType: "run.failed",
+            terminalEvent: failedPayload,
+          },
+          { offloadBucket: env.TAKOS_OFFLOAD },
+        );
         if (failedTransition.committed) {
           await notifyRunFailedEvent(env, runId, {
             payload: failedPayload,
@@ -468,6 +481,7 @@ export async function handleQueue(
               eventType: "run.failed",
               terminalEvent: failedPayload,
             },
+            { offloadBucket: env.TAKOS_OFFLOAD },
           );
           if (failedTransition.committed) {
             try {
