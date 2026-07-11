@@ -270,8 +270,8 @@ export interface Env
   TAKOS_INTERNAL_API_SECRET?: string;
   /** Shared HMAC secret for split-service internal requests. */
   TAKOS_INTERNAL_SERVICE_SECRET?: string;
-  /** Shared secret for executor container host -> takos internal executor RPC. */
-  EXECUTOR_PROXY_SECRET?: string;
+  /** Bearer credential for executor host -> agent container /start. */
+  TAKOS_AGENT_START_TOKEN?: string;
   AUDIT_IP_HASH_KEY?: string;
   // Bot protection
   TURNSTILE_SECRET_KEY?: string;

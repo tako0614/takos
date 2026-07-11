@@ -13,7 +13,7 @@
  * - PLATFORM_PRIVATE_KEY   — RSA 2048 PKCS#8 PEM
  * - PLATFORM_PUBLIC_KEY    — RSA 2048 SPKI PEM
  * - ENCRYPTION_KEY         — 32 byte base64 (data encryption key)
- * - EXECUTOR_PROXY_SECRET  — 32 byte hex (executor-host -> control RPC)
+ * - TAKOS_AGENT_START_TOKEN — 32 byte hex (executor-host -> agent /start)
  * - TAKOS_INTERNAL_API_SECRET — 32 byte hex (internal tenant API)
  *
  * When `--per-cloud` is supplied, ALSO emits an independent per-cloud
@@ -45,7 +45,7 @@ const SECRET_FILES = [
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
   "ENCRYPTION_KEY",
-  "EXECUTOR_PROXY_SECRET",
+  "TAKOS_AGENT_START_TOKEN",
   "TAKOS_INTERNAL_API_SECRET",
 ] as const;
 
@@ -299,7 +299,7 @@ async function main(): Promise<void> {
 
   const { privatePem, publicPem } = await generateRsaKeyPair();
   const encryptionKey = generateBase64Secret(32);
-  const executorProxySecret = generateHexSecret(32);
+  const agentStartToken = generateHexSecret(32);
   const internalApiSecret = generateHexSecret(32);
 
   const written: string[] = [];
@@ -315,8 +315,8 @@ async function main(): Promise<void> {
   written.push(
     await writeSecret(
       options.output,
-      "EXECUTOR_PROXY_SECRET",
-      executorProxySecret,
+      "TAKOS_AGENT_START_TOKEN",
+      agentStartToken,
     ),
   );
   written.push(

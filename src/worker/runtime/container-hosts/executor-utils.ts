@@ -44,11 +44,10 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
-  /** Shared secret carried into the unified container-host env. */
-  EXECUTOR_PROXY_SECRET: string;
+  /** Bearer credential for the private agent-container /start entrypoint. */
+  TAKOS_AGENT_START_TOKEN: string;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
-  TAKOS_AGENT_START_TOKEN?: string;
   EXECUTOR_TIER1_WARM_POOL_SIZE?: string;
   EXECUTOR_TIER1_MAX_CONCURRENT_RUNS?: string;
   EXECUTOR_TIER3_POOL_SIZE?: string;

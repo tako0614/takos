@@ -288,7 +288,8 @@ Required:
 
 - `OIDC_CLIENT_SECRET`: OIDC client secret for the worker's installation client.
 - `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY`: platform signing pair.
-- `EXECUTOR_PROXY_SECRET`: shared secret for executor container calls.
+- `TAKOS_AGENT_START_TOKEN`: bearer credential for the private agent-container
+  `/start` entrypoint.
 - `TAKOS_INTERNAL_API_SECRET`: internal Takos API secret.
 
 Run `wrangler deploy` again after rotating secrets. Cloudflare creates a new

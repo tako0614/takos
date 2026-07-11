@@ -99,7 +99,7 @@ export const LOCAL_DEV_DEFAULTS = {
   PLATFORM_PRIVATE_KEY: "local-platform-private-key",
   PLATFORM_PUBLIC_KEY: "local-platform-public-key",
   ENCRYPTION_KEY: "local-encryption-key",
-  EXECUTOR_PROXY_SECRET: "local-executor-proxy-secret",
+  TAKOS_AGENT_START_TOKEN: "local-agent-start-token",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -266,9 +266,9 @@ function buildBaseConfig(isLocal: boolean) {
     ENCRYPTION_KEY:
       optionalEnv("ENCRYPTION_KEY") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY : ""),
-    EXECUTOR_PROXY_SECRET:
-      optionalEnv("EXECUTOR_PROXY_SECRET") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.EXECUTOR_PROXY_SECRET : ""),
+    TAKOS_AGENT_START_TOKEN:
+      optionalEnv("TAKOS_AGENT_START_TOKEN") ??
+      (isLocal ? LOCAL_DEV_DEFAULTS.TAKOS_AGENT_START_TOKEN : ""),
     SERVICE_INTERNAL_JWT_ISSUER:
       optionalEnv("SERVICE_INTERNAL_JWT_ISSUER") ?? "takos-node",
     ENVIRONMENT:
@@ -367,9 +367,9 @@ function assertSelfHostedProductionConfig(config: BaseConfig): void {
     LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY,
   );
   requireExplicit(
-    "EXECUTOR_PROXY_SECRET",
-    config.EXECUTOR_PROXY_SECRET,
-    LOCAL_DEV_DEFAULTS.EXECUTOR_PROXY_SECRET,
+    "TAKOS_AGENT_START_TOKEN",
+    config.TAKOS_AGENT_START_TOKEN,
+    LOCAL_DEV_DEFAULTS.TAKOS_AGENT_START_TOKEN,
   );
 
   if (invalid.length > 0) {
@@ -526,7 +526,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     K8S_DEPLOYMENT_NAME: optionalEnv("K8S_DEPLOYMENT_NAME"),
     K8S_IMAGE_REGISTRY: optionalEnv("K8S_IMAGE_REGISTRY"),
     ENCRYPTION_KEY: config.ENCRYPTION_KEY,
-    EXECUTOR_PROXY_SECRET: config.EXECUTOR_PROXY_SECRET,
+    TAKOS_AGENT_START_TOKEN: config.TAKOS_AGENT_START_TOKEN,
     SERVICE_INTERNAL_JWT_ISSUER: config.SERVICE_INTERNAL_JWT_ISSUER,
     ENVIRONMENT: config.ENVIRONMENT,
     TAKOS_FEATURED_APP_CATALOG_JSON:

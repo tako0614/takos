@@ -18,7 +18,7 @@ test("workers adapter synthesizes usable in-process container host bindings", as
     AUTH_PUBLIC_BASE_URL: "https://admin.example.com",
     RUNTIME_CONTAINER: fakeContainerNamespace(),
     EXECUTOR_CONTAINER: fakeContainerNamespace(),
-    EXECUTOR_PROXY_SECRET: "test-proxy-secret",
+    TAKOS_AGENT_START_TOKEN: "test-agent-start-token",
   } as unknown as Env;
 
   const platform = buildWorkersWebPlatform(env);

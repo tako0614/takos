@@ -246,10 +246,10 @@ bucket_name = "takos-offload"
 #   signs with PLATFORM_PRIVATE_KEY and injects PLATFORM_PUBLIC_KEY into the
 #   runtime container as JWT_PUBLIC_KEY.
 #
-# Internal executor RPC:
-# - EXECUTOR_PROXY_SECRET: Shared secret carried into the in-process executor
-#   container host env. Container Control RPC is dispatched in-process after the
-#   per-run proxy token + scope are verified (no service-binding hop).
+# Agent container start:
+# - TAKOS_AGENT_START_TOKEN: Bearer credential used only for the private
+#   executor-host -> agent-container /start request. Agent control RPC uses a
+#   separate per-run random token and scope.
 #
 # OCI deployment adapter:
 # - OCI_ORCHESTRATOR_TOKEN: optional auth token for image-backed services /

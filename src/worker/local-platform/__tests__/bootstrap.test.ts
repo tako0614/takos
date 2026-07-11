@@ -328,7 +328,7 @@ localBootstrapTest(
       "PLATFORM_PRIVATE_KEY",
       "PLATFORM_PUBLIC_KEY",
       "ENCRYPTION_KEY",
-      "EXECUTOR_PROXY_SECRET",
+      "TAKOS_AGENT_START_TOKEN",
     ] as const;
     const previous = Object.fromEntries(
       guardedKeys.map((key) => [key, getEnv(key)]),

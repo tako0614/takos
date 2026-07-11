@@ -105,11 +105,10 @@ rather than a route name or header marker.
   (`verifyTakosumiInternalRequestFromHeaders`): signature over method + path + body, with `caller` / `audience` /
   `capabilities` / nonce / timestamp (replay-protected). It already backs `/internal/executor-rpc` (signed-backend mode)
   and `/api/internal/v1/agent-control-backend`.
-- **Decision:** the signed envelope is the ONE cross-service primitive. The ad-hoc plain-secret gates —
-  `validateInternalApiAccess` (hostname + `X-Takos-Internal-Secret`) and the executor-proxy plain
-  `EXECUTOR_PROXY_SECRET` mode — converge
-  onto it. They are load-bearing today (the plain secret is the only gate against Host-spoof/DNS-rebind), so removal is
-  gated on the callers (Takosumi Accounts / deploy-control, with operator-private config outside this repo) sending the signed envelope.
+- **Decision:** the signed envelope is the ONE cross-service primitive for Takos
+  HTTP service calls. The agent container `/start` entrypoint is a narrower
+  private-container boundary protected by `TAKOS_AGENT_START_TOKEN`; subsequent
+  agent-control RPC uses a separate per-run random token and scope.
 
 ## What "internal auth is unnecessary" means precisely
 
