@@ -740,8 +740,14 @@ fn resolve_control_rpc_config(
     env_base_url: Option<String>,
     env_token: Option<String>,
 ) -> AppResult<(String, String)> {
-    let mut base_url = env_base_url
-        .unwrap_or_else(|| payload.control_rpc_base_url.clone())
+    // A pooled container can survive Worker configuration changes. The start
+    // payload is minted for this run by the current control plane, while env
+    // values may belong to an older pool generation. Prefer the per-run
+    // values and retain env only as a compatibility fallback for direct
+    // callers that omit them.
+    let mut base_url = nonempty_value(&payload.control_rpc_base_url)
+        .or(env_base_url)
+        .unwrap_or_default()
         .trim()
         .to_string();
     while base_url.ends_with('/') {
@@ -750,14 +756,20 @@ fn resolve_control_rpc_config(
     if base_url.is_empty() {
         return Err(io::Error::other("agent control RPC base URL must not be empty").into());
     }
-    let token = env_token
-        .unwrap_or_else(|| payload.control_rpc_token.clone())
+    let token = nonempty_value(&payload.control_rpc_token)
+        .or(env_token)
+        .unwrap_or_default()
         .trim()
         .to_string();
     if token.is_empty() {
         return Err(io::Error::other("agent control RPC token must not be empty").into());
     }
     Ok((base_url, token))
+}
+
+fn nonempty_value(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 fn nonempty_env(key: &str) -> Option<String> {
@@ -1244,7 +1256,7 @@ mod tests {
     }
 
     #[test]
-    fn control_rpc_config_prefers_env_values_over_payload_values() {
+    fn control_rpc_config_prefers_per_run_payload_over_stale_container_env() {
         let payload = StartPayload {
             run_id: "run-test".to_string(),
             worker_id: "worker-test".to_string(),
@@ -1263,6 +1275,31 @@ mod tests {
             Some(" env-token ".to_string()),
         )
         .expect("control RPC config should resolve");
+
+        assert_eq!(base_url, "https://caller.example");
+        assert_eq!(token, "caller-token");
+    }
+
+    #[test]
+    fn control_rpc_config_uses_env_as_missing_payload_fallback() {
+        let payload = StartPayload {
+            run_id: "run-test".to_string(),
+            worker_id: "worker-test".to_string(),
+            service_id: Some("service-test".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: None,
+            executor_tier: None,
+            executor_container_id: None,
+            control_rpc_base_url: "   ".to_string(),
+            control_rpc_token: String::new(),
+        };
+
+        let (base_url, token) = resolve_control_rpc_config(
+            &payload,
+            Some("https://env.example/base/".to_string()),
+            Some(" env-token ".to_string()),
+        )
+        .expect("control RPC env fallback should resolve");
 
         assert_eq!(base_url, "https://env.example/base");
         assert_eq!(token, "env-token");
