@@ -7,7 +7,7 @@
 
 import { getDb } from "../../infra/db/index.ts";
 import { runEvents, runs, threads } from "../../infra/db/schema.ts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import { type TtlMs, ttlMs } from "@takos/worker-platform-utils/ttl";
@@ -1307,7 +1307,11 @@ export async function handleCompleteRun(
     return err("Invalid complete-run payload", 400);
   }
   const terminalRun = await getDb(env.DB)
-    .select({ sessionId: runs.sessionId, threadId: runs.threadId })
+    .select({
+      sessionId: runs.sessionId,
+      threadId: runs.threadId,
+      engineCheckpoint: runs.engineCheckpoint,
+    })
     .from(runs)
     .where(eq(runs.id, runId))
     .get();
@@ -1355,16 +1359,19 @@ export async function handleCompleteRun(
       return err("Lease lost", 409);
     }
     abortRemoteToolExecutorsForRun(runId);
-    if (env.TAKOS_OFFLOAD) {
-      await env.TAKOS_OFFLOAD.delete(
-        engineCheckpointR2Key(runId, serviceId, leaseVersion),
-      ).catch((checkpointCleanupError) => {
-        logWarn("Committed engine checkpoint cleanup failed", {
-          module: "executor-host",
-          runId,
-          error: String(checkpointCleanupError),
-        });
-      });
+    const committedCheckpointKey = engineCheckpointR2KeyFromStored(
+      terminalRun.engineCheckpoint,
+    );
+    if (env.TAKOS_OFFLOAD && committedCheckpointKey) {
+      await env.TAKOS_OFFLOAD.delete(committedCheckpointKey).catch(
+        (checkpointCleanupError) => {
+          logWarn("Committed engine checkpoint cleanup failed", {
+            module: "executor-host",
+            runId,
+            error: String(checkpointCleanupError),
+          });
+        },
+      );
     }
 
     // Commit first. A notifier failure cannot roll back or split transcript,
@@ -1521,7 +1528,15 @@ function engineCheckpointR2Key(
   serviceId: string,
   leaseVersion: number,
 ): string {
-  return `agent-checkpoints/${encodeURIComponent(runId)}/${encodeURIComponent(serviceId)}/${leaseVersion}.json`;
+  return `agent-checkpoints/${encodeURIComponent(runId)}/${encodeURIComponent(serviceId)}/${leaseVersion}/${crypto.randomUUID()}.json`;
+}
+
+function engineCheckpointR2KeyFromStored(
+  stored: string | null | undefined,
+): string | null {
+  if (!stored?.startsWith(ENGINE_CHECKPOINT_R2_PREFIX)) return null;
+  const key = stored.slice(ENGINE_CHECKPOINT_R2_PREFIX.length);
+  return key || null;
 }
 
 async function loadStoredEngineCheckpoint(
@@ -1530,7 +1545,7 @@ async function loadStoredEngineCheckpoint(
 ): Promise<Record<string, unknown> | null> {
   let serialized = stored;
   if (stored.startsWith(ENGINE_CHECKPOINT_R2_PREFIX)) {
-    const key = stored.slice(ENGINE_CHECKPOINT_R2_PREFIX.length);
+    const key = engineCheckpointR2KeyFromStored(stored);
     if (!key || !env.TAKOS_OFFLOAD) return null;
     const object = await env.TAKOS_OFFLOAD.get(key);
     if (!object || object.size > MAX_ENGINE_CHECKPOINT_BYTES) return null;
@@ -1593,6 +1608,19 @@ export async function handleEngineCheckpointSave(
     conditions.push(eq(runs.leaseVersion, leaseVersion));
   }
   try {
+    const db = getDb(env.DB);
+    const current = await db
+      .select({ checkpoint: runs.engineCheckpoint })
+      .from(runs)
+      .where(and(...conditions))
+      .get();
+    if (!current) return err("Lease lost", 409);
+    conditions.push(
+      current.checkpoint === null
+        ? isNull(runs.engineCheckpoint)
+        : eq(runs.engineCheckpoint, current.checkpoint),
+    );
+
     let stored = serialized;
     let stagedKey: string | null = null;
     if (
@@ -1612,7 +1640,7 @@ export async function handleEngineCheckpointSave(
       });
       stored = `${ENGINE_CHECKPOINT_R2_PREFIX}${stagedKey}`;
     }
-    const update = await getDb(env.DB)
+    const update = await db
       .update(runs)
       .set({
         engineCheckpoint: stored,
@@ -1625,6 +1653,16 @@ export async function handleEngineCheckpointSave(
         await env.TAKOS_OFFLOAD.delete(stagedKey).catch(() => undefined);
       }
       return err("Lease lost", 409);
+    }
+    const previousKey = engineCheckpointR2KeyFromStored(current.checkpoint);
+    if (previousKey && previousKey !== stagedKey && env.TAKOS_OFFLOAD) {
+      await env.TAKOS_OFFLOAD.delete(previousKey).catch((cleanupError) => {
+        logWarn("Replaced engine checkpoint cleanup failed", {
+          module: "executor-host",
+          runId,
+          error: String(cleanupError),
+        });
+      });
     }
     return ok({ saved: true });
   } catch (error) {

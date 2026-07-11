@@ -94,7 +94,6 @@ const DEFAULT_AGENT_CONTROL_BODY_BYTES = 2 * 1024 * 1024;
 const AGENT_CONTROL_BODY_LIMITS: Readonly<Record<string, number>> = {
   "/api/internal/v1/agent-control/run-event": 128 * 1024,
   "/api/internal/v1/agent-control/tool-execute": 512 * 1024,
-  "/api/internal/v1/agent-control/engine-checkpoint-save": 2 * 1024 * 1024,
   "/api/internal/v1/agent-control/complete-run": 10 * 1024 * 1024,
   "/api/internal/v1/agent-control/engine-checkpoint-save": 17 * 1024 * 1024,
 };

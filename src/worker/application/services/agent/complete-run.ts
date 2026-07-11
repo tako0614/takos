@@ -351,7 +351,7 @@ function buildCompleteRunStatements(
               "tool_calls", "tool_call_id", "metadata", "sequence", "created_at")
            SELECT p."id", r."thread_id", p."role", p."content", p."r2_key",
                   p."tool_calls", p."tool_call_id", p."metadata",
-                  r."transcript_sequence_start" + p."ord",
+                  r."transcript_sequence_start" + CAST(p."ord" AS INTEGER),
                   p."created_at"
            FROM "runs" r
            CROSS JOIN pending p

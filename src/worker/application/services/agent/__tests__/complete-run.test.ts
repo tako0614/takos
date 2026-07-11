@@ -175,8 +175,10 @@ test("Postgres path uses the dedicated transaction and never outer sequential ba
   let transactionCalls = 0;
   let outerBatchCalls = 0;
   let transactionStatementCount = 0;
+  let transcriptInsertSql = "";
   const tx = {
     prepare(queryText: string) {
+      if (queryText.includes("WITH pending")) transcriptInsertSql = queryText;
       return capturedStatement(queryText);
     },
     async batch(statements: CapturedStatement[]) {
@@ -209,6 +211,10 @@ test("Postgres path uses the dedicated transaction and never outer sequential ba
   assertEquals(transactionCalls, 1);
   assertEquals(outerBatchCalls, 0);
   assertEquals(transactionStatementCount, 7);
+  assertEquals(
+    transcriptInsertSql.includes('CAST(p."ord" AS INTEGER)'),
+    true,
+  );
 });
 
 test("cancel winner leaves completion uncommitted and cannot persist orphan transcript", async () => {

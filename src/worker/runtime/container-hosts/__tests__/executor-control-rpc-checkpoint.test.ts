@@ -254,24 +254,48 @@ test("large engine checkpoints are offloaded and transparently loaded", async ()
     };
     assertEquals((await handleEngineCheckpointSave(body, env)).status, 200);
 
-    const row = await client.execute({
+    const firstRow = await client.execute({
       sql: "SELECT engine_checkpoint FROM runs WHERE id = ?",
       args: ["run-1"],
     });
+    const firstStored = String(firstRow.rows[0]?.engine_checkpoint);
     assertEquals(
-      String(row.rows[0]?.engine_checkpoint).startsWith(
-        "r2:agent-checkpoints/run-1/service-1/7.json",
-      ),
+      firstStored.startsWith("r2:agent-checkpoints/run-1/service-1/7/"),
       true,
     );
     assertEquals(offload.values.size, 1);
 
+    const replacement = checkpoint("finalize_external_response");
+    (replacement.state_json as Record<string, unknown>).padding = "y".repeat(
+      1024 * 1024 + 1,
+    );
+    assertEquals(
+      (
+        await handleEngineCheckpointSave(
+          { ...body, checkpoint: replacement },
+          env,
+        )
+      ).status,
+      200,
+    );
+    const replacementRow = await client.execute({
+      sql: "SELECT engine_checkpoint FROM runs WHERE id = ?",
+      args: ["run-1"],
+    });
+    const replacementStored = String(replacementRow.rows[0]?.engine_checkpoint);
+    assertEquals(replacementStored === firstStored, false);
+    assertEquals(offload.values.has(firstStored.slice("r2:".length)), false);
+    assertEquals(offload.values.size, 1);
+
     const loaded = await handleEngineCheckpointLoad(body, env);
     assertEquals(loaded.status, 200);
-    const payload = (await loaded.json()) as { checkpoint: typeof large };
+    const payload = (await loaded.json()) as {
+      checkpoint: typeof replacement;
+    };
+    assertEquals(payload.checkpoint.current_node, "finalize_external_response");
     assertEquals(
       (payload.checkpoint.state_json as Record<string, unknown>).padding,
-      (large.state_json as Record<string, unknown>).padding,
+      (replacement.state_json as Record<string, unknown>).padding,
     );
   } finally {
     client.close();
