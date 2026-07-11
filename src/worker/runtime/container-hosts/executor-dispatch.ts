@@ -90,7 +90,7 @@ export async function dispatchAgentExecutorStart(
     serviceId,
     ...controlConfig,
     controlRpcBaseUrl:
-      controlConfig.controlRpcBaseUrl ?? body.controlRpcBaseUrl,
+      body.controlRpcBaseUrl ?? controlConfig.controlRpcBaseUrl,
     startToken: controlConfig.startToken ?? body.startToken,
   };
   const headers = new Headers({ "Content-Type": "application/json" });

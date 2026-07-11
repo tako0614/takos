@@ -2343,6 +2343,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
+  assert.match(
+    rootVariables,
+    /variable\s+"release_containers_rollout"\s*\{[\s\S]*?default\s*=\s*"immediate"/,
+  );
   assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
   assert.match(rootVariables, /variable\s+"build_from_source"\s*\{/);
   assert.match(rootVariables, /variable\s+"worker_release_tag"\s*\{/);

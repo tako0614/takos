@@ -148,7 +148,9 @@ when `release_containers_rollout` is `immediate` or `gradual`. Forward
 allowlist; `scripts/control/takosumi-release.mjs` uses it only for the final
 `wrangler deploy` step. The normal Provider Connection token remains the
 credential for OpenTofu, D1 migrations, workers.dev enablement, and verification
-calls.
+calls. The installable module defaults to `immediate` so all executor tiers run
+the same release before activation is reported complete. Operators that need a
+staged rollout must select `gradual` explicitly.
 
 Only source builds need the Takosumi source modules imported by the Worker. The
 release command accepts a clean sibling checkout at the exact reviewed ref, or

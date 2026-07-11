@@ -39,9 +39,9 @@ variable "release_working_directory" {
 }
 
 variable "release_containers_rollout" {
-  description = "Optional wrangler --containers-rollout value for Takos release activation. Set to none in runner sandboxes that cannot build or publish Cloudflare Containers."
+  description = "Wrangler Containers rollout strategy for Takos release activation. Immediate keeps every executor tier on the same release; set gradual explicitly for staged production rollouts or none in runner sandboxes that cannot publish Cloudflare Containers."
   type        = string
-  default     = null
+  default     = "immediate"
 
   validation {
     condition     = var.release_containers_rollout == null || contains(["immediate", "gradual", "none"], var.release_containers_rollout)
