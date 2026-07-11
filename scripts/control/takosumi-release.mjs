@@ -33,6 +33,8 @@ const RELEASE_HEALTH_ATTEMPTS = 12;
 const RELEASE_HEALTH_INTERVAL_MS = 2500;
 const RELEASE_WORKER_API_ATTEMPTS = 12;
 const RELEASE_WORKER_API_INTERVAL_MS = 2500;
+const RELEASE_CONTAINER_API_ATTEMPTS = 60;
+const RELEASE_CONTAINER_API_INTERVAL_MS = 2000;
 const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
@@ -1109,6 +1111,122 @@ export async function waitForWranglerDeploymentBestEffort(
       message,
     };
   }
+}
+
+const RELEASE_CONTAINER_APPLICATIONS = [
+  ["TakosRuntimeContainer", "runtime"],
+  ["ExecutorContainerTier1", "executor-tier1"],
+  ["ExecutorContainerTier2", "executor-tier2"],
+  ["ExecutorContainerTier3", "executor-tier3"],
+];
+
+/**
+ * Wait until Cloudflare's asynchronous Container rollout has materialized every
+ * prebuilt image selected by the reviewed release manifest. `wrangler deploy`
+ * can return before the container applications converge, even with an
+ * immediate rollout, so Worker health alone is not sufficient release proof.
+ */
+export async function waitForReleaseContainerImages(
+  outputs,
+  environment,
+  env = process.env,
+) {
+  if (env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT?.trim() === "none") {
+    return { skipped: true, reason: "container_rollout_disabled" };
+  }
+
+  const images = normalizeReleaseContainerImages(
+    env.TAKOS_RELEASE_CONTAINER_IMAGES_JSON,
+  );
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
+  const expected = RELEASE_CONTAINER_APPLICATIONS.flatMap(
+    ([className, suffix]) => {
+      const image = images[className];
+      return image
+        ? [{ className, name: `${workerName}-${suffix}`, image }]
+        : [];
+    },
+  );
+  if (expected.length === 0) {
+    return { skipped: true, reason: "no_prebuilt_container_images" };
+  }
+
+  const command = commandLine([
+    "bunx",
+    "wrangler",
+    "containers",
+    "list",
+    "--config",
+    releaseWranglerConfigPath(environment),
+    ...wranglerEnvironmentArgs(environment),
+    "--json",
+  ]);
+  const attempts = Math.max(
+    1,
+    integerEnv(
+      env,
+      "TAKOS_RELEASE_CONTAINER_API_ATTEMPTS",
+      RELEASE_CONTAINER_API_ATTEMPTS,
+    ),
+  );
+  const intervalMs = integerEnv(
+    env,
+    "TAKOS_RELEASE_CONTAINER_API_INTERVAL_MS",
+    RELEASE_CONTAINER_API_INTERVAL_MS,
+  );
+  let lastProblem = "container applications were not listed";
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = runShellCommand(command, env);
+    if (!result.error && result.status === 0) {
+      const parsed = parseWranglerJsonOutput(result.stdout ?? "");
+      if (parsed.ok && Array.isArray(parsed.value)) {
+        const applications = new Map(
+          parsed.value
+            .filter((entry) => entry && typeof entry === "object")
+            .map((entry) => [entry.name, entry]),
+        );
+        const pending = expected.filter((entry) => {
+          const application = applications.get(entry.name);
+          return (
+            application?.state !== "ready" || application?.image !== entry.image
+          );
+        });
+        if (pending.length === 0) {
+          console.log(
+            `Verified ${expected.length} release container image(s) for ${workerName}.`,
+          );
+          return { skipped: false, containers: expected };
+        }
+        lastProblem = pending
+          .map((entry) => {
+            const actual = applications.get(entry.name);
+            return `${entry.name}: expected ${entry.image}, got ${
+              actual?.image ?? "missing"
+            } (${actual?.state ?? "missing"})`;
+          })
+          .join("; ");
+      } else {
+        lastProblem = parsed.ok
+          ? "wrangler containers list returned a non-array JSON value"
+          : parsed.error;
+      }
+    } else {
+      lastProblem =
+        `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim() ||
+        result.error?.message ||
+        `wrangler containers list exited ${result.status ?? "unknown"}`;
+    }
+
+    if (attempt < attempts && intervalMs > 0) await wait(intervalMs);
+  }
+
+  throw new Error(
+    `Container rollout for ${workerName} did not converge after ${attempts} attempt(s): ${boundedCommandLog(
+      lastProblem,
+      env,
+    )}`,
+  );
 }
 
 function parseWranglerJsonOutput(output) {
@@ -2910,6 +3028,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         await timeReleaseStep(timings, "wrangler-deployment-status", () =>
           waitForWranglerDeploymentBestEffort(outputs, environment, deployEnv),
         );
+        if (!managedCompat) {
+          await timeReleaseStep(timings, "container-image-rollout", () =>
+            waitForReleaseContainerImages(outputs, environment, deployEnv),
+          );
+        }
         await timeReleaseStep(timings, "worker-content-verification", () =>
           verifyCloudflareWorkerContent(outputs, environment, deployEnv),
         );

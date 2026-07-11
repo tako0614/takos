@@ -35,6 +35,7 @@ import {
   removeWranglerDurableObjectLifecycleFromToml,
   removeWranglerQueueConsumerTriggersFromToml,
   verifyReleaseDeployment,
+  waitForReleaseContainerImages,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
   wranglerDeployEnv,
@@ -636,8 +637,7 @@ test("normalizeReleaseContainerImages accepts aliases and supported registry ref
   assert.throws(
     () =>
       normalizeReleaseContainerImages({
-        executor:
-          "registry.cloudflare.com/acc_123/takos-agent:bad tag",
+        executor: "registry.cloudflare.com/acc_123/takos-agent:bad tag",
       }),
     /Cloudflare Containers-supported registry ref/,
   );
@@ -2002,6 +2002,78 @@ exit 0
     process.chdir(previousCwd);
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("waitForReleaseContainerImages waits for every release image", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-containers-"));
+  const bin = resolve(root, "bin");
+  const state = resolve(root, "state");
+  const log = resolve(root, "commands.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+count=0
+if [ -f '${state}' ]; then
+  count=$(cat '${state}')
+fi
+count=$((count + 1))
+printf '%s' "$count" > '${state}'
+if [ "$count" = "1" ]; then
+  executor='registry.cloudflare.com/acc_123/takos-agent:old'
+else
+  executor='${executorTaggedImage}'
+fi
+cat <<JSON
+[
+  {"name":"takos-test-runtime","state":"ready","image":"${runtimeTaggedImage}"},
+  {"name":"takos-test-executor-tier1","state":"ready","image":"$executor"},
+  {"name":"takos-test-executor-tier2","state":"ready","image":"$executor"},
+  {"name":"takos-test-executor-tier3","state":"ready","image":"$executor"}
+]
+JSON
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    process.chdir(root);
+    const result = await waitForReleaseContainerImages(
+      rawOutputs,
+      "production",
+      {
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: JSON.stringify({
+          runtime: runtimeTaggedImage,
+          executor: executorTaggedImage,
+        }),
+        TAKOS_RELEASE_CONTAINER_API_ATTEMPTS: "2",
+        TAKOS_RELEASE_CONTAINER_API_INTERVAL_MS: "0",
+      },
+    );
+    assert.equal(result.skipped, false);
+    assert.equal(result.containers.length, 4);
+    assert.equal(readFileSync(state, "utf8"), "2");
+    assert.match(readFileSync(log, "utf8"), /wrangler containers list/);
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("waitForReleaseContainerImages honors an explicit no-rollout mode", async () => {
+  const result = await waitForReleaseContainerImages(rawOutputs, "production", {
+    TAKOS_WRANGLER_CONTAINERS_ROLLOUT: "none",
+    TAKOS_RELEASE_CONTAINER_IMAGES_JSON: JSON.stringify({
+      runtime: runtimeTaggedImage,
+      executor: executorTaggedImage,
+    }),
+  });
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "container_rollout_disabled",
+  });
 });
 
 test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {
