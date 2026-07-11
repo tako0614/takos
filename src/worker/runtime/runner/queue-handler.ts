@@ -235,15 +235,19 @@ export async function handleQueue(
           }),
         );
       } catch (dispatchErr) {
+        const dispatchError =
+          `Dispatch exception: ${String(dispatchErr).slice(0, 500)}`;
         logError(
           `EXECUTOR_HOST.fetch() threw for run ${runId}: ${dispatchErr}`,
           dispatchErr,
           { module: "run_queue" },
         );
         await db.update(runs).set({
-          status: "failed",
-          error: `Dispatch exception: ${String(dispatchErr).slice(0, 500)}`,
-          completedAt: new Date().toISOString(),
+          status: "queued",
+          serviceId: null,
+          serviceHeartbeat: null,
+          error: dispatchError,
+          completedAt: null,
         }).where(
           and(
             eq(runs.id, runId),
@@ -251,7 +255,7 @@ export async function handleQueue(
             eq(runs.serviceId, serviceId),
           ),
         );
-        message.ack();
+        message.retry();
         continue;
       }
 
@@ -289,6 +293,8 @@ export async function handleQueue(
             status: "queued",
             serviceId: null,
             serviceHeartbeat: null,
+            error: `Dispatch rejected: ${res.status} ${text.slice(0, 500)}`,
+            completedAt: null,
           })
             .where(
               and(
@@ -318,6 +324,8 @@ export async function handleQueue(
         status: "queued",
         serviceId: null,
         serviceHeartbeat: null,
+        error: "Run queue handler failed before container dispatch completed",
+        completedAt: null,
       }).where(
         and(
           eq(runs.id, runId),

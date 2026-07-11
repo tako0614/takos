@@ -165,6 +165,63 @@ test("run queue dispatch accepts agent container control RPC side effects", asyn
   assertEquals(state.indexMessages.length, 1);
 });
 
+test("run queue retries transient executor dispatch exceptions", async () => {
+  const state: AgentProofState = {
+    run: {
+      id: "run_dispatch_retry",
+      threadId: "thread_dispatch_retry",
+      accountId: "space_dispatch_retry",
+      requesterAccountId: "user_dispatch_retry",
+      sessionId: null,
+      agentType: "default",
+      status: "queued",
+      input: JSON.stringify({ prompt: "retry dispatch" }),
+      output: null,
+      error: null,
+      usage: "{}",
+      serviceId: null,
+      serviceHeartbeat: null,
+      leaseVersion: 0,
+      startedAt: null,
+      completedAt: null,
+      createdAt: "2026-06-02T00:00:00.000Z",
+    },
+    messages: [],
+    runEvents: [],
+    memoryClaims: [],
+    memoryEvidence: [],
+    notifierPayloads: [],
+    indexMessages: [],
+  };
+  const message = createQueueMessage({
+    version: RUN_QUEUE_MESSAGE_VERSION,
+    runId: state.run.id,
+    timestamp: Date.now(),
+    retryCount: 0,
+    model: "takosumi/default",
+  });
+  const env = createAgentProofEnv(state, []);
+  env.EXECUTOR_HOST.fetch = async () => {
+    throw new Error("Network connection lost");
+  };
+
+  await handleQueue({
+    queue: "takos-runs",
+    messages: [message],
+  }, env as never);
+
+  assertEquals(message.acks, 0);
+  assertEquals(message.retries, 1);
+  assertEquals(state.run.status, "queued");
+  assertEquals(state.run.serviceId, null);
+  assertEquals(state.run.serviceHeartbeat, null);
+  assertEquals(state.run.completedAt, null);
+  assertEquals(
+    state.run.error,
+    "Dispatch exception: Error: Network connection lost",
+  );
+});
+
 function createAgentProofEnv(
   state: AgentProofState,
   dispatches: Array<Record<string, unknown>>,
@@ -464,6 +521,18 @@ function updateRows(
   }
   if (typeof values.completedAt === "string") {
     state.run.completedAt = values.completedAt;
+  } else if (values.completedAt === null) {
+    state.run.completedAt = null;
+  }
+  if (typeof values.serviceId === "string") {
+    state.run.serviceId = values.serviceId;
+  } else if (values.serviceId === null) {
+    state.run.serviceId = null;
+  }
+  if (typeof values.serviceHeartbeat === "string") {
+    state.run.serviceHeartbeat = values.serviceHeartbeat;
+  } else if (values.serviceHeartbeat === null) {
+    state.run.serviceHeartbeat = null;
   }
   return { meta: { changes: 1 } };
 }

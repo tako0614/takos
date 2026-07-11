@@ -97,14 +97,29 @@ const wranglerGlobalArgs = [
 
 for (const consumer of QUEUE_CONSUMERS) {
   const queueName = requireStringProperty(queues, consumer.queueKey, "queues");
+  const currentConsumers = await listQueueConsumers(
+    queueName,
+    wranglerGlobalArgs,
+  );
   if (
-    await queueAlreadyHasConsumer(queueName, workerName, wranglerGlobalArgs)
+    currentConsumers.some((entry) => consumerMatchesWorker(entry, workerName))
   ) {
     console.log(
       `Queue ${queueName} already has Worker consumer ${workerName}; continuing.`,
     );
     continue;
   }
+
+  for (const current of currentConsumers) {
+    const currentWorker = consumerWorkerName(current);
+    if (!currentWorker || !isWorkerConsumer(current)) {
+      throw new Error(
+        `Queue ${queueName} has an unsupported existing consumer; refusing to replace it without a Worker script name`,
+      );
+    }
+    await removeQueueConsumer(queueName, currentWorker, wranglerGlobalArgs);
+  }
+
   const addArgs = [
     "wrangler",
     "queues",
@@ -127,10 +142,20 @@ for (const consumer of QUEUE_CONSUMERS) {
       requireStringProperty(queues, consumer.deadLetterQueueKey, "queues"),
     );
   }
-  await addQueueConsumerWithRetry(addArgs, workerName, queueName);
+  await addQueueConsumerWithRetry(
+    addArgs,
+    workerName,
+    queueName,
+    wranglerGlobalArgs,
+  );
 }
 
-async function addQueueConsumerWithRetry(addArgs, workerName, queueName) {
+async function addQueueConsumerWithRetry(
+  addArgs,
+  workerName,
+  queueName,
+  globalArgs,
+) {
   for (let attempt = 0; ; attempt += 1) {
     const result = spawnSync("bunx", addArgs, {
       encoding: "utf8",
@@ -139,11 +164,16 @@ async function addQueueConsumerWithRetry(addArgs, workerName, queueName) {
     });
     emitCommandResult(result);
     const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    if (result.status === 0) {
+      return;
+    }
     if (
-      result.status === 0 ||
       /already has|already exists|duplicate|consumer .* exists/i.test(combined)
     ) {
-      return;
+      const consumers = await listQueueConsumers(queueName, globalArgs);
+      if (consumers.some((entry) => consumerMatchesWorker(entry, workerName))) {
+        return;
+      }
     }
     const delay = WORKER_PROPAGATION_RETRY_DELAYS_MS[attempt];
     if (
@@ -161,6 +191,38 @@ async function addQueueConsumerWithRetry(addArgs, workerName, queueName) {
     );
     if (delay > 0) await sleep(delay);
   }
+}
+
+async function removeQueueConsumer(queueName, workerName, globalArgs) {
+  const result = spawnSync(
+    "bunx",
+    [
+      "wrangler",
+      "queues",
+      "consumer",
+      "remove",
+      queueName,
+      workerName,
+      ...globalArgs,
+    ],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    },
+  );
+  emitCommandResult(result);
+  if (result.status === 0) return;
+
+  const remaining = await listQueueConsumers(queueName, globalArgs);
+  if (!remaining.some((entry) => consumerMatchesWorker(entry, workerName))) {
+    return;
+  }
+  throw new Error(
+    `Failed to remove stale Queue consumer ${workerName} from ${queueName}: ${bounded(
+      `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+    )}`,
+  );
 }
 
 function queueConsumerWorkerPropagationPending(output) {
@@ -194,7 +256,7 @@ function readReleaseOutputs() {
   }
 }
 
-async function queueAlreadyHasConsumer(queueName, workerName, globalArgs) {
+async function listQueueConsumers(queueName, globalArgs) {
   const result = spawnSync(
     "bunx",
     [
@@ -220,10 +282,7 @@ async function queueAlreadyHasConsumer(queueName, workerName, globalArgs) {
       )}`,
     );
   }
-  const consumers = parseConsumerList(result.stdout ?? "");
-  return consumers.some((consumer) =>
-    consumerMatchesWorker(consumer, workerName),
-  );
+  return parseConsumerList(result.stdout ?? "");
 }
 
 function parseConsumerList(stdout) {
@@ -256,15 +315,26 @@ function parseJsonFromCommandOutput(output) {
 }
 
 function consumerMatchesWorker(consumer, workerName) {
+  return consumerWorkerName(consumer) === workerName;
+}
+
+function consumerWorkerName(consumer) {
   if (!consumer || typeof consumer !== "object") return false;
-  return [
-    consumer.script_name,
-    consumer.scriptName,
-    consumer.script,
-    consumer.worker,
-    consumer.service,
-    consumer.name,
-  ].some((value) => value === workerName);
+  return (
+    [
+      consumer.script_name,
+      consumer.scriptName,
+      consumer.script,
+      consumer.worker,
+      consumer.service,
+      consumer.name,
+    ].find((value) => typeof value === "string" && value.trim() !== "") ?? null
+  );
+}
+
+function isWorkerConsumer(consumer) {
+  if (!consumer || typeof consumer !== "object") return false;
+  return !consumer.type || consumer.type === "worker";
 }
 
 function requireObjectOutput(outputs, key) {

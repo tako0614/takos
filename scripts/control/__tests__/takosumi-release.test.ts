@@ -408,6 +408,81 @@ esac
   }
 });
 
+test("ensure-queue-consumers replaces a stale Worker consumer", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-queue-rebind-"));
+  const bin = resolve(root, "bin");
+  const log = resolve(root, "commands.log");
+  const removed = resolve(root, "stale-consumer-removed");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+case "$*" in
+  *"consumer list takos-test-runs "*)
+    if [ -f '${removed}' ]; then
+      printf '[]\\n'
+    else
+      printf '[{"script":"takos","type":"worker"}]\\n'
+    fi
+    ;;
+  *"consumer list "*)
+    printf '[]\\n'
+    ;;
+  *"consumer remove takos-test-runs takos "*)
+    touch '${removed}'
+    ;;
+  *"consumer add "*)
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 1
+    ;;
+esac
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "scripts/control/ensure-queue-consumers.mjs",
+        "production",
+        "--config",
+        productionWranglerConfig,
+      ],
+      {
+        cwd: repoRoot,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
+        },
+      },
+    );
+    const [status, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+
+    assert.equal(status, 0, `${stdout}\n${stderr}`.trim());
+    const commands = readFileSync(log, "utf8");
+    assert.match(
+      commands,
+      /queues consumer remove takos-test-runs takos --config/,
+    );
+    assert.match(
+      commands,
+      /queues consumer add takos-test-runs takos-test --batch-size 1 --batch-timeout 1 --config/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("releaseD1MigrationsWranglerConfigPath is isolated from the deploy config", () => {
   assert.equal(
     releaseD1MigrationsWranglerConfigPath("production"),
