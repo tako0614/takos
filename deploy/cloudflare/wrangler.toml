@@ -68,6 +68,10 @@ TAKOSUMI_ACCOUNTS_URL = "https://app.takosumi.example"
 OIDC_ISSUER_URL = "https://app.takosumi.example"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
 OIDC_REDIRECT_URI = "https://app.your-domain.example/auth/oidc/callback"
+EXECUTOR_TIER1_WARM_POOL_SIZE = "1"
+EXECUTOR_TIER1_MAX_CONCURRENT_RUNS = "4"
+EXECUTOR_TIER3_POOL_SIZE = "1"
+EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = "1"
 # Optional subject used by Takos featured-app Capsule installation jobs when the
 # operator chooses to run them from this worker.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
@@ -211,7 +215,7 @@ class_name = "ExecutorContainerTier3"
 image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
-max_instances = 25
+max_instances = 1
 rollout_active_grace_period = 900
 
 # R2 Bucket for worker bundles (optional - for production)
@@ -292,7 +296,7 @@ queue = "takos-runs"
 max_batch_size = 1
 max_batch_timeout = 1
 max_retries = 5
-max_concurrency = 250
+max_concurrency = 5
 retry_delay = 5
 dead_letter_queue = "takos-runs-dlq"
 
@@ -370,6 +374,10 @@ TAKOSUMI_ACCOUNTS_URL = "https://staging-app.takosumi.example"
 OIDC_ISSUER_URL = "https://staging-app.takosumi.example"
 OIDC_CLIENT_ID = "takos-staging-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
+EXECUTOR_TIER1_WARM_POOL_SIZE = "1"
+EXECUTOR_TIER1_MAX_CONCURRENT_RUNS = "4"
+EXECUTOR_TIER3_POOL_SIZE = "1"
+EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = "1"
 # Optional subject used by featured-app Capsule installation jobs.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
@@ -456,7 +464,7 @@ class_name = "ExecutorContainerTier3"
 image = "../../containers/agent/Dockerfile"
 image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
-max_instances = 25
+max_instances = 1
 rollout_active_grace_period = 900
 
 [[env.staging.r2_buckets]]
@@ -500,7 +508,7 @@ queue = "takos-runs-staging"
 max_batch_size = 1
 max_batch_timeout = 1
 max_retries = 5
-max_concurrency = 250
+max_concurrency = 5
 retry_delay = 5
 dead_letter_queue = "takos-runs-dlq-staging"
 

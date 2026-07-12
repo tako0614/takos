@@ -36,6 +36,18 @@ variable "environment" {
   default     = "production"
 }
 
+variable "executor_capacity" {
+  description = "Runtime and executor capacity projected into the Takos Worker and Cloudflare Container applications."
+  type = object({
+    runtime_max_instances     = number
+    tier1_max_instances       = number
+    tier1_max_concurrent_runs = number
+    tier2_max_instances       = number
+    tier3_max_instances       = number
+    tier3_max_concurrent_runs = number
+  })
+}
+
 variable "plan_mode" {
   description = "Plan-only mode: no real Cloudflare credentials required (for Takosumi Run with type `plan` review)."
   type        = bool

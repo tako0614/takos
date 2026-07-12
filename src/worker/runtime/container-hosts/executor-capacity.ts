@@ -8,8 +8,8 @@
 export const DEFAULT_EXECUTOR_POOL_CAPACITY = Object.freeze({
   tier1WarmPoolSize: 1,
   tier1MaxConcurrentRuns: 4,
-  tier3PoolSize: 25,
-  tier3MaxConcurrentRuns: 32,
+  tier3PoolSize: 1,
+  tier3MaxConcurrentRuns: 1,
 });
 
 /** Tier 2 is reserved for explicit dispatch and is not part of the managed pool. */

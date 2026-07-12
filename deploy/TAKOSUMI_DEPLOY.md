@@ -69,9 +69,24 @@ the reviewed release command. Apply then skips `bun install`, the SPA build,
 Worker bundling, and all container builds.
 
 ```hcl
-worker_release_tag = "v0.10.29"
+worker_release_tag = "v0.10.30"
 build_from_source  = false
+
+executor_capacity = {
+  runtime_max_instances     = 1
+  tier1_max_instances       = 1
+  tier1_max_concurrent_runs = 4
+  tier2_max_instances       = 1
+  tier3_max_instances       = 1
+  tier3_max_concurrent_runs = 1
+}
 ```
+
+The small-install capacity above is also the module default. The release
+renderer projects the same OpenTofu value into Cloudflare Container
+`max_instances`, Takos executor pool variables, and the run-queue consumer, so
+operators can raise capacity without maintaining three independent settings.
+The computed run concurrency may not exceed Cloudflare Queues' limit of 250.
 
 Set `build_from_source = true` to build the Worker and SPA from the selected Git
 snapshot. This mode still reuses the tagged release's runtime and executor
@@ -81,7 +96,7 @@ install with lifecycle scripts disabled, and may reuse a persistent Bun cache
 through `TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR`.
 
 ```hcl
-worker_release_tag = "v0.10.29"
+worker_release_tag = "v0.10.30"
 build_from_source  = true
 ```
 
@@ -90,8 +105,8 @@ registry or a release without the standard image metadata:
 
 ```hcl
 release_container_images = {
-  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:0.10.29-<commit>"
-  executor = "registry.cloudflare.com/<account-id>/takos-agent:0.10.29-<commit>"
+  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:0.10.30-<commit>"
+  executor = "registry.cloudflare.com/<account-id>/takos-agent:0.10.30-<commit>"
 }
 ```
 

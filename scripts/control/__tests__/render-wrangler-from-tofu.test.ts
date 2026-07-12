@@ -8,6 +8,7 @@ import {
   parseArgs,
   parseTakosumiOutputsJson,
   renderContainerApplicationNames,
+  renderExecutorCapacity,
   renderPublicRoute,
 } from "../render-wrangler-from-tofu.mjs";
 
@@ -423,6 +424,71 @@ test("renderContainerApplicationNames replaces stale generated names", () => {
   );
   assert.match(rendered, /name = "takos-prod-runtime"/);
   assert.doesNotMatch(rendered, /takos-takosruntimecontainer/);
+});
+
+test("renderExecutorCapacity applies OpenTofu capacity to containers and pool vars", () => {
+  const containerBlocks = (header: string) =>
+    [
+      "TakosRuntimeContainer",
+      "ExecutorContainerTier1",
+      "ExecutorContainerTier2",
+      "ExecutorContainerTier3",
+    ]
+      .map(
+        (className) =>
+          `${header}\nclass_name = "${className}"\nmax_instances = 1`,
+      )
+      .join("\n\n");
+  const toml = [
+    "[vars]",
+    'EXECUTOR_TIER3_POOL_SIZE = "1"',
+    containerBlocks("[[containers]]"),
+    "[[queues.consumers]]",
+    'queue = "takos-runs"',
+    "max_concurrency = 5",
+    "[env.staging.vars]",
+    'EXECUTOR_TIER3_POOL_SIZE = "1"',
+    containerBlocks("[[env.staging.containers]]"),
+    "[[env.staging.queues.consumers]]",
+    'queue = "takos-runs-staging"',
+    "max_concurrency = 5",
+  ].join("\n\n");
+  const outputs = {
+    executor_capacity: {
+      runtime_max_instances: 2,
+      tier1_max_instances: 3,
+      tier1_max_concurrent_runs: 4,
+      tier2_max_instances: 5,
+      tier3_max_instances: 6,
+      tier3_max_concurrent_runs: 7,
+    },
+    queues: {
+      runs: "takos-runs",
+    },
+  };
+
+  const production = renderExecutorCapacity(toml, "production", outputs);
+  assert.match(
+    production,
+    /class_name = "ExecutorContainerTier3"\nmax_instances = 6/,
+  );
+  assert.match(production, /EXECUTOR_TIER3_POOL_SIZE = "6"/);
+  assert.match(production, /EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = "7"/);
+  assert.match(production, /queue = "takos-runs"\s+max_concurrency = 54/);
+  assert.match(
+    production,
+    /\[env\.staging\.vars\]\n\s*EXECUTOR_TIER3_POOL_SIZE = "1"/,
+  );
+
+  const staging = renderExecutorCapacity(toml, "staging", {
+    ...outputs,
+    queues: { runs: "takos-runs-staging" },
+  });
+  assert.match(
+    staging,
+    /\[\[env\.staging\.containers\]\]\nclass_name = "ExecutorContainerTier3"\nmax_instances = 6/,
+  );
+  assert.match(staging, /queue = "takos-runs-staging"\s+max_concurrency = 54/);
 });
 
 test("assertRenderedWorkerTarget verifies rendered container application names", () => {

@@ -45,6 +45,12 @@ locals {
   extra_worker_env               = { for name, value in var.env : name => value if trimspace(value) != "" }
   app_deployment_env = merge(
     local.extra_worker_env,
+    {
+      EXECUTOR_TIER1_WARM_POOL_SIZE      = tostring(var.executor_capacity.tier1_max_instances)
+      EXECUTOR_TIER1_MAX_CONCURRENT_RUNS = tostring(var.executor_capacity.tier1_max_concurrent_runs)
+      EXECUTOR_TIER3_POOL_SIZE           = tostring(var.executor_capacity.tier3_max_instances)
+      EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = tostring(var.executor_capacity.tier3_max_concurrent_runs)
+    },
     local.takosumi_accounts_oidc_enabled && local.takosumi_accounts_url != "" ? {
       TAKOSUMI_ACCOUNTS_URL = local.takosumi_accounts_url
     } : {},

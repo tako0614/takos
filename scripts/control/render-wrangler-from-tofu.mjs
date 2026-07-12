@@ -34,6 +34,18 @@ const CONTAINER_APP_NAME_SUFFIX_BY_CLASS = {
   ExecutorContainerTier2: "executor-tier2",
   ExecutorContainerTier3: "executor-tier3",
 };
+const CONTAINER_CAPACITY_KEY_BY_CLASS = {
+  TakosRuntimeContainer: "runtime_max_instances",
+  ExecutorContainerTier1: "tier1_max_instances",
+  ExecutorContainerTier2: "tier2_max_instances",
+  ExecutorContainerTier3: "tier3_max_instances",
+};
+const EXECUTOR_ENV_KEY_BY_CAPACITY_KEY = {
+  tier1_max_instances: "EXECUTOR_TIER1_WARM_POOL_SIZE",
+  tier1_max_concurrent_runs: "EXECUTOR_TIER1_MAX_CONCURRENT_RUNS",
+  tier3_max_instances: "EXECUTOR_TIER3_POOL_SIZE",
+  tier3_max_concurrent_runs: "EXECUTOR_TIER3_MAX_CONCURRENT_RUNS",
+};
 
 // Wrangler config is resolved relative to THIS script (takos/scripts/control/),
 // so the command works from any cwd (in particular from deploy/opentofu where
@@ -273,7 +285,8 @@ function workerEnvReplacements(env, deploymentEnv) {
 }
 
 function optionalPublicUrl(outputs) {
-  const value = outputValue(outputs.public_url) ?? outputValue(outputs.launch_url);
+  const value =
+    outputValue(outputs.public_url) ?? outputValue(outputs.launch_url);
   if (typeof value !== "string" || value.trim() === "") return undefined;
   let parsed;
   try {
@@ -480,6 +493,154 @@ export function renderContainerApplicationNames(toml, env, workerName) {
   return rendered.join("\n");
 }
 
+function executorCapacityFromOutputs(outputs) {
+  const value = outputValue(outputs.executor_capacity);
+  if (value == null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error('tofu output "executor_capacity" must be an object');
+  }
+  const required = [
+    "runtime_max_instances",
+    "tier1_max_instances",
+    "tier1_max_concurrent_runs",
+    "tier2_max_instances",
+    "tier3_max_instances",
+    "tier3_max_concurrent_runs",
+  ];
+  const capacity = {};
+  for (const key of required) {
+    const entry = value[key];
+    if (!Number.isInteger(entry) || entry < 1 || entry > 500) {
+      throw new Error(
+        `tofu output "executor_capacity.${key}" must be a whole number between 1 and 500`,
+      );
+    }
+    capacity[key] = entry;
+  }
+  return capacity;
+}
+
+function renderTomlAssignments(lines, assignments) {
+  const remaining = new Map(Object.entries(assignments));
+  const rendered = lines.map((line) => {
+    const name = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=/u)?.[1];
+    if (!name || !remaining.has(name)) return line;
+    const value = remaining.get(name);
+    remaining.delete(name);
+    return `${name} = ${tomlString(value)}`;
+  });
+  for (const [name, value] of remaining) {
+    rendered.push(`${name} = ${tomlString(value)}`);
+  }
+  return rendered;
+}
+
+function renderContainerCapacityBlock(lines, capacity) {
+  const className = lines
+    .join("\n")
+    .match(/^\s*class_name\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+  const key = className
+    ? CONTAINER_CAPACITY_KEY_BY_CLASS[className]
+    : undefined;
+  if (!key) return { lines, className: undefined };
+  let replaced = false;
+  const rendered = lines.map((line) => {
+    if (!/^\s*max_instances\s*=/u.test(line)) return line;
+    replaced = true;
+    return `max_instances = ${capacity[key]}`;
+  });
+  if (!replaced) rendered.push(`max_instances = ${capacity[key]}`);
+  return { lines: rendered, className };
+}
+
+function renderRunQueueCapacityBlock(lines, queueName, maxConcurrency) {
+  const block = lines.join("\n");
+  const configuredQueue = block.match(/^\s*queue\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+  if (configuredQueue !== queueName) return { lines, matched: false };
+  let replaced = false;
+  const rendered = lines.map((line) => {
+    if (!/^\s*max_concurrency\s*=/u.test(line)) return line;
+    replaced = true;
+    return `max_concurrency = ${maxConcurrency}`;
+  });
+  if (!replaced) rendered.push(`max_concurrency = ${maxConcurrency}`);
+  return { lines: rendered, matched: true };
+}
+
+export function renderExecutorCapacity(toml, env, outputs) {
+  const capacity = executorCapacityFromOutputs(outputs);
+  if (!capacity) return toml;
+  const containerHeader = containerHeaderForEnv(env);
+  const varsHeader = env === "staging" ? "[env.staging.vars]" : "[vars]";
+  const queueHeader =
+    env === "staging"
+      ? "[[env.staging.queues.consumers]]"
+      : "[[queues.consumers]]";
+  const queueOutputs = outputValue(outputs.queues);
+  const runQueueName =
+    queueOutputs &&
+    typeof queueOutputs === "object" &&
+    !Array.isArray(queueOutputs) &&
+    typeof queueOutputs.runs === "string"
+      ? queueOutputs.runs
+      : undefined;
+  const runQueueMaxConcurrency =
+    capacity.tier1_max_instances * capacity.tier1_max_concurrent_runs +
+    capacity.tier3_max_instances * capacity.tier3_max_concurrent_runs;
+  const executorEnv = Object.fromEntries(
+    Object.entries(EXECUTOR_ENV_KEY_BY_CAPACITY_KEY).map(
+      ([capacityKey, envName]) => [envName, String(capacity[capacityKey])],
+    ),
+  );
+  const rendered = [];
+  const renderedClasses = new Set();
+  let renderedVars = false;
+  let renderedRunQueue = false;
+
+  eachTomlBlock(toml, (block) => {
+    if (block.header === containerHeader) {
+      const result = renderContainerCapacityBlock(block.lines, capacity);
+      if (result.className) renderedClasses.add(result.className);
+      rendered.push(...result.lines);
+      return;
+    }
+    if (block.header === varsHeader) {
+      renderedVars = true;
+      rendered.push(...renderTomlAssignments(block.lines, executorEnv));
+      return;
+    }
+    if (runQueueName && block.header === queueHeader) {
+      const result = renderRunQueueCapacityBlock(
+        block.lines,
+        runQueueName,
+        runQueueMaxConcurrency,
+      );
+      renderedRunQueue ||= result.matched;
+      rendered.push(...result.lines);
+      return;
+    }
+    rendered.push(...block.lines);
+  });
+
+  if (!renderedVars) {
+    throw new Error(`wrangler.toml is missing ${varsHeader}`);
+  }
+  const missingClasses = Object.keys(CONTAINER_CAPACITY_KEY_BY_CLASS).filter(
+    (className) => !renderedClasses.has(className),
+  );
+  if (missingClasses.length > 0) {
+    throw new Error(
+      `wrangler.toml is missing ${env} container capacity block(s): ${missingClasses.join(", ")}`,
+    );
+  }
+  if (runQueueName && !renderedRunQueue) {
+    throw new Error(
+      `wrangler.toml is missing ${env} run queue consumer ${runQueueName}`,
+    );
+  }
+  return rendered.join("\n");
+}
+
 function requireWorkerNameOutput(outputs) {
   const value = outputValue(outputs.service_runtime_name);
   if (typeof value !== "string" || value.trim() === "") {
@@ -637,7 +798,8 @@ export function main(argv = process.argv.slice(2)) {
     missing,
   } = applyReplacements(toml, replacements);
   const renderedToml = renderContainerApplicationNames(next, env, workerName);
-  const routedToml = renderPublicRoute(renderedToml, env, outputs, { zoneId });
+  const capacityToml = renderExecutorCapacity(renderedToml, env, outputs);
+  const routedToml = renderPublicRoute(capacityToml, env, outputs, { zoneId });
   assertRenderedWorkerTarget(routedToml, env, workerName);
 
   for (const { placeholder, value } of applied) {

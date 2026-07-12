@@ -29,6 +29,11 @@ output "workers_subdomain" {
   value       = var.workers_subdomain
 }
 
+output "executor_capacity" {
+  description = "Takos runtime and executor capacity consumed by the release renderer."
+  value       = var.executor_capacity
+}
+
 output "app_deployment" {
   description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
   value = {

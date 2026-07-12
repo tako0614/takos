@@ -16,7 +16,7 @@ terraform {
 locals {
   # Keep the installable module self-contained: Takosumi may extract only this
   # module path from the reviewed Git snapshot.
-  app_version                       = "0.10.29"
+  app_version                       = "0.10.30"
   container_image_ref_pattern       = "^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})|(docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)@sha256:[0-9a-f]{64})$"
   worker_release_tag                = trimspace(var.worker_release_tag)
   worker_release_explicit_url       = trimspace(var.worker_release_artifact_url)
@@ -115,6 +115,7 @@ module "cloudflare" {
   project_name      = var.project_name
   public_subdomain  = var.public_subdomain
   environment       = var.environment
+  executor_capacity = var.executor_capacity
   plan_mode         = var.opentofu_plan_mode
   workers_subdomain = try(var.cloudflare.workers_subdomain, null)
 

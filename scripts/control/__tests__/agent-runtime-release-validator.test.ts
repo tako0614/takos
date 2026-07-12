@@ -31,11 +31,11 @@ test("agent runtime release config keeps pool, queues, workflow, and engine pin 
 test("agent runtime release validator catches executor capacity drift", async () => {
   const input = await actualInputs();
   input.wranglerText = input.wranglerText.replace(
-    "max_instances = 25",
-    "max_instances = 1",
+    "instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }\nmax_instances = 1",
+    "instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }\nmax_instances = 2",
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    "deploy/cloudflare/wrangler.toml production ExecutorContainerTier3 max_instances must be 25",
+    "deploy/cloudflare/wrangler.toml production ExecutorContainerTier3 max_instances must be 1",
   );
 });
 

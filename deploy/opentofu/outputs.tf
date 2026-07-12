@@ -40,6 +40,11 @@ output "workers_subdomain" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].workers_subdomain : null
 }
 
+output "executor_capacity" {
+  description = "Takos runtime and executor capacity consumed by the release renderer."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].executor_capacity : null
+}
+
 output "app_deployment" {
   description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
   value       = var.target == "cloudflare" ? module.cloudflare[0].app_deployment : null

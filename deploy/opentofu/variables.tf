@@ -63,6 +63,41 @@ variable "release_container_images" {
   }
 }
 
+variable "executor_capacity" {
+  description = "Takos runtime and executor capacity materialized into the Worker and Cloudflare Container applications. Defaults fit a small self-host install; operators can raise the same limits explicitly."
+  type = object({
+    runtime_max_instances     = optional(number, 1)
+    tier1_max_instances       = optional(number, 1)
+    tier1_max_concurrent_runs = optional(number, 4)
+    tier2_max_instances       = optional(number, 1)
+    tier3_max_instances       = optional(number, 1)
+    tier3_max_concurrent_runs = optional(number, 1)
+  })
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for value in [
+        var.executor_capacity.runtime_max_instances,
+        var.executor_capacity.tier1_max_instances,
+        var.executor_capacity.tier1_max_concurrent_runs,
+        var.executor_capacity.tier2_max_instances,
+        var.executor_capacity.tier3_max_instances,
+        var.executor_capacity.tier3_max_concurrent_runs,
+      ] : value >= 1 && value <= 500 && floor(value) == value
+    ])
+    error_message = "executor_capacity values must be whole numbers between 1 and 500."
+  }
+
+  validation {
+    condition = (
+      var.executor_capacity.tier1_max_instances * var.executor_capacity.tier1_max_concurrent_runs +
+      var.executor_capacity.tier3_max_instances * var.executor_capacity.tier3_max_concurrent_runs
+    ) <= 250
+    error_message = "executor_capacity total run concurrency must not exceed Cloudflare Queues max_concurrency 250."
+  }
+}
+
 variable "build_from_source" {
   description = "Build the Takos Worker and web assets from the pinned Git Source during release activation instead of using the CI Worker archive. By default worker_release_tag still supplies prebuilt runtime/executor container images."
   type        = bool
@@ -72,7 +107,7 @@ variable "build_from_source" {
 variable "worker_release_tag" {
   description = "GitHub release tag whose takosumi-artifact.json selects the Worker bundle, web assets, SHA-256, and container image refs. In source-build mode only its container image refs are consumed. Set empty only for a runner that intentionally builds every artifact from source."
   type        = string
-  default     = "v0.10.29"
+  default     = "v0.10.30"
 
   validation {
     condition     = trimspace(var.worker_release_tag) == "" || can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
