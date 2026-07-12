@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { runLocalAgentPublicApiProof } from "./local-agent-proof.ts";
 import {
   AGENT_SOURCE_FINGERPRINT_LABEL,
+  assertCoreDumpsDisabled,
   assertFreshAgentProofBuild,
   assertLocalhostComposePorts,
   computeAgentSourceFingerprint,
@@ -462,6 +463,7 @@ async function main() {
         throw new Error(`compose config is missing service ${expected}`);
       }
     }
+    assertCoreDumpsDisabled(config.stdout, expectedServices);
     console.log(
       `[local-e2e] compose config/localhost bindings ok (${services.join(", ")})`,
     );

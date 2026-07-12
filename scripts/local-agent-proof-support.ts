@@ -285,6 +285,41 @@ export function assertLocalhostComposePorts(
   }
 }
 
+export function assertCoreDumpsDisabled(
+  renderedConfig: string,
+  expectedServices: readonly string[],
+): void {
+  let config: unknown;
+  try {
+    config = JSON.parse(renderedConfig) as unknown;
+  } catch {
+    throw new Error("rendered compose config is not valid JSON");
+  }
+  const services =
+    config && typeof config === "object" && "services" in config
+      ? (config.services as Record<string, unknown>)
+      : null;
+  if (!services) throw new Error("rendered compose config has no services");
+  for (const serviceName of expectedServices) {
+    const service = services[serviceName] as
+      | { ulimits?: { core?: number | { hard?: number; soft?: number } } }
+      | undefined;
+    const core = service?.ulimits?.core;
+    const disabled =
+      core === 0 ||
+      (!!core &&
+        typeof core === "object" &&
+        ((core.hard === 0 && core.soft === 0) ||
+          // Docker Compose's JSON renderer omits numeric zero fields and emits
+          // `{}` for the normalized soft=0/hard=0 ulimit. The Compose parser
+          // has already validated the source value before producing this shape.
+          Object.keys(core).length === 0));
+    if (!disabled) {
+      throw new Error(`${serviceName} must disable core dumps with ulimit 0`);
+    }
+  }
+}
+
 export async function computeAgentSourceFingerprint(
   takosRoot: string,
 ): Promise<string> {

@@ -4,6 +4,7 @@ import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  assertCoreDumpsDisabled,
   assertFreshAgentProofBuild,
   assertLocalhostComposePorts,
   cleanupLocalE2eProject,
@@ -180,6 +181,28 @@ describe("local agent proof support", () => {
     expect(() =>
       assertLocalhostComposePorts(extraSurfaceConfig, expected),
     ).toThrow("postgres must publish only 127.0.0.1:15432:5432");
+  });
+
+  test("requires every proof service to disable core dumps", () => {
+    const secureConfig = JSON.stringify({
+      services: {
+        worker: { ulimits: { core: {} } },
+        agent: { ulimits: { core: 0 } },
+      },
+    });
+    expect(() =>
+      assertCoreDumpsDisabled(secureConfig, ["worker", "agent"]),
+    ).not.toThrow();
+
+    const unsafeConfig = JSON.stringify({
+      services: {
+        worker: { ulimits: { core: { hard: 0, soft: 0 } } },
+        agent: {},
+      },
+    });
+    expect(() =>
+      assertCoreDumpsDisabled(unsafeConfig, ["worker", "agent"]),
+    ).toThrow("agent must disable core dumps with ulimit 0");
   });
 
   test("requires complete run evidence and matching image provenance", () => {

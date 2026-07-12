@@ -10,6 +10,8 @@ services:
       - full_page_writes=off
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
@@ -25,12 +27,16 @@ services:
         psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takosumi'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takosumi"
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
   redis:
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
@@ -42,6 +48,8 @@ services:
         condition: service_started
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
@@ -75,6 +83,8 @@ services:
       - ../takosumi:/takosumi:ro
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
@@ -94,6 +104,8 @@ services:
       TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS: "600000"
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
 
@@ -108,5 +120,7 @@ services:
         condition: service_started
     security_opt:
       - apparmor=unconfined
+    ulimits:
+      core: 0
     healthcheck:
       disable: true
