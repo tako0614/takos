@@ -34,7 +34,6 @@ import {
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
 
 import {
-  abortRemoteToolExecutorsForLease,
   handleAddMessage,
   handleCompleteRun,
   handleConversationHistory,
@@ -478,10 +477,7 @@ export function dispatchControlRpc(
     // leak; it cannot touch the replacement lease's executor.
     if (path !== TOOL_CLEANUP_PATH && typeof body.runId === "string") {
       const leaseError = await ensureRunLease(env, body.runId, body);
-      if (leaseError) {
-        abortRemoteToolExecutorsForLease(body);
-        return leaseError;
-      }
+      if (leaseError) return leaseError;
     }
     return await handler(body, env);
   })();

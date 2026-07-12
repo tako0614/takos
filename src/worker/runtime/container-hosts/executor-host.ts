@@ -74,12 +74,7 @@ import {
   isProxyRequestAuthorized,
 } from "./executor-auth.ts";
 import { assertRunExecutionAccess } from "./executor-run-state.ts";
-import {
-  abortRemoteToolExecutorsForLease,
-  abortRemoteToolExecutorsForRun,
-  abortSupersededRemoteToolExecutors,
-  ensureRunLease,
-} from "./executor-control-rpc.ts";
+import { ensureRunLease } from "./executor-control-rpc.ts";
 
 // ---------------------------------------------------------------------------
 // Public executor-host helper exports
@@ -767,7 +762,6 @@ export async function revokeRunProxyTokens(
   runId: string,
   additional?: { tier: ExecutorTier; containerId: string },
 ): Promise<number> {
-  abortRemoteToolExecutorsForRun(runId);
   const targets = collectProxyTokenContainerTargets(env, runId, additional);
   return await revokeAcrossProxyTokenContainers(
     targets,
@@ -784,7 +778,6 @@ async function revokeRunLeaseProxyTokens(
   leaseVersion: number | undefined,
   additional?: { tier: ExecutorTier; containerId: string },
 ): Promise<number> {
-  abortRemoteToolExecutorsForLease({ runId, serviceId, leaseVersion });
   const targets = collectProxyTokenContainerTargets(env, runId, additional);
   return await revokeAcrossProxyTokenContainers(
     targets,
@@ -806,7 +799,6 @@ async function revokeSupersededRunProxyTokens(
   leaseVersion: number | undefined,
   additional?: { tier: ExecutorTier; containerId: string },
 ): Promise<number> {
-  abortSupersededRemoteToolExecutors({ runId, serviceId, leaseVersion });
   const targets = collectProxyTokenContainerTargets(env, runId, additional);
   return await revokeAcrossProxyTokenContainers(
     targets,
@@ -1092,7 +1084,6 @@ export default {
       try {
         await assertRunExecutionAccess(env, tokenInfo.runId);
       } catch {
-        abortRemoteToolExecutorsForRun(tokenInfo.runId);
         return err("Run requester no longer has Workspace access", 403);
       }
 

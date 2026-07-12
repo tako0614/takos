@@ -55,7 +55,10 @@ import {
   ok,
   readRunServiceId,
 } from "./executor-utils.ts";
-import { getRunBootstrap } from "./executor-run-state.ts";
+import {
+  assertRunExecutionAccess,
+  getRunBootstrap,
+} from "./executor-run-state.ts";
 
 /**
  * Fence a run-scoped, side-effecting control RPC to the caller's token-bound
@@ -120,19 +123,6 @@ export async function ensureRunLease(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Remote tool executor cache
-// ---------------------------------------------------------------------------
-
-type RemoteToolExecutorEntry = {
-  promise: Promise<ToolExecutorLike>;
-  createdAt: number;
-  identity: NormalizedRemoteToolExecutorIdentity | null;
-  abortController: AbortController;
-};
-
-const remoteToolExecutors = new Map<string, RemoteToolExecutorEntry>();
-
 type RemoteToolExecutorIdentity = {
   runId?: unknown;
   serviceId?: unknown;
@@ -161,97 +151,6 @@ function normalizeRemoteToolExecutorIdentity(
       typeof identity.leaseVersion === "number" ? identity.leaseVersion : null,
   };
 }
-
-/**
- * A tool executor belongs to one run lease, not merely to a stable run id.
- * Stale-recovery intentionally reuses runId while replacing serviceId and
- * incrementing leaseVersion. Encoding the complete authority identity keeps a
- * late cleanup from the old container from deleting the fresh lease's MCP/tool
- * state.
- */
-export function remoteToolExecutorCacheKey(
-  identity: RemoteToolExecutorIdentity,
-): string {
-  const normalized = normalizeRemoteToolExecutorIdentity(identity);
-  return JSON.stringify([
-    normalized.runId,
-    normalized.serviceId,
-    normalized.leaseVersion,
-  ]);
-}
-
-function abortRemoteToolExecutorEntry(entry: RemoteToolExecutorEntry): void {
-  if (!entry.abortController.signal.aborted) entry.abortController.abort();
-}
-
-function abortMatchingRemoteToolExecutors(
-  predicate: (identity: NormalizedRemoteToolExecutorIdentity) => boolean,
-): number {
-  let aborted = 0;
-  for (const entry of remoteToolExecutors.values()) {
-    if (!entry.identity || !predicate(entry.identity)) continue;
-    if (!entry.abortController.signal.aborted) {
-      entry.abortController.abort();
-      aborted++;
-    }
-  }
-  return aborted;
-}
-
-/** Abort every in-flight tool execution belonging to a terminal/cancelled run. */
-export function abortRemoteToolExecutorsForRun(runId: string): number {
-  return abortMatchingRemoteToolExecutors(
-    (identity) => identity.runId === runId,
-  );
-}
-
-/** Abort only one exact stale run lease, never a replacement controller. */
-export function abortRemoteToolExecutorsForLease(
-  identity: RemoteToolExecutorIdentity,
-): number {
-  const expected = normalizeRemoteToolExecutorIdentity(identity);
-  return abortMatchingRemoteToolExecutors(
-    (candidate) =>
-      candidate.runId === expected.runId &&
-      candidate.serviceId === expected.serviceId &&
-      candidate.leaseVersion === expected.leaseVersion,
-  );
-}
-
-/** Abort older leases while preserving exact duplicates and higher versions. */
-export function abortSupersededRemoteToolExecutors(
-  identity: RemoteToolExecutorIdentity,
-): number {
-  const current = normalizeRemoteToolExecutorIdentity(identity);
-  return abortMatchingRemoteToolExecutors((candidate) => {
-    if (candidate.runId !== current.runId) return false;
-    if (
-      candidate.serviceId === current.serviceId &&
-      candidate.leaseVersion === current.leaseVersion
-    ) {
-      return false;
-    }
-    if (
-      candidate.leaseVersion !== null &&
-      (current.leaseVersion === null ||
-        candidate.leaseVersion > current.leaseVersion)
-    ) {
-      return false;
-    }
-    return true;
-  });
-}
-
-/**
- * Defence-in-depth TTL for {@link remoteToolExecutors}.
- *
- * Each entry is normally evicted by an explicit `cleanupRemoteToolExecutor`
- * call (handler {@link handleToolCleanup}). If that call is dropped or the
- * agent crashes between executor creation and cleanup, the entry would
- * otherwise live forever. We treat any entry older than this window as
- * stale and reclaim it.
- */
-const REMOTE_TOOL_EXECUTOR_TTL_MS: TtlMs = ttlMs(60 * 60_000);
 
 const recentRunEventKeys = new Map<string, number>();
 const RUN_EVENT_DEDUP_TTL_MS: TtlMs = ttlMs(60 * 60_000);
@@ -350,66 +249,10 @@ async function persistTerminalStatusEvent(
   }
 }
 
-/** Test-only hook. Resets the executor cache. */
-export function __resetRemoteToolExecutorsForTesting(): void {
-  for (const entry of remoteToolExecutors.values()) {
-    abortRemoteToolExecutorEntry(entry);
-  }
-  remoteToolExecutors.clear();
-}
-
-/** Test-only hook. Returns the current cache size. */
-export function __remoteToolExecutorsSizeForTesting(): number {
-  return remoteToolExecutors.size;
-}
-
-/** Test-only hook. Returns whether a particular cache identity is cached. */
-export function __remoteToolExecutorHasForTesting(
-  identity: string | RemoteToolExecutorIdentity,
-): boolean {
-  const key =
-    typeof identity === "string"
-      ? identity
-      : remoteToolExecutorCacheKey(identity);
-  return remoteToolExecutors.has(key);
-}
-
-/** Test-only hook. Returns the run-level cancellation signal for an entry. */
-export function __remoteToolExecutorAbortSignalForTesting(
-  identity: string | RemoteToolExecutorIdentity,
-): AbortSignal | null {
-  const key =
-    typeof identity === "string"
-      ? identity
-      : remoteToolExecutorCacheKey(identity);
-  return remoteToolExecutors.get(key)?.abortController.signal ?? null;
-}
-
-/** Test-only hook. Seeds an executor entry with a controlled timestamp. */
-export function __setRemoteToolExecutorForTesting(
-  identity: string | RemoteToolExecutorIdentity,
-  executor: ToolExecutorLike,
-  createdAt: number,
-): void {
-  const key =
-    typeof identity === "string"
-      ? identity
-      : remoteToolExecutorCacheKey(identity);
-  remoteToolExecutors.set(key, {
-    promise: Promise.resolve(executor),
-    createdAt,
-    identity:
-      typeof identity === "string"
-        ? null
-        : normalizeRemoteToolExecutorIdentity(identity),
-    abortController: new AbortController(),
-  });
-}
-
 async function createRemoteToolExecutor(
   runId: string,
   env: Env,
-  runAbortSignal: AbortSignal,
+  runAbortSignal?: AbortSignal,
 ): Promise<ToolExecutorLike> {
   const bootstrap = await getRunBootstrap(env, runId);
 
@@ -436,85 +279,28 @@ async function createRemoteToolExecutor(
   );
 }
 
-/**
- * Evicts any executor entries whose age exceeds
- * {@link REMOTE_TOOL_EXECUTOR_TTL_MS}. Eviction also fires `cleanup()`
- * best-effort on the underlying executor so its own resources get released.
- */
-function reapExpiredRemoteToolExecutors(nowMs: number): void {
-  for (const [cacheKey, entry] of remoteToolExecutors) {
-    if (nowMs - entry.createdAt <= REMOTE_TOOL_EXECUTOR_TTL_MS) continue;
-    remoteToolExecutors.delete(cacheKey);
-    abortRemoteToolExecutorEntry(entry);
-    void entry.promise.then(
-      (executor) => {
-        try {
-          return executor.cleanup();
-        } catch {
-          // Best-effort: cleanup failures here are non-fatal.
-        }
-      },
-      () => {
-        // Best-effort: a failed-create entry needs no cleanup.
-      },
-    );
-  }
+export interface RemoteToolExecutorDependencies {
+  createExecutor(
+    runId: string,
+    env: Env,
+    runAbortSignal?: AbortSignal,
+  ): Promise<ToolExecutorLike>;
 }
 
-async function getOrCreateRemoteToolExecutor(
-  runId: string,
-  identity: RemoteToolExecutorIdentity,
-  env: Env,
-): Promise<RemoteToolExecutorEntry> {
-  const nowMs = Date.now();
-  reapExpiredRemoteToolExecutors(nowMs);
-  const cacheKey = remoteToolExecutorCacheKey(identity);
+const remoteToolExecutorDependencies: RemoteToolExecutorDependencies = {
+  createExecutor: createRemoteToolExecutor,
+};
 
-  const existing = remoteToolExecutors.get(cacheKey);
-  if (existing) {
-    await existing.promise;
-    return existing;
-  }
-
-  const abortController = new AbortController();
-  const normalizedIdentity = normalizeRemoteToolExecutorIdentity(identity);
-  const pending = createRemoteToolExecutor(runId, env, abortController.signal);
-  const entry: RemoteToolExecutorEntry = {
-    promise: pending,
-    createdAt: nowMs,
-    identity: normalizedIdentity,
-    abortController,
-  };
-  remoteToolExecutors.set(cacheKey, entry);
-  try {
-    await pending;
-    return entry;
-  } catch (error) {
-    // The successful-resolve branch keeps the entry for handleToolCleanup;
-    // any failed-create entry must be evicted so a retry can build fresh.
-    if (remoteToolExecutors.get(cacheKey)?.promise === pending) {
-      remoteToolExecutors.delete(cacheKey);
-    }
-    abortRemoteToolExecutorEntry(entry);
-    throw error;
-  }
-}
-
-async function cleanupRemoteToolExecutor(
-  identity: RemoteToolExecutorIdentity,
+async function cleanupRequestToolExecutor(
+  executor: ToolExecutorLike,
 ): Promise<void> {
-  const cacheKey = remoteToolExecutorCacheKey(identity);
-  const existing = remoteToolExecutors.get(cacheKey);
-  if (!existing) {
-    return;
-  }
-  remoteToolExecutors.delete(cacheKey);
-  abortRemoteToolExecutorEntry(existing);
   try {
-    const executor = await existing.promise;
     await executor.cleanup();
-  } catch {
-    // Best-effort cleanup.
+  } catch (error) {
+    logWarn("Request-local tool executor cleanup failed", {
+      module: "executor-host",
+      error: String(error),
+    });
   }
 }
 
@@ -548,19 +334,18 @@ function waitForLeasePoll(
 }
 
 /**
- * Cross-isolate cancellation fence for long-running MCP/web tools. Token-map
- * revocation and cache AbortControllers are isolate-local, while user cancel
- * and stale recovery can land elsewhere. Poll the authoritative DB lease at a
- * bounded <=5s cadence for the lifetime of one execute request and abort the
- * exact cache entry when status/service/version changes.
+ * Cross-isolate cancellation fence for long-running MCP/web tools. Poll the
+ * authoritative DB lease and requester membership at a bounded <=5s cadence
+ * for the lifetime of one execute request, then abort that request's local
+ * executor when its authority changes.
  */
 async function monitorRemoteToolExecutorLease(
   env: Env,
-  entry: RemoteToolExecutorEntry,
+  identity: NormalizedRemoteToolExecutorIdentity,
+  abortController: AbortController,
   stopSignal: AbortSignal,
 ): Promise<void> {
-  const identity = entry.identity;
-  if (!identity?.runId || !identity.serviceId) return;
+  if (!identity.runId || !identity.serviceId) return;
   const body: Record<string, unknown> = {
     runId: identity.runId,
     serviceId: identity.serviceId,
@@ -571,12 +356,19 @@ async function monitorRemoteToolExecutorLease(
   const intervalMs = runLeasePollIntervalMs(env);
   while (await waitForLeasePoll(intervalMs, stopSignal)) {
     const leaseError = await ensureRunLease(env, identity.runId, body);
-    if (!leaseError) continue;
-    // A transient DB failure is not evidence that authority was revoked. Keep
-    // polling; the tool's own timeout remains the availability bound.
-    if (leaseError.status !== 404 && leaseError.status !== 409) continue;
-    abortRemoteToolExecutorEntry(entry);
-    return;
+    if (leaseError) {
+      // A transient DB failure is not evidence that authority was revoked. Keep
+      // polling; the tool's own timeout remains the availability bound.
+      if (leaseError.status !== 404 && leaseError.status !== 409) continue;
+      abortController.abort();
+      return;
+    }
+    try {
+      await assertRunExecutionAccess(env, identity.runId);
+    } catch {
+      abortController.abort();
+      return;
+    }
   }
 }
 
@@ -1314,10 +1106,7 @@ export async function handleCompleteRun(
   }
   if (messages === null) return rejectInvalidPayload("transcript");
   const leaseError = await ensureRunLease(env, runId, body);
-  if (leaseError) {
-    abortRemoteToolExecutorsForLease(body);
-    return leaseError;
-  }
+  if (leaseError) return leaseError;
   const output = typeof body.output === "string" ? body.output : undefined;
   const errorMessage = typeof body.error === "string" ? body.error : undefined;
   if (
@@ -1385,10 +1174,8 @@ export async function handleCompleteRun(
       },
     );
     if (!result.committed) {
-      abortRemoteToolExecutorsForLease(body);
       return err("Lease lost", 409);
     }
-    abortRemoteToolExecutorsForRun(runId);
     const committedCheckpointKey = engineCheckpointR2KeyFromStored(
       terminalRun.engineCheckpoint,
     );
@@ -1846,13 +1633,14 @@ export async function handleEngineCheckpointLoad(
 export async function handleToolCatalog(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: RemoteToolExecutorDependencies = remoteToolExecutorDependencies,
 ): Promise<Response> {
   const { runId } = body as { runId?: string };
   if (!runId) return err("Missing runId", 400);
 
+  let executor: ToolExecutorLike | null = null;
   try {
-    const entry = await getOrCreateRemoteToolExecutor(runId, body, env);
-    const executor = await entry.promise;
+    executor = await dependencies.createExecutor(runId, env);
     return ok({
       tools: executor.getAvailableTools(),
       mcpFailedServers: executor.mcpFailedServers,
@@ -1861,12 +1649,15 @@ export async function handleToolCatalog(
     logError("Tool catalog RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
+  } finally {
+    if (executor) await cleanupRequestToolExecutor(executor);
   }
 }
 
 export async function handleToolExecute(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: RemoteToolExecutorDependencies = remoteToolExecutorDependencies,
 ): Promise<Response> {
   const { runId, toolCall } = body as { runId?: string; toolCall?: ToolCall };
   if (!runId || !toolCall || typeof toolCall !== "object") {
@@ -1885,37 +1676,42 @@ export async function handleToolExecute(
   // space-file writes) for a run a fresh lease now owns — idempotency.ts only
   // dedups identical runId+tool+args, not divergent A-vs-B calls.
   const leaseError = await ensureRunLease(env, runId, body);
-  if (leaseError) {
-    abortRemoteToolExecutorsForLease(body);
-    return leaseError;
-  }
+  if (leaseError) return leaseError;
 
-  let entry: RemoteToolExecutorEntry | null = null;
+  const identity = normalizeRemoteToolExecutorIdentity(body);
+  const abortController = new AbortController();
+  let executor: ToolExecutorLike | null = null;
   try {
-    entry = await getOrCreateRemoteToolExecutor(runId, body, env);
-    if (entry.abortController.signal.aborted) return err("Lease lost", 409);
-    const executor = await entry.promise;
+    executor = await dependencies.createExecutor(
+      runId,
+      env,
+      abortController.signal,
+    );
     const stopMonitor = new AbortController();
     const monitor = monitorRemoteToolExecutorLease(
       env,
-      entry,
+      identity,
+      abortController,
       stopMonitor.signal,
     );
     try {
       const result = await executor.execute(toolCall);
       // Cancellation can race a handler that ignores AbortSignal. Never return
       // its stale result to the superseded container.
-      if (entry.abortController.signal.aborted) return err("Lease lost", 409);
+      if (abortController.signal.aborted) return err("Lease lost", 409);
       return ok(result);
     } finally {
       stopMonitor.abort();
       await monitor;
     }
   } catch (e: unknown) {
-    if (entry?.abortController.signal.aborted) return err("Lease lost", 409);
+    if (abortController.signal.aborted) return err("Lease lost", 409);
     logError("Tool execute RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
+  } finally {
+    abortController.abort();
+    if (executor) await cleanupRequestToolExecutor(executor);
   }
 }
 
@@ -1925,7 +1721,8 @@ export async function handleToolCleanup(
   const { runId } = body as { runId?: string };
   if (!runId) return err("Missing runId", 400);
 
-  await cleanupRemoteToolExecutor(body);
+  // Executors are request-local, so all resources are already released by the
+  // catalog/execute request boundary. Keep cleanup idempotent in the protocol.
   return ok({ success: true });
 }
 
