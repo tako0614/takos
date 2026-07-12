@@ -107,7 +107,7 @@ variable "build_from_source" {
 variable "worker_release_tag" {
   description = "GitHub release tag whose takosumi-artifact.json selects the Worker bundle, web assets, SHA-256, and container image refs. In source-build mode only its container image refs are consumed. Set empty only for a runner that intentionally builds every artifact from source."
   type        = string
-  default     = "v0.10.31"
+  default     = "v0.10.32"
 
   validation {
     condition     = trimspace(var.worker_release_tag) == "" || can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
