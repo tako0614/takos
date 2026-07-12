@@ -179,6 +179,25 @@ test("complete-run rejects invalid usage before touching the database", async ()
   }
 });
 
+test("complete-run reports a non-sensitive validation reason", async () => {
+  const response = await handleCompleteRun(
+    {
+      runId: "run-1",
+      serviceId: "service-1",
+      leaseVersion: 1,
+      status: "completed",
+      usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 2 },
+      messages: [{ role: "assistant", content: "done" }],
+    },
+    {} as never,
+  );
+
+  assertEquals(response.status, 400);
+  assertEquals(await response.json(), {
+    error: "Invalid complete-run payload: cached_input_tokens",
+  });
+});
+
 test("complete-run does not grant the container user-cancellation authority", async () => {
   const response = await handleCompleteRun(
     {

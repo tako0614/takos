@@ -1279,23 +1279,40 @@ export async function handleCompleteRun(
   const cachedInputTokens = usage?.cachedInputTokens;
   const validUsageInteger = (value: unknown): value is number =>
     typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  const rejectInvalidPayload = (reason: string): Response => {
+    logWarn("Complete run payload rejected", {
+      module: "executor-host",
+      ...(runId ? { runId } : {}),
+      reason,
+    });
+    return err(`Invalid complete-run payload: ${reason}`, 400);
+  };
+  if (!runId) return rejectInvalidPayload("run_id");
+  if (!serviceId) return rejectInvalidPayload("service_id");
+  if (status !== "completed" && status !== "failed") {
+    return rejectInvalidPayload("status");
+  }
+  if (!usage) return rejectInvalidPayload("usage");
+  if (!validUsageInteger(inputTokens)) {
+    return rejectInvalidPayload("input_tokens");
+  }
+  if (!validUsageInteger(outputTokens)) {
+    return rejectInvalidPayload("output_tokens");
+  }
   if (
-    !runId ||
-    !serviceId ||
-    (status !== "completed" && status !== "failed") ||
-    !usage ||
-    !validUsageInteger(inputTokens) ||
-    !validUsageInteger(outputTokens) ||
-    (cachedInputTokens !== undefined &&
-      (!validUsageInteger(cachedInputTokens) ||
-        cachedInputTokens > inputTokens)) ||
+    cachedInputTokens !== undefined &&
+    (!validUsageInteger(cachedInputTokens) || cachedInputTokens > inputTokens)
+  ) {
+    return rejectInvalidPayload("cached_input_tokens");
+  }
+  if (
     typeof leaseVersion !== "number" ||
     !Number.isSafeInteger(leaseVersion) ||
-    leaseVersion < 0 ||
-    messages === null
+    leaseVersion < 0
   ) {
-    return err("Invalid complete-run payload", 400);
+    return rejectInvalidPayload("lease_version");
   }
+  if (messages === null) return rejectInvalidPayload("transcript");
   const leaseError = await ensureRunLease(env, runId, body);
   if (leaseError) {
     abortRemoteToolExecutorsForLease(body);
@@ -1309,7 +1326,12 @@ export async function handleCompleteRun(
     (errorMessage !== undefined &&
       new TextEncoder().encode(errorMessage).byteLength > 64 * 1024)
   ) {
-    return err("Invalid complete-run payload", 400);
+    return rejectInvalidPayload(
+      output !== undefined &&
+        new TextEncoder().encode(output).byteLength > 512 * 1024
+        ? "output_size"
+        : "error_size",
+    );
   }
   const terminalRun = await getDb(env.DB)
     .select({

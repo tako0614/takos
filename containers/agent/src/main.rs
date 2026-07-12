@@ -998,6 +998,7 @@ async fn handle_failure(
     let messages = build_terminal_transcript_messages(
         turn_messages.unwrap_or_default(),
         Some(user_visible_failure_message(&error_message)),
+        Some("Tool execution failed before a result was recorded."),
     )?;
     if let Err(update_err) = client
         .complete_run(status, usage.clone(), None, Some(&error_message), messages)
@@ -1020,14 +1021,17 @@ fn build_terminal_transcript(
         .assistant_message
         .clone()
         .or_else(|| terminal_error.map(user_visible_failure_message));
-    build_terminal_transcript_messages(&response.turn_messages, final_message)
+    build_terminal_transcript_messages(&response.turn_messages, final_message, None)
 }
 
 fn build_terminal_transcript_messages(
     turn_messages: &[ConversationMessage],
     final_message: Option<String>,
+    incomplete_tool_result: Option<&str>,
 ) -> AppResult<Vec<Value>> {
     let mut transcript = Vec::with_capacity(turn_messages.len() + 1);
+    let mut pending_tool_call_ids = Vec::<String>::new();
+    let mut seen_tool_call_ids = HashSet::<String>::new();
     for message in turn_messages {
         let role = match message.role {
             ConversationRole::Assistant => "assistant",
@@ -1039,6 +1043,12 @@ fn build_terminal_transcript_messages(
                 .into());
             }
         };
+        if role == "assistant" && !pending_tool_call_ids.is_empty() {
+            return Err(io::Error::other(
+                "engine started a new assistant turn before recording every tool result",
+            )
+            .into());
+        }
         let tool_calls = message
             .tool_calls
             .iter()
@@ -1051,6 +1061,10 @@ fn build_terminal_transcript_messages(
                         "engine returned non-object tool call arguments",
                     ));
                 }
+                if !seen_tool_call_ids.insert(id.to_string()) {
+                    return Err(io::Error::other("engine reused a tool call correlation id"));
+                }
+                pending_tool_call_ids.push(id.to_string());
                 Ok(json!({
                     "id": id,
                     "name": call.name,
@@ -1072,6 +1086,16 @@ fn build_terminal_transcript_messages(
             let tool_call_id = message.tool_call_id.as_deref().ok_or_else(|| {
                 io::Error::other("engine returned a tool result without a correlation id")
             })?;
+            let Some(index) = pending_tool_call_ids
+                .iter()
+                .position(|pending| pending == tool_call_id)
+            else {
+                return Err(io::Error::other(
+                    "engine returned a tool result for an unknown correlation id",
+                )
+                .into());
+            };
+            pending_tool_call_ids.remove(index);
             persisted["tool_call_id"] = json!(tool_call_id);
         } else {
             if message.tool_call_id.is_some() {
@@ -1085,6 +1109,22 @@ fn build_terminal_transcript_messages(
             }
         }
         transcript.push(persisted);
+    }
+
+    if !pending_tool_call_ids.is_empty() {
+        let Some(content) = incomplete_tool_result else {
+            return Err(io::Error::other(
+                "engine completed with tool calls that have no recorded result",
+            )
+            .into());
+        };
+        transcript.extend(pending_tool_call_ids.into_iter().map(|tool_call_id| {
+            json!({
+                "role": "tool",
+                "content": content,
+                "tool_call_id": tool_call_id,
+            })
+        }));
     }
 
     if let Some(content) = final_message {
@@ -1284,11 +1324,12 @@ fn max_tool_definitions() -> usize {
 mod tests {
     use super::execute_run;
     use super::{
-        accepted_start_payload, authorize_start_with_token, collect_openai_api_keys,
-        handle_failure, handle_run_task_error, handle_success, heartbeat_loop,
-        parse_max_concurrent_runs, resolve_bind_host, sanitize_failure_error_message,
-        select_model_tools, user_visible_failure_message, worker_context_run_options, RunAdmission,
-        ServiceState, StartAuthError, OPENAI_MAX_TOOL_DEFINITIONS, RUNTIME_PROTOCOL_VERSION,
+        accepted_start_payload, authorize_start_with_token, build_terminal_transcript_messages,
+        collect_openai_api_keys, handle_failure, handle_run_task_error, handle_success,
+        heartbeat_loop, parse_max_concurrent_runs, resolve_bind_host,
+        sanitize_failure_error_message, select_model_tools, user_visible_failure_message,
+        worker_context_run_options, RunAdmission, ServiceState, StartAuthError,
+        OPENAI_MAX_TOOL_DEFINITIONS, RUNTIME_PROTOCOL_VERSION,
     };
     use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition, UsagePayload};
     use axum::body::{to_bytes, Body};
@@ -1302,7 +1343,7 @@ mod tests {
     use std::time::Duration;
     use takos_agent_engine::domain::LoopStatus;
     use takos_agent_engine::ids::{LoopId, SessionId};
-    use takos_agent_engine::model::{ConversationMessage, ConversationRole};
+    use takos_agent_engine::model::{ConversationMessage, ConversationRole, ToolCallRequest};
     use takos_agent_engine::{ExecutionProfile, SessionResponse};
     use tokio::sync::Mutex;
     use tokio_util::sync::CancellationToken;
@@ -1330,6 +1371,53 @@ mod tests {
             control_rpc_base_url: "http://127.0.0.1:1".to_string(),
             control_rpc_token: "test-token".to_string(),
         }
+    }
+
+    #[test]
+    fn failed_transcript_closes_a_trailing_incomplete_tool_batch() {
+        let turn_messages = vec![ConversationMessage {
+            role: ConversationRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: vec![ToolCallRequest {
+                id: Some("call-1".to_string()),
+                name: "example_tool".to_string(),
+                arguments: serde_json::json!({}),
+            }],
+        }];
+
+        let transcript = build_terminal_transcript_messages(
+            &turn_messages,
+            Some("The agent run failed.".to_string()),
+            Some("Tool execution failed before a result was recorded."),
+        )
+        .expect("failed run should produce a structurally complete transcript");
+
+        assert_eq!(transcript.len(), 3);
+        assert_eq!(transcript[0]["role"], "assistant");
+        assert_eq!(transcript[1]["role"], "tool");
+        assert_eq!(transcript[1]["tool_call_id"], "call-1");
+        assert_eq!(transcript[2]["role"], "assistant");
+        assert_eq!(transcript[2]["content"], "The agent run failed.");
+    }
+
+    #[test]
+    fn successful_transcript_rejects_an_incomplete_tool_batch() {
+        let turn_messages = vec![ConversationMessage {
+            role: ConversationRole::Assistant,
+            content: String::new(),
+            tool_call_id: None,
+            tool_calls: vec![ToolCallRequest {
+                id: Some("call-1".to_string()),
+                name: "example_tool".to_string(),
+                arguments: serde_json::json!({}),
+            }],
+        }];
+
+        assert!(
+            build_terminal_transcript_messages(&turn_messages, Some("done".to_string()), None,)
+                .is_err()
+        );
     }
 
     #[test]
