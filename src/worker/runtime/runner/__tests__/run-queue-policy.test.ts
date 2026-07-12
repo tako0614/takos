@@ -19,14 +19,14 @@ test("a lease-less DLQ delivery cannot terminalize a running owner", () => {
 });
 
 test("run queue concurrency follows executor capacity and the platform limit", () => {
-  expect(DEFAULT_EXECUTOR_LOGICAL_RUN_CAPACITY).toBe(804);
+  expect(DEFAULT_EXECUTOR_LOGICAL_RUN_CAPACITY).toBe(5);
   expect(RUN_QUEUE_MAX_CONCURRENCY).toBe(
     Math.min(
       DEFAULT_EXECUTOR_LOGICAL_RUN_CAPACITY,
       CLOUDFLARE_QUEUE_MAX_CONCURRENCY,
     ),
   );
-  expect(RUN_QUEUE_MAX_CONCURRENCY).toBe(250);
+  expect(RUN_QUEUE_MAX_CONCURRENCY).toBe(5);
 });
 
 test("run queue retry delay uses bounded exponential backoff", () => {
