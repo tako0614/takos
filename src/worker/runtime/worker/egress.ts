@@ -24,6 +24,7 @@ interface Env {
   EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE?: string; // 0..1 (only used for shadow logging)
   EGRESS_MAX_RESPONSE_BYTES?: string; // default 26214400 (25MB)
   EGRESS_TIMEOUT_MS?: string; // default 300000 (5 min)
+  TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK?: string;
 }
 
 const DEFAULT_MAX_REQUEST_BYTES = 10 * 1024 * 1024; // 10MB
@@ -56,6 +57,31 @@ function isBlockedHostname(hostname: string): boolean {
   if (isPrivateIP(h)) return true;
 
   return false;
+}
+
+function isExplicitLoopbackHostname(hostname: string): boolean {
+  const normalized = normalizeHostname(hostname);
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "::1" ||
+    /^127(?:\.\d{1,3}){3}$/u.test(normalized)
+  );
+}
+
+function notificationPushLoopbackAllowed(
+  env: Env,
+  mode: string | null,
+  url: URL,
+): boolean {
+  return (
+    env.TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK?.trim().toLowerCase() ===
+      "true" &&
+    mode === "notification-push" &&
+    url.protocol === "http:" &&
+    portOf(url) > 0 &&
+    isExplicitLoopbackHostname(url.hostname)
+  );
 }
 
 async function dohResolve(
@@ -273,17 +299,26 @@ export default {
     }
 
     url.hostname = normalizeHostname(url.hostname);
+    const allowNotificationPushLoopback = notificationPushLoopbackAllowed(
+      env,
+      mode,
+      url,
+    );
 
-    if (!url.hostname.includes(".") && !url.hostname.includes(":")) {
+    if (
+      !allowNotificationPushLoopback &&
+      !url.hostname.includes(".") &&
+      !url.hostname.includes(":")
+    ) {
       return errorJsonResponse("Hostname must be a public FQDN", 400);
     }
 
     const port = portOf(url);
-    if (![80, 443].includes(port)) {
+    if (!allowNotificationPushLoopback && ![80, 443].includes(port)) {
       return errorJsonResponse(`Port ${port} is not allowed`, 400);
     }
 
-    if (isBlockedHostname(url.hostname)) {
+    if (!allowNotificationPushLoopback && isBlockedHostname(url.hostname)) {
       logWarn("blocked hostname", {
         module: "egress",
         ...{ url: safeLogUrl(url), spaceId, runId, mode },
@@ -294,35 +329,37 @@ export default {
       );
     }
 
-    let ips: string[] = [];
-    try {
-      ips = await resolveAllIPs(url.hostname);
-    } catch (e) {
-      logWarn("DNS resolve failed", {
-        module: "egress",
-        ...{ url: safeLogUrl(url), err: String(e) },
-      });
-      return errorJsonResponse("DNS resolution failed", 502);
-    }
-
-    if (ips.length === 0) {
-      logWarn("DNS resolve empty", {
-        module: "egress",
-        ...{ url: safeLogUrl(url) },
-      });
-      return errorJsonResponse("DNS resolution returned no addresses", 502);
-    }
-
-    for (const ip of ips) {
-      if (isPrivateIP(ip)) {
-        logWarn("blocked resolved IP", {
+    if (!allowNotificationPushLoopback) {
+      let ips: string[] = [];
+      try {
+        ips = await resolveAllIPs(url.hostname);
+      } catch (e) {
+        logWarn("DNS resolve failed", {
           module: "egress",
-          ...{ url: safeLogUrl(url), ip },
+          ...{ url: safeLogUrl(url), err: String(e) },
         });
-        return errorJsonResponse(
-          "Resolved to private/internal IP address",
-          403,
-        );
+        return errorJsonResponse("DNS resolution failed", 502);
+      }
+
+      if (ips.length === 0) {
+        logWarn("DNS resolve empty", {
+          module: "egress",
+          ...{ url: safeLogUrl(url) },
+        });
+        return errorJsonResponse("DNS resolution returned no addresses", 502);
+      }
+
+      for (const ip of ips) {
+        if (isPrivateIP(ip)) {
+          logWarn("blocked resolved IP", {
+            module: "egress",
+            ...{ url: safeLogUrl(url), ip },
+          });
+          return errorJsonResponse(
+            "Resolved to private/internal IP address",
+            403,
+          );
+        }
       }
     }
 
@@ -434,6 +471,12 @@ export default {
     for (const header of ["WWW-Authenticate", "Mcp-Session-Id"] as const) {
       const value = upstream.headers.get(header);
       if (value) resHeaders.set(header, value);
+    }
+    // Queue retry policy needs the provider/gateway pacing signal, but do not
+    // widen the generic egress response-header surface for other modes.
+    if (mode === "notification-push") {
+      const retryAfter = upstream.headers.get("Retry-After");
+      if (retryAfter) resHeaders.set("Retry-After", retryAfter);
     }
     resHeaders.set("Cache-Control", "no-store");
 

@@ -18,11 +18,11 @@ export {
 } from "./schema-platform-infra.ts";
 
 export {
-  mobilePushRegistrations,
   notificationPushers,
   notificationPreferences,
   notifications,
   notificationSettings,
+  runNotificationOutbox,
   sessionFiles,
   sessionRepos,
   sessions,

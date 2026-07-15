@@ -83,16 +83,19 @@ locals {
   #   index_jobs      INDEX_QUEUE        | index_jobs_dlq      (DLQ)
   #   workflow        WORKFLOW_QUEUE     | workflow_dlq        (DLQ)
   #   deployment      DEPLOY_QUEUE       | deployment_dlq      (DLQ)
+  #   notification    TAKOS_NOTIFICATION_PUSH_QUEUE | notification_dlq (DLQ)
   #
   queues = {
-    runs           = "${var.project_name}-runs"
-    index_jobs     = "${var.project_name}-index-jobs"
-    workflow       = "${var.project_name}-workflow-jobs"
-    deployment     = "${var.project_name}-deployment-jobs"
-    runs_dlq       = "${var.project_name}-runs-dlq"
-    index_jobs_dlq = "${var.project_name}-index-jobs-dlq"
-    workflow_dlq   = "${var.project_name}-workflow-jobs-dlq"
-    deployment_dlq = "${var.project_name}-deployment-jobs-dlq"
+    runs                  = "${var.project_name}-runs"
+    index_jobs            = "${var.project_name}-index-jobs"
+    workflow              = "${var.project_name}-workflow-jobs"
+    deployment            = "${var.project_name}-deployment-jobs"
+    notification_push     = "${var.project_name}-notification-push"
+    runs_dlq              = "${var.project_name}-runs-dlq"
+    index_jobs_dlq        = "${var.project_name}-index-jobs-dlq"
+    workflow_dlq          = "${var.project_name}-workflow-jobs-dlq"
+    deployment_dlq        = "${var.project_name}-deployment-jobs-dlq"
+    notification_push_dlq = "${var.project_name}-notification-push-dlq"
   }
 
   kv_namespaces = {
@@ -133,9 +136,7 @@ resource "cloudflare_r2_bucket" "this" {
   name       = each.value
 }
 
-# Queues — bindings RUN_QUEUE, INDEX_QUEUE, WORKFLOW_QUEUE, DEPLOY_QUEUE,
-# plus the four dead-letter queues
-# referenced by the run/index/workflow/deployment consumers in wrangler.toml.
+# Queues used by the Worker artifact, including notification-push and its DLQ.
 resource "cloudflare_queue" "this" {
   for_each   = local.queues
   account_id = var.account_id

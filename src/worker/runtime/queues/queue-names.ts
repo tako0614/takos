@@ -6,7 +6,9 @@ export type WorkerQueueKind =
   | "workflow_jobs"
   | "workflow_jobs_dlq"
   | "deployment_jobs"
-  | "deployment_jobs_dlq";
+  | "deployment_jobs_dlq"
+  | "notification_push"
+  | "notification_push_dlq";
 
 const STAGING_SUFFIX = /-staging$/i;
 
@@ -28,5 +30,9 @@ export function classifyWorkerQueueName(
     return "deployment_jobs_dlq";
   }
   if (normalized.endsWith("-deployment-jobs")) return "deployment_jobs";
+  if (normalized.endsWith("-notification-push-dlq")) {
+    return "notification_push_dlq";
+  }
+  if (normalized.endsWith("-notification-push")) return "notification_push";
   return null;
 }

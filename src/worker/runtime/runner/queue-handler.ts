@@ -30,6 +30,7 @@ import { resolveRunModel } from "../../application/services/runs/create-thread-r
 import { assertRunExecutionAccess } from "../container-hosts/executor-run-state.ts";
 import { AuthorizationError } from "@takos/worker-platform-utils/errors";
 import { fencePendingOperationsForClaimedRun } from "../../application/tools/idempotency.ts";
+import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
 
 function retryRunQueueMessage(message: MessageQueueMessage<unknown>): void {
   message.retry({
@@ -203,6 +204,14 @@ export async function handleQueue(
             module: "run_dlq",
           });
         }
+        await dispatchRunNotificationOutbox(env, {
+          completionKey: failedTransition.completionKey,
+        }).catch((notificationError) => {
+          logError("Failed to create DLQ run notification", notificationError, {
+            module: "run_dlq",
+            runId,
+          });
+        });
       }
 
       message.ack();
@@ -338,6 +347,15 @@ export async function handleQueue(
             logError(
               `Failed to notify membership-revoked Run ${runId}`,
               notifyError,
+              { module: "run_queue" },
+            );
+          });
+          await dispatchRunNotificationOutbox(env, {
+            completionKey: failedTransition.completionKey,
+          }).catch((notificationError) => {
+            logError(
+              `Failed to create membership-revoked Run ${runId} notification`,
+              notificationError,
               { module: "run_queue" },
             );
           });
@@ -496,6 +514,15 @@ export async function handleQueue(
                 { module: "run_queue" },
               );
             }
+            await dispatchRunNotificationOutbox(env, {
+              completionKey: failedTransition.completionKey,
+            }).catch((notificationError) => {
+              logError(
+                "Failed to create dispatch-rejection notification",
+                notificationError,
+                { module: "run_queue", runId },
+              );
+            });
           }
           message.ack();
         } else {

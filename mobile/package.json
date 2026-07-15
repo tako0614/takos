@@ -1,6 +1,6 @@
 {
   "name": "@takos/takos-mobile",
-  "version": "0.0.0",
+  "version": "0.10.33",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -15,15 +15,18 @@
     "release:native-check": "bun ../../takosumi/mobile-kit/scripts/check-tauri-mobile-release.mjs --product takos --scheme takos --product-name Takos --dev-port 1420 --remote-push-plugin mobile-push",
     "release:evidence-check": "bun ../../takosumi/mobile-kit/scripts/check-mobile-release-evidence.mjs --product takos --product-name Takos --bundle-id jp.takos.mobile",
     "release:check": "bun ../../takosumi/mobile-kit/scripts/check-mobile-full-release.mjs",
-    "release:status": "bun ../../takosumi/mobile-kit/scripts/report-mobile-release-status.mjs --product takos --product-name Takos --bundle-id jp.takos.mobile",
-    "tauri:native-push:apply": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs",
-    "tauri:native-push:verify": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs --dry-run --strict",
+    "release:status": "bun ../../takosumi/mobile-kit/scripts/report-mobile-release-status.mjs --product takos --product-name Takos --bundle-id jp.takos.mobile --require-secure-keystore --require-remote-push --remote-push-backend-file ../src/worker/application/services/notifications/mobile-push-delivery.ts",
+    "release:repo-check": "bun ../scripts/check-mobile-preflight-source-ref.mjs && bun ../../takosumi/mobile-kit/scripts/report-mobile-release-status.mjs --product takos --product-name Takos --bundle-id jp.takos.mobile --require-secure-keystore --require-remote-push --remote-push-backend-file ../src/worker/application/services/notifications/mobile-push-delivery.ts --skip-toolchain-probe --fail-on-repo-blockers",
     "tauri:dev": "bunx tauri dev",
     "tauri:build": "bunx tauri build",
-    "tauri:android:init": "bunx tauri android init --skip-targets-install",
+    "tauri:android:init": "bun ../../takosumi/mobile-kit/scripts/init-tauri-mobile-native.mjs --platform android --apple-environment development",
     "tauri:android:dev": "bunx tauri android dev --open --host",
     "tauri:android:build": "bunx tauri android build",
-    "tauri:ios:init": "bunx tauri ios init",
+    "tauri:native-push:apply": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs --apple-environment development",
+    "tauri:native-push:verify": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs --apple-environment development --dry-run --strict",
+    "tauri:native-push:apply:release": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs --apple-environment production",
+    "tauri:native-push:verify:release": "bun ../../takosumi/mobile-kit/scripts/apply-tauri-mobile-push-native.mjs --apple-environment production --dry-run --strict",
+    "tauri:ios:init": "bun ../../takosumi/mobile-kit/scripts/init-tauri-mobile-native.mjs --platform ios --apple-environment development",
     "tauri:ios:dev": "bunx tauri ios dev",
     "tauri:ios:build": "bunx tauri ios build"
   },
@@ -38,8 +41,7 @@
     "@tauri-apps/plugin-os": "^2.3.2",
     "@tauri-apps/plugin-store": "^2.4.3",
     "@tauri-apps/plugin-stronghold": "^2.3.1",
-    "solid-js": "^1.9.13",
-    "tauri-plugin-mobile-push-api": "^0.1.4"
+    "solid-js": "^1.9.13"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

@@ -53,8 +53,9 @@ export async function runWorkerRuntimeScheduled(
 export function createWorkerRuntime(
   buildPlatform: (
     env: Env,
-  ) => ControlPlatform<Env> | Promise<ControlPlatform<Env>> =
-    buildWorkersWorkerPlatform,
+  ) =>
+    | ControlPlatform<Env>
+    | Promise<ControlPlatform<Env>> = buildWorkersWorkerPlatform,
 ) {
   return {
     // ---------------------------------------------------------------------------
@@ -76,10 +77,7 @@ export function createWorkerRuntime(
       const queueKind = classifyWorkerQueueName(batch.queue);
 
       // --- runner queues ---
-      if (
-        queueKind === "runs" ||
-        queueKind === "runs_dlq"
-      ) {
+      if (queueKind === "runs" || queueKind === "runs_dlq") {
         const { default: runner } = await import("../runner/index.ts");
         return runner.queue(batch, bindings);
       }
@@ -117,6 +115,19 @@ export function createWorkerRuntime(
         return;
       }
 
+      // --- product notification pusher queues ---
+      if (queueKind === "notification_push") {
+        const { handleNotificationPushQueue } =
+          await import("../queues/notification-push.ts");
+        return handleNotificationPushQueue(batch, bindings);
+      }
+
+      if (queueKind === "notification_push_dlq") {
+        const { handleNotificationPushDlq } =
+          await import("../queues/notification-push.ts");
+        return handleNotificationPushDlq(batch);
+      }
+
       // --- workflow / deployment queues ---
       if (
         queueKind === "workflow_jobs" ||
@@ -124,9 +135,8 @@ export function createWorkerRuntime(
         queueKind === "deployment_jobs" ||
         queueKind === "deployment_jobs_dlq"
       ) {
-        const { default: workflowRunner } = await import(
-          "../queues/workflow-runner.ts"
-        );
+        const { default: workflowRunner } =
+          await import("../queues/workflow-runner.ts");
         return workflowRunner.queue(batch, bindings);
       }
 

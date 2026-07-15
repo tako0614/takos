@@ -5,13 +5,6 @@ import { scan, Format } from "@tauri-apps/plugin-barcode-scanner";
 import { authenticate } from "@tauri-apps/plugin-biometric";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import {
-  getToken as getMobilePushToken,
-  onNotificationReceived as onMobilePushNotificationReceived,
-  onNotificationTapped as onMobilePushNotificationTapped,
-  onTokenRefresh as onMobilePushTokenRefresh,
-  requestPermission as requestMobilePushPermission,
-} from "tauri-plugin-mobile-push-api";
-import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
@@ -25,6 +18,7 @@ import {
   type NativeBridge,
   type TauriPushNotificationsAdapter,
 } from "@takosjp/takosumi-mobile-kit";
+import { takosMobilePushPlugin } from "./mobile-push.ts";
 import { productAdapter } from "./product.ts";
 
 export interface ProductNativeBridgeOptions {
@@ -64,13 +58,7 @@ export function createProductNativeBridge(
       qrCodeFormat: Format.QRCode,
     },
     pushNotifications: options.pushNotifications,
-    mobilePush: {
-      requestPermission: requestMobilePushPermission,
-      getToken: getMobilePushToken,
-      onNotificationReceived: onMobilePushNotificationReceived,
-      onNotificationTapped: onMobilePushNotificationTapped,
-      onTokenRefresh: onMobilePushTokenRefresh,
-    },
+    mobilePush: takosMobilePushPlugin,
     biometric: {
       authenticate,
     },

@@ -1,0 +1,3 @@
+[default]
+description = "Allows Takos mobile to store, retrieve, and remove its Stronghold seed"
+permissions = ["allow-remove", "allow-retrieve", "allow-store"]

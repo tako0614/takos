@@ -38,6 +38,8 @@ const rawOutputs = {
     workflow_dlq: "q_workflow_dlq",
     deployment: "q_deploy",
     deployment_dlq: "q_deploy_dlq",
+    notification_push: "q_notification_push",
+    notification_push_dlq: "q_notification_push_dlq",
   },
   vector_indexes: {
     vector: {
@@ -75,6 +77,8 @@ test("buildReplacements accepts tofu output envelopes", () => {
     '"takos-workflow-jobs-dlq"': '"q_workflow_dlq"',
     '"takos-deployment-jobs"': '"q_deploy"',
     '"takos-deployment-jobs-dlq"': '"q_deploy_dlq"',
+    '"takos-notification-push"': '"q_notification_push"',
+    '"takos-notification-push-dlq"': '"q_notification_push_dlq"',
     '"takos-embeddings"': '"vec_takos"',
   });
 });
@@ -102,6 +106,8 @@ test("buildReplacements accepts Takosumi release raw outputs", () => {
       '"takos-workflow-jobs-dlq-staging"': '"q_workflow_dlq"',
       '"takos-deployment-jobs-staging"': '"q_deploy"',
       '"takos-deployment-jobs-dlq-staging"': '"q_deploy_dlq"',
+      '"takos-notification-push-staging"': '"q_notification_push"',
+      '"takos-notification-push-dlq-staging"': '"q_notification_push_dlq"',
       '"takos-embeddings-staging"': '"vec_takos"',
       "replace-with-staging-zone-id": "zone_123",
     },

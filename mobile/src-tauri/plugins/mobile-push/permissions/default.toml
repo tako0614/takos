@@ -1,0 +1,11 @@
+[default]
+description = "Allows Takos mobile to request push permission, manage its provider registration, and receive lifecycle events"
+permissions = [
+  "allow-activate-event",
+  "allow-deactivate-event",
+  "allow-get-token",
+  "allow-register-listener",
+  "allow-remove-listener",
+  "allow-request-permission",
+  "allow-unregister",
+]
