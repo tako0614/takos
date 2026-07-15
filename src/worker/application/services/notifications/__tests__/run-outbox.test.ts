@@ -92,6 +92,17 @@ async function freshDb(): Promise<{ client: Client; db: Database }> {
       updated_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL
     );
+    CREATE TABLE notification_push_outbox (
+      notification_id TEXT PRIMARY KEY,
+      delivery_status TEXT NOT NULL DEFAULT 'queued',
+      claim_token TEXT,
+      claimed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    );
     CREATE UNIQUE INDEX idx_notification_pushers_app_pushkey
       ON notification_pushers(app_id, pushkey_hash);
     CREATE TABLE run_notification_outbox (

@@ -125,7 +125,7 @@ export function createWorkerRuntime(
       if (queueKind === "notification_push_dlq") {
         const { handleNotificationPushDlq } =
           await import("../queues/notification-push.ts");
-        return handleNotificationPushDlq(batch);
+        return handleNotificationPushDlq(batch, bindings);
       }
 
       // --- workflow / deployment queues ---

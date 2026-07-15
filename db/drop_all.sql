@@ -71,6 +71,7 @@ DROP TABLE IF EXISTS notification_preferences;
 DROP TABLE IF EXISTS notification_settings;
 DROP TABLE IF EXISTS notification_pushers;
 DROP TABLE IF EXISTS mobile_push_registrations;
+DROP TABLE IF EXISTS notification_push_outbox;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS moderation_audit_logs;
 DROP TABLE IF EXISTS reports;

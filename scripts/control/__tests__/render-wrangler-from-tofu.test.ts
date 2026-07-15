@@ -11,6 +11,7 @@ import {
   renderExecutorCapacity,
   renderPublicRoute,
 } from "../render-wrangler-from-tofu.mjs";
+import { QUEUE_CONSUMERS } from "../queue-consumer-config.ts";
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
@@ -49,6 +50,19 @@ const rawOutputs = {
     },
   },
 };
+
+test("notification push DLQ retries D1 ownership commits without a hot loop", () => {
+  const dlq = QUEUE_CONSUMERS.find(
+    (consumer) => consumer.queueKey === "notification_push_dlq",
+  );
+  assert.deepEqual(dlq, {
+    queueKey: "notification_push_dlq",
+    batchSize: 10,
+    batchTimeout: 60,
+    messageRetries: 100,
+    retryDelaySeconds: 600,
+  });
+});
 
 test("buildReplacements accepts tofu output envelopes", () => {
   const envelope = Object.fromEntries(

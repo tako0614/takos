@@ -59,3 +59,20 @@ Takos app migrations are forward-only at the DDL layer. Rollback means:
    restore from backup according to the operator runbook.
 
 Do not rely on ad hoc reverse SQL for production rollback.
+
+## Deferred contract cleanup
+
+- `mobile_push_registrations` is intentionally preserved during the
+  notification-pusher cutover. Database migrations run before the replacement
+  Worker artifact is uploaded, so dropping the table in the cutover release
+  would break the still-serving Worker during rollout. Add a new, later
+  `contract` migration only after the replacement Worker is active in every
+  environment, the rollback window has expired, and a restore path has been
+  verified. The replacement code does not map, read, or write this table;
+  retaining it keeps overlapping or rolled-back Workers compatible without
+  affecting the new notification-pusher path. Full database resets continue to
+  remove it through `db/drop_all.sql`. Migration `0109` also recreates the
+  legacy table and indexes idempotently as a forward repair for any environment
+  that applied the prematurely ordered local `0102` contract migration; it
+  cannot restore registration rows that were already deleted, but it restores
+  the schema required by an old-Worker rollback.

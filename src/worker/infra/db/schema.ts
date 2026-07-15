@@ -99,6 +99,7 @@ export {
   infraEndpointRoutes,
   infraEndpoints,
   infraWorkers,
+  notificationPushOutbox,
   notificationPushers,
   moderationAuditLogs,
   nodes,
