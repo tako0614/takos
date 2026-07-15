@@ -4,6 +4,8 @@ import {
   RUN_QUEUE_RETRY_BASE_DELAY_SECONDS,
 } from "../../src/worker/runtime/runner/run-queue-policy.ts";
 import {
+  NOTIFICATION_PUSH_DLQ_MAX_RETRIES,
+  NOTIFICATION_PUSH_DLQ_RETRY_DELAY_SECONDS,
   NOTIFICATION_PUSH_QUEUE_MAX_BATCH_SIZE,
   NOTIFICATION_PUSH_QUEUE_MAX_BATCH_TIMEOUT_SECONDS,
   NOTIFICATION_PUSH_QUEUE_MAX_CONCURRENCY,
@@ -85,5 +87,7 @@ export const QUEUE_CONSUMERS: readonly QueueConsumerConfig[] = [
     queueKey: "notification_push_dlq",
     batchSize: 10,
     batchTimeout: 60,
+    messageRetries: NOTIFICATION_PUSH_DLQ_MAX_RETRIES,
+    retryDelaySeconds: NOTIFICATION_PUSH_DLQ_RETRY_DELAY_SECONDS,
   },
 ];

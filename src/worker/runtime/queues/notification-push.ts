@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import {
   isValidNotificationPushQueueMessage,
@@ -9,12 +9,20 @@ import type { NotificationPushDeliveryEnv } from "../../application/services/not
 import { deliverNotificationToPushers } from "../../application/services/notifications/mobile-push-delivery.ts";
 import { getDb, notifications } from "../../infra/db/index.ts";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
-import { notificationPushQueueFallbackDelaySeconds } from "./notification-push-policy.ts";
+import {
+  notificationPushQueueFallbackDelaySeconds,
+  NOTIFICATION_PUSH_DLQ_RETRY_DELAY_SECONDS,
+} from "./notification-push-policy.ts";
 import { isPushSupportedNotificationType } from "../../application/services/notifications/notification-models.ts";
 import {
   getNotificationPreferences,
   isNotificationsMuted,
 } from "../../application/services/notifications/service.ts";
+import {
+  markNotificationPushOutboxDone,
+  recordNotificationPushOutboxEnqueued,
+  reopenNotificationPushOutboxFromDlq,
+} from "../../application/services/notifications/push-outbox.ts";
 
 export type NotificationPushQueueEnv = NotificationPushDeliveryEnv;
 
@@ -36,16 +44,12 @@ export async function handleNotificationPushQueue(
       const body = message.body;
       const notification = await getDb(env.DB)
         .select({
+          userId: notifications.recipientAccountId,
           scopeId: notifications.accountId,
           type: notifications.type,
         })
         .from(notifications)
-        .where(
-          and(
-            eq(notifications.id, body.notificationId),
-            eq(notifications.recipientAccountId, body.userId),
-          ),
-        )
+        .where(eq(notifications.id, body.notificationId))
         .get();
       if (!notification) {
         logInfo("Notification push queue target no longer exists", {
@@ -56,8 +60,37 @@ export async function handleNotificationPushQueue(
         message.ack();
         continue;
       }
+      if (body.userId !== notification.userId) {
+        logWarn(
+          "Notification push queue recipient does not match stored event",
+          {
+            module: "notification_push_queue",
+            notification_id: body.notificationId,
+            transport_message_id: message.id,
+          },
+        );
+        message.ack();
+        continue;
+      }
       if ((body.scopeId ?? null) !== (notification.scopeId ?? null)) {
         logWarn("Notification push queue scope does not match stored event", {
+          module: "notification_push_queue",
+          notification_id: body.notificationId,
+          transport_message_id: message.id,
+        });
+        message.ack();
+        continue;
+      }
+
+      // Old producers may have queued an event before the durable push outbox
+      // existed. Adopt every valid event before gateway delivery so terminal
+      // acknowledgement and DLQ replay always have a D1 authority.
+      const replayStatus = await recordNotificationPushOutboxEnqueued(
+        env.DB,
+        body.notificationId,
+      );
+      if (replayStatus === "done") {
+        logInfo("Notification push queue collapsed a completed duplicate", {
           module: "notification_push_queue",
           notification_id: body.notificationId,
           transport_message_id: message.id,
@@ -72,6 +105,7 @@ export async function handleNotificationPushQueue(
           notification_type: notification.type,
           transport_message_id: message.id,
         });
+        await markNotificationPushOutboxDone(env.DB, body.notificationId);
         message.ack();
         continue;
       }
@@ -91,6 +125,7 @@ export async function handleNotificationPushQueue(
           muted,
           transport_message_id: message.id,
         });
+        await markNotificationPushOutboxDone(env.DB, body.notificationId);
         message.ack();
         continue;
       }
@@ -131,6 +166,7 @@ export async function handleNotificationPushQueue(
         message.attempts,
         result,
       );
+      await markNotificationPushOutboxDone(env.DB, body.notificationId);
       message.ack();
     } catch (error) {
       const delaySeconds = notificationPushQueueFallbackDelaySeconds(
@@ -149,6 +185,7 @@ export async function handleNotificationPushQueue(
 
 export async function handleNotificationPushDlq(
   batch: MessageQueueBatch<unknown>,
+  env: NotificationPushQueueEnv,
 ): Promise<void> {
   for (const message of batch.messages) {
     const body = isValidNotificationPushQueueMessage(message.body)
@@ -161,7 +198,42 @@ export async function handleNotificationPushDlq(
       ...(body ? { notification_id: body.notificationId } : {}),
       valid_message: Boolean(body),
     });
-    message.ack();
+    if (!body) {
+      message.ack();
+      continue;
+    }
+
+    try {
+      const replayStatus = await reopenNotificationPushOutboxFromDlq(
+        env.DB,
+        body.notificationId,
+        `main Queue exhausted after ${message.attempts} attempts`,
+      );
+      logWarn("Notification push DLQ transferred replay ownership to D1", {
+        module: "notification_push_dlq",
+        notification_id: body.notificationId,
+        transport_message_id: message.id,
+        replay_status: replayStatus,
+      });
+      // Ack only after the durable state transition commits. `done` and
+      // `missing` are already terminal; `queued` is owned by cron replay.
+      message.ack();
+    } catch (error) {
+      const delaySeconds = Math.min(
+        NOTIFICATION_PUSH_DLQ_RETRY_DELAY_SECONDS,
+        Math.max(
+          60,
+          notificationPushQueueFallbackDelaySeconds(message.attempts),
+        ),
+      );
+      logError("Notification push DLQ replay persistence failed", error, {
+        module: "notification_push_dlq",
+        notification_id: body.notificationId,
+        transport_message_id: message.id,
+        delay_seconds: delaySeconds,
+      });
+      message.retry({ delaySeconds });
+    }
   }
 }
 

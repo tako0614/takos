@@ -11,6 +11,10 @@ import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
 import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
 import { dispatchTerminalIndexOutbox } from "../../application/services/run-notifier/index-outbox.ts";
 import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
+import {
+  dispatchNotificationPushOutbox,
+  NOTIFICATION_PUSH_OUTBOX_STALE_TRANSPORT_MS,
+} from "../../application/services/notifications/push-outbox.ts";
 
 /** Injectable deps (model resolution) for deterministic testing. */
 export const cronHandlerDeps = {
@@ -228,6 +232,24 @@ export async function handleScheduled(
     await dispatchRunNotificationOutbox(env, { staleBefore: staleThreshold });
   } catch (error) {
     logError("Failed to dispatch Run notification outbox", error, {
+      module: "runner_cron",
+    });
+  }
+
+  // A main Queue DLQ message first commits its event id back to this durable
+  // outbox. Replay is bounded here and deliberately waits beyond the Queue's
+  // maximum 24-hour Retry-After before recovering ambiguous `dispatching` or
+  // `enqueued` rows.
+  try {
+    const stalePushHandoff = new Date(
+      Date.now() - NOTIFICATION_PUSH_OUTBOX_STALE_TRANSPORT_MS,
+    ).toISOString();
+    await dispatchNotificationPushOutbox(env, {
+      staleBefore: stalePushHandoff,
+      limit: 50,
+    });
+  } catch (error) {
+    logError("Failed to dispatch notification push outbox", error, {
       module: "runner_cron",
     });
   }

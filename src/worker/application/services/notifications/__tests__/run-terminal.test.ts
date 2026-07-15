@@ -81,6 +81,17 @@ async function freshDb(): Promise<Database> {
       email_sent_at TEXT,
       email_error TEXT
     );
+    CREATE TABLE notification_push_outbox (
+      notification_id TEXT PRIMARY KEY,
+      delivery_status TEXT NOT NULL DEFAULT 'queued',
+      claim_token TEXT,
+      claimed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    );
   `);
   return drizzle(client, { schema }) as unknown as Database;
 }
@@ -105,7 +116,7 @@ test.each([
   ["completed", "run.completed", "Agent response is ready"],
   ["failed", "run.failed", "Agent run failed"],
 ] as const)(
-  "committed run %s keeps one inbox row and safely requeues the same event id",
+  "committed run %s keeps one inbox row and one durable Queue handoff",
   async (status, expectedType, expectedTitle) => {
     const db = await freshDb();
     const completionKey = `completion-${status}`;
@@ -155,7 +166,7 @@ test.each([
       thread_id: "thread-1",
       route: "/chat/workspace-1/thread-1",
     });
-    expect(queued).toHaveLength(2);
+    expect(queued).toHaveLength(1);
     for (const message of queued) {
       expect(message).toEqual({
         version: 1,
