@@ -192,6 +192,12 @@ export function buildReplacements(
     [`"${legacy.replace("{name}", "deployment-jobs-dlq")}"`]: tomlString(
       requireKey(queues, "deployment_dlq", "queues"),
     ),
+    [`"${legacy.replace("{name}", "notification-push")}"`]: tomlString(
+      requireKey(queues, "notification_push", "queues"),
+    ),
+    [`"${legacy.replace("{name}", "notification-push-dlq")}"`]: tomlString(
+      requireKey(queues, "notification_push_dlq", "queues"),
+    ),
     [`"${legacy.replace("{name}", "embeddings")}"`]:
       tomlString(vectorizeIndexName),
   };

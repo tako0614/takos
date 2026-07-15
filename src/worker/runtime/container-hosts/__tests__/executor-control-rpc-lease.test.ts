@@ -16,6 +16,17 @@ import {
 } from "../executor-utils.ts";
 import { handleRunFail, handleRunReset } from "../executor-run-state.ts";
 
+type CapturedStatement = {
+  queryText: string;
+  boundValues: unknown[];
+  bind(...values: unknown[]): CapturedStatement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  run<T = Record<string, unknown>>(): Promise<{
+    results: T[];
+    meta: { changes: number };
+  }>;
+};
+
 /**
  * Guards the run-lease fence on the run-scoped control-RPC write path.
  *
@@ -39,7 +50,29 @@ function makeDb(opts: {
   updateResult?: unknown;
   onUpdate?: () => void;
   onInsert?: (values: Record<string, unknown>) => void;
+  onBatch?: (statements: CapturedStatement[]) => void;
 }): SqlDatabaseBinding {
+  let event = opts.event ?? null;
+  const statement = (
+    queryText: string,
+    boundValues: unknown[] = [],
+  ): CapturedStatement => ({
+    queryText,
+    boundValues,
+    bind(...values: unknown[]) {
+      return statement(queryText, values);
+    },
+    async first<T>() {
+      if (!queryText.includes('SELECT "engine_checkpoint"')) return null;
+      if (!opts.run || opts.run.status !== "running") return null;
+      return {
+        engineCheckpoint: opts.run.engineCheckpoint ?? null,
+      } as T;
+    },
+    async run<T>() {
+      return { results: [] as T[], meta: { changes: 0 } };
+    },
+  });
   const db = {
     select(fields?: Record<string, unknown>) {
       return {
@@ -49,7 +82,7 @@ function makeDb(opts: {
               return {
                 get: () => {
                   if (fields && Object.keys(fields).join(",") === "id") {
-                    return Promise.resolve(opts.event ?? null);
+                    return Promise.resolve(event);
                   }
                   if (fields && Object.keys(fields).join(",") === "sessionId") {
                     return Promise.resolve(
@@ -61,6 +94,7 @@ function makeDb(opts: {
                   return Promise.resolve(opts.run);
                 },
                 all: () => Promise.resolve([]),
+                limit: () => ({ all: () => Promise.resolve([]) }),
               };
             },
           };
@@ -91,8 +125,52 @@ function makeDb(opts: {
     delete() {
       return { where: () => Promise.resolve({}) };
     },
-    prepare() {
-      return {};
+    prepare(queryText: string) {
+      return statement(queryText);
+    },
+    async batch(statements: CapturedStatement[]) {
+      opts.onBatch?.(statements);
+      const update = statements[0];
+      const hasExpectedService = Boolean(
+        update?.queryText.includes('"service_id" = ?'),
+      );
+      const hasExpectedLease = Boolean(
+        update?.queryText.includes('"lease_version" = ?'),
+      );
+      const expectedService = hasExpectedService
+        ? update?.boundValues[
+            update.boundValues.length - (hasExpectedLease ? 2 : 1)
+          ]
+        : undefined;
+      const expectedLease = hasExpectedLease
+        ? update?.boundValues[update.boundValues.length - 1]
+        : undefined;
+      const committed = Boolean(
+        opts.run?.status === "running" &&
+        (!hasExpectedService || opts.run.serviceId === expectedService) &&
+        (!hasExpectedLease || opts.run.leaseVersion === expectedLease),
+      );
+      if (committed && opts.run && update) {
+        let valueIndex = 3;
+        opts.run.status = update.boundValues[0];
+        opts.run.completedAt = update.boundValues[1];
+        opts.run.completionKey = update.boundValues[2];
+        if (update.queryText.includes('"error" = ?')) {
+          opts.run.error = update.boundValues[valueIndex++];
+        }
+        if (update.queryText.includes('"output" = ?')) {
+          opts.run.output = update.boundValues[valueIndex++];
+        }
+        if (update.queryText.includes('"usage" = ?')) {
+          opts.run.usage = update.boundValues[valueIndex++];
+        }
+        event = { id: 1 };
+      }
+      return statements.map((_item, index) => ({
+        results:
+          committed && index === statements.length - 1 ? [{ id: 1 }] : [],
+        meta: { changes: committed ? 1 : 0 },
+      }));
     },
   };
   return db as unknown as SqlDatabaseBinding;
@@ -354,8 +432,8 @@ test("handleUpdateRunStatus rejects a terminal write after cancellation", async 
   assertEquals(updateCalled, false);
 });
 
-test("terminal status persists its canonical event before returning", async () => {
-  let inserted: Record<string, unknown> | null = null;
+test("terminal status atomically persists event/outbox and exact retry is idempotent", async () => {
+  const batches: CapturedStatement[][] = [];
   const env = {
     DB: makeDb({
       run: {
@@ -368,9 +446,8 @@ test("terminal status persists its canonical event before returning", async () =
         sessionId: "session_1",
       },
       event: null,
-      updateResult: { meta: { changes: 1 } },
-      onInsert: (values) => {
-        inserted = values;
+      onBatch: (statements) => {
+        batches.push(statements);
       },
     }),
     RUN_NOTIFIER: makeRunNotifier(),
@@ -387,9 +464,38 @@ test("terminal status persists its canonical event before returning", async () =
     env,
   );
   assertEquals(res.status, 200);
-  assertEquals(inserted?.type, "error");
-  assertEquals(inserted?.eventKey, "run:run_1:terminal-status:failed");
-  const data = JSON.parse(String(inserted?.data)) as Record<string, unknown>;
+  const replay = await handleUpdateRunStatus(
+    {
+      runId: "run_1",
+      serviceId: "lease_A",
+      leaseVersion: 1,
+      status: "failed",
+      usage: { inputTokens: 5, outputTokens: 5 },
+      error: "agent execution timed out",
+    },
+    env,
+  );
+  assertEquals(replay.status, 200);
+  // The first call owns one atomic batch; replay observes its completion key
+  // and only re-flushes the existing outbox.
+  assertEquals(batches.length, 1);
+  const outbox = batches[0].filter((statement) =>
+    statement.queryText.includes('INSERT INTO "run_notification_outbox"'),
+  );
+  assertEquals(outbox.length, 1);
+  const event = batches[0].find((statement) =>
+    statement.queryText.includes('INSERT INTO "run_events"'),
+  );
+  assertEquals(Boolean(event), true);
+  assertEquals(event?.boundValues[0], "error");
+  assertEquals(
+    String(event?.boundValues[1]).includes("terminal-status:failed"),
+    true,
+  );
+  const data = JSON.parse(String(event?.boundValues[2])) as Record<
+    string,
+    unknown
+  >;
   assertEquals(data.status, "failed");
   assertEquals(data.error, "agent execution timed out");
 });

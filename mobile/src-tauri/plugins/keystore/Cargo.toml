@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-keystore"
+version = "2.1.0-takos.1"
+authors = ["Takos"]
+description = "Takos-owned mobile secure seed storage for Android Keystore and iOS Keychain"
+edition = "2021"
+rust-version = "1.89"
+license = "AGPL-3.0-only"
+publish = false
+links = "tauri-plugin-keystore"
+
+[dependencies]
+serde = "1.0"
+tauri = { version = "2.11.5", default-features = false }
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2.6.3", features = ["build"] }

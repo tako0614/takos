@@ -2727,6 +2727,7 @@ interface NotificationSettingsState {
   readonly loading?: boolean;
   readonly savingKey?: string;
   readonly preferences?: TakosMobileNotificationPreferences;
+  readonly pushSupportedTypes?: readonly TakosMobileNotificationType[];
   readonly mutedUntil?: string;
   readonly error?: string;
   readonly status?: string;
@@ -2758,6 +2759,7 @@ function NotificationSettingsPreview(props: {
       });
       setState({
         preferences: settings.preferences,
+        pushSupportedTypes: settings.pushSupportedTypes,
         mutedUntil: settings.mutedUntil,
       });
     } catch (error) {
@@ -2809,6 +2811,9 @@ function NotificationSettingsPreview(props: {
   ) {
     const preferences = state().preferences;
     if (!preferences) return;
+    if (channel === "push" && !state().pushSupportedTypes?.includes(type)) {
+      return;
+    }
     const enabled = !preferences[type][channel];
     const savingKey = `${type}:${channel}`;
     setState((previous) => ({
@@ -2912,12 +2917,24 @@ function NotificationSettingsPreview(props: {
                     <For each={takosMobileNotificationChannels}>
                       {(channel) => {
                         const savingKey = () => `${type}:${channel}`;
+                        const pushUnavailable = () =>
+                          channel === "push" &&
+                          !state().pushSupportedTypes?.includes(type);
                         return (
-                          <label>
+                          <label
+                            title={
+                              pushUnavailable()
+                                ? "Takos push is available only for Agent run results."
+                                : undefined
+                            }
+                          >
                             <input
                               type="checkbox"
                               checked={preferences()[type][channel]}
-                              disabled={state().savingKey === savingKey()}
+                              disabled={
+                                state().savingKey === savingKey() ||
+                                pushUnavailable()
+                              }
                               onChange={() =>
                                 void togglePreference(type, channel)
                               }

@@ -291,6 +291,10 @@ binding = "WORKFLOW_QUEUE"
 queue = "takos-deployment-jobs"
 binding = "DEPLOY_QUEUE"
 
+[[queues.producers]]
+queue = "takos-notification-push"
+binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
+
 [[queues.consumers]]
 queue = "takos-runs"
 max_batch_size = 1
@@ -338,6 +342,20 @@ dead_letter_queue = "takos-deployment-jobs-dlq"
 
 [[queues.consumers]]
 queue = "takos-deployment-jobs-dlq"
+max_batch_size = 10
+max_batch_timeout = 60
+
+[[queues.consumers]]
+queue = "takos-notification-push"
+max_batch_size = 5
+max_batch_timeout = 5
+max_retries = 5
+max_concurrency = 5
+retry_delay = 5
+dead_letter_queue = "takos-notification-push-dlq"
+
+[[queues.consumers]]
+queue = "takos-notification-push-dlq"
 max_batch_size = 10
 max_batch_timeout = 60
 
@@ -503,6 +521,10 @@ binding = "WORKFLOW_QUEUE"
 queue = "takos-deployment-jobs-staging"
 binding = "DEPLOY_QUEUE"
 
+[[env.staging.queues.producers]]
+queue = "takos-notification-push-staging"
+binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
+
 [[env.staging.queues.consumers]]
 queue = "takos-runs-staging"
 max_batch_size = 1
@@ -550,6 +572,20 @@ dead_letter_queue = "takos-deployment-jobs-dlq-staging"
 
 [[env.staging.queues.consumers]]
 queue = "takos-deployment-jobs-dlq-staging"
+max_batch_size = 10
+max_batch_timeout = 60
+
+[[env.staging.queues.consumers]]
+queue = "takos-notification-push-staging"
+max_batch_size = 5
+max_batch_timeout = 5
+max_retries = 5
+max_concurrency = 5
+retry_delay = 5
+dead_letter_queue = "takos-notification-push-dlq-staging"
+
+[[env.staging.queues.consumers]]
+queue = "takos-notification-push-dlq-staging"
 max_batch_size = 10
 max_batch_timeout = 60
 

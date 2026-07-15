@@ -47,6 +47,7 @@ import {
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
+  transitionRunTerminalAtomically,
 } from "../../application/services/run-notifier/index.ts";
 import type { Env } from "../../shared/types/index.ts";
 import {
@@ -59,6 +60,7 @@ import {
   assertRunExecutionAccess,
   getRunBootstrap,
 } from "./executor-run-state.ts";
+import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
 
 /**
  * Fence a run-scoped, side-effecting control RPC to the caller's token-bound
@@ -83,6 +85,7 @@ export async function ensureRunLease(
   env: Env,
   runId: string,
   body: Record<string, unknown>,
+  options: { readonly allowTerminalRetry?: boolean } = {},
 ): Promise<Response | null> {
   const serviceId = readRunServiceId(body);
   if (!serviceId) return null;
@@ -113,7 +116,7 @@ export async function ensureRunLease(
   if (leaseVersion !== null && run.leaseVersion !== leaseVersion) {
     return err("Lease lost", 409);
   }
-  if (run.status !== "running") {
+  if (run.status !== "running" && !options.allowTerminalRetry) {
     // Terminal status revokes the executor's authority just like a replaced
     // service/lease. Keep the canonical lease-lost wire signal so the Rust
     // heartbeat/finalization path cancels cleanly instead of retrying failure
@@ -156,7 +159,6 @@ const recentRunEventKeys = new Map<string, number>();
 const RUN_EVENT_DEDUP_TTL_MS: TtlMs = ttlMs(60 * 60_000);
 const RUN_EVENT_DEDUP_MAX_KEYS = 10_000;
 
-type TerminalControlStatus = "completed" | "failed" | "cancelled";
 const ALLOWED_RUN_EVENT_TYPES: ReadonlySet<string> = new Set([
   "user",
   "assistant",
@@ -172,82 +174,6 @@ const ALLOWED_RUN_EVENT_TYPES: ReadonlySet<string> = new Set([
   "started",
   "cancelled",
 ]);
-
-/**
- * Persist the canonical terminal event inside the status RPC boundary, before
- * executor-host revokes the run token after the response. A stable event key
- * makes retries idempotent. Terminal events always remain in SQL so replay has
- * a durable fallback when offload or the notifier is temporarily unavailable.
- */
-async function persistTerminalStatusEvent(
-  env: Env,
-  runId: string,
-  status: TerminalControlStatus,
-  data: Record<string, unknown>,
-): Promise<void> {
-  const db = getDb(env.DB);
-  const eventType = status === "failed" ? "error" : status;
-  const eventKey = `run:${runId}:terminal-status:${status}`;
-  let eventId: number | null = null;
-
-  const existing = await db
-    .select({ id: runEvents.id })
-    .from(runEvents)
-    .where(eq(runEvents.eventKey, eventKey))
-    .get();
-  if (existing) {
-    eventId = existing.id;
-  } else {
-    try {
-      const inserted = await db
-        .insert(runEvents)
-        .values({
-          runId,
-          type: eventType,
-          eventKey,
-          data: JSON.stringify(data),
-          createdAt: new Date().toISOString(),
-        })
-        .returning({ id: runEvents.id })
-        .get();
-      eventId = inserted?.id ?? null;
-    } catch (insertError) {
-      const raced = await db
-        .select({ id: runEvents.id })
-        .from(runEvents)
-        .where(eq(runEvents.eventKey, eventKey))
-        .get();
-      if (!raced) throw insertError;
-      eventId = raced.id;
-    }
-  }
-
-  try {
-    const stub = getRunNotifierStub(env, runId);
-    const response = await stub.fetch(
-      buildRunNotifierEmitRequest({
-        ...buildRunNotifierEmitPayload(runId, eventType, data, eventId),
-        dedup_key: eventKey,
-      }),
-    );
-    if (!response.ok) {
-      logWarn("Terminal run event notifier emit failed", {
-        module: "executor-host",
-        runId,
-        status,
-        notifierStatus: response.status,
-      });
-    }
-  } catch (notifyError) {
-    // SQL is the durable source for replay; notifier delivery is best effort.
-    logWarn("Terminal run event notifier emit failed", {
-      module: "executor-host",
-      runId,
-      status,
-      error: String(notifyError),
-    });
-  }
-}
 
 async function createRemoteToolExecutor(
   runId: string,
@@ -788,7 +714,14 @@ export async function handleUpdateRunStatus(
     return err("Missing usage", 400);
   }
 
-  const leaseError = await ensureRunLease(env, runId, body);
+  const terminalStatus =
+    status === "completed" || status === "failed" || status === "cancelled";
+  // Terminal writes use a single lease/status CAS and their own exact-outcome
+  // idempotency check below. Permit the same token-bound lease to reach that
+  // check after a commit, while still rejecting a reclaimed/stale lease here.
+  const leaseError = await ensureRunLease(env, runId, body, {
+    allowTerminalRetry: terminalStatus,
+  });
   if (leaseError) return leaseError;
 
   // Lease identity is token-bound: executor-host stamps body.serviceId from the
@@ -797,21 +730,153 @@ export async function handleUpdateRunStatus(
   const serviceId = readRunServiceId(body);
   const leaseVersion =
     typeof body.leaseVersion === "number" ? body.leaseVersion : undefined;
+  const normalizedUsage = {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    // Map the container's cached-prompt-token count onto the shared
+    // AgentUsage `cacheReadTokens` field so runs.usage has one shape
+    // regardless of execution path.
+    ...(typeof usage.cachedInputTokens === "number"
+      ? { cacheReadTokens: usage.cachedInputTokens }
+      : {}),
+  };
 
   try {
+    if (terminalStatus) {
+      const terminalRun = await getDb(env.DB)
+        .select({ sessionId: runs.sessionId })
+        .from(runs)
+        .where(eq(runs.id, runId))
+        .get();
+      if (!terminalRun) return err("Run not found", 404);
+      const terminalPayload = buildTerminalPayload(
+        runId,
+        status,
+        {
+          ...(status === "completed" ? { success: true } : {}),
+          ...(typeof output === "string" ? { output } : {}),
+          ...(typeof errorMessage === "string"
+            ? { error: errorMessage, message: errorMessage }
+            : {}),
+          usage: normalizedUsage,
+        },
+        terminalRun.sessionId ?? null,
+      );
+      const completedAt = new Date().toISOString();
+      const eventType = status === "failed" ? "error" : status;
+      const transition = await transitionRunTerminalAtomically(
+        env.DB,
+        {
+          runId,
+          status,
+          expectedStatuses: ["running"],
+          ...(serviceId ? { expectedServiceId: serviceId } : {}),
+          ...(leaseVersion === undefined
+            ? {}
+            : { expectedLeaseVersion: leaseVersion }),
+          completedAt,
+          usage: normalizedUsage,
+          ...(output === undefined ? {} : { output }),
+          ...(errorMessage === undefined ? {} : { error: errorMessage }),
+          eventType,
+          terminalEvent: terminalPayload,
+        },
+        { offloadBucket: env.TAKOS_OFFLOAD },
+      );
+      let completionKey = transition.completionKey;
+      let terminalEventId = transition.eventId;
+      if (!transition.committed) {
+        // A retry after an ambiguous terminal response finds no active row.
+        // Treat only the exact same lease/outcome as idempotent; another
+        // terminal winner remains a conflict. Its durable outbox can then be
+        // flushed again using the completion key committed by that winner.
+        const current = await getDb(env.DB)
+          .select({
+            status: runs.status,
+            usage: runs.usage,
+            output: runs.output,
+            error: runs.error,
+            serviceId: runs.serviceId,
+            leaseVersion: runs.leaseVersion,
+            completionKey: runs.completionKey,
+          })
+          .from(runs)
+          .where(eq(runs.id, runId))
+          .get();
+        const idempotent = Boolean(
+          current &&
+          current.status === status &&
+          current.usage === JSON.stringify(normalizedUsage) &&
+          (output === undefined || current.output === output) &&
+          (errorMessage === undefined || current.error === errorMessage) &&
+          (!serviceId || current.serviceId === serviceId) &&
+          (leaseVersion === undefined ||
+            current.leaseVersion === leaseVersion) &&
+          current.completionKey,
+        );
+        if (!idempotent || !current?.completionKey) {
+          return err("Lease lost", 409);
+        }
+        completionKey = current.completionKey;
+        const replayEventKey = `run:${runId}:control:${completionKey}:terminal-status:${status}`;
+        const existingEvent = await getDb(env.DB)
+          .select({ id: runEvents.id })
+          .from(runEvents)
+          .where(eq(runEvents.eventKey, replayEventKey))
+          .get();
+        terminalEventId = existingEvent?.id ?? null;
+      }
+
+      const eventKey = `run:${runId}:control:${completionKey}:terminal-status:${status}`;
+      try {
+        const stub = getRunNotifierStub(env, runId);
+        const response = await stub.fetch(
+          buildRunNotifierEmitRequest({
+            ...buildRunNotifierEmitPayload(
+              runId,
+              eventType,
+              terminalPayload,
+              terminalEventId,
+            ),
+            dedup_key: eventKey,
+          }),
+        );
+        if (!response.ok) {
+          logWarn("Terminal run event notifier emit failed", {
+            module: "executor-host",
+            runId,
+            status,
+            notifierStatus: response.status,
+          });
+        }
+      } catch (notifyError) {
+        // SQL remains the durable replay source; realtime emit is best effort.
+        logWarn("Terminal run event notifier emit failed", {
+          module: "executor-host",
+          runId,
+          status,
+          error: String(notifyError),
+        });
+      }
+
+      if (status === "completed" || status === "failed") {
+        await dispatchRunNotificationOutbox(env, {
+          completionKey,
+        }).catch((notificationError) => {
+          logWarn("Legacy run-status notification outbox flush failed", {
+            module: "executor-host",
+            runId,
+            error: String(notificationError),
+          });
+        });
+      }
+      return ok({ success: true, updated: true });
+    }
+
     const result = await updateRunStatusImpl(
       env.DB,
       runId,
-      {
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-        // Map the container's cached-prompt-token count onto the shared
-        // AgentUsage `cacheReadTokens` field so runs.usage has one shape
-        // regardless of execution path.
-        ...(typeof usage.cachedInputTokens === "number"
-          ? { cacheReadTokens: usage.cachedInputTokens }
-          : {}),
-      },
+      normalizedUsage,
       status,
       output,
       errorMessage,
@@ -824,33 +889,6 @@ export async function handleUpdateRunStatus(
       return err("Lease lost", 409);
     }
 
-    if (
-      status === "completed" ||
-      status === "failed" ||
-      status === "cancelled"
-    ) {
-      const terminalRun = await getDb(env.DB)
-        .select({
-          sessionId: runs.sessionId,
-        })
-        .from(runs)
-        .where(eq(runs.id, runId))
-        .get();
-      const terminalPayload = buildTerminalPayload(
-        runId,
-        status,
-        {
-          ...(status === "completed" ? { success: true } : {}),
-          ...(typeof output === "string" ? { output } : {}),
-          ...(typeof errorMessage === "string"
-            ? { error: errorMessage, message: errorMessage }
-            : {}),
-          usage,
-        },
-        terminalRun?.sessionId ?? null,
-      );
-      await persistTerminalStatusEvent(env, runId, status, terminalPayload);
-    }
     return ok({ success: true, updated: result.updated });
   } catch (e: unknown) {
     logError("Update run status RPC error", e, { module: "executor-host" });
@@ -1105,7 +1143,12 @@ export async function handleCompleteRun(
     return rejectInvalidPayload("lease_version");
   }
   if (messages === null) return rejectInvalidPayload("transcript");
-  const leaseError = await ensureRunLease(env, runId, body);
+  // completeRunAtomically owns both the active-lease CAS and exact committed
+  // outcome replay check. Allow the same token-bound terminal lease to reach
+  // that replay check; a reclaimed service/lease remains fenced immediately.
+  const leaseError = await ensureRunLease(env, runId, body, {
+    allowTerminalRetry: true,
+  });
   if (leaseError) return leaseError;
   const output = typeof body.output === "string" ? body.output : undefined;
   const errorMessage = typeof body.error === "string" ? body.error : undefined;
@@ -1225,6 +1268,18 @@ export async function handleCompleteRun(
         module: "executor-host",
         runId,
         error: String(notifyError),
+      });
+    }
+
+    try {
+      await dispatchRunNotificationOutbox(env, {
+        completionKey: result.completionKey,
+      });
+    } catch (notificationError) {
+      logWarn("Complete-run user notification failed", {
+        module: "executor-host",
+        runId,
+        error: String(notificationError),
       });
     }
 

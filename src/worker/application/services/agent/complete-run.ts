@@ -17,6 +17,7 @@ import {
   writeMessageToR2,
 } from "../offload/messages.ts";
 import { buildTerminalIndexOutboxStatements } from "../run-notifier/index-outbox.ts";
+import { buildRunNotificationOutboxStatements } from "../notifications/run-outbox.ts";
 
 export type CompleteRunStatus = "completed" | "failed";
 
@@ -370,6 +371,15 @@ function buildCompleteRunStatements(
   statements.push(
     ...buildTerminalIndexOutboxStatements(factory, {
       completionKey,
+      createdAt: completedAt,
+      runPredicateSql: predicate,
+      runPredicateArgs: predicateArgs,
+    }),
+  );
+  statements.push(
+    ...buildRunNotificationOutboxStatements(factory, {
+      completionKey,
+      runStatus: input.status,
       createdAt: completedAt,
       runPredicateSql: predicate,
       runPredicateArgs: predicateArgs,

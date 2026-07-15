@@ -97,6 +97,49 @@ test("D1 commits the control-owned terminal status and event in one batch", asyn
   assertEquals(captured[3].queryText.includes('r."completion_key" = ?'), true);
 });
 
+test("completed transition commits its user-notification outbox in the same batch", async () => {
+  let captured: CapturedStatement[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return statement(queryText);
+    },
+    async batch(statements: CapturedStatement[]) {
+      captured = statements;
+      return statements.map((_statement, index) =>
+        index === 0
+          ? result(1)
+          : index === statements.length - 1
+            ? result(1, [{ id: 11 }])
+            : result(1),
+      );
+    },
+  };
+
+  const transition = await transitionRunTerminalAtomically(db as never, {
+    ...cancellation,
+    status: "completed",
+    usage: { inputTokens: 4, outputTokens: 8 },
+    eventType: "completed",
+    terminalEvent: { status: "completed", run: { id: "run-1" } },
+  });
+
+  assertEquals(transition.committed, true);
+  assertEquals(captured.length, 5);
+  assertEquals(captured[0].queryText.includes('"usage" = ?'), true);
+  assertEquals(
+    captured[3].queryText.includes('INSERT INTO "run_notification_outbox"'),
+    true,
+  );
+  assertEquals(
+    captured[3].boundValues.includes(transition.completionKey),
+    true,
+  );
+  assertEquals(
+    captured[4].queryText.includes('INSERT INTO "run_events"'),
+    true,
+  );
+});
+
 test("Postgres uses one dedicated transaction for the terminal transition", async () => {
   let transactionCalls = 0;
   let outerBatchCalls = 0;
@@ -153,6 +196,34 @@ test("a lost active-status CAS cannot insert an orphan terminal event", async ()
     captured[1].boundValues.includes(transition.completionKey),
     true,
   );
+});
+
+test("a lost failed transition conditions the notification outbox on the same CAS", async () => {
+  let captured: CapturedStatement[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return statement(queryText);
+    },
+    async batch(statements: CapturedStatement[]) {
+      captured = statements;
+      return statements.map(() => result(0));
+    },
+  };
+
+  const transition = await transitionRunTerminalAtomically(db as never, {
+    ...cancellation,
+    status: "failed",
+    eventType: "error",
+    terminalEvent: { status: "failed", run: { id: "run-1" } },
+  });
+
+  assertEquals(transition.committed, false);
+  const outbox = captured.find((item) =>
+    item.queryText.includes('INSERT INTO "run_notification_outbox"'),
+  );
+  assertEquals(Boolean(outbox), true);
+  assertEquals(outbox?.queryText.includes('r."completion_key" = ?'), true);
+  assertEquals(outbox?.boundValues.includes(transition.completionKey), true);
 });
 
 test("a committed cancellation deletes only its captured R2 checkpoint", async () => {

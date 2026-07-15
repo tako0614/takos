@@ -18,6 +18,7 @@ import {
 import { runR2OrphanedObjectGcBatch } from "../r2/orphaned-object-gc.ts";
 import { runWorkflowArtifactGcBatch } from "../execution/workflow-storage.ts";
 import { processFeaturedAppPreinstallJobs } from "../source/featured-app-catalog.ts";
+import { pruneStaleNotificationPushers } from "../notifications/mobile-push-delivery.ts";
 import { logInfo } from "../../../shared/utils/logger.ts";
 
 // Cron schedule classifiers.
@@ -27,15 +28,9 @@ import { logInfo } from "../../../shared/utils/logger.ts";
 // Local / dev callers use the canonical `*/15 * * * *` and `0 * * * *` forms.
 // Both must dispatch to the same maintenance jobs, so the dispatcher matches
 // on schedule *family* rather than literal equality.
-const QUARTER_HOUR_CRONS = new Set([
-  "*/15 * * * *",
-  "3,18,33,48 * * * *",
-]);
+const QUARTER_HOUR_CRONS = new Set(["*/15 * * * *", "3,18,33,48 * * * *"]);
 
-const HOURLY_CRONS = new Set([
-  "0 * * * *",
-  "5 * * * *",
-]);
+const HOURLY_CRONS = new Set(["0 * * * *", "5 * * * *"]);
 
 export function isQuarterHourCron(cron: string): boolean {
   return QUARTER_HOUR_CRONS.has(cron);
@@ -61,6 +56,7 @@ export type ScheduledFamilyMaintenanceDeps = {
   runSnapshotGcBatch: typeof runSnapshotGcBatch;
   runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
   processFeaturedAppPreinstallJobs: typeof processFeaturedAppPreinstallJobs;
+  pruneStaleNotificationPushers: typeof pruneStaleNotificationPushers;
   logInfo: typeof logInfo;
 };
 
@@ -72,6 +68,7 @@ const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
   runSnapshotGcBatch,
   runWorkflowArtifactGcBatch,
   processFeaturedAppPreinstallJobs,
+  pruneStaleNotificationPushers,
   logInfo,
 };
 
@@ -141,6 +138,21 @@ export async function runScheduledFamilyMaintenance(
   }
 
   if (runHourlyJobs) {
+    try {
+      const pushRetention = await deps.pruneStaleNotificationPushers(env);
+      if (logSuccesses && pushRetention.deleted > 0) {
+        deps.logInfo("notification pusher retention completed", {
+          module: "cron",
+          ...{ cron, ...pushRetention },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "notification-pusher-retention",
+        error: toScheduledError(error),
+      });
+    }
+
     try {
       const sessionSummary = await deps.cleanupDeadSessions(env);
 

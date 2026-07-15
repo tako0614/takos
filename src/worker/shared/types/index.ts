@@ -4,6 +4,7 @@ export {
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
+  NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   indexJobDeliveryId,
@@ -11,6 +12,7 @@ export {
 export type {
   DeploymentQueueMessage,
   IndexJobQueueMessage,
+  NotificationPushQueueMessage,
   RunQueueMessage,
   WorkerDeploymentQueueMessage,
   WorkflowJobDefinition,
@@ -22,6 +24,7 @@ export type {
 export {
   isValidDeploymentQueueMessage,
   isValidIndexJobQueueMessage,
+  isValidNotificationPushQueueMessage,
   isValidRunQueueMessage,
   isValidWorkflowJobQueueMessage,
 } from "./queue-message-guards.ts";

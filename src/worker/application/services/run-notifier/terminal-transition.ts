@@ -9,8 +9,9 @@ import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import { buildTerminalIndexOutboxStatements } from "./index-outbox.ts";
+import { buildRunNotificationOutboxStatements } from "../notifications/run-outbox.ts";
 
-export type ControlTerminalStatus = "failed" | "cancelled";
+export type ControlTerminalStatus = "completed" | "failed" | "cancelled";
 export type ActiveRunStatus = "pending" | "queued" | "running";
 
 export interface ControlTerminalTransitionInput {
@@ -20,6 +21,7 @@ export interface ControlTerminalTransitionInput {
   expectedServiceId?: string;
   expectedLeaseVersion?: number;
   completedAt: string;
+  usage?: Record<string, unknown>;
   error?: string | null;
   output?: string | null;
   eventType: string;
@@ -86,6 +88,10 @@ function buildStatements(
     setClauses.push('"output" = ?');
     updateArgs.push(input.output ?? null);
   }
+  if (Object.hasOwn(input, "usage")) {
+    setClauses.push('"usage" = ?');
+    updateArgs.push(JSON.stringify(input.usage ?? {}));
+  }
 
   const where = [
     '"id" = ?',
@@ -128,6 +134,17 @@ function buildStatements(
       runPredicateArgs: committedPredicateArgs,
     }),
   );
+  if (input.status === "completed" || input.status === "failed") {
+    statements.push(
+      ...buildRunNotificationOutboxStatements(factory, {
+        completionKey,
+        runStatus: input.status,
+        createdAt: input.completedAt,
+        runPredicateSql: committedPredicate,
+        runPredicateArgs: committedPredicateArgs,
+      }),
+    );
+  }
   statements.push(
     factory
       .prepare(

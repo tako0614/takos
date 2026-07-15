@@ -33,6 +33,15 @@ export const takosMobileNotificationChannels = [
   "push",
 ] as const;
 
+/**
+ * Takos-owned mobile push is deliberately limited to terminal Agent Run
+ * outcomes. Social and messaging push belongs to Yurucommu / Yurumeet.
+ */
+export const takosMobilePushNotificationTypes = [
+  "run.completed",
+  "run.failed",
+] as const satisfies readonly TakosMobileNotificationType[];
+
 export type TakosMobileNotificationType =
   (typeof takosMobileNotificationTypes)[number];
 
@@ -46,6 +55,7 @@ export type TakosMobileNotificationPreferences = Record<
 
 export interface TakosMobileNotificationSettings {
   readonly preferences: TakosMobileNotificationPreferences;
+  readonly pushSupportedTypes: readonly TakosMobileNotificationType[];
   readonly mutedUntil?: string;
 }
 
@@ -110,6 +120,9 @@ export async function loadTakosMobileNotificationSettings(input: {
   return {
     preferences: normalizeNotificationPreferences(
       preferencesResponse.preferences,
+    ),
+    pushSupportedTypes: normalizePushSupportedNotificationTypes(
+      preferencesResponse.push_supported_types,
     ),
     mutedUntil: mobileOptionalText(settingsResponse.muted_until),
   };
@@ -269,6 +282,7 @@ interface TakosNotificationsResponse {
 
 interface TakosNotificationPreferencesResponse {
   readonly preferences?: unknown;
+  readonly push_supported_types?: unknown;
 }
 
 interface TakosNotificationSettingsResponse {
@@ -289,6 +303,16 @@ function normalizeNotificationPreferences(
     };
   }
   return preferences;
+}
+
+function normalizePushSupportedNotificationTypes(
+  value: unknown,
+): readonly TakosMobileNotificationType[] {
+  if (!Array.isArray(value)) return [];
+  const supported = new Set(
+    value.filter((type): type is string => typeof type === "string"),
+  );
+  return takosMobilePushNotificationTypes.filter((type) => supported.has(type));
 }
 
 function normalizeNotificationLimit(limit: number | undefined): number {

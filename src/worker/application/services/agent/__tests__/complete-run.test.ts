@@ -142,7 +142,7 @@ test("D1 path commits run, chunked transcript, and event in one bounded batch", 
 
   assertEquals(result.committed, true);
   assertEquals(result.eventId, 44);
-  assertEquals(captured.length, 7);
+  assertEquals(captured.length, 8);
   assertEquals(captured[0].queryText.includes('UPDATE "runs"'), true);
   assertEquals(captured[1].queryText.includes('UPDATE "threads"'), true);
   assertEquals(
@@ -160,11 +160,16 @@ test("D1 path commits run, chunked transcript, and event in one bounded batch", 
   assertEquals(captured[4].boundValues.includes("info_unit"), true);
   assertEquals(captured[5].boundValues.includes("thread_context"), true);
   assertEquals(
-    captured[6].queryText.includes('INSERT INTO "run_events"'),
+    captured[6].queryText.includes('INSERT INTO "run_notification_outbox"'),
+    true,
+  );
+  assertEquals(captured[6].boundValues.includes(result.completionKey), true);
+  assertEquals(
+    captured[7].queryText.includes('INSERT INTO "run_events"'),
     true,
   );
   assertEquals(
-    captured[6].boundValues.some(
+    captured[7].boundValues.some(
       (value) =>
         typeof value === "string" &&
         value.includes(`completion:${result.completionKey}:terminal-status`),
@@ -212,7 +217,7 @@ test("Postgres path uses the dedicated transaction and never outer sequential ba
   assertEquals(result.committed, true);
   assertEquals(transactionCalls, 1);
   assertEquals(outerBatchCalls, 0);
-  assertEquals(transactionStatementCount, 7);
+  assertEquals(transactionStatementCount, 8);
   assertEquals(transcriptInsertSql.includes('CAST(p."ord" AS INTEGER)'), true);
 });
 
@@ -550,6 +555,7 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       CREATE TABLE runs (
         id TEXT PRIMARY KEY,
         account_id TEXT NOT NULL,
+        requester_account_id TEXT,
         thread_id TEXT NOT NULL,
         status TEXT NOT NULL,
         usage TEXT NOT NULL DEFAULT '{}',
@@ -600,16 +606,30 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
         completed_at TEXT,
         created_at TEXT NOT NULL
       );
+      CREATE TABLE run_notification_outbox (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        completion_key TEXT NOT NULL UNIQUE,
+        run_status TEXT NOT NULL,
+        delivery_status TEXT NOT NULL DEFAULT 'queued',
+        claim_token TEXT,
+        claimed_at TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
     await client.execute({
       sql: "INSERT INTO threads (id, next_message_sequence) VALUES (?, 0)",
       args: ["thread-1"],
     });
     await client.execute({
-      sql: "INSERT INTO runs (id, account_id, thread_id, status, service_id, lease_version, engine_checkpoint, engine_checkpoint_updated_at) VALUES (?, ?, ?, 'running', ?, ?, ?, ?)",
+      sql: "INSERT INTO runs (id, account_id, requester_account_id, thread_id, status, service_id, lease_version, engine_checkpoint, engine_checkpoint_updated_at) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?)",
       args: [
         "run-1",
         "account-1",
+        "user-1",
         "thread-1",
         "service-1",
         7,
@@ -636,6 +656,10 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
     });
     assertEquals(preserved.rows[0].status, "running");
     assertEquals(preserved.rows[0].engine_checkpoint, '{"status":"running"}');
+    const staleNotificationOutbox = await client.execute(
+      "SELECT COUNT(*) AS count FROM run_notification_outbox",
+    );
+    assertEquals(Number(staleNotificationOutbox.rows[0].count), 0);
 
     const result = await completeRunAtomically(db as never, completeInput(), {
       expectedEngineCheckpoint: '{"status":"running"}',
@@ -681,6 +705,17 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       indexOutbox.rows.every((row) => row.status === "queued"),
       true,
     );
+    const notificationOutbox = await client.execute(
+      "SELECT run_id, completion_key, run_status, delivery_status FROM run_notification_outbox",
+    );
+    assertEquals(notificationOutbox.rows.length, 1);
+    assertEquals(notificationOutbox.rows[0].run_id, "run-1");
+    assertEquals(
+      notificationOutbox.rows[0].completion_key,
+      result.completionKey,
+    );
+    assertEquals(notificationOutbox.rows[0].run_status, "completed");
+    assertEquals(notificationOutbox.rows[0].delivery_status, "queued");
     const retry = await completeRunAtomically(db as never, completeInput(), {
       expectedEngineCheckpoint: '{"status":"running"}',
     });
@@ -694,6 +729,10 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       "SELECT COUNT(*) AS count FROM messages WHERE thread_id = 'thread-1'",
     );
     assertEquals(Number(retryTranscript.rows[0].count), 3);
+    const retryNotificationOutbox = await client.execute(
+      "SELECT COUNT(*) AS count FROM run_notification_outbox",
+    );
+    assertEquals(Number(retryNotificationOutbox.rows[0].count), 1);
   } finally {
     client.close();
   }
