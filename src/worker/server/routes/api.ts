@@ -24,7 +24,6 @@ import sessions from "./sessions/index.ts";
 import repos from "./repos/index.ts";
 import pullRequests from "./pull-requests/index.ts";
 import notifications from "./notifications/index.ts";
-import mobile from "./mobile.ts";
 import { registerAppApiRoutes } from "./apps/index.ts";
 import shortcuts, { shortcutGroupRoutes } from "./shortcuts/index.ts";
 import me from "./me/index.ts";
@@ -147,7 +146,6 @@ function requiredApiScopesForRequest(
   if (
     pathMatches(pathname, "/me") ||
     pathMatches(pathname, "/auth") ||
-    pathMatches(pathname, "/mobile") ||
     pathMatches(pathname, "/notifications")
   ) {
     return ["profile"];
@@ -347,8 +345,6 @@ export function createApiRouter({
   apiRouter.use("/shortcuts/*", scopedApiAuth);
   apiRouter.use("/notifications", scopedApiAuth);
   apiRouter.use("/notifications/*", scopedApiAuth);
-  apiRouter.use("/mobile", scopedApiAuth);
-  apiRouter.use("/mobile/*", scopedApiAuth);
 
   // Commercial billing policy is enforced by Takosumi Accounts/Cloud. The
   // Takos app router intentionally does not mount local billing or plan gates.
@@ -381,7 +377,6 @@ export function createApiRouter({
   apiRouter.route("/", repos); // Repository management routes
   apiRouter.route("/", agentTasks); // Agent task routes
   apiRouter.route("/", notifications); // Notifications routes at /api/notifications
-  apiRouter.route("/mobile", mobile);
   apiRouter.route("/notifications", createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
   apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally). NOTE: subscribe side is wired; the group lifecycle producer (emitGroupLifecycleEvent) is not yet called from the deploy engine, so the stream is currently empty — see events/routes.ts.
   apiRouter.route("/", pullRequests); // Pull request routes for code review

@@ -5,9 +5,6 @@ import {
   type CreateTakosumiDiscoveryOptions,
 } from "takosumi-contract";
 
-const TAKOS_MOBILE_PUSH_REGISTRATION_PATH =
-  "/api/mobile/push-registrations" as const;
-
 export function createTakosDistributionWellKnown(origin: string) {
   return createTakosumiWellKnownDocument(
     takosDistributionDiscoveryOptions(origin),
@@ -32,7 +29,6 @@ export interface TakosProductWellKnown {
     readonly apps: string;
     readonly notifications: string;
     readonly notificationPushers: string;
-    readonly mobilePushRegistrations: string;
   };
 }
 
@@ -52,7 +48,6 @@ export function createTakosProductWellKnown(
       apps: `${baseUrl}/api/apps`,
       notifications: `${baseUrl}/api/notifications`,
       notificationPushers: `${baseUrl}${NOTIFICATION_PUSHER_REGISTRATION_PATH}`,
-      mobilePushRegistrations: `${baseUrl}${TAKOS_MOBILE_PUSH_REGISTRATION_PATH}`,
     },
   };
 }

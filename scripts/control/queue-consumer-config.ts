@@ -3,6 +3,13 @@ import {
   RUN_QUEUE_MAX_RETRIES,
   RUN_QUEUE_RETRY_BASE_DELAY_SECONDS,
 } from "../../src/worker/runtime/runner/run-queue-policy.ts";
+import {
+  NOTIFICATION_PUSH_QUEUE_MAX_BATCH_SIZE,
+  NOTIFICATION_PUSH_QUEUE_MAX_BATCH_TIMEOUT_SECONDS,
+  NOTIFICATION_PUSH_QUEUE_MAX_CONCURRENCY,
+  NOTIFICATION_PUSH_QUEUE_MAX_RETRIES,
+  NOTIFICATION_PUSH_QUEUE_RETRY_BASE_DELAY_SECONDS,
+} from "../../src/worker/runtime/queues/notification-push-policy.ts";
 
 export type QueueConsumerConfig = {
   queueKey: string;
@@ -62,6 +69,20 @@ export const QUEUE_CONSUMERS: readonly QueueConsumerConfig[] = [
   },
   {
     queueKey: "deployment_dlq",
+    batchSize: 10,
+    batchTimeout: 60,
+  },
+  {
+    queueKey: "notification_push",
+    batchSize: NOTIFICATION_PUSH_QUEUE_MAX_BATCH_SIZE,
+    batchTimeout: NOTIFICATION_PUSH_QUEUE_MAX_BATCH_TIMEOUT_SECONDS,
+    messageRetries: NOTIFICATION_PUSH_QUEUE_MAX_RETRIES,
+    deadLetterQueueKey: "notification_push_dlq",
+    maxConcurrency: NOTIFICATION_PUSH_QUEUE_MAX_CONCURRENCY,
+    retryDelaySeconds: NOTIFICATION_PUSH_QUEUE_RETRY_BASE_DELAY_SECONDS,
+  },
+  {
+    queueKey: "notification_push_dlq",
     batchSize: 10,
     batchTimeout: 60,
   },

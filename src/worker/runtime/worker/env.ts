@@ -10,6 +10,7 @@ import type {
   DbEnv,
   DeploymentQueueMessage,
   IndexJobQueueMessage,
+  NotificationPushQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
 } from "../../shared/types/index.ts";
@@ -93,6 +94,16 @@ export type WorkerEnv = DbEnv & {
   SERVICE_INTERNAL_JWT_ISSUER?: string;
   WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
   DEPLOY_QUEUE?: MessageQueueBinding<DeploymentQueueMessage>;
+  TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
+
+  // --- notification pusher delivery ---
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_URL?: string;
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_TOKEN?: string;
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS?: string;
+  TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK?: string;
+  TAKOS_NOTIFICATION_PUSH_RETENTION_DAYS?: string;
+  TAKOS_NOTIFICATION_PUSH_MAX_ATTEMPTS?: string;
+  TAKOS_NOTIFICATION_PUSH_TIMEOUT_MS?: string;
 
   // --- egress ---
   RATE_LIMITER_DO?: DurableObjectNamespace;

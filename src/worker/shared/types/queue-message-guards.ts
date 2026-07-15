@@ -2,15 +2,45 @@ import {
   DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
+  NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
   WORKFLOW_QUEUE_MESSAGE_VERSION,
 } from "./queue-messages.ts";
 import type {
   DeploymentQueueMessage,
   IndexJobQueueMessage,
+  NotificationPushQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
 } from "./queue-messages.ts";
+
+function isBoundedIdentifier(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 512;
+}
+
+export function isValidNotificationPushQueueMessage(
+  msg: unknown,
+): msg is NotificationPushQueueMessage {
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) return false;
+  const m = msg as Record<string, unknown>;
+  const allowedKeys = new Set([
+    "version",
+    "notificationId",
+    "userId",
+    "scopeId",
+    "timestamp",
+  ]);
+  return (
+    Object.keys(m).every((key) => allowedKeys.has(key)) &&
+    m.version === NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION &&
+    isBoundedIdentifier(m.notificationId) &&
+    isBoundedIdentifier(m.userId) &&
+    (m.scopeId === undefined || isBoundedIdentifier(m.scopeId)) &&
+    typeof m.timestamp === "number" &&
+    Number.isFinite(m.timestamp) &&
+    m.timestamp >= 0
+  );
+}
 
 export function isValidRunQueueMessage(msg: unknown): msg is RunQueueMessage {
   if (!msg || typeof msg !== "object") return false;

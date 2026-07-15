@@ -37,8 +37,6 @@ test("Takos product well-known exposes mobile host discovery endpoints", () => {
       apps: "https://takos.test/api/apps",
       notifications: "https://takos.test/api/notifications",
       notificationPushers: "https://takos.test/api/notifications/pushers",
-      mobilePushRegistrations:
-        "https://takos.test/api/mobile/push-registrations",
     },
   });
 });

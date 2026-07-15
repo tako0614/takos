@@ -10,6 +10,7 @@ import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
 import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
 import { dispatchTerminalIndexOutbox } from "../../application/services/run-notifier/index-outbox.ts";
+import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
 
 /** Injectable deps (model resolution) for deterministic testing. */
 export const cronHandlerDeps = {
@@ -217,6 +218,16 @@ export async function handleScheduled(
     await dispatchTerminalIndexOutbox(env, { staleBefore: staleThreshold });
   } catch (error) {
     logError("Failed to dispatch terminal index outbox", error, {
+      module: "runner_cron",
+    });
+  }
+
+  // User-visible terminal outcomes use an independent outbox so a temporary
+  // inbox/Queue/gateway failure never disappears with the successful Run CAS.
+  try {
+    await dispatchRunNotificationOutbox(env, { staleBefore: staleThreshold });
+  } catch (error) {
+    logError("Failed to dispatch Run notification outbox", error, {
       module: "runner_cron",
     });
   }

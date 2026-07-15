@@ -24,6 +24,8 @@ const QUEUE_NAMES = {
     workflow_dlq: "takos-workflow-jobs-dlq",
     deployment: "takos-deployment-jobs",
     deployment_dlq: "takos-deployment-jobs-dlq",
+    notification_push: "takos-notification-push",
+    notification_push_dlq: "takos-notification-push-dlq",
   },
   staging: {
     runs: "takos-runs-staging",
@@ -34,6 +36,8 @@ const QUEUE_NAMES = {
     workflow_dlq: "takos-workflow-jobs-dlq-staging",
     deployment: "takos-deployment-jobs-staging",
     deployment_dlq: "takos-deployment-jobs-dlq-staging",
+    notification_push: "takos-notification-push-staging",
+    notification_push_dlq: "takos-notification-push-dlq-staging",
   },
 } as const;
 

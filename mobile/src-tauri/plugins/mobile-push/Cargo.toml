@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-mobile-push"
+version = "2.0.0-takos.1"
+authors = ["Takos"]
+description = "Takos-owned APNs and FCM bridge for the Takos mobile shell"
+edition = "2021"
+rust-version = "1.89"
+license = "AGPL-3.0-only"
+publish = false
+links = "tauri-plugin-mobile-push"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.11.5", default-features = false }
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2.6.3", features = ["build"] }

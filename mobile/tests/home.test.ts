@@ -1520,6 +1520,12 @@ test("loadTakosMobileNotificationSettings reads preferences and mute state", asy
       requests.push(request);
       if (request.url.endsWith("/api/notifications/preferences")) {
         return json({
+          push_supported_types: [
+            "run.completed",
+            "run.failed",
+            "workspace.invite",
+            "unknown",
+          ],
           preferences: {
             "run.failed": {
               in_app: true,
@@ -1549,6 +1555,7 @@ test("loadTakosMobileNotificationSettings reads preferences and mute state", asy
     expect(request.headers.get("authorization")).toBe("Bearer mobile-token");
   }
   expect(settings.mutedUntil).toBe("2026-06-30T13:00:00.000Z");
+  expect(settings.pushSupportedTypes).toEqual(["run.completed", "run.failed"]);
   expect(settings.preferences["run.failed"]).toEqual({
     in_app: true,
     email: true,
@@ -1775,7 +1782,7 @@ test("markTakosMobileNotificationRead rejects blank notification ids", async () 
   ).rejects.toThrow("Notification id is required.");
 });
 
-test("registerTakosMobilePush posts the product mobile push payload", async () => {
+test("registerTakosMobilePush posts a product-neutral notification pusher", async () => {
   const requests: Request[] = [];
 
   await registerTakosMobilePush(
@@ -1783,10 +1790,12 @@ test("registerTakosMobilePush posts the product mobile push payload", async () =
       session,
       registration: {
         token: "push-token",
+        provider: "fcm",
         environment: "test",
       },
     },
     {
+      gatewayUrl: "https://push.example/_matrix/push/v1/notify",
       fetch: async (input, init) => {
         requests.push(new Request(input, init));
         return json({ ok: true });
@@ -1794,16 +1803,67 @@ test("registerTakosMobilePush posts the product mobile push payload", async () =
     },
   );
 
-  expect(requests[0].url).toBe(
-    "https://takos.test/api/mobile/push-registrations",
-  );
+  expect(requests[0].url).toBe("https://takos.test/api/notifications/pushers");
   expect(requests[0].headers.get("authorization")).toBe("Bearer mobile-token");
   expect(await requests[0].json()).toEqual({
-    token: "push-token",
-    environment: "test",
     product: "takos",
-    host_url: "https://takos.test",
+    pusher: {
+      kind: "http",
+      app_id: "jp.takos.mobile",
+      app_display_name: "Takos",
+      pushkey: "push-token",
+      data: {
+        url: "https://push.example/_matrix/push/v1/notify",
+        format: "event_id_only",
+        provider: "fcm",
+        environment: "test",
+      },
+    },
   });
+});
+
+test("registerTakosMobilePush fails clearly when the gateway is feature-off", async () => {
+  await expect(
+    registerTakosMobilePush(
+      {
+        session,
+        registration: {
+          token: "push-token",
+          provider: "apns",
+          environment: "sandbox",
+        },
+      },
+      {
+        gatewayUrl: null,
+        fetch: async () => {
+          throw new Error("must not send request");
+        },
+      },
+    ),
+  ).rejects.toThrow(
+    "VITE_TAKOS_NOTIFICATION_PUSHER_GATEWAY_URL is not configured",
+  );
+});
+
+test("registerTakosMobilePush rejects unsafe gateway configuration", async () => {
+  await expect(
+    registerTakosMobilePush(
+      {
+        session,
+        registration: {
+          token: "push-token",
+          provider: "fcm",
+          environment: "production",
+        },
+      },
+      {
+        gatewayUrl: "http://push.example/notify",
+        fetch: async () => {
+          throw new Error("must not send request");
+        },
+      },
+    ),
+  ).rejects.toThrow("must use HTTPS without credentials");
 });
 
 test("unregisterTakosMobilePush deletes the product mobile push payload", async () => {
@@ -1814,6 +1874,7 @@ test("unregisterTakosMobilePush deletes the product mobile push payload", async 
       session,
       registration: {
         token: "push-token",
+        provider: "fcm",
         environment: "test",
       },
     },
@@ -1825,16 +1886,13 @@ test("unregisterTakosMobilePush deletes the product mobile push payload", async 
     },
   );
 
-  expect(requests[0].url).toBe(
-    "https://takos.test/api/mobile/push-registrations",
-  );
+  expect(requests[0].url).toBe("https://takos.test/api/notifications/pushers");
   expect(requests[0].method).toBe("DELETE");
   expect(requests[0].headers.get("authorization")).toBe("Bearer mobile-token");
   expect(await requests[0].json()).toEqual({
-    token: "push-token",
-    environment: "test",
     product: "takos",
-    host_url: "https://takos.test",
+    app_id: "jp.takos.mobile",
+    pushkey: "push-token",
   });
 });
 

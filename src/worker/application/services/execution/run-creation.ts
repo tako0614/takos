@@ -25,6 +25,7 @@ import {
 } from "../runs/create-thread-run-validation.ts";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import { logError } from "../../../shared/utils/logger.ts";
+import { dispatchRunNotificationOutbox } from "../notifications/run-outbox.ts";
 
 type CreateThreadRunInput = {
   userId: string;
@@ -175,6 +176,15 @@ export async function createThreadRun(
       { offloadBucket: env.TAKOS_OFFLOAD },
     );
     if (transition.committed) {
+      await dispatchRunNotificationOutbox(env, {
+        completionKey: transition.completionKey,
+      }).catch((notificationError) => {
+        logError(
+          "Failed to create enqueue-failure notification",
+          notificationError,
+          { module: "services/execution/run-creation", runId },
+        );
+      });
       await emitCommittedRunEvent(
         env,
         runId,
