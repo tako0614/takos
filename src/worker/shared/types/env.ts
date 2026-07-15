@@ -10,6 +10,7 @@ import type {
 import type {
   DeploymentQueueMessage,
   IndexJobQueueMessage,
+  NotificationPushQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
 } from "./queue-messages.ts";
@@ -162,6 +163,7 @@ export interface Env
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
   DEPLOY_QUEUE?: MessageQueueBinding<DeploymentQueueMessage>;
+  TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
   OIDC_ISSUER_URL?: string;
   OIDC_DISCOVERY_URL?: string;
@@ -173,6 +175,16 @@ export interface Env
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
   /** Optional Takosumi subject used by featured-app Capsule install jobs. */
   TAKOSUMI_ACCOUNTS_SUBJECT?: string;
+  /** Exact gateway URL used only to scope the optional bearer credential. */
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_URL?: string;
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_TOKEN?: string;
+  /** Comma-separated public host allowlist for pusher registration. */
+  TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS?: string;
+  /** Development-only HTTP loopback exception for local gateway testing. */
+  TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK?: string;
+  TAKOS_NOTIFICATION_PUSH_RETENTION_DAYS?: string;
+  TAKOS_NOTIFICATION_PUSH_MAX_ATTEMPTS?: string;
+  TAKOS_NOTIFICATION_PUSH_TIMEOUT_MS?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
   /**

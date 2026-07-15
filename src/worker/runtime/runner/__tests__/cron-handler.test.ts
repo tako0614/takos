@@ -182,7 +182,11 @@ test("scheduled recovery dispatches the durable terminal index outbox independen
     targetId: "run-1",
     timestamp: (sentMessages[0] as { timestamp: number }).timestamp,
   });
-  assertEquals(prepareCalls.length, 2);
+  assertEquals(prepareCalls.length, 3);
   assertStringIncludes(prepareCalls[0].sql.toLowerCase(), "index_jobs");
   assertStringIncludes(prepareCalls[1].sql.toLowerCase(), "update");
+  assertStringIncludes(
+    prepareCalls[2].sql.toLowerCase(),
+    "run_notification_outbox",
+  );
 });

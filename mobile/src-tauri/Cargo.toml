@@ -1,9 +1,10 @@
 [package]
 name = "takos-mobile"
-version = "0.0.0"
+version = "0.10.33"
 description = "Takos mobile client shell"
 authors = ["Takos"]
 edition = "2021"
+rust-version = "1.89"
 license = "AGPL-3.0-only"
 
 [lib]
@@ -26,5 +27,12 @@ tauri-plugin-stronghold = "2.3.1"
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2"
 tauri-plugin-biometric = "2.3.2"
-tauri-plugin-keystore = "2.1.0-alpha.1"
-tauri-plugin-mobile-push = "0.1.4"
+tauri-plugin-keystore = { path = "plugins/keystore" }
+tauri-plugin-mobile-push = { path = "plugins/mobile-push" }
+
+[patch.crates-io]
+# notify-rust 4.18 still constrains this crate to 0.7. The pinned upstream
+# security fix keeps the 0.7.2 API while removing vulnerable quick-xml.
+tauri-winrt-notification = { git = "https://github.com/tauri-apps/winrt-notification", rev = "09a4135a871c6ead29832dca5698948fb30bf94b" }
+# wayland-scanner 0.31.10 has not cut a release after its quick-xml 0.41 fix.
+wayland-scanner = { git = "https://github.com/Smithay/wayland-rs", rev = "d07c4f91f28b42e5a485823ffd9d8d5a210b1053" }

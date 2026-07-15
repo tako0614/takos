@@ -2,6 +2,7 @@ export const RUN_QUEUE_MESSAGE_VERSION = 2;
 export const WORKFLOW_QUEUE_MESSAGE_VERSION = 3;
 export const DEPLOYMENT_QUEUE_MESSAGE_VERSION = 1;
 export const INDEX_QUEUE_MESSAGE_VERSION = 1;
+export const NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION = 1;
 export type WorkflowShell =
   "bash" | "pwsh" | "python" | "sh" | "cmd" | "powershell";
 
@@ -17,6 +18,15 @@ export interface RunQueueMessage {
    */
   backpressureCount?: number;
   model?: string;
+}
+
+/** Event-id-only delivery work; notification content remains authoritative in DB. */
+export interface NotificationPushQueueMessage {
+  version: typeof NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION;
+  notificationId: string;
+  userId: string;
+  scopeId?: string;
+  timestamp: number;
 }
 
 /**

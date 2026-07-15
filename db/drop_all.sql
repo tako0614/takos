@@ -58,6 +58,7 @@ DROP TABLE IF EXISTS chunks;
 DROP TABLE IF EXISTS edges;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS index_jobs;
+DROP TABLE IF EXISTS run_notification_outbox;
 DROP TABLE IF EXISTS runs;
 DROP TABLE IF EXISTS tool_operations;
 

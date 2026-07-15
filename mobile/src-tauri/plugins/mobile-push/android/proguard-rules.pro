@@ -1,0 +1,2 @@
+-keep class jp.takos.mobile.push.MobilePushPlugin { *; }
+-keep class jp.takos.mobile.push.TakosFirebaseMessagingService { *; }

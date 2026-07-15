@@ -21,6 +21,8 @@
     "mobile:release-evidence-check": "cd mobile && bun run release:evidence-check",
     "mobile:release-check": "cd mobile && bun run release:check",
     "mobile:release-status": "cd mobile && bun run release:status",
+    "mobile:preflight-source-ref-check": "bun scripts/check-mobile-preflight-source-ref.mjs",
+    "mobile:repo-release-check": "cd mobile && bun run release:repo-check",
     "build": "bun run web:build",
     "doctor": "bun scripts/doctor.mjs",
     "local:config": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -p \"${TAKOS_LOCAL_COMPOSE_PROJECT:-takos-local}\" -f compose.local.yml config'",

@@ -25,6 +25,90 @@
       "playAppSigning": true
     }
   },
+  "nativeSecurity": {
+    "ios": {
+      "result": "passed",
+      "cases": [
+        "first_store",
+        "cold_restart",
+        "unlock_cancel",
+        "biometric_change",
+        "app_upgrade",
+        "legacy_migration"
+      ],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/device-security/ios"
+    },
+    "android": {
+      "result": "passed",
+      "cases": [
+        "first_store",
+        "cold_restart",
+        "unlock_cancel",
+        "biometric_change",
+        "app_upgrade",
+        "legacy_migration"
+      ],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/device-security/android"
+    }
+  },
+  "mobileOidc": {
+    "codeExchange": {
+      "result": "passed",
+      "cases": ["authorization_code_pkce", "refresh_rotation"],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/oidc/code-exchange"
+    },
+    "firstUserProvision": {
+      "result": "passed",
+      "cases": ["new_account", "repeat_sign_in"],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/oidc/first-user-provision"
+    },
+    "scopedApi": {
+      "result": "passed",
+      "cases": [
+        "auth_me",
+        "allowed_scope",
+        "denied_scope",
+        "wrong_audience_rejected"
+      ],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/oidc/scoped-api"
+    }
+  },
+  "remotePush": {
+    "deliveryBackend": {
+      "result": "passed",
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/remote-push/backend"
+    },
+    "ios": {
+      "result": "passed",
+      "cases": [
+        "foreground",
+        "background",
+        "terminated",
+        "tap",
+        "token_rotation"
+      ],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/remote-push/ios"
+    },
+    "android": {
+      "result": "passed",
+      "cases": [
+        "foreground",
+        "background",
+        "terminated",
+        "tap",
+        "token_rotation"
+      ],
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/remote-push/android"
+    }
+  },
   "store": {
     "appStore": {
       "appRef": "private:app-store-connect/takos",

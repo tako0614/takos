@@ -98,6 +98,15 @@ function createDeps(
         failed: 0,
       };
     },
+    pruneStaleNotificationPushers: async () => {
+      calls.push("push-retention");
+      return {
+        cutoff: "2026-01-01T00:00:00.000Z",
+        selected: 0,
+        deleted: 0,
+        hasMore: false,
+      };
+    },
     logInfo: () => {},
     ...overrides,
   };
@@ -116,7 +125,13 @@ test("runScheduledFamilyMaintenance includes workflow artifact GC in the hourly 
     createDeps(env, calls),
   );
 
-  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact"]);
+  assertEquals(calls, [
+    "push-retention",
+    "cleanup",
+    "snapshot",
+    "orphan",
+    "artifact",
+  ]);
   assertEquals(errors, []);
 });
 
@@ -138,9 +153,47 @@ test("runScheduledFamilyMaintenance keeps hourly jobs running after workflow art
     }),
   );
 
-  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact"]);
-  assertEquals(errors, [{
-    job: "workflow-artifact-gc",
-    error: "artifact gc failed",
-  }]);
+  assertEquals(calls, [
+    "push-retention",
+    "cleanup",
+    "snapshot",
+    "orphan",
+    "artifact",
+  ]);
+  assertEquals(errors, [
+    {
+      job: "workflow-artifact-gc",
+      error: "artifact gc failed",
+    },
+  ]);
+});
+
+test("runScheduledFamilyMaintenance isolates notification pusher retention failures", async () => {
+  const env = createTestEnv();
+  const calls: string[] = [];
+  const errors: Array<{ job: string; error: string }> = [];
+
+  await runScheduledFamilyMaintenance(
+    env,
+    "0 * * * *",
+    errors,
+    {},
+    createDeps(env, calls, {
+      pruneStaleNotificationPushers: async () => {
+        calls.push("push-retention");
+        throw new Error("retention failed");
+      },
+    }),
+  );
+
+  assertEquals(calls, [
+    "push-retention",
+    "cleanup",
+    "snapshot",
+    "orphan",
+    "artifact",
+  ]);
+  assertEquals(errors, [
+    { job: "notification-pusher-retention", error: "retention failed" },
+  ]);
 });

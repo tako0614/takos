@@ -1,5 +1,6 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { Env } from "../../../shared/types/index.ts";
+import { NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
 import {
   getDb,
   notificationPreferences,
@@ -12,16 +13,19 @@ import {
   safeJsonParseOrDefault,
 } from "../../../shared/utils/index.ts";
 
-import { logWarn } from "../../../shared/utils/logger.ts";
+import { logInfo, logWarn } from "../../../shared/utils/logger.ts";
+import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
+  isPushSupportedNotificationType,
   type NotificationChannel,
   type NotificationPreferenceMatrix,
   type NotificationType,
 } from "./notification-models.ts";
+import { deliverNotificationToPushers } from "./mobile-push-delivery.ts";
 
 export type NotificationDto = {
   id: string;
@@ -35,10 +39,42 @@ export type NotificationDto = {
   created_at: string;
 };
 
+/**
+ * Durable hand-off state for callers that own a domain-event outbox.
+ *
+ * `queued` means the notification push Queue accepted the event; `delivered`
+ * means the synchronous fallback reached a terminal gateway outcome. Only
+ * `failed` must remain pending in the caller's outbox. `deferred` is reserved
+ * for request-context callers whose waitUntil-style callback owns completion.
+ */
+export type NotificationPushHandoff =
+  "not_requested" | "queued" | "delivered" | "deferred" | "failed";
+
+export type CreateNotificationResult = {
+  notification_id: string | null;
+  push_handoff: NotificationPushHandoff;
+};
+
 type NotificationNotifierNamespace = NonNullable<Env["NOTIFICATION_NOTIFIER"]>;
 type NotificationNotifierStub = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
+
+export type NotificationServiceEnv = Pick<Env, "DB"> &
+  Partial<
+    Pick<
+      Env,
+      | "NOTIFICATION_NOTIFIER"
+      | "TAKOS_NOTIFICATION_PUSH_QUEUE"
+      | "TAKOS_EGRESS"
+      | "TAKOS_NOTIFICATION_PUSH_GATEWAY_URL"
+      | "TAKOS_NOTIFICATION_PUSH_GATEWAY_TOKEN"
+      | "TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS"
+      | "TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK"
+      | "TAKOS_NOTIFICATION_PUSH_MAX_ATTEMPTS"
+      | "TAKOS_NOTIFICATION_PUSH_TIMEOUT_MS"
+    >
+  >;
 
 function isMissingTableError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -62,7 +98,7 @@ function throwMissingNotificationTable(
 }
 
 function getNotificationNotifierStub(
-  env: Env,
+  env: NotificationServiceEnv,
   userId: string,
 ): NotificationNotifierStub | null {
   const namespace: NotificationNotifierNamespace | undefined =
@@ -96,9 +132,11 @@ export async function getNotificationsMutedUntil(
 ): Promise<string | null> {
   const db = getDb(dbBinding);
   try {
-    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil })
+    const row = await db
+      .select({ mutedUntil: notificationSettings.mutedUntil })
       .from(notificationSettings)
-      .where(eq(notificationSettings.accountId, userId)).get();
+      .where(eq(notificationSettings.accountId, userId))
+      .get();
     return row?.mutedUntil ?? null;
   } catch (err) {
     if (isMissingTableError(err)) {
@@ -129,11 +167,14 @@ export async function setNotificationsMutedUntil(
   const ts = new Date().toISOString();
   const mutedValue = mutedUntil ? new Date(mutedUntil).toISOString() : null;
   try {
-    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil })
+    const row = await db
+      .select({ mutedUntil: notificationSettings.mutedUntil })
       .from(notificationSettings)
-      .where(eq(notificationSettings.accountId, userId)).get();
+      .where(eq(notificationSettings.accountId, userId))
+      .get();
     if (row) {
-      const updated = await db.update(notificationSettings)
+      const updated = await db
+        .update(notificationSettings)
         .set({ mutedUntil: mutedValue, updatedAt: ts })
         .where(eq(notificationSettings.accountId, userId))
         .returning({ mutedUntil: notificationSettings.mutedUntil })
@@ -141,15 +182,20 @@ export async function setNotificationsMutedUntil(
       return { muted_until: updated?.mutedUntil ?? null };
     } else {
       try {
-        const created = await db.insert(notificationSettings).values({
-          accountId: userId,
-          mutedUntil: mutedValue,
-          createdAt: ts,
-          updatedAt: ts,
-        }).returning({ mutedUntil: notificationSettings.mutedUntil }).get();
+        const created = await db
+          .insert(notificationSettings)
+          .values({
+            accountId: userId,
+            mutedUntil: mutedValue,
+            createdAt: ts,
+            updatedAt: ts,
+          })
+          .returning({ mutedUntil: notificationSettings.mutedUntil })
+          .get();
         return { muted_until: created?.mutedUntil ?? null };
       } catch {
-        const updated = await db.update(notificationSettings)
+        const updated = await db
+          .update(notificationSettings)
           .set({ mutedUntil: mutedValue, updatedAt: ts })
           .where(eq(notificationSettings.accountId, userId))
           .returning({ mutedUntil: notificationSettings.mutedUntil })
@@ -180,12 +226,35 @@ export async function ensureNotificationPreferences(
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
   try {
-    const existing = await db.select({
-      type: notificationPreferences.type,
-      channel: notificationPreferences.channel,
-    }).from(notificationPreferences)
+    const existing = await db
+      .select({
+        type: notificationPreferences.type,
+        channel: notificationPreferences.channel,
+        enabled: notificationPreferences.enabled,
+      })
+      .from(notificationPreferences)
       .where(eq(notificationPreferences.accountId, userId))
       .all();
+    const unsupportedEnabledPushTypes = existing
+      .filter(
+        (row) =>
+          row.channel === "push" &&
+          row.enabled &&
+          !isPushSupportedNotificationType(row.type),
+      )
+      .map((row) => row.type);
+    if (unsupportedEnabledPushTypes.length > 0) {
+      await db
+        .update(notificationPreferences)
+        .set({ enabled: false, updatedAt: ts })
+        .where(
+          and(
+            eq(notificationPreferences.accountId, userId),
+            eq(notificationPreferences.channel, "push"),
+            inArray(notificationPreferences.type, unsupportedEnabledPushTypes),
+          ),
+        );
+    }
     const existingSet = new Set(existing.map((r) => `${r.type}:${r.channel}`));
     const toCreate: Array<{
       accountId: string;
@@ -238,11 +307,13 @@ export async function getNotificationPreferences(
   await ensureNotificationPreferences(dbBinding, userId);
   const db = getDb(dbBinding);
   try {
-    const rows = await db.select({
-      type: notificationPreferences.type,
-      channel: notificationPreferences.channel,
-      enabled: notificationPreferences.enabled,
-    }).from(notificationPreferences)
+    const rows = await db
+      .select({
+        type: notificationPreferences.type,
+        channel: notificationPreferences.channel,
+        enabled: notificationPreferences.enabled,
+      })
+      .from(notificationPreferences)
       .where(eq(notificationPreferences.accountId, userId))
       .all();
     const matrix: NotificationPreferenceMatrix = emptyMatrix();
@@ -252,7 +323,10 @@ export async function getNotificationPreferences(
       const channel = row.channel as NotificationChannel;
       if (!(type in matrix)) continue;
       if (!NOTIFICATION_CHANNELS.includes(channel)) continue;
-      matrix[type][channel] = row.enabled;
+      matrix[type][channel] =
+        channel === "push" && !isPushSupportedNotificationType(type)
+          ? false
+          : row.enabled;
       seen.add(`${type}:${channel}`);
     }
     // Apply defaults for missing combos (avoid "false" being treated as default)
@@ -263,6 +337,9 @@ export async function getNotificationPreferences(
           matrix[type][channel] =
             DEFAULT_NOTIFICATION_PREFERENCES[type][channel];
         }
+      }
+      if (!isPushSupportedNotificationType(type)) {
+        matrix[type].push = false;
       }
     }
     return matrix;
@@ -277,18 +354,22 @@ export async function getNotificationPreferences(
 export async function updateNotificationPreferences(
   dbBinding: SqlDatabaseBinding,
   userId: string,
-  updates: Array<
-    { type: NotificationType; channel: NotificationChannel; enabled: boolean }
-  >,
+  updates: Array<{
+    type: NotificationType;
+    channel: NotificationChannel;
+    enabled: boolean;
+  }>,
 ): Promise<NotificationPreferenceMatrix> {
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
   try {
     // 1. Batch-fetch all existing preferences for this user
-    const existingRows = await db.select({
-      type: notificationPreferences.type,
-      channel: notificationPreferences.channel,
-    }).from(notificationPreferences)
+    const existingRows = await db
+      .select({
+        type: notificationPreferences.type,
+        channel: notificationPreferences.channel,
+      })
+      .from(notificationPreferences)
       .where(eq(notificationPreferences.accountId, userId))
       .all();
     const existingSet = new Set(
@@ -304,20 +385,26 @@ export async function updateNotificationPreferences(
       createdAt: string;
       updatedAt: string;
     }> = [];
-    const toUpdate: Array<
-      { type: NotificationType; channel: NotificationChannel; enabled: boolean }
-    > = [];
+    const toUpdate: Array<{
+      type: NotificationType;
+      channel: NotificationChannel;
+      enabled: boolean;
+    }> = [];
 
     for (const u of updates) {
+      const enabled =
+        u.channel === "push" && !isPushSupportedNotificationType(u.type)
+          ? false
+          : !!u.enabled;
       const key = `${u.type}:${u.channel}`;
       if (existingSet.has(key)) {
-        toUpdate.push(u);
+        toUpdate.push({ ...u, enabled });
       } else {
         toCreate.push({
           accountId: userId,
           type: u.type,
           channel: u.channel,
-          enabled: !!u.enabled,
+          enabled,
           createdAt: ts,
           updatedAt: ts,
         });
@@ -331,13 +418,16 @@ export async function updateNotificationPreferences(
 
     // 4. Update existing preferences sequentially (SQL store does not support transactions)
     for (const u of toUpdate) {
-      await db.update(notificationPreferences)
+      await db
+        .update(notificationPreferences)
         .set({ enabled: !!u.enabled, updatedAt: ts })
-        .where(and(
-          eq(notificationPreferences.accountId, userId),
-          eq(notificationPreferences.type, u.type),
-          eq(notificationPreferences.channel, u.channel),
-        ));
+        .where(
+          and(
+            eq(notificationPreferences.accountId, userId),
+            eq(notificationPreferences.type, u.type),
+            eq(notificationPreferences.channel, u.channel),
+          ),
+        );
     }
   } catch (err) {
     if (isMissingTableError(err)) {
@@ -386,27 +476,29 @@ export async function listNotifications(
       conditions.push(
         beforeId
           ? or(
-            lt(notifications.createdAt, before),
-            and(
-              eq(notifications.createdAt, before),
-              lt(notifications.id, beforeId),
-            ),
-          )!
+              lt(notifications.createdAt, before),
+              and(
+                eq(notifications.createdAt, before),
+                lt(notifications.id, beforeId),
+              ),
+            )!
           : lt(notifications.createdAt, before),
       );
     }
 
-    const rows = await db.select({
-      id: notifications.id,
-      recipientAccountId: notifications.recipientAccountId,
-      accountId: notifications.accountId,
-      type: notifications.type,
-      title: notifications.title,
-      body: notifications.body,
-      data: notifications.data,
-      readAt: notifications.readAt,
-      createdAt: notifications.createdAt,
-    }).from(notifications)
+    const rows = await db
+      .select({
+        id: notifications.id,
+        recipientAccountId: notifications.recipientAccountId,
+        accountId: notifications.accountId,
+        type: notifications.type,
+        title: notifications.title,
+        body: notifications.body,
+        data: notifications.data,
+        readAt: notifications.readAt,
+        createdAt: notifications.createdAt,
+      })
+      .from(notifications)
       .where(and(...conditions))
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limitVal)
@@ -443,12 +535,16 @@ export async function getUnreadCount(
   if (enabledTypes.length === 0) return 0;
 
   try {
-    const result = await db.select({ count: count() }).from(notifications)
-      .where(and(
-        eq(notifications.recipientAccountId, userId),
-        inArray(notifications.type, enabledTypes),
-        isNull(notifications.readAt),
-      ))
+    const result = await db
+      .select({ count: count() })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.recipientAccountId, userId),
+          inArray(notifications.type, enabledTypes),
+          isNull(notifications.readAt),
+        ),
+      )
       .get();
     return result?.count ?? 0;
   } catch (err) {
@@ -466,13 +562,16 @@ export async function markNotificationRead(
 ): Promise<{ success: true }> {
   const db = getDb(dbBinding);
   try {
-    await db.update(notifications)
+    await db
+      .update(notifications)
       .set({ readAt: new Date().toISOString() })
-      .where(and(
-        eq(notifications.id, notificationId),
-        eq(notifications.recipientAccountId, userId),
-        isNull(notifications.readAt),
-      ));
+      .where(
+        and(
+          eq(notifications.id, notificationId),
+          eq(notifications.recipientAccountId, userId),
+          isNull(notifications.readAt),
+        ),
+      );
   } catch (err) {
     if (isMissingTableError(err)) {
       throwMissingNotificationTable(err, "notifications");
@@ -507,7 +606,7 @@ export async function markAllNotificationsRead(
 }
 
 export async function createNotification(
-  env: Env,
+  env: NotificationServiceEnv,
   input: {
     userId: string;
     spaceId?: string | null;
@@ -516,19 +615,25 @@ export async function createNotification(
     body?: string | null;
     data?: Record<string, unknown> | null;
   },
-): Promise<{ notification_id: string | null }> {
+  options: {
+    readonly deferPushDelivery?: (task: Promise<unknown>) => void;
+    /** Stable internal id for idempotent domain-event notification creation. */
+    readonly notificationId?: string;
+  } = {},
+): Promise<CreateNotificationResult> {
   const db = getDb(env.DB);
 
   const prefs = await getNotificationPreferences(env.DB, input.userId);
-  const channelPrefs = prefs[input.type] ||
-    DEFAULT_NOTIFICATION_PREFERENCES[input.type];
+  const channelPrefs =
+    prefs[input.type] || DEFAULT_NOTIFICATION_PREFERENCES[input.type];
   const wantsInApp = !!channelPrefs.in_app;
-  const wantsPush = !!channelPrefs.push;
+  const wantsPush =
+    isPushSupportedNotificationType(input.type) && !!channelPrefs.push;
   if (!wantsInApp && !wantsPush) {
-    return { notification_id: null };
+    return { notification_id: null, push_handoff: "not_requested" };
   }
 
-  const id = generateId(16);
+  const id = options.notificationId ?? generateId(16);
   const ts = new Date().toISOString();
   const muted = await isNotificationsMuted(env.DB, input.userId);
 
@@ -544,8 +649,9 @@ export async function createNotification(
     });
   }
 
+  let inserted = true;
   try {
-    await db.insert(notifications).values({
+    const insert = db.insert(notifications).values({
       id,
       recipientAccountId: input.userId,
       accountId: input.spaceId ?? null,
@@ -559,6 +665,18 @@ export async function createNotification(
       emailSentAt: null,
       emailError: null,
     });
+    if (options.notificationId) {
+      const result = await insert.onConflictDoNothing({
+        target: notifications.id,
+      });
+      if (affectedRowCount(result) === 0) {
+        // A fixed-id replay may mean the inbox row committed before Queue.send.
+        // Re-enqueue the same event id; delivery is intentionally at-least-once.
+        inserted = false;
+      }
+    } else {
+      await insert;
+    }
   } catch (err) {
     if (isMissingTableError(err)) {
       throwMissingNotificationTable(err, "notifications");
@@ -566,7 +684,7 @@ export async function createNotification(
     throw err;
   }
 
-  if (wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
+  if (inserted && wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
     try {
       const stub = getNotificationNotifierStub(env, input.userId);
       if (stub) {
@@ -580,5 +698,85 @@ export async function createNotification(
     }
   }
 
-  return { notification_id: id };
+  let pushHandoff: NotificationPushHandoff = "not_requested";
+  if (wantsPush && !muted) {
+    let queued = false;
+    if (env.TAKOS_NOTIFICATION_PUSH_QUEUE) {
+      try {
+        await env.TAKOS_NOTIFICATION_PUSH_QUEUE.send({
+          version: NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
+          notificationId: id,
+          userId: input.userId,
+          ...(input.spaceId ? { scopeId: input.spaceId } : {}),
+          timestamp: Date.parse(ts),
+        });
+        queued = true;
+        pushHandoff = "queued";
+        logInfo("Notification pusher delivery queued", {
+          module: "notifications",
+          notification_id: id,
+        });
+      } catch (error) {
+        logWarn("Failed to queue notification pusher delivery", {
+          module: "notifications",
+          error_type: error instanceof Error ? error.name : "unknown",
+        });
+      }
+    }
+
+    if (!queued) {
+      const deliveryTask = deliverNotificationToPushers(env, {
+        userId: input.userId,
+        notificationId: id,
+        spaceId: input.spaceId,
+      })
+        .then<NotificationPushHandoff>((delivery) => {
+          if (
+            delivery.retryExhaustedCount > 0 ||
+            delivery.permanentFailureCount > 0 ||
+            delivery.configurationErrorCount > 0 ||
+            delivery.skippedInvalidPusherCount > 0 ||
+            delivery.selectionTruncated
+          ) {
+            logWarn("Notification pusher delivery completed with failures", {
+              module: "notifications",
+              gateway_batches: delivery.gatewayBatchCount,
+              retry_exhausted: delivery.retryExhaustedCount,
+              permanent_failures: delivery.permanentFailureCount,
+              configuration_errors: delivery.configurationErrorCount,
+              skipped_invalid: delivery.skippedInvalidPusherCount,
+              selection_truncated: delivery.selectionTruncated,
+            });
+          }
+          return delivery.retryExhaustedCount > 0 ||
+            delivery.configurationErrorCount > 0
+            ? "failed"
+            : "delivered";
+        })
+        .catch<NotificationPushHandoff>((error) => {
+          logWarn("Notification pusher delivery failed", {
+            module: "notifications",
+            error_type: error instanceof Error ? error.name : "unknown",
+          });
+          return "failed";
+        });
+
+      if (options.deferPushDelivery) {
+        try {
+          options.deferPushDelivery(deliveryTask);
+          pushHandoff = "deferred";
+        } catch (error) {
+          logWarn("Failed to defer notification pusher delivery", {
+            module: "notifications",
+            error_type: error instanceof Error ? error.name : "unknown",
+          });
+          pushHandoff = await deliveryTask;
+        }
+      } else {
+        pushHandoff = await deliveryTask;
+      }
+    }
+  }
+
+  return { notification_id: id, push_handoff: pushHandoff };
 }

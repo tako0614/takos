@@ -27,12 +27,19 @@ import {
 import {
   registerNotificationPusher,
   unregisterNotificationPusher,
+  validateNotificationPusherDataForStorage,
 } from "../../../application/services/notifications/pushers.ts";
+import {
+  isNotificationPushInsecureLoopbackEnabled,
+  validateNotificationPushGatewayUrl,
+} from "../../../application/services/notifications/mobile-push-delivery.ts";
 import {
   isNotificationChannel,
   isNotificationType,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_TYPES,
+  PUSH_SUPPORTED_NOTIFICATION_TYPES,
+  isPushSupportedNotificationType,
   type NotificationChannel,
   type NotificationType,
 } from "../../../application/services/notifications/notification-models.ts";
@@ -143,13 +150,43 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         400,
       );
     }
+    const gateway = validateNotificationPushGatewayUrl(
+      parsed.value.gatewayUrl,
+      {
+        allowedHosts: c.env.TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS,
+        allowInsecureLoopback: isNotificationPushInsecureLoopbackEnabled(c.env),
+      },
+    );
+    if (!gateway.ok) {
+      return c.json(
+        {
+          code: "BAD_REQUEST",
+          error: gateway.reason,
+          field: "pusher.data.url",
+        },
+        400,
+      );
+    }
+    const dataValidation = validateNotificationPusherDataForStorage(
+      parsed.value.pusher,
+    );
+    if (!dataValidation.ok) {
+      return c.json(
+        {
+          code: "BAD_REQUEST",
+          error: dataValidation.reason,
+          field: "pusher.data",
+        },
+        400,
+      );
+    }
 
     const pusher = await registerNotificationPusher(c.env.DB, {
       accountId: user.id,
       product: parsed.value.product ?? "takos",
       scope: parsed.value.scope,
       pusher: parsed.value.pusher,
-      gatewayUrl: parsed.value.gatewayUrl,
+      gatewayUrl: gateway.url,
     });
     return c.json({ pusher });
   })
@@ -196,6 +233,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     return c.json({
       types: NOTIFICATION_TYPES,
       channels: NOTIFICATION_CHANNELS,
+      push_supported_types: PUSH_SUPPORTED_NOTIFICATION_TYPES,
       preferences: prefs,
     });
   })
@@ -230,6 +268,20 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         if (!isNotificationChannel(row.channel)) {
           throw new BadRequestError(`Invalid channel: ${String(row.channel)}`);
         }
+        if (
+          row.channel === "push" &&
+          row.enabled &&
+          !isPushSupportedNotificationType(row.type)
+        ) {
+          throw new BadRequestError(
+            `Push notifications are not supported for type: ${row.type}`,
+            {
+              type: row.type,
+              channel: row.channel,
+              supported_push_types: PUSH_SUPPORTED_NOTIFICATION_TYPES,
+            },
+          );
+        }
         updates.push({
           type: row.type,
           channel: row.channel,
@@ -245,6 +297,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return c.json({
         types: NOTIFICATION_TYPES,
         channels: NOTIFICATION_CHANNELS,
+        push_supported_types: PUSH_SUPPORTED_NOTIFICATION_TYPES,
         preferences: prefs,
       });
     },

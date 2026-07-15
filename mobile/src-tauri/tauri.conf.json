@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Takos",
-  "version": "0.0.0",
+  "version": "0.10.33",
   "identifier": "jp.takos.mobile",
   "build": {
     "beforeDevCommand": "bun run dev:web",
