@@ -127,7 +127,28 @@ export const notifications = sqliteTable(
   }),
 );
 
-// 58a. Durable terminal Run notification outbox
+// 58a. Durable event-id-only notification push outbox
+export const notificationPushOutbox = sqliteTable(
+  "notification_push_outbox",
+  {
+    notificationId: text("notification_id")
+      .primaryKey()
+      .references(() => notifications.id, { onDelete: "cascade" }),
+    deliveryStatus: text("delivery_status").notNull().default("queued"),
+    claimToken: text("claim_token"),
+    claimedAt: text("claimed_at"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => ({
+    idxStatusClaimedAt: index(
+      "idx_notification_push_outbox_status_claimed_at",
+    ).on(table.deliveryStatus, table.claimedAt),
+  }),
+);
+
+// 58b. Durable terminal Run notification outbox
 export const runNotificationOutbox = sqliteTable(
   "run_notification_outbox",
   {

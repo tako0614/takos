@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createClient } from "@libsql/client";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "../../../infra/db/schema.ts";
@@ -16,6 +17,10 @@ import {
 import { notificationPushQueueFallbackDelaySeconds } from "../notification-push-policy.ts";
 import { createWorkerRuntime } from "../../worker/runtime-factory.ts";
 import type { NotificationType } from "../../../application/services/notifications/notification-models.ts";
+import {
+  dispatchNotificationPushOutbox,
+  getNotificationPushOutboxStatus,
+} from "../../../application/services/notifications/push-outbox.ts";
 
 async function freshDb(): Promise<Database> {
   const client = createClient({ url: ":memory:" });
@@ -54,6 +59,19 @@ async function freshDb(): Promise<Database> {
       updated_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL
     );
+    CREATE TABLE notification_push_outbox (
+      notification_id TEXT PRIMARY KEY,
+      delivery_status TEXT NOT NULL DEFAULT 'queued',
+      claim_token TEXT,
+      claimed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_notification_push_outbox_status_claimed_at
+      ON notification_push_outbox(delivery_status, claimed_at);
     CREATE TABLE notification_preferences (
       account_id TEXT NOT NULL,
       type TEXT NOT NULL,
@@ -233,6 +251,9 @@ test("notification push queue acknowledges unsupported Takos event types without
   expect(gatewayCalls).toBe(0);
   expect(queued.state.acknowledgements).toBe(1);
   expect(queued.state.retryDelays).toEqual([]);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
 });
 
 test("notification push queue honors a push opt-out made after enqueue", async () => {
@@ -267,6 +288,9 @@ test("notification push queue honors a push opt-out made after enqueue", async (
   expect(gatewayCalls).toBe(0);
   expect(queued.state.acknowledgements).toBe(1);
   expect(queued.state.retryDelays).toEqual([]);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
 });
 
 test("notification push queue honors a mute made after enqueue", async () => {
@@ -299,6 +323,9 @@ test("notification push queue honors a mute made after enqueue", async () => {
   expect(gatewayCalls).toBe(0);
   expect(queued.state.acknowledgements).toBe(1);
   expect(queued.state.retryDelays).toEqual([]);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
 });
 
 test("notification push queue retries configuration errors for DLQ visibility", async () => {
@@ -321,13 +348,233 @@ test("notification push queue retries configuration errors for DLQ visibility", 
 });
 
 test("notification push DLQ records and acknowledges terminal messages", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
   const queued = queueMessage(body(), 6);
-  await handleNotificationPushDlq({
-    queue: "takos-notification-push-dlq",
-    messages: [queued.message],
-  });
+  await handleNotificationPushDlq(
+    {
+      queue: "takos-notification-push-dlq",
+      messages: [queued.message],
+    },
+    { DB: db } as never,
+  );
   expect(queued.state.acknowledgements).toBe(1);
   expect(queued.state.retryDelays).toEqual([]);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("queued");
+});
+
+test("notification push survives gateway outage through DLQ and replays idempotently", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
+  const unavailable = queueMessage(body(), 5);
+
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [unavailable.message] },
+    {
+      DB: db,
+      TAKOS_EGRESS: {
+        async fetch() {
+          return Response.json(
+            { retryable: ["device-token"] },
+            { status: 503 },
+          );
+        },
+      },
+      TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS: "push.example",
+    } as never,
+  );
+  expect(unavailable.state.acknowledgements).toBe(0);
+  expect(unavailable.state.retryDelays).toHaveLength(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("enqueued");
+
+  const exhausted = queueMessage(body(), 6);
+  await handleNotificationPushDlq(
+    {
+      queue: "takos-notification-push-dlq",
+      messages: [exhausted.message],
+    },
+    { DB: db } as never,
+  );
+  expect(exhausted.state.acknowledgements).toBe(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("queued");
+
+  const replayed: NotificationPushQueueMessage[] = [];
+  expect(
+    await dispatchNotificationPushOutbox(
+      {
+        DB: db as never,
+        TAKOS_NOTIFICATION_PUSH_QUEUE: {
+          async send(message) {
+            replayed.push(message);
+          },
+        },
+      },
+      { notificationId: "notification-1" },
+    ),
+  ).toBe(1);
+  expect(replayed).toHaveLength(1);
+
+  const recovered = queueMessage(replayed[0]);
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [recovered.message] },
+    {
+      DB: db,
+      TAKOS_EGRESS: {
+        async fetch() {
+          return Response.json({ rejected: [] });
+        },
+      },
+      TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS: "push.example",
+    } as never,
+  );
+  expect(recovered.state.acknowledgements).toBe(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
+
+  const duplicateDlq = queueMessage(body(), 6);
+  await handleNotificationPushDlq(
+    {
+      queue: "takos-notification-push-dlq",
+      messages: [duplicateDlq.message],
+    },
+    { DB: db } as never,
+  );
+  expect(duplicateDlq.state.acknowledgements).toBe(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
+  expect(
+    await dispatchNotificationPushOutbox(
+      {
+        DB: db as never,
+        TAKOS_NOTIFICATION_PUSH_QUEUE: {
+          async send(message) {
+            replayed.push(message);
+          },
+        },
+      },
+      { notificationId: "notification-1" },
+    ),
+  ).toBe(0);
+  expect(replayed).toHaveLength(1);
+});
+
+test("notification push outbox recovers a stale crash-before-send claim", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
+  await db.insert(schema.notificationPushOutbox).values({
+    notificationId: "notification-1",
+    deliveryStatus: "dispatching",
+    claimToken: "crashed-before-send",
+    claimedAt: "2026-07-13T00:00:00.000Z",
+    attempts: 1,
+    createdAt: "2026-07-13T00:00:00.000Z",
+    updatedAt: "2026-07-13T00:00:00.000Z",
+  });
+  const replayed: NotificationPushQueueMessage[] = [];
+
+  expect(
+    await dispatchNotificationPushOutbox(
+      {
+        DB: db as never,
+        TAKOS_NOTIFICATION_PUSH_QUEUE: {
+          async send(message) {
+            replayed.push(message);
+          },
+        },
+      },
+      { staleBefore: "2026-07-14T00:00:00.000Z" },
+    ),
+  ).toBe(1);
+  expect(replayed).toHaveLength(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("enqueued");
+  const row = await db
+    .select({
+      attempts: schema.notificationPushOutbox.attempts,
+      claimToken: schema.notificationPushOutbox.claimToken,
+    })
+    .from(schema.notificationPushOutbox)
+    .where(eq(schema.notificationPushOutbox.notificationId, "notification-1"))
+    .get();
+  expect(row).toEqual({ attempts: 2, claimToken: null });
+});
+
+test("notification push outbox recovers crash-after-send and collapses the duplicate", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
+  await db.insert(schema.notificationPushOutbox).values({
+    notificationId: "notification-1",
+    deliveryStatus: "dispatching",
+    claimToken: "crashed-after-send",
+    claimedAt: "2026-07-13T00:00:00.000Z",
+    attempts: 1,
+    createdAt: "2026-07-13T00:00:00.000Z",
+    updatedAt: "2026-07-13T00:00:00.000Z",
+  });
+  const replayed: NotificationPushQueueMessage[] = [];
+  await dispatchNotificationPushOutbox(
+    {
+      DB: db as never,
+      TAKOS_NOTIFICATION_PUSH_QUEUE: {
+        async send(message) {
+          replayed.push(message);
+        },
+      },
+    },
+    { staleBefore: "2026-07-14T00:00:00.000Z" },
+  );
+  expect(replayed).toHaveLength(1);
+
+  let gatewayCalls = 0;
+  const env = {
+    DB: db,
+    TAKOS_EGRESS: {
+      async fetch() {
+        gatewayCalls += 1;
+        return Response.json({ rejected: [] });
+      },
+    },
+    TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS: "push.example",
+  } as never;
+  const original = queueMessage(body());
+  const recovered = queueMessage(replayed[0]);
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [original.message] },
+    env,
+  );
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [recovered.message] },
+    env,
+  );
+
+  expect(gatewayCalls).toBe(1);
+  expect(original.state.acknowledgements).toBe(1);
+  expect(recovered.state.acknowledgements).toBe(1);
+  expect(
+    await getNotificationPushOutboxStatus(db as never, "notification-1"),
+  ).toBe("done");
+});
+
+test("notification push DLQ retries without ack when D1 replay ownership cannot commit", async () => {
+  const queued = queueMessage(body(), 100);
+  await handleNotificationPushDlq(
+    {
+      queue: "takos-notification-push-dlq",
+      messages: [queued.message],
+    },
+    { DB: {} } as never,
+  );
+  expect(queued.state.acknowledgements).toBe(0);
+  expect(queued.state.retryDelays).toEqual([600]);
 });
 
 test("notification push fallback retry delay is bounded exponential backoff", () => {
@@ -338,6 +585,8 @@ test("notification push fallback retry delay is bounded exponential backoff", ()
 });
 
 test("unified Worker runtime routes notification push and DLQ queues", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
   const runtime = createWorkerRuntime(
     async (env) => ({ bindings: env }) as never,
   );
@@ -350,7 +599,7 @@ test("unified Worker runtime routes notification push and DLQ queues", async () 
   );
   await runtime.queue(
     { queue: "takos-notification-push-dlq", messages: [dlq.message] },
-    {} as never,
+    { DB: db } as never,
   );
 
   expect(push.state.acknowledgements).toBe(1);

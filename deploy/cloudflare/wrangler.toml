@@ -358,6 +358,8 @@ dead_letter_queue = "takos-notification-push-dlq"
 queue = "takos-notification-push-dlq"
 max_batch_size = 10
 max_batch_timeout = 60
+max_retries = 100
+retry_delay = 600
 
 # Vectorize for semantic search
 [[vectorize]]
@@ -588,6 +590,8 @@ dead_letter_queue = "takos-notification-push-dlq-staging"
 queue = "takos-notification-push-dlq-staging"
 max_batch_size = 10
 max_batch_timeout = 60
+max_retries = 100
+retry_delay = 600
 
 [[env.staging.vectorize]]
 binding = "VECTORIZE"
