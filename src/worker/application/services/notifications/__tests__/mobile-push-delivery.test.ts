@@ -50,6 +50,17 @@ async function freshDb(): Promise<Database> {
       email_sent_at TEXT,
       email_error TEXT
     );
+    CREATE TABLE notification_push_outbox (
+      notification_id TEXT PRIMARY KEY,
+      delivery_status TEXT NOT NULL DEFAULT 'queued',
+      claim_token TEXT,
+      claimed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    );
     CREATE TABLE notification_pushers (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,

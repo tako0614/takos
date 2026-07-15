@@ -1,6 +1,5 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { Env } from "../../../shared/types/index.ts";
-import { NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
 import {
   getDb,
   notificationPreferences,
@@ -26,6 +25,12 @@ import {
   type NotificationType,
 } from "./notification-models.ts";
 import { deliverNotificationToPushers } from "./mobile-push-delivery.ts";
+import {
+  dispatchNotificationPushOutbox,
+  ensureNotificationPushOutbox,
+  getNotificationPushOutboxStatus,
+  markNotificationPushOutboxDone,
+} from "./push-outbox.ts";
 
 export type NotificationDto = {
   id: string;
@@ -42,13 +47,17 @@ export type NotificationDto = {
 /**
  * Durable hand-off state for callers that own a domain-event outbox.
  *
- * `queued` means the notification push Queue accepted the event; `delivered`
- * means the synchronous fallback reached a terminal gateway outcome. Only
- * `failed` must remain pending in the caller's outbox. `deferred` is reserved
- * for request-context callers whose waitUntil-style callback owns completion.
+ * `queued` means the durable push outbox and notification Queue own the event;
+ * `delivered` means the outbox reached a terminal outcome. Only `failed` must
+ * remain pending in the caller's domain outbox. `deferred` is reserved for
+ * request-context callers whose waitUntil-style callback owns completion.
  */
 export type NotificationPushHandoff =
-  "not_requested" | "queued" | "delivered" | "deferred" | "failed";
+  | "not_requested"
+  | "queued"
+  | "delivered"
+  | "deferred"
+  | "failed";
 
 export type CreateNotificationResult = {
   notification_id: string | null;
@@ -700,22 +709,32 @@ export async function createNotification(
 
   let pushHandoff: NotificationPushHandoff = "not_requested";
   if (wantsPush && !muted) {
+    // This event-id-only row is the replay authority after the caller's domain
+    // transaction is complete. Persist it before Queue or gateway handoff.
+    await ensureNotificationPushOutbox(env.DB, id, ts);
+
     let queued = false;
     if (env.TAKOS_NOTIFICATION_PUSH_QUEUE) {
       try {
-        await env.TAKOS_NOTIFICATION_PUSH_QUEUE.send({
-          version: NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
+        const sent = await dispatchNotificationPushOutbox(env, {
           notificationId: id,
-          userId: input.userId,
-          ...(input.spaceId ? { scopeId: input.spaceId } : {}),
-          timestamp: Date.parse(ts),
+          limit: 1,
         });
-        queued = true;
-        pushHandoff = "queued";
-        logInfo("Notification pusher delivery queued", {
-          module: "notifications",
-          notification_id: id,
-        });
+        const status =
+          sent > 0
+            ? "enqueued"
+            : await getNotificationPushOutboxStatus(env.DB, id);
+        if (status === "dispatching" || status === "enqueued") {
+          queued = true;
+          pushHandoff = "queued";
+          logInfo("Notification pusher delivery queued", {
+            module: "notifications",
+            notification_id: id,
+          });
+        } else if (status === "done") {
+          queued = true;
+          pushHandoff = "delivered";
+        }
       } catch (error) {
         logWarn("Failed to queue notification pusher delivery", {
           module: "notifications",
@@ -730,7 +749,7 @@ export async function createNotification(
         notificationId: id,
         spaceId: input.spaceId,
       })
-        .then<NotificationPushHandoff>((delivery) => {
+        .then<NotificationPushHandoff>(async (delivery) => {
           if (
             delivery.retryExhaustedCount > 0 ||
             delivery.permanentFailureCount > 0 ||
@@ -748,10 +767,14 @@ export async function createNotification(
               selection_truncated: delivery.selectionTruncated,
             });
           }
-          return delivery.retryExhaustedCount > 0 ||
+          if (
+            delivery.retryExhaustedCount > 0 ||
             delivery.configurationErrorCount > 0
-            ? "failed"
-            : "delivered";
+          ) {
+            return "failed";
+          }
+          await markNotificationPushOutboxDone(env.DB, id);
+          return "delivered";
         })
         .catch<NotificationPushHandoff>((error) => {
           logWarn("Notification pusher delivery failed", {
