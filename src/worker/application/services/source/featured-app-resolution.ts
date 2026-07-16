@@ -1,7 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
-import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 import {
   featuredAppCatalogConfig,
   featuredAppCatalogEntries,
@@ -84,9 +83,7 @@ function normalizeHttpUrl(value: string, field: string): string {
     );
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new FeaturedAppCatalogInvalidError(
-      `${field} must use http or https`,
-    );
+    throw new FeaturedAppCatalogInvalidError(`${field} must use http or https`);
   }
   if (parsed.username || parsed.password) {
     throw new FeaturedAppCatalogInvalidError(
@@ -96,23 +93,10 @@ function normalizeHttpUrl(value: string, field: string): string {
   return parsed.toString();
 }
 
-function normalizeInstallationsUrl(value: string, field: string): string {
-  const normalized = normalizeHttpUrl(value, field);
-  const url = new URL(normalized);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  if (basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
-    url.pathname = basePath;
-  } else {
-    url.pathname = `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
-  }
-  url.search = "";
-  return url.toString();
-}
-
 export function resolveFeaturedAppInstallConfig(
   env: FeaturedAppCatalogEnv,
 ): FeaturedAppInstallConfig | null {
-  const installUrl =
+  const controlUrl =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_URL) ??
     readEnvString(env.TAKOS_APP_INSTALLATIONS_URL) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
@@ -124,42 +108,21 @@ export function resolveFeaturedAppInstallConfig(
   const accountId =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID) ??
     readEnvString(env.TAKOS_APP_INSTALL_ACCOUNT_ID);
-  const subject =
-    readEnvString(env.TAKOS_FEATURED_APP_INSTALL_SUBJECT) ??
-    readEnvString(env.TAKOS_APP_INSTALL_SUBJECT) ??
-    readEnvString(env.TAKOSUMI_ACCOUNTS_SUBJECT);
   const mode =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_MODE) ??
     readEnvString(env.TAKOS_APP_INSTALL_MODE);
-  const runtimeBaseUrl =
-    readEnvString(env.TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL) ??
-    readEnvString(env.TAKOS_APP_INSTALL_RUNTIME_BASE_URL);
-  const configured = Boolean(
-    installUrl || token || accountId || subject || mode || runtimeBaseUrl,
-  );
+  const configured = Boolean(controlUrl || token || accountId || mode);
   if (!configured) return null;
-  if (!installUrl || !token || !subject) {
+  if (!controlUrl || !token || !accountId) {
     throw new FeaturedAppCatalogInvalidError(
-      "Featured app Capsule install requires endpoint, token, and subject: configure TAKOS_FEATURED_APP_INSTALL_URL/TOKEN/SUBJECT, shared TAKOS_APP_INSTALLATIONS_URL/TOKEN/SUBJECT, or TAKOSUMI_ACCOUNTS_INTERNAL_URL + TAKOSUMI_ACCOUNTS_TOKEN/SUBJECT",
+      "Featured app Capsule automation requires canonical control URL, token, and Takosumi Workspace id",
     );
   }
   return {
-    installUrl: normalizeInstallationsUrl(
-      installUrl,
-      "TAKOS_FEATURED_APP_INSTALL_URL",
-    ),
+    controlUrl: normalizeHttpUrl(controlUrl, "TAKOS_FEATURED_APP_INSTALL_URL"),
     token,
-    subject,
-    ...(accountId ? { accountId } : {}),
+    workspaceId: accountId,
     ...(mode ? { mode } : {}),
-    ...(runtimeBaseUrl
-      ? {
-          runtimeBaseUrl: normalizeHttpUrl(
-            runtimeBaseUrl,
-            "TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL",
-          ),
-        }
-      : {}),
   };
 }
 
@@ -311,8 +274,7 @@ export function resolveStaticFeaturedAppCatalog(
  * `resolveFeaturedAppCatalogForBootstrap` when DB-managed operator
  * configuration must be considered.
  */
-export const resolveFeaturedAppCatalog =
-  resolveStaticFeaturedAppCatalog;
+export const resolveFeaturedAppCatalog = resolveStaticFeaturedAppCatalog;
 
 export async function resolveFeaturedAppCatalogForBootstrap(
   env: FeaturedAppCatalogEnv,
@@ -326,10 +288,7 @@ export async function resolveFeaturedAppCatalogForBootstrap(
 
   let persistedCatalog: PersistedFeaturedAppCatalog;
   try {
-    persistedCatalog = await readPersistedFeaturedAppCatalog(
-      env,
-      defaults,
-    );
+    persistedCatalog = await readPersistedFeaturedAppCatalog(env, defaults);
   } catch (error) {
     if (!(error instanceof FeaturedAppCatalogUnavailableError)) {
       throw error;
@@ -400,10 +359,7 @@ async function resolveFeaturedAppCatalogStatus(
 
   let persistedCatalog: PersistedFeaturedAppCatalog;
   try {
-    persistedCatalog = await readPersistedFeaturedAppCatalog(
-      env,
-      defaults,
-    );
+    persistedCatalog = await readPersistedFeaturedAppCatalog(env, defaults);
   } catch (error) {
     if (!(error instanceof FeaturedAppCatalogUnavailableError)) {
       throw error;
@@ -415,11 +371,7 @@ async function resolveFeaturedAppCatalogStatus(
     );
   }
   if (persistedCatalog.configured) {
-    return featuredAppCatalogStatus(
-      "db",
-      defaults,
-      persistedCatalog.entries,
-    );
+    return featuredAppCatalogStatus("db", defaults, persistedCatalog.entries);
   }
 
   return featuredAppCatalogStatus(

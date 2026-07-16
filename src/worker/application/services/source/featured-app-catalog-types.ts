@@ -7,7 +7,8 @@ import type { Env } from "../../../shared/types/index.ts";
 
 export type FeaturedAppRefType = "branch" | "tag" | "commit";
 export type FeaturedAppBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
-export type FeaturedAppRuntimeMode = "shared-cell" | "dedicated" | "self-hosted";
+export type FeaturedAppRuntimeMode =
+  "shared-cell" | "dedicated" | "self-hosted";
 export type FeaturedAppVariableValue =
   | string
   | number
@@ -96,12 +97,10 @@ export type FeaturedAppPreinstallJobRow =
   typeof featuredAppPreinstallJobs.$inferSelect;
 
 export type FeaturedAppInstallConfig = {
-  installUrl: string;
+  controlUrl: string;
   token: string;
-  subject: string;
-  accountId?: string;
+  workspaceId: string;
   mode?: string;
-  runtimeBaseUrl?: string;
 };
 
 export type FeaturedAppPreinstallJobStatus =
@@ -123,11 +122,7 @@ export interface FeaturedAppPreinstallJobSummary {
 }
 
 export type FeaturedAppCatalogStatusSource =
-  | "disabled"
-  | "env_catalog"
-  | "env_repositories"
-  | "db"
-  | "fallback";
+  "disabled" | "env_catalog" | "env_repositories" | "db" | "fallback";
 
 export interface FeaturedAppCatalogStatus {
   source: FeaturedAppCatalogStatusSource;

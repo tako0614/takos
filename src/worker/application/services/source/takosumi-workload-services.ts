@@ -1,25 +1,19 @@
-import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
+import {
+  takosumiCapsuleOutputsPath,
+  takosumiInterfacesPath,
+  takosumiSessionApiUrl,
+} from "../takosumi-control-paths.ts";
 
 /**
- * Workload service display, derived from a Capsule's deployment OUTPUTS
- * (deploy decision D3). The OSS service projection ledger was removed from
- * Takosumi Accounts; the Takos product now reads the Capsule projection's
- * deployment-output payload (`deployment_outputs` on the legacy-named
- * projection envelope) instead of the retired `/installations/{id}/services`
- * endpoint.
- *
- * The functional env/URL material reaching workloads is owned separately by the
- * local service-publication catalog (apply-engine + group-managed-desired-state)
- * and is unaffected by this display projection.
+ * Takos launcher/service presentation derived from canonical Takosumi records.
+ * Interfaces are the runtime authority. Ordinary OpenTofu Outputs are included
+ * only as value-free apply evidence and never become launch endpoints.
  */
 
 export type WorkloadServiceStatus =
-  | "ready"
-  | "not_configured"
-  | "unavailable"
-  | "unknown";
+  "ready" | "not_configured" | "unavailable" | "unknown";
 
-export interface InstallableAppWorkloadServiceSummary {
+export interface CapsuleWorkloadServiceSummary {
   id: string;
   capability: string;
   status: WorkloadServiceStatus;
@@ -28,10 +22,14 @@ export interface InstallableAppWorkloadServiceSummary {
   token_expires_at: string | null;
 }
 
-export interface TakosumiAccountsServiceRequestConfig {
+export interface TakosumiControlReadConfig {
   baseUrl: string;
   token?: string;
-  fetch?: typeof fetch;
+  headers?: HeadersInit;
+  fetch?: (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response>;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -46,110 +44,159 @@ function readString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/**
- * Builds the legacy-named installed-service projection URL on the accounts
- * plane. The projection envelope carries the deployment-output projection that
- * backs the workload service display.
- */
-export function accountsInstallationProjectionUrl(
-  baseUrl: string,
-  installationId: string,
-): URL {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  const installationsPath = basePath.endsWith(
-    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-  )
-    ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
-  url.pathname = `${installationsPath}/${encodeURIComponent(installationId)}`;
-  url.search = "";
-  return url;
+function outputEvidenceServices(
+  body: Record<string, unknown> | null,
+): CapsuleWorkloadServiceSummary[] {
+  const output = readRecord(body?.output);
+  const publicOutputs = readRecord(output?.publicOutputs);
+  if (!publicOutputs) return [];
+  return Object.keys(publicOutputs)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => ({
+      id: `output:${name}`,
+      capability: "opentofu.output",
+      status: "ready" as const,
+      // Output values are not a runtime registry. Interface input mappings own
+      // the endpoint projection and authorization boundary.
+      endpoint: null,
+      secret_configured: false,
+      token_expires_at: null,
+    }));
 }
 
-function projectDeploymentOutput(
+function interfaceStatus(value: unknown): WorkloadServiceStatus {
+  switch (readString(value)) {
+    case "Resolved":
+      return "ready";
+    case "Pending":
+    case "NotReady":
+      return "not_configured";
+    case "Unknown":
+    case "Terminating":
+    case "Retired":
+      return "unavailable";
+    default:
+      return "unknown";
+  }
+}
+
+function resolvedInterfaceEndpoint(
+  record: Record<string, unknown>,
+): string | null {
+  const spec = readRecord(record.spec);
+  const status = readRecord(record.status);
+  if (!spec || !status || readString(status.phase) !== "Resolved") return null;
+  const resolvedInputs = readRecord(status.resolvedInputs);
+  if (!resolvedInputs) return null;
+  const access = readRecord(spec.access);
+  const resourceUriInput = readString(access?.resourceUriInput);
+  if (resourceUriInput) return readString(resolvedInputs[resourceUriInput]);
+
+  // These are consumer-profile rules for the two first-party runtime types,
+  // not Output-name inference. Unknown Interface types remain discoverable but
+  // do not gain an endpoint by convention.
+  const type = readString(spec.type);
+  if (type === "interface.ui.surface") return readString(resolvedInputs.url);
+  if (type === "mcp.server" || type === "protocol.mcp.server") {
+    return (
+      readString(resolvedInputs.endpoint) ?? readString(resolvedInputs.url)
+    );
+  }
+  return null;
+}
+
+function interfaceService(
   value: unknown,
-): InstallableAppWorkloadServiceSummary | null {
+): CapsuleWorkloadServiceSummary | null {
   const record = readRecord(value);
-  if (!record) return null;
-  const name =
-    readString(record.name) ?? readString(record.kind) ?? null;
-  if (!name) return null;
-  const endpoint = readString(record.value);
+  const metadata = readRecord(record?.metadata);
+  const spec = readRecord(record?.spec);
+  const status = readRecord(record?.status);
+  const id = readString(metadata?.id);
+  const name = readString(metadata?.name);
+  const type = readString(spec?.type);
+  if (!record || !id || !name || !type || !status) return null;
   return {
-    id: name,
-    capability: "deployment.outputs",
-    status: endpoint ? "ready" : "not_configured",
-    endpoint,
-    secret_configured: record.sensitive === true,
+    id: `interface:${name}`,
+    capability: type,
+    status: interfaceStatus(status.phase),
+    endpoint: resolvedInterfaceEndpoint(record),
+    secret_configured: false,
     token_expires_at: null,
   };
 }
 
-/**
- * Projects an installation envelope body (`{ installation: { deployment_outputs,
- * launch_url, ... } }`) into the workload service display summaries.
- */
-export function projectWorkloadServicesFromInstallationBody(
-  body: Record<string, unknown> | null,
-): InstallableAppWorkloadServiceSummary[] {
-  if (!body) return [];
-  const installation = readRecord(body.installation) ?? body;
-  const outputs = installation.deployment_outputs;
-  if (Array.isArray(outputs) && outputs.length > 0) {
-    return outputs
-      .map(projectDeploymentOutput)
-      .filter(
-        (service): service is InstallableAppWorkloadServiceSummary =>
-          service !== null,
-      );
-  }
-  const launchUrl = readString(installation.launch_url);
-  if (launchUrl) {
-    return [
-      {
-        id: "launch_url",
-        capability: "deployment.outputs",
-        status: "ready",
-        endpoint: launchUrl,
-        secret_configured: false,
-        token_expires_at: null,
-      },
-    ];
-  }
-  return [];
+export function projectCapsuleWorkloadServices(
+  outputBody: Record<string, unknown> | null,
+  interfacesBody: Record<string, unknown> | null,
+): CapsuleWorkloadServiceSummary[] {
+  const interfaces = Array.isArray(interfacesBody?.interfaces)
+    ? interfacesBody.interfaces
+        .map(interfaceService)
+        .filter(
+          (service): service is CapsuleWorkloadServiceSummary =>
+            service !== null,
+        )
+    : [];
+  return [...interfaces, ...outputEvidenceServices(outputBody)];
 }
 
-/**
- * Wraps an installation envelope body into the `{ installation_id, services }`
- * response shape the dashboard consumes for the per-installation services view.
- */
-export function installationProjectionToServicesBody(
-  installationId: string,
-  body: Record<string, unknown> | null,
+/** Local Takos UI DTO; the legacy key is intentionally confined to this edge. */
+export function capsuleRuntimeToServicesBody(
+  capsuleId: string,
+  outputBody: Record<string, unknown> | null,
+  interfacesBody: Record<string, unknown> | null,
 ): Record<string, unknown> {
   return {
-    installation_id: installationId,
-    services: projectWorkloadServicesFromInstallationBody(body),
+    installation_id: capsuleId,
+    services: projectCapsuleWorkloadServices(outputBody, interfacesBody),
   };
 }
 
-export async function fetchAccountsInstallationWorkloadServices(
-  installationId: string,
-  config: TakosumiAccountsServiceRequestConfig | undefined,
-): Promise<InstallableAppWorkloadServiceSummary[]> {
-  if (!config) return [];
-  const url = accountsInstallationProjectionUrl(config.baseUrl, installationId);
-  const headers = new Headers({ accept: "application/json" });
+function requestHeaders(config: TakosumiControlReadConfig): Headers {
+  const headers = new Headers(config.headers);
+  headers.set("accept", "application/json");
   if (config.token?.trim()) {
     headers.set("authorization", `Bearer ${config.token.trim()}`);
   }
+  return headers;
+}
 
+async function readJsonRecord(
+  response: Response,
+): Promise<Record<string, unknown> | null> {
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => null)) as unknown;
+  return readRecord(body);
+}
+
+export async function fetchCapsuleWorkloadServices(
+  capsuleId: string,
+  workspaceId: string,
+  config: TakosumiControlReadConfig | undefined,
+): Promise<CapsuleWorkloadServiceSummary[]> {
+  if (!config) return [];
+  const outputUrl = takosumiSessionApiUrl(
+    config.baseUrl,
+    takosumiCapsuleOutputsPath(capsuleId),
+  );
+  const interfacesUrl = takosumiSessionApiUrl(
+    config.baseUrl,
+    takosumiInterfacesPath(),
+  );
+  interfacesUrl.searchParams.set("workspaceId", workspaceId);
+  interfacesUrl.searchParams.set("ownerKind", "Capsule");
+  interfacesUrl.searchParams.set("ownerId", capsuleId);
+  const fetchImpl = config.fetch ?? fetch;
   try {
-    const response = await (config.fetch ?? fetch)(url, { headers });
-    if (!response.ok) return [];
-    const body = (await response.json()) as unknown;
-    return projectWorkloadServicesFromInstallationBody(readRecord(body));
+    const [outputResponse, interfacesResponse] = await Promise.all([
+      fetchImpl(outputUrl, { headers: requestHeaders(config) }),
+      fetchImpl(interfacesUrl, { headers: requestHeaders(config) }),
+    ]);
+    return projectCapsuleWorkloadServices(
+      await readJsonRecord(outputResponse),
+      await readJsonRecord(interfacesResponse),
+    );
   } catch {
     return [];
   }

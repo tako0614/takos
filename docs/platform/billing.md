@@ -326,23 +326,22 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 
 ## API 一覧
 
-current `takosumi` Accounts reference implementation の billing HTTP
-surface は、Stripe checkout / webhook と installed-service usage report ingest
-です。
+current operator account-plane billing HTTP surface は Stripe checkout /
+webhook です。Capsule runtime からの usage ingest は Takosumi Cloud / Operator
+の billing extension が所有し、Takos OSS が retired installed-service
+projection route を公開する前提にはしません。
 
-| エンドポイント                                            | メソッド | 説明                                                                                                              |
-| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `/v1/billing/stripe/checkout`                             | POST     | Stripe Checkout session 作成                                                                                      |
-| `/v1/billing/stripe/webhook`                              | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                                       |
-| `/v1/capsule-projections/{id}/billing/usage-reports` | POST     | installed-service projection token + `billing.usage.report` account-plane capability record で保護された使用量 report |
+| エンドポイント                | メソッド | 説明                                        |
+| ----------------------------- | -------- | ------------------------------------------- |
+| `/v1/billing/stripe/checkout` | POST     | Stripe Checkout session 作成                |
+| `/v1/billing/stripe/webhook`  | POST     | Stripe Webhook（認証不要・Stripe 署名検証） |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
 
-請求は Takosumi Accounts の BillingPort を使います。使用量の ingest と
-entitlement projection は Accounts reference implementation にあり、customer
-portal / invoice download の公開 UI は hosted Takosumi launch overlay の運用
-hardening として扱います。
+請求は operator の BillingPort を使います。usage ingest、payment enforcement、
+entitlement、customer portal、invoice download は Takosumi Cloud / Operator
+extension の責務で、Takos はその非公開 endpoint を正本化しません。
 
 ## 関連ドキュメント
 

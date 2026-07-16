@@ -1,12 +1,7 @@
-import {
-  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-  TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API,
-  takosumiAccountsCapsulePath,
-} from "@takosjp/takosumi-accounts-contract";
-
 import type { Env } from "../../../shared/types/env.ts";
 import { RUNTIME_PROJECTION_CAPABILITIES } from "../source/app-interface-contract.ts";
 import type { AppServiceBinding } from "../source/app-manifest-types.ts";
+import { takosumiSessionApiUrl } from "../takosumi-control-paths.ts";
 
 export type ServiceGrantMaterialization = {
   baseUrl: string;
@@ -24,6 +19,11 @@ export type ServiceGrantMaterializer = (
     previousToken?: string | null;
   },
 ) => Promise<ServiceGrantMaterialization>;
+
+export const serviceGrantDeps = {
+  fetch: (input: string | URL | Request, init?: RequestInit) =>
+    fetch(input, init),
+};
 
 function readEnvString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
@@ -46,38 +46,9 @@ function readString(value: unknown): string | null {
 function accountsBaseUrl(env: Env): string | null {
   return (
     readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
-    readEnvString(env.TAKOSUMI_ACCOUNTS_URL)
+    readEnvString(env.TAKOSUMI_ACCOUNTS_URL) ??
+    readEnvString(env.OIDC_ISSUER_URL)
   );
-}
-
-function accountsApiUrl(baseUrl: string, path: string): URL {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  if (
-    basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH) &&
-    normalizedPath.startsWith(`${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}/`)
-  ) {
-    url.pathname = `${basePath}${normalizedPath.slice(
-      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH.length,
-    )}`;
-  } else if (
-    basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH) &&
-    normalizedPath === TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH
-  ) {
-    url.pathname = basePath;
-  } else {
-    url.pathname = `${basePath}${normalizedPath}`;
-  }
-  url.search = "";
-  return url;
-}
-
-function accountsInstallationBaseUrl(baseUrl: string): string {
-  return accountsApiUrl(
-    baseUrl,
-    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-  ).toString();
 }
 
 async function readJsonBody(response: Response): Promise<unknown> {
@@ -90,107 +61,132 @@ async function readJsonBody(response: Response): Promise<unknown> {
   }
 }
 
-function accountsErrorMessage(body: unknown, fallback: string): string {
-  const record = readRecord(body);
-  const error = readRecord(record?.error);
-  return (
-    readString(record?.error_description) ??
-    readString(record?.message) ??
-    readString(error?.message) ??
-    readString(error?.code) ??
-    readString(record?.error) ??
-    fallback
-  );
+function assertSupportedBinding(serviceBinding: AppServiceBinding): void {
+  if (
+    serviceBinding.capability !== RUNTIME_PROJECTION_CAPABILITIES.controlApi
+  ) {
+    throw new Error(
+      `service binding '${serviceBinding.name}' (${serviceBinding.capability}) is not supported by this materializer`,
+    );
+  }
 }
 
-function accountsServiceIdForCapability(
-  serviceBinding: AppServiceBinding,
-): string {
-  if (serviceBinding.capability === RUNTIME_PROJECTION_CAPABILITIES.controlApi) {
-    return TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API;
-  }
-  throw new Error(
-    `service binding '${serviceBinding.name}' (${serviceBinding.capability}) is not supported by this materializer`,
+function scopeSet(value: unknown): Set<string> {
+  return new Set((readString(value) ?? "").split(/\s+/u).filter(Boolean));
+}
+
+function isCurrentInterfaceToken(
+  body: unknown,
+  expected: {
+    workspaceId: string;
+    capsuleId: string;
+    resource: string;
+    permissions: readonly string[];
+  },
+): boolean {
+  const record = readRecord(body);
+  const takosumi = readRecord(record?.takosumi);
+  const resolvedRevision = takosumi?.interface_resolved_revision;
+  const permissions = scopeSet(record?.scope);
+  return Boolean(
+    record?.active === true &&
+    record?.token_use === "interface_oauth" &&
+    readString(record.aud) === expected.resource &&
+    readString(takosumi?.workspace_id) === expected.workspaceId &&
+    readString(takosumi?.capsule_id) === expected.capsuleId &&
+    readString(takosumi?.interface_id) &&
+    readString(takosumi?.interface_binding_id) &&
+    typeof resolvedRevision === "number" &&
+    Number.isInteger(resolvedRevision) &&
+    resolvedRevision >= 0 &&
+    expected.permissions.every((permission) => permissions.has(permission)),
   );
 }
 
 async function previousTokenIsCurrent(input: {
-  fetchImpl: typeof fetch;
   baseUrl: string;
-  installationId: string;
+  clientId: string;
+  clientSecret: string;
+  workspaceId: string;
+  capsuleId: string;
+  permissions: readonly string[];
   previousToken: string;
-}): Promise<boolean> {
-  const response = await input.fetchImpl(
-    accountsApiUrl(
-      input.baseUrl,
-      takosumiAccountsCapsulePath(input.installationId),
-    ),
+}): Promise<{ current: boolean; resource: string }> {
+  const resource = takosumiSessionApiUrl(input.baseUrl, "/api/v1").toString();
+  const response = await serviceGrantDeps.fetch(
+    takosumiSessionApiUrl(input.baseUrl, "/oauth/introspect"),
     {
-      method: "GET",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.previousToken}`,
-      },
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        token: input.previousToken,
+        client_id: input.clientId,
+        client_secret: input.clientSecret,
+        resource,
+      }),
     },
   );
-  if (response.ok) return true;
-  if (response.status === 401 || response.status === 403) return false;
-  const body = await readJsonBody(response);
-  throw new Error(
-    `service binding token validation failed: ${accountsErrorMessage(
-      body,
-      `Accounts returned HTTP ${response.status}`,
-    )}`,
-  );
+  if (!response.ok) {
+    throw new Error(
+      `canonical Interface token introspection failed with HTTP ${response.status}`,
+    );
+  }
+  return {
+    current: isCurrentInterfaceToken(await readJsonBody(response), {
+      workspaceId: input.workspaceId,
+      capsuleId: input.capsuleId,
+      resource,
+      permissions: input.permissions,
+    }),
+    resource,
+  };
 }
 
 export const materializeTakosumiServiceGrant: ServiceGrantMaterializer = async (
   env,
   params,
 ) => {
-  const accountsServiceId = accountsServiceIdForCapability(
-    params.serviceBinding,
-  );
-  const installationId = readEnvString(params.installationId);
-  if (!installationId) {
+  assertSupportedBinding(params.serviceBinding);
+  const capsuleId = readEnvString(params.installationId);
+  if (!capsuleId) {
     throw new Error(
-      `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) targets compute '${params.workloadName}' but no Takosumi Accounts Capsule projection id is available`,
+      `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) targets compute '${params.workloadName}' but no canonical Capsule id is available`,
     );
   }
   const baseUrl = accountsBaseUrl(env);
   if (!baseUrl) {
     throw new Error(
-      `service binding '${params.serviceBinding.name}' requires TAKOSUMI_ACCOUNTS_INTERNAL_URL or TAKOSUMI_ACCOUNTS_URL`,
+      `service binding '${params.serviceBinding.name}' requires TAKOSUMI_ACCOUNTS_INTERNAL_URL, TAKOSUMI_ACCOUNTS_URL, or OIDC_ISSUER_URL`,
     );
   }
-
-  // Reference the resolved platform service id so the capability check is
-  // exercised even though token minting is no longer available in OSS.
-  void accountsServiceId;
-  const fetchImpl = fetch;
+  const clientId = readEnvString(env.OIDC_CLIENT_ID);
+  const clientSecret = readEnvString(env.OIDC_CLIENT_SECRET);
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      `service binding '${params.serviceBinding.name}' requires confidential OIDC client credentials for Interface token introspection`,
+    );
+  }
   const previousToken = readEnvString(params.previousToken);
   if (previousToken) {
-    const isCurrent = await previousTokenIsCurrent({
-      fetchImpl,
+    const validation = await previousTokenIsCurrent({
       baseUrl,
-      installationId,
+      clientId,
+      clientSecret,
+      workspaceId: params.spaceId,
+      capsuleId,
+      permissions: params.serviceBinding.scopes,
       previousToken,
     });
-    if (isCurrent) {
-      return {
-        baseUrl: accountsInstallationBaseUrl(baseUrl),
-        token: previousToken,
-      };
+    if (validation.current) {
+      return { baseUrl: validation.resource, token: previousToken };
     }
   }
 
-  // Deploy decision D3: Takosumi OSS removed the runtime projection service-token
-  // issuance (the `/installations/{id}/services/{serviceId}/rotate-token`
-  // endpoint). A `control.api` runtime authority token can therefore only be REUSED
-  // (validated above), not minted, against an OSS control plane. Operators that
-  // need control.api token vending use Takosumi Cloud. Fail closed here rather
-  // than silently calling a removed endpoint.
+  // Runtime authority is owned by a current Interface + InterfaceBinding.
+  // This deploy reconciler has no Principal authorization context with which to
+  // request a replacement token, so it may only reuse a fully introspected
+  // short-lived credential and otherwise must fail closed.
   throw new Error(
-    `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) cannot mint a new runtime authority token: Takosumi OSS removed runtime projection service-token issuance. Supply a current token via previousToken, or use Takosumi Cloud.`,
+    `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) cannot mint a canonical Interface token. Supply a current, exactly scoped Interface OAuth token via previousToken.`,
   );
 };

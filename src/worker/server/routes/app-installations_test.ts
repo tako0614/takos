@@ -1,5 +1,4 @@
-import { test } from "bun:test";
-import { assertEquals, assertObjectMatch } from "@takos/test/assert";
+import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
@@ -12,17 +11,14 @@ import type {
   FeaturedAppCatalogEntry,
   FeaturedAppInstallConfig,
 } from "../../application/services/source/featured-app-catalog.ts";
-import { installableAppInstallDeps } from "../../application/services/source/installable-app-install.ts";
 
 const originalRouteAuthDeps = { ...routeAuthDeps };
-const originalAppInstallationsRouteDeps = { ...appInstallationsRouteDeps };
-const originalInstallableAppInstallDeps = { ...installableAppInstallDeps };
+const originalDeps = { ...appInstallationsRouteDeps };
 
-function restoreDeps() {
+afterEach(() => {
   Object.assign(routeAuthDeps, originalRouteAuthDeps);
-  Object.assign(appInstallationsRouteDeps, originalAppInstallationsRouteDeps);
-  Object.assign(installableAppInstallDeps, originalInstallableAppInstallDeps);
-}
+  Object.assign(appInstallationsRouteDeps, originalDeps);
+});
 
 function createApp() {
   const app = new Hono<{
@@ -31,23 +27,7 @@ function createApp() {
   }>();
   app.onError((error, c) => {
     if (isAppError(error)) {
-      return c.json(
-        error.toResponse(),
-        error.statusCode as
-          | 400
-          | 401
-          | 403
-          | 404
-          | 409
-          | 410
-          | 422
-          | 429
-          | 500
-          | 501
-          | 502
-          | 503
-          | 504,
-      );
+      return c.json(error.toResponse(), error.statusCode as never);
     }
     throw error;
   });
@@ -59,65 +39,55 @@ function createApp() {
   return app;
 }
 
+function authorize(spaceId = "space-local") {
+  routeAuthDeps.requireSpaceAccess = async () =>
+    ({ space: { id: spaceId }, membership: { role: "editor" } }) as never;
+}
+
+const operatorEnv = {
+  DB: {},
+  TAKOS_APP_INSTALLATIONS_URL: "https://operator.test/control",
+  TAKOS_APP_INSTALL_TOKEN: "operator-token",
+  TAKOS_APP_INSTALL_ACCOUNT_ID: "ws_operator",
+} as Env;
+
 const featuredAppEntry = {
   name: "takos-office",
   title: "Office",
   appId: "jp.takos.office",
   repositoryUrl: "https://github.com/tako0614/takos-office.git",
-  ref: "v0.1.2",
+  ref: "v1.0.0",
   refType: "tag",
-  runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
+  runtimeModes: ["shared-cell", "dedicated"],
   preinstall: false,
 } satisfies FeaturedAppCatalogEntry;
 
-const roadToMeCatalogEntry = {
-  name: "road-to-me",
-  title: "Road to Me",
-  appId: "jp.takos.road-to-me",
-  repositoryUrl: "https://github.com/tako0614/road-to-me.git",
-  ref: "v0.1.0",
-  refType: "tag",
-  runtimeModes: ["dedicated", "self-hosted"],
-  preinstall: false,
-} satisfies FeaturedAppCatalogEntry;
-
-const installConfig = {
-  installUrl: "https://installer.internal/v1/capsule-projections",
-  token: "install-token",
-  subject: "operator-subject",
+const featuredConfig = {
+  controlUrl: "https://operator.test/control",
+  token: "operator-token",
+  workspaceId: "ws_operator",
   mode: "shared-cell",
 } satisfies FeaturedAppInstallConfig;
 
-test("app-installations route applies a featured app through Capsule install", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
-    async () => [featuredAppEntry];
-  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () =>
-    installConfig;
-  appInstallationsRouteDeps.applyFeaturedAppInstallation = async (
-    entry,
-    config,
-    params,
-  ) => {
-    calls.push({ kind: "apply", entry, config, params });
-    return {
-      accounts: {
-        installationId: "inst_1",
-        status: "ready",
-      },
+describe("app installation routes on canonical Takosumi records", () => {
+  test("applies a featured app through explicit operator automation", async () => {
+    authorize();
+    appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
+      async () => [featuredAppEntry];
+    appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () =>
+      featuredConfig;
+    let call: unknown;
+    appInstallationsRouteDeps.applyFeaturedAppInstallation = async (
+      entry,
+      config,
+      params,
+    ) => {
+      call = { entry, config, params };
+      return { capsule: { id: "cap_office", status: "active" } };
     };
-  };
 
-  try {
     const response = await createApp().request(
-      "/spaces/space-alias/app-installations/apply",
+      "/spaces/me/app-installations/apply",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -126,1011 +96,343 @@ test("app-installations route applies a featured app through Capsule install", a
           mode: "shared-cell",
         }),
       },
-      { DB: {} } as Env,
+      operatorEnv,
     );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 202);
-    assertObjectMatch(body, {
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
       installation: {
-        installed: true,
-        installation_id: "inst_1",
-        app_id: "jp.takos.office",
+        installation_id: "cap_office",
         status: "ready",
-        runtime_mode: "shared-cell",
-        installed_version: "v0.1.2",
+        app_id: "jp.takos.office",
       },
       subject_source: "operator_config",
     });
-    assertEquals(calls, [
+    expect(call).toEqual({
+      entry: featuredAppEntry,
+      config: featuredConfig,
+      params: { mode: "shared-cell" },
+    });
+  });
+
+  test("passes an exact canonical Run reference from plan to apply", async () => {
+    authorize();
+    const calls: unknown[] = [];
+    appInstallationsRouteDeps.planInstallableAppInstallation = async (
+      input,
+    ) => {
+      calls.push({ kind: "plan", input });
+      return {
+        status: 201,
+        body: {
+          expected: {
+            workspaceId: "ws_operator",
+            sourceId: "src_1",
+            capsuleId: "cap_1",
+            runId: "run_plan",
+          },
+        },
+      };
+    };
+    appInstallationsRouteDeps.applyInstallableAppInstallation = async (
+      input,
+    ) => {
+      calls.push({ kind: "apply", input });
+      return { status: 202, body: { run: { id: "run_apply" } } };
+    };
+    const app = createApp();
+    const source = {
+      git_url: "https://github.com/acme/app.git",
+      ref: "v1",
+      module_path: "modules/app",
+    };
+    const planResponse = await app.request(
+      "/spaces/me/app-installations/git-url/plan",
       {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(source),
+      },
+      operatorEnv,
+    );
+    const plan = (await planResponse.json()) as Record<string, unknown>;
+    const applyResponse = await app.request(
+      "/spaces/me/app-installations/git-url/apply",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...source, expected: plan.expected }),
+      },
+      operatorEnv,
+    );
+    expect(planResponse.status).toBe(201);
+    expect(applyResponse.status).toBe(202);
+    expect(calls).toEqual([
+      {
+        kind: "plan",
+        input: {
+          workspaceId: "ws_operator",
+          gitUrl: source.git_url,
+          ref: "v1",
+          modulePath: "modules/app",
+        },
       },
       {
         kind: "apply",
-        entry: featuredAppEntry,
-        config: installConfig,
-        params: {
-          spaceId: "space-1",
-          createdByAccountId: "space-1",
-          mode: "shared-cell",
+        input: {
+          workspaceId: "ws_operator",
+          expected: {
+            workspaceId: "ws_operator",
+            sourceId: "src_1",
+            capsuleId: "cap_1",
+            runId: "run_plan",
+          },
         },
       },
     ]);
-  } finally {
-    restoreDeps();
-  }
-});
+  });
 
-test("app-installations route applies catalog-only road-to-me by app_id", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
-    async () => [featuredAppEntry, roadToMeCatalogEntry];
-  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () =>
-    installConfig;
-  appInstallationsRouteDeps.applyFeaturedAppInstallation = async (
-    entry,
-    config,
-    params,
-  ) => {
-    calls.push({ kind: "apply", entry, config, params });
-    return {
-      accounts: {
-        installationId: "inst_road",
-        status: "ready",
-      },
+  test("uses the delegated Takosumi Workspace instead of the local id", async () => {
+    authorize("local-space");
+    appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
+      accessToken: "delegated-token",
+      workspaceId: "ws_parent",
+    });
+    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig = () => ({
+      baseUrl: "https://operator.test",
+    });
+    let planned: unknown;
+    appInstallationsRouteDeps.planInstallableAppInstallation = async (
+      input,
+      config,
+    ) => {
+      planned = { input, headers: new Headers(config.headers) };
+      return { status: 201, body: { expected: { runId: "run_1" } } };
     };
-  };
-
-  try {
     const response = await createApp().request(
-      "/spaces/space-alias/app-installations/apply",
+      "/spaces/me/app-installations/git-url/plan",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          app_id: "jp.takos.road-to-me",
-          mode: "dedicated",
-        }),
-      },
-      { DB: {} } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 202);
-    assertObjectMatch(body, {
-      installation: {
-        installed: true,
-        installation_id: "inst_road",
-        app_id: "jp.takos.road-to-me",
-        status: "ready",
-        runtime_mode: "dedicated",
-        installed_version: "v0.1.0",
-      },
-      subject_source: "operator_config",
-    });
-    assertEquals(calls.at(-1), {
-      kind: "apply",
-      entry: roadToMeCatalogEntry,
-      config: installConfig,
-      params: {
-        spaceId: "space-1",
-        createdByAccountId: "space-1",
-        mode: "dedicated",
-      },
-    });
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route requires Capsule install config", async () => {
-  routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
-    async () => [featuredAppEntry];
-  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () => null;
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-1/app-installations/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ app_id: "jp.takos.office" }),
-      },
-      { DB: {} } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 503);
-    assertObjectMatch(body, {
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "Capsule install is not configured",
-      },
-    });
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route rejects camelCase request aliases", async () => {
-  routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-1/app-installations/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ appId: "jp.takos.office" }),
-      },
-      { DB: {} } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 400);
-    assertObjectMatch(body, {
-      error: {
-        code: "BAD_REQUEST",
-        message: "app_id is required",
-      },
-    });
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route proxies Git URL install plan Run", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  installableAppInstallDeps.fetch = async (input, init) => {
-    const inputUrl = String(input);
-    calls.push({
-      kind: "fetch",
-      input: inputUrl,
-      method: init?.method,
-      authorization: new Headers(init?.headers).get("authorization"),
-      body: JSON.parse(String(init?.body)),
-    });
-    return Response.json({
-      source: {
-        kind: "git",
-        url: "https://github.com/example/app.git",
-        ref: "v1.2.3",
-        commit: "1111111111111111111111111111111111111111",
-      },
-      planDigest: "sha256:abc",
-      installPlan: {
-        repo: { id: "example.app", name: "Example App" },
-        changes: [],
-      },
-      changes: [],
-      expected: {
-        commit: "1111111111111111111111111111111111111111",
-        planDigest: "sha256:abc",
-      },
-    });
-  };
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-alias/app-installations/git-url/plan",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-          module_path: ".",
-          variables: {
-            worker_name: "example-app",
-          },
+          git_url: "https://github.com/acme/app.git",
+          ref: "main",
         }),
       },
       {
         DB: {},
-        TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/capsule-projections",
-        TAKOS_APP_INSTALL_TOKEN: "install-token",
+        ENCRYPTION_KEY: "encryption-key",
+        OIDC_ISSUER_URL: "https://operator.test",
+        OIDC_CLIENT_ID: "takos",
       } as Env,
     );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 200);
-    assertObjectMatch(body, {
-      planDigest: "sha256:abc",
+    expect(response.status).toBe(201);
+    expect(planned).toMatchObject({
+      input: { workspaceId: "ws_parent" },
     });
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "fetch",
-        input: "https://installer.internal/v1/capsule-projections/plan-runs",
-        method: "POST",
-        authorization: "Bearer install-token",
-        body: {
-          spaceId: "space-1",
-          source: {
-            kind: "git",
-            url: "https://github.com/example/app.git",
-            ref: "v1.2.3",
-            modulePath: ".",
-          },
-          variables: {
-            worker_name: "example-app",
-          },
-        },
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route proxies Git URL install apply with approval evidence", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  installableAppInstallDeps.fetch = async (input, init) => {
-    const inputUrl = String(input);
-    calls.push({
-      kind: "fetch",
-      input: inputUrl,
-      method: init?.method,
-      authorization: new Headers(init?.headers).get("authorization"),
-      body: JSON.parse(String(init?.body)),
-    });
-    return Response.json(
-      {
-        ok: true,
-        kind: "takosumi.installation-apply@v1",
-        accounts: {
-          installationId: "inst_git_1",
-          status: "ready",
-        },
-      },
-      { status: 202 },
+    expect((planned as { headers: Headers }).headers.get("authorization")).toBe(
+      "Bearer delegated-token",
     );
-  };
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-alias/app-installations/git-url/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-          mode: "shared-cell",
-          expected_commit: "1111111111111111111111111111111111111111",
-          expected_plan_digest: "sha256:abc",
-          cost_ack: true,
-        }),
-      },
-      {
-        DB: {},
-        TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/capsule-projections",
-        TAKOS_APP_INSTALL_TOKEN: "install-token",
-        TAKOS_APP_INSTALL_ACCOUNT_ID: "acct_operator",
-        TAKOS_APP_INSTALL_SUBJECT: "operator-subject",
-      } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 202);
-    assertObjectMatch(body, {
-      ok: true,
-      kind: "takosumi.installation-apply@v1",
-      accounts: {
-        installationId: "inst_git_1",
-        status: "ready",
-      },
-    });
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "fetch",
-        input: "https://installer.internal/v1/capsule-projections",
-        method: "POST",
-        authorization: "Bearer install-token",
-        body: {
-          accountId: "acct_operator",
-          spaceId: "space-1",
-          createdBySubject: "operator-subject",
-          source: {
-            kind: "git",
-            url: "https://github.com/example/app.git",
-            ref: "v1.2.3",
-          },
-          expected: {
-            commit: "1111111111111111111111111111111111111111",
-            planDigest: "sha256:abc",
-          },
-          mode: "shared-cell",
-          costAck: true,
-        },
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route applies Git URL install to the delegated parent Workspace", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  appInstallationsRouteDeps.accountsPlaneFetch = async (request) => {
-    const url = new URL(request.url);
-    const body =
-      request.method === "POST" ? JSON.parse(await request.text()) : null;
-    calls.push({
-      kind: "accounts",
-      path: url.pathname,
-      method: request.method,
-      cookie: request.headers.get("cookie"),
-      authorization: request.headers.get("authorization"),
-      body,
-    });
-    if (
-      url.pathname === "/v1/capsule-projections" &&
-      request.method === "POST"
-    ) {
-      return Response.json(
-        {
-          ok: true,
-          accounts: {
-            installationId: "inst_session_1",
-            status: "ready",
-          },
-        },
-        { status: 202 },
-      );
-    }
-    return Response.json({ error: "not_found" }, { status: 404 });
-  };
-  appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
-    accessToken: "delegated-access-token",
-    workspaceId: "workspace-parent",
   });
 
-  try {
-    const response = await createApp().request(
-      "/spaces/space-alias/app-installations/git-url/apply",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-          module_path: ".",
-          mode: "shared-cell",
-          expected: {
-            planRunId: "run_plan_1",
-            runnerProfileId: "runner_default",
-            sourceDigest: "sha256:source",
-            variablesDigest: "sha256:variables",
-            policyDecisionDigest: "sha256:policy",
-            planDigest: "sha256:abc",
-            planArtifactDigest: "sha256:artifact",
-          },
-          variables: {
-            worker_name: "example-app",
-          },
-        }),
-      },
-      {
-        DB: {},
-        ENCRYPTION_KEY: "test-encryption-key",
-        TAKOSUMI_ACCOUNTS_URL: "https://accounts.example",
-        OIDC_ISSUER_URL: "https://accounts.example",
-        OIDC_CLIENT_ID: "takos-client",
-      } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 202);
-    assertObjectMatch(body, {
-      ok: true,
-      accounts: {
-        installationId: "inst_session_1",
-        status: "ready",
-      },
+  test("raw Accounts session without Workspace delegation fails closed", async () => {
+    authorize();
+    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig = () => ({
+      baseUrl: "https://operator.test",
     });
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "accounts",
-        path: "/v1/capsule-projections",
-        method: "POST",
-        cookie: null,
-        authorization: "Bearer delegated-access-token",
-        body: {
-          workspaceId: "workspace-parent",
-          spaceId: "workspace-parent",
-          source: {
-            kind: "git",
-            url: "https://github.com/example/app.git",
-            ref: "v1.2.3",
-            modulePath: ".",
-          },
-          expected: {
-            planRunId: "run_plan_1",
-            runnerProfileId: "runner_default",
-            sourceDigest: "sha256:source",
-            variablesDigest: "sha256:variables",
-            policyDecisionDigest: "sha256:policy",
-            planDigest: "sha256:abc",
-            planArtifactDigest: "sha256:artifact",
-          },
-          vars: {
-            worker_name: "example-app",
-          },
-          mode: "shared-cell",
-        },
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route lists from the delegated parent Workspace", async () => {
-  routeAuthDeps.requireSpaceAccess = async () =>
-    ({
-      space: { id: "local-workspace" },
-      membership: { role: "viewer" },
-    }) as never;
-  appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
-    accessToken: "delegated-read-token",
-    workspaceId: "workspace-parent",
-  });
-  const calls: Array<Record<string, string | null>> = [];
-  appInstallationsRouteDeps.accountsPlaneFetch = async (request) => {
-    const url = new URL(request.url);
-    calls.push({
-      path: url.pathname,
-      workspaceId: url.searchParams.get("space_id"),
-      authorization: request.headers.get("authorization"),
-    });
-    return Response.json({ installations: [] });
-  };
-
-  try {
+    appInstallationsRouteDeps.accountsPlaneFetch = async () =>
+      Response.json({ subject: "tsub_user" });
     const response = await createApp().request(
       "/spaces/me/app-installations",
-      { method: "GET" },
       {
-        DB: {},
-        ENCRYPTION_KEY: "test-encryption-key",
-        TAKOSUMI_ACCOUNTS_URL: "https://accounts.example",
-        OIDC_ISSUER_URL: "https://accounts.example",
-        OIDC_CLIENT_ID: "takos-client",
-      } as Env,
-    );
-    assertEquals(response.status, 200);
-    assertEquals(calls, [
-      {
-        path: "/v1/capsule-projections",
-        workspaceId: "workspace-parent",
-        authorization: "Bearer delegated-read-token",
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route proxies Git URL deployment plan Run and apply", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  installableAppInstallDeps.fetch = async (input, init) => {
-    const inputUrl = String(input);
-    if (init?.method === "GET") {
-      const url = new URL(inputUrl);
-      calls.push({
-        kind: "fetch",
-        input: `${url.origin}${url.pathname}`,
-        method: "GET",
-        authorization: new Headers(init?.headers).get("authorization"),
-        body: null,
-      });
-      return Response.json({
-        installations: [{ id: "inst_1", app_id: "jp.takos.office" }],
-      });
-    }
-    const isMutation =
-      inputUrl.endsWith("/deployments") || inputUrl.endsWith("/rollback");
-    calls.push({
-      kind: "fetch",
-      input: inputUrl,
-      method: init?.method,
-      authorization: new Headers(init?.headers).get("authorization"),
-      body: JSON.parse(String(init?.body)),
-    });
-    return Response.json(
-      {
-        ok: true,
-        kind: isMutation
-          ? "takosumi.deployment-apply@v1"
-          : "takosumi.deployment-plan-run@v1",
-      },
-      { status: isMutation ? 202 : 200 },
-    );
-  };
-
-  try {
-    const app = createApp();
-    const env = {
-      DB: {},
-      TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/capsule-projections",
-      TAKOS_APP_INSTALL_TOKEN: "install-token",
-      TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
-      TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
-    } as Env;
-
-    const planResponse = await app.request(
-      "/spaces/space-alias/app-installations/git-url/revision/plan",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          operation: "upgrade",
-          installation_id: "inst_1",
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.4",
-        }),
-      },
-      env,
-    );
-    const applyResponse = await app.request(
-      "/spaces/space-alias/app-installations/git-url/revision/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          operation: "rollback",
-          installation_id: "inst_1",
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-          source_commit: "1111111111111111111111111111111111111111",
-          reason: "operator rollback",
-        }),
-      },
-      env,
-    );
-
-    assertEquals(planResponse.status, 200);
-    assertEquals(applyResponse.status, 202);
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "fetch",
-        input: "https://accounts.internal/v1/capsule-projections",
-        method: "GET",
-        authorization: "Bearer accounts-token",
-        body: null,
-      },
-      {
-        kind: "fetch",
-        input:
-          "https://installer.internal/v1/capsule-projections/inst_1/deployments/plan-runs",
-        method: "POST",
-        authorization: "Bearer install-token",
-        body: {
-          source: {
-            kind: "git",
-            url: "https://github.com/example/app.git",
-            ref: "v1.2.4",
-          },
-        },
-      },
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "fetch",
-        input: "https://accounts.internal/v1/capsule-projections",
-        method: "GET",
-        authorization: "Bearer accounts-token",
-        body: null,
-      },
-      {
-        kind: "fetch",
-        input:
-          "https://installer.internal/v1/capsule-projections/inst_1/rollback",
-        method: "POST",
-        authorization: "Bearer install-token",
-        body: {
-          deploymentId: "v1.2.3",
-          reason: "operator rollback",
-        },
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route lists and deletes through Takosumi Accounts", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "editor" },
-    } as never;
-  };
-  installableAppInstallDeps.fetch = async (input, init) => {
-    const url = new URL(String(input));
-    calls.push({
-      kind: "fetch",
-      pathname: url.pathname,
-      spaceId: url.searchParams.get("space_id"),
-      method: init?.method,
-      authorization: new Headers(init?.headers).get("authorization"),
-      body: init?.body ? JSON.parse(String(init.body)) : null,
-    });
-    if (init?.method === "DELETE") {
-      return Response.json({
-        installation: { id: "inst_1", status: "suspended" },
-      });
-    }
-    if (url.pathname.endsWith("/inst_1")) {
-      // Deploy decision D3: workload services are projected from the
-      // installation deployment-output projection (the `/services` endpoint
-      // was retired).
-      return Response.json({
-        installation: {
-          id: "inst_1",
-          deployment_outputs: [
-            {
-              name: "launch_url",
-              kind: "launch_url",
-              value: "https://app.example.test",
-              sensitive: false,
-            },
-          ],
-        },
-      });
-    }
-    return Response.json({
-      installations: [
-        {
-          id: "inst_1",
-          app_id: "jp.takos.office",
-          status: "ready",
-        },
-      ],
-    });
-  };
-
-  try {
-    const app = createApp();
-    const env = {
-      DB: {},
-      TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
-      TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
-    } as Env;
-
-    const listResponse = await app.request(
-      "/spaces/space-alias/app-installations",
-      { method: "GET" },
-      env,
-    );
-    const deleteResponse = await app.request(
-      "/spaces/space-alias/app-installations/inst_1",
-      {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: "user removed app" }),
-      },
-      env,
-    );
-
-    assertEquals(listResponse.status, 200);
-    assertEquals(deleteResponse.status, 200);
-    const listBody = (await listResponse.json()) as {
-      installations: Array<{ services?: unknown }>;
-    };
-    assertEquals(listBody.installations[0]?.services, [
-      {
-        id: "launch_url",
-        capability: "deployment.outputs",
-        status: "ready",
-        endpoint: "https://app.example.test",
-        secret_configured: false,
-        token_expires_at: null,
-      },
-    ]);
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor", "viewer"],
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections",
-        spaceId: "space-1",
-        method: "GET",
-        authorization: "Bearer accounts-token",
-        body: null,
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections/inst_1",
-        spaceId: null,
-        method: "GET",
-        authorization: "Bearer accounts-token",
-        body: null,
-      },
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor"],
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections",
-        spaceId: "space-1",
-        method: "GET",
-        authorization: "Bearer accounts-token",
-        body: null,
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections/inst_1",
-        spaceId: null,
-        method: "DELETE",
-        authorization: "Bearer accounts-token",
-        body: { reason: "user removed app" },
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route lists Capsule services through Takosumi Accounts", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
-    calls.push({ kind: "access", spaceId, userId, roles });
-    return {
-      space: { id: "space-1" },
-      membership: { role: "viewer" },
-    } as never;
-  };
-  installableAppInstallDeps.fetch = async (input, init) => {
-    const url = new URL(String(input));
-    calls.push({
-      kind: "fetch",
-      pathname: url.pathname,
-      spaceId: url.searchParams.get("space_id"),
-      method: init?.method,
-      authorization: new Headers(init?.headers).get("authorization"),
-    });
-    if (url.pathname.endsWith("/inst_1")) {
-      return Response.json({
-        installation: {
-          id: "inst_1",
-          deployment_outputs: [
-            {
-              name: "launch_url",
-              kind: "launch_url",
-              value: "https://app.example.test",
-              sensitive: false,
-            },
-          ],
-        },
-      });
-    }
-    return Response.json({
-      installations: [{ id: "inst_1", app_id: "jp.takos.office" }],
-    });
-  };
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-alias/app-installations/inst_1/services",
-      { method: "GET" },
-      {
-        DB: {},
-        TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
-        TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
-      } as Env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 200);
-    assertEquals(body, {
-      installation_id: "inst_1",
-      services: [
-        {
-          id: "launch_url",
-          capability: "deployment.outputs",
-          status: "ready",
-          endpoint: "https://app.example.test",
-          secret_configured: false,
-          token_expires_at: null,
-        },
-      ],
-    });
-    assertEquals(calls, [
-      {
-        kind: "access",
-        spaceId: "space-alias",
-        userId: "user-1",
-        roles: ["owner", "admin", "editor", "viewer"],
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections",
-        spaceId: "space-1",
-        method: "GET",
-        authorization: "Bearer accounts-token",
-      },
-      {
-        kind: "fetch",
-        pathname: "/v1/capsule-projections/inst_1",
-        spaceId: null,
-        method: "GET",
-        authorization: "Bearer accounts-token",
-      },
-    ]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route rejects cross-space installation_id with 404", async () => {
-  const calls: unknown[] = [];
-  routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-  // The authorized workspace owns no Capsule projection matching the supplied id.
-  appInstallationsRouteDeps.listInstallableAppInstallations = async (
-    spaceId,
-  ) => {
-    calls.push({ kind: "list", spaceId });
-    return {
-      status: 200,
-      body: { installations: [{ id: "inst_other_space" }] },
-    };
-  };
-  installableAppInstallDeps.fetch = async () => {
-    calls.push({ kind: "fetch" });
-    return Response.json({ ok: true });
-  };
-
-  try {
-    const env = {
-      DB: {},
-      TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/capsule-projections",
-      TAKOS_APP_INSTALL_TOKEN: "install-token",
-      TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
-      TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
-    } as Env;
-
-    const response = await createApp().request(
-      "/spaces/space-alias/app-installations/git-url/revision/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          operation: "rollback",
-          installation_id: "inst_victim",
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-        }),
-      },
-      env,
-    );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 404);
-    assertObjectMatch(body, {
-      error: { code: "NOT_FOUND" },
-    });
-    // The upstream revision fetch must not have run.
-    assertEquals(calls, [{ kind: "list", spaceId: "space-1" }]);
-  } finally {
-    restoreDeps();
-  }
-});
-
-test("app-installations route requires Git URL install approval evidence", async () => {
-  routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-
-  try {
-    const response = await createApp().request(
-      "/spaces/space-1/app-installations/git-url/apply",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          git_url: "https://github.com/example/app.git",
-          ref: "v1.2.3",
-          cost_ack: true,
-        }),
+        headers: { "x-takosumi-account-session": "sess_current" },
       },
       { DB: {} } as Env,
     );
-    const body = (await response.json()) as Record<PropertyKey, unknown>;
-
-    assertEquals(response.status, 400);
-    assertObjectMatch(body, {
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
       error: {
-        code: "BAD_REQUEST",
-        message: "expected guard is required after install plan Run approval",
+        message: "Takosumi Workspace-bound OAuth authorization is required",
       },
     });
-  } finally {
-    restoreDeps();
-  }
+  });
+
+  test("plans rollback from a StateVersion and applies its exact Run", async () => {
+    authorize();
+    appInstallationsRouteDeps.listInstallableAppInstallations = async () => ({
+      status: 200,
+      body: { installations: [{ id: "cap_1" }] },
+    });
+    const calls: unknown[] = [];
+    appInstallationsRouteDeps.planInstallableAppRevision = async (input) => {
+      calls.push({ kind: "plan", input });
+      return {
+        status: 201,
+        body: {
+          expected: {
+            workspaceId: "ws_operator",
+            capsuleId: "cap_1",
+            runId: "run_rollback",
+          },
+        },
+      };
+    };
+    appInstallationsRouteDeps.applyInstallableAppRevision = async (input) => {
+      calls.push({ kind: "apply", input });
+      return { status: 202, body: { run: { id: "run_restore" } } };
+    };
+    const app = createApp();
+    const planResponse = await app.request(
+      "/spaces/me/app-installations/git-url/revision/plan",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "rollback",
+          installation_id: "cap_1",
+          state_version_id: "sv_1",
+        }),
+      },
+      operatorEnv,
+    );
+    const plan = (await planResponse.json()) as Record<string, unknown>;
+    const applyResponse = await app.request(
+      "/spaces/me/app-installations/git-url/revision/apply",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "rollback",
+          installation_id: "cap_1",
+          state_version_id: "sv_1",
+          expected: plan.expected,
+        }),
+      },
+      operatorEnv,
+    );
+    expect(planResponse.status).toBe(201);
+    expect(applyResponse.status).toBe(202);
+    expect(calls).toEqual([
+      {
+        kind: "plan",
+        input: {
+          workspaceId: "ws_operator",
+          capsuleId: "cap_1",
+          operation: "rollback",
+          ref: "sv_1",
+        },
+      },
+      {
+        kind: "apply",
+        input: {
+          workspaceId: "ws_operator",
+          capsuleId: "cap_1",
+          operation: "rollback",
+          expected: {
+            workspaceId: "ws_operator",
+            capsuleId: "cap_1",
+            runId: "run_rollback",
+          },
+        },
+      },
+    ]);
+  });
+
+  test("lists, reads services, and deletes only canonical Capsule ids", async () => {
+    authorize();
+    appInstallationsRouteDeps.listInstallableAppInstallationsWithServices =
+      async (workspaceId) => ({
+        status: 200,
+        body: { workspaceId, installations: [{ id: "cap_1" }] },
+      });
+    appInstallationsRouteDeps.listInstallableAppInstallations = async () => ({
+      status: 200,
+      body: { installations: [{ id: "cap_1" }] },
+    });
+    appInstallationsRouteDeps.listInstallableAppInstallationServices = async (
+      capsuleId,
+      workspaceId,
+    ) => ({
+      status: 200,
+      body: { capsuleId, workspaceId, services: [] },
+    });
+    appInstallationsRouteDeps.deleteInstallableAppInstallation = async (
+      capsuleId,
+      workspaceId,
+    ) => ({ status: 202, body: { capsuleId, workspaceId } });
+    const app = createApp();
+    const listed = await app.request(
+      "/spaces/me/app-installations",
+      {},
+      operatorEnv,
+    );
+    const services = await app.request(
+      "/spaces/me/app-installations/cap_1/services",
+      {},
+      operatorEnv,
+    );
+    const deleted = await app.request(
+      "/spaces/me/app-installations/cap_1",
+      { method: "DELETE" },
+      operatorEnv,
+    );
+    expect(await listed.json()).toMatchObject({ workspaceId: "ws_operator" });
+    expect(await services.json()).toMatchObject({
+      capsuleId: "cap_1",
+      workspaceId: "ws_operator",
+    });
+    expect(await deleted.json()).toEqual({
+      capsuleId: "cap_1",
+      workspaceId: "ws_operator",
+    });
+  });
+
+  test("rejects a cross-Workspace Capsule id before revision mutation", async () => {
+    authorize();
+    appInstallationsRouteDeps.listInstallableAppInstallations = async () => ({
+      status: 200,
+      body: { installations: [{ id: "cap_owned" }] },
+    });
+    let mutated = false;
+    appInstallationsRouteDeps.planInstallableAppRevision = async () => {
+      mutated = true;
+      return { status: 201, body: {} };
+    };
+    const response = await createApp().request(
+      "/spaces/me/app-installations/git-url/revision/plan",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "rollback",
+          installation_id: "cap_foreign",
+          state_version_id: "sv_1",
+        }),
+      },
+      operatorEnv,
+    );
+    expect(response.status).toBe(404);
+    expect(mutated).toBe(false);
+  });
+
+  test("requires exact Run evidence for apply", async () => {
+    authorize();
+    const response = await createApp().request(
+      "/spaces/me/app-installations/git-url/apply",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          git_url: "https://github.com/acme/app.git",
+          ref: "main",
+        }),
+      },
+      operatorEnv,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        message: "expected exact Run reference is required after Capsule plan",
+      },
+    });
+  });
 });
