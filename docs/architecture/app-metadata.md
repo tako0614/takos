@@ -37,6 +37,15 @@ OpenTofu Capsule が producer-neutral service metadata を渡す場合は Capsul
 `protocol.mcp.server` / `interface.file.handler` / `interface.ui.surface` / `storage.*` / `source.*` /
 `automation.*` を使います。
 
+### Launcher icon の安全境界
+
+runtime `Interface` への移行中も、Takos の launcher は Takosumi contract が export する共有 Display Metadata parser を
+唯一の解釈として使います。`document.display.icon` と legacy projection から移行中の同等フィールドが受け付けるのは、
+credential 情報を含まない絶対 HTTPS URL、surface URL の origin を基準に解決できる先頭 `/` の path、または 16 文字以内で
+`/` `.` `:` を含まない短い glyph だけです。`javascript:` / `data:` / protocol-relative URL / userinfo / fragment /
+credential-named query は server 側で no-icon fallback に落とし、browser renderer へ渡しません。Store/release catalog の
+icon も untrusted presentation metadata として別途検証し、不正値を launcher authority に昇格させません。
+
 ## Takosumi が記録すること
 
 アプリの「実体」をどこに materialize するかは、Takosumi の run ledger 側の関心です。

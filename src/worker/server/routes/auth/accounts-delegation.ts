@@ -38,6 +38,7 @@ type DelegationAccess = "read" | "write";
 
 type DelegationIdentity = {
   readonly id: string;
+  readonly providerSub: string;
   readonly accessTokenEnc: string | null;
   readonly accessTokenExpiresAt: string | null;
   readonly refreshTokenEnc: string | null;
@@ -50,6 +51,7 @@ type DelegationIdentity = {
 export type AccountsDelegatedAuthorization = {
   readonly accessToken: string;
   readonly workspaceId: string;
+  readonly subjectId: string;
 };
 
 const refreshes = new Map<string, Promise<AccountsDelegatedAuthorization>>();
@@ -76,6 +78,22 @@ function validAccessToken(
   return (
     Number.isFinite(expiresAt) && expiresAt > Date.now() + ACCESS_TOKEN_SKEW_MS
   );
+}
+
+function delegatedSubjectId(
+  identity: DelegationIdentity,
+  issuer: string,
+): string {
+  const prefix = `${issuer}#`;
+  const subjectId = identity.providerSub.startsWith(prefix)
+    ? identity.providerSub.slice(prefix.length).trim()
+    : "";
+  if (!subjectId) {
+    throw new AuthenticationError(
+      "Takosumi Accounts identity subject is invalid",
+    );
+  }
+  return subjectId;
 }
 
 async function identityForUser(
@@ -133,10 +151,10 @@ export async function storeAccountsDelegation(input: {
   const refreshToken = input.tokens.refresh_token?.trim();
   const refreshTokenEnc = refreshToken
     ? await encryptEnvelope(
-      refreshToken,
-      input.encryptionKey,
-      tokenSalt(input.identityId, "refresh"),
-    )
+        refreshToken,
+        input.encryptionKey,
+        tokenSalt(input.identityId, "refresh"),
+      )
     : undefined;
   const scope = input.tokens.scope?.trim() || input.fallbackScope;
   if (scopeAllows(scope, "read") && !input.workspaceId) {
@@ -211,6 +229,7 @@ async function resolveAccountsDelegatedAuthorization(input: {
         tokenSalt(identity.id, "access"),
       ),
       workspaceId: identity.delegatedWorkspaceId,
+      subjectId: delegatedSubjectId(identity, input.issuer),
     };
   }
   if (!identity.refreshTokenEnc) {
@@ -257,6 +276,7 @@ async function resolveAccountsDelegatedAuthorization(input: {
             tokenSalt(identity.id, "access"),
           ),
           workspaceId: identity.delegatedWorkspaceId,
+          subjectId: delegatedSubjectId(identity, input.issuer),
         };
       }
       const leaseExpiresAt = Date.parse(identity.refreshLeaseExpiresAt ?? "");
@@ -316,10 +336,10 @@ async function resolveAccountsDelegatedAuthorization(input: {
     );
     const refreshTokenEnc = tokens.refresh_token
       ? await encryptEnvelope(
-        tokens.refresh_token,
-        input.encryptionKey,
-        tokenSalt(identity.id, "refresh"),
-      )
+          tokens.refresh_token,
+          input.encryptionKey,
+          tokenSalt(identity.id, "refresh"),
+        )
       : identity.refreshTokenEnc;
     const expiresIn = Number.isFinite(tokens.expires_in)
       ? Math.max(1, Math.floor(tokens.expires_in!))
@@ -345,6 +365,7 @@ async function resolveAccountsDelegatedAuthorization(input: {
     return {
       accessToken: tokens.access_token,
       workspaceId: identity.delegatedWorkspaceId,
+      subjectId: delegatedSubjectId(identity, input.issuer),
     };
   } catch (error) {
     await db

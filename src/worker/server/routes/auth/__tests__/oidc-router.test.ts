@@ -4,7 +4,11 @@ import { Hono } from "hono";
 import * as jose from "jose";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { assertEquals, assertExists, assertStringIncludes } from "@takos/test/assert";
+import {
+  assertEquals,
+  assertExists,
+  assertStringIncludes,
+} from "@takos/test/assert";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -47,7 +51,7 @@ function createSessionStore(
     get: (_id: string) => ({
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init);
-        const body = await request.json() as {
+        const body = (await request.json()) as {
           oidcState?: StoredOidcState;
           state?: string;
           session?: CreatedSession;
@@ -59,8 +63,8 @@ function createSessionStore(
         }
         if (path === "/oidc-state/get") {
           return Response.json({
-            oidcState: states.find((state) => state.state === body.state) ??
-              null,
+            oidcState:
+              states.find((state) => state.state === body.state) ?? null,
           });
         }
         if (path === "/oidc-state/delete") {
@@ -78,21 +82,24 @@ function createSessionStore(
   };
 }
 
-function createEnv(input: {
-  states?: StoredOidcState[];
-  oidcIssuerUrl?: string;
-  oidcDiscoveryUrl?: string;
-  oidcClientId?: string;
-  oidcClientSecret?: string;
-  oidcRedirectUri?: string;
-  includeSessionStore?: boolean;
-  sqlBinding?: unknown;
-  createdSessions?: CreatedSession[];
-} = {}): Env {
+function createEnv(
+  input: {
+    states?: StoredOidcState[];
+    oidcIssuerUrl?: string;
+    oidcDiscoveryUrl?: string;
+    oidcClientId?: string;
+    oidcClientSecret?: string;
+    oidcRedirectUri?: string;
+    includeSessionStore?: boolean;
+    sqlBinding?: unknown;
+    createdSessions?: CreatedSession[];
+  } = {},
+): Env {
   const states = input.states ?? [];
-  const sessionStore = input.includeSessionStore === false
-    ? undefined
-    : createSessionStore(states, input.createdSessions);
+  const sessionStore =
+    input.includeSessionStore === false
+      ? undefined
+      : createSessionStore(states, input.createdSessions);
   return {
     ENCRYPTION_KEY: "test-oidc-delegation-encryption-key",
     PLATFORM: {
@@ -209,13 +216,15 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
   };
 
   // No state cookie at all: a callback this browser never initiated.
-  const missingStates: StoredOidcState[] = [{
-    state: "state-csrf",
-    nonce: "nonce-csrf",
-    code_verifier: "verifier-csrf",
-    return_to: "/",
-    expires_at: Date.now() + 60_000,
-  }];
+  const missingStates: StoredOidcState[] = [
+    {
+      state: "state-csrf",
+      nonce: "nonce-csrf",
+      code_verifier: "verifier-csrf",
+      return_to: "/",
+      expires_at: Date.now() + 60_000,
+    },
+  ];
   const missingSessions: CreatedSession[] = [];
   const missingResponse = await createApp().fetch(
     new Request(
@@ -235,13 +244,15 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
   assertEquals(missingStates.length, 1);
 
   // Cookie present but bound to a different flow than the returned state.
-  const mismatchStates: StoredOidcState[] = [{
-    state: "state-victim",
-    nonce: "nonce-victim",
-    code_verifier: "verifier-victim",
-    return_to: "/",
-    expires_at: Date.now() + 60_000,
-  }];
+  const mismatchStates: StoredOidcState[] = [
+    {
+      state: "state-victim",
+      nonce: "nonce-victim",
+      code_verifier: "verifier-victim",
+      return_to: "/",
+      expires_at: Date.now() + 60_000,
+    },
+  ];
   const mismatchSessions: CreatedSession[] = [];
   const mismatchResponse = await createApp().fetch(
     new Request(
@@ -264,13 +275,15 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
 test("OIDC callback exchanges code, verifies id_token, provisions app-local user, and creates a session", async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
-  const states: StoredOidcState[] = [{
-    state: "state-1",
-    nonce: "nonce-1",
-    code_verifier: "verifier-1",
-    return_to: "/space-settings",
-    expires_at: Date.now() + 60_000,
-  }];
+  const states: StoredOidcState[] = [
+    {
+      state: "state-1",
+      nonce: "nonce-1",
+      code_verifier: "verifier-1",
+      return_to: "/space-settings",
+      expires_at: Date.now() + 60_000,
+    },
+  ];
   const createdSessions: CreatedSession[] = [];
   const { publicKey, privateKey } = await jose.generateKeyPair("ES256", {
     extractable: true,
@@ -373,9 +386,10 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
     );
     // The single-use state cookie is cleared on the successful callback.
     assertEquals(
-      setCookies.some((cookie) =>
-        cookie.startsWith("__Host-tp_oidc_state=;") &&
-        cookie.includes("Max-Age=0")
+      setCookies.some(
+        (cookie) =>
+          cookie.startsWith("__Host-tp_oidc_state=;") &&
+          cookie.includes("Max-Age=0"),
       ),
       true,
     );
@@ -388,31 +402,37 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
     assertEquals(tokenRequests[0].get("client_secret"), "client-secret");
     assertEquals(tokenRequests[0].get("code_verifier"), "verifier-1");
 
-    const account = await authDb.db.select({
-      id: accounts.id,
-      email: accounts.email,
-      name: accounts.name,
-      slug: accounts.slug,
-      setupCompleted: accounts.setupCompleted,
-    }).from(accounts).get();
+    const account = await authDb.db
+      .select({
+        id: accounts.id,
+        email: accounts.email,
+        name: accounts.name,
+        slug: accounts.slug,
+        setupCompleted: accounts.setupCompleted,
+      })
+      .from(accounts)
+      .get();
     assertExists(account);
     assertEquals(account.email, "takosumi-user@example.test");
     assertEquals(account.name, "Takosumi User");
     assertEquals(account.setupCompleted, false);
     assertEquals(createdSessions[0].user_id, account.id);
 
-    const identity = await authDb.db.select({
-      userId: authIdentities.userId,
-      provider: authIdentities.provider,
-      providerSub: authIdentities.providerSub,
-      emailSnapshot: authIdentities.emailSnapshot,
-      emailKind: authIdentities.emailKind,
-      accessTokenEnc: authIdentities.accessTokenEnc,
-      accessTokenExpiresAt: authIdentities.accessTokenExpiresAt,
-      refreshTokenEnc: authIdentities.refreshTokenEnc,
-      tokenScope: authIdentities.tokenScope,
-      delegatedWorkspaceId: authIdentities.delegatedWorkspaceId,
-    }).from(authIdentities).get();
+    const identity = await authDb.db
+      .select({
+        userId: authIdentities.userId,
+        provider: authIdentities.provider,
+        providerSub: authIdentities.providerSub,
+        emailSnapshot: authIdentities.emailSnapshot,
+        emailKind: authIdentities.emailKind,
+        accessTokenEnc: authIdentities.accessTokenEnc,
+        accessTokenExpiresAt: authIdentities.accessTokenExpiresAt,
+        refreshTokenEnc: authIdentities.refreshTokenEnc,
+        tokenScope: authIdentities.tokenScope,
+        delegatedWorkspaceId: authIdentities.delegatedWorkspaceId,
+      })
+      .from(authIdentities)
+      .get();
     assertExists(identity);
     assertEquals(identity.userId, account.id);
     assertEquals(identity.provider, "oidc");
@@ -505,28 +525,33 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
     assertEquals(await accountsDelegatedAuthorization(input), {
       accessToken: "fresh-access-token",
       workspaceId: "workspace-delegation",
+      subjectId: "pairwise-subject",
     });
     assertEquals(await accountsDelegatedAuthorization(input), {
       accessToken: "fresh-access-token",
       workspaceId: "workspace-delegation",
+      subjectId: "pairwise-subject",
     });
     assertEquals(requests.length, 1);
     assertEquals(requests[0].get("grant_type"), "refresh_token");
     assertEquals(requests[0].get("client_id"), "takos-client");
-    assertEquals(
-      requests[0].get("client_secret"),
-      "takos-client-secret",
-    );
+    assertEquals(requests[0].get("client_secret"), "takos-client-secret");
     assertEquals(
       requests[0].get("refresh_token"),
       "refresh-token-before-rotation",
     );
-    const identity = await authDb.db.select({
-      accessTokenEnc: authIdentities.accessTokenEnc,
-      refreshTokenEnc: authIdentities.refreshTokenEnc,
-      refreshLeaseId: authIdentities.refreshLeaseId,
-    }).from(authIdentities).get();
-    assertEquals(identity?.accessTokenEnc?.includes("fresh-access-token"), false);
+    const identity = await authDb.db
+      .select({
+        accessTokenEnc: authIdentities.accessTokenEnc,
+        refreshTokenEnc: authIdentities.refreshTokenEnc,
+        refreshLeaseId: authIdentities.refreshLeaseId,
+      })
+      .from(authIdentities)
+      .get();
+    assertEquals(
+      identity?.accessTokenEnc?.includes("fresh-access-token"),
+      false,
+    );
     assertEquals(
       identity?.refreshTokenEnc?.includes("refresh-token-after-rotation"),
       false,
@@ -578,16 +603,20 @@ test("Accounts delegation retains the current refresh token when rotation is omi
   await authDb.db.update(authIdentities).set({
     accessTokenExpiresAt: new Date(Date.now() - 1_000).toISOString(),
   });
-  const before = await authDb.db.select({
-    refreshTokenEnc: authIdentities.refreshTokenEnc,
-  }).from(authIdentities).get();
+  const before = await authDb.db
+    .select({
+      refreshTokenEnc: authIdentities.refreshTokenEnc,
+    })
+    .from(authIdentities)
+    .get();
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => Response.json({
-    access_token: "fresh-access-token-without-rotation",
-    expires_in: 300,
-    scope: "openid offline_access capsules:read",
-  })) as typeof fetch;
+  globalThis.fetch = (async () =>
+    Response.json({
+      access_token: "fresh-access-token-without-rotation",
+      expires_in: 300,
+      scope: "openid offline_access capsules:read",
+    })) as typeof fetch;
 
   try {
     const authorization = await accountsDelegatedAuthorization({
@@ -601,10 +630,14 @@ test("Accounts delegation retains the current refresh token when rotation is omi
     assertEquals(authorization, {
       accessToken: "fresh-access-token-without-rotation",
       workspaceId: "workspace-delegation-no-rotation",
+      subjectId: "pairwise-subject-no-rotation",
     });
-    const after = await authDb.db.select({
-      refreshTokenEnc: authIdentities.refreshTokenEnc,
-    }).from(authIdentities).get();
+    const after = await authDb.db
+      .select({
+        refreshTokenEnc: authIdentities.refreshTokenEnc,
+      })
+      .from(authIdentities)
+      .get();
     assertEquals(after?.refreshTokenEnc, before?.refreshTokenEnc);
   } finally {
     globalThis.fetch = originalFetch;
@@ -655,7 +688,7 @@ test.skipIf(!RUN_INTEGRATION_TESTS)(
         redirect: "manual",
       });
       assertEquals(authorizeResponse.status, 503);
-      const authorizeBody = await authorizeResponse.json() as {
+      const authorizeBody = (await authorizeResponse.json()) as {
         error?: string;
       };
       assertEquals(authorizeBody.error, "launch_readiness_not_complete");
@@ -687,13 +720,15 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     updatedAt: timestamp,
   });
 
-  const states: StoredOidcState[] = [{
-    state: "state-legacy",
-    nonce: "nonce-legacy",
-    code_verifier: "verifier-legacy",
-    return_to: "/spaces",
-    expires_at: Date.now() + 60_000,
-  }];
+  const states: StoredOidcState[] = [
+    {
+      state: "state-legacy",
+      nonce: "nonce-legacy",
+      code_verifier: "verifier-legacy",
+      return_to: "/spaces",
+      expires_at: Date.now() + 60_000,
+    },
+  ];
   const createdSessions: CreatedSession[] = [];
   const { publicKey, privateKey } = await jose.generateKeyPair("ES256", {
     extractable: true,
@@ -786,11 +821,14 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     const newUserId = createdSessions[0].user_id;
     assertEquals(newUserId === "legacy-user-1", false);
 
-    const accountRows = await authDb.db.select({
-      id: accounts.id,
-      email: accounts.email,
-      name: accounts.name,
-    }).from(accounts).all();
+    const accountRows = await authDb.db
+      .select({
+        id: accounts.id,
+        email: accounts.email,
+        name: accounts.name,
+      })
+      .from(accounts)
+      .all();
     assertEquals(accountRows.length, 2);
 
     // The existing account is untouched and keeps its email.
@@ -805,13 +843,16 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     assertExists(fresh);
     assertEquals(fresh.email, null);
 
-    const identity = await authDb.db.select({
-      userId: authIdentities.userId,
-      provider: authIdentities.provider,
-      providerSub: authIdentities.providerSub,
-      emailSnapshot: authIdentities.emailSnapshot,
-      emailKind: authIdentities.emailKind,
-    }).from(authIdentities).get();
+    const identity = await authDb.db
+      .select({
+        userId: authIdentities.userId,
+        provider: authIdentities.provider,
+        providerSub: authIdentities.providerSub,
+        emailSnapshot: authIdentities.emailSnapshot,
+        emailKind: authIdentities.emailKind,
+      })
+      .from(authIdentities)
+      .get();
     assertExists(identity);
     assertEquals(identity, {
       userId: newUserId,
@@ -843,10 +884,12 @@ async function startAccountsServer(input: {
   const handler = await createEphemeralAccountsHandler({
     issuer: url,
     subject: input.subject,
-    clients: [{
-      clientId: input.clientId,
-      redirectUris: [input.redirectUri],
-    }],
+    clients: [
+      {
+        clientId: input.clientId,
+        redirectUris: [input.redirectUri],
+      },
+    ],
     platformAccess: { status: "closed" },
   });
   const server = Bun.serve({
@@ -905,7 +948,7 @@ async function freePort(): Promise<number> {
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
   await new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
+    server.close((error) => (error ? reject(error) : resolve()));
   });
   return port;
 }
@@ -920,12 +963,14 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
       init as globalThis.RequestInit | undefined,
     );
     discoveryRequests.push(request);
-    return Promise.resolve(Response.json({
-      issuer: "https://accounts.example.test",
-      authorization_endpoint: "https://accounts.example.test/oauth/authorize",
-      token_endpoint: "https://accounts.example.test/oauth/token",
-      jwks_uri: "https://accounts.example.test/oauth/jwks",
-    }));
+    return Promise.resolve(
+      Response.json({
+        issuer: "https://accounts.example.test",
+        authorization_endpoint: "https://accounts.example.test/oauth/authorize",
+        token_endpoint: "https://accounts.example.test/oauth/token",
+        jwks_uri: "https://accounts.example.test/oauth/jwks",
+      }),
+    );
   }) as typeof fetch;
 
   try {
@@ -961,9 +1006,9 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
 
     // Login initiation binds the OAuth state to this browser via a short-lived
     // HttpOnly cookie whose value equals the `state` query param.
-    const stateCookie = response.headers.getSetCookie().find((cookie) =>
-      cookie.startsWith("__Host-tp_oidc_state=")
-    );
+    const stateCookie = response.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith("__Host-tp_oidc_state="));
     assertExists(stateCookie);
     assertStringIncludes(
       stateCookie,
