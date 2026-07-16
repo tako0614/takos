@@ -345,7 +345,7 @@ test("api-keys denies deployment-global provider keys by default", async () => {
   );
 });
 
-test("runtime AI credential is minted for the run owner's Capsule", async () => {
+test("runtime AI credential uses the exact authorized InterfaceBinding", async () => {
   const requests: Request[] = [];
   const credential = await resolveRunOpenAiRuntimeCredential(
     {
@@ -368,7 +368,6 @@ test("runtime AI credential is minted for the run owner's Capsule", async () => 
       getRunBootstrap: async (_env, runId) => ({
         status: "running",
         spaceId: "takos-space",
-        sessionId: "session",
         threadId: "thread",
         userId: "takos-user",
         agentType: "default",
@@ -376,45 +375,117 @@ test("runtime AI credential is minted for the run owner's Capsule", async () => 
       }),
       accountsDelegatedAuthorization: async (input) => {
         assertEquals(input.userId, "takos-user");
-        assertEquals(input.access, "write");
+        assertEquals(input.access, "read");
         return {
-          accessToken: "takat_capsule_owner",
+          accessToken: "delegated-accounts-token",
           workspaceId: "workspace_owner",
+          subjectId: "pairwise-user",
         };
       },
       fetch: (async (input, init) => {
         const request = new Request(input, init);
         requests.push(request);
-        if (new URL(request.url).pathname === "/oauth/userinfo") {
+        const url = new URL(request.url);
+        if (url.pathname === "/v1/interfaces") {
           return Response.json({
-            sub: "pairwise-user",
-            takosumi: { installation_id: "inst_takos_capsule" },
+            interfaces: [
+              {
+                apiVersion: "takosumi.dev/v1alpha1",
+                kind: "Interface",
+                metadata: {
+                  id: "if_ai_gateway",
+                  workspaceId: "workspace_owner",
+                  name: "default-ai",
+                  ownerRef: { kind: "Workspace", id: "workspace_owner" },
+                  generation: 1,
+                  createdAt: "2026-07-13T00:00:00.000Z",
+                  updatedAt: "2026-07-13T00:00:00.000Z",
+                },
+                spec: {
+                  type: "takosumi.ai.gateway",
+                  version: "v1",
+                  document: { protocol: "openai-compatible" },
+                  inputs: {
+                    endpoint: {
+                      source: "literal",
+                      value: "https://app.takosumi.test/gateway/ai/v1",
+                    },
+                  },
+                  access: {
+                    visibility: "workspace",
+                    resourceUriInput: "endpoint",
+                  },
+                },
+                status: {
+                  phase: "Resolved",
+                  observedGeneration: 1,
+                  resolvedRevision: 3,
+                  resolvedInputs: {
+                    endpoint: "https://app.takosumi.test/gateway/ai/v1",
+                  },
+                },
+              },
+            ],
+          });
+        }
+        if (url.pathname === "/v1/interfaces/if_ai_gateway/bindings") {
+          return Response.json({
+            bindings: [
+              {
+                apiVersion: "takosumi.dev/v1alpha1",
+                kind: "InterfaceBinding",
+                metadata: {
+                  id: "ifb_ai_gateway",
+                  workspaceId: "workspace_owner",
+                  generation: 2,
+                  createdAt: "2026-07-13T00:00:00.000Z",
+                  updatedAt: "2026-07-13T00:00:00.000Z",
+                },
+                spec: {
+                  interfaceId: "if_ai_gateway",
+                  subjectRef: { kind: "Principal", id: "pairwise-user" },
+                  permissions: ["ai.chat"],
+                  delivery: { type: "oauth2" },
+                },
+                status: {
+                  phase: "Ready",
+                  observedInterfaceRevision: 3,
+                },
+              },
+            ],
           });
         }
         return Response.json({
-          token: "taksrv_runtime_token",
+          access_token: "runtime-interface-token",
           token_type: "Bearer",
+          expires_in: 30,
+          expires_at: new Date(Date.now() + 30_000).toISOString(),
+          scope: "ai.chat",
+          resource: "https://app.takosumi.test/gateway/ai/v1",
         });
       }) as typeof fetch,
     },
   );
 
   assertEquals(credential, {
-    apiKey: "taksrv_runtime_token",
+    apiKey: "runtime-interface-token",
     endpoint: "https://app.takosumi.test/gateway/ai/v1/chat/completions",
   });
-  assertEquals(requests.length, 2);
+  assertEquals(requests.length, 3);
+  assertEquals(
+    requests[0]?.url,
+    "https://internal-app.takosumi.test/v1/interfaces?workspaceId=workspace_owner&type=takosumi.ai.gateway&phase=Resolved&permission=ai.chat",
+  );
   assertEquals(
     requests[1]?.url,
-    "https://internal-app.takosumi.test/v1/capsule-projections/inst_takos_capsule/services/takosumi.ai.gateway/rotate-token",
+    "https://internal-app.takosumi.test/v1/interfaces/if_ai_gateway/bindings?permission=ai.chat",
   );
   assertEquals(
-    requests[1]?.headers.get("authorization"),
-    "Bearer takat_capsule_owner",
+    requests[2]?.headers.get("authorization"),
+    "Bearer delegated-accounts-token",
   );
-  assertEquals(await requests[1]?.json(), {
-    scopes: ["ai.models.read", "ai.chat", "ai.embeddings"],
-    ttlSeconds: 900,
+  assertEquals(await requests[2]?.json(), {
+    permission: "ai.chat",
   });
 });
 

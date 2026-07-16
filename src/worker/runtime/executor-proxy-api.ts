@@ -26,12 +26,12 @@ import {
   handleRunStatus,
 } from "./container-hosts/executor-run-state.ts";
 
-import {
-  TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_AI_GATEWAY,
-  TAKOSUMI_ACCOUNTS_USERINFO_PATH,
-  takosumiAccountsCapsuleServiceRotateTokenPath,
-} from "@takosjp/takosumi-accounts-contract";
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
+import {
+  fetchAuthorizedRuntimeInterfaces,
+  issueRuntimeInterfaceAccessToken,
+  type RuntimeInterfaceFetch,
+} from "../application/services/platform/runtime-interface-client.ts";
 
 import {
   handleAddMessage,
@@ -66,13 +66,8 @@ import { eq } from "drizzle-orm";
 // deployment-global provider keys. Mirrors isTerminalRunStatus in
 // container-hosts/executor-host.ts (the proxy-token revocation gate).
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
-const ACCOUNTS_FETCH_TIMEOUT_MS = 10_000;
-const AI_GATEWAY_TOKEN_TTL_SECONDS = 15 * 60;
-const AI_GATEWAY_TOKEN_SCOPES = [
-  "ai.models.read",
-  "ai.chat",
-  "ai.embeddings",
-] as const;
+const AI_GATEWAY_INTERFACE_TYPE = "takosumi.ai.gateway";
+const AI_GATEWAY_CHAT_PERMISSION = "ai.chat";
 
 type OpenAiRuntimeCredential = {
   readonly apiKey: string;
@@ -82,7 +77,7 @@ type OpenAiRuntimeCredential = {
 type RuntimeCredentialDeps = {
   readonly getRunBootstrap: typeof getRunBootstrap;
   readonly accountsDelegatedAuthorization: typeof accountsDelegatedAuthorization;
-  readonly fetch: typeof fetch;
+  readonly fetch: RuntimeInterfaceFetch;
 };
 
 const runtimeCredentialDeps: RuntimeCredentialDeps = {
@@ -270,13 +265,13 @@ async function handleApiKeys(
 }
 
 /**
- * Mint a short-lived, Capsule-scoped AI Gateway token for one active run.
+ * Mint a short-lived AI Gateway token for one active run.
  *
- * The triggering user's delegated Accounts token identifies the Capsule that
- * owns the Takos worker. Accounts then vends a runtime token whose metadata
- * carries Capsule, Workspace, owner, scopes, and expiry into the Cloud billing
- * guard. No operator/provider credential enters the tenant worker or pooled
- * agent container.
+ * The triggering user's delegated Accounts token reads one exact authorized
+ * `takosumi.ai.gateway` Interface and Ready Principal InterfaceBinding. Core
+ * revalidates that evidence before issuing the invocation-only token. Reserved
+ * lifecycle side channels, operator credentials, and provider keys never enter
+ * the Takos worker or pooled agent container.
  */
 export async function resolveRunOpenAiRuntimeCredential(
   input: { readonly runId: string; readonly env: Env },
@@ -286,18 +281,11 @@ export async function resolveRunOpenAiRuntimeCredential(
   const clientId = nonEmptyString(input.env.OIDC_CLIENT_ID);
   const clientSecret = nonEmptyString(input.env.OIDC_CLIENT_SECRET);
   const encryptionKey = nonEmptyString(input.env.ENCRYPTION_KEY);
-  const publicAccountsUrl =
-    nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_URL) ?? issuer;
   const internalAccountsUrl =
     nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
-    publicAccountsUrl;
-  if (
-    !issuer ||
-    !clientId ||
-    !encryptionKey ||
-    !publicAccountsUrl ||
-    !internalAccountsUrl
-  ) {
+    nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_URL) ??
+    issuer;
+  if (!issuer || !clientId || !encryptionKey || !internalAccountsUrl) {
     return undefined;
   }
 
@@ -315,73 +303,89 @@ export async function resolveRunOpenAiRuntimeCredential(
     issuer: issuer.replace(/\/+$/u, ""),
     clientId,
     clientSecret,
-    access: "write",
+    access: "read",
   });
-  const capsuleId = await capsuleIdForAccountsAccessToken({
-    accountsUrl: internalAccountsUrl,
-    accessToken: authorization.accessToken,
-    fetchImpl: deps.fetch,
-  });
-  const rotateUrl = new URL(
-    takosumiAccountsCapsuleServiceRotateTokenPath(
-      capsuleId,
-      TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_AI_GATEWAY,
-    ),
-    internalAccountsUrl,
-  );
-  const rotateResponse = await deps.fetch(rotateUrl, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authorization: `Bearer ${authorization.accessToken}`,
-      "content-type": "application/json",
+  const request = {
+    baseUrl: internalAccountsUrl,
+    token: authorization.accessToken,
+    subjectId: authorization.subjectId,
+    fetch: deps.fetch,
+  };
+  const authorized = await fetchAuthorizedRuntimeInterfaces(
+    {
+      workspaceId: authorization.workspaceId,
+      type: AI_GATEWAY_INTERFACE_TYPE,
+      permission: AI_GATEWAY_CHAT_PERMISSION,
+      deliveryTypes: ["oauth2"],
     },
-    body: JSON.stringify({
-      scopes: AI_GATEWAY_TOKEN_SCOPES,
-      ttlSeconds: AI_GATEWAY_TOKEN_TTL_SECONDS,
-    }),
-    signal: AbortSignal.timeout(ACCOUNTS_FETCH_TIMEOUT_MS),
-  });
-  const rotateBody = await readJsonRecord(rotateResponse);
-  const token = nonEmptyString(rotateBody.token);
-  if (!rotateResponse.ok || !token?.startsWith("taksrv_")) {
-    throw new Error(`runtime token rotation failed (${rotateResponse.status})`);
+    request,
+  );
+  if (authorized.length === 0) return undefined;
+  if (authorized.length !== 1) {
+    throw new Error("AI Gateway Interface selection is ambiguous");
   }
+  const selected = authorized[0]!;
+  const endpoint = aiGatewayInterfaceEndpoint(selected.interface);
+  if (!endpoint) throw new Error("AI Gateway Interface endpoint is invalid");
+  const resourceInput = selected.interface.spec.access.resourceUriInput;
+  const resource = resourceInput
+    ? nonEmptyString(selected.interface.status.resolvedInputs?.[resourceInput])
+    : undefined;
+  if (!resource || canonicalRuntimeResource(resource) !== endpoint) {
+    throw new Error("AI Gateway Interface audience is invalid");
+  }
+  const token = await issueRuntimeInterfaceAccessToken(request, {
+    interfaceId: selected.interface.metadata.id,
+    permission: AI_GATEWAY_CHAT_PERMISSION,
+    resource: endpoint,
+    errorLabel: "AI Gateway Interface",
+  });
   return {
     apiKey: token,
-    endpoint: new URL(
-      "/gateway/ai/v1/chat/completions",
-      publicAccountsUrl,
-    ).toString(),
+    endpoint: openAiChatCompletionsEndpoint(endpoint)!,
   };
 }
 
-async function capsuleIdForAccountsAccessToken(input: {
-  readonly accountsUrl: string;
-  readonly accessToken: string;
-  readonly fetchImpl: typeof fetch;
-}): Promise<string> {
-  const userInfoResponse = await input.fetchImpl(
-    new URL(TAKOSUMI_ACCOUNTS_USERINFO_PATH, input.accountsUrl),
-    {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.accessToken}`,
-      },
-      signal: AbortSignal.timeout(ACCOUNTS_FETCH_TIMEOUT_MS),
-    },
-  );
-  const userInfo = await readJsonRecord(userInfoResponse);
-  const takosumi = recordValue(userInfo.takosumi);
-  const capsuleId = nonEmptyString(
-    takosumi?.capsule_id ?? takosumi?.installation_id,
-  );
-  if (!userInfoResponse.ok || !capsuleId) {
-    throw new Error(
-      `Capsule identity lookup failed (${userInfoResponse.status})`,
-    );
+function aiGatewayInterfaceEndpoint(
+  iface: Awaited<
+    ReturnType<typeof fetchAuthorizedRuntimeInterfaces>
+  >[number]["interface"],
+): string | undefined {
+  const raw = nonEmptyString(iface.status.resolvedInputs?.endpoint);
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
   }
-  return capsuleId;
+}
+
+function canonicalRuntimeResource(raw: string): string | undefined {
+  try {
+    const url = new URL(raw);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function openAiChatCompletionsEndpoint(
@@ -397,19 +401,6 @@ function openAiChatCompletionsEndpoint(
   url.search = "";
   url.hash = "";
   return url.toString();
-}
-
-async function readJsonRecord(
-  response: Response,
-): Promise<Record<string, unknown>> {
-  const value = await response.json().catch(() => ({}));
-  return recordValue(value) ?? {};
-}
-
-function recordValue(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function nonEmptyString(value: unknown): string | undefined {

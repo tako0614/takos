@@ -20,6 +20,7 @@ import {
   RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
   RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES,
 } from "../../../application/services/platform/service-publications.ts";
+import { resolveDisplayIcon } from "takosumi-contract";
 
 type Variables = {
   user?: User;
@@ -154,22 +155,13 @@ function spaceIdentifierFromRow(row: AccountInfo): string | null {
   });
 }
 
-function resolveLauncherIcon(
+export function resolveLauncherIcon(
   icon: string | null,
   baseUrl: string | null,
 ): string | null {
-  if (!icon) return null;
-  if (/^https?:\/\//i.test(icon)) return icon;
-  if (!baseUrl || !icon.startsWith("/") || icon.startsWith("//")) {
-    return icon;
-  }
-
-  try {
-    const base = new URL(baseUrl);
-    return new URL(icon, `${base.protocol}//${base.host}`).toString();
-  } catch {
-    return icon;
-  }
+  const resolved = resolveDisplayIcon(icon, baseUrl ?? undefined);
+  if (!resolved) return null;
+  return resolved.kind === "image" ? resolved.url : resolved.glyph;
 }
 
 function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {

@@ -33,14 +33,14 @@ The reference implementation is `takosumi/core/domains/output-projection/service
 
 ## 2. Ownership
 
-| Concern              | Owner                                                                |
-| -------------------- | -------------------------------------------------------------------- |
-| Producer identity    | `Capsule` + successful `Run` + `StateVersion` + `Output`             |
-| Producer data source | `tofu output -json`, filtered through the Capsule output allowlist   |
-| Consumer dependency  | output-to-input wiring pinned at plan time                           |
+| Concern              | Owner                                                                  |
+| -------------------- | ---------------------------------------------------------------------- |
+| Producer identity    | `Capsule` + successful `Run` + `StateVersion` + `Output`               |
+| Producer data source | `tofu output -json`, filtered through the Capsule output allowlist     |
+| Consumer dependency  | output-to-input wiring pinned at plan time                             |
 | Runtime authority    | workload runtime plus Takosumi bind-time scoped grants where supported |
-| Audit                | `Run` / `AuditEvent`                                                 |
-| Projection           | Takos host (transient, read-only; outside the Takosumi ledger)       |
+| Audit                | `Run` / `AuditEvent`                                                   |
+| Projection           | Takos host (transient, read-only; outside the Takosumi ledger)         |
 
 Takos consumes these projections to build its app launcher, MCP registry, file handling, storage, Git, and agent
 experiences. Takos may also publish first-party services through the same Outputs, but it does not define a separate
@@ -115,52 +115,56 @@ Standard namespaces: `protocol.*`, `interface.*`, `storage.*`, `source.*`, `comp
 
 Standard capabilities (`STANDARD_PROJECTED_CAPABILITIES`):
 
-| capability                 | meaning                                          |
-| -------------------------- | ------------------------------------------------ |
-| `protocol.mcp.server`      | MCP server endpoint                              |
-| `protocol.http.api`        | generic HTTP API endpoint                        |
-| `protocol.grpc.api`        | gRPC API endpoint                                |
-| `protocol.websocket.api`   | WebSocket API endpoint                           |
-| `interface.ui.surface`     | embeddable or launchable UI surface              |
-| `interface.file.handler`   | file open/edit handler metadata                  |
-| `storage.object`           | object/blob storage API                          |
+| capability                 | meaning                                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `protocol.mcp.server`      | MCP server endpoint                                                      |
+| `protocol.http.api`        | generic HTTP API endpoint                                                |
+| `protocol.grpc.api`        | gRPC API endpoint                                                        |
+| `protocol.websocket.api`   | WebSocket API endpoint                                                   |
+| `interface.ui.surface`     | embeddable or launchable UI surface                                      |
+| `interface.file.handler`   | file open/edit handler metadata                                          |
+| `storage.object`           | object/blob storage API                                                  |
 | `storage.filesystem`       | Takos product-internal Workspace file-tree projection; not an agent tool |
-| `storage.key_value`        | key-value storage API                            |
-| `storage.sql`              | SQL/database API                                 |
-| `storage.vector`           | vector index or vector-search API                |
-| `storage.search_index`     | text/search index API                            |
-| `source.repository`        | repository metadata, refs, and object access     |
-| `source.git.smart_http`    | Git Smart HTTP endpoint                          |
-| `compute.job_runner`       | asynchronous job execution endpoint              |
-| `compute.sandbox`          | sandboxed execution environment                  |
-| `automation.agent_runtime` | agent/task runtime endpoint                      |
-| `automation.tool_provider` | tool provider usable by a runtime or agent       |
-| `ai.model`                 | model inference endpoint                         |
-| `ai.embedding_model`       | embedding model endpoint                         |
-| `identity.oidc`            | OIDC issuer/client projection                    |
-| `identity.oauth.client`    | OAuth client projection                          |
-| `auth.bootstrap_token`     | one-time or short-lived bootstrap token delivery |
-| `auth.token_exchange`      | token exchange endpoint                          |
-| `auth.webhook_signing`     | webhook/event signing secret authority           |
-| `messaging.queue`          | queue service                                    |
-| `messaging.pubsub`         | publish/subscribe service                        |
-| `events.webhook`           | event ingest webhook                             |
-| `events.subscription`      | event subscription stream                        |
-| `observability.logs`       | log read/export endpoint                         |
-| `observability.metrics`    | metric read/export endpoint                      |
-| `observability.traces`     | trace read/export endpoint                       |
-| `billing.usage`            | usage reporting / showback integration port      |
-| `deployment.outputs`       | non-secret deployment output read API            |
-| `control.api`              | scoped same-Workspace support callbacks          |
-| `governance.policy`        | policy decision or policy evidence service       |
-| `governance.approval`      | approval request/decision service                |
+| `storage.key_value`        | key-value storage API                                                    |
+| `storage.sql`              | SQL/database API                                                         |
+| `storage.vector`           | vector index or vector-search API                                        |
+| `storage.search_index`     | text/search index API                                                    |
+| `source.repository`        | repository metadata, refs, and object access                             |
+| `source.git.smart_http`    | Git Smart HTTP endpoint                                                  |
+| `compute.job_runner`       | asynchronous job execution endpoint                                      |
+| `compute.sandbox`          | sandboxed execution environment                                          |
+| `automation.agent_runtime` | agent/task runtime endpoint                                              |
+| `automation.tool_provider` | tool provider usable by a runtime or agent                               |
+| `ai.model`                 | model inference endpoint                                                 |
+| `ai.embedding_model`       | embedding model endpoint                                                 |
+| `identity.oidc`            | OIDC issuer/client projection                                            |
+| `identity.oauth.client`    | OAuth client projection                                                  |
+| `auth.bootstrap_token`     | one-time or short-lived bootstrap token delivery                         |
+| `auth.token_exchange`      | token exchange endpoint                                                  |
+| `auth.webhook_signing`     | webhook/event signing secret authority                                   |
+| `messaging.queue`          | queue service                                                            |
+| `messaging.pubsub`         | publish/subscribe service                                                |
+| `events.webhook`           | event ingest webhook                                                     |
+| `events.subscription`      | event subscription stream                                                |
+| `observability.logs`       | log read/export endpoint                                                 |
+| `observability.metrics`    | metric read/export endpoint                                              |
+| `observability.traces`     | trace read/export endpoint                                               |
+| `billing.usage`            | usage reporting / showback integration port                              |
+| `deployment.outputs`       | non-secret deployment output read API                                    |
+| `control.api`              | scoped same-Workspace support callbacks                                  |
+| `governance.policy`        | policy decision or policy evidence service                               |
+| `governance.approval`      | approval request/decision service                                        |
 
 Extension capabilities (non-standard dotted tokens) are rejected unless the projection is explicitly invoked with
 `allowExtensionCapabilities`. `billing.*` capabilities do not make official billing an OSS feature; official billing,
 payment enforcement, and usage metering sold as a service are Takosumi Cloud-only.
 
-The Takosumi AI Gateway is **not** part of this projection. It is a Cloud-only, OpenAI-compatible runtime API that lives
-in the closed `takosumi-cloud` package; it is not an OpenTofu provider credential and not an OSS control-plane feature.
+The Takosumi AI Gateway is **not** part of this projection. It is an operator/Cloud OpenAI-compatible runtime service,
+not an OpenTofu provider credential. Takos consumes it only after discovering one resolved `takosumi.ai.gateway`
+Interface with an exact Ready Principal `InterfaceBinding` for `ai.chat`; it then asks
+`POST /v1/interfaces/:id/token` for a single invocation-only credential. The delegated Accounts token authenticates
+that request but is never forwarded to the agent runtime. No Capsule-service side channel or legacy token-rotation
+helper is a runtime authority or fallback.
 
 ## 6. OpenTofu projection
 
@@ -234,18 +238,18 @@ here — they authorize OpenTofu plan/apply/destroy and stay in the ProviderConn
 
 Takos is a first-party consumer/producer profile over this projection:
 
-| Takos surface                    | service identity / capability                               |
-| -------------------------------- | ----------------------------------------------------------- |
-| MCP registry                     | app-provided `protocol.mcp.server` publications             |
-| app launcher / embedded UI       | app-provided `interface.ui.surface` publications            |
-| file handlers                    | app-provided `interface.file.handler` publications          |
-| Takos product-internal Workspace APIs | `storage.filesystem`, `source.repository` projections  |
-| Workspace file and object UX     | installable `takos-storage`: `storage.object` + MCP         |
-| key-value / SQL storage          | app-provided `storage.key_value`, `storage.sql`             |
-| Git UX / clone / refs            | installable `takos-git`: `source.git.smart_http` + MCP      |
-| sandbox computer                 | installable `takos-computer`: `protocol.mcp.server`         |
-| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |
-| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
+| Takos surface                         | service identity / capability                               |
+| ------------------------------------- | ----------------------------------------------------------- |
+| MCP registry                          | app-provided `protocol.mcp.server` publications             |
+| app launcher / embedded UI            | app-provided `interface.ui.surface` publications            |
+| file handlers                         | app-provided `interface.file.handler` publications          |
+| Takos product-internal Workspace APIs | `storage.filesystem`, `source.repository` projections       |
+| Workspace file and object UX          | installable `takos-storage`: `storage.object` + MCP         |
+| key-value / SQL storage               | app-provided `storage.key_value`, `storage.sql`             |
+| Git UX / clone / refs                 | installable `takos-git`: `source.git.smart_http` + MCP      |
+| sandbox computer                      | installable `takos-computer`: `protocol.mcp.server`         |
+| agent execution                       | `automation.agent_runtime`, `automation.tool_provider`      |
+| same-Workspace output / control       | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
 
 The internal Workspace projections remain product APIs, while the agent discovers file/repository actions from the
 installed MCP publications.

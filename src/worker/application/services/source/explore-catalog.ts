@@ -28,6 +28,7 @@ import {
 import { fetchPublishStatuses } from "./explore-stats.ts";
 import { sourceServiceDeps } from "./deps.ts";
 import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
+import { hasCredentialQueryParams } from "takosumi-contract";
 import {
   type CatalogCapsuleRecord,
   type CatalogTakosumiCapsulesReadConfig,
@@ -131,6 +132,31 @@ export async function hasInstallableCapsuleForRelease(
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
+  }
+}
+
+/**
+ * Release bundle icons are untrusted repository-published metadata. Accept
+ * only a credential-free absolute HTTPS URL or a root-relative path; degrade
+ * everything else to no icon instead of forwarding it to catalog consumers.
+ */
+export function safeCatalogIcon(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw || raw.length > 2048) return null;
+  if (raw.startsWith("/") && !raw.startsWith("//")) {
+    const url = new URL(raw, "https://catalog.invalid");
+    if (url.hash || hasCredentialQueryParams(url.searchParams)) return null;
+    return raw;
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    if (url.username || url.password || url.hash) return null;
+    if (hasCredentialQueryParams(url.searchParams)) return null;
+    return raw;
+  } catch {
+    return null;
   }
 }
 
@@ -311,7 +337,7 @@ export async function listCatalogItems(
       version: primaryAsset?.bundle_meta?.version || release.tag,
       description:
         primaryAsset?.bundle_meta?.description || release.description || null,
-      icon: primaryAsset?.bundle_meta?.icon || null,
+      icon: safeCatalogIcon(primaryAsset?.bundle_meta?.icon),
       category: primaryAsset?.bundle_meta?.category || null,
       tags: Array.isArray(primaryAsset?.bundle_meta?.tags)
         ? primaryAsset.bundle_meta.tags.filter(
