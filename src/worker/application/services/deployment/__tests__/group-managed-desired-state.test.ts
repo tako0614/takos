@@ -614,7 +614,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
           previousToken: params.previousToken,
         });
         return {
-          baseUrl: "https://takos.example.test/v1/capsule-projections",
+          baseUrl: "https://takos.example.test/api/v1",
           token: "taksrv_runtime_token",
         };
       },
@@ -644,7 +644,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
     capturedVariables.find((entry) => entry.name === "TAKOSUMI_CONTROL_URL"),
     {
       name: "TAKOSUMI_CONTROL_URL",
-      value: "https://takos.example.test/v1/capsule-projections",
+      value: "https://takos.example.test/api/v1",
       secret: false,
     },
   );
@@ -658,7 +658,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
   );
 });
 
-test("syncGroupManagedDesiredState fails closed for service binding grants without a Capsule projection id", async () => {
+test("syncGroupManagedDesiredState fails closed for service binding grants without a canonical Capsule id", async () => {
   const desiredState = compileGroupDesiredState({
     name: "docs",
     compute: {
@@ -735,7 +735,7 @@ test("syncGroupManagedDesiredState fails closed for service binding grants witho
     {
       name: "web",
       error:
-        "service binding 'space-control' (control.api) targets compute 'web' but no Takosumi Accounts Capsule projection id is available",
+        "service binding 'space-control' (control.api) targets compute 'web' but no canonical Capsule id is available",
     },
   ]);
 });

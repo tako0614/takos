@@ -2,10 +2,6 @@ import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
-  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
-  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-} from "@takosjp/takosumi-accounts-contract";
-import {
   featuredAppCatalogConfig,
   featuredAppCatalogEntries,
   featuredAppPreinstallJobs,
@@ -45,6 +41,10 @@ import {
   resolveFeaturedAppCatalogForBootstrap,
   resolveFeaturedAppInstallConfig,
 } from "./featured-app-resolution.ts";
+import {
+  applyInstallableAppInstallation,
+  planInstallableAppInstallation,
+} from "./installable-app-install.ts";
 
 function hasTransactionSupport(db: FeaturedAppCatalogEnv["DB"]): boolean {
   return (
@@ -140,63 +140,6 @@ function updateChanged(result: unknown): boolean {
   return affectedRowCount(result) > 0;
 }
 
-async function readResponseTextSnippet(response: Response): Promise<string> {
-  const text = await response.text();
-  return text.length > 400 ? `${text.slice(0, 400)}...` : text;
-}
-
-async function readResponseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function endpointWithPath(baseUrl: string, path: string): string {
-  const url = new URL(baseUrl);
-  url.pathname = path;
-  url.search = "";
-  return url.toString();
-}
-
-function planRunUrlFromInstallUrl(installUrl: string): string {
-  const url = new URL(installUrl);
-  const path = url.pathname.replace(/\/+$/, "");
-  if (path.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
-    return endpointWithPath(
-      installUrl,
-      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
-    );
-  }
-  return endpointWithPath(
-    installUrl,
-    `${path}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH}`,
-  );
-}
-
-async function postJson(
-  url: string,
-  token: string,
-  body: Record<string, unknown>,
-): Promise<unknown> {
-  const response = await featuredAppCatalogDeps.fetch(url, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const snippet = await readResponseTextSnippet(response);
-    throw new Error(`${response.status} ${snippet}`);
-  }
-  return await readResponseJson(response);
-}
-
 function readExpectedGuard(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("featured app PlanRun response is missing expected guard");
@@ -208,20 +151,6 @@ function readExpectedGuard(value: unknown): Record<string, unknown> {
   return expected as Record<string, unknown>;
 }
 
-function featuredAppOpenTofuSource(entry: FeaturedAppCatalogEntry): {
-  kind: "git";
-  url: string;
-  ref: string;
-  modulePath?: string;
-} {
-  return {
-    kind: "git",
-    url: entry.repositoryUrl,
-    ref: entry.ref,
-    ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
-  };
-}
-
 function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
   return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
 }
@@ -229,53 +158,57 @@ function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
 export async function applyFeaturedAppInstallation(
   entry: FeaturedAppCatalogEntry,
   config: FeaturedAppInstallConfig,
-  params: {
-    spaceId: string;
-    createdByAccountId?: string;
-    subject?: string;
+  _params: {
     mode?: string;
   },
 ): Promise<unknown> {
-  const source = featuredAppOpenTofuSource(entry);
-  const planBody: Record<string, unknown> = {
-    spaceId: params.spaceId,
-    source,
+  const clientConfig = {
+    controlUrl: config.controlUrl,
+    token: config.token,
+    fetch: featuredAppCatalogDeps.fetch,
   };
-  if (hasFeaturedAppVariables(entry)) planBody.variables = entry.variables;
-  const plan = await postJson(
-    planRunUrlFromInstallUrl(config.installUrl),
-    config.token,
-    planBody,
+  const plan = await planInstallableAppInstallation(
+    {
+      workspaceId: config.workspaceId,
+      appId: entry.appId ?? entry.name,
+      gitUrl: entry.repositoryUrl,
+      ref: entry.ref,
+      ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
+      ...(hasFeaturedAppVariables(entry) ? { variables: entry.variables } : {}),
+    },
+    clientConfig,
   ).catch((error) => {
     throw new Error(
-      `featured app Capsule plan failed for ${entry.name}: ${
+      `featured app canonical Capsule plan failed for ${entry.name}: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   });
-  const expected = readExpectedGuard(plan);
-  const mode = params.mode ?? config.mode ?? "shared-cell";
-  const applyBody: Record<string, unknown> = {
-    accountId: config.accountId ?? params.spaceId,
-    spaceId: params.spaceId,
-    createdBySubject: params.subject ?? config.subject,
-    source,
-    expected,
-    mode,
-  };
-  if (config.runtimeBaseUrl) applyBody.runtimeBaseUrl = config.runtimeBaseUrl;
-  if (entry.modulePath) applyBody.modulePath = entry.modulePath;
-  if (hasFeaturedAppVariables(entry)) applyBody.vars = entry.variables;
-
-  return await postJson(config.installUrl, config.token, applyBody).catch(
-    (error) => {
-      throw new Error(
-        `featured app Capsule apply failed for ${entry.name}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+  if (plan.status >= 400) {
+    throw new Error(
+      `featured app canonical Capsule plan failed for ${entry.name}: HTTP ${plan.status}`,
+    );
+  }
+  const expected = readExpectedGuard(plan.body);
+  const applied = await applyInstallableAppInstallation(
+    {
+      workspaceId: config.workspaceId,
+      expected,
     },
+    clientConfig,
   );
+  if (applied.status >= 400) {
+    throw new Error(
+      `featured app canonical Capsule apply failed for ${entry.name}: HTTP ${applied.status}`,
+    );
+  }
+  return {
+    ...applied.body,
+    capsule:
+      plan.body && typeof plan.body.capsule === "object"
+        ? plan.body.capsule
+        : null,
+  };
 }
 
 interface FeaturedAppPreinstallResult {
@@ -461,9 +394,7 @@ async function preinstallFeaturedAppsForSpaceDetailed(
 
   for (const entry of entries) {
     await applyFeaturedAppInstallation(entry, installConfig, {
-      spaceId: params.spaceId,
-      createdByAccountId: params.createdByAccountId,
-      subject: params.subject,
+      ...(installConfig.mode ? { mode: installConfig.mode } : {}),
     });
     installed.push(entry);
   }

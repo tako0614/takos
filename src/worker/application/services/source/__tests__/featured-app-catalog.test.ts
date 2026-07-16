@@ -53,6 +53,76 @@ function objectRecord(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function canonicalFeaturedInstallResponse(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Response {
+  const url = new URL(input instanceof Request ? input.url : input.toString());
+  const method =
+    init?.method ?? (input instanceof Request ? input.method : "GET");
+  const segments = url.pathname.split("/").filter(Boolean);
+  const last = segments.at(-1) ?? "";
+  if (method === "GET" && last === "sources") {
+    return Response.json({ sources: [] });
+  }
+  if (method === "POST" && last === "sources") {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return Response.json(
+      {
+        source: {
+          id: `src_${String(body.name)}`,
+          workspaceId: body.workspaceId,
+          name: body.name,
+          url: body.url,
+          defaultRef: body.defaultRef,
+          defaultPath: body.defaultPath,
+        },
+      },
+      { status: 201 },
+    );
+  }
+  if (method === "POST" && last === "sync") {
+    return Response.json(
+      { run: { id: `run_sync_${segments.at(-2)}`, status: "succeeded" } },
+      { status: 201 },
+    );
+  }
+  if (method === "GET" && last === "capsules") {
+    return Response.json({ capsules: [] });
+  }
+  if (method === "POST" && last === "capsules") {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return Response.json(
+      {
+        capsule: {
+          id: `cap_${String(body.name)}`,
+          workspaceId: segments.at(-2),
+          sourceId: body.sourceId,
+          name: body.name,
+          environment: body.environment,
+        },
+      },
+      { status: 201 },
+    );
+  }
+  if (method === "POST" && last === "plan") {
+    return Response.json(
+      { run: { id: `run_plan_${segments.at(-2)}` } },
+      { status: 201 },
+    );
+  }
+  if (method === "POST" && last === "apply") {
+    return Response.json(
+      { run: { id: `run_apply_${segments.at(-2)}` } },
+      { status: 202 },
+    );
+  }
+  return Response.json(
+    { error: "unexpected canonical request" },
+    { status: 500 },
+  );
+}
+
 test("resolveFeaturedAppCatalog keeps fallback catalog empty", () => {
   const entries = resolveFeaturedAppCatalog(makeEnv());
 
@@ -233,41 +303,38 @@ test("resolveFeaturedAppCatalogForBootstrap honors the preinstall kill switch be
   assertEquals(entries, []);
 });
 
-test("resolveFeaturedAppInstallConfig reuses the shared Takosumi Accounts install surface", () => {
+test("resolveFeaturedAppInstallConfig resolves explicit canonical operator automation", () => {
   assertEquals(
     resolveFeaturedAppInstallConfig(
       makeEnv({
         TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal/",
         TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
-        TAKOSUMI_ACCOUNTS_SUBJECT: "tsub_operator",
+        TAKOS_APP_INSTALL_ACCOUNT_ID: "ws_operator",
         TAKOS_APP_INSTALL_MODE: "shared-cell",
-        TAKOS_APP_INSTALL_RUNTIME_BASE_URL: "https://takos.example.com",
       }),
     ),
     {
-      installUrl: "https://accounts.internal/v1/capsule-projections",
+      controlUrl: "https://accounts.internal/",
       token: "accounts-token",
-      subject: "tsub_operator",
+      workspaceId: "ws_operator",
       mode: "shared-cell",
-      runtimeBaseUrl: "https://takos.example.com/",
     },
   );
   assertEquals(
     resolveFeaturedAppInstallConfig(
       makeEnv({
-        TAKOS_FEATURED_APP_INSTALL_URL:
-          "https://installer.internal/v1/capsule-projections",
+        TAKOS_FEATURED_APP_INSTALL_URL: "https://installer.internal/control",
         TAKOS_FEATURED_APP_INSTALL_TOKEN: "default-token",
-        TAKOS_FEATURED_APP_INSTALL_SUBJECT: "tsub_default",
+        TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID: "ws_default",
         TAKOS_APP_INSTALLATIONS_URL: "https://accounts.internal",
         TAKOS_APP_INSTALL_TOKEN: "shared-token",
         TAKOS_APP_INSTALL_SUBJECT: "tsub_shared",
       }),
     ),
     {
-      installUrl: "https://installer.internal/v1/capsule-projections",
+      controlUrl: "https://installer.internal/control",
       token: "default-token",
-      subject: "tsub_default",
+      workspaceId: "ws_default",
     },
   );
 });
@@ -1151,82 +1218,47 @@ test("processFeaturedAppPreinstallJobs applies featured apps through Capsule ins
   featuredAppCatalogDeps.getDb = (() => db) as any;
   featuredAppCatalogDeps.fetch = async (input, init) => {
     sentRequests.push(new Request(input, init));
-    if (String(input).endsWith("/plan-runs")) {
-      return Response.json({
-        expected: {
-          planRunId: `plan_${sentRequests.length}`,
-          runnerProfileId: "runner_default",
-          sourceDigest: "sha256:source",
-          variablesDigest: "sha256:variables",
-          policyDecisionDigest: "sha256:policy",
-          planDigest: "sha256:plan",
-          planArtifactDigest: "sha256:artifact",
-        },
-      });
-    }
-    return Response.json({ ok: true }, { status: 202 });
+    return canonicalFeaturedInstallResponse(input, init);
   };
 
   try {
     const summary = await processFeaturedAppPreinstallJobs(
       makeEnv({
         TAKOS_FEATURED_APPS_PREINSTALL: "true",
-        TAKOS_FEATURED_APP_INSTALL_URL:
-          "https://installer.internal/v1/capsule-projections",
+        TAKOS_FEATURED_APP_INSTALL_URL: "https://installer.internal/control",
         TAKOS_FEATURED_APP_INSTALL_TOKEN: "install-token",
-        TAKOS_FEATURED_APP_INSTALL_SUBJECT: "tsub_operator",
+        TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID: "ws_operator",
         TAKOS_FEATURED_APP_INSTALL_MODE: "shared-cell",
-        TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL: "https://apps.example.test",
+        TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL:
+          "https://apps.example.test",
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
 
     assertEquals(summary.completed, 1);
     assertEquals(jobStatuses, ["in_progress", "completed"]);
-    assertEquals(sentRequests.length, 6);
+    assertEquals(sentRequests.length, 21);
     assertEquals(
       sentRequests[0].url,
-      "https://installer.internal/v1/capsule-projections/plan-runs",
+      "https://installer.internal/control/api/v1/sources?workspaceId=ws_operator",
     );
     assertEquals(
       sentRequests[0].headers.get("authorization"),
       "Bearer install-token",
     );
-    const body = await sentRequests[0].json();
+    const body = await sentRequests[1].json();
     assertEquals(body, {
-      spaceId: "space-1",
-      source: {
-        kind: "git",
-        url: "https://github.com/tako0614/takos-office.git",
-        ref: "v0.1.0",
-      },
+      workspaceId: "ws_operator",
+      name: "takos-office-source",
+      url: "https://github.com/tako0614/takos-office.git",
+      defaultRef: "v0.1.0",
+      defaultPath: ".",
     });
     assertEquals(
-      sentRequests[1].url,
-      "https://installer.internal/v1/capsule-projections",
+      sentRequests[6].url,
+      "https://installer.internal/control/api/v1/runs/run_plan_cap_takos-office/apply",
     );
-    const applyBody = await sentRequests[1].json();
-    assertEquals(applyBody, {
-      accountId: "space-1",
-      spaceId: "space-1",
-      createdBySubject: "tsub_operator",
-      source: {
-        kind: "git",
-        url: "https://github.com/tako0614/takos-office.git",
-        ref: "v0.1.0",
-      },
-      expected: {
-        planRunId: "plan_1",
-        runnerProfileId: "runner_default",
-        sourceDigest: "sha256:source",
-        variablesDigest: "sha256:variables",
-        policyDecisionDigest: "sha256:policy",
-        planDigest: "sha256:plan",
-        planArtifactDigest: "sha256:artifact",
-      },
-      mode: "shared-cell",
-      runtimeBaseUrl: "https://apps.example.test/",
-    });
+    assertEquals(await sentRequests[6].json(), {});
   } finally {
     clearFeaturedAppCatalogCache();
     featuredAppCatalogDeps.getDb = originalGetDb;
@@ -1300,8 +1332,7 @@ test("processFeaturedAppPreinstallJobs blocks incomplete Capsule install config"
             repositoryUrl: "https://example.com/operator-docs.git",
           },
         ]),
-        TAKOS_FEATURED_APP_INSTALL_URL:
-          "https://installer.internal/v1/capsule-projections",
+        TAKOS_FEATURED_APP_INSTALL_URL: "https://installer.internal/control",
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
@@ -1314,7 +1345,7 @@ test("processFeaturedAppPreinstallJobs blocks incomplete Capsule install config"
     );
     assertEquals(
       String(jobUpdates.at(-1)?.lastError).includes(
-        "TAKOS_FEATURED_APP_INSTALL_URL/TOKEN/SUBJECT",
+        "canonical control URL, token, and Takosumi Workspace id",
       ),
       true,
     );
@@ -1494,8 +1525,9 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
   clearFeaturedAppCatalogCache();
   const fetchCalls: Array<{
     url: string;
+    method: string;
     authorization: string | null;
-    body: Record<string, unknown>;
+    body: Record<string, unknown> | null;
   }> = [];
   featuredAppCatalogDeps.getDb = (() => ({
     select: () => ({
@@ -1510,34 +1542,15 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
     }),
   })) as any;
   featuredAppCatalogDeps.fetch = async (input, init) => {
-    const url = String(input);
     fetchCalls.push({
       url: String(input),
+      method: init?.method ?? "GET",
       authorization: new Headers(init?.headers).get("authorization"),
-      body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      body: init?.body
+        ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+        : null,
     });
-    if (url.endsWith("/plan-runs")) {
-      return Response.json({
-        expected: {
-          planRunId: `plan_${fetchCalls.length}`,
-          runnerProfileId: "runner_default",
-          sourceDigest: "sha256:source",
-          variablesDigest: "sha256:variables",
-          policyDecisionDigest: "sha256:policy",
-          planDigest: "sha256:plan",
-          planArtifactDigest: "sha256:artifact",
-        },
-      });
-    }
-    return Response.json(
-      {
-        accounts: {
-          installationId: `inst_${fetchCalls.length}`,
-          status: "ready",
-        },
-      },
-      { status: 202 },
-    );
+    return canonicalFeaturedInstallResponse(input, init);
   };
 
   try {
@@ -1578,12 +1591,12 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
             preinstall: true,
           },
         ]),
-        TAKOS_FEATURED_APP_INSTALL_URL:
-          "https://installer.internal/v1/capsule-projections",
+        TAKOS_FEATURED_APP_INSTALL_URL: "https://installer.internal/control",
         TAKOS_FEATURED_APP_INSTALL_TOKEN: "install-token",
-        TAKOS_FEATURED_APP_INSTALL_SUBJECT: "tsub_operator",
+        TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID: "ws_operator",
         TAKOS_FEATURED_APP_INSTALL_MODE: "shared-cell",
-        TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL: "https://takos.example.com",
+        TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL:
+          "https://takos.example.com",
       }),
       {
         spaceId: "space-1",
@@ -1596,26 +1609,26 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
       installed.map((entry) => entry.name),
       ["takos-office", "takos-computer", "yurucommu"],
     );
-    assertEquals(fetchCalls.length, 6);
+    assertEquals(fetchCalls.length, 21);
     assertEquals(
       fetchCalls[0].url,
-      "https://installer.internal/v1/capsule-projections/plan-runs",
+      "https://installer.internal/control/api/v1/sources?workspaceId=ws_operator",
     );
     assertEquals(
-      fetchCalls[1].url,
-      "https://installer.internal/v1/capsule-projections",
+      fetchCalls.at(-1)?.url,
+      "https://installer.internal/control/api/v1/runs/run_plan_cap_yurucommu/apply",
     );
     assertEquals(
       fetchCalls.every((call) => call.authorization === "Bearer install-token"),
       true,
     );
+    const sourceCreates = fetchCalls.filter(
+      (call) =>
+        call.method === "POST" &&
+        new URL(call.url).pathname.endsWith("/api/v1/sources"),
+    );
     assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 0)
-        .map(
-          (call) =>
-            objectRecord(call.body.source, "install request source").url,
-        ),
+      sourceCreates.map((call) => call.body?.url),
       [
         "https://github.com/tako0614/takos-office.git",
         "https://github.com/tako0614/takos-computer.git",
@@ -1623,38 +1636,20 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
       ],
     );
     assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 0)
-        .map(
-          (call) =>
-            objectRecord(call.body.source, "install request source").ref,
-        ),
+      sourceCreates.map((call) => call.body?.defaultRef),
       ["v0.1.0", "v2.1.2", "main"],
     );
     assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 0)
-        .map(
-          (call) =>
-            objectRecord(call.body.source, "install request source")
-              .modulePath ?? null,
-        ),
-      [null, null, "."],
+      sourceCreates.map((call) => call.body?.defaultPath ?? null),
+      [".", ".", "."],
+    );
+    const capsuleCreates = fetchCalls.filter(
+      (call) =>
+        call.method === "POST" &&
+        new URL(call.url).pathname.endsWith("/capsules"),
     );
     assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 1)
-        .map(
-          (call) =>
-            objectRecord(call.body.source, "install request source")
-              .modulePath ?? null,
-        ),
-      [null, null, "."],
-    );
-    assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 0)
-        .map((call) => call.body.variables ?? null),
+      capsuleCreates.map((call) => call.body?.vars ?? null),
       [
         null,
         null,
@@ -1666,34 +1661,11 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
       ],
     );
     assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 1)
-        .map((call) => call.body.vars ?? null),
-      [
-        null,
-        null,
-        {
-          enable_cloudflare_resources: true,
-          project_name: "yurucommu",
-          worker_name: "yurucommu",
-        },
-      ],
-    );
-    assertEquals(
-      fetchCalls
-        .filter((_, index) => index % 2 === 1)
-        .every(
-          (call) =>
-            call.body.accountId === "space-1" &&
-            call.body.createdBySubject === "tsub_operator" &&
-            call.body.spaceId === "space-1" &&
-            objectRecord(call.body.source, "install request source").kind ===
-              "git" &&
-            objectRecord(call.body.expected, "install expected guard")
-              .planRunId === `plan_${fetchCalls.indexOf(call)}` &&
-            call.body.mode === "shared-cell" &&
-            call.body.runtimeBaseUrl === "https://takos.example.com/",
-        ),
+      capsuleCreates.every(
+        (call) =>
+          call.body?.installConfigId === "cfg-default-opentofu-capsule" &&
+          call.body?.environment === "production",
+      ),
       true,
     );
   } finally {
@@ -1787,11 +1759,8 @@ test("preinstallFeaturedAppsForSpace honors the kill switch even when env entrie
 });
 
 test("invalidateCatalogCache drops the in-memory cache entry for a DB binding", async () => {
-  const {
-    getCatalogCacheEntry,
-    invalidateCatalogCache,
-    setCatalogCacheEntry,
-  } = await import("../featured-app-catalog-internal.ts");
+  const { getCatalogCacheEntry, invalidateCatalogCache, setCatalogCacheEntry } =
+    await import("../featured-app-catalog-internal.ts");
 
   const dbBinding = {} as Env["DB"];
   setCatalogCacheEntry(dbBinding, {

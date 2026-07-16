@@ -6,10 +6,6 @@ import {
   NotFoundError,
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
-import {
-  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
-  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-} from "@takosjp/takosumi-accounts-contract";
 
 import {
   applyFeaturedAppInstallation,
@@ -32,15 +28,12 @@ import {
   resolveInstallableAppInstallConfig,
 } from "../../application/services/source/installable-app-install.ts";
 import {
-  installationProjectionToServicesBody,
-  projectWorkloadServicesFromInstallationBody,
-} from "../../application/services/source/takosumi-workload-services.ts";
-import {
   parseJsonBody,
   spaceAccess,
   type SpaceAccessRouteEnv,
 } from "./route-auth.ts";
 import { accountsDelegatedAuthorization } from "./auth/accounts-delegation.ts";
+import { takosumiSessionApiUrl } from "../../application/services/takosumi-control-paths.ts";
 
 type InstallableAppApplyBody = {
   app_id?: unknown;
@@ -50,18 +43,13 @@ type InstallableAppApplyBody = {
   module_path?: unknown;
   modulePath?: unknown;
   mode?: unknown;
-  runtime_base_url?: unknown;
-  source_commit?: unknown;
-  expected_commit?: unknown;
-  expected_plan_digest?: unknown;
-  expected_current_deployment_id?: unknown;
+  state_version_id?: unknown;
   expected?: unknown;
   variables?: unknown;
   vars?: unknown;
   installation_id?: unknown;
   operation?: unknown;
   reason?: unknown;
-  cost_ack?: unknown;
 };
 
 type InstallationApiRecord = {
@@ -203,34 +191,10 @@ function assertSafeModulePath(modulePath: string): void {
   }
 }
 
-function readOptionalBodyMode(
-  body: InstallableAppApplyBody,
-): string | undefined {
-  return readString(body.mode) ?? undefined;
-}
-
-function readOptionalBodyRuntimeBaseUrl(
-  body: InstallableAppApplyBody,
-): string | undefined {
-  return readString(body.runtime_base_url) ?? undefined;
-}
-
 function readOptionalBodyVariables(
   body: InstallableAppApplyBody,
 ): Record<string, unknown> | undefined {
   return readRecord(body.variables) ?? readRecord(body.vars) ?? undefined;
-}
-
-function readOptionalBodyBoolean(
-  body: InstallableAppApplyBody,
-  field: "cost_ack",
-): boolean | undefined {
-  const value = body[field];
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "boolean") {
-    throw new BadRequestError(`${field} must be a boolean`);
-  }
-  return value;
 }
 
 function jsonFromUpstream(
@@ -320,52 +284,13 @@ async function accountsPlaneJson(
       body: { error: "Takosumi Accounts API is not configured" },
     };
   }
-  const url = new URL(config.baseUrl);
-  url.pathname = path;
-  url.search = "";
+  const url = takosumiSessionApiUrl(config.baseUrl, path);
   const request = new Request(url.toString(), init);
   const response = await appInstallationsRouteDeps.accountsPlaneFetch(request);
   return {
     status: response.status,
     body: await readUpstreamBody(response),
   };
-}
-
-async function accountsPlaneGetJson(
-  c: Context<SpaceAccessRouteEnv>,
-  path: string,
-  headers: Headers,
-  search?: Record<string, string>,
-): Promise<InstallableAppUpstreamResponse> {
-  const config = appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(
-    c.env,
-  );
-  if (!config) {
-    return {
-      status: 503,
-      body: { error: "Takosumi Accounts API is not configured" },
-    };
-  }
-  const url = new URL(config.baseUrl);
-  url.pathname = path;
-  url.search = "";
-  for (const [key, value] of Object.entries(search ?? {})) {
-    url.searchParams.set(key, value);
-  }
-  const response = await appInstallationsRouteDeps.accountsPlaneFetch(
-    new Request(url.toString(), { method: "GET", headers }),
-  );
-  return {
-    status: response.status,
-    body: await readUpstreamBody(response),
-  };
-}
-
-function jsonHeaders(headers: Headers): Headers {
-  const next = new Headers(headers);
-  next.set("accept", "application/json");
-  next.set("content-type", "application/json");
-  return next;
 }
 
 async function resolveAccountsCaller(
@@ -376,8 +301,8 @@ async function resolveAccountsCaller(
   const clientId = readString(c.env.OIDC_CLIENT_ID);
   const encryptionKey = readString(c.env.ENCRYPTION_KEY);
   if (user && issuer && clientId && encryptionKey && c.env.DB) {
-    const authorization = await appInstallationsRouteDeps
-      .accountsDelegatedAuthorization({
+    const authorization =
+      await appInstallationsRouteDeps.accountsDelegatedAuthorization({
         db: c.env.DB,
         encryptionKey,
         userId: user.id,
@@ -421,26 +346,23 @@ async function resolveAccountsCaller(
 
 function accountsCallerWorkspaceId(
   caller: AccountsCaller,
-  localWorkspaceId: string,
+  _localWorkspaceId: string,
 ): string {
-  return caller.workspaceId ?? localWorkspaceId;
+  if (!caller.workspaceId) {
+    throw new AuthenticationError(
+      "Takosumi Workspace-bound OAuth authorization is required",
+    );
+  }
+  return caller.workspaceId;
 }
 
-function accountsInstallationsPath(installationId?: string): string {
-  return installationId
-    ? `${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}/${encodeURIComponent(
-        installationId,
-      )}`
-    : TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH;
-}
-
-function readAccountsExpectedGuard(
+function readCanonicalPlanReference(
   value: Record<string, unknown> | null,
 ): Record<string, unknown> {
   const expected = readRecord(value?.expected);
   if (!expected) {
     throw new ServiceUnavailableError(
-      "Capsule plan Run response is missing expected guard",
+      "Capsule plan response is missing its exact Run reference",
     );
   }
   return expected;
@@ -455,35 +377,72 @@ function featuredAppMode(
   return firstMode || "shared-cell";
 }
 
-function featuredAppOpenTofuSource(entry: FeaturedAppCatalogEntry): {
-  kind: "git";
-  url: string;
-  ref: string;
-  modulePath?: string;
-} {
-  return {
-    kind: "git",
-    url: entry.repositoryUrl,
-    ref: entry.ref,
-    ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
-  };
-}
-
 function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
   return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
 }
 
-async function postAccountsInstallationJson(
+function callerAccountsConfig(
   c: Context<SpaceAccessRouteEnv>,
   caller: AccountsCaller,
-  path: string,
-  body: Record<string, unknown>,
-): Promise<InstallableAppUpstreamResponse> {
-  return await accountsPlaneJson(c, path, {
-    method: "POST",
-    headers: jsonHeaders(caller.headers),
-    body: JSON.stringify(body),
-  });
+): ReturnType<typeof resolveInstallableAppAccountsConfig> {
+  const config = appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(
+    c.env,
+  );
+  if (!config) return null;
+  return {
+    baseUrl: config.baseUrl,
+    headers: caller.headers,
+    fetch: (input, init) =>
+      appInstallationsRouteDeps.accountsPlaneFetch(
+        input instanceof Request ? input : new Request(input, init),
+      ),
+  };
+}
+
+function operatorRouteConfig(c: Context<SpaceAccessRouteEnv>): {
+  workspaceId: string;
+  installConfig: NonNullable<
+    ReturnType<typeof resolveInstallableAppInstallConfig>
+  >;
+  accountsConfig: NonNullable<
+    ReturnType<typeof resolveInstallableAppAccountsConfig>
+  >;
+} {
+  const installConfig =
+    appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+  const workspaceId = installConfig?.accountId;
+  const controlUrl = installConfig?.controlUrl;
+  const token = installConfig?.token;
+  if (!installConfig || !workspaceId || !controlUrl || !token) {
+    throw new ServiceUnavailableError(
+      "Operator Capsule automation requires canonical control URL, token, and Takosumi Workspace id",
+    );
+  }
+  return {
+    workspaceId,
+    installConfig,
+    accountsConfig: {
+      baseUrl: controlUrl,
+      token,
+      fetch: (input, init) =>
+        appInstallationsRouteDeps.accountsPlaneFetch(
+          input instanceof Request ? input : new Request(input, init),
+        ),
+    },
+  };
+}
+
+function callerInstallConfig(
+  c: Context<SpaceAccessRouteEnv>,
+  caller: AccountsCaller,
+): ReturnType<typeof resolveInstallableAppInstallConfig> {
+  const accounts = callerAccountsConfig(c, caller);
+  if (!accounts) return null;
+  return {
+    controlUrl: accounts.baseUrl,
+    headers: caller.headers,
+    fetch: accounts.fetch,
+  };
 }
 
 async function applyFeaturedAppInstallationForRoute(
@@ -499,36 +458,34 @@ async function applyFeaturedAppInstallationForRoute(
     caller,
     params.localWorkspaceId,
   );
-  const source = featuredAppOpenTofuSource(entry);
-  const planBody: Record<string, unknown> = {
-    workspaceId,
-    spaceId: workspaceId,
-    source,
-  };
-  if (hasFeaturedAppVariables(entry)) planBody.variables = entry.variables;
-  const plan = await postAccountsInstallationJson(
-    c,
-    caller,
-    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
-    planBody,
+  const config = callerInstallConfig(c, caller);
+  if (!config) {
+    throw new ServiceUnavailableError(
+      "Takosumi canonical Capsule API is not configured",
+    );
+  }
+  const plan = await appInstallationsRouteDeps.planInstallableAppInstallation(
+    {
+      workspaceId,
+      appId: entry.appId ?? entry.name,
+      gitUrl: entry.repositoryUrl,
+      ref: entry.ref,
+      ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
+      ...(hasFeaturedAppVariables(entry) ? { variables: entry.variables } : {}),
+    },
+    config,
   );
   if (plan.status >= 400) return plan;
-  const expected = readAccountsExpectedGuard(plan.body);
-  const applyBody: Record<string, unknown> = {
-    workspaceId,
-    spaceId: workspaceId,
-    ...(caller.subject ? { createdBySubject: caller.subject } : {}),
-    source,
-    expected,
-    mode: params.mode,
-  };
-  if (entry.modulePath) applyBody.modulePath = entry.modulePath;
-  if (hasFeaturedAppVariables(entry)) applyBody.vars = entry.variables;
-  return await postAccountsInstallationJson(
-    c,
-    caller,
-    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-    applyBody,
+  const expected = readCanonicalPlanReference(plan.body);
+  return await appInstallationsRouteDeps.applyInstallableAppInstallation(
+    {
+      workspaceId,
+      gitUrl: entry.repositoryUrl,
+      ref: entry.ref,
+      ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
+      expected,
+    },
+    config,
   );
 }
 
@@ -538,42 +495,36 @@ async function listInstallableAppInstallationsForRoute(
 ): Promise<InstallableAppUpstreamResponse> {
   const caller = await resolveAccountsCaller(c);
   if (caller) {
-    const accountsWorkspaceId = accountsCallerWorkspaceId(caller, spaceId);
-    return await accountsPlaneGetJson(
-      c,
-      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-      caller.headers,
-      { space_id: accountsWorkspaceId },
+    return await appInstallationsRouteDeps.listInstallableAppInstallations(
+      accountsCallerWorkspaceId(caller, spaceId),
+      callerAccountsConfig(c, caller),
     );
   }
+  const operator = operatorRouteConfig(c);
   return await appInstallationsRouteDeps.listInstallableAppInstallations(
-    spaceId,
-    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+    operator.workspaceId,
+    operator.accountsConfig,
   );
 }
 
 async function listInstallableAppInstallationServicesForRoute(
   c: Context<SpaceAccessRouteEnv>,
+  spaceId: string,
   installationId: string,
 ): Promise<InstallableAppUpstreamResponse> {
   const caller = await resolveAccountsCaller(c);
   if (caller) {
-    // Deploy decision D3: the retired `/services` endpoint is replaced by the
-    // installation deployment-output projection.
-    const result = await accountsPlaneGetJson(
-      c,
-      accountsInstallationsPath(installationId),
-      caller.headers,
+    return await appInstallationsRouteDeps.listInstallableAppInstallationServices(
+      installationId,
+      accountsCallerWorkspaceId(caller, spaceId),
+      callerAccountsConfig(c, caller),
     );
-    if (result.status >= 400) return result;
-    return {
-      status: result.status,
-      body: installationProjectionToServicesBody(installationId, result.body),
-    };
   }
+  const operator = operatorRouteConfig(c);
   return await appInstallationsRouteDeps.listInstallableAppInstallationServices(
     installationId,
-    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+    operator.workspaceId,
+    operator.accountsConfig,
   );
 }
 
@@ -583,52 +534,16 @@ async function listInstallableAppInstallationsWithServicesForRoute(
 ): Promise<InstallableAppUpstreamResponse> {
   const caller = await resolveAccountsCaller(c);
   if (!caller) {
+    const operator = operatorRouteConfig(c);
     return await appInstallationsRouteDeps.listInstallableAppInstallationsWithServices(
-      spaceId,
-      appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+      operator.workspaceId,
+      operator.accountsConfig,
     );
   }
-  const upstream = await accountsPlaneGetJson(
-    c,
-    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-    caller.headers,
-    { space_id: accountsCallerWorkspaceId(caller, spaceId) },
+  return await appInstallationsRouteDeps.listInstallableAppInstallationsWithServices(
+    accountsCallerWorkspaceId(caller, spaceId),
+    callerAccountsConfig(c, caller),
   );
-  if (upstream.status >= 400) return upstream;
-  const installations = Array.isArray(upstream.body?.installations)
-    ? upstream.body.installations
-    : null;
-  if (!installations) return upstream;
-  const enriched = await Promise.all(
-    installations.map(async (installation) => {
-      const record = readRecord(installation);
-      if (!record) return installation;
-      const installationId =
-        readString(record.id) ??
-        readString(record.installation_id) ??
-        readString(record.installationId);
-      if (!installationId) return installation;
-      const services = await accountsPlaneGetJson(
-        c,
-        accountsInstallationsPath(installationId),
-        caller.headers,
-      );
-      if (services.status >= 400) {
-        return installation;
-      }
-      return {
-        ...record,
-        services: projectWorkloadServicesFromInstallationBody(services.body),
-      };
-    }),
-  );
-  return {
-    status: upstream.status,
-    body: {
-      ...upstream.body,
-      installations: enriched,
-    },
-  };
 }
 
 function findFeaturedAppEntry(
@@ -664,11 +579,9 @@ function listInstallationIds(body: Record<string, unknown> | null): string[] {
 }
 
 /**
- * Confirm the supplied installationId belongs to the authorized space before
- * proxying a revision/delete to upstream. Without this, a member of space A
- * could drive deployments/rollbacks/deletes against an Installation owned by
- * space B by supplying its installationId. Resolves the authorized space's
- * Installations and rejects unknown ids with 404.
+ * Confirm the supplied local UI id resolves to a Capsule in the authorized
+ * Workspace before proxying a revision/delete. The canonical API repeats this
+ * check server-side; this early 404 also avoids cross-Workspace id probing.
  */
 async function assertInstallationBelongsToSpace(
   c: Context<SpaceAccessRouteEnv>,
@@ -691,73 +604,15 @@ function readPathString(value: unknown, path: string[]): string | null {
   return readString(current);
 }
 
-function readBodyExpectedCommit(body: InstallableAppApplyBody): string | null {
-  return (
-    readString(body.expected_commit) ??
-    readPathString(body.expected, ["commit"])
-  );
-}
-
-function readBodyExpectedPlanDigest(
-  body: InstallableAppApplyBody,
-): string | null {
-  return (
-    readString(body.expected_plan_digest) ??
-    readPathString(body.expected, ["planDigest"])
-  );
-}
-
 function readBodyExpectedGuard(
   body: InstallableAppApplyBody,
 ): Record<string, unknown> | null {
   return readRecord(body.expected);
 }
 
-function gitSourceBody(source: {
-  gitUrl: string;
-  ref: string;
-  modulePath?: string;
-}): Record<string, unknown> {
-  return {
-    kind: "git",
-    url: source.gitUrl,
-    ref: source.ref,
-    ...(source.modulePath ? { modulePath: source.modulePath } : {}),
-  };
-}
-
-function readBodyExpectedCurrentDeploymentId(body: InstallableAppApplyBody): {
-  provided: boolean;
-  value: string | null;
-} {
-  if ("expected_current_deployment_id" in body) {
-    return readNullableString(
-      body.expected_current_deployment_id,
-      "expected_current_deployment_id",
-    );
-  }
-  const expected = readRecord(body.expected);
-  if (expected && "currentDeploymentId" in expected) {
-    return readNullableString(
-      expected.currentDeploymentId,
-      "expected.currentDeploymentId",
-    );
-  }
-  return { provided: false, value: null };
-}
-
-function readNullableString(
-  value: unknown,
-  field: string,
-): { provided: true; value: string | null } {
-  if (value === null) return { provided: true, value: null };
-  const text = readString(value);
-  if (text) return { provided: true, value: text };
-  throw new BadRequestError(`${field} must be a string or null`);
-}
-
 function extractInstallationId(value: unknown): string | null {
   return (
+    readPathString(value, ["capsule", "id"]) ??
     readPathString(value, ["accounts", "installationId"]) ??
     readPathString(value, ["accounts", "installation_id"]) ??
     readPathString(value, ["installation", "id"]) ??
@@ -768,12 +623,13 @@ function extractInstallationId(value: unknown): string | null {
 }
 
 function extractInstallationStatus(value: unknown): string {
-  return (
+  const status =
+    readPathString(value, ["capsule", "status"]) ??
     readPathString(value, ["installation", "status"]) ??
     readPathString(value, ["accounts", "status"]) ??
     readPathString(value, ["status"]) ??
-    "installing"
-  );
+    "installing";
+  return status === "active" ? "ready" : status;
 }
 
 function toInstallationRecord(
@@ -827,6 +683,7 @@ appInstallationsRouter.get(
     await assertInstallationBelongsToSpace(c, space.id, installationId);
     const upstream = await listInstallableAppInstallationServicesForRoute(
       c,
+      space.id,
       installationId,
     );
     return jsonFromUpstream(c, upstream);
@@ -848,33 +705,26 @@ appInstallationsRouter.post(
     }
     const variables = readOptionalBodyVariables(body);
     const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const accountsWorkspaceId = accountsCallerWorkspaceId(caller, space.id);
-      const upstream = await postAccountsInstallationJson(
-        c,
-        caller,
-        TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
-        {
-          workspaceId: accountsWorkspaceId,
-          spaceId: accountsWorkspaceId,
-          source: gitSourceBody(source),
-          ...(variables ? { variables } : {}),
-        },
-      );
-      return jsonFromUpstream(c, upstream);
-    }
-    const installConfig =
-      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+    const operator = caller ? null : operatorRouteConfig(c);
+    const installConfig = caller
+      ? callerInstallConfig(c, caller)
+      : operator?.installConfig;
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Capsule plan Run is not configured",
       );
     }
+    const workspaceId = caller
+      ? accountsCallerWorkspaceId(caller, space.id)
+      : operator!.workspaceId;
     const upstream =
       await appInstallationsRouteDeps.planInstallableAppInstallation(
         {
           ...source,
-          spaceId: space.id,
+          workspaceId,
+          ...(readOptionalBodyAppId(body)
+            ? { appId: readOptionalBodyAppId(body)! }
+            : {}),
           ...(variables ? { variables } : {}),
         },
         installConfig,
@@ -892,79 +742,32 @@ appInstallationsRouter.post(
     if (body === null) {
       throw new BadRequestError("Invalid JSON body");
     }
-    const source = readBodyInstallSource(body);
-    if (!source) {
-      throw new BadRequestError("git_url and ref are required");
-    }
-
-    const costAck = readOptionalBodyBoolean(body, "cost_ack");
     const expected = readBodyExpectedGuard(body);
-    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanDigest = readBodyExpectedPlanDigest(body) ?? undefined;
-    if (!expected && (!expectedCommit || !expectedPlanDigest)) {
+    if (!expected) {
       throw new BadRequestError(
-        "expected guard is required after install plan Run approval",
+        "expected exact Run reference is required after Capsule plan",
       );
     }
-    const variables = readOptionalBodyVariables(body);
 
     const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const accountsWorkspaceId = accountsCallerWorkspaceId(caller, space.id);
-      const mode = readOptionalBodyMode(body) ?? "shared-cell";
-      const runtimeBaseUrl = readOptionalBodyRuntimeBaseUrl(body);
-      const upstream = await postAccountsInstallationJson(
-        c,
-        caller,
-        TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
-        {
-          workspaceId: accountsWorkspaceId,
-          spaceId: accountsWorkspaceId,
-          ...(caller.subject ? { createdBySubject: caller.subject } : {}),
-          source: gitSourceBody(source),
-          expected: expected ?? {
-            commit: expectedCommit,
-            planDigest: expectedPlanDigest,
-          },
-          mode,
-          ...(variables ? { vars: variables } : {}),
-          ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
-          ...(costAck === undefined ? {} : { costAck }),
-        },
-      );
-      return jsonFromUpstream(c, upstream);
-    }
-
-    const installConfig =
-      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+    const operator = caller ? null : operatorRouteConfig(c);
+    const installConfig = caller
+      ? callerInstallConfig(c, caller)
+      : operator?.installConfig;
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Capsule apply is not configured",
       );
     }
-    if (!installConfig.subject) {
-      throw new ServiceUnavailableError(
-        "Third-party Capsule subject is not configured",
-      );
-    }
-    const mode = readOptionalBodyMode(body) ?? installConfig.mode;
-    const runtimeBaseUrl =
-      readOptionalBodyRuntimeBaseUrl(body) ?? installConfig.runtimeBaseUrl;
+    const workspaceId = caller
+      ? accountsCallerWorkspaceId(caller, space.id)
+      : operator!.workspaceId;
 
     const upstream =
       await appInstallationsRouteDeps.applyInstallableAppInstallation(
         {
-          ...source,
-          accountId: installConfig.accountId ?? space.id,
-          spaceId: space.id,
-          subject: installConfig.subject,
-          ...(mode ? { mode } : {}),
-          ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
-          ...(expected ? { expected } : {}),
-          ...(expectedCommit ? { expectedCommit } : {}),
-          ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
-          ...(variables ? { variables } : {}),
-          ...(costAck === undefined ? {} : { costAck }),
+          workspaceId,
+          expected,
         },
         installConfig,
       );
@@ -981,44 +784,42 @@ appInstallationsRouter.post(
     if (body === null) {
       throw new BadRequestError("Invalid JSON body");
     }
-    const source = readBodyInstallSource(body);
-    if (!source) {
-      throw new BadRequestError("git_url and ref are required");
-    }
     const installationId = readRequiredInstallationId(body);
     const operation = readBodyRevisionOperation(body);
+    const source = operation === "upgrade" ? readBodyInstallSource(body) : null;
+    if (operation === "upgrade" && !source) {
+      throw new BadRequestError("git_url and ref are required for upgrade");
+    }
+    const revisionRef =
+      operation === "rollback"
+        ? (readString(body.state_version_id) ?? readString(body.ref))
+        : source?.ref;
+    if (!revisionRef) {
+      throw new BadRequestError("state_version_id is required for rollback");
+    }
     await assertInstallationBelongsToSpace(c, space.id, installationId);
-    const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
     const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const upstream = await postAccountsInstallationJson(
-        c,
-        caller,
-        `${accountsInstallationsPath(installationId)}/deployments/plan-runs`,
-        {
-          source: {
-            ...gitSourceBody(source),
-            ...(sourceCommit ? { commit: sourceCommit } : {}),
-          },
-          ...(reason ? { reason } : {}),
-        },
-      );
-      return jsonFromUpstream(c, upstream);
-    }
-    const installConfig =
-      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+    const operator = caller ? null : operatorRouteConfig(c);
+    const installConfig = caller
+      ? callerInstallConfig(c, caller)
+      : operator?.installConfig;
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation deployment plan Run is not configured",
+        "Capsule revision plan Run is not configured",
       );
     }
+    const workspaceId = caller
+      ? accountsCallerWorkspaceId(caller, space.id)
+      : operator!.workspaceId;
     const upstream = await appInstallationsRouteDeps.planInstallableAppRevision(
       {
-        ...source,
-        installationId,
+        workspaceId,
+        capsuleId: installationId,
         operation,
-        ...(sourceCommit ? { sourceCommit } : {}),
+        ref: revisionRef,
+        ...(source?.gitUrl ? { gitUrl: source.gitUrl } : {}),
+        ...(source?.modulePath ? { modulePath: source.modulePath } : {}),
         ...(reason ? { reason } : {}),
       },
       installConfig,
@@ -1036,79 +837,35 @@ appInstallationsRouter.post(
     if (body === null) {
       throw new BadRequestError("Invalid JSON body");
     }
-    const source = readBodyInstallSource(body);
-    if (!source) {
-      throw new BadRequestError("git_url and ref are required");
-    }
     const installationId = readRequiredInstallationId(body);
     const operation = readBodyRevisionOperation(body);
     await assertInstallationBelongsToSpace(c, space.id, installationId);
-    const sourceCommit = readString(body.source_commit) ?? undefined;
-    const reason = readString(body.reason) ?? undefined;
-    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanDigest = readBodyExpectedPlanDigest(body) ?? undefined;
-    const expectedCurrentDeploymentId =
-      readBodyExpectedCurrentDeploymentId(body);
-    if (
-      operation === "upgrade" &&
-      (!expectedCommit ||
-        !expectedPlanDigest ||
-        !expectedCurrentDeploymentId.provided)
-    ) {
+    const expected = readBodyExpectedGuard(body);
+    if (!expected) {
       throw new BadRequestError(
-        "expected.commit, expected.planDigest, and expected.currentDeploymentId are required after deployment plan Run approval",
+        "expected exact Run reference is required after Capsule revision plan",
       );
     }
     const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const path =
-        operation === "rollback"
-          ? `${accountsInstallationsPath(installationId)}/rollback`
-          : `${accountsInstallationsPath(installationId)}/deployments`;
-      const upstream = await postAccountsInstallationJson(c, caller, path, {
-        ...(operation === "rollback"
-          ? { deploymentId: source.ref }
-          : {
-              source: {
-                ...gitSourceBody(source),
-                ...(sourceCommit ? { commit: sourceCommit } : {}),
-              },
-              ...(expectedCommit &&
-              expectedPlanDigest &&
-              expectedCurrentDeploymentId.provided
-                ? {
-                    expected: {
-                      commit: expectedCommit,
-                      planDigest: expectedPlanDigest,
-                      currentDeploymentId: expectedCurrentDeploymentId.value,
-                    },
-                  }
-                : {}),
-            }),
-        ...(reason ? { reason } : {}),
-      });
-      return jsonFromUpstream(c, upstream);
-    }
-    const installConfig =
-      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+    const operator = caller ? null : operatorRouteConfig(c);
+    const installConfig = caller
+      ? callerInstallConfig(c, caller)
+      : operator?.installConfig;
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Capsule revision apply is not configured",
+        "Capsule revision apply is not configured",
       );
     }
+    const workspaceId = caller
+      ? accountsCallerWorkspaceId(caller, space.id)
+      : operator!.workspaceId;
     const upstream =
       await appInstallationsRouteDeps.applyInstallableAppRevision(
         {
-          ...source,
-          installationId,
+          workspaceId,
+          capsuleId: installationId,
           operation,
-          ...(sourceCommit ? { sourceCommit } : {}),
-          ...(reason ? { reason } : {}),
-          ...(expectedCommit ? { expectedCommit } : {}),
-          ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
-          ...(expectedCurrentDeploymentId.provided
-            ? { expectedCurrentDeploymentId: expectedCurrentDeploymentId.value }
-            : {}),
+          expected,
         },
         installConfig,
       );
@@ -1166,9 +923,7 @@ appInstallationsRouter.post(
     const installConfig =
       appInstallationsRouteDeps.resolveFeaturedAppInstallConfig(c.env);
     if (!installConfig) {
-      throw new ServiceUnavailableError(
-        "Capsule install is not configured",
-      );
+      throw new ServiceUnavailableError("Capsule install is not configured");
     }
 
     const upstream =
@@ -1176,8 +931,6 @@ appInstallationsRouter.post(
         entry,
         installConfig,
         {
-          spaceId: space.id,
-          createdByAccountId: space.id,
           ...(mode ? { mode } : {}),
         },
       );
@@ -1210,24 +963,18 @@ appInstallationsRouter.delete(
     const reason =
       body === null ? undefined : (readString(body.reason) ?? undefined);
     const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const upstream = await accountsPlaneJson(
-        c,
-        accountsInstallationsPath(installationId),
-        {
-          method: "DELETE",
-          headers: reason
-            ? jsonHeaders(caller.headers)
-            : new Headers(caller.headers),
-          ...(reason ? { body: JSON.stringify({ reason }) } : {}),
-        },
-      );
-      return jsonFromUpstream(c, upstream);
-    }
+    const operator = caller ? null : operatorRouteConfig(c);
+    const workspaceId = caller
+      ? accountsCallerWorkspaceId(caller, space.id)
+      : operator!.workspaceId;
+    const accountsConfig = caller
+      ? callerAccountsConfig(c, caller)
+      : operator!.accountsConfig;
     const upstream =
       await appInstallationsRouteDeps.deleteInstallableAppInstallation(
         installationId,
-        appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+        workspaceId,
+        accountsConfig,
         reason,
       );
     return jsonFromUpstream(c, upstream);

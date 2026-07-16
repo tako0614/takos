@@ -29,13 +29,13 @@ import { fetchPublishStatuses } from "./explore-stats.ts";
 import { sourceServiceDeps } from "./deps.ts";
 import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
 import {
-  type AccountsInstallationProjection,
-  type CatalogAccountsInstallationsReadConfig,
-  fetchAccountsInstallationsForSpace,
-  setLatestAccountsInstallation,
+  type CatalogCapsuleRecord,
+  type CatalogTakosumiCapsulesReadConfig,
+  fetchCatalogCapsulesForWorkspace,
+  setLatestCatalogCapsule,
 } from "./explore-catalog-accounts.ts";
 import {
-  accountsSourceKeys,
+  canonicalSourceKeys,
   type CatalogInstallationProjection,
   featuredAppPackageAppId,
   featuredAppSourceKey,
@@ -47,10 +47,10 @@ import {
 } from "./explore-catalog-featured-apps.ts";
 
 export type {
-  CatalogAccountsInstallationsEnv,
-  CatalogAccountsInstallationsReadConfig,
+  CatalogTakosumiCapsulesEnv,
+  CatalogTakosumiCapsulesReadConfig,
 } from "./explore-catalog-accounts.ts";
-export { resolveCatalogAccountsInstallationsReadConfig } from "./explore-catalog-accounts.ts";
+export { resolveCatalogTakosumiCapsulesReadConfig } from "./explore-catalog-accounts.ts";
 
 function isDirectoryEntry(entry: { mode: string }): boolean {
   return entry.mode === "040000" || entry.mode === "40000";
@@ -196,7 +196,7 @@ export async function listCatalogItems(
     gitObjects?: ObjectStoreBinding;
     repositoryBaseUrl?: string;
     featuredAppEntries?: FeaturedAppCatalogEntry[];
-    accountsInstallations?: CatalogAccountsInstallationsReadConfig;
+    canonicalCapsules?: CatalogTakosumiCapsulesReadConfig;
     now?: string;
   },
 ): Promise<CatalogResult> {
@@ -346,33 +346,19 @@ export async function listCatalogItems(
 
   const appInstallationMap = new Map<string, CatalogInstallationProjection>();
   if (options.spaceId) {
-    const accountsInstallations = await fetchAccountsInstallationsForSpace(
+    const canonicalCapsules = await fetchCatalogCapsulesForWorkspace(
       options.spaceId,
-      options.accountsInstallations,
+      options.canonicalCapsules,
     );
-    const accountsInstallationByKey = new Map<
-      string,
-      AccountsInstallationProjection
-    >();
-    for (const installation of accountsInstallations) {
-      setLatestAccountsInstallation(
-        accountsInstallationByKey,
-        installation.appId,
-        installation,
-      );
-      for (const sourceKey of accountsSourceKeys(installation)) {
-        setLatestAccountsInstallation(
-          accountsInstallationByKey,
-          sourceKey,
-          installation,
-        );
+    const capsuleByKey = new Map<string, CatalogCapsuleRecord>();
+    for (const capsule of canonicalCapsules) {
+      setLatestCatalogCapsule(capsuleByKey, capsule.appId, capsule);
+      for (const sourceKey of canonicalSourceKeys(capsule)) {
+        setLatestCatalogCapsule(capsuleByKey, sourceKey, capsule);
       }
     }
-    for (const [key, installation] of accountsInstallationByKey) {
-      appInstallationMap.set(
-        key,
-        toCatalogInstallationProjection(installation),
-      );
+    for (const [key, capsule] of capsuleByKey) {
+      appInstallationMap.set(key, toCatalogInstallationProjection(capsule));
     }
   }
 

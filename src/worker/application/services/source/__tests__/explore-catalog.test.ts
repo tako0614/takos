@@ -110,6 +110,75 @@ async function withInstallableCapsulePath<T>(
   }
 }
 
+function canonicalCapsuleReadbackFetch(options: {
+  capsuleId: string;
+  name: string;
+  sourceUrl: string;
+  ref: string;
+  interfaceEndpoint?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}) {
+  return async (input: string | URL | Request) => {
+    const url = new URL(
+      input instanceof Request ? input.url : input.toString(),
+    );
+    if (url.pathname.endsWith("/capsules")) {
+      return Response.json({
+        capsules: [
+          {
+            id: options.capsuleId,
+            workspaceId: "space-1",
+            sourceId: "src_1",
+            name: options.name,
+            environment: "production",
+            status: "active",
+            createdAt: options.createdAt ?? "2026-01-06T00:00:00.000Z",
+            updatedAt: options.updatedAt ?? "2026-01-06T00:00:00.000Z",
+          },
+        ],
+      });
+    }
+    if (url.pathname.endsWith("/sources/src_1")) {
+      return Response.json({
+        source: {
+          id: "src_1",
+          workspaceId: "space-1",
+          url: options.sourceUrl,
+          defaultRef: options.ref,
+        },
+      });
+    }
+    if (url.pathname.endsWith(`/capsules/${options.capsuleId}/outputs`)) {
+      return Response.json({
+        output: options.interfaceEndpoint
+          ? { publicOutputs: { launch_url: options.interfaceEndpoint } }
+          : { publicOutputs: {} },
+      });
+    }
+    if (url.pathname.endsWith("/v1/interfaces")) {
+      return Response.json({
+        interfaces: options.interfaceEndpoint
+          ? [
+              {
+                metadata: { id: "if_ui", name: "ui" },
+                spec: {
+                  type: "interface.ui.surface",
+                  access: { resourceUriInput: "url" },
+                },
+                status: {
+                  phase: "Resolved",
+                  resolvedInputs: { url: options.interfaceEndpoint },
+                },
+              },
+            ]
+          : [],
+      });
+    }
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  };
+}
+
 test("listCatalogItems treats public non-draft releases as deployable apps without package assets", async () => {
   const db = createCatalogDb({
     repos: [
@@ -255,26 +324,14 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
       spaceId: "space-1",
       gitObjects,
       repositoryBaseUrl: "takos.jp",
-      accountsInstallations: {
+      canonicalCapsules: {
         baseUrl: "https://accounts.internal",
-        fetch: async () =>
-          Response.json({
-            installations: [
-              {
-                id: "inst_repo_app",
-                app_id: "deployable-app",
-                status: "installed",
-                runtime_mode: "shared-cell",
-                source: {
-                  url: "https://takos.jp/git/space-1/deployable-app.git",
-                  ref: "v1.0.0",
-                  commit: "commit-1",
-                },
-                created_at: "2026-01-06T00:00:00.000Z",
-                updated_at: "2026-01-06T00:00:00.000Z",
-              },
-            ],
-          }),
+        fetch: canonicalCapsuleReadbackFetch({
+          capsuleId: "inst_repo_app",
+          name: "deployable-app",
+          sourceUrl: "https://takos.jp/git/space-1/deployable-app.git",
+          ref: "v1.0.0",
+        }),
       },
     });
     assertEquals(installed.items[0]?.installation?.installed, true);
@@ -282,7 +339,7 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
   });
 });
 
-test("listCatalogItems marks repository packages installed from Accounts ledger source URL and release tag", async () => {
+test("listCatalogItems marks repository packages installed from the canonical Takosumi ledger source URL and release tag", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -328,26 +385,14 @@ test("listCatalogItems marks repository packages installed from Accounts ledger 
       spaceId: "space-1",
       gitObjects: {} as Env["GIT_OBJECTS"],
       repositoryBaseUrl: "takos.jp",
-      accountsInstallations: {
+      canonicalCapsules: {
         baseUrl: "https://accounts.internal",
-        fetch: async () =>
-          Response.json({
-            installations: [
-              {
-                id: "inst_repo_app",
-                app_id: "deployable-app",
-                status: "installed",
-                runtime_mode: "shared-cell",
-                source: {
-                  url: "https://takos.jp/git/space-1/deployable-app.git",
-                  ref: "v1.0.0",
-                  commit: "commit-1",
-                },
-                created_at: "2026-01-06T00:00:00.000Z",
-                updated_at: "2026-01-06T00:00:00.000Z",
-              },
-            ],
-          }),
+        fetch: canonicalCapsuleReadbackFetch({
+          capsuleId: "inst_repo_app",
+          name: "deployable-app",
+          sourceUrl: "https://takos.jp/git/space-1/deployable-app.git",
+          ref: "v1.0.0",
+        }),
       },
     });
 
@@ -671,7 +716,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
   });
 });
 
-test("listCatalogItems does not infer featured app installation without Accounts ledger readback", async () => {
+test("listCatalogItems does not infer featured app installation without canonical Takosumi readback", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -702,7 +747,7 @@ test("listCatalogItems does not infer featured app installation without Accounts
   assertEquals(result.items[0]?.installation, undefined);
 });
 
-test("listCatalogItems overlays featured app installation state from Accounts ledger", async () => {
+test("listCatalogItems overlays featured app installation state from the canonical Takosumi ledger", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -710,6 +755,15 @@ test("listCatalogItems overlays featured app installation state from Accounts le
     deployments: [],
   });
   const requests: Array<{ url: string; authorization: string | null }> = [];
+  const canonicalFetch = canonicalCapsuleReadbackFetch({
+    capsuleId: "inst_office",
+    name: "jp.takos.office",
+    sourceUrl: "https://github.com/tako0614/takos-office.git",
+    ref: "v1.2.6",
+    interfaceEndpoint: "https://office.example.test",
+    createdAt: "2026-04-22T01:00:00.000Z",
+    updatedAt: "2026-04-22T01:05:00.000Z",
+  });
 
   const result = await listCatalogItems(db, {
     sort: "stars",
@@ -729,7 +783,7 @@ test("listCatalogItems overlays featured app installation state from Accounts le
         preinstall: false,
       },
     ],
-    accountsInstallations: {
+    canonicalCapsules: {
       baseUrl: "https://accounts.internal/base/",
       token: "accounts-token",
       fetch: async (input, init) => {
@@ -738,42 +792,7 @@ test("listCatalogItems overlays featured app installation state from Accounts le
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/capsule-projections/inst_office")) {
-          // Deploy decision D3: workload services are projected from the
-          // installation deployment-output projection.
-          return Response.json({
-            installation: {
-              id: "inst_office",
-              deployment_outputs: [
-                {
-                  name: "launch_url",
-                  kind: "launch_url",
-                  value: "https://office.example.test",
-                  sensitive: false,
-                },
-              ],
-            },
-          });
-        }
-        return Response.json({
-          installations: [
-            {
-              id: "inst_office",
-              space_id: "space-1",
-              app_id: "jp.takos.office",
-              source: {
-                type: "git",
-                url: "https://github.com/tako0614/takos-office.git",
-                ref: "v1.2.6",
-                commit: "commit-office",
-              },
-              mode: "shared-cell",
-              status: "ready",
-              created_at: "2026-04-22T01:00:00.000Z",
-              updated_at: "2026-04-22T01:05:00.000Z",
-            },
-          ],
-        });
+        return canonicalFetch(input);
       },
     },
     now: "2026-04-22T00:00:00.000Z",
@@ -781,32 +800,40 @@ test("listCatalogItems overlays featured app installation state from Accounts le
 
   assertEquals(
     requests[0]?.url,
-    "https://accounts.internal/base/v1/capsule-projections?space_id=space-1",
+    "https://accounts.internal/base/api/v1/workspaces/space-1/capsules?includeDestroyed=false",
   );
   assertEquals(requests[0]?.authorization, "Bearer accounts-token");
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/capsule-projections/inst_office",
+    "https://accounts.internal/base/api/v1/sources/src_1",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
     installation_id: "inst_office",
     app_id: "jp.takos.office",
     status: "ready",
-    runtime_mode: "shared-cell",
+    runtime_mode: "production",
     group_id: null,
     group_name: null,
     installed_version: "v1.2.6",
-    installed_commit: "commit-office",
+    installed_commit: null,
     deployed_at: null,
     installed_at: "2026-04-22T01:00:00.000Z",
     updated_at: "2026-04-22T01:05:00.000Z",
     services: [
       {
-        id: "launch_url",
-        capability: "deployment.outputs",
+        id: "interface:ui",
+        capability: "interface.ui.surface",
         status: "ready",
         endpoint: "https://office.example.test",
+        secret_configured: false,
+        token_expires_at: null,
+      },
+      {
+        id: "output:launch_url",
+        capability: "opentofu.output",
+        status: "ready",
+        endpoint: null,
         secret_configured: false,
         token_expires_at: null,
       },
