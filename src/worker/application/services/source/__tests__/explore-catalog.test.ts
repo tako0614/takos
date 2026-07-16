@@ -2,7 +2,7 @@ import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
-import { listCatalogItems } from "../explore-catalog.ts";
+import { listCatalogItems, safeCatalogIcon } from "../explore-catalog.ts";
 import { sourceServiceDeps } from "../deps.ts";
 import {
   bundleDeployments,
@@ -10,6 +10,28 @@ import {
   repoReleases,
   repositories,
 } from "../../../../infra/db/index.ts";
+
+test("release catalog icons reject executable and credential-bearing URLs", () => {
+  assertEquals(
+    safeCatalogIcon("https://cdn.example.test/icons/app.svg"),
+    "https://cdn.example.test/icons/app.svg",
+  );
+  assertEquals(safeCatalogIcon(" /icons/app.svg "), "/icons/app.svg");
+
+  for (const value of [
+    "javascript:alert(1)",
+    "data:image/svg+xml,<svg/>",
+    "http://cdn.example.test/icon.svg",
+    "//cdn.example.test/icon.svg",
+    "https://user:pass@cdn.example.test/icon.svg",
+    "https://cdn.example.test/icon.svg#fragment",
+    "https://cdn.example.test/icon.svg?api_key=secret",
+    "/icons/app.svg#fragment",
+    "/icons/app.svg?access_token=secret",
+  ]) {
+    assertEquals(safeCatalogIcon(value), null, `expected ${value} to fail`);
+  }
+});
 
 function createCatalogDb(fixtures: {
   repos: Array<Record<string, unknown>>;

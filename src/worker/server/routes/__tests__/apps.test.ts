@@ -3,7 +3,11 @@ import { assertEquals } from "@takos/test/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
-import { appsRouteDeps, registerAppApiRoutes } from "../apps/index.ts";
+import {
+  appsRouteDeps,
+  registerAppApiRoutes,
+  resolveLauncherIcon,
+} from "../apps/routes.ts";
 
 type PreparedRecord = {
   sql: string;
@@ -32,6 +36,38 @@ type AppRow = {
   createdAt: string;
   updatedAt: string;
 };
+
+test("launcher icons use the shared Interface display contract", () => {
+  assertEquals(
+    resolveLauncherIcon(
+      "https://cdn.example.test/apps/docs.svg",
+      "https://docs.example.test/",
+    ),
+    "https://cdn.example.test/apps/docs.svg",
+  );
+  assertEquals(
+    resolveLauncherIcon("/icons/docs.svg", "https://docs.example.test/app"),
+    "https://docs.example.test/icons/docs.svg",
+  );
+  assertEquals(resolveLauncherIcon("📄", "https://docs.example.test/"), "📄");
+
+  for (const icon of [
+    "javascript:alert(1)",
+    "data:image/svg+xml,<svg/>",
+    "//cdn.example.test/icon.svg",
+    "http://cdn.example.test/icon.svg",
+    "https://user:pass@cdn.example.test/icon.svg",
+    "https://cdn.example.test/icon.svg#fragment",
+    "https://cdn.example.test/icon.svg?access_token=secret",
+  ]) {
+    assertEquals(
+      resolveLauncherIcon(icon, "https://docs.example.test/"),
+      null,
+      `expected ${icon} to be rejected`,
+    );
+  }
+  assertEquals(resolveLauncherIcon("/icon.svg", null), null);
+});
 
 function createFakeSqlDatabase(initialRows: AppRow[]) {
   const rows = initialRows.map((row) => ({ ...row }));

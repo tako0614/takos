@@ -196,6 +196,7 @@ describe("app installation routes on canonical Takosumi records", () => {
     appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
       accessToken: "delegated-token",
       workspaceId: "ws_parent",
+      subjectId: "pairwise-user",
     });
     appInstallationsRouteDeps.resolveInstallableAppAccountsConfig = () => ({
       baseUrl: "https://operator.test",
