@@ -19,5 +19,5 @@ export {
 
 export {
   listCatalogItems,
-  resolveCatalogAccountsInstallationsReadConfig,
+  resolveCatalogTakosumiCapsulesReadConfig,
 } from "./explore-catalog.ts";

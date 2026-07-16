@@ -6,10 +6,8 @@ import type {
   ParsedCatalogTags,
 } from "./explore-types.ts";
 import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
-import type {
-  AccountsInstallationProjection,
-} from "./explore-catalog-accounts.ts";
-import type { InstallableAppWorkloadServiceSummary } from "./takosumi-workload-services.ts";
+import type { CatalogCapsuleRecord } from "./explore-catalog-accounts.ts";
+import type { CapsuleWorkloadServiceSummary } from "./takosumi-workload-services.ts";
 
 export type CatalogInstallationProjection = {
   groupId: string | null;
@@ -23,7 +21,7 @@ export type CatalogInstallationProjection = {
   runtimeMode?: string | null;
   installedAt?: string | null;
   updatedAt?: string | null;
-  services?: InstallableAppWorkloadServiceSummary[];
+  services?: CapsuleWorkloadServiceSummary[];
 };
 
 export function normalizeCatalogRepositoryUrlKey(
@@ -39,7 +37,9 @@ export function normalizeCatalogRepositoryUrlKey(
     const path = parsed.pathname.replace(/\/+$/, "").replace(/\.git$/i, "");
     return `${parsed.protocol}//${parsed.host.toLowerCase()}${path}`;
   } catch {
-    return trimmed.replace(/\/+$/, "").replace(/\.git$/i, "")
+    return trimmed
+      .replace(/\/+$/, "")
+      .replace(/\.git$/i, "")
       .toLowerCase();
   }
 }
@@ -59,43 +59,39 @@ export function featuredAppSourceKey(input: {
   ref: string;
   refType: string;
 }): string {
-  return `${
-    normalizeCatalogRepositoryUrlKey(input.repositoryUrl)
-  }#${input.refType}:${input.ref}`;
+  return `${normalizeCatalogRepositoryUrlKey(
+    input.repositoryUrl,
+  )}#${input.refType}:${input.ref}`;
 }
 
-export function accountsSourceKeys(
-  installation: AccountsInstallationProjection,
-): string[] {
-  const { sourceUrl, sourceRef } = installation;
+export function canonicalSourceKeys(capsule: CatalogCapsuleRecord): string[] {
+  const { sourceUrl, sourceRef } = capsule;
   if (!sourceUrl || !sourceRef) return [];
   return (["branch", "tag", "commit"] as const).map((refType) =>
     featuredAppSourceKey({
       repositoryUrl: sourceUrl,
       ref: sourceRef,
       refType,
-    })
+    }),
   );
 }
 
 export function toCatalogInstallationProjection(
-  installation: AccountsInstallationProjection,
+  capsule: CatalogCapsuleRecord,
 ): CatalogInstallationProjection {
   return {
     groupId: null,
     groupName: null,
-    version: installation.sourceRef,
-    commitSha: installation.sourceCommit,
+    version: capsule.sourceRef,
+    commitSha: capsule.sourceCommit,
     deployedAt: null,
-    installationId: installation.installationId,
-    appId: installation.appId,
-    status: installation.status,
-    runtimeMode: installation.runtimeMode,
-    installedAt: installation.createdAt,
-    updatedAt: installation.updatedAt,
-    ...(installation.services.length > 0
-      ? { services: installation.services }
-      : {}),
+    installationId: capsule.capsuleId,
+    appId: capsule.appId,
+    status: capsule.status,
+    runtimeMode: capsule.runtimeMode,
+    installedAt: capsule.createdAt,
+    updatedAt: capsule.updatedAt,
+    ...(capsule.services.length > 0 ? { services: capsule.services } : {}),
   };
 }
 
@@ -152,9 +148,9 @@ function featuredAppTags(entry: FeaturedAppCatalogEntry): string[] {
         featuredAppPackageAppId(entry),
         ...(entry.tags ?? []),
         ...entry.name.split(/[-_\s]+/g),
-      ].map((tag) => tag.trim().toLowerCase()).filter((tag) =>
-        tag && /^[a-z0-9][a-z0-9_-]*$/.test(tag)
-      ),
+      ]
+        .map((tag) => tag.trim().toLowerCase())
+        .filter((tag) => tag && /^[a-z0-9][a-z0-9_-]*$/.test(tag)),
     ),
   ).slice(0, 10);
 }

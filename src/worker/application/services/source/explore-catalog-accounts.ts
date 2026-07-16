@@ -1,13 +1,16 @@
-import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
-
 import type { Env } from "../../../shared/types/index.ts";
 import { sourceServiceDeps } from "./deps.ts";
 import {
-  fetchAccountsInstallationWorkloadServices,
-  type InstallableAppWorkloadServiceSummary,
+  fetchCapsuleWorkloadServices,
+  type CapsuleWorkloadServiceSummary,
 } from "./takosumi-workload-services.ts";
+import {
+  takosumiSessionApiUrl,
+  takosumiSourcePath,
+  takosumiWorkspaceCapsulesPath,
+} from "../takosumi-control-paths.ts";
 
-export type CatalogAccountsInstallationsEnv = Pick<
+export type CatalogTakosumiCapsulesEnv = Pick<
   Env,
   | "OIDC_DISCOVERY_URL"
   | "OIDC_ISSUER_URL"
@@ -16,16 +19,16 @@ export type CatalogAccountsInstallationsEnv = Pick<
   | "TAKOSUMI_ACCOUNTS_URL"
 >;
 
-type CatalogAccountsInstallationsFetch = typeof fetch;
+type CatalogTakosumiCapsulesFetch = typeof fetch;
 
-export interface CatalogAccountsInstallationsReadConfig {
+export interface CatalogTakosumiCapsulesReadConfig {
   baseUrl: string;
   token?: string;
-  fetch?: CatalogAccountsInstallationsFetch;
+  fetch?: CatalogTakosumiCapsulesFetch;
 }
 
-export type AccountsInstallationProjection = {
-  installationId: string;
+export type CatalogCapsuleRecord = {
+  capsuleId: string;
   appId: string;
   status: string;
   runtimeMode: string | null;
@@ -34,7 +37,7 @@ export type AccountsInstallationProjection = {
   sourceCommit: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-  services: InstallableAppWorkloadServiceSummary[];
+  services: CapsuleWorkloadServiceSummary[];
 };
 
 function readString(value: unknown): string | null {
@@ -49,7 +52,7 @@ function readEnvString(value: string | undefined): string | undefined {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -64,10 +67,11 @@ function normalizeAccountsBaseUrl(raw: string): string | null {
   }
 }
 
-export function resolveCatalogAccountsInstallationsReadConfig(
-  env: CatalogAccountsInstallationsEnv,
-): CatalogAccountsInstallationsReadConfig | null {
-  const rawBaseUrl = readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+export function resolveCatalogTakosumiCapsulesReadConfig(
+  env: CatalogTakosumiCapsulesEnv,
+): CatalogTakosumiCapsulesReadConfig | null {
+  const rawBaseUrl =
+    readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_URL) ??
     readEnvString(env.OIDC_DISCOVERY_URL) ??
     readEnvString(env.OIDC_ISSUER_URL);
@@ -76,7 +80,7 @@ export function resolveCatalogAccountsInstallationsReadConfig(
   const baseUrl = normalizeAccountsBaseUrl(rawBaseUrl);
   if (!baseUrl) {
     sourceServiceDeps.logWarn(
-      "Skipping Capsule projection readback because Accounts URL is invalid",
+      "Skipping canonical Capsule readback because the Takosumi URL is invalid",
       { baseUrl: rawBaseUrl },
     );
     return null;
@@ -90,83 +94,104 @@ export function resolveCatalogAccountsInstallationsReadConfig(
   };
 }
 
-function buildAccountsInstallationsListUrl(
-  baseUrl: string,
-  spaceId: string,
-): URL {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
-    ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
-  url.search = "";
-  url.searchParams.set("space_id", spaceId);
-  return url;
-}
-
-function parseAccountsInstallationProjection(
-  value: unknown,
-): AccountsInstallationProjection | null {
-  const record = readRecord(value);
-  if (!record) return null;
-  const installationId = readString(record.id) ??
-    readString(record.installation_id);
-  const appId = readString(record.app_id) ?? readString(record.appId);
-  if (!installationId || !appId) return null;
-
-  const source = readRecord(record.source);
-  return {
-    installationId,
-    appId,
-    status: readString(record.status) ?? "installing",
-    runtimeMode: readString(record.mode) ?? readString(record.runtime_mode),
-    sourceUrl: source ? readString(source.url) : null,
-    sourceRef: source ? readString(source.ref) : null,
-    sourceCommit: source ? readString(source.commit) : null,
-    createdAt: readString(record.created_at) ?? readString(record.createdAt),
-    updatedAt: readString(record.updated_at) ?? readString(record.updatedAt),
-    services: [],
-  };
-}
-
-export async function fetchAccountsInstallationsForSpace(
-  spaceId: string,
-  config: CatalogAccountsInstallationsReadConfig | undefined,
-): Promise<AccountsInstallationProjection[]> {
-  if (!config) return [];
-  const url = buildAccountsInstallationsListUrl(config.baseUrl, spaceId);
+function requestHeaders(config: CatalogTakosumiCapsulesReadConfig): Headers {
   const headers = new Headers({ accept: "application/json" });
   if (config.token?.trim()) {
     headers.set("authorization", `Bearer ${config.token.trim()}`);
   }
+  return headers;
+}
 
+function canonicalCapsuleStatus(value: unknown): string {
+  switch (readString(value)) {
+    case "pending":
+      return "installing";
+    case "active":
+      return "ready";
+    case "stale":
+    case "error":
+    case "disabled":
+    case "destroyed":
+      return readString(value)!;
+    default:
+      return "unknown";
+  }
+}
+
+async function readSource(
+  sourceId: string,
+  config: CatalogTakosumiCapsulesReadConfig,
+): Promise<Record<string, unknown> | null> {
+  const fetchImpl = config.fetch ?? fetch;
+  const response = await fetchImpl(
+    takosumiSessionApiUrl(config.baseUrl, takosumiSourcePath(sourceId)),
+    { headers: requestHeaders(config) },
+  );
+  if (!response.ok) return null;
+  return readRecord(readRecord((await response.json()) as unknown)?.source);
+}
+
+async function projectCapsule(
+  value: unknown,
+  workspaceId: string,
+  config: CatalogTakosumiCapsulesReadConfig,
+): Promise<CatalogCapsuleRecord | null> {
+  const capsule = readRecord(value);
+  const capsuleId = readString(capsule?.id);
+  const appId = readString(capsule?.name);
+  const sourceId = readString(capsule?.sourceId);
+  if (!capsule || !capsuleId || !appId || !sourceId) return null;
+  const [source, services] = await Promise.all([
+    readSource(sourceId, config),
+    fetchCapsuleWorkloadServices(capsuleId, workspaceId, config),
+  ]);
+  return {
+    capsuleId,
+    appId,
+    status: canonicalCapsuleStatus(capsule.status),
+    runtimeMode: readString(capsule.environment),
+    sourceUrl: readString(source?.url),
+    sourceRef: readString(source?.defaultRef),
+    sourceCommit: null,
+    createdAt: readString(capsule.createdAt),
+    updatedAt: readString(capsule.updatedAt),
+    services,
+  };
+}
+
+export async function fetchCatalogCapsulesForWorkspace(
+  workspaceId: string,
+  config: CatalogTakosumiCapsulesReadConfig | undefined,
+): Promise<CatalogCapsuleRecord[]> {
+  if (!config) return [];
+  const url = takosumiSessionApiUrl(
+    config.baseUrl,
+    takosumiWorkspaceCapsulesPath(workspaceId),
+  );
+  url.searchParams.set("includeDestroyed", "false");
   try {
-    const fetchImpl = config.fetch ?? fetch;
-    const response = await fetchImpl(url, { headers });
+    const response = await (config.fetch ?? fetch)(url, {
+      headers: requestHeaders(config),
+    });
     if (!response.ok) {
-      sourceServiceDeps.logWarn("Failed to list Capsule projection readback", {
+      sourceServiceDeps.logWarn("Failed to list canonical Capsules", {
         status: response.status,
         url: url.toString(),
       });
       return [];
     }
-    const body = await response.json() as unknown;
-    const installations = readRecord(body)?.installations;
-    if (!Array.isArray(installations)) return [];
-    const parsedInstallations = installations
-      .map(parseAccountsInstallationProjection)
-      .filter((installation): installation is AccountsInstallationProjection =>
-        installation !== null
-      );
-    return await Promise.all(parsedInstallations.map(async (installation) => ({
-      ...installation,
-      services: await fetchAccountsInstallationWorkloadServices(
-        installation.installationId,
-        config,
+    const body = readRecord((await response.json()) as unknown);
+    if (!Array.isArray(body?.capsules)) return [];
+    const rows = await Promise.all(
+      body.capsules.map((capsule) =>
+        projectCapsule(capsule, workspaceId, config),
       ),
-    })));
+    );
+    return rows.filter(
+      (capsule): capsule is CatalogCapsuleRecord => capsule !== null,
+    );
   } catch (error) {
-    sourceServiceDeps.logWarn("Failed to list Capsule projection readback", {
+    sourceServiceDeps.logWarn("Failed to list canonical Capsules", {
       url: url.toString(),
       error: error instanceof Error ? error.message : String(error),
     });
@@ -174,25 +199,21 @@ export async function fetchAccountsInstallationsForSpace(
   }
 }
 
-export function accountsInstallationUpdatedMs(
-  installation: AccountsInstallationProjection,
-): number {
-  return Date.parse(installation.updatedAt ?? installation.createdAt ?? "") ||
-    0;
+export function catalogCapsuleUpdatedMs(capsule: CatalogCapsuleRecord): number {
+  return Date.parse(capsule.updatedAt ?? capsule.createdAt ?? "") || 0;
 }
 
-export function setLatestAccountsInstallation(
-  map: Map<string, AccountsInstallationProjection>,
+export function setLatestCatalogCapsule(
+  map: Map<string, CatalogCapsuleRecord>,
   key: string | null,
-  installation: AccountsInstallationProjection,
+  capsule: CatalogCapsuleRecord,
 ): void {
   if (!key) return;
   const current = map.get(key);
   if (
     !current ||
-    accountsInstallationUpdatedMs(installation) >=
-      accountsInstallationUpdatedMs(current)
+    catalogCapsuleUpdatedMs(capsule) >= catalogCapsuleUpdatedMs(current)
   ) {
-    map.set(key, installation);
+    map.set(key, capsule);
   }
 }
