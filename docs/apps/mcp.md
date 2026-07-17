@@ -1,18 +1,20 @@
 # MCP Server
 
 MCP servers appear in Takos as tools that can be used from a Workspace. Users install a plain OpenTofu Capsule rather
-than a Takos-specific MCP manifest, and Takos reads the non-secret service metadata from the Capsule Outputs recorded
-after a successful apply.
+than a Takos-specific MCP manifest. After a successful apply, Takosumi resolves the service-side `mcp.server`
+`Interface` inputs from explicitly selected ordinary Outputs, and `InterfaceBinding` authorizes the caller. Takos reads
+only that resolved, authorized view.
 
 ## Current Flow
 
 1. Install a Git URL/ref that points at an OpenTofu Capsule.
 2. Review the Takosumi `plan` Run and approve the saved plan.
 3. A successful `apply` records StateVersion and Output.
-4. Takos reads projected service metadata with the `protocol.mcp.server` capability and shows the server's tools in the
-   Workspace tool catalog.
-5. If the projected publication declares bearer auth, its `auth.secretRef` can refer to a generated secret such as
-   `PUBLISHED_MCP_AUTH_TOKEN`; the secret value is resolved at runtime and is not copied into a public Output.
+4. A service-side `InstallConfig.interfaceBlueprints` entry materializes an `mcp.server` Interface whose
+   `inputs.endpoint` explicitly selects the Capsule's ordinary endpoint Output. A module may instead declare its own
+   Interface with the optional `takosumi_interface` resource.
+5. A Ready `InterfaceBinding` authorizes the Principal for `mcp.invoke`; Takos then shows the server's tools in the
+   Workspace tool catalog. Credentials are delivered only through a supported binding mechanism, never an Output.
 
 Current first-party examples are normal removable Capsules:
 
@@ -20,8 +22,8 @@ Current first-party examples are normal removable Capsules:
 - `takos-storage` publishes Workspace drive tools and separately exposes `storage.object` to app consumers;
 - `takos-git` publishes repository-management tools and separately exposes `source.git.smart_http`.
 
-Takos does not copy these tools into its static registry. Installing or removing the Capsule adds or removes its MCP
-tools through Output projection.
+Takos does not copy these tools into its static registry. Installing or removing the Capsule and its service-side
+Interface adds or removes its MCP tools through the Takosumi Interface API.
 
 ## Connections, not a Store
 
@@ -191,18 +193,17 @@ role checks; these scopes constrain Takosumi Accounts bearer credentials rather 
 ## Boundary
 
 Takos owns external MCP discovery sources, connection OAuth and token persistence, tool display and consent,
-pre-invocation exposure checks, invocation UX, and consumption of projected publication credentials. Takosumi owns the
-Capsule Source / Run / StateVersion / Output ledger, OpenTofu execution and dependency pinning, Output projection, and
-deploy-time provider credential, policy, and audit evidence. Provider credentials remain in ProviderConnection /
-CredentialRecipe / ProviderBinding / vault / runner phase boundaries. MCP publication bearer secrets and scoped
-`storage.object` / `source.git.smart_http` consumer grants are runtime credentials that Takos resolves from protected
-runtime state, never public OpenTofu Output values.
+pre-invocation exposure checks, and invocation UX. Takosumi owns the Capsule Source / Run / StateVersion / Output ledger,
+OpenTofu execution and dependency pinning, Interface resolution, InterfaceBinding authorization, and deploy-time
+provider credential, policy, and audit evidence. Provider credentials remain in ProviderConnection / CredentialRecipe /
+ProviderBinding / vault / runner phase boundaries. Runtime credentials require an explicitly supported Binding delivery
+mechanism and never come from public OpenTofu Output values.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Service exports](/deploy/service-exports)
+- [OpenTofu Outputs and runtime Interfaces](/deploy/runtime-interfaces)
 - [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
 - [MCP Registry overview](https://modelcontextprotocol.io/registry/about)

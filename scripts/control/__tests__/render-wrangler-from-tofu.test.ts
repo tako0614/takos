@@ -171,20 +171,18 @@ test("buildReplacements projects public_url into public Takos worker env placeho
   );
 });
 
-test("buildReplacements projects app_deployment env into OIDC worker placeholders", () => {
+test("buildReplacements projects ordinary worker_env into OIDC worker placeholders", () => {
   assert.deepEqual(
     {
       accountsUrl: buildReplacements(
         {
           ...rawOutputs,
-          app_deployment: {
-            env: {
-              TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.com",
-              OIDC_ISSUER_URL: "https://app.takosumi.com",
-              OIDC_CLIENT_ID: "toc_install",
-              OIDC_REDIRECT_URI:
-                "https://takos-test.app.takos.jp/auth/oidc/callback",
-            },
+          worker_env: {
+            TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.com",
+            OIDC_ISSUER_URL: "https://app.takosumi.com",
+            OIDC_CLIENT_ID: "toc_install",
+            OIDC_REDIRECT_URI:
+              "https://takos-test.app.takos.jp/auth/oidc/callback",
           },
         },
         "production",
@@ -192,13 +190,11 @@ test("buildReplacements projects app_deployment env into OIDC worker placeholder
       clientId: buildReplacements(
         {
           ...rawOutputs,
-          app_deployment: {
-            env: {
-              OIDC_ISSUER_URL: "https://app.takosumi.com",
-              OIDC_CLIENT_ID: "toc_install",
-              OIDC_REDIRECT_URI:
-                "https://takos-test.app.takos.jp/auth/oidc/callback",
-            },
+          worker_env: {
+            OIDC_ISSUER_URL: "https://app.takosumi.com",
+            OIDC_CLIENT_ID: "toc_install",
+            OIDC_REDIRECT_URI:
+              "https://takos-test.app.takos.jp/auth/oidc/callback",
           },
         },
         "production",
@@ -206,13 +202,11 @@ test("buildReplacements projects app_deployment env into OIDC worker placeholder
       redirectUri: buildReplacements(
         {
           ...rawOutputs,
-          app_deployment: {
-            env: {
-              OIDC_ISSUER_URL: "https://app.takosumi.com",
-              OIDC_CLIENT_ID: "toc_install",
-              OIDC_REDIRECT_URI:
-                "https://takos-test.app.takos.jp/auth/oidc/callback",
-            },
+          worker_env: {
+            OIDC_ISSUER_URL: "https://app.takosumi.com",
+            OIDC_CLIENT_ID: "toc_install",
+            OIDC_REDIRECT_URI:
+              "https://takos-test.app.takos.jp/auth/oidc/callback",
           },
         },
         "production",
@@ -228,13 +222,11 @@ test("buildReplacements projects app_deployment env into OIDC worker placeholder
     buildReplacements(
       {
         ...rawOutputs,
-        app_deployment: {
-          env: {
-            OIDC_ISSUER_URL: "https://app.takosumi.com",
-            OIDC_CLIENT_ID: "toc_staging",
-            OIDC_REDIRECT_URI:
-              "https://takos-staging.app.takos.jp/auth/oidc/callback",
-          },
+        worker_env: {
+          OIDC_ISSUER_URL: "https://app.takosumi.com",
+          OIDC_CLIENT_ID: "toc_staging",
+          OIDC_REDIRECT_URI:
+            "https://takos-staging.app.takos.jp/auth/oidc/callback",
         },
       },
       "staging",

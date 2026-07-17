@@ -28,17 +28,19 @@ Those phases are one Takosumi-native deploy. The wrangler config is not a
 separate product-only deploy authority; it consumes the module outputs and must
 stay in sync with them.
 
-When Takos is installed through Takosumi, the OpenTofu module exports a
-`takosumi_release.post_apply` command. Takosumi does not learn a DB-specific
-migration resource. It records an opaque post-apply command, and the configured
-release executor runs it from the reviewed source snapshot after the reviewed
-OpenTofu apply has committed:
+When Takos is installed through Takosumi, the selected service-side
+`InstallConfig.lifecycleActions` declares the product-owned `post_apply`
+activation. The action is pinned with the reviewed Plan and runs from the
+reviewed source snapshot after the reviewed OpenTofu apply has committed.
+Takosumi never discovers lifecycle actions from repository metadata or
+OpenTofu Outputs:
 
 ```sh
 bun scripts/control/takosumi-release.mjs <environment>
 ```
 
-That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
+That command consumes the ordinary root Outputs supplied as
+`TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
 authorized Cloudflare credentials. Any D1 or schema work remains Takos script
 behavior, not a Takosumi resource type.
@@ -46,11 +48,10 @@ This bridge is intentionally narrow: durable resources that the OpenTofu
 provider can express stay in the module, while provider gaps such as Vectorize
 index creation are run from the reviewed app source and the reviewed
 OpenTofu outputs. The OpenTofu module selects either a SHA-256-pinned Git release
-artifact or an explicit source build. Takosumi executes that reviewed module and
-its declared release command; it does not infer build commands, choose a newer
-artifact, or replace Git as the source of truth.
-The module exposes `release_executor` and defaults it to `operator` so the
-normal Takosumi Cloud install path publishes Worker artifacts through the
+artifact or an explicit source build. Takosumi executes the reviewed module and
+the Plan-pinned InstallConfig action; it does not infer build commands, choose a
+newer artifact, or replace Git as the source of truth. The InstallConfig chooses
+the lifecycle action executor. The normal Takosumi Cloud install path uses the
 operator release activator after OpenTofu has committed durable infrastructure:
 
 - `runner`: use only when the selected runner can run `wrangler deploy` and
@@ -291,7 +292,8 @@ bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangle
 
 This is a Takos product-owned activation command. Takosumi does not model it as
 database migration resources; when installed through Takosumi, the same class of
-work is executed through the opaque `takosumi_release.post_apply` command.
+work is executed through a Plan-pinned service-side `post_apply` action in
+`InstallConfig.lifecycleActions`.
 
 ### 6. Set Secrets
 
