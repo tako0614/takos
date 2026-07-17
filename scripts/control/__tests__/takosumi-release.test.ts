@@ -149,7 +149,7 @@ test("buildTakosumiReleaseCommands fails closed when operator mode requires CI i
       buildTakosumiReleaseCommands(rawOutputs, "production", {
         requirePrebuiltContainerImages: true,
       }),
-    /Generate release_container_images from the Git CI release manifest/,
+    /Generate the service-side InstallConfig patch/,
   );
 });
 

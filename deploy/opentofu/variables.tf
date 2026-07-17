@@ -32,37 +32,6 @@ variable "environment" {
   default     = "production"
 }
 
-variable "release_working_directory" {
-  description = "Source-root relative directory where Takos release commands run."
-  type        = string
-  default     = "."
-}
-
-variable "release_containers_rollout" {
-  description = "Wrangler Containers rollout strategy for Takos release activation. Immediate keeps every executor tier on the same release; set gradual explicitly for staged production rollouts or none in runner sandboxes that cannot publish Cloudflare Containers."
-  type        = string
-  default     = "immediate"
-
-  validation {
-    condition     = var.release_containers_rollout == null || contains(["immediate", "gradual", "none"], var.release_containers_rollout)
-    error_message = "release_containers_rollout must be immediate, gradual, none, or null."
-  }
-}
-
-variable "release_container_images" {
-  description = "Optional overrides for prebuilt Cloudflare Containers image refs. The default release manifest supplies runtime/executor refs; explicit entries override matching manifest keys."
-  type        = map(string)
-  default     = {}
-
-  validation {
-    condition = alltrue([
-      for image in values(var.release_container_images) :
-      can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})|(docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)@sha256:[0-9a-f]{64})$", image))
-    ])
-    error_message = "release_container_images values must use Cloudflare managed registry tag/digest refs or digest-pinned external registry refs."
-  }
-}
-
 variable "executor_capacity" {
   description = "Takos runtime and executor capacity materialized into the Worker and Cloudflare Container applications. Defaults fit a small self-host install; operators can raise the same limits explicitly."
   type = object({
@@ -96,68 +65,6 @@ variable "executor_capacity" {
     ) <= 250
     error_message = "executor_capacity total run concurrency must not exceed Cloudflare Queues max_concurrency 250."
   }
-}
-
-variable "build_from_source" {
-  description = "Build the Takos Worker and web assets from the pinned Git Source during release activation instead of using the CI Worker archive. By default worker_release_tag still supplies prebuilt runtime/executor container images."
-  type        = bool
-  default     = false
-}
-
-variable "worker_release_tag" {
-  description = "GitHub release tag whose takosumi-artifact.json selects the Worker bundle, web assets, SHA-256, and container image refs. In source-build mode only its container image refs are consumed. Set empty only for a runner that intentionally builds every artifact from source."
-  type        = string
-  default     = "v0.10.33"
-
-  validation {
-    condition     = trimspace(var.worker_release_tag) == "" || can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
-    error_message = "worker_release_tag must be empty or a SemVer-like Git tag beginning with v."
-  }
-}
-
-variable "worker_release_artifact_url" {
-  description = "Optional HTTPS override for a prebuilt Takos Worker release archive. The SHA-256 override is required with this value."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = trimspace(var.worker_release_artifact_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.worker_release_artifact_url)))
-    error_message = "worker_release_artifact_url must be empty or an https URL."
-  }
-}
-
-variable "worker_release_artifact_sha256" {
-  description = "Expected SHA-256 for worker_release_artifact_url. Accepts lowercase hex or sha256:<hex>."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = trimspace(var.worker_release_artifact_sha256) == "" || can(regex("^(sha256:)?[a-f0-9]{64}$", trimspace(var.worker_release_artifact_sha256)))
-    error_message = "worker_release_artifact_sha256 must be empty, lowercase SHA-256 hex, or sha256:<hex>."
-  }
-}
-
-variable "release_executor" {
-  description = "Executor for Takosumi release activation commands. Defaults to operator for hosted Takosumi Cloud materializers; set runner only when the runner environment intentionally owns wrangler deploy."
-  type        = string
-  default     = "operator"
-
-  validation {
-    condition     = contains(["runner", "operator"], var.release_executor)
-    error_message = "release_executor must be runner or operator."
-  }
-}
-
-variable "takosumi_source_repo_url" {
-  description = "Takosumi source module Git URL used by the Takos release activation when no sibling checkout exists in the runner snapshot."
-  type        = string
-  default     = "https://github.com/tako0614/takosumi.git"
-}
-
-variable "takosumi_source_ref" {
-  description = "Takosumi source module Git tag or commit used only when build_from_source is true. Source builds require an explicit immutable ref."
-  type        = string
-  default     = "f01eea7e6f43bf6bbe6a980fe04c21492f9f417e"
 }
 
 variable "opentofu_plan_mode" {
