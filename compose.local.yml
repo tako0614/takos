@@ -75,7 +75,7 @@ services:
       - "127.0.0.1:${TAKOS_WORKER_HOST_PORT:-${TAKOS_WORKER_PORT:-8787}}:${TAKOS_WORKER_PORT:-8787}"
     volumes:
       - .:/workspace
-      - ../takosumi:/takosumi:ro
+      - "${TAKOSUMI_SOURCE_DIR:-../takosumi}:/takosumi:ro"
 
   takosumi:
     image: oven/bun:1
@@ -106,7 +106,7 @@ services:
     ports:
       - "127.0.0.1:${TAKOSUMI_HOST_PORT:-${TAKOSUMI_PORT:-8788}}:${TAKOSUMI_PORT:-8788}"
     volumes:
-      - ../takosumi:/workspace
+      - "${TAKOSUMI_SOURCE_DIR:-../takosumi}:/workspace:ro"
 
   takos-agent:
     build:
