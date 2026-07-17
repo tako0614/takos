@@ -18,8 +18,10 @@ iOS requests display authorization separately from APNs registration,
 registers when a signed-in push request needs a token, unregisters on sign-out,
 and keeps the current registration's variable-length device token in memory
 only. Its reported `sandbox` or `production` environment is derived from the
-signed `aps-environment` entitlement; token requests fail closed when that
-entitlement is missing or invalid.
+signed `aps-environment` entitlement. The native apply step mirrors that value
+to `TauriMobilePushAPNSEnvironment` inside the signed app `Info.plist`, which the
+plugin reads through the public Bundle API; token requests fail closed when the
+signed configuration is missing or invalid.
 
 Native events are queued only until the first matching JavaScript listener is
 activated. Tauri's own listener registry remains authoritative after that

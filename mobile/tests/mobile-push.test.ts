@@ -140,7 +140,7 @@ test("Takos native push retries listener and native cleanup boundaries", async (
   expect(deactivateAttempts).toBe(2);
 });
 
-test("iOS native push keeps APNs tokens session-local and trusts the signed entitlement", () => {
+test("iOS native push keeps APNs tokens session-local and trusts signed bundle configuration", () => {
   const source = readFileSync(
     new URL(
       "../src-tauri/plugins/mobile-push/ios/Sources/MobilePushPlugin.swift",
@@ -158,8 +158,11 @@ test("iOS native push keeps APNs tokens session-local and trusts the signed enti
   expect(source).toContain(
     "Registration is session-bound and starts from getToken()",
   );
-  expect(source).toContain("SecTaskCopyValueForEntitlement");
-  expect(source).toContain('"aps-environment" as CFString');
+  expect(source).toContain("Bundle.main.object(");
+  expect(source).toContain(
+    'forInfoDictionaryKey: "TauriMobilePushAPNSEnvironment"',
+  );
+  expect(source).not.toContain("SecTask");
   expect(source).toContain('case "development":');
   expect(source).toContain('return "sandbox"');
   expect(source).toContain('case "production":');
