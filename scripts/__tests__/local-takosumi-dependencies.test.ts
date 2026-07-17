@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +17,15 @@ import {
 } from "../local-takosumi-dependencies.ts";
 
 describe("local Takosumi dependency preparation", () => {
+  async function writeRequiredFixtureFiles(fixture: string): Promise<void> {
+    await mkdir(join(fixture, "core"), { recursive: true });
+    await Promise.all([
+      writeFile(join(fixture, "package.json"), JSON.stringify({})),
+      writeFile(join(fixture, "bun.lock"), '{"lockfileVersion":1}\n'),
+      writeFile(join(fixture, "core", "index.ts"), "export {};\n"),
+    ]);
+  }
+
   test("accepts only explicit workspace directories", () => {
     expect(
       takosumiWorkspaceManifestPaths(
@@ -46,10 +56,15 @@ describe("local Takosumi dependency preparation", () => {
     const lockText = '{"lockfileVersion":1}\n';
     await mkdir(join(fixture, "accounts", "contract"), { recursive: true });
     await mkdir(join(fixture, "core"), { recursive: true });
+    await mkdir(join(fixture, "providers", "git"), { recursive: true });
     await Promise.all([
       writeFile(join(fixture, "package.json"), packageText),
       writeFile(join(fixture, "bun.lock"), lockText),
       writeFile(join(fixture, "core", "index.ts"), "export {};\n"),
+      writeFile(
+        join(fixture, "providers", "git", "credentials.ts"),
+        "export const source = true;\n",
+      ),
       writeFile(
         join(fixture, "accounts", "contract", "package.json"),
         JSON.stringify({ name: "workspace-fixture" }),
@@ -57,7 +72,53 @@ describe("local Takosumi dependency preparation", () => {
     ]);
 
     let installRoot = "";
-    await writeFile(join(fixture, ".env"), "SECRET=must-not-copy\n");
+    const secretFiles = [
+      ".dev.vars",
+      ".dev.vars.production",
+      ".env",
+      ".env.local",
+      ".npmrc",
+      ".pypirc",
+      "credentials.json",
+      "service-account.json",
+      "secrets.json",
+      "id_rsa",
+      "id_dsa.backup",
+      "id_ecdsa.local",
+      "id_ed25519",
+    ];
+    const placeholderFiles = [
+      ".dev.vars.example",
+      ".env.local.example",
+      ".npmrc.sample",
+      "credentials.json.template",
+      "id_rsa.fixture",
+      "id_ed25519.pub",
+    ];
+    await Promise.all([
+      ...secretFiles.map((path) =>
+        writeFile(join(fixture, path), "must-not-copy\n"),
+      ),
+      ...placeholderFiles.map((path) =>
+        writeFile(join(fixture, path), "documented-placeholder\n"),
+      ),
+    ]);
+    for (const directory of [
+      ".aws",
+      ".credentials",
+      ".secrets",
+      ".ssh",
+      "certs",
+      "secrets",
+    ]) {
+      await mkdir(join(fixture, directory));
+      await writeFile(join(fixture, directory, "material"), "must-not-copy\n");
+    }
+    await mkdir(join(fixture, "certs.example"));
+    await writeFile(
+      join(fixture, "certs.example", "public.pem.example"),
+      "documented-placeholder\n",
+    );
     await mkdir(join(fixture, "node_modules"));
     await writeFile(join(fixture, "node_modules", "stale"), "stale\n");
 
@@ -84,11 +145,42 @@ describe("local Takosumi dependency preparation", () => {
           "utf8",
         ),
       ).toContain("workspace-fixture");
+      expect(
+        await readFile(
+          join(installRoot, "providers", "git", "credentials.ts"),
+          "utf8",
+        ),
+      ).toContain("source = true");
       expect(prepared.lockDigest).toMatch(/^[0-9a-f]{64}$/u);
       expect(prepared.nodeModulesPath).toBe(
         join(prepared.workspaceRoot, "node_modules"),
       );
-      await expect(access(join(installRoot, ".env"))).rejects.toBeDefined();
+      for (const path of secretFiles) {
+        await expect(access(join(installRoot, path))).rejects.toBeDefined();
+      }
+      for (const directory of [
+        ".aws",
+        ".credentials",
+        ".secrets",
+        ".ssh",
+        "certs",
+        "secrets",
+      ]) {
+        await expect(
+          access(join(installRoot, directory)),
+        ).rejects.toBeDefined();
+      }
+      for (const path of placeholderFiles) {
+        expect(await readFile(join(installRoot, path), "utf8")).toBe(
+          "documented-placeholder\n",
+        );
+      }
+      expect(
+        await readFile(
+          join(installRoot, "certs.example", "public.pem.example"),
+          "utf8",
+        ),
+      ).toBe("documented-placeholder\n");
       await expect(
         access(join(installRoot, "node_modules", "stale")),
       ).rejects.toBeDefined();
@@ -107,12 +199,7 @@ describe("local Takosumi dependency preparation", () => {
     const temporaryParent = await mkdtemp(
       join(tmpdir(), "takosumi-dependency-fixture-"),
     );
-    await mkdir(join(fixture, "core"), { recursive: true });
-    await Promise.all([
-      writeFile(join(fixture, "package.json"), JSON.stringify({})),
-      writeFile(join(fixture, "bun.lock"), '{"lockfileVersion":1}\n'),
-      writeFile(join(fixture, "core", "index.ts"), "export {};\n"),
-    ]);
+    await writeRequiredFixtureFiles(fixture);
     let installRoot = "";
 
     try {
@@ -133,5 +220,44 @@ describe("local Takosumi dependency preparation", () => {
         rm(temporaryParent, { recursive: true, force: true }),
       ]);
     }
+  });
+
+  test("rejects a source symlink before install without exposing its target", async () => {
+    const fixture = await mkdtemp(join(tmpdir(), "takosumi-source-fixture-"));
+    const outside = await mkdtemp(join(tmpdir(), "takosumi-outside-fixture-"));
+    const temporaryParent = await mkdtemp(
+      join(tmpdir(), "takosumi-dependency-fixture-"),
+    );
+    await writeRequiredFixtureFiles(fixture);
+    const outsideFile = join(outside, "do-not-expose");
+    await writeFile(outsideFile, "outside-secret-value\n");
+    await symlink(outsideFile, join(fixture, "ordinary-source-link"));
+    let installCalled = false;
+    let message = "";
+
+    try {
+      await prepareTakosumiDependencies({
+        takosumiRoot: fixture,
+        temporaryParent,
+        install: async () => {
+          installCalled = true;
+        },
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    } finally {
+      await Promise.all([
+        rm(fixture, { recursive: true, force: true }),
+        rm(outside, { recursive: true, force: true }),
+        rm(temporaryParent, { recursive: true, force: true }),
+      ]);
+    }
+
+    expect(installCalled).toBe(false);
+    expect(message).toBe(
+      "adjacent Takosumi source contains a symbolic link; local:e2e refuses to copy it",
+    );
+    expect(message).not.toContain(outsideFile);
+    expect(message).not.toContain("outside-secret-value");
   });
 });
