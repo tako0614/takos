@@ -1,125 +1,104 @@
-# Takos App Interface
+# Takos アプリの Interface
 
-> This page summarizes how a Takos app (a Capsule) publishes and consumes runtime services. The full model lives in
-> [Capsule Runtime Projection](./capsule-runtime-projection). Takos projects a deployed Capsule's well-known OpenTofu
-> Outputs into transient, read-only runtime objects. Takosumi OSS keeps no service-graph ledger; its deploy-control
-> boundary may still mint a scoped bind-time credential for supported service consumes.
+> Takos のアプリは普通の OpenTofu Capsule です。OpenTofu は deploy の事実を返すだけで、Takosumi がその上に
+> runtime `Interface` を宣言し、`InterfaceBinding` で利用者を認可します。Takos は対応している Interface だけを
+> 自分の UI に反映します。
 
-## Ownership
+## 所有権
 
-Takosumi treats a Git-URL OpenTofu Capsule as Source / Capsule / Run / StateVersion / Output and records the result of
-`tofu output -json`. Takos reads a Capsule's published `service_exports` / `service_bindings` / `app_deployment` Outputs and
-projects them into its app launcher, MCP registry, file handlers, Git, storage, and agent runtime.
+Takosumi は Git で公開された module を Source / Capsule / Run / StateVersion / Output として記録します。apply
+が成功すると、通常の root Output が記録されます。これらの Output はアプリの manifest でも runtime の登録簿でも
+認証情報の経路でもありません。
 
-This boundary is fixed.
+runtime のメタデータは、Workspace、Capsule、または Resource が持つ Takosumi の service-side Interface です。
+その宣言には次が含まれます。
 
-- Takosumi does not turn MCP / file handler / launcher metadata into a Takos-specific service class.
-- Output capture, output-to-input wiring, dependency pinning, and audit belong to Takosumi.
-- A Takosumi Source repo is never required to ship a `.takosumi` manifest, a Takosumi-specific metadata field, or a
-  component-graph DSL.
-- API keys and bearer-token literals never go in OpenTofu Outputs.
-- A supported consume such as `storage.object` or `source.git.smart_http` can request scopes and env injection. Takosumi
-  resolves one same-Workspace producer, mints a prefix-scoped credential from the producer's protected signing material,
-  and injects it into the consumer plan without exposing it as a public Output.
-- Provider credentials, state backend, and resource apply belong to the ProviderConnection / CredentialRecipe /
-  ProviderBinding / policy / runner boundary.
+- 利用側が決める `type` と `version`
+- 任意の non-secret な JSON `document`
+- `literal`、`capsule_output`、`resource_output` のいずれかから来る明示的な公開 input
+- 公開範囲 (visibility) と、任意の policy / resource URI 参照
 
-## Publishing services
+Takos は、自分が使い方を知っている解決済みの Interface の type と version だけを読みます。これにより、
+Takosumi の宣言モデルを開いたまま保ちながら、Takos が未知のプロトコルや Output の形を推測しなくて済みます。
 
-A Capsule publishes a service through the `service_exports` Output (or the `app_deployment` publish convenience).
+## 現在の managed Interface profile
 
-```hcl
-output "service_exports" {
-  value = [
-    {
-      name         = "research-tools"
-      capabilities = ["protocol.mcp.server"]
-      endpoints = [
-        {
-          name     = "default"
-          protocol = "https"
-          url      = "https://example.test/mcp"
-        }
-      ]
-      auth = [
-        {
-          scheme   = "bearer"
-          audience = "research-tools"
-          scopes   = ["mcp.invoke"]
-        }
-      ]
-      metadata = {
-        title = "Research tools"
-      }
-      visibility = "space"
-    }
-  ]
-}
+managed MCP の経路は Streamable HTTP です。
+
+1. アプリの Capsule が `mcp_url` のような通常の公開 endpoint Output を返します。
+2. service-side の設定が、`type: mcp.server`、`version: 2025-11-25`、その Output への明示的な
+   `inputs.endpoint` mapping を持つ Capsule 所有の Interface を作ります。
+3. Takosumi が Interface を解決し、Output の provenance (来歴) と解決済みの revision を記録します。
+4. InterfaceBinding が、その exact な revision について Principal に `mcp.invoke` を許可します。
+5. Takos は解決済みで認可された Interface だけを一覧表示し、その tool を Workspace に公開します。
+
+```text
+普通の OpenTofu module
+  -> 通常の Output: mcp_url
+  -> Takosumi の Interface input mapping
+  -> 解決済みの Interface revision
+  -> Ready な InterfaceBinding (mcp.invoke)
+  -> Takos の MCP registry と tool policy
 ```
 
-Takos does not read raw HCL; it reads the projected export Takosumi recorded from the Output. locals / variables /
-modules stay OpenTofu's responsibility.
+Takos が現在受け付ける managed MCP Interface は、認証不要 (`delivery.type = none`) と Principal `oauth2` の
+2 つです。OAuth では、Takosumi が Capsule が HTTPS resource の hostname を所有していることを証明したあと、
+最大 60 秒の audience 限定 token を新しく発行します。Accounts の delegated token が Capsule へ送られることは
+ありません。対応していない credential 配信を宣言する文書は、黙って公開サーバー扱いにはならず、拒否されます。
+外部の MCP Connections は、Takos 内で別の OAuth と認証情報のフローを持ち続けます。
 
-## Capability mapping
+Takos は、認証不要の Principal profile もさらに 2 つ実装しています。
 
-| Takos surface                    | service identity / capability                              |
-| -------------------------------- | ---------------------------------------------------------- |
-| MCP registry                     | app-provided `protocol.mcp.server` publications            |
-| app launcher / embedded UI       | app-provided `interface.ui.surface` publications           |
-| file handlers                    | app-provided `interface.file.handler` publications         |
-| Takos product-internal Workspace APIs | `storage.filesystem`, `source.repository` runtime projections |
-| Workspace file and object UX     | installable `takos-storage`: `storage.object` + MCP        |
-| key-value / SQL storage          | app-provided `storage.key_value`, `storage.sql`            |
-| Git UX / clone / refs            | installable `takos-git`: `source.git.smart_http` + MCP     |
-| sandbox computer                 | installable `takos-computer`: `protocol.mcp.server`        |
-| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`     |
-| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
+- `interface.ui.surface` version `1`: `inputs.url` を宣言し、`document.launcher = true` を要求し、`ui.open`
+  を許可し、ランチャー / サイドバー用の表示メタデータを提供します。
+- `interface.file.handler` version `1`: `inputs.openUrl` を宣言し、`file.open` を許可し、少なくとも 1 つの
+  MIME type または拡張子でファイルを選びます。
 
-The product-internal projections above remain Takos application APIs; they are not static agent tools. Agent-facing
-file and repository operations come from the installed Capsule MCP publications.
+どちらも `delivery.type = none` と、現在の解決済み revision に対する Ready な Binding を必要とします。
+ファイルハンドラーの URL にはリテラルの `:id` パスセグメントが含まれます。これらの経路は Takosumi を直接
+読み、Takos 側に publish/consume のキャッシュや Output Sync のフォールバックはありません。
 
-## Consuming services
+Takos の Git install レビューでは、endpoint の Output、delivery の種類、ランチャーの Output、そして module
+が必要とする場合は現在の Accounts issuer を受け取る通常の OpenTofu 変数を提案できます。すべての名前は明示的
+です。agent は同じ境界を `takosumi_capsule_plan` で使い、保存された plan を表示し、`takosumi_run_apply` の
+前に 1 回限りの確認を待ち、apply の Run を polling し、同じ agent の実行内で新しく認可された MCP tool を
+使えるように自分の request-local toolbox を更新します。
 
-A Capsule consumes services through the `service_bindings` Output (or `app_deployment` consume). Takosumi selects and
-pins the matching producer Output into the plan. The projection parser stays read-only and store-free, while the
-deploy-control grant broker handles supported scoped credentials during the plan.
+## アプリメタデータ
 
-For example, `takos-office` consumes the independently installed `takos-storage` Capsule:
+install や表示用のメタデータは、必ずしも module から来る必要はありません。Git URL、ref、module path、アプリ名、
+アイコン、カテゴリ、`InstallConfig.interfaceBlueprints` による Interface の宣言、Output の input mapping、
+`InstallConfig.outputAllowlist` による公開 Output の選択は、Takosumi の service-side install 設定で管理できます。
+module 自身は任意の `takosumi_interface` resource でも Interface を宣言できます。ソースのリポジトリは普通の
+OpenTofu module のままです。
 
-```hcl
-consume = [
-  {
-    publication = "storage.object"
-    request = {
-      scopes = ["files:read", "files:write"]
-    }
-    inject = {
-      env = {
-        url    = "OBJECT_STORAGE_API_URL"
-        token  = "OBJECT_STORAGE_ACCESS_TOKEN"
-        prefix = "OBJECT_STORAGE_KEY_PREFIX"
-      }
-    }
-  }
-]
-```
+対応している Interface をアプリランチャー、Connections、file handling、agent tool にどう反映するかは Takos
+が決めます。プロトコルを宣言しただけでは自動的に Takos の機能にはなりません。製品側がその Interface の
+type / version とその permission の意味を明示的に実装する必要があります。
 
-`files:read` produces read/list authority; `files:write` produces read/write/delete/list authority. The generated token
-is confined to the consumer's Workspace/Capsule prefix. `takos-computer` uses the same flow with
-`source.git.smart_http`, `repos:read` / `repos:write`, and `TAKOS_GIT_BASE_URL` /
-`TAKOS_GIT_ACCESS_TOKEN` / `TAKOS_GIT_REPO_PREFIX`. Missing or ambiguous producers and unavailable signing authority
-fail closed.
+## 更新と依存関係
 
-## Security invariants
+対応付けられた公開 Output が変わると、Takosumi は新しい Interface revision を解決します。Takos は利用側の
+Capsule を再 apply しなくても、その revision を観測できます。この変更は Workspace 全体の reconcile を
+起動しません。
 
-- No secret literal in `service_exports` / `service_bindings` / `app_deployment` Outputs.
-- The projection parser does not persist a Service Graph. Supported bind-time grants are minted by Takosumi
-  deploy-control, passed through the dispatch-only run credential channel, and never written to public Outputs or logs.
-- Provider credentials remain in the ProviderConnection / CredentialRecipe / ProviderBinding / vault / runner phase
-  boundary.
+ある OpenTofu module が plan / apply 中に別の module の値を必要とする場合は、明示的な Capsule Dependency か
+通常の `terraform_remote_state` として表現します。これは runtime の Interface discovery / 認可とは別の話です。
 
-## Implementation pointers
+## セキュリティ上の不変条件
 
-- Takos profile owner: `takos/`
-- Canonical model: [Capsule Runtime Projection](./capsule-runtime-projection)
-- Projection implementation: `takosumi/core/domains/output-projection/service-projection.ts`
+- token、パスワード、署名鍵、秘密鍵、provider の認証情報は、Interface の document や解決済み input には
+  現れません。
+- sensitive とマークされた Output は Interface の input にはなれません。
+- endpoint が存在することは、それを呼び出す権限を意味しません。InterfaceBinding が runtime の認可記録です。
+- ProviderConnection / CredentialRecipe / ProviderBinding は OpenTofu Run の認証情報のためのものであり、
+  runtime の利用者のためのものではありません。
+- 未対応の Interface version、delivery 方式、mapping の欠落、古い binding、あいまいな identity は安全側に
+  停止します。
+
+## 関連ページ
+
+- [Capsule の runtime Interface](./capsule-runtime-projection)
+- [OpenTofu Output と runtime Interface](/deploy/runtime-interfaces)
+- [MCP サーバー](/apps/mcp)
+- [Takosumi Deploy-Control API](https://takosumi.com/docs/reference/deploy-control-api)

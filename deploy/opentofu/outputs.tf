@@ -45,9 +45,9 @@ output "executor_capacity" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].executor_capacity : null
 }
 
-output "app_deployment" {
-  description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].app_deployment : null
+output "worker_env" {
+  description = "Non-secret Takos Worker variables consumed by the Wrangler renderer. Runtime Interface declarations remain service-side Takosumi configuration."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].worker_env : null
 }
 
 output "cloudflare_d1_database_id" {
@@ -103,50 +103,4 @@ output "object_buckets" {
 output "queues" {
   description = "Provider-neutral queue names keyed by logical binding."
   value       = var.target == "cloudflare" ? module.cloudflare[0].queues : null
-}
-
-output "takosumi_release" {
-  description = "Operator-side release activation commands Takosumi should run after a successful apply."
-  value = {
-    post_apply = [
-      {
-        id                = "takos-worker-release"
-        executor          = var.release_executor
-        command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
-        working_directory = var.release_working_directory
-        timeout_seconds   = 1200
-        env = merge(
-          var.build_from_source ? {
-            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-          } : {},
-          var.release_containers_rollout == null ? {} : {
-            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
-          },
-          var.release_executor == "operator" ? {
-            TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES = "1"
-          } : {},
-          local.worker_release_artifact_url == "" ? {} : {
-            TAKOS_RELEASE_WORKER_ARTIFACT_URL    = local.worker_release_artifact_url
-            TAKOS_RELEASE_WORKER_ARTIFACT_SHA256 = local.worker_release_artifact_sha256
-          },
-          length(local.release_container_images) == 0 ? {} : {
-            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(local.release_container_images)
-          },
-        )
-      },
-    ]
-    pre_destroy = [
-      {
-        id                = "takos-worker-destroy"
-        executor          = var.release_executor
-        command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
-        working_directory = var.release_working_directory
-        timeout_seconds   = 600
-        env = var.release_containers_rollout == null ? {} : {
-          TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
-        }
-      },
-    ]
-  }
 }

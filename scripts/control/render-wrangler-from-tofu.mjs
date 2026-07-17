@@ -123,7 +123,7 @@ export function buildReplacements(
   const r2 = read("object_buckets");
   const queues = read("queues");
   const vectorizeIndexName = readVectorIndexName(outputs);
-  const deploymentEnv = appDeploymentEnv(outputs);
+  const workerEnv = ordinaryWorkerEnv(outputs);
   const requireKey = (obj, key, outputName) => {
     if (obj[key] == null) {
       throw new Error(`tofu output "${outputName}" has no "${key}" key`);
@@ -207,7 +207,7 @@ export function buildReplacements(
   if (publicUrl) {
     Object.assign(replacements, publicUrlReplacements(env, publicUrl));
   }
-  Object.assign(replacements, workerEnvReplacements(env, deploymentEnv));
+  Object.assign(replacements, workerEnvReplacements(env, workerEnv));
   if (env === "staging") {
     // Wrangler still reads the top-level account_id when deploying an env.
     // The staging-specific CF_ACCOUNT_ID var is not enough for API routes such
@@ -250,9 +250,8 @@ function readVectorIndexName(outputs) {
   ]);
 }
 
-function appDeploymentEnv(outputs) {
-  const appDeployment = outputValue(outputs.app_deployment);
-  const env = appDeployment?.env;
+function ordinaryWorkerEnv(outputs) {
+  const env = outputValue(outputs.worker_env);
   if (!env || typeof env !== "object" || Array.isArray(env)) return {};
   return Object.fromEntries(
     Object.entries(env).filter(
