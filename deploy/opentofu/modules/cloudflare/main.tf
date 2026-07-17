@@ -43,7 +43,7 @@ locals {
   takosumi_accounts_redirect_uri = trimspace(var.takosumi_accounts_redirect_uri) != "" ? trimspace(var.takosumi_accounts_redirect_uri) : (local.public_url != null ? "${local.public_url}/auth/oidc/callback" : "")
   takosumi_accounts_oidc_enabled = local.takosumi_accounts_issuer_url != "" && local.takosumi_accounts_client_id != ""
   extra_worker_env               = { for name, value in var.env : name => value if trimspace(value) != "" }
-  app_deployment_env = merge(
+  worker_env = merge(
     local.extra_worker_env,
     {
       EXECUTOR_TIER1_WARM_POOL_SIZE      = tostring(var.executor_capacity.tier1_max_instances)

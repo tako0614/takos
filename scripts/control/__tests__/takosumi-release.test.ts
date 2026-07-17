@@ -2481,20 +2481,13 @@ test("ensureTakosumiSourceModule links an existing checkout beside restored sour
   }
 });
 
-test("Takos OpenTofu modules declare generic Takosumi post-apply release commands", () => {
-  const packageMetadata = JSON.parse(
-    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
-  ) as { version: string };
+test("Takos OpenTofu modules keep lifecycle and runtime declarations out of Outputs", () => {
   const rootModule = readFileSync(
     new URL("../../../deploy/opentofu/outputs.tf", import.meta.url),
     "utf8",
   );
   const rootMain = readFileSync(
     new URL("../../../deploy/opentofu/main.tf", import.meta.url),
-    "utf8",
-  );
-  const rootVariables = readFileSync(
-    new URL("../../../deploy/opentofu/variables.tf", import.meta.url),
     "utf8",
   );
   const cloudflareOutputs = readFileSync(
@@ -2504,78 +2497,12 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     ),
     "utf8",
   );
-  assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
   assert.match(rootMain, /public_url\s*=\s*var\.public_url/);
   assert.doesNotMatch(rootMain, /path\.module[^\n]*\.\.\//);
-  assert.match(
-    rootMain,
-    new RegExp(`app_version\\s*=\\s*"${packageMetadata.version}"`),
-  );
-  assert.match(rootMain, /app_version\s*=\s*local\.app_version/);
-  assert.match(cloudflareOutputs, /version\s*=\s*var\.app_version/);
-  assert.doesNotMatch(cloudflareOutputs, /version\s*=\s*"[0-9]/);
-  assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
-  assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
-  assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
-  assert.match(
-    rootVariables,
-    /variable\s+"release_containers_rollout"\s*\{[\s\S]*?default\s*=\s*"immediate"/,
-  );
-  assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
-  assert.match(rootVariables, /variable\s+"build_from_source"\s*\{/);
-  assert.match(rootVariables, /variable\s+"worker_release_tag"\s*\{/);
-  assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
-  assert.match(rootVariables, /variable\s+"public_url"\s*\{/);
-  assert.match(rootVariables, /default\s*=\s*"operator"/);
-  assert.match(
-    rootVariables,
-    /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
-  );
-  assert.match(rootModule, /post_apply\s*=\s*\[/);
-  assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /output\s+"public_url"\s*\{/);
-  assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
-  assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(rootModule, /executor\s*=\s*var\.release_executor/);
-  assert.match(rootModule, /timeout_seconds\s*=\s*1200/);
-  assert.match(rootModule, /timeout_seconds\s*=\s*600/);
-  assert.match(rootModule, /env\s*=\s*merge\(/);
-  assert.match(
-    rootModule,
-    /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
-  );
-  assert.match(
-    rootModule,
-    /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
-  );
-  assert.doesNotMatch(
-    rootModule,
-    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS/,
-  );
-  assert.match(
-    rootModule,
-    /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
-  );
-  assert.match(rootModule, /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/);
-  assert.match(
-    rootModule,
-    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(local\.release_container_images\)/,
-  );
-  assert.match(
-    rootModule,
-    /TAKOS_RELEASE_WORKER_ARTIFACT_URL\s*=\s*local\.worker_release_artifact_url/,
-  );
-  assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
-  assert.match(
-    rootModule,
-    /working_directory\s*=\s*var\.release_working_directory/,
-  );
-  assert.match(
-    rootModule,
-    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*var\.environment\]/,
-  );
-  assert.match(
-    rootModule,
-    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*var\.environment,\s*"--destroy"\]/,
-  );
+  assert.match(rootModule, /output\s+"worker_env"\s*\{/);
+  assert.match(cloudflareOutputs, /output\s+"worker_env"\s*\{/);
+  assert.doesNotMatch(rootModule, /output\s+"takosumi_release"\s*\{/);
+  assert.doesNotMatch(rootModule, /output\s+"app_deployment"\s*\{/);
+  assert.doesNotMatch(cloudflareOutputs, /output\s+"app_deployment"\s*\{/);
 });

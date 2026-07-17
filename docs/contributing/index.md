@@ -11,9 +11,9 @@
   — hosted operator / self-host distribution の deploy target と ownership boundary。
 - [`operator-boundary-audit.md`](./operator-boundary-audit.md) — Takos product と operator-owned infrastructure の境界を
   docs / 実装間で揃えるためのチェックリスト。
-- runner boundary: OpenTofu state backend、provider credential、Connection / ProviderBinding /
-  policy / runtime-agent handler wiring は external Takosumi control plane が解決します。Takos product routes は Takosumi
-  の StateVersion / Output / Capsule output projection records を消費します。
+- runner boundary: OpenTofu state backend、provider credential、Connection / ProviderBinding / policy の
+  wiring は external Takosumi control plane が解決します。Takos product routes は Takosumi の StateVersion / Output
+  ledger と、認可済みの Interface / InterfaceBinding を消費します。
 
 ## 検証
 
@@ -49,9 +49,8 @@ target URL、provider credential、operator が編集した env file、private e
 
 ## Takosumi Capsule Lifecycle
 
-Takosumi Capsule Lifecycle の正本は
-[Takosumi core spec](https://takosumi.com/docs/core-spec) と
-[core conformance](https://takosumi.com/docs/core-conformance) です。Takos 側では
-[Capsule output projection profile](../architecture/app-interface.md) と
-[OpenTofu Service Exports](../deploy/service-exports.md) を、app launcher / MCP / file handler / storage / Git / agent runtime の
-product profile として扱います。
+Takosumi Capsule Lifecycle の公開モデルは
+[Takosumi specification](https://takosumi.com/docs/reference/model) を参照してください。Takos 側では
+[Takos App Interface](../architecture/app-interface.md) と
+[OpenTofu Outputs and Runtime Interfaces](../deploy/runtime-interfaces.md) を、app launcher / MCP / file handler / storage /
+Git / agent runtime の product profile として扱います。

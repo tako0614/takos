@@ -3,16 +3,6 @@ variable "account_id" {
   type        = string
 }
 
-variable "app_version" {
-  description = "Takos product version projected through app_deployment. The root module derives it from the Git source package metadata."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", var.app_version))
-    error_message = "app_version must be a SemVer version without a leading v."
-  }
-}
-
 variable "project_name" {
   description = "Resource name prefix (e.g. takos-private). Backing resources are named <prefix>-*."
   type        = string
