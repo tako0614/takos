@@ -52,6 +52,8 @@ services:
       core: 0
     healthcheck:
       disable: true
+    volumes:
+      - "${TAKOSUMI_E2E_WORKSPACE_PATH:?TAKOSUMI_E2E_WORKSPACE_PATH is required by local:e2e}:/workspace:ro"
 
   agent-proof-runtime:
     image: oven/bun:1.3
@@ -80,7 +82,7 @@ services:
       - "127.0.0.1:${TAKOS_AGENT_PROOF_PORT:-8790}:8790"
     volumes:
       - .:/workspace
-      - ../takosumi:/takosumi:ro
+      - "${TAKOSUMI_E2E_WORKSPACE_PATH:?TAKOSUMI_E2E_WORKSPACE_PATH is required by local:e2e}:/takosumi:ro"
     security_opt:
       - apparmor=unconfined
     ulimits:
@@ -108,6 +110,8 @@ services:
       core: 0
     healthcheck:
       disable: true
+    volumes:
+      - "${TAKOSUMI_E2E_WORKSPACE_PATH:?TAKOSUMI_E2E_WORKSPACE_PATH is required by local:e2e}:/takosumi:ro"
 
   takos-agent:
     build:
