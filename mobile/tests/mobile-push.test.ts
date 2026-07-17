@@ -258,6 +258,9 @@ test("Android product plugins support the Tauri app minimum SDK", () => {
 
   expect(keystoreGradle).toContain("minSdk = 24");
   expect(mobilePushGradle).toContain("minSdk = 24");
+  expect(mobilePushGradle).toContain(
+    'implementation("androidx.appcompat:appcompat:1.6.0")',
+  );
 });
 
 test("native push event activation is an idempotent cross-session barrier", () => {
