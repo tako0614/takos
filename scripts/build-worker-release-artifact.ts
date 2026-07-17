@@ -82,6 +82,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
     const repository = Bun.env.GITHUB_REPOSITORY?.trim() || "tako0614/takos";
     const artifactUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/${archiveName}`;
     const manifestUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/takosumi-artifact.json`;
+    const installConfigPatchUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/install-config-patch.json`;
     const containerImages = await readContainerImages(
       options.imageDigestDir,
       options.requireCloudflareContainerImages,
@@ -108,6 +109,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
       assetManifest: "asset-manifest.json",
       containerImages,
       manifestUrl,
+      installConfigPatchUrl,
     };
     await writeFile(
       join(outputDir, "takosumi-artifact.json"),

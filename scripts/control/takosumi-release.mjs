@@ -453,7 +453,7 @@ export function buildTakosumiReleaseCommands(
   ].filter((name) => !prebuiltContainerImages[name]);
   if (requirePrebuiltContainerImages && missingPrebuiltContainerImages.length) {
     throw new Error(
-      `TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES is set, but prebuilt images are missing for: ${missingPrebuiltContainerImages.join(", ")}. Generate release_container_images from the Git CI release manifest and pass it through OpenTofu.`,
+      `TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES is set, but prebuilt images are missing for: ${missingPrebuiltContainerImages.join(", ")}. Generate the service-side InstallConfig patch from the Git CI Worker artifact manifest.`,
     );
   }
   const ensureSecretsArgs = [
@@ -651,7 +651,7 @@ export function releaseWranglerAccountId(outputs, env = process.env) {
     const imageAccountId = releaseContainerImagesAccountId(env);
     if (imageAccountId) return imageAccountId;
     throw new Error(
-      "Takos release requires a real Cloudflare account id for native Wrangler operations when cloudflare_account_id is a Takosumi virtual account. Set TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID or TAKOSUMI_CLOUDFLARE_ACCOUNT_ID, or pass registry.cloudflare.com release_container_images from Git CI.",
+      "Takos release requires a real Cloudflare account id for native Wrangler operations when cloudflare_account_id is a Takosumi virtual account. Set TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID or TAKOSUMI_CLOUDFLARE_ACCOUNT_ID, and configure reviewed registry.cloudflare.com image refs in the service-side lifecycle action.",
     );
   }
   return outputAccountId;
