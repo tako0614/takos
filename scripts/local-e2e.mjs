@@ -2,6 +2,10 @@ import * as runtime from "./runtime.ts";
 import { resolve } from "node:path";
 import { runLocalAgentPublicApiProof } from "./local-agent-proof.ts";
 import {
+  cleanupTakosumiDependencies,
+  prepareTakosumiDependencies,
+} from "./local-takosumi-dependencies.ts";
+import {
   AGENT_SOURCE_FINGERPRINT_LABEL,
   assertCoreDumpsDisabled,
   assertFreshAgentProofBuild,
@@ -116,6 +120,7 @@ function configuredPortTargets(config) {
 async function runCommand(commandName, args, options = {}) {
   const {
     check = true,
+    cwd,
     env = {},
     ignoreInterruption = false,
     timeoutMs = numberEnv("TAKOS_LOCAL_E2E_COMMAND_TIMEOUT_MS", 5 * 60 * 1000),
@@ -138,6 +143,7 @@ async function runCommand(commandName, args, options = {}) {
   }
   const command = runtime.runCommand(commandName, {
     args,
+    cwd,
     env,
     stdout: "pipe",
     stderr: "pipe",
@@ -366,6 +372,10 @@ async function printDiagnostics(composeArgs, commandEnv) {
 async function main() {
   assertFreshAgentProofBuild(runtime.env.get("TAKOS_LOCAL_E2E_SKIP_BUILD"));
   const takosRoot = runtime.cwd();
+  const takosumiRoot = resolve(
+    takosRoot,
+    env("TAKOSUMI_SOURCE_DIR", "../takosumi"),
+  );
   const sourceFingerprint = await computeAgentSourceFingerprint(takosRoot);
   const project = env(
     "TAKOS_LOCAL_E2E_PROJECT",
@@ -387,6 +397,7 @@ async function main() {
   );
   const commandEnv = {
     ...dynamicPublishedPortEnvironment(),
+    TAKOSUMI_SOURCE_DIR: takosumiRoot,
     TAKOS_WORKER_URL: "",
     TAKOS_INTERNAL_SERVICE_SECRET: secret,
     TAKOS_INTERNAL_API_SECRET: env("TAKOS_INTERNAL_API_SECRET", secret),
@@ -401,6 +412,7 @@ async function main() {
   let started = false;
   let startAttempted = false;
   let failure = null;
+  let preparedTakosumiDependencies = null;
   const cleanupProject = createLocalE2eProjectCleanup({
     composeArgs,
     commandEnv,
@@ -431,6 +443,34 @@ async function main() {
   console.log("[local-e2e] requesting Docker-assigned localhost ports");
 
   try {
+    preparedTakosumiDependencies = await prepareTakosumiDependencies({
+      takosumiRoot,
+      install: async (dependencyRoot) => {
+        const result = await runCommand(
+          "bun",
+          ["install", "--frozen-lockfile", "--ignore-scripts"],
+          {
+            check: false,
+            cwd: dependencyRoot,
+            timeoutMs: numberEnv(
+              "TAKOS_LOCAL_E2E_DEPENDENCY_TIMEOUT_MS",
+              5 * 60 * 1000,
+            ),
+          },
+        );
+        if (result.code !== 0) {
+          throw new Error(
+            `isolated Takosumi dependency install rejected its frozen lockfile (exit ${result.code})`,
+          );
+        }
+      },
+    });
+    commandEnv.TAKOSUMI_E2E_WORKSPACE_PATH =
+      preparedTakosumiDependencies.workspaceRoot;
+    console.log(
+      `[local-e2e] Takosumi frozen dependencies ready (lock sha256 ${preparedTakosumiDependencies.lockDigest.slice(0, 12)})`,
+    );
+
     const config = await runDocker(
       [...composeArgs, "config", "--format", "json"],
       {
@@ -469,6 +509,24 @@ async function main() {
     );
 
     startAttempted = true;
+    await runDocker(
+      [
+        ...composeArgs,
+        "run",
+        "--rm",
+        "--no-deps",
+        "takosumi",
+        "bun",
+        "build",
+        "--target=bun",
+        "core/index.ts",
+        "--outfile",
+        "/tmp/takosumi-local-e2e-preflight.mjs",
+      ],
+      { env: commandEnv, timeoutMs: 120_000 },
+    );
+    console.log("[local-e2e] Takosumi service import preflight ok");
+
     const upArgs = [...composeArgs, "up", "--build", "-d"];
     await runDocker(upArgs, {
       env: commandEnv,
@@ -516,7 +574,7 @@ async function main() {
     console.error(
       `[local-e2e] failed: ${error instanceof Error ? error.message : String(error)}`,
     );
-    if (!interruption.signal.aborted) {
+    if (!interruption.signal.aborted && startAttempted) {
       await printDiagnostics(composeArgs, commandEnv).catch(
         (diagnosticError) => {
           console.error(
@@ -539,6 +597,17 @@ async function main() {
       }
     } else if (started) {
       console.log("[local-e2e] keeping compose stack for inspection");
+    }
+    if (!started || !keepStack || interruption.signal.aborted) {
+      try {
+        await cleanupTakosumiDependencies(preparedTakosumiDependencies);
+      } catch (dependencyCleanupError) {
+        failure = combineFailures(failure, dependencyCleanupError);
+      }
+    } else if (preparedTakosumiDependencies) {
+      console.log(
+        `[local-e2e] keeping isolated Takosumi workspace for the retained stack: ${preparedTakosumiDependencies.workspaceRoot}`,
+      );
     }
     removeTerminationHandlers();
   }
