@@ -35,7 +35,7 @@ env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos-mobile
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   RUST_TOOLCHAIN: 1.93.1
-  TAKOSUMI_SOURCE_REF: ${{ inputs.takosumi_source_ref || '383d7f47794d83af2fd516a48d88d22b7592396c' }}
+  TAKOSUMI_SOURCE_REF: ${{ inputs.takosumi_source_ref || 'b6a18c0708a0a07b7e64aa4f490b7bb1a0044167' }}
 
 jobs:
   repository-contract:
