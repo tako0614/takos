@@ -60,6 +60,14 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Install locked Takos source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takos
+
+      - name: Install locked Takosumi source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takosumi
+
       - name: Install locked mobile JavaScript dependencies
         run: bun install --frozen-lockfile
         working-directory: takos/mobile
@@ -116,6 +124,14 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
           bun-version: 1.3.14
+
+      - name: Install locked Takos source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takos
+
+      - name: Install locked Takosumi source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takosumi
 
       - name: Configure Android native toolchain
         shell: bash
@@ -212,6 +228,14 @@ jobs:
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
           bun-version: 1.3.14
+
+      - name: Install locked Takos source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takos
+
+      - name: Install locked Takosumi source dependencies
+        run: bun install --frozen-lockfile
+        working-directory: takosumi
 
       - name: Configure hosted iOS toolchain
         shell: bash
