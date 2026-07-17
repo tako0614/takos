@@ -255,9 +255,25 @@ test("Android product plugins support the Tauri app minimum SDK", () => {
     ),
     "utf8",
   );
+  const keystoreManifest = readFileSync(
+    new URL(
+      "../src-tauri/plugins/keystore/android/src/main/AndroidManifest.xml",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const mobilePushManifest = readFileSync(
+    new URL(
+      "../src-tauri/plugins/mobile-push/android/src/main/AndroidManifest.xml",
+      import.meta.url,
+    ),
+    "utf8",
+  );
 
   expect(keystoreGradle).toContain("minSdk = 24");
   expect(mobilePushGradle).toContain("minSdk = 24");
+  expect(keystoreManifest).not.toContain("<uses-sdk");
+  expect(mobilePushManifest).not.toContain("<uses-sdk");
   expect(mobilePushGradle).toContain(
     'implementation("androidx.appcompat:appcompat:1.6.0")',
   );
