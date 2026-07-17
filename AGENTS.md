@@ -6,14 +6,16 @@
 **OpenTofu-native, Takosumi-managed な AI workspace distribution** で、app / deploy topology は Git-hosted
 OpenTofu Capsule として扱い、Takosumi 専用 manifest や DSL を要求しない。product-grade lifecycle は外部 Takosumi
 control plane (Accounts / deploy-control / dashboard / OpenTofu runner / Run ledger / policy / audit) が管理し、Takos
-product surface (chat / agent / memory / Workspace / app launcher / Takos Capsule output projection profile) はその上で動く
+product surface (chat / agent / memory / Workspace / app launcher / Takos runtime Interface consumer) はその上で動く
 通常の Capsule / distribution Worker として deploy される。deploy の正本は
-[`deploy/opentofu`](deploy/opentofu) module (`var.target = cloudflare`): `tofu apply` が Takos distribution worker の
-durable backing infra を provision し、worker artifact (`deploy/cloudflare` の wrangler step) はその module output を読む。
-通常 install は Git tag の release workflow が生成した SHA-256 固定の Worker + SPA artifact と prebuilt container images を
-OpenTofu module が選択し、release step は再ビルドせずに materialize する。`build_from_source = true` は同じ Git snapshot を
-frozen dependency install でビルドする明示的 fallback であり、別の deploy authority や Takosumi 独自 source format ではない。
-Takos worker は **OIDC issuer ではなく client/resource server** であり、Takosumi Accounts / Capsule projection API は
+[`deploy/opentofu`](deploy/opentofu) module (`var.target = cloudflare`) を Takosumi Capsule Run から実行し、`tofu apply` が
+Takos distribution worker の durable backing infra を provision する。worker artifact (`deploy/cloudflare` の wrangler step) は
+その Run に紐づく reviewed lifecycle action が module Output を読んで公開する。
+通常 install は Git tag の release workflow が生成した SHA-256 固定の Worker + SPA artifact と prebuilt container images を、
+Takosumi の service-side InstallConfig lifecycle action が選択し、release step は再ビルドせずに materialize する。OpenTofu module
+は lifecycle 用の変数・予約 Output・manifest fetch を持たない。source build は同じ reviewed Git snapshot を frozen dependency
+install でビルドする明示的な operator action fallback であり、別の deploy authority や Takosumi 独自 source format ではない。
+Takos worker は **OIDC issuer ではなく client/resource server** であり、Takosumi Accounts / Interface API は
 `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` で指す外部 Takosumi origin から消費する。Takosumi / Takos の
 identity と vocabulary は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。

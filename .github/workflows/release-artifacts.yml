@@ -529,6 +529,16 @@ jobs:
             --require-cloudflare-container-images \
             --output dist/release-manifest.json
 
+      - name: Write first-party Takosumi InstallConfig patch
+        shell: bash
+        working-directory: takos
+        run: |
+          set -euo pipefail
+          bun run install-config:generate -- \
+            dist/takosumi-artifact/takosumi-artifact.json \
+            --executor operator \
+            --output dist/takosumi-artifact/install-config-patch.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
           name: takos-release-assets
@@ -587,6 +597,7 @@ jobs:
           fi
           gh release upload "${RELEASE_TAG}" \
             dist/release-manifest.json \
+            dist/takosumi-artifact/install-config-patch.json \
             dist/takosumi-artifact/takos-worker-release.tar.gz \
             dist/takosumi-artifact/takos-worker-release.tar.gz.sha256 \
             dist/takosumi-artifact/takosumi-artifact.json \

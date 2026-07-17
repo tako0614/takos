@@ -59,6 +59,9 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
       runtime: runtimeImage,
       executor: executorImage,
     });
+    expect(manifest.installConfigPatchUrl).toBe(
+      "https://github.com/tako0614/takos/releases/download/v0.10.1/install-config-patch.json",
+    );
     const repeated = await buildWorkerReleaseArtifact({
       bundleDir,
       assetsDir,
