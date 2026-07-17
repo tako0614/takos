@@ -240,6 +240,17 @@ test("Android FCM registration is FID-based and session-bound", () => {
   expect(manifest).toContain('android:value="false"');
 });
 
+test("Android product keystore supports the Tauri app minimum SDK", () => {
+  const gradle = readFileSync(
+    new URL(
+      "../src-tauri/plugins/keystore/android/build.gradle.kts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  expect(gradle).toContain("minSdk = 24");
+});
+
 test("native push event activation is an idempotent cross-session barrier", () => {
   const iosSource = readFileSync(
     new URL(
