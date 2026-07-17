@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+} from "node:fs/promises";
 import {
   basename,
   isAbsolute,
@@ -28,38 +37,119 @@ export type PreparedTakosumiDependencies = {
 };
 
 const excludedDirectoryNames = new Set([
+  ".aws",
+  ".azure",
+  ".certificates",
+  ".certs",
+  ".credentials",
+  ".docker",
+  ".gcloud",
   ".git",
+  ".gnupg",
+  ".kube",
+  ".password-store",
+  ".secret",
   ".secrets",
+  ".ssh",
   ".terraform",
   ".wrangler",
+  "cert",
+  "certificate",
+  "certificates",
+  "certs",
+  "credential",
+  "credentials",
   "node_modules",
+  "secret",
+  "secrets",
 ]);
 
 const excludedSecretExtensions = new Set([
   ".cer",
   ".crt",
+  ".der",
+  ".jks",
   ".key",
+  ".kdbx",
+  ".keystore",
   ".p12",
   ".pem",
   ".pfx",
+  ".pkcs8",
 ]);
 
-function isSafeSourceCopyPath(takosumiRoot: string, source: string): boolean {
+const excludedSecretFileNames = [
+  ".dev.vars",
+  ".dockercfg",
+  ".netrc",
+  ".npmrc",
+  ".pypirc",
+  "application_default_credentials.json",
+  "credentials.json",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  "id_rsa",
+  "secrets.json",
+  "service-account.json",
+] as const;
+
+const placeholderSuffixes = [
+  ".example",
+  ".fixture",
+  ".sample",
+  ".template",
+] as const;
+
+const symbolicLinkError =
+  "adjacent Takosumi source contains a symbolic link; local:e2e refuses to copy it";
+
+function isPlaceholderName(name: string): boolean {
+  return placeholderSuffixes.some((suffix) => name.endsWith(suffix));
+}
+
+function hasSecretFileName(name: string): boolean {
+  if (isPlaceholderName(name)) return false;
+  if (name.endsWith(".pub")) return false;
+  return excludedSecretFileNames.some(
+    (secretName) => name === secretName || name.startsWith(`${secretName}.`),
+  );
+}
+
+function isExcludedSourcePath(takosumiRoot: string, source: string): boolean {
   const relativePath = relative(takosumiRoot, source);
-  if (!relativePath) return true;
+  if (!relativePath) return false;
   const parts = relativePath.split(sep);
-  if (parts.some((part) => excludedDirectoryNames.has(part))) return false;
+  if (parts.some((part) => excludedDirectoryNames.has(part))) return true;
   const name = basename(source).toLowerCase();
-  if (
-    name === ".env" ||
-    (name.startsWith(".env.") && !name.endsWith(".example"))
-  ) {
-    return false;
+  if (hasSecretFileName(name)) return true;
+  if (!isPlaceholderName(name)) {
+    if (name === ".env" || name.startsWith(".env.")) return true;
+    if (name === ".dev.vars" || name.startsWith(".dev.vars.")) return true;
+    for (const extension of excludedSecretExtensions) {
+      if (name.endsWith(extension)) return true;
+    }
   }
-  for (const extension of excludedSecretExtensions) {
-    if (name.endsWith(extension)) return false;
-  }
+  return false;
+}
+
+async function shouldCopySourcePath(
+  takosumiRoot: string,
+  source: string,
+): Promise<boolean> {
+  if (isExcludedSourcePath(takosumiRoot, source)) return false;
+  const metadata = await lstat(source);
+  if (metadata.isSymbolicLink()) throw new Error(symbolicLinkError);
   return true;
+}
+
+async function assertNoCopiedSourceSymlinks(path: string): Promise<void> {
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) throw new Error(symbolicLinkError);
+    if (entry.isDirectory()) {
+      await assertNoCopiedSourceSymlinks(join(path, entry.name));
+    }
+  }
 }
 
 function workspaceEntries(document: PackageDocument): string[] {
@@ -158,8 +248,11 @@ export async function prepareTakosumiDependencies(
     await cp(takosumiRoot, workspaceRoot, {
       recursive: true,
       force: false,
-      filter: (source) => isSafeSourceCopyPath(takosumiRoot, source),
+      dereference: false,
+      verbatimSymlinks: true,
+      filter: (source) => shouldCopySourcePath(takosumiRoot, source),
     });
+    await assertNoCopiedSourceSymlinks(workspaceRoot);
     await options.install(workspaceRoot);
     const nodeModulesPath = join(workspaceRoot, "node_modules");
     await requireDirectory(
