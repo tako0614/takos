@@ -11,8 +11,10 @@ product surface (chat / agent / memory / Workspace / app launcher / Takos runtim
 [`deploy/opentofu`](deploy/opentofu) module (`var.target = cloudflare`) を Takosumi Capsule Run から実行し、`tofu apply` が
 Takos distribution worker の durable backing infra を provision する。worker artifact (`deploy/cloudflare` の wrangler step) は
 その Run に紐づく reviewed lifecycle action が module Output を読んで公開する。
-通常 install は Git tag の release workflow が生成した SHA-256 固定の Worker + SPA artifact と prebuilt container images を、
-Takosumi の service-side InstallConfig lifecycle action が選択し、release step は再ビルドせずに materialize する。OpenTofu module
+通常 install は release-safety controller が reviewed commit から一度だけ生成した SHA-256 固定の Worker + SPA artifact と
+prebuilt container images を使う。staging / fresh replica / protected-environment evidence 後に signed annotated tag と結び、
+同じ digest/bytes だけを stable release へ promotion する。Takosumi の service-side InstallConfig lifecycle action がその
+release を選択し、release step は再ビルドせずに materialize する。OpenTofu module
 は lifecycle 用の変数・予約 Output・manifest fetch を持たない。source build は同じ reviewed Git snapshot を frozen dependency
 install でビルドする明示的な operator action fallback であり、別の deploy authority や Takosumi 独自 source format ではない。
 Takos worker は **OIDC issuer ではなく client/resource server** であり、Takosumi Accounts / Interface API は
@@ -99,13 +101,13 @@ Takosumi Accounts / dashboard / deploy-control / OpenTofu runner は外部 Takos
 
 ## Terminology
 
-| term                        | 意味                                                                                                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Takos distribution**      | OpenTofu-native, Takosumi-managed AI workspace distribution。 = `takos/` repository が供給する user-facing product surface (Worker + UI + Git/agent containers)。   |
-| **Takos product**           | Takos distribution 内の chat / agent / memory / Workspace / app launcher / Takos Capsule output projection profile。Takosumi substrate とは source owner を分ける。 |
-| **takos-worker**            | Takos product の唯一の public/control Worker。Hono route、OIDC consumer、chat / agent / memory / space と generic workspace service API surface を所有する。        |
-| **takos-agent**             | repo や source directory ではなく、agent execution の container artifact/service id。source owner は `containers/agent`。Git hosting は worker-native (`src/worker`) で別 container ではない。          |
-| **Takos app (= 抽象)**      | Takosumi 上で install/deploy される 1 application unit。関連 installable apps (`takos-office` / `takos-computer` / `yurucommu`) や third-party app が該当する。     |
+| term                   | 意味                                                                                                                                                                                           |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Takos distribution** | OpenTofu-native, Takosumi-managed AI workspace distribution。 = `takos/` repository が供給する user-facing product surface (Worker + UI + Git/agent containers)。                              |
+| **Takos product**      | Takos distribution 内の chat / agent / memory / Workspace / app launcher / Takos Capsule output projection profile。Takosumi substrate とは source owner を分ける。                            |
+| **takos-worker**       | Takos product の唯一の public/control Worker。Hono route、OIDC consumer、chat / agent / memory / space と generic workspace service API surface を所有する。                                   |
+| **takos-agent**        | repo や source directory ではなく、agent execution の container artifact/service id。source owner は `containers/agent`。Git hosting は worker-native (`src/worker`) で別 container ではない。 |
+| **Takos app (= 抽象)** | Takosumi 上で install/deploy される 1 application unit。関連 installable apps (`takos-office` / `takos-computer` / `yurucommu`) や third-party app が該当する。                                |
 
 `Takos product` vs `Takos app` の混同を避けるため、 docs では次の wording を使う:
 

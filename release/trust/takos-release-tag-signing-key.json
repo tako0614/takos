@@ -1,0 +1,10 @@
+{
+  "kind": "takos.release-tag-signing-key@v1",
+  "keyId": "SHA256:hwf8GB20s8vNIIFVc1VM6kLPvu6++zEIltmWQ8cN4XU",
+  "algorithm": "ssh-ed25519",
+  "principal": "shoutatomiyama0614@gmail.com",
+  "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHJR2fFkI/eNEIlYCMC3g08Mtqc0drdqhtnNqxDzbiAh takos-release-tag-signing-v1",
+  "githubAccount": "tako0614",
+  "usage": ["git-tag-signing"],
+  "createdAt": "2026-07-19T06:51:00.000Z"
+}
