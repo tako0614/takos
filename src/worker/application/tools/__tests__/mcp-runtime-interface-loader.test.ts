@@ -51,7 +51,6 @@ function runtimeInterface(
   id: string,
   name: string,
   endpoint: string,
-  materializedFrom: "capsule_blueprint" | "capsule_resource",
   spec: typeof OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec,
 ) {
   const timestamp = "2026-07-19T00:00:00.000Z";
@@ -65,10 +64,10 @@ function runtimeInterface(
       ownerRef: { kind: "Capsule", id: "capsule-1" },
       generation: 1,
       labels: {},
-      materializedFrom:
-        materializedFrom === "capsule_blueprint"
-          ? { source: materializedFrom, key: "operator-control-mcp-v1" }
-          : { source: materializedFrom },
+      materializedFrom: {
+        source: "capsule_blueprint",
+        key: "operator-control-mcp-v1",
+      },
       createdAt: timestamp,
       updatedAt: timestamp,
     },
@@ -219,12 +218,8 @@ function toolContext(env: Env) {
   };
 }
 
-test("operator control MCP blueprint and capsule_resource declarations reach the agent catalog", async () => {
+test("operator control MCP service-side blueprint reaches the agent catalog", async () => {
   stubMcp();
-  assertEquals(
-    OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec,
-    OPERATOR_CONTROL_MCP_FIXTURE.moduleInterface.spec,
-  );
   assertEquals(
     OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.bindings[0].permissions,
     ["mcp.invoke"],
@@ -234,15 +229,7 @@ test("operator control MCP blueprint and capsule_resource declarations reach the
       "if-blueprint",
       OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.name,
       OPERATOR_CONTROL_MCP_FIXTURE.output.value,
-      "capsule_blueprint",
       OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec,
-    ),
-    runtimeInterface(
-      "if-resource",
-      OPERATOR_CONTROL_MCP_FIXTURE.moduleInterface.name,
-      "https://control-resource.example/mcp",
-      "capsule_resource",
-      OPERATOR_CONTROL_MCP_FIXTURE.moduleInterface.spec,
     ),
   ];
   const issuedTokens: string[] = [];
@@ -270,19 +257,19 @@ test("operator control MCP blueprint and capsule_resource declarations reach the
   );
 
   assertEquals(result.failedServers, []);
-  assertEquals(result.tools.size, 2);
+  assertEquals(result.tools.size, 1);
   assertEquals(
     Array.from(result.tools.values()).every((tool) =>
       tool.definition.name.includes("capsule_plan"),
     ),
     true,
   );
-  assertEquals(issuedTokens.length, 2);
+  assertEquals(issuedTokens.length, 1);
   const tool = result.tools.values().next().value;
   assert(tool);
   assertEquals(await tool.handler({}, toolContext(env)), "interface-call-ok");
   // Catalog discovery and invocation each receive fresh, call-local tokens.
-  assertEquals(issuedTokens.length, 3);
+  assertEquals(issuedTokens.length, 2);
 });
 
 test("Interface revocation after tools/list fails closed before tools/call", async () => {
@@ -292,8 +279,7 @@ test("Interface revocation after tools/list fails closed before tools/call", asy
       "if-control",
       "control-mcp",
       "https://control.example/mcp",
-      "capsule_resource",
-      OPERATOR_CONTROL_MCP_FIXTURE.moduleInterface.spec,
+      OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec,
     ),
   ];
   let revoked = false;
@@ -345,8 +331,7 @@ test("Interface revision change after tools/list fails closed with a current Rea
       "if-control",
       "control-mcp",
       "https://control.example/mcp",
-      "capsule_resource",
-      OPERATOR_CONTROL_MCP_FIXTURE.moduleInterface.spec,
+      OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec,
     ),
   ];
   const issuedTokens: string[] = [];

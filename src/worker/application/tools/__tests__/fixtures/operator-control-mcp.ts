@@ -1,10 +1,9 @@
 /**
  * Concrete producer fixture for the operator control MCP deployment model.
  *
- * The blueprint is service-side InstallConfig data. `moduleInterface` models
- * the equivalent optional takosumi_interface declaration. Both produce the
- * same ordinary Interface spec; only the blueprint can propose the installing
- * Principal binding.
+ * The blueprint is service-side InstallConfig data. The Capsule returns only
+ * the ordinary non-secret endpoint Output; it receives no Interface write
+ * credential and declares no Takosumi-specific provider resource.
  */
 export const OPERATOR_CONTROL_MCP_FIXTURE = {
   output: {
@@ -41,28 +40,6 @@ export const OPERATOR_CONTROL_MCP_FIXTURE = {
         delivery: { type: "oauth2" },
       },
     ],
-  },
-  moduleInterface: {
-    resourceType: "takosumi_interface",
-    name: "operator-control-mcp",
-    spec: {
-      type: "mcp.server",
-      version: "2025-11-25",
-      document: {
-        transport: "streamable-http",
-        display: { title: "Takosumi Control" },
-      },
-      inputs: {
-        endpoint: {
-          source: "capsule_output",
-          outputName: "endpoint",
-        },
-      },
-      access: {
-        visibility: "workspace",
-        resourceUriInput: "endpoint",
-      },
-    },
   },
   toolsList: [
     {

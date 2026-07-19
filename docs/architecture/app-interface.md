@@ -110,9 +110,9 @@ InstallConfig は次のような通常の Interface blueprint と binding propos
 ```
 
 最初の成功した apply 後、Takosumi は blueprint を普通の Interface と Ready な Principal InterfaceBinding に
-materialize します。module が optional `takosumi_interface` resource で同じ Interface を宣言する場合も、同名の
-service-side blueprint は binding proposal だけを合成でき、module に認可 authority を与えません。どちらの宣言元も
-Takos からは同じ Interface / InterfaceBinding API として見えます。
+materialize します。Interface の宣言・binding proposal・認可 authority は service-side にあり、Capsule module に
+Takosumi control credential や Interface write authority を与えません。Takos からは materialize 済みの Interface /
+InterfaceBinding API だけが見えます。
 
 adapter は invocation 用 Interface OAuth token を自分の endpoint で検証し、その Principal / Workspace と現在の
 Binding revision を使って Takosumi の public control service へ操作を委譲します。各 operation は Takosumi 側で
@@ -125,8 +125,10 @@ operator token を Capsule に渡したり、OpenTofu Output に bearer credenti
 install や表示用のメタデータは、必ずしも module から来る必要はありません。Git URL、ref、module path、アプリ名、
 アイコン、カテゴリ、`InstallConfig.interfaceBlueprints` による Interface の宣言、Output の input mapping、
 `InstallConfig.outputAllowlist` による公開 Output の選択は、Takosumi の service-side install 設定で管理できます。
-module 自身は任意の `takosumi_interface` resource でも Interface を宣言できます。ソースのリポジトリは普通の
-OpenTofu module のままです。
+ソースのリポジトリは普通の OpenTofu module のままであり、Takosumi 専用 provider resource は要求しません。
+Form-backed Resource の portable な宣言は、verified な Takoform Form Definition の `interfaces[]` descriptor に置けます。
+Takosumi はその descriptor から host-owned Interface を materialize しますが、InterfaceBinding は別の明示的な
+service-side 認可です。
 
 対応している Interface をアプリランチャー、Connections、file handling、agent tool にどう反映するかは Takos
 が決めます。プロトコルを宣言しただけでは自動的に Takos の機能にはなりません。製品側がその Interface の

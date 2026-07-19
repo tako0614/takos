@@ -32,9 +32,15 @@ service-side で明示します。これは Interface の宣言ではなく、Ou
 
 Workspace オーナー、オペレーター、または install flow が、Takosumi の service-side 設定に Interface を作成します。
 plain module 向けの recipe path は `InstallConfig.interfaceBlueprints` です。最初の成功した apply 後に blueprint を
-一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。module 自身が任意の
-`takosumi_interface` resource で宣言する経路もあります。宣言には、その利用者が理解できる任意の protocol type /
+一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。`/v1/interfaces` の service-side
+API から同じ record を明示的に作ることもできます。宣言には、その利用者が理解できる任意の protocol type /
 version を使えます。`document` は任意の non-secret な JSON で、動的な値は明示的な input で接続します。
+
+Form-backed Resource では、verified な Takoform Form Definition の `interfaces[]` descriptor が portable な宣言を
+所有できます。descriptor は open な name / version、non-secret document schema、`literal` / Form output からの
+deterministic input mapping だけを持ちます。Takosumi は Ready な Resource から普通の host-owned Interface を
+materialize しますが、InterfaceBinding、token、認可、record lifecycle は Form や provider へ移しません。plain
+Capsule に Form は必須ではなく、Takosumi 専用 provider resource を authoring path として要求しません。
 
 `InstallConfig.lifecycleActions` は同じく service-side の設定ですが、provider gap や application initialization のための
 Plan-pinned action であり、Interface や Output から生成しません。
