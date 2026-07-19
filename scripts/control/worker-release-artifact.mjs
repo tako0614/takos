@@ -9,18 +9,31 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const MAX_WORKER_RELEASE_ARCHIVE_BYTES = 64 * 1024 * 1024;
 
 export function workerReleaseArtifactConfig(env = process.env) {
   const url = stringValue(env.TAKOS_RELEASE_WORKER_ARTIFACT_URL);
+  const file = stringValue(env.TAKOS_RELEASE_WORKER_ARTIFACT_FILE);
   const digest = normalizeSha256(env.TAKOS_RELEASE_WORKER_ARTIFACT_SHA256);
-  if (!url && !digest) return undefined;
-  if (!url || !digest) {
+  if (!url && !file && !digest) return undefined;
+  if ((!url && !file) || !digest || (url && file)) {
     throw new Error(
-      "TAKOS_RELEASE_WORKER_ARTIFACT_URL and TAKOS_RELEASE_WORKER_ARTIFACT_SHA256 must be set together.",
+      "Exactly one of TAKOS_RELEASE_WORKER_ARTIFACT_URL or TAKOS_RELEASE_WORKER_ARTIFACT_FILE must be set with TAKOS_RELEASE_WORKER_ARTIFACT_SHA256.",
     );
+  }
+  if (file) {
+    if (!isAbsolute(file)) {
+      throw new Error("Takos Worker release artifact file must be absolute.");
+    }
+    assertRegularFile(file, "local archive");
+    if (lstatSync(file).isSymbolicLink()) {
+      throw new Error(
+        "Takos Worker release artifact file must not be a symlink.",
+      );
+    }
+    return { file: resolve(file), sha256: digest };
   }
   const parsed = new URL(url);
   if (parsed.protocol !== "https:") {
@@ -49,25 +62,9 @@ export async function prepareWorkerReleaseArtifact({
   const contentRoot = join(root, "content");
 
   try {
-    const response = await fetchImpl(config.url, {
-      headers: { accept: "application/gzip, application/octet-stream" },
-    });
-    if (!response.ok) {
-      throw new Error(
-        `Takos Worker release artifact download failed: HTTP ${response.status}`,
-      );
-    }
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (
-      Number.isFinite(declaredLength) &&
-      declaredLength > MAX_WORKER_RELEASE_ARCHIVE_BYTES
-    ) {
-      throw new Error("Takos Worker release artifact exceeds the size limit.");
-    }
-    const bytes = await readLimitedResponseBytes(
-      response,
-      MAX_WORKER_RELEASE_ARCHIVE_BYTES,
-    );
+    const bytes = config.file
+      ? readLocalArtifactBytes(config.file)
+      : await readRemoteArtifactBytes(config.url, fetchImpl);
     const actualDigest = await sha256Hex(bytes);
     if (actualDigest !== config.sha256) {
       throw new Error(
@@ -113,6 +110,38 @@ export async function prepareWorkerReleaseArtifact({
     rmSync(root, { recursive: true, force: true });
     throw error;
   }
+}
+
+function readLocalArtifactBytes(path) {
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error(
+      "Takos Worker release artifact file must be a regular non-symlink file.",
+    );
+  }
+  if (stat.size > MAX_WORKER_RELEASE_ARCHIVE_BYTES) {
+    throw new Error("Takos Worker release artifact exceeds the size limit.");
+  }
+  return new Uint8Array(readFileSync(path));
+}
+
+async function readRemoteArtifactBytes(url, fetchImpl) {
+  const response = await fetchImpl(url, {
+    headers: { accept: "application/gzip, application/octet-stream" },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Takos Worker release artifact download failed: HTTP ${response.status}`,
+    );
+  }
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_WORKER_RELEASE_ARCHIVE_BYTES
+  ) {
+    throw new Error("Takos Worker release artifact exceeds the size limit.");
+  }
+  return readLimitedResponseBytes(response, MAX_WORKER_RELEASE_ARCHIVE_BYTES);
 }
 
 async function readLimitedResponseBytes(response, limit) {
