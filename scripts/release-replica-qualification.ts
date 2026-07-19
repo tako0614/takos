@@ -1,16 +1,21 @@
+import { spawnSync } from "node:child_process";
 import {
   createHash,
   generateKeyPairSync,
   randomBytes,
 } from "node:crypto";
 import {
+  chmodSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
 const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
@@ -161,6 +166,54 @@ export function compareCanonicalSha256Hex(
   };
 }
 
+export function verifySha256WithSystemTool(
+  value: string | Uint8Array,
+  expectedDigest: string,
+): boolean {
+  invariant(
+    expectedDigest.length === 71 && SHA256_RE.test(expectedDigest),
+    "published SHA-256 is not canonical lowercase hex",
+  );
+  const directory = mkdtempSync(join(tmpdir(), "takos-release-sha256-"));
+  const bodyPath = join(directory, "body");
+  try {
+    chmodSync(directory, 0o700);
+    writeFileSync(bodyPath, value, { mode: 0o600 });
+    chmodSync(bodyPath, 0o600);
+    const result = spawnSync(
+      "/usr/bin/bash",
+      [
+        "--noprofile",
+        "--norc",
+        "-c",
+        'set -euo pipefail\nprintf "%s  %s\\n" "${EXPECTED_DIGEST#sha256:}" "$BODY_PATH" | /usr/bin/sha256sum --check --status --strict',
+      ],
+      {
+        env: {
+          PATH: "/usr/bin:/bin",
+          LC_ALL: "C",
+          BODY_PATH: bodyPath,
+          EXPECTED_DIGEST: expectedDigest,
+        },
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    invariant(
+      result.error === undefined,
+      `system SHA-256 verifier could not start: ${String(result.error)}`,
+    );
+    invariant(
+      result.status === 0 || result.status === 1,
+      `system SHA-256 verifier failed with exit ${String(result.status)}: ${String(result.stderr).slice(0, 500)}`,
+    );
+    return result.status === 0;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 export function compareSha256Bytes(
   value: string | Uint8Array,
   expectedDigest: string,
@@ -182,6 +235,15 @@ export function compareSha256Bytes(
       expectedCharCode: null,
     };
   }
+  if (verifySha256WithSystemTool(value, expectedDigest)) {
+    return {
+      actualDigest,
+      matches: true,
+      firstDifference: -1,
+      actualCharCode: null,
+      expectedCharCode: null,
+    };
+  }
   const comparison = compareCanonicalSha256Hex(
     actualHex,
     expectedDigest.slice("sha256:".length),
@@ -189,6 +251,7 @@ export function compareSha256Bytes(
   return {
     actualDigest,
     ...comparison,
+    matches: false,
   };
 }
 
