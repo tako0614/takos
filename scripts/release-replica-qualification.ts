@@ -223,9 +223,7 @@ export function exactRegistryBody(
     "raw manifest transport size is invalid",
   );
   const asIsDigest = sha256Bytes(commandOutput);
-  const asIsMatches =
-    commandOutput.byteLength <= MAX_OCI_INDEX_BYTES &&
-    asIsDigest === expectedDigest;
+  const asIsMatches = asIsDigest === expectedDigest;
   const canTrimLineFeed = commandOutput.at(-1) === 0x0a;
   const trimmedBody = canTrimLineFeed
     ? commandOutput.slice(0, commandOutput.byteLength - 1)
@@ -234,13 +232,16 @@ export function exactRegistryBody(
   const trimmedMatches =
     trimmedBody !== null &&
     trimmedBody.byteLength > 0 &&
-    trimmedBody.byteLength <= MAX_OCI_INDEX_BYTES &&
     trimmedDigest === expectedDigest;
   invariant(
     asIsMatches !== trimmedMatches,
-    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} transportSize=${commandOutput.byteLength} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIsDigest} asIsMatches=${String(asIsMatches)} trimmedDigest=${String(trimmedDigest)} trimmedMatches=${String(trimmedMatches)}`,
+    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} expectedLength=${expectedDigest.length} transportSize=${commandOutput.byteLength} maxBodySize=${MAX_OCI_INDEX_BYTES} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIsDigest} asIsLength=${asIsDigest.length} asIsMatches=${String(asIsMatches)} trimmedDigest=${String(trimmedDigest)} trimmedMatches=${String(trimmedMatches)}`,
   );
   const body = asIsMatches ? commandOutput : trimmedBody!;
+  invariant(
+    body.byteLength <= MAX_OCI_INDEX_BYTES,
+    "verified raw OCI index body exceeds the size limit",
+  );
   return {
     body,
     rawIndexBodySize: body.byteLength,
