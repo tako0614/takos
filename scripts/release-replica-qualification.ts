@@ -186,11 +186,12 @@ export function verifySha256WithSystemTool(
         "--noprofile",
         "--norc",
         "-c",
-        'set -euo pipefail\nprintf "%s  %s\\n" "${EXPECTED_DIGEST#sha256:}" "$BODY_PATH" | sha256sum --check --status --strict',
+        'set -euo pipefail\nprintf "%s  %s\\n" "${EXPECTED_DIGEST#sha256:}" "$BODY_PATH" | /usr/bin/sha256sum --check --status --strict',
       ],
       {
         env: {
-          ...process.env,
+          PATH: "/usr/bin:/bin",
+          LC_ALL: "C",
           BODY_PATH: bodyPath,
           EXPECTED_DIGEST: expectedDigest,
         },
