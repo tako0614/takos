@@ -628,14 +628,25 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
       step.name === "Publish exact candidate bytes as stable GitHub release",
   );
   const publishRun = shellCode(publishStep?.run);
+  const publishAssets = [
+    "release-manifest.json",
+    "install-config-patch.json",
+    "takos-worker-release.tar.gz",
+    "takos-worker-release.tar.gz.sha256",
+    "takosumi-artifact.json",
+  ];
   if (
     !publishRun.includes("gh release create") ||
     !publishRun.includes("--verify-tag") ||
     !publishRun.includes("--latest") ||
+    publishStep?.["working-directory"] !== "takos" ||
+    publishAssets.some(
+      (asset) => !publishRun.includes(`../candidate/assets/${asset}`),
+    ) ||
     text.includes("--clobber")
   ) {
     errors.push(
-      `${WORKFLOW_PATH} must create a new stable release from exact bytes without clobber`,
+      `${WORKFLOW_PATH} must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber`,
     );
   }
   if (
