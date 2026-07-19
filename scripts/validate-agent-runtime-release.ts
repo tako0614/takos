@@ -451,6 +451,17 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
       `${WORKFLOW_PATH} must record agentEngineCommit in image provenance metadata`,
     );
   }
+  const imageMetadataStep = ociSteps.find(
+    (step) => step.name === "Extract image metadata",
+  );
+  if (
+    stringValue(asRecord(imageMetadataStep?.with)?.tags).trim() !==
+    "type=raw,value=candidate-${{ github.run_id }}-${{ github.run_attempt }}"
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} candidate builds must publish only the unique run-attempt image tag`,
+    );
+  }
 
   const matrix = asRecord(asRecord(ociJob?.strategy)?.matrix);
   const runtimeImage = recordArray(matrix?.include).find(
@@ -480,6 +491,18 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
 
   const candidateJob = asRecord(jobs?.["release-candidate"]);
   const candidateSteps = workflowSteps(candidateJob);
+  const buildManifestStep = candidateSteps.find(
+    (step) => step.name === "Build release manifest",
+  );
+  if (
+    !shellCode(buildManifestStep?.run).includes(
+      '--candidate-run-id "${GITHUB_RUN_ID}"',
+    )
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} release manifest must validate candidate-only image tags against the exact workflow run`,
+    );
+  }
   const sealStep = candidateSteps.find(
     (step) => step.name === "Seal candidate manifest and exact release bytes",
   );

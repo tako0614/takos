@@ -62,6 +62,7 @@ type BuildReleaseManifestOptions = {
   imageDigestDir: string;
   releaseVersion: string | null;
   releaseTag: string | null;
+  candidateRunId: string | null;
   requireImageDigests: boolean;
   requireCloudflareContainerImages: boolean;
   requireCleanGit: boolean;
@@ -216,6 +217,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
     imageDigestDir: "dist/image-digests",
     releaseVersion: null,
     releaseTag: null,
+    candidateRunId: null,
     requireImageDigests: false,
     requireCloudflareContainerImages: false,
     requireCleanGit: false,
@@ -247,6 +249,12 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
       options.releaseTag = value;
       continue;
     }
+    if (flag === "--candidate-run-id") {
+      const value = args[++index];
+      if (!value || !/^[1-9][0-9]*$/u.test(value)) usage();
+      options.candidateRunId = value;
+      continue;
+    }
     if (flag === "--require-image-digests") {
       options.requireImageDigests = true;
       continue;
@@ -267,7 +275,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    "Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-cloudflare-container-images] [--require-clean-git]",
+    "Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--candidate-run-id <actions-run-id>] [--require-image-digests] [--require-cloudflare-container-images] [--require-clean-git]",
   );
   runtime.exit(2);
 }
@@ -602,6 +610,7 @@ async function collectOfficialImages(
         record.record,
         gitInfo,
         release.version,
+        options.candidateRunId,
         cloudflareContainerImageRequired,
         options.requireCloudflareContainerImages,
         image.name === "takos-agent" ? agentEngineSource.commit : null,
@@ -619,7 +628,9 @@ async function collectOfficialImages(
           ? { agentEngine: agentEngineSource.commit }
           : {}),
       },
-      tagPolicy: ["semver", `sha-${gitInfo.shortCommit ?? "<commit>"}`],
+      tagPolicy: options.candidateRunId
+        ? [`candidate-${options.candidateRunId}-1`]
+        : ["semver", `sha-${gitInfo.shortCommit ?? "<commit>"}`],
       digest,
       digestRef,
       cloudflareRegistryRef,
@@ -695,6 +706,7 @@ function validateImageDigestRecord(
   record: ImageDigestRecord,
   gitInfo: GitInfo,
   releaseVersion: string | null,
+  candidateRunId: string | null,
   cloudflareContainerImageRequired: boolean,
   requireCloudflareContainerImages: boolean,
   expectedAgentEngineCommit: string | null,
@@ -710,7 +722,12 @@ function validateImageDigestRecord(
     errors.push(`${name}: digestRef must pin ${repository}@${record.digest}`);
   }
   const tags = Array.isArray(record.tags) ? record.tags : [];
-  if (tags.length === 0) {
+  if (candidateRunId) {
+    const expectedCandidateTag = `${repository}:candidate-${candidateRunId}-1`;
+    if (tags.length !== 1 || tags[0] !== expectedCandidateTag) {
+      errors.push(`${name}: candidate tags must equal ${expectedCandidateTag}`);
+    }
+  } else if (tags.length === 0) {
     errors.push(`${name}: tags must include semver and sha-* references`);
   } else {
     const expectedVersionTag = releaseVersion
