@@ -177,6 +177,10 @@ describe("release replica qualification", () => {
     expect(() =>
       exactRegistryBody(new Uint8Array(), sha256Bytes(body)),
     ).toThrow("transport size is invalid");
+    const oversizedBody = new Uint8Array(10 * 1024 * 1024 + 1);
+    expect(() =>
+      exactRegistryBody(oversizedBody, sha256Bytes(oversizedBody)),
+    ).toThrow("verified raw OCI index body exceeds");
     expect(() =>
       exactRegistryBody(
         new Uint8Array(10 * 1024 * 1024 + 2),
