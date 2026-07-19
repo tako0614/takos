@@ -83,6 +83,30 @@ type RuntimeSecrets = {
   platformPublicKey: string;
 };
 
+type OciIndex = {
+  schemaVersion?: number;
+  mediaType?: string;
+  manifests?: Array<{
+    mediaType?: string;
+    digest?: string;
+    platform?: {
+      os?: string;
+      architecture?: string;
+    };
+  }>;
+};
+
+type PlatformImageResolution = {
+  publishedIndex: string;
+  sourceTag: string;
+  rawIndexDigest: string;
+  platform: {
+    os: "linux";
+    architecture: "amd64";
+  };
+  executionImage: string;
+};
+
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
@@ -122,6 +146,48 @@ export function exactDigestRef(repository: string, digest: string): string {
   );
   invariant(SHA256_RE.test(digest), `invalid image digest: ${digest}`);
   return `${repository}@${digest}`;
+}
+
+export function resolveLinuxAmd64Image(
+  publishedIndex: string,
+  sourceTag: string,
+  rawIndex: Uint8Array,
+): PlatformImageResolution {
+  const separator = publishedIndex.lastIndexOf("@");
+  invariant(separator > 0, "published image is not an exact digest reference");
+  const repository = publishedIndex.slice(0, separator);
+  const expectedIndexDigest = publishedIndex.slice(separator + 1);
+  invariant(
+    sourceTag === `${repository}:${PREVIOUS_VERSION}`,
+    "previous image tag drifted",
+  );
+  invariant(
+    sha256Bytes(rawIndex) === expectedIndexDigest,
+    "raw OCI index digest drifted from the published release manifest",
+  );
+  const index = JSON.parse(new TextDecoder().decode(rawIndex)) as OciIndex;
+  invariant(index.schemaVersion === 2, "OCI index schema version drifted");
+  invariant(
+    index.mediaType === "application/vnd.oci.image.index.v1+json",
+    "published image is not an OCI index",
+  );
+  const matches = (index.manifests ?? []).filter(
+    (manifest) =>
+      manifest.platform?.os === "linux" &&
+      manifest.platform?.architecture === "amd64",
+  );
+  invariant(
+    matches.length === 1,
+    "OCI index must contain exactly one linux/amd64 image manifest",
+  );
+  const executionImage = exactDigestRef(repository, String(matches[0]!.digest));
+  return {
+    publishedIndex,
+    sourceTag,
+    rawIndexDigest: expectedIndexDigest,
+    platform: { os: "linux", architecture: "amd64" },
+    executionImage,
+  };
 }
 
 function parseOptions(): Options {
@@ -224,10 +290,30 @@ async function command(
   ]);
   if (exitCode !== 0 && !options.allowFailure) {
     throw new Error(
-      `${argv[0]} ${argv[1] ?? ""} failed with exit ${exitCode}: ${safeError(stderr)}`,
+      `${argv.slice(0, 4).join(" ")} failed with exit ${exitCode}: ${safeError(stderr)}`,
     );
   }
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+}
+
+async function commandBytes(argv: readonly string[]): Promise<Uint8Array> {
+  const child = Bun.spawn([...argv], {
+    env: process.env,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).arrayBuffer(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(
+      `${argv.slice(0, 4).join(" ")} failed with exit ${exitCode}: ${safeError(stderr)}`,
+    );
+  }
+  return new Uint8Array(stdout);
 }
 
 async function docker(...args: readonly string[]): Promise<string> {
@@ -239,6 +325,64 @@ async function dockerWithEnv(
   env: Readonly<Record<string, string>>,
 ): Promise<string> {
   return (await command(["docker", ...args], { env })).stdout;
+}
+
+async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
+  images: ImageSet;
+  resolutions: Record<keyof ImageSet, PlatformImageResolution>;
+}> {
+  const resolutions = {} as Record<keyof ImageSet, PlatformImageResolution>;
+  for (const [name, publishedIndex] of Object.entries(published) as Array<
+    [keyof ImageSet, string]
+  >) {
+    const repository = publishedIndex.slice(0, publishedIndex.lastIndexOf("@"));
+    const sourceTag = `${repository}:${PREVIOUS_VERSION}`;
+    const rawIndex = await commandBytes([
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      sourceTag,
+      "--raw",
+    ]);
+    resolutions[name] = resolveLinuxAmd64Image(
+      publishedIndex,
+      sourceTag,
+      rawIndex,
+    );
+  }
+  return {
+    images: {
+      worker: resolutions.worker.executionImage,
+      agent: resolutions.agent.executionImage,
+      runtime: resolutions.runtime.executionImage,
+    },
+    resolutions,
+  };
+}
+
+async function pullAndReadBackExactImages(images: ImageSet): Promise<ImageSet> {
+  const readback = {} as ImageSet;
+  for (const [name, image] of Object.entries(images) as Array<
+    [keyof ImageSet, string]
+  >) {
+    await docker("pull", image);
+    const repoDigests = JSON.parse(
+      await docker(
+        "image",
+        "inspect",
+        "--format",
+        "{{json .RepoDigests}}",
+        image,
+      ),
+    ) as string[];
+    invariant(
+      repoDigests.includes(image),
+      `${name} exact pulled digest was not present in Docker readback`,
+    );
+    readback[name] = image;
+  }
+  return readback;
 }
 
 function replicaNames(releaseId: string): ReplicaNames {
@@ -893,17 +1037,29 @@ async function main(): Promise<void> {
         `fresh runner lacks required Docker security option ${required}`,
       );
     }
+    const dockerArchitecture = await docker(
+      "version",
+      "--format",
+      "{{.Server.Arch}}",
+    );
+    invariant(
+      dockerArchitecture === "amd64",
+      `replica Docker architecture must be amd64, got ${dockerArchitecture}`,
+    );
+    const previousResolution = await resolvePreviousExecutionImages(
+      options.previous,
+    );
+    const previousPullReadback = await pullAndReadBackExactImages(
+      previousResolution.images,
+    );
     await Promise.all(
-      [
-        ...Object.values(options.previous),
-        ...Object.values(options.candidate),
-      ].map((image) => docker("pull", image)),
+      Object.values(options.candidate).map((image) => docker("pull", image)),
     );
     await startBacking(names, secrets);
 
     await Promise.all([
-      startWorker(names, options.previous.worker, secrets),
-      startAgentAndRuntime(names, options.previous, secrets),
+      startWorker(names, previousResolution.images.worker, secrets),
+      startAgentAndRuntime(names, previousResolution.images, secrets),
     ]);
     const previousChecks = await Promise.all([
       httpCheck("previous worker health", "http://127.0.0.1:19787/health"),
@@ -956,8 +1112,8 @@ async function main(): Promise<void> {
     // then return the replica to the candidate and re-read every image digest.
     await stopApplication(names);
     await Promise.all([
-      startWorker(names, options.previous.worker, secrets),
-      startAgentAndRuntime(names, options.previous, secrets),
+      startWorker(names, previousResolution.images.worker, secrets),
+      startAgentAndRuntime(names, previousResolution.images, secrets),
     ]);
     const rollbackCheck = await httpCheck(
       "previous worker health after rollback",
@@ -995,6 +1151,7 @@ async function main(): Promise<void> {
         contents: osReleaseContents,
       },
       kernel: (await command(["uname", "-r"])).stdout,
+      dockerArchitecture,
       dockerServer: await docker("version", "--format", "{{.Server.Version}}"),
       dockerSecurityOptions: [...securityOptions].sort(),
       containerProfiles: profiles,
@@ -1010,6 +1167,7 @@ async function main(): Promise<void> {
       candidateRunId: options.candidateRunId,
       candidateManifestDigest: options.candidateManifestDigest,
       previousImages: options.previous,
+      previousExecutionImages: previousResolution.images,
       candidateImages: options.candidate,
       environment: "production",
       domains: "reserved-.test-only",
@@ -1039,6 +1197,13 @@ async function main(): Promise<void> {
         changedFromPreviousRelease:
           before.schemaFingerprint !== after.schemaFingerprint,
       },
+      previousImageResolution: {
+        publishedVersion: PREVIOUS_VERSION,
+        publishedIndexes: options.previous,
+        platformExecutionImages: previousResolution.images,
+        mappings: previousResolution.resolutions,
+        exactPullReadback: previousPullReadback,
+      },
       data: {
         source: "empty",
         tableCount: after.tableCount,
@@ -1063,7 +1228,7 @@ async function main(): Promise<void> {
       rollbackRehearsal: {
         status: "passed",
         from: options.candidate.worker,
-        to: options.previous.worker,
+        to: previousResolution.images.worker,
         final: options.candidate.worker,
         check: rollbackCheck,
       },

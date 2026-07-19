@@ -5,6 +5,7 @@ import {
   hostSecurityQualifies,
   migrationInventoryDirectory,
   REQUIRED_BUN_VERSION,
+  resolveLinuxAmd64Image,
   sha256Bytes,
 } from "./release-replica-qualification.ts";
 
@@ -57,5 +58,74 @@ describe("release replica qualification", () => {
 
   test("locks the replica controller to the reviewed Bun toolchain", () => {
     expect(REQUIRED_BUN_VERSION).toBe("1.3.14");
+  });
+
+  test("resolves one linux/amd64 child only from raw bytes matching the published index", () => {
+    const childDigest = `sha256:${"c".repeat(64)}`;
+    const rawIndex = new TextEncoder().encode(
+      JSON.stringify({
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.index.v1+json",
+        manifests: [
+          {
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+            digest: childDigest,
+            platform: { os: "linux", architecture: "amd64" },
+          },
+          {
+            mediaType: "application/vnd.oci.image.manifest.v1+json",
+            digest: `sha256:${"d".repeat(64)}`,
+            platform: { os: "unknown", architecture: "unknown" },
+          },
+        ],
+      }),
+    );
+    const indexRef = `ghcr.io/tako0614/takos-agent@${sha256Bytes(rawIndex)}`;
+    expect(
+      resolveLinuxAmd64Image(
+        indexRef,
+        "ghcr.io/tako0614/takos-agent:0.10.35",
+        rawIndex,
+      ),
+    ).toEqual({
+      publishedIndex: indexRef,
+      sourceTag: "ghcr.io/tako0614/takos-agent:0.10.35",
+      rawIndexDigest: sha256Bytes(rawIndex),
+      platform: { os: "linux", architecture: "amd64" },
+      executionImage: `ghcr.io/tako0614/takos-agent@${childDigest}`,
+    });
+
+    const changedRawIndex = new Uint8Array([...rawIndex, 0x20]);
+    expect(() =>
+      resolveLinuxAmd64Image(
+        indexRef,
+        "ghcr.io/tako0614/takos-agent:0.10.35",
+        changedRawIndex,
+      ),
+    ).toThrow("raw OCI index digest drifted");
+
+    const duplicateRawIndex = new TextEncoder().encode(
+      JSON.stringify({
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.index.v1+json",
+        manifests: [
+          {
+            digest: childDigest,
+            platform: { os: "linux", architecture: "amd64" },
+          },
+          {
+            digest: `sha256:${"e".repeat(64)}`,
+            platform: { os: "linux", architecture: "amd64" },
+          },
+        ],
+      }),
+    );
+    expect(() =>
+      resolveLinuxAmd64Image(
+        `ghcr.io/tako0614/takos-agent@${sha256Bytes(duplicateRawIndex)}`,
+        "ghcr.io/tako0614/takos-agent:0.10.35",
+        duplicateRawIndex,
+      ),
+    ).toThrow("exactly one linux/amd64");
   });
 });
