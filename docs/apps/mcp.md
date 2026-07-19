@@ -25,6 +25,14 @@ Current first-party examples are normal removable Capsules:
 Takos does not copy these tools into its static registry. Installing or removing the Capsule and its service-side
 Interface adds or removes its MCP tools through the Takosumi Interface API.
 
+Takosumi control operations use this same path when an operator chooses to expose them to agents. The producer is a
+normal operator control MCP Capsule or host adapter with an `mcp.server` Interface and a Principal `mcp.invoke`
+InterfaceBinding. The adapter authenticates the invocation-only Interface token, maps the live MCP operation onto the
+same Takosumi public control service, and lets Takosumi re-evaluate Workspace RBAC, policy, saved-plan guards, Run/state,
+and audit. Takos does not define fixed control tool names, and it does not inject a broad control API token into a
+deployed workload. The exact blueprint and trust model are documented in
+[Takos app Interfaces](/architecture/app-interface#takosumi-control-mcp-の具体的な配信モデル).
+
 ## Connections, not a Store
 
 Takos treats MCP as an open connection surface, not as a catalog allowlist. The Connections view accepts any publicly
