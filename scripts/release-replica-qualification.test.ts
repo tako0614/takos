@@ -150,6 +150,12 @@ describe("release replica qualification", () => {
       transportSize: body.byteLength + 1,
       trailingLineFeedRemoved: true,
     });
+    expect(exactRegistryBody(withLineFeed, sha256Bytes(withLineFeed))).toEqual({
+      body: withLineFeed,
+      rawIndexBodySize: withLineFeed.byteLength,
+      transportSize: withLineFeed.byteLength,
+      trailingLineFeedRemoved: false,
+    });
 
     for (const invalid of [
       new Uint8Array([...body, 0x0d, 0x0a]),
