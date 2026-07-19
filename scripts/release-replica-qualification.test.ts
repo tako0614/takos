@@ -1,15 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   compareCanonicalSha256Hex,
   compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
+  digestAuthorityPath,
   exactRegistryBody,
   exactDigestRef,
   hostSecurityQualifies,
   migrationInventoryDirectory,
-  REQUIRED_BUN_VERSION,
+  readDigestAuthority,
+  REQUIRED_NODE_VERSION,
   resolveLinuxAmd64Image,
   sha256Bytes,
+  verifySha256WithSystemTool,
 } from "./release-replica-qualification.ts";
 
 describe("release replica qualification", () => {
@@ -91,6 +97,36 @@ describe("release replica qualification", () => {
     ).toThrow("calculated SHA-256 is not canonical lowercase hex");
   });
 
+  test("uses a private file as the digest authority", () => {
+    const body = new Uint8Array([0, 1, 2, 3, 13, 255]);
+    const directory = mkdtempSync(join(tmpdir(), "takos-authority-test-"));
+    const authority = join(directory, "candidate-manifest.digest");
+    try {
+      chmodSync(directory, 0o700);
+      writeFileSync(authority, `${sha256Bytes(body)}\n`, { mode: 0o600 });
+      chmodSync(authority, 0o600);
+      const verifiedPath = digestAuthorityPath(
+        directory,
+        "candidate-manifest.digest",
+      );
+      expect(
+        readDigestAuthority(directory, "candidate-manifest.digest"),
+      ).toEqual({ path: verifiedPath, digest: sha256Bytes(body) });
+      expect(
+        verifySha256WithSystemTool(body, sha256Bytes(body), verifiedPath),
+      ).toBe(true);
+      expect(() =>
+        verifySha256WithSystemTool(
+          body,
+          `sha256:${"0".repeat(64)}`,
+          verifiedPath,
+        ),
+      ).toThrow("digest authority input does not match the expected digest");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("locks qualification to the canonical control migration inventory", () => {
     expect(CONTROL_MIGRATION_DIRECTORY).toBe(
       "db/migrations-control/migrations",
@@ -100,8 +136,8 @@ describe("release replica qualification", () => {
     );
   });
 
-  test("locks the replica controller to the reviewed Bun toolchain", () => {
-    expect(REQUIRED_BUN_VERSION).toBe("1.3.14");
+  test("locks the replica controller to the reviewed Node toolchain", () => {
+    expect(REQUIRED_NODE_VERSION).toBe("v24.18.0");
   });
 
   test("resolves one linux/amd64 child only from raw bytes matching the published index", () => {
