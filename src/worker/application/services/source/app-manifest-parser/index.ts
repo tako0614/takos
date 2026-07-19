@@ -15,7 +15,6 @@
 //   - resources  (optional runtime bindings for the flat app contract)
 //   - routes     (optional)
 //   - publish    (optional)
-//   - serviceBindings (optional runtime authority binding requests)
 //   - env        (optional — flat Record<string, string>)
 //   - overrides  (optional)
 //
@@ -39,7 +38,6 @@ import { validateSemver } from "./parse-common.ts";
 import { parseCompute, parseComputeOverride } from "./parse-compute.ts";
 import { parsePublish, parsePublishOverride } from "./parse-publish.ts";
 import { parseResources, parseResourcesOverride } from "./parse-resources.ts";
-import { parseServiceBindings } from "./parse-service-bindings.ts";
 import { parseRoutes } from "./parse-routes.ts";
 
 export type ParseAppManifestOptions = Record<string, never>;
@@ -52,7 +50,6 @@ const TOP_LEVEL_FIELDS = new Set([
   "resources",
   "routes",
   "publish",
-  "serviceBindings",
   "env",
   "overrides",
 ]);
@@ -95,13 +92,18 @@ function parseContractVersion(
 }
 
 export function assertAllowedTopLevelFields(record: object): void {
+  if (Object.hasOwn(record, "serviceBindings")) {
+    throw new Error(
+      "serviceBindings is retired; publish a Takosumi Interface and authorize its consumer with InterfaceBinding instead of injecting a control API token into workload env",
+    );
+  }
   const envelopeFields = ["apiVersion", "kind", "metadata", "spec"];
   const hasEnvelopeField = envelopeFields.some((field) =>
     Object.hasOwn(record, field),
   );
   if (hasEnvelopeField) {
     throw new Error(
-      "Takos desired-state projections use the flat contract; remove apiVersion/kind/metadata/spec and put contractVersion, name, compute, routes, publish, serviceBindings, env, and overrides at the top level",
+      "Takos desired-state projections use the flat contract; remove apiVersion/kind/metadata/spec and put contractVersion, name, compute, routes, publish, env, and overrides at the top level",
     );
   }
 
@@ -199,7 +201,6 @@ export function parseAppManifestRecord(
   const resources = parseResources(record, compute);
   const routes = parseRoutes(record, compute);
   const publish = parsePublish(record);
-  const serviceBindings = parseServiceBindings(record, compute);
 
   // --- Env (flat Record<string, string>) ---
   const env = asStringMap(record.env, "env") ?? {};
@@ -228,7 +229,6 @@ export function parseAppManifestRecord(
     resources,
     routes,
     publish,
-    ...(serviceBindings.length > 0 ? { serviceBindings } : {}),
     env,
     ...(overrides ? { overrides } : {}),
   };
@@ -250,6 +250,5 @@ export const parseAppManifestText = parseAppManifestYaml;
 // Re-export parsers for any consumers that import them directly
 export { parseCompute } from "./parse-compute.ts";
 export { parsePublish } from "./parse-publish.ts";
-export { parseServiceBindings } from "./parse-service-bindings.ts";
 export { parseRoutes } from "./parse-routes.ts";
 export { assertManifestInputDoesNotUseBuildMetadata } from "./build-metadata.ts";

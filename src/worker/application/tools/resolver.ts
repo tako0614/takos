@@ -13,6 +13,7 @@ import {
   isCustomTool,
 } from "./custom/index.ts";
 import { loadMcpTools } from "./mcp-tools.ts";
+import type { RuntimeMcpInterfaceConfig } from "./mcp-tools.ts";
 import { logWarn } from "../../shared/utils/logger.ts";
 
 export interface ToolResolverOptions {
@@ -21,6 +22,7 @@ export interface ToolResolverOptions {
     role?: SpaceRole;
     capabilities?: string[];
   };
+  runtimeMcpInterfaces?: RuntimeMcpInterfaceConfig;
 }
 
 export class ToolResolver {
@@ -29,6 +31,7 @@ export class ToolResolver {
   private disabledCustomTools: Set<string>;
   private _mcpFailedServers: string[] = [];
   private mcpExposureContext?: ToolResolverOptions["mcpExposureContext"];
+  private runtimeMcpInterfaces?: ToolResolverOptions["runtimeMcpInterfaces"];
 
   constructor(
     private db: SqlDatabaseBinding,
@@ -38,6 +41,7 @@ export class ToolResolver {
   ) {
     this.disabledCustomTools = new Set(options?.disabledCustomTools || []);
     this.mcpExposureContext = options?.mcpExposureContext;
+    this.runtimeMcpInterfaces = options?.runtimeMcpInterfaces;
   }
 
   private isCustomToolEnabled(name: string): boolean {
@@ -56,6 +60,7 @@ export class ToolResolver {
         this.env,
         existingNames,
         this.mcpExposureContext,
+        this.runtimeMcpInterfaces,
       );
       this.mcpTools = mcpResult.tools;
       this._mcpFailedServers = mcpResult.failedServers;
