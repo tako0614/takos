@@ -884,17 +884,18 @@ jobs:
 
       - name: Publish exact candidate bytes as stable GitHub release
         shell: bash
+        working-directory: takos
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           gh release create "${RELEASE_TAG}" \
-            candidate/assets/release-manifest.json \
-            candidate/assets/install-config-patch.json \
-            candidate/assets/takos-worker-release.tar.gz \
-            candidate/assets/takos-worker-release.tar.gz.sha256 \
-            candidate/assets/takosumi-artifact.json \
+            ../candidate/assets/release-manifest.json \
+            ../candidate/assets/install-config-patch.json \
+            ../candidate/assets/takos-worker-release.tar.gz \
+            ../candidate/assets/takos-worker-release.tar.gz.sha256 \
+            ../candidate/assets/takosumi-artifact.json \
             --verify-tag \
             --latest \
             --title "Takos ${RELEASE_TAG}" \

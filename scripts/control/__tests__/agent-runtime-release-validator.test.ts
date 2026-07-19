@@ -227,7 +227,25 @@ test("agent runtime release validator rejects clobber publication", async () => 
   const input = await actualInputs();
   input.workflowText += "\n# forbidden mutation: --clobber\n";
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml must create a new stable release from exact bytes without clobber",
+    ".github/workflows/release-artifacts.yml must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber",
+  );
+});
+
+test("agent runtime release validator requires tag notes to run in the checked-out repository", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    [
+      "      - name: Publish exact candidate bytes as stable GitHub release",
+      "        shell: bash",
+      "        working-directory: takos",
+    ].join("\n"),
+    [
+      "      - name: Publish exact candidate bytes as stable GitHub release",
+      "        shell: bash",
+    ].join("\n"),
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber",
   );
 });
 
