@@ -95,10 +95,11 @@ output "mcp_url" {
 ```
 
 Interface の宣言は service-side の設定に置かれます。`/v1/interfaces` から直接作ることも、apply 成功後に
-`InstallConfig.interfaceBlueprints` から一度 materialize することもできます。module 自身が任意の
-`takosumi_interface` resource で宣言する経路もあります。blueprint はアプリのリポジトリから読み込むものでは
-ありません。`InstallConfig.outputAllowlist` は UI や install summary に公開する通常の Output を選ぶ別の設定で、
-Interface の宣言や lifecycle action の発見には使いません。
+`InstallConfig.interfaceBlueprints` から一度 materialize することもできます。blueprint はアプリのリポジトリから
+読み込むものではありません。Form-backed Resource だけは、verified な Takoform Form Definition の `interfaces[]`
+descriptor から portable な宣言を materialize できます。どちらでも record と認可は Takosumi が所有し、plain
+Capsule に Takosumi 専用 provider resource は要求しません。`InstallConfig.outputAllowlist` は UI や install summary
+に公開する通常の Output を選ぶ別の設定で、Interface の宣言や lifecycle action の発見には使いません。
 
 ## 4. Input の解決
 

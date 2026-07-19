@@ -11,8 +11,9 @@ only that resolved, authorized view.
 2. Review the Takosumi `plan` Run and approve the saved plan.
 3. A successful `apply` records StateVersion and Output.
 4. A service-side `InstallConfig.interfaceBlueprints` entry materializes an `mcp.server` Interface whose
-   `inputs.endpoint` explicitly selects the Capsule's ordinary endpoint Output. A module may instead declare its own
-   Interface with the optional `takosumi_interface` resource.
+   `inputs.endpoint` explicitly selects the Capsule's ordinary endpoint Output. When the service is realized as a
+   Form-backed Resource, its verified Takoform Form Definition may instead declare the portable Interface descriptor;
+   Takosumi still owns the resulting Interface record and its lifecycle.
 5. A Ready `InterfaceBinding` authorizes the Principal for `mcp.invoke`; Takos then shows the server's tools in the
    Workspace tool catalog. Credentials are delivered only through a supported binding mechanism, never an Output.
 

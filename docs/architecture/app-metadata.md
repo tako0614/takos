@@ -51,11 +51,12 @@ open-with 選択、chat / agent / memory / Workspace に紐づく product state 
 store ではなく、認可済み UI Interface の read-only view です。
 
 Interface の宣言と Output mapping は service-side の設定として管理し、アプリのリポジトリには Takosumi 専用の
-manifest を要求しません。宣言源の正本は Takosumi final-plan の Interface Declaration Sources で、service-side
-`InstallConfig.interfaceBlueprints` に加えて、module が任意で `takosumi_interface` リソース(optional
-`takosumi/takosumi` provider)を使って自分の Interface を宣言する経路が定義されています。
+manifest や provider resource を要求しません。plain Capsule の宣言源は service-side の
+`InstallConfig.interfaceBlueprints` または明示的な Interface API です。Form-backed Resource は、verified な Takoform
+Form Definition の `interfaces[]` descriptor で portable な宣言と input mapping を持てます。Takosumi はその
+descriptor を host-owned Interface に materialize し、InterfaceBinding と lifecycle を引き続き所有します。
 `InstallConfig.outputAllowlist` は UI / install summary / 外部表示へ公開する通常の Output を選ぶ別の設定であり、
-Interface の宣言ではありません。どちらの Interface 宣言経路でも binding(認可)はユーザー側に残ります。アプリは
+Interface の宣言ではありません。どの Interface 宣言経路でも binding(認可)はユーザー側に残ります。アプリは
 通常の Capsule として記録され、ユーザーがアンインストールできます。
 `takos-storage` / `takos-git` / `takos-computer` も同じ通常の installable Capsule であり、その agent tool を
 Takos の静的な catalog には複製しません。
