@@ -1,21 +1,87 @@
 name: Release Artifacts
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
+      phase:
+        description: "Build one immutable candidate or promote an existing candidate"
+        required: true
+        default: candidate
+        type: choice
+        options:
+          - candidate
+          - promote
       version:
-        description: "Optional assertion; package.json takosRelease.version remains authoritative"
+        description: "Assertion; package.json takosRelease.version remains authoritative"
+        required: true
+        type: string
+      release_id:
+        description: "Private-envelope release identifier (promote only)"
         required: false
         default: ""
         type: string
-      publish:
-        description: "Publish OCI images instead of dry-run build only"
+      tag:
+        description: "Signed annotated tag to promote"
         required: false
-        default: false
-        type: boolean
+        default: ""
+        type: string
+      source_commit:
+        description: "Exact reviewed source commit"
+        required: false
+        default: ""
+        type: string
+      candidate_run_id:
+        description: "Successful candidate workflow run id"
+        required: false
+        default: ""
+        type: string
+      candidate_manifest_digest:
+        description: "SHA-256 of release-candidate-manifest.json"
+        required: false
+        default: ""
+        type: string
+      envelope_digest:
+        description: "SHA-256 of the operator-private release envelope"
+        required: false
+        default: ""
+        type: string
+      controller_commit:
+        description: "Pinned release-safety controller commit"
+        required: false
+        default: ""
+        type: string
+      controller_digest:
+        description: "Pinned release-safety controller tree digest"
+        required: false
+        default: ""
+        type: string
+      adapter_digest:
+        description: "Pinned fixed-adapter SHA-256 digest"
+        required: false
+        default: ""
+        type: string
+      authorization_digest:
+        description: "Protected-environment authorization evidence digest"
+        required: false
+        default: ""
+        type: string
+      target_fingerprint:
+        description: "Expected deterministic stable-target fingerprint"
+        required: false
+        default: ""
+        type: string
+      artifact_digests_b64:
+        description: "Base64url ordered envelope artifact digest JSON"
+        required: false
+        default: ""
+        type: string
+      health_checks_b64:
+        description: "Base64url required envelope health-check JSON"
+        required: false
+        default: ""
+        type: string
+
+run-name: ${{ inputs.phase == 'promote' && format('release-safety:{0}:{1}', inputs.release_id, inputs.envelope_digest) || format('release-candidate:{0}:{1}', inputs.version, github.sha) }}
 
 concurrency:
   group: takos-release-artifacts-${{ github.ref }}
@@ -27,7 +93,9 @@ permissions:
 env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  TAKOSUMI_SOURCE_REF: 40663fd2754de7a581fb977127968bf9b62e7a04
+  TAKOSUMI_SOURCE_REF: 99fbc6277db9f1fb2827e675c8fa3c02488415a7
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "76c68e4036eb7a8a4f47eb03916ca5acf251e98b"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:d56dd0f527b7e295fa8dc05558ff1880865392709aa79f9ae85239d9b3ede7c2"
 
 jobs:
   validate:
@@ -39,7 +107,7 @@ jobs:
       release_tag: ${{ steps.source.outputs.release_tag }}
       agent_engine_repository: ${{ steps.source.outputs.agent_engine_repository }}
       agent_engine_commit: ${{ steps.source.outputs.agent_engine_commit }}
-      release_tag_commit: ${{ steps.source.outputs.release_tag_commit }}
+      source_commit: ${{ steps.source.outputs.source_commit }}
     permissions:
       contents: read
     steps:
@@ -54,7 +122,20 @@ jobs:
         working-directory: takos
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
-          REQUESTED_PUBLISH: ${{ inputs.publish }}
+          RELEASE_PHASE: ${{ inputs.phase }}
+          REQUESTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          ENVELOPE_DIGEST: ${{ inputs.envelope_digest }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
+          ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
+          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+          HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
         run: |
           set -euo pipefail
           release_version="$(jq -er '.takosRelease.version // .version' package.json)"
@@ -64,7 +145,7 @@ jobs:
             echo "package.json takosRelease.version is not SemVer: ${release_version}" >&2
             exit 1
           fi
-          if [[ -n "${REQUESTED_VERSION}" && "${REQUESTED_VERSION}" != "${release_version}" ]]; then
+          if [[ "${REQUESTED_VERSION}" != "${release_version}" ]]; then
             echo "Requested version ${REQUESTED_VERSION} must match package.json release version ${release_version}" >&2
             exit 1
           fi
@@ -77,31 +158,59 @@ jobs:
             exit 1
           fi
           release_tag="v${release_version}"
-          if [[ "${GITHUB_REF}" == refs/tags/v* && "${GITHUB_REF_NAME}" != "${release_tag}" ]]; then
-            echo "Git tag ${GITHUB_REF_NAME} must match package.json release version ${release_tag}" >&2
+          source_commit="${GITHUB_SHA}"
+          if [[ "${GITHUB_RUN_ATTEMPT}" != "1" ]]; then
+            echo "Candidate and promotion runs are immutable; use a new release id after a failed attempt." >&2
             exit 1
           fi
-          release_tag_commit=""
-          if [[ "${GITHUB_REF}" == refs/tags/v* || "${REQUESTED_PUBLISH}" == "true" ]]; then
-            remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${release_tag}" "refs/tags/${release_tag}^{}")"
-            release_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 ~ /\^\{\}$/ { print $1; exit }')"
-            if [[ -z "${release_tag_commit}" ]]; then
-              release_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 !~ /\^\{\}$/ { print $1; exit }')"
-            fi
-            if [[ -z "${release_tag_commit}" ]]; then
-              echo "Release tag ${release_tag} must already exist before publishing." >&2
+          if [[ "${RELEASE_PHASE}" == "candidate" ]]; then
+            if [[ -n "${REQUESTED_SOURCE_COMMIT}" && "${REQUESTED_SOURCE_COMMIT}" != "${GITHUB_SHA}" ]]; then
+              echo "Candidate source_commit must equal workflow commit ${GITHUB_SHA}." >&2
               exit 1
             fi
-            if [[ "${release_tag_commit}" != "${GITHUB_SHA}" ]]; then
-              echo "Release tag ${release_tag} resolves to ${release_tag_commit}, not workflow commit ${GITHUB_SHA}." >&2
+          elif [[ "${RELEASE_PHASE}" == "promote" ]]; then
+            for value in RELEASE_ID REQUESTED_TAG REQUESTED_SOURCE_COMMIT CANDIDATE_RUN_ID CANDIDATE_MANIFEST_DIGEST ENVELOPE_DIGEST CONTROLLER_COMMIT CONTROLLER_DIGEST ADAPTER_DIGEST AUTHORIZATION_DIGEST TARGET_FINGERPRINT ARTIFACT_DIGESTS_B64 HEALTH_CHECKS_B64; do
+              if [[ -z "${!value}" ]]; then
+                echo "${value} is required for promotion." >&2
+                exit 1
+              fi
+            done
+            if [[ "${REQUESTED_TAG}" != "${release_tag}" ]]; then
+              echo "Promotion tag ${REQUESTED_TAG} must equal ${release_tag}." >&2
               exit 1
             fi
+            if [[ "${REQUESTED_SOURCE_COMMIT}" != "${GITHUB_SHA}" ]]; then
+              echo "Promotion source_commit must equal workflow commit ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+            if [[ ! "${CANDIDATE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+              echo "candidate_run_id must be numeric." >&2
+              exit 1
+            fi
+            for digest in "${CANDIDATE_MANIFEST_DIGEST}" "${ENVELOPE_DIGEST}" "${CONTROLLER_DIGEST}" "${ADAPTER_DIGEST}" "${AUTHORIZATION_DIGEST}" "${TARGET_FINGERPRINT}"; do
+              if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                echo "Promotion digests must be canonical SHA-256 values." >&2
+                exit 1
+              fi
+            done
+            if [[ "${CONTROLLER_COMMIT}" != "${RELEASE_SAFETY_CONTROLLER_COMMIT}" ]]; then
+              echo "controller_commit does not match the workflow authority pin." >&2
+              exit 1
+            fi
+            if [[ "${ADAPTER_DIGEST}" != "${RELEASE_SAFETY_ADAPTER_DIGEST}" ]]; then
+              echo "adapter_digest does not match the fixed-adapter pin." >&2
+              exit 1
+            fi
+            source_commit="${REQUESTED_SOURCE_COMMIT}"
+          else
+            echo "Unsupported release phase: ${RELEASE_PHASE}" >&2
+            exit 1
           fi
           echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
           echo "agent_engine_repository=${agent_engine_repository}" >> "${GITHUB_OUTPUT}"
           echo "agent_engine_commit=${agent_engine_commit}" >> "${GITHUB_OUTPUT}"
-          echo "release_tag_commit=${release_tag_commit}" >> "${GITHUB_OUTPUT}"
+          echo "source_commit=${source_commit}" >> "${GITHUB_OUTPUT}"
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -125,7 +234,7 @@ jobs:
       - run: bun install --frozen-lockfile
         working-directory: takos
       - name: Validate release identity
-        if: github.event_name == 'push' || inputs.publish == true
+        if: inputs.phase == 'candidate'
         shell: bash
         working-directory: takos
         env:
@@ -145,7 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
-    if: github.event_name == 'push' || inputs.publish == true
+    if: inputs.phase == 'candidate'
     permissions:
       contents: read
     steps:
@@ -206,7 +315,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [validate, cloudflare-container-registry-preflight]
-    if: always() && needs.validate.result == 'success' && (needs.cloudflare-container-registry-preflight.result == 'success' || needs.cloudflare-container-registry-preflight.result == 'skipped')
+    if: inputs.phase == 'candidate' && needs.validate.result == 'success' && needs.cloudflare-container-registry-preflight.result == 'success'
     permissions:
       contents: read
       packages: write
@@ -296,7 +405,6 @@ jobs:
         working-directory: takos
 
       - name: Login to GHCR
-        if: github.event_name == 'push' || inputs.publish == true
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
         with:
           registry: ghcr.io
@@ -309,9 +417,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ needs.validate.outputs.release_version }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
-            type=sha,prefix=sha-
+            type=raw,value=candidate-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Build and publish OCI image
         id: build
@@ -319,14 +425,13 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name == 'push' || inputs.publish == true }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: mode=max
 
       - name: Record image digest metadata
-        if: github.event_name == 'push' || inputs.publish == true
         shell: bash
         env:
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
@@ -363,9 +468,17 @@ jobs:
             } + (if $name == "takos-agent" then {
               agentEngineCommit: $agentEngineCommit
             } else {} end))' > "dist/image-digests/${{ matrix.image }}.json"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --format '{{ json .SBOM }}' > "dist/image-digests/${{ matrix.image }}.sbom.json"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --format '{{ json .Provenance }}' > "dist/image-digests/${{ matrix.image }}.provenance.json"
+          jq -e 'type == "object" or type == "array"' \
+            "dist/image-digests/${{ matrix.image }}.sbom.json" >/dev/null
+          jq -e 'type == "object" or type == "array"' \
+            "dist/image-digests/${{ matrix.image }}.provenance.json" >/dev/null
 
       - name: Build and publish Cloudflare Container image
-        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true
+        if: matrix.cloudflare_container == true
         shell: bash
         working-directory: takos
         env:
@@ -387,7 +500,7 @@ jobs:
           else
             echo "Using fallback CLOUDFLARE_API_TOKEN for Cloudflare Container image publish."
           fi
-          cf_tag="${RELEASE_VERSION}-${GITHUB_SHA::12}"
+          cf_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           local_tag="${{ matrix.image }}:${cf_tag}"
           if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "Invalid OCI image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
@@ -425,20 +538,22 @@ jobs:
           mv "${tmp}" "${image_metadata_file}"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
-        if: github.event_name == 'push' || inputs.publish == true
         with:
           name: takos-image-digest-${{ matrix.image }}
-          path: dist/image-digests/${{ matrix.image }}.json
+          path: |
+            dist/image-digests/${{ matrix.image }}.json
+            dist/image-digests/${{ matrix.image }}.sbom.json
+            dist/image-digests/${{ matrix.image }}.provenance.json
           if-no-files-found: error
 
-  release-manifest:
-    name: Worker artifact and release manifest
+  release-candidate:
+    name: Build immutable release candidate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [validate, oci-images]
-    if: always() && needs.validate.result == 'success' && needs.oci-images.result == 'success' && (github.event_name == 'push' || inputs.publish == true)
+    if: inputs.phase == 'candidate' && needs.validate.result == 'success' && needs.oci-images.result == 'success'
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -539,66 +654,355 @@ jobs:
             --executor operator \
             --output dist/takosumi-artifact/install-config-patch.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
-        with:
-          name: takos-release-assets
-          path: |
-            takos/dist/release-manifest.json
-            takos/dist/takosumi-artifact/
-          if-no-files-found: error
-
-      - name: Publish GitHub release assets
+      - name: Seal candidate manifest and exact release bytes
         shell: bash
         working-directory: takos
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
-          EXPECTED_RELEASE_COMMIT: ${{ needs.validate.outputs.release_tag_commit }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.release_version }}
         run: |
           set -euo pipefail
-          remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}" "refs/tags/${RELEASE_TAG}^{}")"
-          current_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 ~ /\^\{\}$/ { print $1; exit }')"
-          if [[ -z "${current_tag_commit}" ]]; then
-            current_tag_commit="$(printf '%s\n' "${remote_tag_lines}" | awk '$2 !~ /\^\{\}$/ { print $1; exit }')"
-          fi
-          if [[ -z "${current_tag_commit}" || "${current_tag_commit}" != "${GITHUB_SHA}" || "${current_tag_commit}" != "${EXPECTED_RELEASE_COMMIT}" ]]; then
-            echo "Release tag ${RELEASE_TAG} must exist and resolve to workflow commit ${GITHUB_SHA}; got ${current_tag_commit:-missing}." >&2
+          bun scripts/release-candidate-contract.ts build \
+            --repository "https://github.com/${GITHUB_REPOSITORY}.git" \
+            --source-commit "${GITHUB_SHA}" \
+            --version "${RELEASE_VERSION}" \
+            --takosumi-source-commit "${TAKOSUMI_SOURCE_REF}" \
+            --candidate-run-id "${GITHUB_RUN_ID}" \
+            --image-digest-dir ../release-inputs/image-digests \
+            --release-manifest dist/release-manifest.json \
+            --release-asset-dir dist/takosumi-artifact \
+            --policy .github/workflows/release-artifacts.yml \
+            --toolchain bun.lock \
+            --output-dir dist/release-candidate
+          manifest_digest="sha256:$(sha256sum dist/release-candidate/release-candidate-manifest.json | awk '{print $1}')"
+          printf '%s\n' "${manifest_digest}" > dist/release-candidate/release-candidate-manifest.json.sha256
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
+        with:
+          name: takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ github.sha }}
+          path: takos/dist/release-candidate/
+          if-no-files-found: error
+
+  promote:
+    name: Promote exact candidate digests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validate
+    if: inputs.phase == 'promote' && needs.validate.result == 'success'
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: takos
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
+        with:
+          bun-version: latest
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
+
+      - name: Login to GHCR for digest-only promotion
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify candidate workflow authority
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}")"
+          jq -e \
+            --arg source "${SOURCE_COMMIT}" \
+            '.head_sha == $source and
+             .event == "workflow_dispatch" and
+             .status == "completed" and
+             .conclusion == "success" and
+             .run_attempt == 1 and
+             .path == ".github/workflows/release-artifacts.yml"' \
+            <<<"${run_json}" >/dev/null
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pinned: v8.0.1 (2026)
+        with:
+          name: takos-release-candidate-${{ inputs.version }}-${{ inputs.source_commit }}
+          path: candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Verify envelope bindings and every candidate byte
+        id: candidate
+        shell: bash
+        working-directory: takos
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          ARTIFACT_DIGESTS_B64: ${{ inputs.artifact_digests_b64 }}
+          HEALTH_CHECKS_B64: ${{ inputs.health_checks_b64 }}
+        run: |
+          set -euo pipefail
+          candidate_dir="${GITHUB_WORKSPACE}/candidate"
+          bun scripts/release-candidate-contract.ts verify \
+            --candidate-dir "${candidate_dir}" \
+            --repository "https://github.com/${GITHUB_REPOSITORY}.git" \
+            --source-commit "${SOURCE_COMMIT}" \
+            --version "${RELEASE_VERSION}" \
+            --takosumi-source-commit "${TAKOSUMI_SOURCE_REF}" \
+            --candidate-run-id "${CANDIDATE_RUN_ID}" \
+            --manifest-digest "${CANDIDATE_MANIFEST_DIGEST}" \
+            --policy .github/workflows/release-artifacts.yml \
+            --toolchain bun.lock > "${RUNNER_TEMP}/candidate-verification.json"
+
+          bun -e 'process.stdout.write(Buffer.from(process.env.ARTIFACT_DIGESTS_B64, "base64url"))' \
+            > "${RUNNER_TEMP}/expected-artifact-digests.json"
+          bun -e 'process.stdout.write(Buffer.from(process.env.HEALTH_CHECKS_B64, "base64url"))' \
+            > "${RUNNER_TEMP}/required-health-checks.json"
+          jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and test("^sha256:[0-9a-f]{64}$"))' \
+            "${RUNNER_TEMP}/expected-artifact-digests.json" >/dev/null
+          jq -e '
+            . == [
+              {name: "stable OCI digest readback", status: "required", bindingDigest: .[0].bindingDigest},
+              {name: "stable GitHub release asset readback", status: "required", bindingDigest: .[1].bindingDigest}
+            ] and
+            all(.[].bindingDigest; type == "string" and test("^sha256:[0-9a-f]{64}$"))' \
+            "${RUNNER_TEMP}/required-health-checks.json" >/dev/null
+          expected="$(jq -c . "${RUNNER_TEMP}/expected-artifact-digests.json")"
+          actual="$(jq -c '.artifactDigests' "${candidate_dir}/release-candidate-manifest.json")"
+          if [[ "${expected}" != "${actual}" ]]; then
+            echo "Envelope artifactDigests do not exactly match the candidate in order." >&2
             exit 1
           fi
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            prerelease_flag=()
-          else
-            prerelease_flag=(--prerelease)
-          fi
+          echo "manifest=${candidate_dir}/release-candidate-manifest.json" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify signed annotated release tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}")"
+          tag_object_sha="$(jq -er '.object.sha' <<<"${ref_json}")"
+          jq -e '.object.type == "tag"' <<<"${ref_json}" >/dev/null
+          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}")"
+          jq -e \
+            --arg source "${SOURCE_COMMIT}" \
+            '.object.type == "commit" and .object.sha == $source and .verification.verified == true' \
+            <<<"${tag_json}" >/dev/null
+          descriptor="takos/release/trust/takos-release-tag-signing-key.json"
+          principal="$(jq -er '.principal' "${descriptor}")"
+          public_key="$(jq -er '.publicKey' "${descriptor}")"
+          allowed_signers="${RUNNER_TEMP}/takos-release-allowed-signers"
+          printf '%s %s\n' "${principal}" "${public_key}" > "${allowed_signers}"
+          git -C takos fetch --force --no-tags origin \
+            "refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          git -C takos \
+            -c gpg.format=ssh \
+            -c gpg.ssh.allowedSignersFile="${allowed_signers}" \
+            verify-tag "${RELEASE_TAG}"
+
+      - name: Preflight immutable stable targets
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+          CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
+        run: |
+          set -euo pipefail
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            existing_assets="$(gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name')"
-            if grep -Fxq 'release-manifest.json' <<<"${existing_assets}"; then
-              existing_dir="$(mktemp -d)"
-              trap 'rm -rf "${existing_dir}"' EXIT
-              gh release download "${RELEASE_TAG}" --pattern release-manifest.json --dir "${existing_dir}"
-              if ! existing_commit="$(jq -er '.git.commit | select(type == "string" and length == 40)' "${existing_dir}/release-manifest.json")"; then
-                echo "Existing ${RELEASE_TAG} release-manifest.json does not contain a valid source commit; refusing to clobber assets." >&2
-                exit 1
-              fi
-              if [[ "${existing_commit}" != "${GITHUB_SHA}" ]]; then
-                echo "Existing ${RELEASE_TAG} assets belong to ${existing_commit}, not ${GITHUB_SHA}; refusing to clobber." >&2
-                exit 1
-              fi
-            elif grep -Eq '^(takos-worker-release\.tar\.gz|takos-worker-release\.tar\.gz\.sha256|takosumi-artifact\.json)$' <<<"${existing_assets}"; then
-              echo "Existing ${RELEASE_TAG} assets have no release-manifest.json provenance; refusing to clobber." >&2
+            echo "Release ${RELEASE_TAG} already exists; immutable versions are never overwritten." >&2
+            exit 1
+          fi
+          while IFS=$'\t' read -r image digest; do
+            if docker buildx imagetools inspect "${image}:${RELEASE_VERSION}" >/dev/null 2>&1; then
+              echo "Stable OCI tag ${image}:${RELEASE_VERSION} already exists." >&2
               exit 1
             fi
-          else
-            gh release create "${RELEASE_TAG}" \
-              --verify-tag \
-              --title "Takos ${RELEASE_TAG}" \
-              --notes "Takosumi/OpenTofu release artifacts for ${GITHUB_SHA}." \
-              "${prerelease_flag[@]}"
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Candidate OCI digest is invalid: ${digest}" >&2
+              exit 1
+            fi
+          done < <(jq -r '.ociImages[] | [.image, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
+          release_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+          target_json="$(jq -cS \
+            --arg tag "${RELEASE_TAG}" \
+            --arg url "${release_url}" \
+            '{
+              release: {tag: $tag, url: $url},
+              ociImages: [.ociImages[] | {name, versionRef, latestRef, digest}]
+            }' "${CANDIDATE_MANIFEST}")"
+          computed="sha256:$(printf '%s' "${target_json}" | sha256sum | awk '{print $1}')"
+          if [[ "${computed}" != "${TARGET_FINGERPRINT}" ]]; then
+            echo "Target fingerprint does not bind the deterministic stable targets." >&2
+            exit 1
           fi
-          gh release upload "${RELEASE_TAG}" \
-            dist/release-manifest.json \
-            dist/takosumi-artifact/install-config-patch.json \
-            dist/takosumi-artifact/takos-worker-release.tar.gz \
-            dist/takosumi-artifact/takos-worker-release.tar.gz.sha256 \
-            dist/takosumi-artifact/takosumi-artifact.json \
-            --clobber
+          echo "release_url=${release_url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Promote versioned OCI tags from exact content digests
+        shell: bash
+        env:
+          CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r version_ref digest digest_ref; do
+            docker buildx imagetools create \
+              --tag "${version_ref}" \
+              "${digest_ref}"
+            readback="sha256:$(docker buildx imagetools inspect "${version_ref}" --raw | sha256sum | awk '{print $1}')"
+            if [[ "${readback}" != "${digest}" ]]; then
+              echo "OCI readback drift for ${version_ref}: ${readback} != ${digest}" >&2
+              exit 1
+            fi
+          done < <(jq -r '.ociImages[] | [.versionRef, .digest, .digestRef] | @tsv' "${CANDIDATE_MANIFEST}")
+
+      - name: Publish exact candidate bytes as stable GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "${RELEASE_TAG}" \
+            candidate/assets/release-manifest.json \
+            candidate/assets/install-config-patch.json \
+            candidate/assets/takos-worker-release.tar.gz \
+            candidate/assets/takos-worker-release.tar.gz.sha256 \
+            candidate/assets/takosumi-artifact.json \
+            --verify-tag \
+            --latest \
+            --title "Takos ${RELEASE_TAG}" \
+            --notes-from-tag
+
+      - name: Advance latest OCI tags and read back all stable digests
+        shell: bash
+        env:
+          CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r version_ref latest_ref digest digest_ref; do
+            docker buildx imagetools create --tag "${latest_ref}" "${digest_ref}"
+            for promoted_ref in "${version_ref}" "${latest_ref}"; do
+              readback="sha256:$(docker buildx imagetools inspect "${promoted_ref}" --raw | sha256sum | awk '{print $1}')"
+              if [[ "${readback}" != "${digest}" ]]; then
+                echo "OCI readback drift for ${promoted_ref}: ${readback} != ${digest}" >&2
+                exit 1
+              fi
+            done
+          done < <(jq -r '.ociImages[] | [.versionRef, .latestRef, .digest, .digestRef] | @tsv' "${CANDIDATE_MANIFEST}")
+
+      - name: Read back stable authority and write adapter result
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          CONTROLLER_COMMIT: ${{ inputs.controller_commit }}
+          CONTROLLER_DIGEST: ${{ inputs.controller_digest }}
+          ADAPTER_DIGEST: ${{ inputs.adapter_digest }}
+          AUTHORIZATION_DIGEST: ${{ inputs.authorization_digest }}
+          ENVELOPE_DIGEST: ${{ inputs.envelope_digest }}
+          TARGET_FINGERPRINT: ${{ inputs.target_fingerprint }}
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+          CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
+          RELEASE_URL: ${{ steps.target.outputs.release_url }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh release view "${RELEASE_TAG}" --json url,tagName,isDraft,isPrerelease,assets)"
+          jq -e \
+            --arg tag "${RELEASE_TAG}" \
+            --arg url "${RELEASE_URL}" \
+            '.tagName == $tag and .url == $url and .isDraft == false and .isPrerelease == false' \
+            <<<"${release_json}" >/dev/null
+          actual_assets="$(jq -c '[.assets[].name] | sort' <<<"${release_json}")"
+          expected_assets='["install-config-patch.json","release-manifest.json","takos-worker-release.tar.gz","takos-worker-release.tar.gz.sha256","takosumi-artifact.json"]'
+          if [[ "${actual_assets}" != "${expected_assets}" ]]; then
+            echo "Stable release assets differ from the sealed candidate." >&2
+            exit 1
+          fi
+          readback_dir="${RUNNER_TEMP}/release-readback"
+          mkdir -p "${readback_dir}"
+          gh release download "${RELEASE_TAG}" --dir "${readback_dir}"
+          while IFS=$'\t' read -r name path digest; do
+            readback="sha256:$(sha256sum "${readback_dir}/${name}" | awk '{print $1}')"
+            if [[ "${readback}" != "${digest}" ]]; then
+              echo "GitHub release asset readback drift for ${name}." >&2
+              exit 1
+            fi
+          done < <(jq -r '.releaseAssets[] | [.name, .path, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
+
+          jq '[.[] | .status = "passed"]' "${RUNNER_TEMP}/required-health-checks.json" \
+            > "${RUNNER_TEMP}/passed-health-checks.json"
+          attestation_json="$(jq -cnS \
+            --arg releaseId "${RELEASE_ID}" \
+            --arg envelopeDigest "${ENVELOPE_DIGEST}" \
+            --arg authorizationDigest "${AUTHORIZATION_DIGEST}" \
+            --arg candidateManifestDigest "${CANDIDATE_MANIFEST_DIGEST}" \
+            --arg controllerCommit "${CONTROLLER_COMMIT}" \
+            --arg controllerDigest "${CONTROLLER_DIGEST}" \
+            --arg adapterDigest "${ADAPTER_DIGEST}" \
+            --arg targetFingerprint "${TARGET_FINGERPRINT}" \
+            --slurpfile healthChecks "${RUNNER_TEMP}/passed-health-checks.json" \
+            '{releaseId: $releaseId, envelopeDigest: $envelopeDigest,
+              authorizationDigest: $authorizationDigest,
+              candidateManifestDigest: $candidateManifestDigest,
+              controllerCommit: $controllerCommit, controllerDigest: $controllerDigest,
+              adapterDigest: $adapterDigest, targetFingerprint: $targetFingerprint,
+              healthChecks: $healthChecks[0]}')"
+          attestation_digest="sha256:$(printf '%s' "${attestation_json}" | sha256sum | awk '{print $1}')"
+          readback_at="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          jq -n \
+            --arg kind "takos.release-safety-adapter-result@v1" \
+            --arg status promoted \
+            --arg surfaceId takos-release-artifacts \
+            --arg sourceCommit "${SOURCE_COMMIT}" \
+            --arg controllerCommit "${CONTROLLER_COMMIT}" \
+            --arg controllerDigest "${CONTROLLER_DIGEST}" \
+            --arg adapterDigest "${ADAPTER_DIGEST}" \
+            --arg targetFingerprint "${TARGET_FINGERPRINT}" \
+            --arg attestationDigest "${attestation_digest}" \
+            --arg releaseTag "${RELEASE_TAG}" \
+            --arg releaseUrl "${RELEASE_URL}" \
+            --arg workflowRunId "${GITHUB_RUN_ID}" \
+            --arg readbackAt "${readback_at}" \
+            --slurpfile manifest "${CANDIDATE_MANIFEST}" \
+            --slurpfile healthChecks "${RUNNER_TEMP}/passed-health-checks.json" \
+            '{kind: $kind, status: $status, surfaceId: $surfaceId,
+              sourceCommit: $sourceCommit, controllerCommit: $controllerCommit,
+              controllerDigest: $controllerDigest, adapterDigest: $adapterDigest,
+              artifactDigests: $manifest[0].artifactDigests,
+              targetFingerprint: $targetFingerprint, attestationDigest: $attestationDigest,
+              releaseTag: $releaseTag, releaseUrl: $releaseUrl,
+              workflowRunId: $workflowRunId, readbackAt: $readbackAt,
+              healthChecks: $healthChecks[0]}' \
+            > release-safety-readback.json
+          gh release upload "${RELEASE_TAG}" release-safety-readback.json
+          mkdir -p "${RUNNER_TEMP}/result-readback"
+          gh release download "${RELEASE_TAG}" \
+            --pattern release-safety-readback.json \
+            --dir "${RUNNER_TEMP}/result-readback"
+          cmp -s release-safety-readback.json \
+            "${RUNNER_TEMP}/result-readback/release-safety-readback.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
+        with:
+          name: release-safety-readback-${{ inputs.release_id }}
+          path: release-safety-readback.json
+          if-no-files-found: error

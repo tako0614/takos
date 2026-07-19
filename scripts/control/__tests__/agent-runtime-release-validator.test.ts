@@ -3,24 +3,28 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   AGENT_ENGINE_SOURCE_PATH,
+  RELEASE_TAG_TRUST_PATH,
   validateAgentRuntimeReleaseContract,
 } from "../../validate-agent-runtime-release.ts";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 
 async function actualInputs() {
-  const [wranglerText, workflowText, engineSourceText] = await Promise.all([
-    readFile(resolve(repoRoot, "deploy/cloudflare/wrangler.toml"), "utf8"),
-    readFile(
-      resolve(repoRoot, ".github/workflows/release-artifacts.yml"),
-      "utf8",
-    ),
-    readFile(resolve(repoRoot, AGENT_ENGINE_SOURCE_PATH), "utf8"),
-  ]);
+  const [wranglerText, workflowText, engineSourceText, tagTrustText] =
+    await Promise.all([
+      readFile(resolve(repoRoot, "deploy/cloudflare/wrangler.toml"), "utf8"),
+      readFile(
+        resolve(repoRoot, ".github/workflows/release-artifacts.yml"),
+        "utf8",
+      ),
+      readFile(resolve(repoRoot, AGENT_ENGINE_SOURCE_PATH), "utf8"),
+      readFile(resolve(repoRoot, RELEASE_TAG_TRUST_PATH), "utf8"),
+    ]);
   return {
     wranglerText,
     workflowText,
     engineSource: JSON.parse(engineSourceText) as unknown,
+    tagTrust: JSON.parse(tagTrustText) as unknown,
   };
 }
 
@@ -62,6 +66,17 @@ test("agent runtime release validator rejects a mutable engine ref", async () =>
   );
 });
 
+test("agent runtime release validator rejects a tag trust fingerprint drift", async () => {
+  const input = await actualInputs();
+  input.tagTrust = {
+    ...(input.tagTrust as Record<string, unknown>),
+    keyId: `SHA256:${"A".repeat(43)}`,
+  };
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    "release/trust/takos-release-tag-signing-key.json keyId does not match publicKey",
+  );
+});
+
 test("agent runtime release validator requires the pinned engine checkout", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
@@ -98,47 +113,44 @@ test("agent runtime release validator ignores comments that mimic the pinned che
   );
 });
 
-test("agent runtime release validator requires publish-time tag identity guards", async () => {
+test("agent runtime release validator requires a verified signed annotated tag", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
-    "              --verify-tag \\",
-    "              # --verify-tag",
+    ".verification.verified == true",
+    ".verification.verified == false",
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml must require an existing Git tag when creating a release",
+    ".github/workflows/release-artifacts.yml must verify a signed annotated tag bound to the source commit",
   );
 });
 
-test("agent runtime release validator ignores commented-out tag identity checks", async () => {
+test("agent runtime release validator requires the private-envelope digest set", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
-    '          remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${release_tag}" "refs/tags/${release_tag}^{}")"',
-    '          # remote_tag_lines="$(git ls-remote --tags origin "refs/tags/${release_tag}" "refs/tags/${release_tag}^{}")"',
+    "process.env.ARTIFACT_DIGESTS_B64",
+    "process.env.REMOVED_ARTIFACT_DIGESTS",
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml validate job must resolve an existing release tag before publishing",
+    ".github/workflows/release-artifacts.yml promotion must reverify the candidate and exact private-envelope bindings",
   );
 });
 
-test("agent runtime release validator requires the manual publish path to verify the tag", async () => {
+test("agent runtime release validator forbids build actions in promotion", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
-    '"${REQUESTED_PUBLISH}" == "true"',
-    '"${REQUESTED_PUBLISH}" == "never"',
+    "      - name: Login to GHCR for digest-only promotion",
+    "      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf\n      - name: Login to GHCR for digest-only promotion",
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml validate job must resolve an existing release tag before publishing",
+    ".github/workflows/release-artifacts.yml promotion must use the production environment without rebuilding",
   );
 });
 
-test("agent runtime release validator requires existing asset commit checks", async () => {
+test("agent runtime release validator rejects clobber publication", async () => {
   const input = await actualInputs();
-  input.workflowText = input.workflowText.replace(
-    '              if [[ "${existing_commit}" != "${GITHUB_SHA}" ]]; then',
-    '              if [[ -z "${existing_commit}" ]]; then',
-  );
+  input.workflowText += "\n# forbidden mutation: --clobber\n";
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml must refuse to clobber release assets from another commit",
+    ".github/workflows/release-artifacts.yml must create a new stable release from exact bytes without clobber",
   );
 });
 
