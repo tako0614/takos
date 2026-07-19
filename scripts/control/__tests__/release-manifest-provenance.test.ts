@@ -65,9 +65,48 @@ test("release manifest rejects agent image provenance from another engine commit
   }
 });
 
+test("release manifest accepts only the exact candidate run tag before promotion", async () => {
+  const root = await mkdtemp(
+    resolve(tmpdir(), "takos-release-candidate-tags-"),
+  );
+  try {
+    const imageDir = resolve(root, "images");
+    const output = resolve(root, "release-manifest.json");
+    await writeImageRecords(imageDir, undefined, "12345");
+    const result = await runManifest(imageDir, output, "12345");
+    expect(result.status).toBe(0);
+    const manifest = JSON.parse(await readFile(output, "utf8"));
+    for (const image of manifest.officialImages.images) {
+      expect(image.tags).toEqual([`${image.repository}:candidate-12345-1`]);
+      expect(image.tagPolicy).toEqual(["candidate-12345-1"]);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("release manifest rejects a candidate tag from another run", async () => {
+  const root = await mkdtemp(
+    resolve(tmpdir(), "takos-release-candidate-drift-"),
+  );
+  try {
+    const imageDir = resolve(root, "images");
+    const output = resolve(root, "release-manifest.json");
+    await writeImageRecords(imageDir, undefined, "12345");
+    const result = await runManifest(imageDir, output, "67890");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "candidate tags must equal ghcr.io/tako0614/",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function writeImageRecords(
   imageDir: string,
   agentEngineCommitOverride?: string,
+  candidateRunId?: string,
 ): Promise<void> {
   await mkdir(imageDir, { recursive: true });
   const packageConfig = JSON.parse(
@@ -97,10 +136,12 @@ async function writeImageRecords(
           image: repository,
           digest,
           digestRef: `${repository}@${digest}`,
-          tags: [
-            `${repository}:${packageConfig.takosRelease.version}`,
-            `${repository}:sha-${commit.slice(0, 7)}`,
-          ],
+          tags: candidateRunId
+            ? [`${repository}:candidate-${candidateRunId}-1`]
+            : [
+                `${repository}:${packageConfig.takosRelease.version}`,
+                `${repository}:sha-${commit.slice(0, 7)}`,
+              ],
           commit,
           ...(name === "takos-agent"
             ? {
@@ -118,7 +159,11 @@ async function writeImageRecords(
   }
 }
 
-async function runManifest(imageDir: string, output: string) {
+async function runManifest(
+  imageDir: string,
+  output: string,
+  candidateRunId?: string,
+) {
   const process = Bun.spawn(
     [
       "bun",
@@ -126,6 +171,7 @@ async function runManifest(imageDir: string, output: string) {
       "--image-digest-dir",
       imageDir,
       "--require-image-digests",
+      ...(candidateRunId ? ["--candidate-run-id", candidateRunId] : []),
       "--output",
       output,
     ],

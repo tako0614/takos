@@ -157,6 +157,28 @@ test("agent runtime release validator requires promotion to use the same candida
   );
 });
 
+test("agent runtime release validator forbids stable tags during candidate build", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "type=raw,value=candidate-${{ github.run_id }}-${{ github.run_attempt }}",
+    "type=raw,value=${{ inputs.version }}",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml candidate builds must publish only the unique run-attempt image tag",
+  );
+});
+
+test("agent runtime release validator binds manifest tags to the candidate run", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    '            --candidate-run-id "${GITHUB_RUN_ID}" \\\n',
+    "",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml release manifest must validate candidate-only image tags against the exact workflow run",
+  );
+});
+
 test("agent runtime release validator forbids build actions in promotion", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
