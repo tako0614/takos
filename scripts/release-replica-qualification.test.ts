@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  canonicalPostgresSchemaDump,
   compareCanonicalSha256Hex,
   compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
@@ -17,6 +18,7 @@ import {
   exactDigestRef,
   hostSecurityQualifies,
   migrationInventoryDirectory,
+  POSTGRES_SCHEMA_CANONICALIZATION,
   readDigestAuthority,
   REQUIRED_NODE_VERSION,
   resolveLinuxAmd64Image,
@@ -25,6 +27,57 @@ import {
 } from "./release-replica-qualification.ts";
 
 describe("release replica qualification", () => {
+  test("normalizes only pg_dump's matched random restriction pair", () => {
+    const dump = (token: string, ddl = "CREATE TABLE example (id integer);") =>
+      [
+        "-- PostgreSQL database dump",
+        "",
+        `\\restrict ${token}`,
+        "",
+        ddl,
+        "",
+        `\\unrestrict ${token}`,
+        "",
+      ].join("\n");
+    const first = dump(
+      "3PCSOAXrPN7mz5fM4yNoaw9uQSkeuo7s978mTer9Lo6KzgiDm62q1IwdnE4z7kA",
+    );
+    const second = dump(
+      "BHzqEQkyk1rOK3bMnwEpUSbhdZpuHriE9XdkjzsYVNQ4nfzRF7VM2dj4cUf5XU8",
+    );
+
+    expect(POSTGRES_SCHEMA_CANONICALIZATION).toBe(
+      "pg_dump-restrict-pair-v1",
+    );
+    expect(sha256Bytes(first)).not.toBe(sha256Bytes(second));
+    expect(sha256Bytes(canonicalPostgresSchemaDump(first))).toBe(
+      sha256Bytes(canonicalPostgresSchemaDump(second)),
+    );
+    expect(
+      sha256Bytes(
+        canonicalPostgresSchemaDump(
+          dump(
+            "BHzqEQkyk1rOK3bMnwEpUSbhdZpuHriE9XdkjzsYVNQ4nfzRF7VM2dj4cUf5XU8",
+            "CREATE TABLE example (id bigint);",
+          ),
+        ),
+      ),
+    ).not.toBe(sha256Bytes(canonicalPostgresSchemaDump(first)));
+    expect(canonicalPostgresSchemaDump("CREATE TABLE stable (id integer);"))
+      .toBe("CREATE TABLE stable (id integer);");
+    expect(() =>
+      canonicalPostgresSchemaDump(
+        "\\restrict opening\n\\unrestrict different\n",
+      ),
+    ).toThrow("pg_dump restriction token pair drifted");
+    expect(() => canonicalPostgresSchemaDump("\\restrict only\n")).toThrow(
+      "pg_dump restriction line count drifted",
+    );
+    expect(() =>
+      canonicalPostgresSchemaDump("\\restrict unexpected-token!\n"),
+    ).toThrow("pg_dump restriction line format drifted");
+  });
+
   test("locks the previous release digests to published v0.10.35 evidence", () => {
     const fixture = JSON.parse(
       readFileSync(
