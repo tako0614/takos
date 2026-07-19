@@ -102,6 +102,9 @@ Optional env:
                                           containers inside the activation run.
   TAKOS_RELEASE_WORKER_ARTIFACT_URL        Optional CI-built Worker/assets
                                           archive selected by OpenTofu.
+  TAKOS_RELEASE_WORKER_ARTIFACT_FILE       Absolute regular non-symlink path to
+                                          already-downloaded candidate bytes.
+                                          Mutually exclusive with URL.
   TAKOS_RELEASE_WORKER_ARTIFACT_SHA256     Required SHA-256 for the archive.
                                           When both are absent, activation
                                           builds the pinned Git source.
@@ -3034,6 +3037,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         });
       })();
   let preparedWorkerArtifact;
+  const activation = {};
   try {
     let releaseEnv = childEnv;
     {
@@ -3129,22 +3133,36 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             deployEnv,
           ),
         );
-        await timeReleaseStep(timings, "wrangler-deployment-status", () =>
-          waitForWranglerDeploymentBestEffort(outputs, environment, deployEnv),
+        activation.deployment = await timeReleaseStep(
+          timings,
+          "wrangler-deployment-status",
+          () =>
+            waitForWranglerDeploymentBestEffort(
+              outputs,
+              environment,
+              deployEnv,
+            ),
         );
         if (!managedCompat) {
-          await timeReleaseStep(timings, "container-image-rollout", () =>
-            waitForReleaseContainerImages(outputs, environment, deployEnv),
+          activation.containers = await timeReleaseStep(
+            timings,
+            "container-image-rollout",
+            () =>
+              waitForReleaseContainerImages(outputs, environment, deployEnv),
           );
         }
-        await timeReleaseStep(timings, "worker-content-verification", () =>
-          verifyCloudflareWorkerContent(outputs, environment, deployEnv),
+        activation.workerContent = await timeReleaseStep(
+          timings,
+          "worker-content-verification",
+          () => verifyCloudflareWorkerContent(outputs, environment, deployEnv),
         );
         await timeReleaseStep(timings, "workers-dev-enable", () =>
           ensureWorkersDevSubdomain(outputs, deployEnv),
         );
-        await timeReleaseStep(timings, "public-health-check", () =>
-          verifyReleaseHealth(outputs, deployEnv),
+        activation.health = await timeReleaseStep(
+          timings,
+          "public-health-check",
+          () => verifyReleaseHealth(outputs, deployEnv),
         );
       }
     }
@@ -3174,6 +3192,18 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,
   );
+  return {
+    environment,
+    operation: destroy ? "destroy" : "activate",
+    status: releaseStatus,
+    workerArtifact: preparedWorkerArtifact
+      ? {
+          sha256: preparedWorkerArtifact.sha256,
+          sizeBytes: preparedWorkerArtifact.sizeBytes,
+        }
+      : undefined,
+    activation,
+  };
 }
 
 if (import.meta.main) {
