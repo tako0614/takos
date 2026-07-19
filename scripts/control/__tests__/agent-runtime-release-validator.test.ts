@@ -3,24 +3,28 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   AGENT_ENGINE_SOURCE_PATH,
+  RELEASE_TAG_TRUST_PATH,
   validateAgentRuntimeReleaseContract,
 } from "../../validate-agent-runtime-release.ts";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 
 async function actualInputs() {
-  const [wranglerText, workflowText, engineSourceText] = await Promise.all([
-    readFile(resolve(repoRoot, "deploy/cloudflare/wrangler.toml"), "utf8"),
-    readFile(
-      resolve(repoRoot, ".github/workflows/release-artifacts.yml"),
-      "utf8",
-    ),
-    readFile(resolve(repoRoot, AGENT_ENGINE_SOURCE_PATH), "utf8"),
-  ]);
+  const [wranglerText, workflowText, engineSourceText, tagTrustText] =
+    await Promise.all([
+      readFile(resolve(repoRoot, "deploy/cloudflare/wrangler.toml"), "utf8"),
+      readFile(
+        resolve(repoRoot, ".github/workflows/release-artifacts.yml"),
+        "utf8",
+      ),
+      readFile(resolve(repoRoot, AGENT_ENGINE_SOURCE_PATH), "utf8"),
+      readFile(resolve(repoRoot, RELEASE_TAG_TRUST_PATH), "utf8"),
+    ]);
   return {
     wranglerText,
     workflowText,
     engineSource: JSON.parse(engineSourceText) as unknown,
+    tagTrust: JSON.parse(tagTrustText) as unknown,
   };
 }
 
@@ -59,6 +63,17 @@ test("agent runtime release validator rejects a mutable engine ref", async () =>
   };
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
     "containers/agent/engine-source.json commit must be an immutable 40-character Git SHA",
+  );
+});
+
+test("agent runtime release validator rejects a tag trust fingerprint drift", async () => {
+  const input = await actualInputs();
+  input.tagTrust = {
+    ...(input.tagTrust as Record<string, unknown>),
+    keyId: `SHA256:${"A".repeat(43)}`,
+  };
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    "release/trust/takos-release-tag-signing-key.json keyId does not match publicKey",
   );
 });
 
