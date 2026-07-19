@@ -546,7 +546,7 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     );
   }
   if (
-    promoteJob?.environment !== "production" ||
+    promoteJob?.environment !== undefined ||
     promoteSteps.some(
       (step) =>
         typeof step.uses === "string" &&
@@ -554,7 +554,7 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     )
   ) {
     errors.push(
-      `${WORKFLOW_PATH} promotion must use the production environment without rebuilding`,
+      `${WORKFLOW_PATH} promotion must use sealed controller authorization without a protected environment or rebuilding`,
     );
   }
   const verifyCandidateStep = promoteSteps.find(
