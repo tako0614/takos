@@ -41,6 +41,11 @@ Takos distribution の deploy topology は `deploy/opentofu` の OpenTofu Capsul
 commit / module path / well-known OpenTofu outputs などの汎用 metadata から Run を作り、apply 成功後に StateVersion と
 Output を記録します。
 
+[`install-options.json`](install-options.json) は、現在実行可能な Cloudflare OpenTofu module を選ぶための任意の
+`CapsuleSourceOptions` 表示ドキュメントです。Takosumi 専用 manifest ではなく、通常の Git URL + module path での
+直接インストールには不要です。この文書は、それを含む次の通常の安定版タグから利用できます。別クラウドの選択肢は、
+対応する実在 module を出荷したときだけ追加します。
+
 ## ローカル compose
 
 ```sh
