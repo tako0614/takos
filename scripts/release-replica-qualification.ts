@@ -24,7 +24,7 @@ const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const RELEASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const PREVIOUS_VERSION = "0.10.35";
+export const PREVIOUS_VERSION = "0.10.36";
 const POSTGRES_IMAGE =
   "postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229";
 const REDIS_IMAGE =
@@ -118,7 +118,7 @@ type OciIndex = {
   }>;
 };
 
-type PlatformImageResolution = {
+type PlatformIndexResolution = {
   publishedIndex: string;
   sourceTag: string;
   rawIndexDigest: string;
@@ -130,6 +130,13 @@ type PlatformImageResolution = {
     architecture: "amd64";
   };
   executionImage: string;
+};
+
+type PlatformImageResolution = PlatformIndexResolution & {
+  childManifestDigest: string;
+  childManifestBodySize: number;
+  childManifestTransportSize: number;
+  childManifestTrailingLineFeedRemoved: boolean;
 };
 
 function invariant(condition: unknown, message: string): asserts condition {
@@ -367,6 +374,20 @@ export function exactDigestRef(repository: string, digest: string): string {
   return `${repository}@${digest}`;
 }
 
+export function exactRawManifestInspectCommand(
+  reference: string,
+): readonly string[] {
+  const separator = reference.lastIndexOf("@");
+  invariant(separator > 0, "raw manifest reference is not digest-pinned");
+  const repository = reference.slice(0, separator);
+  const digest = reference.slice(separator + 1);
+  invariant(
+    exactDigestRef(repository, digest) === reference,
+    "raw manifest reference is not canonical",
+  );
+  return ["docker", "buildx", "imagetools", "inspect", reference, "--raw"];
+}
+
 export function resolveLinuxAmd64Image(
   publishedIndex: string,
   sourceTag: string,
@@ -381,7 +402,7 @@ export function resolveLinuxAmd64Image(
     trailingLineFeedRemoved: false,
   },
   authorityPath?: string,
-): PlatformImageResolution {
+): PlatformIndexResolution {
   const separator = publishedIndex.lastIndexOf("@");
   invariant(separator > 0, "published image is not an exact digest reference");
   const repository = publishedIndex.slice(0, separator);
@@ -422,6 +443,55 @@ export function resolveLinuxAmd64Image(
     ...transport,
     platform: { os: "linux", architecture: "amd64" },
     executionImage,
+  };
+}
+
+export function verifyPlatformChildManifest(
+  executionImage: string,
+  rawManifest: Uint8Array,
+  transport: {
+    rawIndexBodySize: number;
+    transportSize: number;
+    trailingLineFeedRemoved: boolean;
+  } = {
+    rawIndexBodySize: rawManifest.byteLength,
+    transportSize: rawManifest.byteLength,
+    trailingLineFeedRemoved: false,
+  },
+): {
+  childManifestDigest: string;
+  childManifestBodySize: number;
+  childManifestTransportSize: number;
+  childManifestTrailingLineFeedRemoved: boolean;
+} {
+  const separator = executionImage.lastIndexOf("@");
+  invariant(
+    separator > 0,
+    "selected platform image is not an exact digest reference",
+  );
+  const expectedDigest = executionImage.slice(separator + 1);
+  const comparison = compareSha256Bytes(rawManifest, expectedDigest);
+  invariant(
+    comparison.matches,
+    `selected platform manifest digest drifted: expected ${expectedDigest}, got ${comparison.actualDigest}`,
+  );
+  const manifest = JSON.parse(new TextDecoder().decode(rawManifest)) as {
+    schemaVersion?: number;
+    mediaType?: string;
+  };
+  invariant(
+    manifest.schemaVersion === 2,
+    "selected platform manifest schema version drifted",
+  );
+  invariant(
+    manifest.mediaType === "application/vnd.oci.image.manifest.v1+json",
+    "selected platform image is not an OCI manifest",
+  );
+  return {
+    childManifestDigest: expectedDigest,
+    childManifestBodySize: transport.rawIndexBodySize,
+    childManifestTransportSize: transport.transportSize,
+    childManifestTrailingLineFeedRemoved: transport.trailingLineFeedRemoved,
   };
 }
 
@@ -659,20 +729,15 @@ async function resolvePreviousExecutionImages(
       `${name} requested digest does not match its authority file`,
     );
     const expectedIndexDigest = authority.digest;
-    const rawOutput = await commandBytes([
-      "docker",
-      "buildx",
-      "imagetools",
-      "inspect",
-      sourceTag,
-      "--raw",
-    ]);
+    const rawOutput = await commandBytes(
+      exactRawManifestInspectCommand(publishedIndex),
+    );
     const rawIndex = exactRegistryBody(
       rawOutput,
       expectedIndexDigest,
       authority.path,
     );
-    resolutions[name] = resolveLinuxAmd64Image(
+    const resolution = resolveLinuxAmd64Image(
       publishedIndex,
       sourceTag,
       rawIndex.body,
@@ -683,6 +748,27 @@ async function resolvePreviousExecutionImages(
       },
       authority.path,
     );
+    const rawChildOutput = await commandBytes(
+      exactRawManifestInspectCommand(resolution.executionImage),
+    );
+    const rawChildManifest = exactRegistryBody(
+      rawChildOutput,
+      resolution.executionImage.slice(
+        resolution.executionImage.lastIndexOf("@") + 1,
+      ),
+    );
+    resolutions[name] = {
+      ...resolution,
+      ...verifyPlatformChildManifest(
+        resolution.executionImage,
+        rawChildManifest.body,
+        {
+          rawIndexBodySize: rawChildManifest.rawIndexBodySize,
+          transportSize: rawChildManifest.transportSize,
+          trailingLineFeedRemoved: rawChildManifest.trailingLineFeedRemoved,
+        },
+      ),
+    };
   }
   return {
     images: {
