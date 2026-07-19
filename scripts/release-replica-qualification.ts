@@ -43,6 +43,8 @@ const DIGEST_AUTHORITY_FILES = {
 } as const;
 export const CONTROL_MIGRATION_DIRECTORY =
   "db/migrations-control/migrations" as const;
+export const POSTGRES_SCHEMA_CANONICALIZATION =
+  "pg_dump-restrict-pair-v1" as const;
 export const REQUIRED_NODE_VERSION = "v24.18.0" as const;
 
 export type ImageSet = {
@@ -1108,6 +1110,44 @@ async function psql(
   ).stdout;
 }
 
+export function canonicalPostgresSchemaDump(schema: string): string {
+  const lines = schema.split("\n");
+  const restrictionLines: Array<{
+    index: number;
+    command: "restrict" | "unrestrict";
+    token: string;
+  }> = [];
+
+  for (const [index, line] of lines.entries()) {
+    if (!/^\\(?:un)?restrict(?:\s|$)/u.test(line)) continue;
+    const match = /^\\(restrict|unrestrict) ([A-Za-z0-9]+)$/u.exec(line);
+    invariant(match, "pg_dump restriction line format drifted");
+    restrictionLines.push({
+      index,
+      command: match[1] as "restrict" | "unrestrict",
+      token: match[2]!,
+    });
+  }
+
+  if (restrictionLines.length === 0) return schema;
+  invariant(
+    restrictionLines.length === 2,
+    "pg_dump restriction line count drifted",
+  );
+  const [opening, closing] = restrictionLines;
+  invariant(
+    opening?.command === "restrict" && closing?.command === "unrestrict",
+    "pg_dump restriction line order drifted",
+  );
+  invariant(
+    opening.token === closing.token,
+    "pg_dump restriction token pair drifted",
+  );
+  lines[opening.index] = "\\restrict <normalized>";
+  lines[closing.index] = "\\unrestrict <normalized>";
+  return lines.join("\n");
+}
+
 async function databaseEvidence(
   names: ReplicaNames,
   secrets: RuntimeSecrets,
@@ -1204,7 +1244,7 @@ async function databaseEvidence(
   ).stdout;
   return {
     migrationCount,
-    schemaFingerprint: sha256Bytes(schema),
+    schemaFingerprint: sha256Bytes(canonicalPostgresSchemaDump(schema)),
     tableCount: tables.length,
     nonMigrationRows,
     foreignKeyConstraints: foreignKeys!,
@@ -1547,6 +1587,7 @@ async function main(): Promise<void> {
       configFingerprint: sha256Bytes(canonicalJson(config)),
       migration: {
         ...migration,
+        schemaCanonicalization: POSTGRES_SCHEMA_CANONICALIZATION,
         countBeforeUpgrade: before.migrationCount,
         countAfterUpgrade: after.migrationCount,
         schemaFingerprintBefore: before.schemaFingerprint,
