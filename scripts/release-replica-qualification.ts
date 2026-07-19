@@ -1490,11 +1490,11 @@ async function main(): Promise<void> {
     const after = await databaseEvidence(names, secrets);
     invariant(
       before.migrationCount === after.migrationCount,
-      "v0.10.36 unexpectedly changed the migration lineage",
+      `${options.version} unexpectedly changed the migration lineage`,
     );
     invariant(
       before.schemaFingerprint === after.schemaFingerprint,
-      "v0.10.36 changed the database schema without a migration-lineage change",
+      `${options.version} changed the database schema without a migration-lineage change`,
     );
     const profiles = await containerProfiles(names);
     const confinement = hostSecurityQualifies(securityOptions, profiles);
