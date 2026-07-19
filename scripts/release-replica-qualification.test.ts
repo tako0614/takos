@@ -40,7 +40,10 @@ describe("release replica qualification", () => {
         size: number;
       };
       buildRun: { id: number; attempt: number };
-      images: Record<"worker" | "agent" | "runtime", { digest: string }>;
+      images: Record<
+        "worker" | "agent" | "runtime",
+        { repository: string; digest: string }
+      >;
     };
     const workflow = readFileSync(
       new URL(
@@ -60,6 +63,13 @@ describe("release replica qualification", () => {
         size: 23567,
       },
       buildRun: { id: 29673093536, attempt: 1 },
+      images: {
+        worker: { repository: "ghcr.io/tako0614/takos-worker" },
+        agent: { repository: "ghcr.io/tako0614/takos-agent" },
+        runtime: {
+          repository: "ghcr.io/tako0614/takos-worker-runtime",
+        },
+      },
     });
     expect(fixture.images.agent.digest).toBe(
       "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
