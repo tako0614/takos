@@ -1,0 +1,28 @@
+{
+  "kind": "takos.release-replica.previous-release-evidence.v1",
+  "version": "0.10.35",
+  "sourceCommit": "d2dbcb406e6a8871e4c0b8bf243afc978331f323",
+  "releaseManifest": {
+    "assetId": 482077911,
+    "sha256": "62163dbc722b7acca61fe07f7f9707dd0f89383e5e49c5cd39c7edb75fd403c3",
+    "size": 23567
+  },
+  "buildRun": {
+    "id": 29673093536,
+    "attempt": 1
+  },
+  "images": {
+    "worker": {
+      "repository": "ghcr.io/tako0614/takos-worker",
+      "digest": "sha256:ba8f0af05473728707168fc3a2e37568691767b706b3a78378c0e61ad485fc9b"
+    },
+    "agent": {
+      "repository": "ghcr.io/tako0614/takos-agent",
+      "digest": "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6"
+    },
+    "runtime": {
+      "repository": "ghcr.io/tako0614/takos-worker-runtime",
+      "digest": "sha256:3164eb048307bc054b848f61656d4899ef1bed6ea4e43636ec852580eca4e474"
+    }
+  }
+}
