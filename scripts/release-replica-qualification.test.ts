@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
+  decodeCanonicalSha256,
   exactRegistryBody,
   exactDigestRef,
   hostSecurityQualifies,
@@ -64,6 +65,22 @@ describe("release replica qualification", () => {
     expect(compareSha256Bytes("replica", sha256Bytes("replica")).matches).toBe(
       true,
     );
+  });
+
+  test("decodes the published digest without runtime hex-decoder ambiguity", () => {
+    const published =
+      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6";
+    const decoded = decodeCanonicalSha256(published);
+    expect(decoded.byteLength).toBe(32);
+    expect(decoded[7]).toBe(0x0d);
+    expect(
+      Array.from(decoded, (byte) => byte.toString(16).padStart(2, "0")).join(
+        "",
+      ),
+    ).toBe(published.slice("sha256:".length));
+    expect(() =>
+      decodeCanonicalSha256(`sha256:${"A".repeat(64)}`),
+    ).toThrow("published SHA-256 is not canonical lowercase hex");
   });
 
   test("locks qualification to the canonical control migration inventory", () => {
