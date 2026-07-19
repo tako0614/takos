@@ -150,13 +150,43 @@ test("Worker release artifact configuration requires HTTPS URL and matching SHA 
     workerReleaseArtifactConfig({
       TAKOS_RELEASE_WORKER_ARTIFACT_URL: "https://example.com/release.tar.gz",
     }),
-  ).toThrow(/must be set together/u);
+  ).toThrow(/must be set with/u);
   expect(() =>
     workerReleaseArtifactConfig({
       TAKOS_RELEASE_WORKER_ARTIFACT_URL: "http://example.com/release.tar.gz",
       TAKOS_RELEASE_WORKER_ARTIFACT_SHA256: "a".repeat(64),
     }),
   ).toThrow(/must use https/u);
+});
+
+test("Worker release artifact configuration accepts only an absolute regular local file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-worker-artifact-local-"));
+  try {
+    const archive = join(root, "candidate.tar.gz");
+    await writeFile(archive, "candidate");
+    expect(
+      workerReleaseArtifactConfig({
+        TAKOS_RELEASE_WORKER_ARTIFACT_FILE: archive,
+        TAKOS_RELEASE_WORKER_ARTIFACT_SHA256: "a".repeat(64),
+      }),
+    ).toEqual({ file: archive, sha256: "a".repeat(64) });
+    expect(() =>
+      workerReleaseArtifactConfig({
+        TAKOS_RELEASE_WORKER_ARTIFACT_FILE: "candidate.tar.gz",
+        TAKOS_RELEASE_WORKER_ARTIFACT_SHA256: "a".repeat(64),
+      }),
+    ).toThrow(/must be absolute/u);
+    expect(() =>
+      workerReleaseArtifactConfig({
+        TAKOS_RELEASE_WORKER_ARTIFACT_FILE: archive,
+        TAKOS_RELEASE_WORKER_ARTIFACT_URL:
+          "https://example.com/candidate.tar.gz",
+        TAKOS_RELEASE_WORKER_ARTIFACT_SHA256: "a".repeat(64),
+      }),
+    ).toThrow(/Exactly one/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Worker release artifact preparation rejects a digest mismatch before extraction", async () => {
