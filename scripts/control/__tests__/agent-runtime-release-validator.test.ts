@@ -135,6 +135,28 @@ test("agent runtime release validator requires the private-envelope digest set",
   );
 });
 
+test("agent runtime release validator requires the controller candidate artifact name", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ needs.validate.outputs.source_commit_short }}",
+    "takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ github.sha }}",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must retain the sealed candidate under the controller's exact 12-character source-prefix name",
+  );
+});
+
+test("agent runtime release validator requires promotion to use the same candidate name", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "takos-release-candidate-${{ inputs.version }}-${{ needs.validate.outputs.source_commit_short }}",
+    "takos-release-candidate-${{ inputs.version }}-${{ inputs.source_commit }}",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml promotion must download the controller's exact 12-character source-prefix candidate name",
+  );
+});
+
 test("agent runtime release validator forbids build actions in promotion", async () => {
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(

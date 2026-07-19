@@ -382,10 +382,13 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     sourceEnv?.REQUESTED_VERSION !== "${{ inputs.version }}" ||
     sourceEnv?.RELEASE_PHASE !== "${{ inputs.phase }}" ||
     !sourceRun.includes('"${REQUESTED_VERSION}" != "${release_version}"') ||
-    !sourceRun.includes('"${GITHUB_RUN_ATTEMPT}" != "1"')
+    !sourceRun.includes('"${GITHUB_RUN_ATTEMPT}" != "1"') ||
+    !sourceRun.includes('source_commit_short="${source_commit:0:12}"') ||
+    asRecord(validateJob?.outputs)?.source_commit_short !==
+      "${{ steps.source.outputs.source_commit_short }}"
   ) {
     errors.push(
-      `${WORKFLOW_PATH} must treat workflow version as an assertion and forbid rerun mutation`,
+      `${WORKFLOW_PATH} must treat workflow version as an assertion, forbid rerun mutation, and expose the exact 12-character source prefix`,
     );
   }
   const workflowEnv = asRecord(workflow.env);
@@ -496,17 +499,29 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
       step.uses.includes("actions/upload-artifact@"),
   );
   if (
-    !stringValue(asRecord(candidateUpload?.with)?.name).includes(
-      "takos-release-candidate-",
-    )
+    stringValue(asRecord(candidateUpload?.with)?.name) !==
+    "takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ needs.validate.outputs.source_commit_short }}"
   ) {
     errors.push(
-      `${WORKFLOW_PATH} must retain the sealed candidate as an immutable run artifact`,
+      `${WORKFLOW_PATH} must retain the sealed candidate under the controller's exact 12-character source-prefix name`,
     );
   }
 
   const promoteJob = asRecord(jobs?.promote);
   const promoteSteps = workflowSteps(promoteJob);
+  const candidateDownload = promoteSteps.find(
+    (step) =>
+      typeof step.uses === "string" &&
+      step.uses.includes("actions/download-artifact@"),
+  );
+  if (
+    stringValue(asRecord(candidateDownload?.with)?.name) !==
+    "takos-release-candidate-${{ inputs.version }}-${{ needs.validate.outputs.source_commit_short }}"
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} promotion must download the controller's exact 12-character source-prefix candidate name`,
+    );
+  }
   if (
     promoteJob?.environment !== "production" ||
     promoteSteps.some(
