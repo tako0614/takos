@@ -646,6 +646,7 @@ jobs:
             --image-digest-dir ../release-inputs/image-digests \
             --release-version "${RELEASE_VERSION}" \
             --release-tag "${RELEASE_TAG}" \
+            --candidate-run-id "${GITHUB_RUN_ID}" \
             --require-image-digests \
             --require-clean-git \
             --require-cloudflare-container-images \
