@@ -61,7 +61,7 @@ on:
         default: ""
         type: string
       authorization_digest:
-        description: "Protected-environment authorization evidence digest"
+        description: "Controller technical-authorization evidence digest"
         required: false
         default: ""
         type: string
@@ -94,8 +94,8 @@ env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   TAKOSUMI_SOURCE_REF: 99fbc6277db9f1fb2827e675c8fa3c02488415a7
-  RELEASE_SAFETY_CONTROLLER_COMMIT: "76c68e4036eb7a8a4f47eb03916ca5acf251e98b"
-  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:d56dd0f527b7e295fa8dc05558ff1880865392709aa79f9ae85239d9b3ede7c2"
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "65f73a39899e4c8c01083fec3c6c97d432b7aaf2"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:782766cb0c9b0ab9cdcb88b43b7ce8d09a1525f337e9440da6c769ca225fbbce"
 
 jobs:
   validate:
@@ -696,7 +696,6 @@ jobs:
     timeout-minutes: 30
     needs: validate
     if: inputs.phase == 'promote' && needs.validate.result == 'success'
-    environment: production
     permissions:
       actions: read
       contents: write
