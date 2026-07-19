@@ -214,6 +214,24 @@ export function digestAuthorityPath(
   return authorityPath;
 }
 
+export function readDigestAuthority(
+  authorityDirectory: string,
+  fileName: (typeof DIGEST_AUTHORITY_FILES)[keyof typeof DIGEST_AUTHORITY_FILES],
+): { path: string; digest: string } {
+  const path = digestAuthorityPath(authorityDirectory, fileName);
+  const contents = readFileSync(path, "utf8");
+  invariant(
+    contents.length === 72 && contents.endsWith("\n"),
+    "digest authority input must contain exactly one newline-terminated line",
+  );
+  const digest = contents.slice(0, -1);
+  invariant(
+    digest.length === 71 && SHA256_RE.test(digest),
+    "digest authority input is not a canonical SHA-256",
+  );
+  return { path, digest };
+}
+
 export function verifySha256WithSystemTool(
   value: string | Uint8Array,
   expectedDigest: string,
@@ -223,6 +241,12 @@ export function verifySha256WithSystemTool(
     expectedDigest.length === 71 && SHA256_RE.test(expectedDigest),
     "published SHA-256 is not canonical lowercase hex",
   );
+  if (authorityPath) {
+    invariant(
+      readFileSync(authorityPath, "utf8") === `${expectedDigest}\n`,
+      "digest authority input does not match the expected digest",
+    );
+  }
   const directory = mkdtempSync(join(tmpdir(), "takos-release-sha256-"));
   const bodyPath = join(directory, "body");
   try {
@@ -619,15 +643,20 @@ async function resolvePreviousExecutionImages(
   for (const [name, publishedIndex] of Object.entries(published) as Array<
     [keyof ImageSet, string]
   >) {
-    const authorityPath = digestAuthorityPath(
+    const authority = readDigestAuthority(
       digestAuthorityDir,
       DIGEST_AUTHORITY_FILES[name],
     );
     const repository = publishedIndex.slice(0, publishedIndex.lastIndexOf("@"));
     const sourceTag = `${repository}:${PREVIOUS_VERSION}`;
-    const expectedIndexDigest = publishedIndex.slice(
+    const requestedIndexDigest = publishedIndex.slice(
       publishedIndex.lastIndexOf("@") + 1,
     );
+    invariant(
+      requestedIndexDigest === authority.digest,
+      `${name} requested digest does not match its authority file`,
+    );
+    const expectedIndexDigest = authority.digest;
     const rawOutput = await commandBytes([
       "docker",
       "buildx",
@@ -639,7 +668,7 @@ async function resolvePreviousExecutionImages(
     const rawIndex = exactRegistryBody(
       rawOutput,
       expectedIndexDigest,
-      authorityPath,
+      authority.path,
     );
     resolutions[name] = resolveLinuxAmd64Image(
       publishedIndex,
@@ -650,7 +679,7 @@ async function resolvePreviousExecutionImages(
         transportSize: rawIndex.transportSize,
         trailingLineFeedRemoved: rawIndex.trailingLineFeedRemoved,
       },
-      authorityPath,
+      authority.path,
     );
   }
   return {
@@ -725,14 +754,18 @@ function runtimeSecrets(): RuntimeSecrets {
 
 function candidateManifest(options: Options): Record<string, unknown> {
   const bytes = readFileSync(options.candidateManifest);
-  const authorityPath = digestAuthorityPath(
+  const authority = readDigestAuthority(
     options.digestAuthorityDir,
     DIGEST_AUTHORITY_FILES.candidateManifest,
   );
+  invariant(
+    options.candidateManifestDigest === authority.digest,
+    "candidate manifest requested digest does not match its authority file",
+  );
   const manifestDigestComparison = compareSha256Bytes(
     bytes,
-    options.candidateManifestDigest,
-    authorityPath,
+    authority.digest,
+    authority.path,
   );
   invariant(
     manifestDigestComparison.matches,
@@ -1298,13 +1331,24 @@ async function main(): Promise<void> {
   const options = parseOptions();
   const names = replicaNames(options.releaseId);
   const startedAt = new Date().toISOString();
+  invariant(
+    process.version === REQUIRED_NODE_VERSION,
+    `controller Node version drifted: expected ${REQUIRED_NODE_VERSION}, got ${process.version}`,
+  );
+  const nodeVersionReadback = (
+    await command([process.execPath, "--version"])
+  ).stdout;
+  invariant(
+    nodeVersionReadback === process.version,
+    `controller Node executable readback drifted: process=${process.version}, child=${nodeVersionReadback}`,
+  );
+  const controllerRuntime = {
+    version: process.version,
+    executable: process.execPath,
+    versionReadback: nodeVersionReadback,
+  };
   const manifest = candidateManifest(options);
   const migration = migrationEvidence(options.sourceDir);
-  const nodeVersion = (await command(["node", "--version"])).stdout;
-  invariant(
-    nodeVersion === REQUIRED_NODE_VERSION,
-    `Node version drifted: expected ${REQUIRED_NODE_VERSION}, got ${nodeVersion}`,
-  );
   const runnerImageOS = process.env.ImageOS?.trim() ?? "";
   const runnerImageVersion = process.env.ImageVersion?.trim() ?? "";
   if (process.env.GITHUB_ACTIONS === "true") {
@@ -1332,6 +1376,7 @@ async function main(): Promise<void> {
     accessPolicy: "replica-only-no-production-fallback",
     dataSource: "empty",
     productionCredentialsUsed: false,
+    controllerRuntime,
   };
   mkdirSync(resolve(options.output, ".."), { recursive: true, mode: 0o700 });
   let evidence: Record<string, unknown> = {
@@ -1456,7 +1501,7 @@ async function main(): Promise<void> {
       runner: "github-hosted-ubuntu-24.04",
       runnerImageOS: runnerImageOS || null,
       runnerImageVersion: runnerImageVersion || null,
-      nodeVersion,
+      controllerRuntime,
       osRelease: {
         path: "/etc/os-release",
         digest: sha256Bytes(osReleaseContents),

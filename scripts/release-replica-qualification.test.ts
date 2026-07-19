@@ -11,6 +11,7 @@ import {
   exactDigestRef,
   hostSecurityQualifies,
   migrationInventoryDirectory,
+  readDigestAuthority,
   REQUIRED_NODE_VERSION,
   resolveLinuxAmd64Image,
   sha256Bytes,
@@ -109,12 +110,18 @@ describe("release replica qualification", () => {
         "candidate-manifest.digest",
       );
       expect(
+        readDigestAuthority(directory, "candidate-manifest.digest"),
+      ).toEqual({ path: verifiedPath, digest: sha256Bytes(body) });
+      expect(
+        verifySha256WithSystemTool(body, sha256Bytes(body), verifiedPath),
+      ).toBe(true);
+      expect(() =>
         verifySha256WithSystemTool(
           body,
           `sha256:${"0".repeat(64)}`,
           verifiedPath,
         ),
-      ).toBe(true);
+      ).toThrow("digest authority input does not match the expected digest");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
