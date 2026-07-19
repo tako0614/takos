@@ -222,32 +222,30 @@ export function exactRegistryBody(
       commandOutput.byteLength <= MAX_OCI_INDEX_BYTES + 1,
     "raw manifest transport size is invalid",
   );
-  const candidates: Array<{
-    body: Uint8Array;
-    trailingLineFeedRemoved: boolean;
-  }> = [{ body: commandOutput, trailingLineFeedRemoved: false }];
-  if (commandOutput.at(-1) === 0x0a) {
-    candidates.push({
-      body: commandOutput.slice(0, -1),
-      trailingLineFeedRemoved: true,
-    });
-  }
-  const matches = candidates.filter(
-    (candidate) =>
-      candidate.body.byteLength > 0 &&
-      candidate.body.byteLength <= MAX_OCI_INDEX_BYTES &&
-      sha256Bytes(candidate.body) === expectedDigest,
-  );
+  const asIsDigest = sha256Bytes(commandOutput);
+  const asIsMatches =
+    commandOutput.byteLength <= MAX_OCI_INDEX_BYTES &&
+    asIsDigest === expectedDigest;
+  const canTrimLineFeed = commandOutput.at(-1) === 0x0a;
+  const trimmedBody = canTrimLineFeed
+    ? commandOutput.slice(0, commandOutput.byteLength - 1)
+    : null;
+  const trimmedDigest = trimmedBody ? sha256Bytes(trimmedBody) : null;
+  const trimmedMatches =
+    trimmedBody !== null &&
+    trimmedBody.byteLength > 0 &&
+    trimmedBody.byteLength <= MAX_OCI_INDEX_BYTES &&
+    trimmedDigest === expectedDigest;
   invariant(
-    matches.length === 1,
-    `raw OCI index transport did not produce exactly one published body: expected ${expectedDigest}, transport ${sha256Bytes(commandOutput)}`,
+    asIsMatches !== trimmedMatches,
+    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} transportSize=${commandOutput.byteLength} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIsDigest} asIsMatches=${String(asIsMatches)} trimmedDigest=${String(trimmedDigest)} trimmedMatches=${String(trimmedMatches)}`,
   );
-  const match = matches[0]!;
+  const body = asIsMatches ? commandOutput : trimmedBody!;
   return {
-    body: match.body,
-    rawIndexBodySize: match.body.byteLength,
+    body,
+    rawIndexBodySize: body.byteLength,
     transportSize: commandOutput.byteLength,
-    trailingLineFeedRemoved: match.trailingLineFeedRemoved,
+    trailingLineFeedRemoved: trimmedMatches,
   };
 }
 
