@@ -22,6 +22,7 @@ const REQUIRED_SECURITY_OPTIONS = [
   "name=seccomp,profile=builtin",
   "name=cgroupns",
 ] as const;
+const MAX_OCI_INDEX_BYTES = 10 * 1024 * 1024;
 export const CONTROL_MIGRATION_DIRECTORY =
   "db/migrations-control/migrations" as const;
 export const REQUIRED_BUN_VERSION = "1.3.14" as const;
@@ -100,6 +101,9 @@ type PlatformImageResolution = {
   publishedIndex: string;
   sourceTag: string;
   rawIndexDigest: string;
+  descriptorSize: number;
+  transportSize: number;
+  trailingLineFeedRemoved: boolean;
   platform: {
     os: "linux";
     architecture: "amd64";
@@ -152,6 +156,15 @@ export function resolveLinuxAmd64Image(
   publishedIndex: string,
   sourceTag: string,
   rawIndex: Uint8Array,
+  transport: {
+    descriptorSize: number;
+    transportSize: number;
+    trailingLineFeedRemoved: boolean;
+  } = {
+    descriptorSize: rawIndex.byteLength,
+    transportSize: rawIndex.byteLength,
+    trailingLineFeedRemoved: false,
+  },
 ): PlatformImageResolution {
   const separator = publishedIndex.lastIndexOf("@");
   invariant(separator > 0, "published image is not an exact digest reference");
@@ -163,7 +176,7 @@ export function resolveLinuxAmd64Image(
   );
   invariant(
     sha256Bytes(rawIndex) === expectedIndexDigest,
-    "raw OCI index digest drifted from the published release manifest",
+    `raw OCI index digest drifted from the published release manifest: expected ${expectedIndexDigest}, got ${sha256Bytes(rawIndex)}`,
   );
   const index = JSON.parse(new TextDecoder().decode(rawIndex)) as OciIndex;
   invariant(index.schemaVersion === 2, "OCI index schema version drifted");
@@ -185,9 +198,66 @@ export function resolveLinuxAmd64Image(
     publishedIndex,
     sourceTag,
     rawIndexDigest: expectedIndexDigest,
+    ...transport,
     platform: { os: "linux", architecture: "amd64" },
     executionImage,
   };
+}
+
+export function exactRegistryBody(
+  commandOutput: Uint8Array,
+  descriptorSize: number,
+): {
+  body: Uint8Array;
+  descriptorSize: number;
+  transportSize: number;
+  trailingLineFeedRemoved: boolean;
+} {
+  invariant(
+    Number.isSafeInteger(descriptorSize) &&
+      descriptorSize > 0 &&
+      descriptorSize <= MAX_OCI_INDEX_BYTES,
+    "registry descriptor size is invalid",
+  );
+  if (commandOutput.byteLength === descriptorSize) {
+    return {
+      body: commandOutput,
+      descriptorSize,
+      transportSize: commandOutput.byteLength,
+      trailingLineFeedRemoved: false,
+    };
+  }
+  invariant(
+    commandOutput.byteLength === descriptorSize + 1 &&
+      commandOutput.at(-1) === 0x0a,
+    "raw manifest output does not match the registry descriptor size",
+  );
+  return {
+    body: commandOutput.slice(0, descriptorSize),
+    descriptorSize,
+    transportSize: commandOutput.byteLength,
+    trailingLineFeedRemoved: true,
+  };
+}
+
+export function verifyRegistryDescriptor(
+  publishedIndex: string,
+  descriptor: { digest?: string; size?: number },
+): number {
+  const separator = publishedIndex.lastIndexOf("@");
+  invariant(separator > 0, "published image is not an exact digest reference");
+  const expectedIndexDigest = publishedIndex.slice(separator + 1);
+  invariant(
+    descriptor.digest === expectedIndexDigest,
+    "registry descriptor digest drifted from the published release manifest",
+  );
+  invariant(
+    Number.isSafeInteger(descriptor.size) &&
+      Number(descriptor.size) > 0 &&
+      Number(descriptor.size) <= MAX_OCI_INDEX_BYTES,
+    "registry descriptor size is invalid",
+  );
+  return Number(descriptor.size);
 }
 
 function parseOptions(): Options {
@@ -337,7 +407,21 @@ async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
   >) {
     const repository = publishedIndex.slice(0, publishedIndex.lastIndexOf("@"));
     const sourceTag = `${repository}:${PREVIOUS_VERSION}`;
-    const rawIndex = await commandBytes([
+    const descriptor = JSON.parse(
+      (
+        await command([
+          "docker",
+          "buildx",
+          "imagetools",
+          "inspect",
+          sourceTag,
+          "--format",
+          "{{json .Manifest}}",
+        ])
+      ).stdout,
+    ) as { digest?: string; size?: number };
+    const descriptorSize = verifyRegistryDescriptor(publishedIndex, descriptor);
+    const rawOutput = await commandBytes([
       "docker",
       "buildx",
       "imagetools",
@@ -345,10 +429,16 @@ async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
       sourceTag,
       "--raw",
     ]);
+    const rawIndex = exactRegistryBody(rawOutput, descriptorSize);
     resolutions[name] = resolveLinuxAmd64Image(
       publishedIndex,
       sourceTag,
-      rawIndex,
+      rawIndex.body,
+      {
+        descriptorSize: rawIndex.descriptorSize,
+        transportSize: rawIndex.transportSize,
+        trailingLineFeedRemoved: rawIndex.trailingLineFeedRemoved,
+      },
     );
   }
   return {

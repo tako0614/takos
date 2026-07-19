@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   CONTROL_MIGRATION_DIRECTORY,
+  exactRegistryBody,
   exactDigestRef,
   hostSecurityQualifies,
   migrationInventoryDirectory,
   REQUIRED_BUN_VERSION,
   resolveLinuxAmd64Image,
   sha256Bytes,
+  verifyRegistryDescriptor,
 } from "./release-replica-qualification.ts";
 
 describe("release replica qualification", () => {
@@ -91,6 +93,9 @@ describe("release replica qualification", () => {
       publishedIndex: indexRef,
       sourceTag: "ghcr.io/tako0614/takos-agent:0.10.35",
       rawIndexDigest: sha256Bytes(rawIndex),
+      descriptorSize: rawIndex.byteLength,
+      transportSize: rawIndex.byteLength,
+      trailingLineFeedRemoved: false,
       platform: { os: "linux", architecture: "amd64" },
       executionImage: `ghcr.io/tako0614/takos-agent@${childDigest}`,
     });
@@ -127,5 +132,53 @@ describe("release replica qualification", () => {
         duplicateRawIndex,
       ),
     ).toThrow("exactly one linux/amd64");
+  });
+
+  test("separates only one CLI line-feed delimiter from exact registry bytes", () => {
+    const body = new TextEncoder().encode('{"schemaVersion":2}');
+    expect(exactRegistryBody(body, body.byteLength)).toEqual({
+      body,
+      descriptorSize: body.byteLength,
+      transportSize: body.byteLength,
+      trailingLineFeedRemoved: false,
+    });
+
+    const withLineFeed = new Uint8Array([...body, 0x0a]);
+    expect(exactRegistryBody(withLineFeed, body.byteLength)).toEqual({
+      body,
+      descriptorSize: body.byteLength,
+      transportSize: body.byteLength + 1,
+      trailingLineFeedRemoved: true,
+    });
+
+    for (const invalid of [
+      new Uint8Array([...body, 0x0d, 0x0a]),
+      new Uint8Array([...body, 0x0a, 0x0a]),
+      new Uint8Array([...body, 0x20]),
+      body.slice(0, -1),
+    ]) {
+      expect(() => exactRegistryBody(invalid, body.byteLength)).toThrow(
+        "does not match the registry descriptor size",
+      );
+    }
+  });
+
+  test("rejects registry descriptor digest and size drift", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const publishedIndex = `ghcr.io/tako0614/takos-agent@${digest}`;
+    expect(
+      verifyRegistryDescriptor(publishedIndex, { digest, size: 856 }),
+    ).toBe(856);
+    expect(() =>
+      verifyRegistryDescriptor(publishedIndex, {
+        digest: `sha256:${"b".repeat(64)}`,
+        size: 856,
+      }),
+    ).toThrow("descriptor digest drifted");
+    for (const size of [undefined, 0, -1, 10 * 1024 * 1024 + 1]) {
+      expect(() =>
+        verifyRegistryDescriptor(publishedIndex, { digest, size }),
+      ).toThrow("descriptor size is invalid");
+    }
   });
 });
