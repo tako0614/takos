@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  compareCanonicalSha256Hex,
   compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
-  decodeCanonicalSha256,
   exactRegistryBody,
   exactDigestRef,
   hostSecurityQualifies,
@@ -50,12 +50,14 @@ describe("release replica qualification", () => {
     expect(sha256Bytes("replica")).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
-  test("compares SHA-256 authority as 32 digest bytes", () => {
+  test("compares SHA-256 authority without runtime string equality", () => {
     const bytes = new Uint8Array([0, 1, 2, 3, 255]);
     expect(compareSha256Bytes(bytes, sha256Bytes(bytes))).toEqual({
       actualDigest: sha256Bytes(bytes),
       matches: true,
       firstDifference: -1,
+      actualCharCode: null,
+      expectedCharCode: null,
     });
     const digest = sha256Bytes(bytes);
     const changed = `${digest.slice(0, -1)}${digest.endsWith("0") ? "1" : "0"}`;
@@ -67,20 +69,26 @@ describe("release replica qualification", () => {
     );
   });
 
-  test("decodes the published digest without runtime hex-decoder ambiguity", () => {
+  test("compares the published digest as strict ASCII code units", () => {
     const published =
       "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6";
-    const decoded = decodeCanonicalSha256(published);
-    expect(decoded.byteLength).toBe(32);
-    expect(decoded[7]).toBe(0x0d);
-    expect(
-      Array.from(decoded, (byte) => byte.toString(16).padStart(2, "0")).join(
-        "",
-      ),
-    ).toBe(published.slice("sha256:".length));
+    const hexadecimal = published.slice("sha256:".length);
+    expect(compareCanonicalSha256Hex(hexadecimal, hexadecimal)).toEqual({
+      matches: true,
+      firstDifference: -1,
+      actualCharCode: null,
+      expectedCharCode: null,
+    });
+    const changed = `${hexadecimal.slice(0, 15)}e${hexadecimal.slice(16)}`;
+    expect(compareCanonicalSha256Hex(hexadecimal, changed)).toEqual({
+      matches: false,
+      firstDifference: 15,
+      actualCharCode: "d".charCodeAt(0),
+      expectedCharCode: "e".charCodeAt(0),
+    });
     expect(() =>
-      decodeCanonicalSha256(`sha256:${"A".repeat(64)}`),
-    ).toThrow("published SHA-256 is not canonical lowercase hex");
+      compareCanonicalSha256Hex("A".repeat(64), hexadecimal),
+    ).toThrow("calculated SHA-256 is not canonical lowercase hex");
   });
 
   test("locks qualification to the canonical control migration inventory", () => {
