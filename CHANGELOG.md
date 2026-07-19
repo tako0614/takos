@@ -6,6 +6,13 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.10.38 — Stable release publication repair
+
+- Publish the sealed GitHub Release from the checked-out Takos repository so
+  `--notes-from-tag` can verify and read the annotated release tag.
+- Retain the failed v0.10.37 promotion's exact versioned OCI tags without
+  overwrite; v0.10.38 is a newly built and qualified immutable candidate.
+
 ## 0.10.37 — Immutable release qualification
 
 - Build one three-image candidate and bind its exact source, policy, toolchain,
