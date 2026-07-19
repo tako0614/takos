@@ -76,6 +76,10 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: "24.18.0"
+
       - name: Verify reviewed qualification workflow authority
         shell: bash
         run: |
@@ -157,6 +161,30 @@ jobs:
                {name:"takos-worker-runtime", digest:$runtime}
              ]' "${manifest}" >/dev/null
 
+      - name: Prepare file-backed digest authority
+        shell: bash
+        env:
+          CANDIDATE_MANIFEST_DIGEST: ${{ inputs.candidate_manifest_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          authority_dir="${RUNNER_TEMP}/takos-release-digest-authority-${GITHUB_RUN_ID}"
+          install -d -m 700 "${authority_dir}"
+          write_digest() {
+            local file_name="$1"
+            local digest="$2"
+            [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s\n' "${digest}" > "${authority_dir}/${file_name}"
+            chmod 600 "${authority_dir}/${file_name}"
+            [[ "$(stat -c '%s' "${authority_dir}/${file_name}")" == "72" ]]
+          }
+          write_digest candidate-manifest.digest "${CANDIDATE_MANIFEST_DIGEST}"
+          write_digest previous-worker.digest "${PREVIOUS_WORKER_DIGEST}"
+          write_digest previous-agent.digest "${PREVIOUS_AGENT_DIGEST}"
+          write_digest previous-runtime.digest "${PREVIOUS_RUNTIME_DIGEST}"
+          [[ "$(stat -c '%a' "${authority_dir}")" == "700" ]]
+          [[ "$(find "${authority_dir}" -mindepth 1 -maxdepth 1 -type f | wc -l)" == "4" ]]
+
       - name: Login to GHCR for exact digest pulls only
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
         with:
@@ -175,17 +203,19 @@ jobs:
           WORKER_DIGEST: ${{ inputs.worker_digest }}
           AGENT_DIGEST: ${{ inputs.agent_digest }}
           RUNTIME_DIGEST: ${{ inputs.runtime_digest }}
+          DIGEST_AUTHORITY_DIR: ${{ runner.temp }}/takos-release-digest-authority-${{ github.run_id }}
         run: |
           set -euo pipefail
           mkdir -p evidence
           chmod 700 evidence
-          bun control/scripts/release-replica-qualification.ts \
+          node --experimental-strip-types control/scripts/release-replica-qualification.ts \
             --release-id "${RELEASE_ID}" \
             --source-commit "${SOURCE_COMMIT}" \
             --workflow-commit "${GITHUB_SHA}" \
             --candidate-run-id "${CANDIDATE_RUN_ID}" \
             --candidate-manifest-digest "${CANDIDATE_MANIFEST_DIGEST}" \
             --candidate-manifest "${GITHUB_WORKSPACE}/candidate/release-candidate-manifest.json" \
+            --digest-authority-dir "${DIGEST_AUTHORITY_DIR}" \
             --source-dir "${GITHUB_WORKSPACE}/source" \
             --output "${GITHUB_WORKSPACE}/evidence/release-replica-qualification.json" \
             --worker-digest "${WORKER_DIGEST}" \
