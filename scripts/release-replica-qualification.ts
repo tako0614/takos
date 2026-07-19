@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { Buffer } from "node:buffer";
 import {
   createHash,
   generateKeyPairSync,
@@ -6,6 +7,7 @@ import {
 } from "node:crypto";
 import {
   chmodSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -33,9 +35,15 @@ const REQUIRED_SECURITY_OPTIONS = [
   "name=cgroupns",
 ] as const;
 const MAX_OCI_INDEX_BYTES = 10 * 1024 * 1024;
+const DIGEST_AUTHORITY_FILES = {
+  candidateManifest: "candidate-manifest.digest",
+  worker: "previous-worker.digest",
+  agent: "previous-agent.digest",
+  runtime: "previous-runtime.digest",
+} as const;
 export const CONTROL_MIGRATION_DIRECTORY =
   "db/migrations-control/migrations" as const;
-export const REQUIRED_BUN_VERSION = "1.3.14" as const;
+export const REQUIRED_NODE_VERSION = "v24.18.0" as const;
 
 export type ImageSet = {
   worker: string;
@@ -63,6 +71,7 @@ type Options = {
   candidateRunId: string;
   candidateManifestDigest: string;
   candidateManifest: string;
+  digestAuthorityDir: string;
   sourceDir: string;
   output: string;
   candidate: ImageSet;
@@ -166,9 +175,49 @@ export function compareCanonicalSha256Hex(
   };
 }
 
+export function digestAuthorityPath(
+  authorityDirectory: string,
+  fileName: (typeof DIGEST_AUTHORITY_FILES)[keyof typeof DIGEST_AUTHORITY_FILES],
+): string {
+  const directory = resolve(authorityDirectory);
+  const directoryStat = lstatSync(directory);
+  invariant(
+    directoryStat.isDirectory() && !directoryStat.isSymbolicLink(),
+    "digest authority root must be a real directory",
+  );
+  invariant(
+    (directoryStat.mode & 0o777) === 0o700,
+    "digest authority root must have mode 0700",
+  );
+  invariant(
+    Object.values(DIGEST_AUTHORITY_FILES).includes(fileName),
+    "digest authority file name is not allowed",
+  );
+  const authorityPath = resolve(directory, fileName);
+  invariant(
+    authorityPath === join(directory, fileName),
+    "digest authority file escaped its root",
+  );
+  const authorityStat = lstatSync(authorityPath);
+  invariant(
+    authorityStat.isFile() && !authorityStat.isSymbolicLink(),
+    "digest authority input must be a real file",
+  );
+  invariant(
+    (authorityStat.mode & 0o777) === 0o600,
+    "digest authority input must have mode 0600",
+  );
+  invariant(
+    authorityStat.size === 72,
+    "digest authority input must contain one canonical digest line",
+  );
+  return authorityPath;
+}
+
 export function verifySha256WithSystemTool(
   value: string | Uint8Array,
   expectedDigest: string,
+  authorityPath?: string,
 ): boolean {
   invariant(
     expectedDigest.length === 71 && SHA256_RE.test(expectedDigest),
@@ -180,21 +229,24 @@ export function verifySha256WithSystemTool(
     chmodSync(directory, 0o700);
     writeFileSync(bodyPath, value, { mode: 0o600 });
     chmodSync(bodyPath, 0o600);
+    const verifierScript = authorityPath
+      ? 'set -euo pipefail\nIFS= read -r expected_digest < "$AUTHORITY_PATH"\n[[ "$expected_digest" =~ ^sha256:[0-9a-f]{64}$ ]]\nprintf "%s  %s\\n" "${expected_digest#sha256:}" "$BODY_PATH" | /usr/bin/sha256sum --check --status --strict'
+      : 'set -euo pipefail\nprintf "%s  %s\\n" "${EXPECTED_DIGEST#sha256:}" "$BODY_PATH" | /usr/bin/sha256sum --check --status --strict';
+    const verifierEnvironment: Record<string, string> = {
+      PATH: "/usr/bin:/bin",
+      LC_ALL: "C",
+      BODY_PATH: bodyPath,
+    };
+    if (authorityPath) {
+      verifierEnvironment.AUTHORITY_PATH = authorityPath;
+    } else {
+      verifierEnvironment.EXPECTED_DIGEST = expectedDigest;
+    }
     const result = spawnSync(
       "/usr/bin/bash",
-      [
-        "--noprofile",
-        "--norc",
-        "-c",
-        'set -euo pipefail\nprintf "%s  %s\\n" "${EXPECTED_DIGEST#sha256:}" "$BODY_PATH" | /usr/bin/sha256sum --check --status --strict',
-      ],
+      ["--noprofile", "--norc", "-c", verifierScript],
       {
-        env: {
-          PATH: "/usr/bin:/bin",
-          LC_ALL: "C",
-          BODY_PATH: bodyPath,
-          EXPECTED_DIGEST: expectedDigest,
-        },
+        env: verifierEnvironment,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: 1024 * 1024,
@@ -217,6 +269,7 @@ export function verifySha256WithSystemTool(
 export function compareSha256Bytes(
   value: string | Uint8Array,
   expectedDigest: string,
+  authorityPath?: string,
 ): {
   actualDigest: string;
   matches: boolean;
@@ -235,7 +288,7 @@ export function compareSha256Bytes(
       expectedCharCode: null,
     };
   }
-  if (verifySha256WithSystemTool(value, expectedDigest)) {
+  if (verifySha256WithSystemTool(value, expectedDigest, authorityPath)) {
     return {
       actualDigest,
       matches: true,
@@ -301,6 +354,7 @@ export function resolveLinuxAmd64Image(
     transportSize: rawIndex.byteLength,
     trailingLineFeedRemoved: false,
   },
+  authorityPath?: string,
 ): PlatformImageResolution {
   const separator = publishedIndex.lastIndexOf("@");
   invariant(separator > 0, "published image is not an exact digest reference");
@@ -310,7 +364,11 @@ export function resolveLinuxAmd64Image(
     sourceTag === `${repository}:${PREVIOUS_VERSION}`,
     "previous image tag drifted",
   );
-  const rawIndexComparison = compareSha256Bytes(rawIndex, expectedIndexDigest);
+  const rawIndexComparison = compareSha256Bytes(
+    rawIndex,
+    expectedIndexDigest,
+    authorityPath,
+  );
   invariant(
     rawIndexComparison.matches,
     `raw OCI index digest drifted from the published release manifest: expected ${expectedIndexDigest}, got ${rawIndexComparison.actualDigest}, firstDifference=${rawIndexComparison.firstDifference}, actualCharCode=${String(rawIndexComparison.actualCharCode)}, expectedCharCode=${String(rawIndexComparison.expectedCharCode)}`,
@@ -344,6 +402,7 @@ export function resolveLinuxAmd64Image(
 export function exactRegistryBody(
   commandOutput: Uint8Array,
   expectedDigest: string,
+  authorityPath?: string,
 ): {
   body: Uint8Array;
   rawIndexBodySize: number;
@@ -359,13 +418,17 @@ export function exactRegistryBody(
       commandOutput.byteLength <= MAX_OCI_INDEX_BYTES + 1,
     "raw manifest transport size is invalid",
   );
-  const asIs = compareSha256Bytes(commandOutput, expectedDigest);
+  const asIs = compareSha256Bytes(
+    commandOutput,
+    expectedDigest,
+    authorityPath,
+  );
   const canTrimLineFeed = commandOutput.at(-1) === 0x0a;
   const trimmedBody = canTrimLineFeed
     ? commandOutput.slice(0, commandOutput.byteLength - 1)
     : null;
   const trimmed = trimmedBody
-    ? compareSha256Bytes(trimmedBody, expectedDigest)
+    ? compareSha256Bytes(trimmedBody, expectedDigest, authorityPath)
     : null;
   const trimmedMatches =
     trimmedBody !== null &&
@@ -417,6 +480,9 @@ function parseOptions(): Options {
     candidateRunId,
     candidateManifestDigest,
     candidateManifest: resolve(requiredArgument("--candidate-manifest")),
+    digestAuthorityDir: resolve(
+      requiredArgument("--digest-authority-dir"),
+    ),
     sourceDir: resolve(requiredArgument("--source-dir")),
     output: resolve(requiredArgument("--output")),
     candidate: {
@@ -469,23 +535,31 @@ async function command(
     input?: string;
   } = {},
 ): Promise<CommandResult> {
-  const child = Bun.spawn([...argv], {
+  const child = spawn(argv[0]!, argv.slice(1), {
     env: { ...process.env, ...options.env },
-    stdin: options.input === undefined ? "ignore" : "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   });
   if (options.input !== undefined) {
     const stdin = child.stdin;
     invariant(stdin, `${argv[0]} stdin was not created`);
-    stdin.write(options.input);
-    stdin.end();
+    stdin.end(options.input);
   }
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  child.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+  const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
+    child.once("error", rejectExit);
+    child.once("close", (code, signal) => {
+      if (code === null) {
+        rejectExit(new Error(`${argv[0]} terminated by ${String(signal)}`));
+        return;
+      }
+      resolveExit(code);
+    });
+  });
+  const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+  const stderr = Buffer.concat(stderrChunks).toString("utf8");
   if (exitCode !== 0 && !options.allowFailure) {
     throw new Error(
       `${argv.slice(0, 4).join(" ")} failed with exit ${exitCode}: ${safeError(stderr)}`,
@@ -495,23 +569,32 @@ async function command(
 }
 
 async function commandBytes(argv: readonly string[]): Promise<Uint8Array> {
-  const child = Bun.spawn([...argv], {
+  const child = spawn(argv[0]!, argv.slice(1), {
     env: process.env,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).arrayBuffer(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
+  const stdoutChunks: Buffer[] = [];
+  const stderrChunks: Buffer[] = [];
+  child.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+  const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
+    child.once("error", rejectExit);
+    child.once("close", (code, signal) => {
+      if (code === null) {
+        rejectExit(new Error(`${argv[0]} terminated by ${String(signal)}`));
+        return;
+      }
+      resolveExit(code);
+    });
+  });
+  const stdout = Buffer.concat(stdoutChunks);
+  const stderr = Buffer.concat(stderrChunks).toString("utf8");
   if (exitCode !== 0) {
     throw new Error(
       `${argv.slice(0, 4).join(" ")} failed with exit ${exitCode}: ${safeError(stderr)}`,
     );
   }
-  return new Uint8Array(stdout);
+  return new Uint8Array(stdout.buffer, stdout.byteOffset, stdout.byteLength);
 }
 
 async function docker(...args: readonly string[]): Promise<string> {
@@ -525,7 +608,10 @@ async function dockerWithEnv(
   return (await command(["docker", ...args], { env })).stdout;
 }
 
-async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
+async function resolvePreviousExecutionImages(
+  published: ImageSet,
+  digestAuthorityDir: string,
+): Promise<{
   images: ImageSet;
   resolutions: Record<keyof ImageSet, PlatformImageResolution>;
 }> {
@@ -533,6 +619,10 @@ async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
   for (const [name, publishedIndex] of Object.entries(published) as Array<
     [keyof ImageSet, string]
   >) {
+    const authorityPath = digestAuthorityPath(
+      digestAuthorityDir,
+      DIGEST_AUTHORITY_FILES[name],
+    );
     const repository = publishedIndex.slice(0, publishedIndex.lastIndexOf("@"));
     const sourceTag = `${repository}:${PREVIOUS_VERSION}`;
     const expectedIndexDigest = publishedIndex.slice(
@@ -546,7 +636,11 @@ async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
       sourceTag,
       "--raw",
     ]);
-    const rawIndex = exactRegistryBody(rawOutput, expectedIndexDigest);
+    const rawIndex = exactRegistryBody(
+      rawOutput,
+      expectedIndexDigest,
+      authorityPath,
+    );
     resolutions[name] = resolveLinuxAmd64Image(
       publishedIndex,
       sourceTag,
@@ -556,6 +650,7 @@ async function resolvePreviousExecutionImages(published: ImageSet): Promise<{
         transportSize: rawIndex.transportSize,
         trailingLineFeedRemoved: rawIndex.trailingLineFeedRemoved,
       },
+      authorityPath,
     );
   }
   return {
@@ -630,9 +725,14 @@ function runtimeSecrets(): RuntimeSecrets {
 
 function candidateManifest(options: Options): Record<string, unknown> {
   const bytes = readFileSync(options.candidateManifest);
+  const authorityPath = digestAuthorityPath(
+    options.digestAuthorityDir,
+    DIGEST_AUTHORITY_FILES.candidateManifest,
+  );
   const manifestDigestComparison = compareSha256Bytes(
     bytes,
     options.candidateManifestDigest,
+    authorityPath,
   );
   invariant(
     manifestDigestComparison.matches,
@@ -739,7 +839,7 @@ async function waitForCommand(
     } catch (error) {
       lastError = error;
     }
-    await Bun.sleep(1_000);
+    await new Promise((resolveSleep) => setTimeout(resolveSleep, 1_000));
   }
   throw new Error(`${label} did not become ready: ${safeError(lastError)}`);
 }
@@ -1143,7 +1243,7 @@ async function failureInjection(
     "PORT=8080",
     image,
   );
-  await Bun.sleep(5_000);
+  await new Promise((resolveSleep) => setTimeout(resolveSleep, 5_000));
   const state = JSON.parse(
     await docker("inspect", "--format", "{{json .State}}", names.failureWorker),
   ) as { Running?: boolean; ExitCode?: number };
@@ -1200,10 +1300,10 @@ async function main(): Promise<void> {
   const startedAt = new Date().toISOString();
   const manifest = candidateManifest(options);
   const migration = migrationEvidence(options.sourceDir);
-  const bunVersion = (await command(["bun", "--version"])).stdout;
+  const nodeVersion = (await command(["node", "--version"])).stdout;
   invariant(
-    bunVersion === REQUIRED_BUN_VERSION,
-    `Bun version drifted: expected ${REQUIRED_BUN_VERSION}, got ${bunVersion}`,
+    nodeVersion === REQUIRED_NODE_VERSION,
+    `Node version drifted: expected ${REQUIRED_NODE_VERSION}, got ${nodeVersion}`,
   );
   const runnerImageOS = process.env.ImageOS?.trim() ?? "";
   const runnerImageVersion = process.env.ImageVersion?.trim() ?? "";
@@ -1259,6 +1359,7 @@ async function main(): Promise<void> {
     );
     const previousResolution = await resolvePreviousExecutionImages(
       options.previous,
+      options.digestAuthorityDir,
     );
     const previousPullReadback = await pullAndReadBackExactImages(
       previousResolution.images,
@@ -1355,7 +1456,7 @@ async function main(): Promise<void> {
       runner: "github-hosted-ubuntu-24.04",
       runnerImageOS: runnerImageOS || null,
       runnerImageVersion: runnerImageVersion || null,
-      bunVersion,
+      nodeVersion,
       osRelease: {
         path: "/etc/os-release",
         digest: sha256Bytes(osReleaseContents),
