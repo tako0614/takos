@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import * as runtime from "./runtime.ts";
 import {
@@ -11,6 +12,8 @@ import { QUEUE_CONSUMERS } from "./control/queue-consumer-config.ts";
 
 const WRANGLER_PATH = "deploy/cloudflare/wrangler.toml";
 const WORKFLOW_PATH = ".github/workflows/release-artifacts.yml";
+export const RELEASE_TAG_TRUST_PATH =
+  "release/trust/takos-release-tag-signing-key.json";
 export const AGENT_ENGINE_SOURCE_PATH = "containers/agent/engine-source.json";
 const EGRESS_ENTRYPOINT = "TakosEgressEntrypoint";
 
@@ -53,6 +56,7 @@ export type AgentRuntimeReleaseValidationInput = {
   wranglerText: string;
   workflowText: string;
   engineSource: unknown;
+  tagTrust: unknown;
 };
 
 export function validateAgentEngineSource(value: unknown): {
@@ -98,6 +102,79 @@ export function validateAgentEngineSource(value: unknown): {
   };
 }
 
+export function validateReleaseTagTrust(value: unknown): string[] {
+  const record = asRecord(value);
+  if (!record) return [`${RELEASE_TAG_TRUST_PATH} must be a JSON object`];
+  const errors: string[] = [];
+  const exactKeys = new Set([
+    "kind",
+    "keyId",
+    "algorithm",
+    "principal",
+    "publicKey",
+    "githubAccount",
+    "usage",
+    "createdAt",
+  ]);
+  for (const key of Object.keys(record)) {
+    if (!exactKeys.has(key)) {
+      errors.push(
+        `${RELEASE_TAG_TRUST_PATH} contains unsupported field ${key}`,
+      );
+    }
+  }
+  if (record.kind !== "takos.release-tag-signing-key@v1") {
+    errors.push(`${RELEASE_TAG_TRUST_PATH} kind is invalid`);
+  }
+  if (record.algorithm !== "ssh-ed25519") {
+    errors.push(`${RELEASE_TAG_TRUST_PATH} algorithm must be ssh-ed25519`);
+  }
+  if (record.githubAccount !== "tako0614") {
+    errors.push(`${RELEASE_TAG_TRUST_PATH} githubAccount must be tako0614`);
+  }
+  if (
+    typeof record.principal !== "string" ||
+    !/^[^\s@]+@[^\s@]+$/u.test(record.principal)
+  ) {
+    errors.push(
+      `${RELEASE_TAG_TRUST_PATH} principal must be an email identity`,
+    );
+  }
+  if (
+    !Array.isArray(record.usage) ||
+    record.usage.length !== 1 ||
+    record.usage[0] !== "git-tag-signing"
+  ) {
+    errors.push(`${RELEASE_TAG_TRUST_PATH} usage must be git-tag-signing only`);
+  }
+  if (
+    typeof record.createdAt !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(record.createdAt)
+  ) {
+    errors.push(
+      `${RELEASE_TAG_TRUST_PATH} createdAt must be an exact UTC timestamp`,
+    );
+  }
+  if (
+    typeof record.publicKey !== "string" ||
+    !/^ssh-ed25519 [A-Za-z0-9+/]+={0,2}(?: [^\r\n]+)?$/u.test(record.publicKey)
+  ) {
+    errors.push(
+      `${RELEASE_TAG_TRUST_PATH} publicKey must be one SSH Ed25519 key`,
+    );
+  } else {
+    const encoded = record.publicKey.split(" ")[1];
+    const fingerprint = createHash("sha256")
+      .update(Buffer.from(encoded, "base64"))
+      .digest("base64")
+      .replace(/=+$/u, "");
+    if (record.keyId !== `SHA256:${fingerprint}`) {
+      errors.push(`${RELEASE_TAG_TRUST_PATH} keyId does not match publicKey`);
+    }
+  }
+  return errors;
+}
+
 export function validateAgentRuntimeReleaseContract(
   input: AgentRuntimeReleaseValidationInput,
 ): string[] {
@@ -141,6 +218,7 @@ export function validateAgentRuntimeReleaseContract(
   );
 
   errors.push(...validateAgentEngineSource(input.engineSource).errors);
+  errors.push(...validateReleaseTagTrust(input.tagTrust));
   validateReleaseWorkflow(input.workflowText, errors);
   return errors;
 }
@@ -464,7 +542,10 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !signedTagRun.includes('.object.type == "tag"') ||
     !signedTagRun.includes(".verification.verified == true") ||
-    !signedTagRun.includes(".object.sha == $source")
+    !signedTagRun.includes(".object.sha == $source") ||
+    !signedTagRun.includes(RELEASE_TAG_TRUST_PATH) ||
+    !signedTagRun.includes("gpg.ssh.allowedSignersFile") ||
+    !signedTagRun.includes('verify-tag "${RELEASE_TAG}"')
   ) {
     errors.push(
       `${WORKFLOW_PATH} must verify a signed annotated tag bound to the source commit`,
@@ -605,15 +686,18 @@ function recordArray(value: unknown): JsonRecord[] {
 }
 
 async function main(): Promise<void> {
-  const [wranglerText, workflowText, engineSourceText] = await Promise.all([
-    runtime.readTextFile(WRANGLER_PATH),
-    runtime.readTextFile(WORKFLOW_PATH),
-    runtime.readTextFile(AGENT_ENGINE_SOURCE_PATH),
-  ]);
+  const [wranglerText, workflowText, engineSourceText, tagTrustText] =
+    await Promise.all([
+      runtime.readTextFile(WRANGLER_PATH),
+      runtime.readTextFile(WORKFLOW_PATH),
+      runtime.readTextFile(AGENT_ENGINE_SOURCE_PATH),
+      runtime.readTextFile(RELEASE_TAG_TRUST_PATH),
+    ]);
   const errors = validateAgentRuntimeReleaseContract({
     wranglerText,
     workflowText,
     engineSource: JSON.parse(engineSourceText) as unknown,
+    tagTrust: JSON.parse(tagTrustText) as unknown,
   });
   if (errors.length > 0) {
     console.error("Agent runtime release validation failed:");
