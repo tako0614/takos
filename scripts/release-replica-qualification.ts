@@ -1,4 +1,3 @@
-import { Buffer } from "node:buffer";
 import {
   createHash,
   generateKeyPairSync,
@@ -125,6 +124,35 @@ export function sha256Bytes(value: string | Uint8Array): string {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
+function lowercaseHexNibble(characterCode: number): number {
+  if (characterCode >= 0x30 && characterCode <= 0x39) {
+    return characterCode - 0x30;
+  }
+  if (characterCode >= 0x61 && characterCode <= 0x66) {
+    return characterCode - 0x61 + 10;
+  }
+  return -1;
+}
+
+export function decodeCanonicalSha256(digest: string): Uint8Array {
+  invariant(
+    digest.length === 71 && SHA256_RE.test(digest),
+    "published SHA-256 is not canonical lowercase hex",
+  );
+  const hexadecimal = digest.slice("sha256:".length);
+  const decoded = new Uint8Array(32);
+  for (let index = 0; index < decoded.byteLength; index += 1) {
+    const high = lowercaseHexNibble(hexadecimal.charCodeAt(index * 2));
+    const low = lowercaseHexNibble(hexadecimal.charCodeAt(index * 2 + 1));
+    invariant(
+      high >= 0 && low >= 0,
+      "published SHA-256 contains a non-lowercase-hex byte",
+    );
+    decoded[index] = high * 16 + low;
+  }
+  return decoded;
+}
+
 export function compareSha256Bytes(
   value: string | Uint8Array,
   expectedDigest: string,
@@ -134,7 +162,7 @@ export function compareSha256Bytes(
   if (expectedDigest.length !== 71 || !SHA256_RE.test(expectedDigest)) {
     return { actualDigest, matches: false, firstDifference: 0 };
   }
-  const expected = Buffer.from(expectedDigest.slice("sha256:".length), "hex");
+  const expected = decodeCanonicalSha256(expectedDigest);
   invariant(expected.byteLength === 32, "published SHA-256 is not 32 bytes");
   let firstDifference = -1;
   for (let index = 0; index < actual.byteLength; index += 1) {
