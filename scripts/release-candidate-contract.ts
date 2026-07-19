@@ -22,32 +22,24 @@ export const REQUIRED_RELEASE_ASSETS = [
 
 type NamedDigest = {
   name: string;
-  path: string;
   digest: string;
 };
 
 type ImageDigest = {
   name: string;
-  image: string;
   versionRef: string;
   latestRef: string;
   digest: string;
-  digestRef: string;
-  metadataPath: string;
-  sbomPath: string;
-  sbomDigest: string;
-  provenancePath: string;
-  provenanceDigest: string;
-  cloudflareRegistryRef?: string;
 };
 
 export type CandidateManifest = {
   kind: typeof CANDIDATE_KIND;
+  surfaceId: "takos-release-artifacts";
   repository: string;
   sourceCommit: string;
   version: string;
-  takosumiSourceCommit: string;
-  candidateRunId: string;
+  tag: string;
+  workflowRunId: string;
   builtAt: string;
   ociImages: ImageDigest[];
   releaseAssets: NamedDigest[];
@@ -146,12 +138,25 @@ function copyAsset(
   const target = join(outputDir, "assets", name);
   mkdirSync(join(outputDir, "assets"), { recursive: true });
   copyFileSync(source, target);
-  return { name, path: `assets/${name}`, digest: sha256File(target) };
+  return { name, digest: sha256File(target) };
 }
 
 function requireEvidenceJson(path: string, label: string): void {
   const value: unknown = JSON.parse(readFileSync(path, "utf8"));
   invariant(value !== null, `${label} evidence must not be null`);
+}
+
+function requireExactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  invariant(
+    JSON.stringify(actual) === JSON.stringify(wanted),
+    `${label} keys drifted`,
+  );
 }
 
 export function buildCandidateManifest(input: BuildInput): CandidateManifest {
@@ -160,7 +165,7 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
   const evidenceDir = join(outputDir, "evidence", "image-digests");
   mkdirSync(evidenceDir, { recursive: true });
 
-  const ociImages = REQUIRED_IMAGES.map((name): ImageDigest => {
+  const imageEvidence = REQUIRED_IMAGES.map((name) => {
     const metadataSource = join(input.imageDigestDir, `${name}.json`);
     const sbomSource = join(input.imageDigestDir, `${name}.sbom.json`);
     const provenanceSource = join(
@@ -181,6 +186,10 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
       `${name} metadata image is missing`,
     );
     invariant(
+      metadata.image === `ghcr.io/tako0614/${name}`,
+      `${name} metadata image drifted`,
+    );
+    invariant(
       typeof metadata.digest === "string" && SHA256_RE.test(metadata.digest),
       `${name} metadata digest is invalid`,
     );
@@ -188,30 +197,40 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
       metadata.digestRef === `${metadata.image}@${metadata.digest}`,
       `${name} digestRef must bind the image content digest`,
     );
+    invariant(
+      JSON.stringify(metadata.tags) ===
+        JSON.stringify([
+          `${metadata.image}:candidate-${input.candidateRunId}-1`,
+        ]),
+      `${name} metadata must contain only the exact candidate tag`,
+    );
+    if (name !== "takos-worker") {
+      invariant(
+        typeof metadata.cloudflareRegistryRef === "string" &&
+          metadata.cloudflareRegistryRef.endsWith(
+            `/${name}:candidate-${input.candidateRunId}-1`,
+          ),
+        `${name} Cloudflare registry candidate ref is required`,
+      );
+    }
     requireEvidenceJson(sbomSource, `${name} SBOM`);
     requireEvidenceJson(provenanceSource, `${name} provenance`);
 
     for (const source of [metadataSource, sbomSource, provenanceSource]) {
       copyFileSync(source, join(evidenceDir, basename(source)));
     }
-    const result: ImageDigest = {
-      name,
-      image: metadata.image,
-      versionRef: `${metadata.image}:${input.version}`,
-      latestRef: `${metadata.image}:latest`,
-      digest: metadata.digest,
-      digestRef: metadata.digestRef as string,
-      metadataPath: `evidence/image-digests/${name}.json`,
-      sbomPath: `evidence/image-digests/${name}.sbom.json`,
+    return {
+      image: {
+        name,
+        versionRef: `${metadata.image}:${input.version}`,
+        latestRef: `${metadata.image}:latest`,
+        digest: metadata.digest,
+      } satisfies ImageDigest,
       sbomDigest: sha256File(sbomSource),
-      provenancePath: `evidence/image-digests/${name}.provenance.json`,
       provenanceDigest: sha256File(provenanceSource),
     };
-    if (typeof metadata.cloudflareRegistryRef === "string") {
-      result.cloudflareRegistryRef = metadata.cloudflareRegistryRef;
-    }
-    return result;
   });
+  const ociImages = imageEvidence.map((evidence) => evidence.image);
 
   const releaseAssets = REQUIRED_RELEASE_ASSETS.map((name) => {
     const source =
@@ -227,11 +246,12 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
 
   const manifest: CandidateManifest = {
     kind: CANDIDATE_KIND,
+    surfaceId: "takos-release-artifacts",
     repository: input.repository,
     sourceCommit: input.sourceCommit,
     version: input.version,
-    takosumiSourceCommit: input.takosumiSourceCommit,
-    candidateRunId: input.candidateRunId,
+    tag: `v${input.version}`,
+    workflowRunId: input.candidateRunId,
     builtAt: input.builtAt ?? new Date().toISOString(),
     ociImages,
     releaseAssets,
@@ -239,8 +259,10 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
       ...ociImages.map((image) => image.digest),
       ...releaseAssets.map((artifact) => artifact.digest),
     ],
-    sbomDigests: ociImages.map((image) => image.sbomDigest),
-    provenanceDigests: ociImages.map((image) => image.provenanceDigest),
+    sbomDigests: imageEvidence.map((evidence) => evidence.sbomDigest),
+    provenanceDigests: imageEvidence.map(
+      (evidence) => evidence.provenanceDigest,
+    ),
     configDigest: config.digest,
     policyDigest: sha256File(input.policyPath),
     toolchainDigest: sha256File(input.toolchainPath),
@@ -271,23 +293,52 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
       "candidate manifest digest drifted",
     );
   }
-  const manifest = readJson(manifestPath) as CandidateManifest;
+  const manifestRecord = readJson(manifestPath);
+  requireExactKeys(
+    manifestRecord,
+    [
+      "kind",
+      "surfaceId",
+      "repository",
+      "sourceCommit",
+      "version",
+      "tag",
+      "workflowRunId",
+      "builtAt",
+      "ociImages",
+      "releaseAssets",
+      "artifactDigests",
+      "sbomDigests",
+      "provenanceDigests",
+      "configDigest",
+      "policyDigest",
+      "toolchainDigest",
+    ],
+    "candidate manifest",
+  );
+  const manifest = manifestRecord as CandidateManifest;
   invariant(
     manifest.kind === CANDIDATE_KIND,
     `kind must equal ${CANDIDATE_KIND}`,
   );
   for (const [field, expected] of Object.entries({
+    surfaceId: "takos-release-artifacts",
     repository: input.repository,
     sourceCommit: input.sourceCommit,
     version: input.version,
-    takosumiSourceCommit: input.takosumiSourceCommit,
-    candidateRunId: input.candidateRunId,
+    tag: `v${input.version}`,
+    workflowRunId: input.candidateRunId,
   })) {
     invariant(
       manifest[field as keyof CandidateManifest] === expected,
       `${field} drifted`,
     );
   }
+  invariant(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(manifest.builtAt) &&
+      Number.isFinite(Date.parse(manifest.builtAt)),
+    "builtAt drifted",
+  );
   invariant(
     Array.isArray(manifest.ociImages) &&
       manifest.ociImages.map((image) => image.name).join("\n") ===
@@ -300,29 +351,49 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
         REQUIRED_RELEASE_ASSETS.join("\n"),
     "release asset order or membership drifted",
   );
-  for (const image of manifest.ociImages) {
-    invariant(SHA256_RE.test(image.digest), `${image.name} digest is invalid`);
-    invariant(
-      image.digestRef === `${image.image}@${image.digest}`,
-      `${image.name} digestRef drifted`,
+  for (const [index, image] of manifest.ociImages.entries()) {
+    requireExactKeys(
+      image as unknown as Record<string, unknown>,
+      ["name", "versionRef", "latestRef", "digest"],
+      `${image.name} image`,
     );
+    invariant(SHA256_RE.test(image.digest), `${image.name} digest is invalid`);
+    const expectedImage = `ghcr.io/tako0614/${image.name}`;
     invariant(
-      image.versionRef === `${image.image}:${input.version}`,
+      image.versionRef === `${expectedImage}:${input.version}`,
       `${image.name} versionRef drifted`,
     );
     invariant(
-      image.latestRef === `${image.image}:latest`,
+      image.latestRef === `${expectedImage}:latest`,
       `${image.name} latestRef drifted`,
     );
+    const sbomPath = join(
+      root,
+      "evidence",
+      "image-digests",
+      `${image.name}.sbom.json`,
+    );
+    const provenancePath = join(
+      root,
+      "evidence",
+      "image-digests",
+      `${image.name}.provenance.json`,
+    );
     invariant(
-      sha256File(join(root, image.sbomPath)) === image.sbomDigest,
+      sha256File(sbomPath) === manifest.sbomDigests[index],
       `${image.name} SBOM drifted`,
     );
     invariant(
-      sha256File(join(root, image.provenancePath)) === image.provenanceDigest,
+      sha256File(provenancePath) === manifest.provenanceDigests[index],
       `${image.name} provenance drifted`,
     );
-    const metadata = readJson(join(root, image.metadataPath));
+    const metadata = readJson(
+      join(root, "evidence", "image-digests", `${image.name}.json`),
+    );
+    invariant(
+      metadata.image === expectedImage,
+      `${image.name} metadata image drifted`,
+    );
     invariant(
       metadata.digest === image.digest,
       `${image.name} metadata digest drifted`,
@@ -331,10 +402,35 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
       metadata.commit === input.sourceCommit,
       `${image.name} metadata commit drifted`,
     );
+    invariant(
+      metadata.digestRef === `${expectedImage}@${image.digest}`,
+      `${image.name} metadata digestRef drifted`,
+    );
+    invariant(
+      JSON.stringify(metadata.tags) ===
+        JSON.stringify([
+          `${expectedImage}:candidate-${input.candidateRunId}-1`,
+        ]),
+      `${image.name} metadata candidate tag drifted`,
+    );
+    if (image.name !== "takos-worker") {
+      invariant(
+        typeof metadata.cloudflareRegistryRef === "string" &&
+          metadata.cloudflareRegistryRef.endsWith(
+            `/${image.name}:candidate-${input.candidateRunId}-1`,
+          ),
+        `${image.name} Cloudflare registry candidate ref drifted`,
+      );
+    }
   }
   for (const artifact of manifest.releaseAssets) {
+    requireExactKeys(
+      artifact as unknown as Record<string, unknown>,
+      ["name", "digest"],
+      `${artifact.name} release asset`,
+    );
     invariant(
-      sha256File(join(root, artifact.path)) === artifact.digest,
+      sha256File(join(root, "assets", artifact.name)) === artifact.digest,
       `${artifact.name} bytes drifted`,
     );
   }
@@ -349,12 +445,29 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
   );
   invariant(
     JSON.stringify(manifest.sbomDigests) ===
-      JSON.stringify(manifest.ociImages.map((image) => image.sbomDigest)),
+      JSON.stringify(
+        manifest.ociImages.map((image) =>
+          sha256File(
+            join(root, "evidence", "image-digests", `${image.name}.sbom.json`),
+          ),
+        ),
+      ),
     "ordered sbomDigests drifted",
   );
   invariant(
     JSON.stringify(manifest.provenanceDigests) ===
-      JSON.stringify(manifest.ociImages.map((image) => image.provenanceDigest)),
+      JSON.stringify(
+        manifest.ociImages.map((image) =>
+          sha256File(
+            join(
+              root,
+              "evidence",
+              "image-digests",
+              `${image.name}.provenance.json`,
+            ),
+          ),
+        ),
+      ),
     "ordered provenanceDigests drifted",
   );
   invariant(

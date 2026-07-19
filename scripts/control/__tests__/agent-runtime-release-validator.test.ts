@@ -190,6 +190,28 @@ test("agent runtime release validator forbids build actions in promotion", async
   );
 });
 
+test("agent runtime release validator derives OCI digest refs from the fixed controller schema", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    ".ociImages[] | [.versionRef, .digest] | @tsv",
+    ".ociImages[] | [.versionRef, .digest, .digestRef] | @tsv",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must promote and read back exact OCI content digests",
+  );
+});
+
+test("agent runtime release validator reads release assets from the fixed controller schema", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    ".releaseAssets[] | [.name, .digest] | @tsv",
+    ".releaseAssets[] | [.name, .path, .digest] | @tsv",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must emit and independently read back the fixed-adapter result",
+  );
+});
+
 test("agent runtime release validator rejects clobber publication", async () => {
   const input = await actualInputs();
   input.workflowText += "\n# forbidden mutation: --clobber\n";
