@@ -12,7 +12,7 @@ product surface (chat / agent / memory / Workspace / app launcher / Takos runtim
 Takos distribution worker の durable backing infra を provision する。worker artifact (`deploy/cloudflare` の wrangler step) は
 その Run に紐づく reviewed lifecycle action が module Output を読んで公開する。
 通常 install は release-safety controller が reviewed commit から一度だけ生成した SHA-256 固定の Worker + SPA artifact と
-prebuilt container images を使う。staging / fresh replica / protected-environment evidence 後に signed annotated tag と結び、
+prebuilt container images を使う。staging / fresh replica / controller-issued single-operator technical-authorization evidence 後に signed annotated tag と結び、
 同じ digest/bytes だけを stable release へ promotion する。Takosumi の service-side InstallConfig lifecycle action がその
 release を選択し、release step は再ビルドせずに materialize する。OpenTofu module
 は lifecycle 用の変数・予約 Output・manifest fetch を持たない。source build は同じ reviewed Git snapshot を frozen dependency

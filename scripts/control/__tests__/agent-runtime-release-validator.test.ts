@@ -186,7 +186,18 @@ test("agent runtime release validator forbids build actions in promotion", async
     "      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf\n      - name: Login to GHCR for digest-only promotion",
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml promotion must use the production environment without rebuilding",
+    ".github/workflows/release-artifacts.yml promotion must use sealed controller authorization without a protected environment or rebuilding",
+  );
+});
+
+test("agent runtime release validator forbids protected promotion environments", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "    permissions:\n      actions: read\n      contents: write\n      packages: write",
+    "    environment: production\n    permissions:\n      actions: read\n      contents: write\n      packages: write",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml promotion must use sealed controller authorization without a protected environment or rebuilding",
   );
 });
 

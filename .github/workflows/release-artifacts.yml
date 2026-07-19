@@ -61,7 +61,7 @@ on:
         default: ""
         type: string
       authorization_digest:
-        description: "Protected-environment authorization evidence digest"
+        description: "Controller technical-authorization evidence digest"
         required: false
         default: ""
         type: string
@@ -696,7 +696,6 @@ jobs:
     timeout-minutes: 30
     needs: validate
     if: inputs.phase == 'promote' && needs.validate.result == 'success'
-    environment: production
     permissions:
       actions: read
       contents: write
