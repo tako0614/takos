@@ -285,12 +285,10 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   const sourceRun = shellCode(sourceStep?.run);
   const sourceEnv = asRecord(sourceStep?.env);
   if (
-    allSteps.some(
-      (step) =>
-        asRecord(step.env)?.RELEASE_VERSION === "${{ inputs.version }}" ||
-        stringValue(asRecord(step.with)?.tags).includes(
-          "type=raw,value=${{ inputs.version }}",
-        ),
+    allSteps.some((step) =>
+      stringValue(asRecord(step.with)?.tags).includes(
+        "type=raw,value=${{ inputs.version }}",
+      ),
     )
   ) {
     errors.push(
@@ -302,20 +300,33 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
       `${WORKFLOW_PATH} must use package.json takosRelease.version as the release version source`,
     );
   }
-
   if (
-    sourceEnv?.REQUESTED_PUBLISH !== "${{ inputs.publish }}" ||
-    !sourceRun.includes('"${REQUESTED_PUBLISH}" == "true"') ||
-    !sourceRun.includes("git ls-remote --tags origin") ||
-    !sourceRun.includes("release_tag_commit")
+    sourceEnv?.REQUESTED_VERSION !== "${{ inputs.version }}" ||
+    sourceEnv?.RELEASE_PHASE !== "${{ inputs.phase }}" ||
+    !sourceRun.includes('"${REQUESTED_VERSION}" != "${release_version}"') ||
+    !sourceRun.includes('"${GITHUB_RUN_ATTEMPT}" != "1"')
   ) {
     errors.push(
-      `${WORKFLOW_PATH} validate job must resolve an existing release tag before publishing`,
+      `${WORKFLOW_PATH} must treat workflow version as an assertion and forbid rerun mutation`,
     );
   }
-  if (!sourceRun.includes('"${release_tag_commit}" != "${GITHUB_SHA}"')) {
+  const workflowEnv = asRecord(workflow.env);
+  if (
+    typeof workflowEnv?.TAKOSUMI_SOURCE_REF !== "string" ||
+    !/^[0-9a-f]{40}$/u.test(workflowEnv.TAKOSUMI_SOURCE_REF)
+  ) {
     errors.push(
-      `${WORKFLOW_PATH} validate job must bind the release tag to GITHUB_SHA`,
+      `${WORKFLOW_PATH} must pin Takosumi to an immutable full Git SHA`,
+    );
+  }
+  if (
+    typeof workflowEnv?.RELEASE_SAFETY_CONTROLLER_COMMIT !== "string" ||
+    !/^[0-9a-f]{40}$/u.test(workflowEnv.RELEASE_SAFETY_CONTROLLER_COMMIT) ||
+    typeof workflowEnv?.RELEASE_SAFETY_ADAPTER_DIGEST !== "string" ||
+    !/^sha256:[0-9a-f]{64}$/u.test(workflowEnv.RELEASE_SAFETY_ADAPTER_DIGEST)
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must pin the release-safety controller and fixed adapter`,
     );
   }
 
@@ -386,39 +397,155 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     );
   }
 
-  const releaseJob = asRecord(jobs?.["release-manifest"]);
-  const publishStep = workflowSteps(releaseJob).find(
-    (step) => step.name === "Publish GitHub release assets",
+  const candidateJob = asRecord(jobs?.["release-candidate"]);
+  const candidateSteps = workflowSteps(candidateJob);
+  const sealStep = candidateSteps.find(
+    (step) => step.name === "Seal candidate manifest and exact release bytes",
+  );
+  if (
+    !shellCode(sealStep?.run).includes(
+      "scripts/release-candidate-contract.ts build",
+    ) ||
+    !shellCode(sealStep?.run).includes("--candidate-run-id")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must seal one candidate manifest from the build run`,
+    );
+  }
+  const candidateUpload = candidateSteps.find(
+    (step) =>
+      typeof step.uses === "string" &&
+      step.uses.includes("actions/upload-artifact@"),
+  );
+  if (
+    !stringValue(asRecord(candidateUpload?.with)?.name).includes(
+      "takos-release-candidate-",
+    )
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must retain the sealed candidate as an immutable run artifact`,
+    );
+  }
+
+  const promoteJob = asRecord(jobs?.promote);
+  const promoteSteps = workflowSteps(promoteJob);
+  if (
+    promoteJob?.environment !== "production" ||
+    promoteSteps.some(
+      (step) =>
+        typeof step.uses === "string" &&
+        step.uses.includes("docker/build-push-action@"),
+    )
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} promotion must use the production environment without rebuilding`,
+    );
+  }
+  const verifyCandidateStep = promoteSteps.find(
+    (step) => step.name === "Verify envelope bindings and every candidate byte",
+  );
+  const verifyCandidateRun = shellCode(verifyCandidateStep?.run);
+  if (
+    !verifyCandidateRun.includes(
+      "scripts/release-candidate-contract.ts verify",
+    ) ||
+    !verifyCandidateRun.includes("CANDIDATE_MANIFEST_DIGEST") ||
+    !verifyCandidateRun.includes("ARTIFACT_DIGESTS_B64") ||
+    !verifyCandidateRun.includes("HEALTH_CHECKS_B64")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} promotion must reverify the candidate and exact private-envelope bindings`,
+    );
+  }
+  const signedTagStep = promoteSteps.find(
+    (step) => step.name === "Verify signed annotated release tag",
+  );
+  const signedTagRun = shellCode(signedTagStep?.run);
+  if (
+    !signedTagRun.includes('.object.type == "tag"') ||
+    !signedTagRun.includes(".verification.verified == true") ||
+    !signedTagRun.includes(".object.sha == $source")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must verify a signed annotated tag bound to the source commit`,
+    );
+  }
+  const promoteOciStep = promoteSteps.find(
+    (step) =>
+      step.name === "Promote versioned OCI tags from exact content digests",
+  );
+  const promoteOciRun = shellCode(promoteOciStep?.run);
+  if (
+    !promoteOciRun.includes("docker buildx imagetools create") ||
+    !promoteOciRun.includes('"${digest_ref}"') ||
+    !promoteOciRun.includes("--raw")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must promote and read back exact OCI content digests`,
+    );
+  }
+  const latestReadbackStep = promoteSteps.find(
+    (step) =>
+      step.name === "Advance latest OCI tags and read back all stable digests",
+  );
+  const latestReadbackRun = shellCode(latestReadbackStep?.run);
+  if (
+    !latestReadbackRun.includes("docker buildx imagetools create") ||
+    !latestReadbackRun.includes('"${version_ref}" "${latest_ref}"') ||
+    !latestReadbackRun.includes("--raw")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must advance latest only after release creation and read back every stable OCI tag`,
+    );
+  }
+  const publishStep = promoteSteps.find(
+    (step) =>
+      step.name === "Publish exact candidate bytes as stable GitHub release",
   );
   const publishRun = shellCode(publishStep?.run);
-  const validateOutputs = asRecord(validateJob?.outputs);
-  const publishEnv = asRecord(publishStep?.env);
   if (
-    validateOutputs?.release_tag_commit !==
-      "${{ steps.source.outputs.release_tag_commit }}" ||
-    publishEnv?.EXPECTED_RELEASE_COMMIT !==
-      "${{ needs.validate.outputs.release_tag_commit }}" ||
-    !publishRun.includes("git ls-remote --tags origin") ||
-    !publishRun.includes("EXPECTED_RELEASE_COMMIT") ||
-    !publishRun.includes('"${current_tag_commit}" != "${GITHUB_SHA}"')
+    !publishRun.includes("gh release create") ||
+    !publishRun.includes("--verify-tag") ||
+    !publishRun.includes("--latest") ||
+    text.includes("--clobber")
   ) {
     errors.push(
-      `${WORKFLOW_PATH} publish step must revalidate the release tag against GITHUB_SHA`,
-    );
-  }
-  if (!publishRun.includes("--verify-tag")) {
-    errors.push(
-      `${WORKFLOW_PATH} must require an existing Git tag when creating a release`,
+      `${WORKFLOW_PATH} must create a new stable release from exact bytes without clobber`,
     );
   }
   if (
-    !publishRun.includes("existing_commit") ||
-    !publishRun.includes(".git.commit") ||
-    !publishRun.includes('"${existing_commit}" != "${GITHUB_SHA}"') ||
-    !publishRun.includes("refusing to clobber")
+    !latestReadbackStep ||
+    !publishStep ||
+    promoteSteps.indexOf(latestReadbackStep) <=
+      promoteSteps.indexOf(publishStep)
   ) {
     errors.push(
-      `${WORKFLOW_PATH} must refuse to clobber release assets from another commit`,
+      `${WORKFLOW_PATH} must advance latest only after the stable release is created`,
+    );
+  }
+  const preflightStep = promoteSteps.find(
+    (step) => step.name === "Preflight immutable stable targets",
+  );
+  if (
+    !shellCode(preflightStep?.run).includes("already exists") ||
+    !shellCode(preflightStep?.run).includes("TARGET_FINGERPRINT")
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must fail closed on reused versions and bind the stable target fingerprint`,
+    );
+  }
+  const readbackStep = promoteSteps.find(
+    (step) =>
+      step.name === "Read back stable authority and write adapter result",
+  );
+  const readbackRun = shellCode(readbackStep?.run);
+  if (
+    !readbackRun.includes("takos.release-safety-adapter-result@v1") ||
+    !readbackRun.includes("release-safety-readback.json") ||
+    !readbackRun.includes('gh release download "${RELEASE_TAG}"')
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must emit and independently read back the fixed-adapter result`,
     );
   }
 }
