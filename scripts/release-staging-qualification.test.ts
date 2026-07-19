@@ -24,8 +24,7 @@ const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
 const runtimeRef =
   "registry.cloudflare.com/acc/takos-worker-runtime:candidate-12345-1";
-const executorRef =
-  "registry.cloudflare.com/acc/takos-agent:candidate-12345-1";
+const executorRef = "registry.cloudflare.com/acc/takos-agent:candidate-12345-1";
 
 const manifest = {
   sourceCommit: "a".repeat(40),
@@ -112,6 +111,26 @@ test("staging evidence fails closed and binds exact activation readback", () => 
       },
     }),
   ).toThrow(/container readback was skipped or incomplete/u);
+  expect(() =>
+    buildStagingEvidence({
+      releaseId: evidence.releaseId,
+      controllerCommit: "b".repeat(40),
+      manifest,
+      manifestDigest: digest("4"),
+      containers,
+      activation: {
+        ...activation,
+        activation: {
+          ...activation.activation,
+          workerContent: {
+            workerName: "takos-staging",
+            skipped: true,
+            reason: "content_api_unavailable",
+          },
+        },
+      },
+    }),
+  ).toThrow(/Worker content readback was skipped/u);
 });
 
 test("staging activation consumes sealed local bytes and candidate-only container refs", async () => {
