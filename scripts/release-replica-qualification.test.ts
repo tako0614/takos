@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,6 +25,59 @@ import {
 } from "./release-replica-qualification.ts";
 
 describe("release replica qualification", () => {
+  test("locks the previous release digests to published v0.10.35 evidence", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/release-replica-v0.10.35.json", import.meta.url),
+        "utf8",
+      ),
+    ) as {
+      version: string;
+      sourceCommit: string;
+      releaseManifest: {
+        assetId: number;
+        sha256: string;
+        size: number;
+      };
+      buildRun: { id: number; attempt: number };
+      images: Record<"worker" | "agent" | "runtime", { digest: string }>;
+    };
+    const workflow = readFileSync(
+      new URL(
+        "../.github/workflows/release-replica-qualification.yml",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(fixture).toMatchObject({
+      version: "0.10.35",
+      sourceCommit: "d2dbcb406e6a8871e4c0b8bf243afc978331f323",
+      releaseManifest: {
+        assetId: 482077911,
+        sha256:
+          "62163dbc722b7acca61fe07f7f9707dd0f89383e5e49c5cd39c7edb75fd403c3",
+        size: 23567,
+      },
+      buildRun: { id: 29673093536, attempt: 1 },
+    });
+    expect(fixture.images.agent.digest).toBe(
+      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
+    );
+    for (const [name, envName] of [
+      ["worker", "PREVIOUS_WORKER_DIGEST"],
+      ["agent", "PREVIOUS_AGENT_DIGEST"],
+      ["runtime", "PREVIOUS_RUNTIME_DIGEST"],
+    ] as const) {
+      expect(workflow).toContain(
+        `  ${envName}: ${fixture.images[name].digest}\n`,
+      );
+    }
+    expect(workflow).not.toContain(
+      "sha256:8e01bf1a2eb3530b8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
+    );
+  });
+
   test("accepts only canonical digest references", () => {
     const digest = `sha256:${"a".repeat(64)}`;
     expect(exactDigestRef("ghcr.io/tako0614/takos-worker", digest)).toBe(
