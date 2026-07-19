@@ -6,6 +6,15 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.10.37 — Immutable release qualification
+
+- Build one three-image candidate and bind its exact source, policy, toolchain,
+  and OCI digests before any promotion.
+- Qualify both a fresh install and an exact v0.10.36-to-v0.10.37 upgrade in an
+  isolated production-equivalent replica without rebuilding the candidate.
+- Use single-operator technical authorization while retaining fail-closed
+  digest, health, failure-rehearsal, and registry-readback gates.
+
 ## 0.10.36 — Declared MCP Interface discovery
 
 - Discover agent tools from ordinary resolved `mcp.server` Interfaces and
