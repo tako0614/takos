@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
   exactRegistryBody,
   exactDigestRef,
@@ -46,6 +47,23 @@ describe("release replica qualification", () => {
 
   test("hash output is canonical SHA-256", () => {
     expect(sha256Bytes("replica")).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  test("compares SHA-256 authority as 32 digest bytes", () => {
+    const bytes = new Uint8Array([0, 1, 2, 3, 255]);
+    expect(compareSha256Bytes(bytes, sha256Bytes(bytes))).toEqual({
+      actualDigest: sha256Bytes(bytes),
+      matches: true,
+      firstDifference: -1,
+    });
+    const digest = sha256Bytes(bytes);
+    const changed = `${digest.slice(0, -1)}${digest.endsWith("0") ? "1" : "0"}`;
+    const mismatch = compareSha256Bytes(bytes, changed);
+    expect(mismatch.matches).toBe(false);
+    expect(mismatch.firstDifference).toBeGreaterThanOrEqual(0);
+    expect(compareSha256Bytes("replica", sha256Bytes("replica")).matches).toBe(
+      true,
+    );
   });
 
   test("locks qualification to the canonical control migration inventory", () => {

@@ -1,4 +1,10 @@
-import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
+import { Buffer } from "node:buffer";
+import {
+  createHash,
+  generateKeyPairSync,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import {
   mkdirSync,
   readFileSync,
@@ -119,6 +125,31 @@ export function sha256Bytes(value: string | Uint8Array): string {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
+export function compareSha256Bytes(
+  value: string | Uint8Array,
+  expectedDigest: string,
+): { actualDigest: string; matches: boolean; firstDifference: number } {
+  const actual = createHash("sha256").update(value).digest();
+  const actualDigest = `sha256:${actual.toString("hex")}`;
+  if (expectedDigest.length !== 71 || !SHA256_RE.test(expectedDigest)) {
+    return { actualDigest, matches: false, firstDifference: 0 };
+  }
+  const expected = Buffer.from(expectedDigest.slice("sha256:".length), "hex");
+  invariant(expected.byteLength === 32, "published SHA-256 is not 32 bytes");
+  let firstDifference = -1;
+  for (let index = 0; index < actual.byteLength; index += 1) {
+    if (actual[index] !== expected[index]) {
+      firstDifference = index;
+      break;
+    }
+  }
+  return {
+    actualDigest,
+    matches: timingSafeEqual(actual, expected),
+    firstDifference,
+  };
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
@@ -222,22 +253,23 @@ export function exactRegistryBody(
       commandOutput.byteLength <= MAX_OCI_INDEX_BYTES + 1,
     "raw manifest transport size is invalid",
   );
-  const asIsDigest = sha256Bytes(commandOutput);
-  const asIsMatches = asIsDigest === expectedDigest;
+  const asIs = compareSha256Bytes(commandOutput, expectedDigest);
   const canTrimLineFeed = commandOutput.at(-1) === 0x0a;
   const trimmedBody = canTrimLineFeed
     ? commandOutput.slice(0, commandOutput.byteLength - 1)
     : null;
-  const trimmedDigest = trimmedBody ? sha256Bytes(trimmedBody) : null;
+  const trimmed = trimmedBody
+    ? compareSha256Bytes(trimmedBody, expectedDigest)
+    : null;
   const trimmedMatches =
     trimmedBody !== null &&
     trimmedBody.byteLength > 0 &&
-    trimmedDigest === expectedDigest;
+    trimmed?.matches === true;
   invariant(
-    asIsMatches !== trimmedMatches,
-    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} expectedLength=${expectedDigest.length} transportSize=${commandOutput.byteLength} maxBodySize=${MAX_OCI_INDEX_BYTES} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIsDigest} asIsLength=${asIsDigest.length} asIsMatches=${String(asIsMatches)} trimmedDigest=${String(trimmedDigest)} trimmedMatches=${String(trimmedMatches)}`,
+    asIs.matches !== trimmedMatches,
+    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} expectedLength=${expectedDigest.length} transportSize=${commandOutput.byteLength} maxBodySize=${MAX_OCI_INDEX_BYTES} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIs.actualDigest} asIsLength=${asIs.actualDigest.length} asIsMatches=${String(asIs.matches)} asIsFirstDifference=${asIs.firstDifference} trimmedDigest=${String(trimmed?.actualDigest ?? null)} trimmedMatches=${String(trimmedMatches)} trimmedFirstDifference=${String(trimmed?.firstDifference ?? null)}`,
   );
-  const body = asIsMatches ? commandOutput : trimmedBody!;
+  const body = asIs.matches ? commandOutput : trimmedBody!;
   invariant(
     body.byteLength <= MAX_OCI_INDEX_BYTES,
     "verified raw OCI index body exceeds the size limit",
