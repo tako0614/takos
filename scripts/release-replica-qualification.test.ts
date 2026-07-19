@@ -14,15 +14,18 @@ import {
   compareSha256Bytes,
   CONTROL_MIGRATION_DIRECTORY,
   digestAuthorityPath,
+  exactRawManifestInspectCommand,
   exactRegistryBody,
   exactDigestRef,
   hostSecurityQualifies,
   migrationInventoryDirectory,
   POSTGRES_SCHEMA_CANONICALIZATION,
+  PREVIOUS_VERSION,
   readDigestAuthority,
   REQUIRED_NODE_VERSION,
   resolveLinuxAmd64Image,
   sha256Bytes,
+  verifyPlatformChildManifest,
   verifySha256WithSystemTool,
 } from "./release-replica-qualification.ts";
 
@@ -128,6 +131,7 @@ describe("release replica qualification", () => {
         },
       },
     });
+    expect(PREVIOUS_VERSION).toBe(fixture.version);
     expect(fixture.images.agent.digest).toBe(
       "sha256:be681bb79a274270b8f6399bb2bd3ac15cbcaafda5bdd6b17007d6b8c369e9e8",
     );
@@ -147,6 +151,21 @@ describe("release replica qualification", () => {
     ]) {
       expect(workflow).not.toContain(supersededDigest);
     }
+  });
+
+  test("reads both OCI index and selected child only through exact digest refs", () => {
+    const reference = `ghcr.io/tako0614/takos-worker@sha256:${"a".repeat(64)}`;
+    expect(exactRawManifestInspectCommand(reference)).toEqual([
+      "docker",
+      "buildx",
+      "imagetools",
+      "inspect",
+      reference,
+      "--raw",
+    ]);
+    expect(() =>
+      exactRawManifestInspectCommand("ghcr.io/tako0614/takos-worker:0.10.36"),
+    ).toThrow("digest-pinned");
   });
 
   test("accepts only canonical digest references", () => {
@@ -294,12 +313,12 @@ describe("release replica qualification", () => {
     expect(
       resolveLinuxAmd64Image(
         indexRef,
-        "ghcr.io/tako0614/takos-agent:0.10.35",
+        "ghcr.io/tako0614/takos-agent:0.10.36",
         rawIndex,
       ),
     ).toEqual({
       publishedIndex: indexRef,
-      sourceTag: "ghcr.io/tako0614/takos-agent:0.10.35",
+      sourceTag: "ghcr.io/tako0614/takos-agent:0.10.36",
       rawIndexDigest: sha256Bytes(rawIndex),
       rawIndexBodySize: rawIndex.byteLength,
       transportSize: rawIndex.byteLength,
@@ -312,7 +331,7 @@ describe("release replica qualification", () => {
     expect(() =>
       resolveLinuxAmd64Image(
         indexRef,
-        "ghcr.io/tako0614/takos-agent:0.10.35",
+        "ghcr.io/tako0614/takos-agent:0.10.36",
         changedRawIndex,
       ),
     ).toThrow("raw OCI index digest drifted");
@@ -336,10 +355,39 @@ describe("release replica qualification", () => {
     expect(() =>
       resolveLinuxAmd64Image(
         `ghcr.io/tako0614/takos-agent@${sha256Bytes(duplicateRawIndex)}`,
-        "ghcr.io/tako0614/takos-agent:0.10.35",
+        "ghcr.io/tako0614/takos-agent:0.10.36",
         duplicateRawIndex,
       ),
     ).toThrow("exactly one linux/amd64");
+  });
+
+  test("verifies the selected platform manifest bytes against the child digest", () => {
+    const manifest = new TextEncoder().encode(
+      JSON.stringify({
+        schemaVersion: 2,
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        config: {
+          mediaType: "application/vnd.oci.image.config.v1+json",
+          digest: `sha256:${"a".repeat(64)}`,
+          size: 1,
+        },
+        layers: [],
+      }),
+    );
+    const digest = sha256Bytes(manifest);
+    const executionImage = `ghcr.io/tako0614/takos-agent@${digest}`;
+    expect(verifyPlatformChildManifest(executionImage, manifest)).toEqual({
+      childManifestDigest: digest,
+      childManifestBodySize: manifest.byteLength,
+      childManifestTransportSize: manifest.byteLength,
+      childManifestTrailingLineFeedRemoved: false,
+    });
+    expect(() =>
+      verifyPlatformChildManifest(
+        executionImage,
+        new Uint8Array([...manifest, 0x20]),
+      ),
+    ).toThrow("selected platform manifest digest drifted");
   });
 
   test("separates only one CLI line-feed delimiter from exact registry bytes", () => {
