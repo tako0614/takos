@@ -8,7 +8,7 @@
  */
 export const OPERATOR_CONTROL_MCP_FIXTURE = {
   output: {
-    name: "mcp_url",
+    name: "endpoint",
     value: "https://control.example/mcp",
     sensitive: false,
   },
@@ -25,7 +25,7 @@ export const OPERATOR_CONTROL_MCP_FIXTURE = {
       inputs: {
         endpoint: {
           source: "capsule_output",
-          outputName: "mcp_url",
+          outputName: "endpoint",
         },
       },
       access: {
@@ -55,7 +55,7 @@ export const OPERATOR_CONTROL_MCP_FIXTURE = {
       inputs: {
         endpoint: {
           source: "capsule_output",
-          outputName: "mcp_url",
+          outputName: "endpoint",
         },
       },
       access: {
