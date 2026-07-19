@@ -1088,9 +1088,11 @@ async function main(): Promise<void> {
       encoding: "utf8",
       mode: 0o600,
     });
+    const outputStat = statSync(options.output);
+    invariant(outputStat.isFile(), "replica evidence was not written");
     invariant(
-      statSync(options.output).isFile(),
-      "replica evidence was not written",
+      (outputStat.mode & 0o777) === 0o600,
+      "replica evidence permissions are not 0600",
     );
   }
 }

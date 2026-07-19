@@ -196,6 +196,8 @@ jobs:
             --previous-runtime-digest "${PREVIOUS_RUNTIME_DIGEST}"
           jq -e '.status == "verified" and .productionEquivalent == true' \
             evidence/release-replica-qualification.json >/dev/null
+          [[ "$(stat -c '%a' evidence)" == "700" ]]
+          [[ "$(stat -c '%a' evidence/release-replica-qualification.json)" == "600" ]]
           sha256sum evidence/release-replica-qualification.json \
             > evidence/release-replica-qualification.json.sha256
 
