@@ -32,6 +32,18 @@ import {
 } from "../services/platform/mcp/tool-policy.ts";
 import { computeSHA256 } from "../../shared/utils/hash.ts";
 import { requireMcpToolInvocationConfirmation } from "../services/platform/mcp/tool-confirmation.ts";
+import {
+  fetchAuthorizedRuntimeInterfaces,
+  issueRuntimeInterfaceAccessToken,
+  type AuthorizedRuntimeInterface,
+  type RuntimeInterfaceRequestConfig,
+} from "../services/platform/runtime-interface-client.ts";
+import {
+  MCP_SERVER_INTERFACE_TYPE,
+  MCP_SERVER_INTERFACE_VERSION,
+  MCP_SERVER_INVOKE_PERMISSION,
+  parseInterfaceDisplay,
+} from "takosumi-contract";
 
 export interface McpLoadResult {
   tools: Map<string, RegisteredTool>;
@@ -70,7 +82,22 @@ interface McpServerLoadRecord {
   oauthResourceUri: string | null;
   oauthTokenExpiresAt: string | Date | null;
   authSecretRef?: string | null;
+  runtimeInterface?: RuntimeMcpInterfaceAuthority;
 }
+
+export interface RuntimeMcpInterfaceConfig {
+  readonly workspaceId: string;
+  readonly request: RuntimeInterfaceRequestConfig;
+}
+
+type RuntimeMcpInterfaceAuthority = {
+  readonly config: RuntimeMcpInterfaceConfig;
+  readonly interfaceId: string;
+  readonly interfaceRevision: number;
+  readonly bindingId: string;
+  readonly permission: typeof MCP_SERVER_INVOKE_PERMISSION;
+  readonly deliveryType: "none" | "oauth2";
+};
 
 type LoadedMcpServerCatalog = {
   mcpTools: Awaited<ReturnType<McpClient["listTools"]>>;
@@ -286,6 +313,7 @@ export async function loadMcpTools(
   env: Env,
   existingNames: Set<string>,
   exposureContext?: { role?: SpaceRole; capabilities?: string[] },
+  runtimeInterfaceConfig?: RuntimeMcpInterfaceConfig,
 ): Promise<McpLoadResult> {
   const tools = new Map<string, RegisteredTool>();
   const failedServers: string[] = [];
@@ -351,7 +379,14 @@ export async function loadMcpTools(
         };
       })
       .filter((record): record is McpServerLoadRecord => record !== null);
-    servers = [...publicationServers, ...storedServers];
+    const runtimeInterfaceServers = runtimeInterfaceConfig
+      ? await loadRuntimeMcpInterfaceServers(runtimeInterfaceConfig)
+      : [];
+    servers = [
+      ...runtimeInterfaceServers,
+      ...publicationServers,
+      ...storedServers,
+    ];
   } catch (err) {
     logError("Failed to load MCP servers from DB", err, {
       module: "tools/mcp-tools",
@@ -363,8 +398,18 @@ export async function loadMcpTools(
   // Deterministic and contract-aligned ordering:
   // Takos custom tools are resolved first, then Capsule-projected MCP, then external MCP.
   servers.sort((a, b) => {
-    const sourceRank = (sourceType: string) =>
-      sourceType === "external" ? 1 : 0;
+    const sourceRank = (sourceType: string) => {
+      switch (sourceType) {
+        case "runtime_interface":
+          return 0;
+        case "publication":
+          return 1;
+        case "external":
+          return 3;
+        default:
+          return 2;
+      }
+    };
     const rankDiff = sourceRank(a.sourceType) - sourceRank(b.sourceType);
     if (rankDiff !== 0) return rankDiff;
     const nameDiff = a.name.localeCompare(b.name);
@@ -753,6 +798,10 @@ async function resolveMcpAccessToken(
   drizzle: Database,
   server: McpServerLoadRecord,
 ): Promise<string | null> {
+  if (server.sourceType === "runtime_interface") {
+    return await resolveRuntimeInterfaceMcpAccess(server);
+  }
+
   if (server.sourceType === "external") {
     await refreshTokenIfNeeded(db, env, drizzle, server);
     return await decryptAccessToken(db, env, server);
@@ -781,6 +830,140 @@ async function resolveMcpAccessToken(
     ? { ...server, oauthAccessToken: freshRow.oauthAccessToken }
     : server;
   return await decryptAccessToken(db, env, tokenSource);
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function canonicalRuntimeMcpEndpoint(value: unknown): string | null {
+  const raw = readNonEmptyString(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function runtimeMcpServerFromAuthorized(
+  authorized: AuthorizedRuntimeInterface,
+  config: RuntimeMcpInterfaceConfig,
+): McpServerLoadRecord | null {
+  const iface = authorized.interface;
+  if (iface.spec.version !== MCP_SERVER_INTERFACE_VERSION) return null;
+  const document = readRecord(iface.spec.document);
+  if (document?.transport !== "streamable-http") return null;
+  const endpoint = canonicalRuntimeMcpEndpoint(
+    iface.status.resolvedInputs?.endpoint,
+  );
+  if (!endpoint) return null;
+
+  const deliveryType = authorized.binding.spec.delivery.type;
+  if (deliveryType !== "none" && deliveryType !== "oauth2") return null;
+  const resourceInput = iface.spec.access.resourceUriInput;
+  if (deliveryType === "oauth2") {
+    const resource = resourceInput
+      ? canonicalRuntimeMcpEndpoint(
+          iface.status.resolvedInputs?.[resourceInput],
+        )
+      : null;
+    if (resource !== endpoint) return null;
+  }
+
+  const display = parseInterfaceDisplay(document.display, {
+    surfaceUrl: endpoint,
+  });
+  return {
+    id: `interface:${iface.metadata.id}`,
+    accountId: config.workspaceId,
+    name: display.title ?? iface.metadata.name,
+    url: endpoint,
+    sourceType: "runtime_interface",
+    authMode: deliveryType,
+    serviceId: null,
+    bundleDeploymentId: null,
+    oauthAccessToken: null,
+    oauthRefreshToken: null,
+    oauthIssuerUrl: null,
+    oauthClientId: null,
+    oauthClientSecret: null,
+    oauthTokenEndpointAuthMethod: null,
+    oauthResourceUri: endpoint,
+    oauthTokenExpiresAt: null,
+    runtimeInterface: {
+      config,
+      interfaceId: iface.metadata.id,
+      interfaceRevision: iface.status.resolvedRevision,
+      bindingId: authorized.binding.metadata.id,
+      permission: MCP_SERVER_INVOKE_PERMISSION,
+      deliveryType,
+    },
+  };
+}
+
+async function loadRuntimeMcpInterfaceServers(
+  config: RuntimeMcpInterfaceConfig,
+): Promise<McpServerLoadRecord[]> {
+  const authorized = await fetchAuthorizedRuntimeInterfaces(
+    {
+      workspaceId: config.workspaceId,
+      type: MCP_SERVER_INTERFACE_TYPE,
+      permission: MCP_SERVER_INVOKE_PERMISSION,
+      deliveryTypes: ["none", "oauth2"],
+    },
+    config.request,
+  );
+  return authorized
+    .map((entry) => runtimeMcpServerFromAuthorized(entry, config))
+    .filter((entry): entry is McpServerLoadRecord => entry !== null);
+}
+
+async function resolveRuntimeInterfaceMcpAccess(
+  server: McpServerLoadRecord,
+): Promise<string | null> {
+  const authority = server.runtimeInterface;
+  if (!authority) {
+    throw new Error(`MCP Interface authority is missing for ${server.id}`);
+  }
+  const current = await loadRuntimeMcpInterfaceServers(authority.config);
+  const exact = current.find(
+    (candidate) =>
+      candidate.runtimeInterface?.interfaceId === authority.interfaceId &&
+      candidate.runtimeInterface.interfaceRevision ===
+        authority.interfaceRevision &&
+      candidate.runtimeInterface.bindingId === authority.bindingId &&
+      candidate.runtimeInterface.deliveryType === authority.deliveryType &&
+      candidate.url === server.url,
+  );
+  if (!exact) {
+    throw new Error(
+      `MCP Interface ${authority.interfaceId} is no longer authorized at its catalog revision`,
+    );
+  }
+  if (authority.deliveryType === "none") return null;
+  return await issueRuntimeInterfaceAccessToken(authority.config.request, {
+    interfaceId: authority.interfaceId,
+    permission: authority.permission,
+    resource: server.url,
+    errorLabel: `MCP Interface ${authority.interfaceId}`,
+  });
 }
 
 /** Refresh the OAuth token if it expires within 5 minutes. */

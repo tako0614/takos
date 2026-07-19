@@ -1992,10 +1992,10 @@ compute:
   );
 });
 
-test("public source contract - parses contractVersion, service bindings, and bearer auth", () => {
+test("public source contract - parses contractVersion and bearer auth", () => {
   const manifest = parseAppManifestYaml(`
 contractVersion: 1
-name: service-grant-app
+name: interface-app
 version: 1.0.0
 
 compute:
@@ -2018,16 +2018,6 @@ publish:
     auth:
       kind: bearer
       secretRef: mcp_token
-
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: takosumi_control_url
-      tokenEnv: takosumi_control_token
-    scopes:
-      - installations.outputs.read.same-space
 `);
 
   assertEquals(manifest.contractVersion, 1);
@@ -2035,20 +2025,7 @@ serviceBindings:
     kind: "bearer",
     secretRef: "mcp_token",
   });
-  assertEquals(manifest.serviceBindings, [
-    {
-      name: "space-control",
-      capability: "control.api",
-      target: "web",
-      inject: {
-        baseUrlEnv: "TAKOSUMI_CONTROL_URL",
-        tokenEnv: "TAKOSUMI_CONTROL_TOKEN",
-      },
-      scopes: ["installations.outputs.read.same-space"],
-    },
-  ]);
 });
-
 test("public source contract - rejects schema and unsupported contractVersion", () => {
   assertThrows(
     () =>
@@ -2090,139 +2067,20 @@ compute:
   );
 });
 
-test("public source contract - rejects invalid service binding grants", () => {
+test("public source contract - rejects retired serviceBindings", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: unknown-service-binding-target-app
+name: retired-runtime-authority-app
 compute:
   web:
     kind: worker
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: api
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_URL
-      tokenEnv: TAKOSUMI_CONTROL_TOKEN
-    scopes:
-      - installations.outputs.read.same-space
+serviceBindings: []
 `),
     Error,
-    "serviceBindings[0].target references unknown top-level compute: api",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: duplicate-service-binding-env-app
-compute:
-  web:
-    kind: worker
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_URL
-      tokenEnv: TAKOSUMI_CONTROL_TOKEN
-    scopes:
-      - installations.outputs.read.same-space
-  - name: space-control-reader
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_READER_URL
-      tokenEnv: TAKOSUMI_CONTROL_TOKEN
-    scopes:
-      - installations.outputs.read.same-space
-`),
-    Error,
-    "serviceBindings[1].inject env 'TAKOSUMI_CONTROL_TOKEN' duplicates service binding 'space-control' for compute 'web'",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: unsupported-service-binding-app
-compute:
-  web:
-    kind: worker
-serviceBindings:
-  - name: memory
-    capability: takos.memory.workspace
-    target: web
-    inject:
-      baseUrlEnv: TAKOS_MEMORY_URL
-      tokenEnv: TAKOS_MEMORY_TOKEN
-    scopes:
-      - memory.read
-`),
-    Error,
-    "serviceBindings[0].capability 'takos.memory.workspace' is not supported by the Takos runtime projection profile",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: service-binding-missing-token-env-app
-compute:
-  web:
-    kind: worker
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_URL
-    scopes:
-      - installations.outputs.read.same-space
-`),
-    Error,
-    "serviceBindings[0].inject.baseUrlEnv and serviceBindings[0].inject.tokenEnv are required",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: service-binding-missing-scopes-app
-compute:
-  web:
-    kind: worker
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_URL
-      tokenEnv: TAKOSUMI_CONTROL_TOKEN
-`),
-    Error,
-    "serviceBindings[0].scopes must declare at least one scope",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: service-binding-unsupported-scope-app
-compute:
-  web:
-    kind: worker
-serviceBindings:
-  - name: space-control
-    capability: control.api
-    target: web
-    inject:
-      baseUrlEnv: TAKOSUMI_CONTROL_URL
-      tokenEnv: TAKOSUMI_CONTROL_TOKEN
-    scopes:
-      - provider.credentials.manage
-`),
-    Error,
-    "serviceBindings[0].scopes[0] 'provider.credentials.manage' is not supported by service binding capability 'control.api'",
+    "serviceBindings is retired; publish a Takosumi Interface and authorize its consumer with InterfaceBinding instead of injecting a control API token into workload env",
   );
 });
-
 test("public source contract - rejects inconsistent publication auth", () => {
   assertThrows(
     () =>

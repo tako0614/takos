@@ -61,6 +61,63 @@ import {
   getRunBootstrap,
 } from "./executor-run-state.ts";
 import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
+import { accountsDelegatedAuthorization } from "../../server/routes/auth/accounts-delegation.ts";
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function runtimeMcpInterfaceConfig(
+  env: Env,
+  userId: string,
+): Promise<
+  | {
+      workspaceId: string;
+      request: {
+        baseUrl: string;
+        token: string;
+        subjectId: string;
+      };
+    }
+  | undefined
+> {
+  const issuer = nonEmptyString(env.OIDC_ISSUER_URL);
+  const clientId = nonEmptyString(env.OIDC_CLIENT_ID);
+  const encryptionKey = nonEmptyString(env.ENCRYPTION_KEY);
+  const baseUrl =
+    nonEmptyString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+    nonEmptyString(env.TAKOSUMI_ACCOUNTS_URL) ??
+    issuer;
+  if (!issuer || !clientId || !encryptionKey || !baseUrl) return undefined;
+  try {
+    const authorization = await accountsDelegatedAuthorization({
+      db: env.DB,
+      encryptionKey,
+      userId,
+      issuer: issuer.replace(/\/+$/u, ""),
+      clientId,
+      clientSecret: nonEmptyString(env.OIDC_CLIENT_SECRET) ?? undefined,
+      access: "read",
+    });
+    return {
+      workspaceId: authorization.workspaceId,
+      request: {
+        baseUrl,
+        token: authorization.accessToken,
+        subjectId: authorization.subjectId,
+      },
+    };
+  } catch (error) {
+    // A missing/expired delegated Accounts grant removes Interface-backed MCP
+    // tools from this run. Never fall back to an operator token or log the
+    // delegated credential.
+    logWarn("Takosumi MCP Interface discovery is unavailable for this run", {
+      module: "executor-host",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
 
 /**
  * Fence a run-scoped, side-effecting control RPC to the caller's token-bound
@@ -181,6 +238,10 @@ async function createRemoteToolExecutor(
   runAbortSignal?: AbortSignal,
 ): Promise<ToolExecutorLike> {
   const bootstrap = await getRunBootstrap(env, runId);
+  const runtimeMcpInterfaces = await runtimeMcpInterfaceConfig(
+    env,
+    bootstrap.userId,
+  );
 
   // The agent acts on behalf of the run's triggering user and must never hold
   // MORE authority than that user. Resolving capabilities with NO role floor
@@ -199,6 +260,7 @@ async function createRemoteToolExecutor(
     bootstrap.userId,
     {
       disabledCustomTools: [...AGENT_DISABLED_CUSTOM_TOOLS],
+      ...(runtimeMcpInterfaces ? { runtimeMcpInterfaces } : {}),
     },
     undefined,
     runAbortSignal,

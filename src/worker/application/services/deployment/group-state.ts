@@ -4,7 +4,6 @@ import type {
   AppManifestOverride,
   AppPublication,
   AppResource,
-  AppServiceBinding,
 } from "../source/app-manifest-types.ts";
 import { assertAllowedTopLevelFields } from "../source/app-manifest-parser/index.ts";
 import { parseCompute } from "../source/app-manifest-parser/parse-compute.ts";
@@ -264,15 +263,6 @@ function workloadCategoryFromKind(
   }
 }
 
-function serviceBindingsForTarget(
-  manifest: AppManifest,
-  target: string,
-): AppServiceBinding[] {
-  return (manifest.serviceBindings ?? []).filter(
-    (service) => service.target === target,
-  );
-}
-
 export function attachedWorkloadName(
   parentName: string,
   childName: string,
@@ -345,7 +335,6 @@ export function compileGroupDesiredState(
       specFingerprint: stableFingerprint({
         spec: entry,
         manifestEnv: resolvedManifest.env ?? {},
-        serviceBindings: serviceBindingsForTarget(resolvedManifest, name),
       }),
       dependsOn: entry.depends ?? [],
       routeNames: routeNamesByTarget.get(name) ?? [],
@@ -366,10 +355,6 @@ export function compileGroupDesiredState(
           specFingerprint: stableFingerprint({
             spec: childEntry,
             manifestEnv: resolvedManifest.env ?? {},
-            serviceBindings: serviceBindingsForTarget(
-              resolvedManifest,
-              workloadName,
-            ),
           }),
           dependsOn: childEntry.depends ?? [],
           routeNames: routeNamesByTarget.get(workloadName) ?? [],

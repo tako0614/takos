@@ -4,7 +4,6 @@ import type {
   AppManifest,
   AppPublication,
   AppResourceBinding,
-  AppServiceBinding,
 } from "../source/app-manifest-types.ts";
 import {
   isPublicationType,
@@ -34,10 +33,6 @@ import {
   resolveWorkloadBaseUrl,
 } from "./group-state.ts";
 import { normalizeEnvName } from "../common-env/crypto.ts";
-import {
-  materializeTakosumiServiceGrant,
-  type ServiceGrantMaterializer,
-} from "./service-grants.ts";
 
 function buildInjectedEnv(
   desiredState: GroupDesiredState,
@@ -167,101 +162,6 @@ function ensureMcpAuthSecrets(
   }
 }
 
-function collectServiceBindingsForWorkload(
-  manifest: Pick<AppManifest, "serviceBindings">,
-  workloadName: string,
-): AppServiceBinding[] {
-  return (manifest.serviceBindings ?? []).filter(
-    (service) => service.target === workloadName,
-  );
-}
-
-function inferServiceBindingInstallationId(
-  explicitInstallationId: string | null | undefined,
-  observedGroupId: string,
-): string | null {
-  const explicit = explicitInstallationId?.trim();
-  if (explicit) return explicit;
-  return /^inst_[A-Za-z0-9_-]+$/.test(observedGroupId) ? observedGroupId : null;
-}
-
-async function materializeServiceGrants(
-  env: Env,
-  serviceBindings: AppServiceBinding[],
-  input: {
-    spaceId: string;
-    installationId?: string | null;
-    observedGroupId: string;
-    workloadName: string;
-  },
-  localEnvMap: Map<string, DesiredEnvVar>,
-  effectiveEnvMap: Map<string, DesiredEnvVar>,
-  previousEnvVars: Map<string, DesiredEnvVar>,
-  materializer: ServiceGrantMaterializer,
-): Promise<void> {
-  const installationId = inferServiceBindingInstallationId(
-    input.installationId,
-    input.observedGroupId,
-  );
-  for (const serviceBinding of serviceBindings) {
-    for (const envName of [
-      serviceBinding.inject.baseUrlEnv,
-      serviceBinding.inject.tokenEnv,
-    ]) {
-      if (!envName) continue;
-      const key = normalizeEnvName(envName);
-      if (effectiveEnvMap.has(key)) {
-        throw new Error(
-          `service binding '${serviceBinding.name}' inject env '${key}' already exists in compute '${input.workloadName}'`,
-        );
-      }
-    }
-  }
-
-  for (const serviceBinding of serviceBindings) {
-    if (!serviceBinding.inject.baseUrlEnv || !serviceBinding.inject.tokenEnv) {
-      throw new Error(
-        `service binding '${serviceBinding.name}' inject.baseUrlEnv and inject.tokenEnv are required`,
-      );
-    }
-    const baseUrlEnv = normalizeEnvName(serviceBinding.inject.baseUrlEnv);
-    const tokenEnv = normalizeEnvName(serviceBinding.inject.tokenEnv);
-    const materialized = await materializer(env, {
-      spaceId: input.spaceId,
-      installationId,
-      workloadName: input.workloadName,
-      serviceBinding,
-      previousToken: previousEnvVars.get(tokenEnv)?.value,
-    });
-    const baseUrlEntry = {
-      name: baseUrlEnv,
-      value: materialized.baseUrl,
-      secret: false,
-    };
-    const tokenEntry = {
-      name: tokenEnv,
-      value: materialized.token,
-      secret: true,
-    };
-    localEnvMap.set(baseUrlEnv, baseUrlEntry);
-    localEnvMap.set(tokenEnv, tokenEntry);
-    effectiveEnvMap.set(baseUrlEnv, baseUrlEntry);
-    effectiveEnvMap.set(tokenEnv, tokenEntry);
-  }
-}
-
-function reserveEffectiveEnvVar(
-  effectiveEnvMap: Map<string, DesiredEnvVar>,
-  entry: DesiredEnvVar,
-  errorMessage: string,
-): void {
-  const key = normalizeEnvName(entry.name);
-  if (effectiveEnvMap.has(key)) {
-    throw new Error(errorMessage);
-  }
-  effectiveEnvMap.set(key, entry);
-}
-
 export type GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => DesiredStateService;
   listServiceConsumes: typeof listServiceConsumes;
@@ -272,7 +172,6 @@ export type GroupManagedDesiredStateDeps = {
   resolveLinkedCommonEnvState: typeof resolveLinkedCommonEnvState;
   createServiceBinding: typeof createServiceBinding;
   deleteServiceBinding: typeof deleteServiceBinding;
-  materializeServiceGrant: ServiceGrantMaterializer;
 };
 
 type ManagedWorkloadDesiredStateHelpers = {
@@ -293,7 +192,6 @@ const defaultGroupManagedDesiredStateDeps: GroupManagedDesiredStateDeps = {
   resolveLinkedCommonEnvState,
   createServiceBinding,
   deleteServiceBinding,
-  materializeServiceGrant: materializeTakosumiServiceGrant,
 };
 
 const defaultManagedWorkloadDesiredStateHelpers: ManagedWorkloadDesiredStateHelpers =
@@ -738,12 +636,6 @@ export async function syncGroupManagedDesiredState(
         effectiveEnvMap.set(key, value);
       }
 
-      const serviceBindings = collectServiceBindingsForWorkload(
-        input.desiredState.manifest,
-        workloadName,
-      );
-      const preReservedRuntimeEnvKeys = new Set<string>();
-
       const consumeEnvPreview = await resolvedDeps.previewServiceConsumeEnvVars(
         env,
         {
@@ -759,61 +651,6 @@ export async function syncGroupManagedDesiredState(
             `consume output resolves env '${key}' which already exists in compute '${workloadName}'`,
           );
         }
-        if (serviceBindings.length > 0) {
-          effectiveEnvMap.set(key, {
-            name: entry.name,
-            value: "",
-            secret: entry.secret,
-          });
-          preReservedRuntimeEnvKeys.add(key);
-        }
-      }
-
-      if (serviceBindings.length > 0) {
-        const linkedCommonEnvState =
-          await resolvedDeps.resolveLinkedCommonEnvState(
-            env,
-            input.spaceId,
-            observedWorkload.serviceId,
-          );
-        for (const entry of linkedCommonEnvState.envBindings) {
-          const key = normalizeEnvName(entry.name);
-          reserveEffectiveEnvVar(
-            effectiveEnvMap,
-            {
-              name: entry.name,
-              value: entry.text ?? "",
-              secret: entry.type === "secret_text",
-            },
-            `common env '${key}' already exists in compute '${workloadName}'`,
-          );
-          preReservedRuntimeEnvKeys.add(key);
-        }
-
-        ensureMcpAuthSecrets(
-          localEnvMap,
-          effectiveEnvMap,
-          mapPreviousLocalEnvVars(restoreSnapshot),
-          collectMcpAuthSecretRefsForWorkload(
-            input.desiredState.manifest,
-            workloadName,
-          ),
-        );
-
-        await materializeServiceGrants(
-          env,
-          serviceBindings,
-          {
-            spaceId: input.spaceId,
-            installationId: input.installationId,
-            observedGroupId: input.observedState.groupId,
-            workloadName,
-          },
-          localEnvMap,
-          effectiveEnvMap,
-          mapPreviousLocalEnvVars(restoreSnapshot),
-          resolvedDeps.materializeServiceGrant,
-        );
       }
 
       await resolvedDeps.replaceServiceConsumes(env, {
@@ -835,7 +672,6 @@ export async function syncGroupManagedDesiredState(
       for (const entry of consumeEnvVars) {
         const key = normalizeEnvName(entry.name);
         if (effectiveEnvMap.has(key)) {
-          if (preReservedRuntimeEnvKeys.has(key)) continue;
           throw new Error(
             `consume output resolves env '${key}' which already exists in compute '${workloadName}'`,
           );
@@ -856,7 +692,6 @@ export async function syncGroupManagedDesiredState(
       for (const entry of linkedCommonEnvState.envBindings) {
         const key = normalizeEnvName(entry.name);
         if (effectiveEnvMap.has(key)) {
-          if (preReservedRuntimeEnvKeys.has(key)) continue;
           throw new Error(
             `common env '${key}' already exists in compute '${workloadName}'`,
           );

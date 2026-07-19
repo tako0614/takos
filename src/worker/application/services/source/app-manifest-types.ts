@@ -11,8 +11,6 @@
 import type {
   TakosAppAuthKind,
   TakosAppContractVersion,
-  TakosAppServiceBindingCapability,
-  TakosAppServiceGrantScope,
 } from "./app-interface-contract.ts";
 
 // --- Volume mount (compute-local) ---
@@ -194,21 +192,6 @@ export type AppRoute = {
   timeoutMs?: number;
 };
 
-// --- Runtime authority binding requests ---
-
-export type AppServiceBindingInject = {
-  baseUrlEnv?: string;
-  tokenEnv?: string;
-};
-
-export type AppServiceBinding = {
-  name: string;
-  capability: TakosAppServiceBindingCapability;
-  target: string;
-  inject: AppServiceBindingInject;
-  scopes: TakosAppServiceGrantScope[];
-};
-
 // --- Publications (MCP servers, file handlers, UI surfaces, etc.) ---
 
 export type AppPublication = {
@@ -269,7 +252,6 @@ export type AppManifest = {
   resources?: Record<string, AppResource>;
   routes: AppRoute[];
   publish: AppPublication[];
-  serviceBindings?: AppServiceBinding[];
   env: Record<string, string>;
   overrides?: Record<string, AppManifestOverride>;
 };

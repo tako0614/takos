@@ -7,8 +7,6 @@ export type {
   AppPublication,
   AppPublicationAuth,
   AppRoute,
-  AppServiceBinding,
-  AppServiceBindingInject,
   AppTriggers,
   ComputeKind,
   HealthCheck,
@@ -32,8 +30,6 @@ export {
   TAKOS_APP_AUTH_KINDS,
   TAKOS_APP_CONTRACT_VERSION,
   TAKOS_APP_PUBLICATION_TYPES,
-  TAKOS_APP_SERVICE_BINDING_CAPABILITIES,
-  TAKOS_APP_SERVICE_GRANT_SCOPES,
 } from "./app-interface-contract.ts";
 
 export type {
@@ -41,8 +37,6 @@ export type {
   TakosAppAuthKind,
   TakosAppContractVersion,
   TakosAppPublicationType,
-  TakosAppServiceBindingCapability,
-  TakosAppServiceGrantScope,
   RuntimeProjectionCapability,
 } from "./app-interface-contract.ts";
 
