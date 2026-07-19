@@ -2139,10 +2139,6 @@ function releaseHealthUrl(outputs) {
   return url.toString();
 }
 
-function releaseWorkerEnvironment(environment) {
-  return environment === "staging" ? "staging" : "production";
-}
-
 function integerEnv(env, name, fallback) {
   const raw = env[name];
   if (typeof raw !== "string" || raw.trim() === "") return fallback;
@@ -2167,13 +2163,11 @@ async function sha256Hex(bytes) {
 
 async function verifyCloudflareWorkerContent(
   outputs,
-  environment,
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
   const accountId = releaseCloudflareApiAccountId(outputs, env);
-  const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
   if (!apiToken) {
     console.warn(
@@ -2188,8 +2182,6 @@ async function verifyCloudflareWorkerContent(
   const urls = workerContentVerificationUrls({
     accountId,
     workerName,
-    workerEnvironment,
-    environment,
     apiBase: releaseCloudflareApiBaseUrl(outputs, env),
   });
   const attempts = releaseWorkerApiAttempts(env);
@@ -2305,20 +2297,14 @@ function cloudflareWorkerContentUnavailableReason(response, payload) {
 function workerContentVerificationUrls({
   accountId,
   workerName,
-  workerEnvironment,
-  environment,
   apiBase = "https://api.cloudflare.com/client/v4",
 }) {
   const base = apiBase.replace(/\/+$/u, "");
   const account = encodeURIComponent(accountId);
   const worker = encodeURIComponent(workerName);
-  const serviceEnvironmentUrl =
-    `${base}/accounts/${account}` +
-    `/workers/services/${worker}/environments/${encodeURIComponent(workerEnvironment)}/content`;
-  const scriptUrl = `${base}/accounts/${account}/workers/scripts/${worker}/content`;
-  return environment === "staging"
-    ? [serviceEnvironmentUrl, scriptUrl]
-    : [scriptUrl, serviceEnvironmentUrl];
+  // Cloudflare's API Token-compatible readback endpoint is /content/v2.
+  // The legacy /content route rejects Bearer authentication with error 10405.
+  return [`${base}/accounts/${account}/workers/scripts/${worker}/content/v2`];
 }
 
 async function wait(ms) {
@@ -2377,12 +2363,7 @@ export async function verifyReleaseDeployment(
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
-  const artifact = await verifyCloudflareWorkerContent(
-    outputs,
-    environment,
-    env,
-    fetchImpl,
-  );
+  const artifact = await verifyCloudflareWorkerContent(outputs, env, fetchImpl);
   const health = await verifyReleaseHealth(outputs, env, fetchImpl);
   return { artifact, health };
 }
@@ -3154,7 +3135,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         activation.workerContent = await timeReleaseStep(
           timings,
           "worker-content-verification",
-          () => verifyCloudflareWorkerContent(outputs, environment, deployEnv),
+          () => verifyCloudflareWorkerContent(outputs, deployEnv),
         );
         await timeReleaseStep(timings, "workers-dev-enable", () =>
           ensureWorkersDevSubdomain(outputs, deployEnv),

@@ -2202,7 +2202,7 @@ test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () 
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url,
-    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
   );
   assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
 });
@@ -2246,8 +2246,8 @@ test("verifyReleaseDeployment waits until Worker content is visible", async () =
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );
@@ -2281,10 +2281,44 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );
+});
+
+test("staging Worker content readback uses the v2 API with Bearer auth", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    "staging",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      if (String(url).includes("/content/v2")) {
+        return new Response("/* real worker */\n".repeat(128), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.equal(result.artifact.workerName, "takos-test");
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
+      "https://takos-test.example-subdomain.workers.dev/health",
+    ],
+  );
+  assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
 });
 
 test("verifyReleaseDeployment uses Cloudflare-compatible API base for managed targets", async () => {
@@ -2317,7 +2351,7 @@ test("verifyReleaseDeployment uses Cloudflare-compatible API base for managed ta
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
+      "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content/v2",
       "https://takos-test.app.takos.jp/health",
     ],
   );
@@ -2350,7 +2384,7 @@ test("verifyReleaseDeployment derives health URL from workers subdomain outputs"
   assert.equal(result.artifact.workerName, "takos-test");
   assert.equal(result.health.status, 200);
   assert.deepEqual(requests, [
-    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
     "https://takos-test.example-subdomain.workers.dev/health",
   ]);
 });
@@ -2414,21 +2448,6 @@ test("verifyReleaseDeployment falls back to health when Worker content API is un
           { status: 405, headers: { "content-type": "application/json" } },
         );
       }
-      if (value.includes("/workers/services/")) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            errors: [
-              {
-                code: 10092,
-                message: "This environment does not exist on this Worker.",
-              },
-            ],
-            result: null,
-          }),
-          { status: 404, headers: { "content-type": "application/json" } },
-        );
-      }
       return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
     },
   );
@@ -2442,8 +2461,7 @@ test("verifyReleaseDeployment falls back to health when Worker content API is un
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );
