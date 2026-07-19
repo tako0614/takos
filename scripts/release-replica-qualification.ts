@@ -2,7 +2,6 @@ import {
   createHash,
   generateKeyPairSync,
   randomBytes,
-  timingSafeEqual,
 } from "node:crypto";
 import {
   mkdirSync,
@@ -14,6 +13,7 @@ import {
 import { join, resolve } from "node:path";
 
 const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
+const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const RELEASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -124,57 +124,71 @@ export function sha256Bytes(value: string | Uint8Array): string {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
-function lowercaseHexNibble(characterCode: number): number {
-  if (characterCode >= 0x30 && characterCode <= 0x39) {
-    return characterCode - 0x30;
-  }
-  if (characterCode >= 0x61 && characterCode <= 0x66) {
-    return characterCode - 0x61 + 10;
-  }
-  return -1;
-}
-
-export function decodeCanonicalSha256(digest: string): Uint8Array {
+export function compareCanonicalSha256Hex(
+  actualHex: string,
+  expectedHex: string,
+): {
+  matches: boolean;
+  firstDifference: number;
+  actualCharCode: number | null;
+  expectedCharCode: number | null;
+} {
   invariant(
-    digest.length === 71 && SHA256_RE.test(digest),
+    SHA256_HEX_RE.test(actualHex),
+    "calculated SHA-256 is not canonical lowercase hex",
+  );
+  invariant(
+    SHA256_HEX_RE.test(expectedHex),
     "published SHA-256 is not canonical lowercase hex",
   );
-  const hexadecimal = digest.slice("sha256:".length);
-  const decoded = new Uint8Array(32);
-  for (let index = 0; index < decoded.byteLength; index += 1) {
-    const high = lowercaseHexNibble(hexadecimal.charCodeAt(index * 2));
-    const low = lowercaseHexNibble(hexadecimal.charCodeAt(index * 2 + 1));
-    invariant(
-      high >= 0 && low >= 0,
-      "published SHA-256 contains a non-lowercase-hex byte",
-    );
-    decoded[index] = high * 16 + low;
+  for (let index = 0; index < 64; index += 1) {
+    const actualCharCode = actualHex.charCodeAt(index);
+    const expectedCharCode = expectedHex.charCodeAt(index);
+    if (actualCharCode !== expectedCharCode) {
+      return {
+        matches: false,
+        firstDifference: index,
+        actualCharCode,
+        expectedCharCode,
+      };
+    }
   }
-  return decoded;
+  return {
+    matches: true,
+    firstDifference: -1,
+    actualCharCode: null,
+    expectedCharCode: null,
+  };
 }
 
 export function compareSha256Bytes(
   value: string | Uint8Array,
   expectedDigest: string,
-): { actualDigest: string; matches: boolean; firstDifference: number } {
-  const actual = createHash("sha256").update(value).digest();
-  const actualDigest = `sha256:${actual.toString("hex")}`;
+): {
+  actualDigest: string;
+  matches: boolean;
+  firstDifference: number;
+  actualCharCode: number | null;
+  expectedCharCode: number | null;
+} {
+  const actualHex = createHash("sha256").update(value).digest("hex");
+  const actualDigest = `sha256:${actualHex}`;
   if (expectedDigest.length !== 71 || !SHA256_RE.test(expectedDigest)) {
-    return { actualDigest, matches: false, firstDifference: 0 };
+    return {
+      actualDigest,
+      matches: false,
+      firstDifference: 0,
+      actualCharCode: null,
+      expectedCharCode: null,
+    };
   }
-  const expected = decodeCanonicalSha256(expectedDigest);
-  invariant(expected.byteLength === 32, "published SHA-256 is not 32 bytes");
-  let firstDifference = -1;
-  for (let index = 0; index < actual.byteLength; index += 1) {
-    if (actual[index] !== expected[index]) {
-      firstDifference = index;
-      break;
-    }
-  }
+  const comparison = compareCanonicalSha256Hex(
+    actualHex,
+    expectedDigest.slice("sha256:".length),
+  );
   return {
     actualDigest,
-    matches: timingSafeEqual(actual, expected),
-    firstDifference,
+    ...comparison,
   };
 }
 
@@ -233,9 +247,10 @@ export function resolveLinuxAmd64Image(
     sourceTag === `${repository}:${PREVIOUS_VERSION}`,
     "previous image tag drifted",
   );
+  const rawIndexComparison = compareSha256Bytes(rawIndex, expectedIndexDigest);
   invariant(
-    sha256Bytes(rawIndex) === expectedIndexDigest,
-    `raw OCI index digest drifted from the published release manifest: expected ${expectedIndexDigest}, got ${sha256Bytes(rawIndex)}`,
+    rawIndexComparison.matches,
+    `raw OCI index digest drifted from the published release manifest: expected ${expectedIndexDigest}, got ${rawIndexComparison.actualDigest}, firstDifference=${rawIndexComparison.firstDifference}, actualCharCode=${String(rawIndexComparison.actualCharCode)}, expectedCharCode=${String(rawIndexComparison.expectedCharCode)}`,
   );
   const index = JSON.parse(new TextDecoder().decode(rawIndex)) as OciIndex;
   invariant(index.schemaVersion === 2, "OCI index schema version drifted");
@@ -295,7 +310,7 @@ export function exactRegistryBody(
     trimmed?.matches === true;
   invariant(
     asIs.matches !== trimmedMatches,
-    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} expectedLength=${expectedDigest.length} transportSize=${commandOutput.byteLength} maxBodySize=${MAX_OCI_INDEX_BYTES} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIs.actualDigest} asIsLength=${asIs.actualDigest.length} asIsMatches=${String(asIs.matches)} asIsFirstDifference=${asIs.firstDifference} trimmedDigest=${String(trimmed?.actualDigest ?? null)} trimmedMatches=${String(trimmedMatches)} trimmedFirstDifference=${String(trimmed?.firstDifference ?? null)}`,
+    `raw OCI index transport did not produce exactly one published body: expected=${expectedDigest} expectedLength=${expectedDigest.length} transportSize=${commandOutput.byteLength} maxBodySize=${MAX_OCI_INDEX_BYTES} lastByte=${String(commandOutput.at(-1))} asIsDigest=${asIs.actualDigest} asIsLength=${asIs.actualDigest.length} asIsMatches=${String(asIs.matches)} asIsFirstDifference=${asIs.firstDifference} asIsActualCharCode=${String(asIs.actualCharCode)} asIsExpectedCharCode=${String(asIs.expectedCharCode)} trimmedDigest=${String(trimmed?.actualDigest ?? null)} trimmedMatches=${String(trimmedMatches)} trimmedFirstDifference=${String(trimmed?.firstDifference ?? null)} trimmedActualCharCode=${String(trimmed?.actualCharCode ?? null)} trimmedExpectedCharCode=${String(trimmed?.expectedCharCode ?? null)}`,
   );
   const body = asIs.matches ? commandOutput : trimmedBody!;
   invariant(
@@ -552,9 +567,13 @@ function runtimeSecrets(): RuntimeSecrets {
 
 function candidateManifest(options: Options): Record<string, unknown> {
   const bytes = readFileSync(options.candidateManifest);
+  const manifestDigestComparison = compareSha256Bytes(
+    bytes,
+    options.candidateManifestDigest,
+  );
   invariant(
-    sha256Bytes(bytes) === options.candidateManifestDigest,
-    "candidate manifest digest drifted",
+    manifestDigestComparison.matches,
+    `candidate manifest digest drifted: expected ${options.candidateManifestDigest}, got ${manifestDigestComparison.actualDigest}, firstDifference=${manifestDigestComparison.firstDifference}, actualCharCode=${String(manifestDigestComparison.actualCharCode)}, expectedCharCode=${String(manifestDigestComparison.expectedCharCode)}`,
   );
   const manifest = JSON.parse(bytes.toString("utf8")) as Record<
     string,
