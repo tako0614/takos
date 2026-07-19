@@ -108,6 +108,7 @@ jobs:
       agent_engine_repository: ${{ steps.source.outputs.agent_engine_repository }}
       agent_engine_commit: ${{ steps.source.outputs.agent_engine_commit }}
       source_commit: ${{ steps.source.outputs.source_commit }}
+      source_commit_short: ${{ steps.source.outputs.source_commit_short }}
     permissions:
       contents: read
     steps:
@@ -206,11 +207,17 @@ jobs:
             echo "Unsupported release phase: ${RELEASE_PHASE}" >&2
             exit 1
           fi
+          source_commit_short="${source_commit:0:12}"
+          if [[ ! "${source_commit_short}" =~ ^[0-9a-f]{12}$ ]]; then
+            echo "Source commit prefix must be exactly 12 lowercase hexadecimal characters." >&2
+            exit 1
+          fi
           echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
           echo "agent_engine_repository=${agent_engine_repository}" >> "${GITHUB_OUTPUT}"
           echo "agent_engine_commit=${agent_engine_commit}" >> "${GITHUB_OUTPUT}"
           echo "source_commit=${source_commit}" >> "${GITHUB_OUTPUT}"
+          echo "source_commit_short=${source_commit_short}" >> "${GITHUB_OUTPUT}"
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -678,7 +685,7 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
-          name: takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ github.sha }}
+          name: takos-release-candidate-${{ needs.validate.outputs.release_version }}-${{ needs.validate.outputs.source_commit_short }}
           path: takos/dist/release-candidate/
           if-no-files-found: error
 
@@ -734,7 +741,7 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pinned: v8.0.1 (2026)
         with:
-          name: takos-release-candidate-${{ inputs.version }}-${{ inputs.source_commit }}
+          name: takos-release-candidate-${{ inputs.version }}-${{ needs.validate.outputs.source_commit_short }}
           path: candidate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
