@@ -1,10 +1,21 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 
 import {
   type CandidateManifest,
+  sha256File,
   verifyCandidateManifest,
 } from "./release-candidate-contract.ts";
 import { main as activateRelease } from "./control/takosumi-release.mjs";
@@ -34,13 +45,141 @@ function gitValue(directory: string, args: string[]): string {
   return result.stdout.trim();
 }
 
-function metadata(candidateDir: string, name: string): Record<string, unknown> {
-  return JSON.parse(
-    readFileSync(
-      join(candidateDir, "evidence", "image-digests", `${name}.json`),
-      "utf8",
-    ),
-  ) as Record<string, unknown>;
+export function cleanGitCheckoutCommit(
+  directory: string,
+  label: string,
+): string {
+  const commit = gitValue(directory, ["rev-parse", "HEAD"]);
+  invariant(COMMIT_RE.test(commit), `${label} HEAD is not a full commit`);
+  invariant(
+    gitValue(directory, ["status", "--porcelain"]) === "",
+    `${label} checkout must be clean`,
+  );
+  return commit;
+}
+
+type StagingContainerSelection = {
+  readonly descriptorDigest: string;
+  readonly runtime: { readonly registryRef: string; readonly sourceDigest: string };
+  readonly executor: {
+    readonly registryRef: string;
+    readonly sourceDigest: string;
+  };
+};
+
+function record(value: unknown, label: string): Record<string, unknown> {
+  invariant(
+    value !== null && typeof value === "object" && !Array.isArray(value),
+    `${label} must be an object`,
+  );
+  return value as Record<string, unknown>;
+}
+
+function candidateImageDigest(
+  manifest: CandidateManifest,
+  name: "takos-worker-runtime" | "takos-agent",
+): string {
+  const digest = manifest.ociImages.find((image) => image.name === name)?.digest;
+  invariant(
+    typeof digest === "string" && SHA256_RE.test(digest),
+    `candidate ${name} OCI digest is missing`,
+  );
+  return digest;
+}
+
+function candidateRegistryRef(
+  value: unknown,
+  image: "takos-worker-runtime" | "takos-agent",
+  runId: string,
+): string {
+  invariant(typeof value === "string", `candidate ${image} registry ref is missing`);
+  const escapedRunId = runId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  invariant(
+    new RegExp(
+      `^registry\\.cloudflare\\.com/[^/]+/${image}:candidate-${escapedRunId}-1$`,
+    ).test(value),
+    `candidate ${image} registry ref drifted`,
+  );
+  return value;
+}
+
+export function sealedStagingContainerSelection(input: {
+  candidateDir: string;
+  manifest: CandidateManifest;
+}): StagingContainerSelection {
+  const candidateDir = resolve(input.candidateDir);
+  const descriptorAsset = input.manifest.releaseAssets.find(
+    (asset) => asset.name === "takosumi-artifact.json",
+  );
+  invariant(
+    descriptorAsset && SHA256_RE.test(descriptorAsset.digest),
+    "candidate Worker artifact descriptor is missing",
+  );
+  const descriptorPath = join(candidateDir, "assets", descriptorAsset.name);
+  invariant(
+    existsSync(descriptorPath) && lstatSync(descriptorPath).isFile(),
+    "candidate Worker artifact descriptor must be a regular non-symlink file",
+  );
+  invariant(
+    sha256File(descriptorPath) === descriptorAsset.digest,
+    "candidate Worker artifact descriptor digest drifted",
+  );
+  const descriptor = record(
+    JSON.parse(readFileSync(descriptorPath, "utf8")) as unknown,
+    "candidate Worker artifact descriptor",
+  );
+  invariant(
+    descriptor.kind === "takosumi.worker-artifact@v1" &&
+      descriptor.app === "takos" &&
+      descriptor.commit === input.manifest.sourceCommit &&
+      descriptor.releaseTag === input.manifest.tag &&
+      descriptor.workflowRun ===
+        `https://github.com/tako0614/takos/actions/runs/${input.manifest.workflowRunId}`,
+    "candidate Worker artifact descriptor identity drifted",
+  );
+  const archive = input.manifest.releaseAssets.find(
+    (asset) => asset.name === "takos-worker-release.tar.gz",
+  );
+  invariant(archive, "candidate Worker archive is missing");
+  const descriptorArchive = record(
+    descriptor.artifact,
+    "candidate Worker archive descriptor",
+  );
+  invariant(
+    descriptorArchive.filename === archive.name &&
+      descriptorArchive.sha256Prefixed === archive.digest &&
+      descriptorArchive.sha256 === archive.digest.slice("sha256:".length),
+    "candidate Worker archive descriptor drifted",
+  );
+  const containerImages = record(
+    descriptor.containerImages,
+    "candidate container image selection",
+  );
+  const runtimeRef = candidateRegistryRef(
+    containerImages.runtime,
+    "takos-worker-runtime",
+    input.manifest.workflowRunId,
+  );
+  const executorRef = candidateRegistryRef(
+    containerImages.executor,
+    "takos-agent",
+    input.manifest.workflowRunId,
+  );
+  invariant(
+    runtimeRef.split("/")[1] === executorRef.split("/")[1],
+    "candidate container registry accounts drifted",
+  );
+  return {
+    descriptorDigest: descriptorAsset.digest,
+    runtime: {
+      registryRef: runtimeRef,
+      sourceDigest: candidateImageDigest(input.manifest, "takos-worker-runtime"),
+    },
+    executor: {
+      registryRef: executorRef,
+      sourceDigest: candidateImageDigest(input.manifest, "takos-agent"),
+    },
+  };
 }
 
 export function buildStagingActivationEnv(input: {
@@ -53,16 +192,10 @@ export function buildStagingActivationEnv(input: {
     (asset) => asset.name === "takos-worker-release.tar.gz",
   );
   invariant(archive, "candidate Worker archive is missing");
-  const runtime = metadata(candidateDir, "takos-worker-runtime");
-  const executor = metadata(candidateDir, "takos-agent");
-  invariant(
-    typeof runtime.cloudflareRegistryRef === "string",
-    "candidate runtime Cloudflare registry ref is missing",
-  );
-  invariant(
-    typeof executor.cloudflareRegistryRef === "string",
-    "candidate executor Cloudflare registry ref is missing",
-  );
+  const containers = sealedStagingContainerSelection({
+    candidateDir,
+    manifest: input.manifest,
+  });
   return {
     ...input.baseEnv,
     TAKOS_RELEASE_WORKER_ARTIFACT_URL: undefined,
@@ -75,8 +208,8 @@ export function buildStagingActivationEnv(input: {
       "sha256:".length,
     ),
     TAKOS_RELEASE_CONTAINER_IMAGES_JSON: JSON.stringify({
-      runtime: runtime.cloudflareRegistryRef,
-      executor: executor.cloudflareRegistryRef,
+      runtime: containers.runtime.registryRef,
+      executor: containers.executor.registryRef,
     }),
     TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES: "true",
     TAKOS_RELEASE_REQUIRE_WRANGLER_DEPLOYMENT_STATUS: "true",
@@ -92,10 +225,15 @@ export function buildStagingEvidence(input: {
   controllerCommit: string;
   manifest: CandidateManifest;
   manifestDigest: string;
+  containers: StagingContainerSelection;
   activation: ActivationResult;
   verifiedAt?: string;
 }) {
   const { activation } = input;
+  invariant(
+    activation.environment === "staging" && activation.operation === "activate",
+    "staging activation identity drifted",
+  );
   invariant(activation.status === "succeeded", "staging activation failed");
   invariant(
     activation.workerArtifact?.sha256 &&
@@ -110,9 +248,26 @@ export function buildStagingEvidence(input: {
     "persistent staging deployment readback was skipped",
   );
   invariant(
-    activation.activation.containers?.skipped === false &&
-      activation.activation.containers.containers.length === 4,
+    activation.activation.containers?.skipped === false,
     "persistent staging container readback was skipped or incomplete",
+  );
+  const observedContainers = new Map(
+    activation.activation.containers.containers.map((container) => [
+      container.className,
+      container.image,
+    ]),
+  );
+  invariant(
+    activation.activation.containers.containers.length === 4 &&
+      observedContainers.size === 4 &&
+      observedContainers.get("TakosRuntimeContainer") ===
+        input.containers.runtime.registryRef &&
+      ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"].every(
+        (className) =>
+          observedContainers.get(className) ===
+          input.containers.executor.registryRef,
+      ),
+    "persistent staging container selection drifted",
   );
   invariant(
     activation.activation.workerContent?.skipped !== true &&
@@ -136,6 +291,7 @@ export function buildStagingEvidence(input: {
     candidateRunId: input.manifest.workflowRunId,
     candidateManifestDigest: input.manifestDigest,
     artifactDigests: input.manifest.artifactDigests,
+    containerImageSelection: input.containers,
     activation,
     checks: [
       {
@@ -144,7 +300,7 @@ export function buildStagingEvidence(input: {
         bindingDigest: input.manifestDigest,
       },
       {
-        name: "exact Worker archive and OCI activation",
+        name: "exact Worker archive and sealed candidate container selection",
         status: "passed",
         bindingDigest: activationBinding,
       },
@@ -182,13 +338,10 @@ export async function runStagingQualification(input: {
     "candidate manifest digest is invalid",
   );
   const sourceDir = resolve(input.sourceDir);
+  const sourceCommit = cleanGitCheckoutCommit(sourceDir, "candidate source");
   invariant(
-    gitValue(sourceDir, ["rev-parse", "HEAD"]) === input.sourceCommit,
+    sourceCommit === input.sourceCommit,
     "candidate source checkout drifted",
-  );
-  invariant(
-    gitValue(sourceDir, ["status", "--porcelain"]) === "",
-    "candidate source checkout must be clean",
   );
   const workflow = readFileSync(
     join(sourceDir, ".github", "workflows", "release-artifacts.yml"),
@@ -216,7 +369,14 @@ export async function runStagingQualification(input: {
     toolchainPath: join(sourceDir, "bun.lock"),
   });
   const controllerDir = resolve(import.meta.dir, "..");
-  const controllerCommit = gitValue(controllerDir, ["rev-parse", "HEAD"]);
+  const controllerCommit = cleanGitCheckoutCommit(
+    controllerDir,
+    "staging controller",
+  );
+  const containers = sealedStagingContainerSelection({
+    candidateDir,
+    manifest,
+  });
   const previousCwd = process.cwd();
   let activation: ActivationResult;
   try {
@@ -237,16 +397,38 @@ export async function runStagingQualification(input: {
     controllerCommit,
     manifest,
     manifestDigest: input.candidateManifestDigest,
+    containers,
     activation,
   });
-  const output = resolve(input.output);
-  mkdirSync(dirname(output), { recursive: true, mode: 0o700 });
-  chmodSync(dirname(output), 0o700);
-  writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  chmodSync(output, 0o600);
+  writePrivateEvidence(input.output, evidence);
   return evidence;
+}
+
+export function writePrivateEvidence(outputPath: string, evidence: unknown): void {
+  const output = resolve(outputPath);
+  const parent = dirname(output);
+  mkdirSync(parent, { recursive: true, mode: 0o700 });
+  invariant(
+    lstatSync(parent).isDirectory() && realpathSync(parent) === parent,
+    "staging evidence directory must be a real directory without symlinks",
+  );
+  invariant(!existsSync(output), "staging evidence output already exists");
+  const temporary = join(
+    parent,
+    `.${basename(output)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    writeFileSync(temporary, `${JSON.stringify(evidence, null, 2)}\n`, {
+      flag: "wx",
+      mode: 0o600,
+    });
+    chmodSync(temporary, 0o600);
+    // Hard-link publication is atomic and fails with EEXIST. Unlike rename(),
+    // it cannot replace an output (or symlink) created after the preflight.
+    linkSync(temporary, output);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 if (import.meta.main) {
