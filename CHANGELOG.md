@@ -6,6 +6,11 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.10.35 — Capsule Source Options
+
+- Publish the optional provider-neutral deployment chooser for the existing
+  Cloudflare OpenTofu Capsule without changing the normal install authority.
+
 ## 0.10.0 — Takosumi 17-noun alignment
 
 - Align the Takos-managed deploy path with Takosumi's final 17-noun model. The
