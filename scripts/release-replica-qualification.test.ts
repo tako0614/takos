@@ -78,19 +78,21 @@ describe("release replica qualification", () => {
     ).toThrow("pg_dump restriction line format drifted");
   });
 
-  test("locks the previous release digests to published v0.10.35 evidence", () => {
+  test("locks the previous release digests to immutable v0.10.36 evidence", () => {
     const fixture = JSON.parse(
       readFileSync(
-        new URL("./fixtures/release-replica-v0.10.35.json", import.meta.url),
+        new URL("./fixtures/release-replica-v0.10.36.json", import.meta.url),
         "utf8",
       ),
     ) as {
       version: string;
       sourceCommit: string;
-      releaseManifest: {
-        assetId: number;
-        sha256: string;
-        size: number;
+      candidateArtifact: {
+        id: number;
+        name: string;
+        archiveSize: number;
+        manifestSha256: string;
+        manifestSize: number;
       };
       buildRun: { id: number; attempt: number };
       images: Record<
@@ -107,15 +109,17 @@ describe("release replica qualification", () => {
     );
 
     expect(fixture).toMatchObject({
-      version: "0.10.35",
-      sourceCommit: "d2dbcb406e6a8871e4c0b8bf243afc978331f323",
-      releaseManifest: {
-        assetId: 482077911,
-        sha256:
-          "62163dbc722b7acca61fe07f7f9707dd0f89383e5e49c5cd39c7edb75fd403c3",
-        size: 23567,
+      version: "0.10.36",
+      sourceCommit: "a545d037aae542b3a2447edf1c58f3373cb5b5b6",
+      candidateArtifact: {
+        id: 8439777422,
+        name: "takos-release-candidate-0.10.36-a545d037aae5",
+        archiveSize: 6526485,
+        manifestSha256:
+          "bd41ead7bfb67194469a00baf1ed3b36c5fe11822094c654a1b10b1db370af32",
+        manifestSize: 3360,
       },
-      buildRun: { id: 29673093536, attempt: 1 },
+      buildRun: { id: 29678450835, attempt: 1 },
       images: {
         worker: { repository: "ghcr.io/tako0614/takos-worker" },
         agent: { repository: "ghcr.io/tako0614/takos-agent" },
@@ -125,7 +129,7 @@ describe("release replica qualification", () => {
       },
     });
     expect(fixture.images.agent.digest).toBe(
-      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
+      "sha256:be681bb79a274270b8f6399bb2bd3ac15cbcaafda5bdd6b17007d6b8c369e9e8",
     );
     for (const [name, envName] of [
       ["worker", "PREVIOUS_WORKER_DIGEST"],
@@ -136,9 +140,13 @@ describe("release replica qualification", () => {
         `  ${envName}: ${fixture.images[name].digest}\n`,
       );
     }
-    expect(workflow).not.toContain(
-      "sha256:8e01bf1a2eb3530b8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
-    );
+    for (const supersededDigest of [
+      "sha256:ba8f0af05473728707168fc3a2e37568691767b706b3a78378c0e61ad485fc9b",
+      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
+      "sha256:3164eb048307bc054b848f61656d4899ef1bed6ea4e43636ec852580eca4e474",
+    ]) {
+      expect(workflow).not.toContain(supersededDigest);
+    }
   });
 
   test("accepts only canonical digest references", () => {
