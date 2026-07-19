@@ -846,7 +846,9 @@ jobs:
               echo "Candidate OCI digest is invalid: ${digest}" >&2
               exit 1
             fi
-          done < <(jq -r '.ociImages[] | [.image, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
+          done < <(jq -r --arg version "${RELEASE_VERSION}" \
+            '.ociImages[] | [(.versionRef | sub(":" + $version + "$"; "")), .digest] | @tsv' \
+            "${CANDIDATE_MANIFEST}")
           release_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
           target_json="$(jq -cS \
             --arg tag "${RELEASE_TAG}" \
@@ -868,7 +870,9 @@ jobs:
           CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
         run: |
           set -euo pipefail
-          while IFS=$'\t' read -r version_ref digest digest_ref; do
+          while IFS=$'\t' read -r version_ref digest; do
+            image="${version_ref%:*}"
+            digest_ref="${image}@${digest}"
             docker buildx imagetools create \
               --tag "${version_ref}" \
               "${digest_ref}"
@@ -877,7 +881,7 @@ jobs:
               echo "OCI readback drift for ${version_ref}: ${readback} != ${digest}" >&2
               exit 1
             fi
-          done < <(jq -r '.ociImages[] | [.versionRef, .digest, .digestRef] | @tsv' "${CANDIDATE_MANIFEST}")
+          done < <(jq -r '.ociImages[] | [.versionRef, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
 
       - name: Publish exact candidate bytes as stable GitHub release
         shell: bash
@@ -903,7 +907,9 @@ jobs:
           CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
         run: |
           set -euo pipefail
-          while IFS=$'\t' read -r version_ref latest_ref digest digest_ref; do
+          while IFS=$'\t' read -r version_ref latest_ref digest; do
+            image="${version_ref%:*}"
+            digest_ref="${image}@${digest}"
             docker buildx imagetools create --tag "${latest_ref}" "${digest_ref}"
             for promoted_ref in "${version_ref}" "${latest_ref}"; do
               readback="sha256:$(docker buildx imagetools inspect "${promoted_ref}" --raw | sha256sum | awk '{print $1}')"
@@ -912,7 +918,7 @@ jobs:
                 exit 1
               fi
             done
-          done < <(jq -r '.ociImages[] | [.versionRef, .latestRef, .digest, .digestRef] | @tsv' "${CANDIDATE_MANIFEST}")
+          done < <(jq -r '.ociImages[] | [.versionRef, .latestRef, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
 
       - name: Read back stable authority and write adapter result
         shell: bash
@@ -948,13 +954,13 @@ jobs:
           readback_dir="${RUNNER_TEMP}/release-readback"
           mkdir -p "${readback_dir}"
           gh release download "${RELEASE_TAG}" --dir "${readback_dir}"
-          while IFS=$'\t' read -r name path digest; do
+          while IFS=$'\t' read -r name digest; do
             readback="sha256:$(sha256sum "${readback_dir}/${name}" | awk '{print $1}')"
             if [[ "${readback}" != "${digest}" ]]; then
               echo "GitHub release asset readback drift for ${name}." >&2
               exit 1
             fi
-          done < <(jq -r '.releaseAssets[] | [.name, .path, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
+          done < <(jq -r '.releaseAssets[] | [.name, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
 
           jq '[.[] | .status = "passed"]' "${RUNNER_TEMP}/required-health-checks.json" \
             > "${RUNNER_TEMP}/passed-health-checks.json"

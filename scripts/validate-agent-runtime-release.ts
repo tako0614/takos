@@ -597,6 +597,9 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !promoteOciRun.includes("docker buildx imagetools create") ||
     !promoteOciRun.includes('"${digest_ref}"') ||
+    !promoteOciRun.includes('image="${version_ref%:*}"') ||
+    !promoteOciRun.includes('digest_ref="${image}@${digest}"') ||
+    promoteOciRun.includes(".digestRef") ||
     !promoteOciRun.includes("--raw")
   ) {
     errors.push(
@@ -611,6 +614,9 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !latestReadbackRun.includes("docker buildx imagetools create") ||
     !latestReadbackRun.includes('"${version_ref}" "${latest_ref}"') ||
+    !latestReadbackRun.includes('image="${version_ref%:*}"') ||
+    !latestReadbackRun.includes('digest_ref="${image}@${digest}"') ||
+    latestReadbackRun.includes(".digestRef") ||
     !latestReadbackRun.includes("--raw")
   ) {
     errors.push(
@@ -645,9 +651,12 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   const preflightStep = promoteSteps.find(
     (step) => step.name === "Preflight immutable stable targets",
   );
+  const preflightRun = shellCode(preflightStep?.run);
   if (
-    !shellCode(preflightStep?.run).includes("already exists") ||
-    !shellCode(preflightStep?.run).includes("TARGET_FINGERPRINT")
+    !preflightRun.includes("already exists") ||
+    !preflightRun.includes("TARGET_FINGERPRINT") ||
+    !preflightRun.includes('.versionRef | sub(":" + $version + "$"; "")') ||
+    preflightRun.includes(".image, .digest")
   ) {
     errors.push(
       `${WORKFLOW_PATH} must fail closed on reused versions and bind the stable target fingerprint`,
@@ -661,7 +670,9 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !readbackRun.includes("takos.release-safety-adapter-result@v1") ||
     !readbackRun.includes("release-safety-readback.json") ||
-    !readbackRun.includes('gh release download "${RELEASE_TAG}"')
+    !readbackRun.includes('gh release download "${RELEASE_TAG}"') ||
+    !readbackRun.includes(".releaseAssets[] | [.name, .digest]") ||
+    readbackRun.includes(".name, .path, .digest")
   ) {
     errors.push(
       `${WORKFLOW_PATH} must emit and independently read back the fixed-adapter result`,
