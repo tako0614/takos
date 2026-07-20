@@ -10,10 +10,43 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import process from "node:process";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 
-test("ensure-vectorize-index preserves compat API base for virtual accounts", async () => {
+test("ensure-vectorize-index rejects virtual managed accounts", async () => {
+  const proc = Bun.spawn(
+    [
+      process.execPath,
+      "scripts/control/ensure-vectorize-index.mjs",
+      "takos-test-embeddings",
+      "--dimensions",
+      "768",
+      "--metric",
+      "cosine",
+      "--account-id",
+      "ts_acc_takosumi_cloud",
+    ],
+    {
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        PATH: "",
+      },
+    },
+  );
+  const [status, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stderr).text(),
+  ]);
+
+  assert.notEqual(status, 0);
+  assert.match(stderr, /canonical Resource\/Run lifecycle/);
+});
+
+test("ensure-vectorize-index strips retired API base overrides for direct Cloudflare accounts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "takos-vectorize-test-"));
   const bin = join(dir, "bin");
   const captureFile = join(dir, "calls.json");
@@ -55,7 +88,7 @@ echo '{"success":true}'
         "--metric",
         "cosine",
         "--account-id",
-        "ts_acc_takosumi_cloud",
+        "acc_123",
       ],
       {
         cwd: repoRoot,
@@ -66,10 +99,10 @@ echo '{"success":true}'
           PATH: `${bin}:${process.env.PATH ?? ""}`,
           BUNX_CAPTURE_FILE: captureFile,
           TAKOS_CLOUDFLARE_API_BASE_URL:
-            "https://compat.example.test/client/v4",
-          CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-          CF_API_BASE_URL: "https://compat.example.test/client/v4",
-          CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
+            "https://ignored.example.test/client/v4",
+          CLOUDFLARE_API_BASE_URL: "https://ignored.example.test/client/v4",
+          CF_API_BASE_URL: "https://ignored.example.test/client/v4",
+          CLOUDFLARE_BASE_URL: "https://ignored.example.test/client/v4",
           CLOUDFLARE_API_TOKEN: "test-token",
         },
       },
@@ -100,10 +133,7 @@ echo '{"success":true}'
     );
     for (const call of calls) {
       assert.deepEqual(call.env, {
-        CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-        CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-        CF_API_BASE_URL: "https://compat.example.test/client/v4",
-        CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
+        CLOUDFLARE_ACCOUNT_ID: "acc_123",
         CLOUDFLARE_API_TOKEN: "test-token",
       });
     }
