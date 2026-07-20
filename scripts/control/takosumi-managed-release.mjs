@@ -44,6 +44,11 @@ export async function releaseTakosumiManagedEdgeWorker({
   const settings = managedReleaseSettings(outputs, environment, env, cwd);
   const token = readBearerToken(settings.tokenFile, cwd);
   const config = readManagedReleaseConfig(settings.configFile, outputs, cwd);
+  const vars = mergedWorkerVars(outputs, config.vars);
+  // Reject every malformed or colliding binding before the first artifact or
+  // secret write. Release retries are idempotent, but invalid local input must
+  // never be allowed to cause even a recoverable Cloud-side mutation.
+  assertUniqueBindingNames(vars, config.resources, config.secretNames);
   for (const binding of config.resources) {
     const resource = binding.resource;
     const connection = config.connections?.[binding.name];
@@ -116,8 +121,6 @@ export async function releaseTakosumiManagedEdgeWorker({
     }),
   );
 
-  const vars = mergedWorkerVars(outputs, config.vars);
-  assertUniqueBindingNames(vars, config.resources, config.secretNames);
   const materializedResponse = await requestJson(
     fetchImpl,
     token,
@@ -937,7 +940,12 @@ function mergedWorkerVars(outputs, configured) {
   if (workerEnv !== undefined) {
     const ordinary = objectField(workerEnv, "worker_env output");
     for (const [name, value] of Object.entries(ordinary)) {
-      if (!BINDING_NAME.test(name) || typeof value !== "string") {
+      if (
+        !BINDING_NAME.test(name) ||
+        SECRET_LIKE_NAME.test(name) ||
+        typeof value !== "string" ||
+        value.length > 64 * 1024
+      ) {
         throw new Error("Takos worker_env Output is invalid.");
       }
       vars.set(name, { type: "plain_text", name, text: value });

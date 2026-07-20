@@ -466,6 +466,18 @@ test("managed config uses canonical runtime_binding connections without provider
         resolve(import.meta.dir, "../../.."),
       ),
     ).toThrow(/cannot project sensitive output worker_env/u);
+    expect(() =>
+      readManagedReleaseConfig(
+        configPath,
+        {
+          worker_env: {
+            sensitive: false,
+            value: { SESSION_TOKEN: "must-not-be-plain-text" },
+          },
+        },
+        resolve(import.meta.dir, "../../.."),
+      ),
+    ).toThrow(/worker_env Output is invalid/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -483,6 +495,42 @@ test("managed credential files must be private and outside the repository", () =
     expect(readManagedReleaseSecrets(path)).toEqual({});
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("managed release rejects binding collisions before any Cloud mutation", async () => {
+  const fixture = makeFixture({ secretNames: ["APP_CONFIG"] });
+  try {
+    writeFileSync(
+      fixture.env.TAKOS_MANAGED_RELEASE_CONFIG_FILE,
+      JSON.stringify({
+        kind: "takos.managed-edge-worker-release@v1",
+        compatibilityDate: "2026-07-20",
+        vars: [{ type: "plain_text", name: "APP_CONFIG", text: "invalid" }],
+        resources: [],
+        secretNames: ["APP_CONFIG"],
+      }),
+    );
+    let calls = 0;
+    await expect(
+      releaseTakosumiManagedEdgeWorker({
+        outputs: { service_runtime_name: RESOURCE },
+        environment: "production",
+        artifactConfig: {
+          file: fixture.archive,
+          sha256: "0".repeat(64),
+        },
+        env: fixture.env,
+        fetchImpl: (async () => {
+          calls += 1;
+          return json({ error: "must_not_run" }, 500);
+        }) as typeof fetch,
+        cwd: resolve(import.meta.dir, "../../.."),
+      }),
+    ).rejects.toThrow(/binding names must be unique/u);
+    expect(calls).toBe(0);
+  } finally {
+    fixture.cleanup();
   }
 });
 
