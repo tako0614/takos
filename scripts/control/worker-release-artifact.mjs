@@ -62,15 +62,8 @@ export async function prepareWorkerReleaseArtifact({
   const contentRoot = join(root, "content");
 
   try {
-    const bytes = config.file
-      ? readLocalArtifactBytes(config.file)
-      : await readRemoteArtifactBytes(config.url, fetchImpl);
-    const actualDigest = await sha256Hex(bytes);
-    if (actualDigest !== config.sha256) {
-      throw new Error(
-        `Takos Worker release artifact SHA-256 mismatch: expected ${config.sha256}, received ${actualDigest}`,
-      );
-    }
+    const { bytes, sha256: actualDigest } =
+      await readWorkerReleaseArtifactBytes(config, fetchImpl);
     writeFileSync(archivePath, bytes, { mode: 0o600 });
     assertSafeArchive(archivePath);
     mkdirSync(contentRoot, { recursive: true });
@@ -110,6 +103,28 @@ export async function prepareWorkerReleaseArtifact({
     rmSync(root, { recursive: true, force: true });
     throw error;
   }
+}
+
+/**
+ * Read and verify the exact immutable release archive without extracting it.
+ * Managed Takosumi targets stage these bytes through the canonical Resource
+ * artifact ingress; direct Wrangler activation continues to use the prepared
+ * extraction path above.
+ */
+export async function readWorkerReleaseArtifactBytes(
+  config,
+  fetchImpl = globalThis.fetch,
+) {
+  const bytes = config.file
+    ? readLocalArtifactBytes(config.file)
+    : await readRemoteArtifactBytes(config.url, fetchImpl);
+  const actualDigest = await sha256Hex(bytes);
+  if (actualDigest !== config.sha256) {
+    throw new Error(
+      `Takos Worker release artifact SHA-256 mismatch: expected ${config.sha256}, received ${actualDigest}`,
+    );
+  }
+  return { bytes, sha256: actualDigest, sizeBytes: bytes.byteLength };
 }
 
 function readLocalArtifactBytes(path) {

@@ -32,6 +32,51 @@ activation steps, and publishes the reviewed Worker artifact. Takosumi treats
 the command as an opaque lifecycle action and records its result on the same
 Run boundary.
 
+## Hosted canonical Resource release
+
+When the selected target is Takosumi-managed (`cloudflare_account_id` is an
+opaque `ts_acc_*` target coordinate), the same activator does not invoke
+Wrangler or receive Cloudflare API credentials. It requires immutable
+prebuilt Worker archive bytes plus their exact SHA-256, then uses the Takosumi
+control API to perform one fail-closed release:
+
+1. Stage the exact Worker archive as a canonical `artifact` Run.
+2. Upload runtime secrets through the Cloud write-only secret route.
+3. Ask the Cloud materializer to produce an immutable Worker version,
+   promotion-pending deployment, and exact release manifest.
+4. Verify and stage the returned manifest bytes as another canonical
+   `artifact` Run.
+5. preview and apply one manifest-backed `EdgeWorker` Resource.
+6. Wait for that exact Resource generation and source digest to become
+   `Ready`, then confirm the matching pending deployment.
+
+Any mismatch, terminal Resource phase, timeout, response-size violation, or
+concurrent active-deployment change leaves promotion unconfirmed. Managed
+destroy is intentionally rejected by this helper; deletion must use the same
+canonical Resource lifecycle.
+
+The lifecycle controller supplies these coordinates outside the source tree:
+
+- `TAKOS_MANAGED_RELEASE_URL`
+- `TAKOS_MANAGED_RELEASE_WORKSPACE_ID`
+- `TAKOS_MANAGED_RELEASE_ACCESS_TOKEN_FILE` (absolute, regular, current-user
+  owned, mode `0600`)
+- `TAKOS_MANAGED_RELEASE_CONFIG_FILE` (absolute, outside this repository)
+- `TAKOS_MANAGED_RELEASE_SECRETS_FILE` (absolute, regular, current-user owned,
+  mode `0600`, when secrets are declared)
+- `TAKOS_MANAGED_RELEASE_IDEMPOTENCY_KEY` (stable for retries of one reviewed
+  candidate)
+
+The versioned config kind is `takos.managed-edge-worker-release@v1`. Runtime
+bindings are declared in `connections` using only a canonical Resource UID,
+requested permissions, and `projection: "runtime_binding"`. Every connection
+is paired with exact `Ready` Resource evidence from the same Workspace. Takos
+does not select or encode a provider-native resource type; any native resource
+identifiers in reconciler evidence remain opaque materializer input. The
+canonical `Interface` / `InterfaceBinding` authority remains in Takosumi, and
+this release path does not introduce a Cloudflare compatibility API or a
+parallel runtime registry.
+
 The immutable CI release publishes `install-config-patch.json` beside
 `takosumi-artifact.json`. Operators can reproduce that service-side
 contribution without reading OpenTofu state:

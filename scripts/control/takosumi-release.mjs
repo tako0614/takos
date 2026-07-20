@@ -19,6 +19,7 @@ import {
   prepareWorkerReleaseArtifact,
   workerReleaseArtifactConfig,
 } from "./worker-release-artifact.mjs";
+import { releaseTakosumiManagedEdgeWorker } from "./takosumi-managed-release.mjs";
 
 const ENVIRONMENTS = ["production", "staging"];
 const WRANGLER_CONFIG = "deploy/cloudflare/wrangler.toml";
@@ -100,6 +101,21 @@ Optional env:
   TAKOS_RELEASE_WORKER_ARTIFACT_SHA256     Required SHA-256 for the archive.
                                           When both are absent, activation
                                           builds the pinned Git source.
+  TAKOS_MANAGED_RELEASE_URL                Takosumi HTTPS origin for a managed
+                                          target (TAKOSUMI_CONTROL_URL is an
+                                          accepted fallback).
+  TAKOS_MANAGED_RELEASE_WORKSPACE_ID       Canonical Workspace / Resource Space.
+  TAKOS_MANAGED_RELEASE_RESOURCE_NAME      Optional EdgeWorker name; defaults to
+                                          service_runtime_name Output.
+  TAKOS_MANAGED_RELEASE_ACCESS_TOKEN_FILE  Absolute 0600 bearer-token file
+                                          outside this repository.
+  TAKOS_MANAGED_RELEASE_CONFIG_FILE        Absolute non-secret release config
+                                          outside this repository.
+  TAKOS_MANAGED_RELEASE_SECRETS_FILE       Absolute 0600 JSON secret map outside
+                                          this repository; required when the
+                                          config lists secretNames.
+  TAKOS_MANAGED_RELEASE_IDEMPOTENCY_KEY    Reviewed release-candidate key. A
+                                          retry must reuse the same value.
   TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR     Cache root used by bun install during
                                           activation. Each retry gets its own
                                           subdirectory to avoid corrupt cache
@@ -584,6 +600,12 @@ export function normalizeReleaseContainerImages(value) {
 
 function isTakosumiVirtualCloudflareAccountId(value) {
   return typeof value === "string" && /^ts_acc_/u.test(value.trim());
+}
+
+export function isTakosumiManagedReleaseTarget(outputs) {
+  return isTakosumiVirtualCloudflareAccountId(
+    outputValue(outputs?.cloudflare_account_id),
+  );
 }
 
 function requireDirectCloudflareAccountId(value) {
@@ -2164,8 +2186,59 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const releaseStartedAt = Date.now();
   let releaseStatus = "succeeded";
   const outputs = readReleaseOutputs(env);
-  const childEnv = releaseChildEnv(outputs, env);
   const workerArtifact = destroy ? undefined : workerReleaseArtifactConfig(env);
+  if (isTakosumiManagedReleaseTarget(outputs)) {
+    if (destroy) {
+      throw new Error(
+        "Managed Takos cleanup must use the canonical Resource delete lifecycle; direct Wrangler destroy is forbidden.",
+      );
+    }
+    if (!workerArtifact) {
+      throw new Error(
+        "Managed Takos release requires an immutable TAKOS_RELEASE_WORKER_ARTIFACT_URL or TAKOS_RELEASE_WORKER_ARTIFACT_FILE and exact SHA-256.",
+      );
+    }
+    let managed;
+    try {
+      managed = await timeReleaseStep(
+        timings,
+        "canonical-managed-edge-worker-release",
+        () =>
+          releaseTakosumiManagedEdgeWorker({
+            outputs,
+            environment,
+            artifactConfig: workerArtifact,
+            env,
+          }),
+      );
+    } catch (error) {
+      releaseStatus = "failed";
+      throw error;
+    } finally {
+      emitReleaseTimingSummary(
+        releaseTimingSummary({
+          environment,
+          destroy: false,
+          status: releaseStatus,
+          startedAt: releaseStartedAt,
+          finishedAt: Date.now(),
+          timings,
+        }),
+        env,
+      );
+    }
+    console.log(
+      `\nTakos canonical managed release activation completed for ${environment}.`,
+    );
+    return {
+      environment,
+      operation: "activate",
+      status: releaseStatus,
+      workerArtifact: managed.archive,
+      activation: { managed },
+    };
+  }
+  const childEnv = releaseChildEnv(outputs, env);
   const takosumiRepoDir =
     env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
     env.TAKOSUMI_REPO_DIR ??
