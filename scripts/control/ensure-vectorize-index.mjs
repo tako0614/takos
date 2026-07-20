@@ -28,16 +28,17 @@ function readOption(parts, option) {
 
 const accountIdOption = readOption(args, "--account-id");
 const wranglerArgs = accountIdOption.rest;
-const useCompatApi =
-  process.env.TAKOS_CLOUDFLARE_TARGET_MODE === "managed_compat" ||
-  /^ts_acc_/u.test(accountIdOption.value ?? "");
-const nativeProcessEnv = { ...process.env };
-if (!useCompatApi) {
-  delete nativeProcessEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
-  delete nativeProcessEnv.CLOUDFLARE_API_BASE_URL;
-  delete nativeProcessEnv.CF_API_BASE_URL;
-  delete nativeProcessEnv.CLOUDFLARE_BASE_URL;
+if (/^ts_acc_/u.test(accountIdOption.value ?? "")) {
+  console.error(
+    "Takosumi managed targets must materialize Vectorize through the canonical Resource/Run lifecycle; this helper accepts only a real operator-owned Cloudflare account.",
+  );
+  process.exit(1);
 }
+const nativeProcessEnv = { ...process.env };
+delete nativeProcessEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
+delete nativeProcessEnv.CLOUDFLARE_API_BASE_URL;
+delete nativeProcessEnv.CF_API_BASE_URL;
+delete nativeProcessEnv.CLOUDFLARE_BASE_URL;
 const env = {
   ...nativeProcessEnv,
   ...(accountIdOption.value

@@ -16,8 +16,6 @@ import process from "node:process";
 import {
   buildTakosumiDestroyCommands,
   buildTakosumiReleaseCommands,
-  deployManagedCompatWorker,
-  ensureManagedCompatPublicRoute,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   isRetryableBunInstallFailure,
@@ -27,7 +25,6 @@ import {
   pruneWranglerMigrationsForExistingWorker,
   releaseD1MigrationsWranglerConfigPath,
   releaseChildEnv,
-  releaseWranglerBundleDir,
   releaseWranglerAccountId,
   releaseCommandStepName,
   readReleaseOutputs,
@@ -63,6 +60,8 @@ const rawOutputs = {
     workflow_dlq: "takos-test-workflow-jobs-dlq",
     deployment: "takos-test-deployment-jobs",
     deployment_dlq: "takos-test-deployment-jobs-dlq",
+    notification_push: "takos-test-notification-push",
+    notification_push_dlq: "takos-test-notification-push-dlq",
   },
   object_buckets: {
     worker_bundles: "takos-test-worker-bundles",
@@ -333,7 +332,7 @@ case "$*" in
   *"consumer list takos-test-runs "*)
     printf 'Resolving dependencies\\n'
     printf 'Resolved, downloaded and extracted [2]\\n'
-    printf '[{"script_name":"takos-test","type":"worker","dead_letter_queue":"takos-test-runs-dlq","settings":{"batch_size":1,"max_wait_time_ms":1000,"max_retries":5,"max_concurrency":250,"retry_delay":5}}]\\n'
+    printf '[{"script_name":"takos-test","type":"worker","dead_letter_queue":"takos-test-runs-dlq","settings":{"batch_size":1,"max_wait_time_ms":1000,"max_retries":5,"max_concurrency":5,"retry_delay":5}}]\\n'
     ;;
   *"consumer list "*)
     printf '[]\\n'
@@ -481,7 +480,7 @@ esac
     );
     assert.match(
       commands,
-      /--message-retries 5 --dead-letter-queue takos-test-runs-dlq --max-concurrency 250 --retry-delay-secs 5/,
+      /--message-retries 5 --dead-letter-queue takos-test-runs-dlq --max-concurrency 5 --retry-delay-secs 5/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -1014,13 +1013,13 @@ test("wranglerDeployEnv prefers explicit Takos deploy token over containers alia
 });
 
 test("wranglerDeployEnv strips Cloudflare API base overrides from native release helpers", () => {
-  const compatBase = "https://compat.example.test/client/v4";
+  const retiredBase = "https://ignored.example.test/client/v4";
   const input = {
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
     CF_API_TOKEN: "provider-token",
-    TAKOS_CLOUDFLARE_API_BASE_URL: compatBase,
-    CLOUDFLARE_API_BASE_URL: compatBase,
+    TAKOS_CLOUDFLARE_API_BASE_URL: retiredBase,
+    CLOUDFLARE_API_BASE_URL: retiredBase,
   };
 
   assert.deepEqual(wranglerDeployEnv(input), {
@@ -1031,7 +1030,7 @@ test("wranglerDeployEnv strips Cloudflare API base overrides from native release
 });
 
 test("wranglerDeployEnv keeps provider auth while ignoring custom Cloudflare API bases", () => {
-  const apiBase = "https://compat.example.test/client/v4";
+  const apiBase = "https://ignored.example.test/client/v4";
   const env = wranglerDeployEnv({
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
@@ -1224,133 +1223,52 @@ test("preflightWranglerDeployAuth checks individual R2 bucket access used by wra
   );
 });
 
-test("releaseChildEnv preserves Takosumi Cloud compat API base for managed targets", () => {
-  const containerImages = JSON.stringify({
-    runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
-    executor: "registry.cloudflare.com/backend_acc/takos-agent:0.10.0",
-  });
-
-  assert.deepEqual(
-    releaseChildEnv(
-      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
-      {
-        PATH: "/bin",
-        CLOUDFLARE_API_TOKEN: "token",
-        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      },
-    ),
-    {
-      PATH: "/bin",
-      CLOUDFLARE_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-      CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-      CF_API_BASE_URL: "https://compat.example.test/client/v4",
-      CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
-      TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      CI: "true",
-      WRANGLER_SEND_METRICS: "false",
-      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
-      CF_API_TOKEN: "token",
-      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-    },
-  );
-});
-
-test("releaseWranglerAccountId can derive a native account for explicit native helper operations", () => {
-  const containerImages = JSON.stringify({
-    runtime:
-      "registry.cloudflare.com/backend_acc/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
-    executor:
-      "registry.cloudflare.com/backend_acc/takos-agent@sha256:2222222222222222222222222222222222222222222222222222222222222222",
-  });
-
-  assert.equal(
-    releaseWranglerAccountId(
-      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
-      {
-        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      },
-    ),
-    "backend_acc",
-  );
-  assert.deepEqual(
-    releaseChildEnv(
-      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
-      {
-        PATH: "/bin",
-        CLOUDFLARE_API_TOKEN: "token",
-        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      },
-    ),
-    {
-      PATH: "/bin",
-      CLOUDFLARE_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-      CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-      CF_API_BASE_URL: "https://compat.example.test/client/v4",
-      CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
-      TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      CI: "true",
-      WRANGLER_SEND_METRICS: "false",
-      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
-      CF_API_TOKEN: "token",
-      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-    },
-  );
-});
-
-test("buildTakosumiReleaseCommands uses the native Wrangler account for Vectorize", () => {
-  const commands = buildTakosumiReleaseCommands(
-    {
-      ...rawOutputs,
-      cloudflare_account_id: "ts_acc_takosumi_cloud",
-    },
-    "production",
-    {
-      wranglerAccountId: "backend_acc",
-    },
-  );
-
-  assert.equal(
-    commands[1],
-    "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'backend_acc'",
-  );
-});
-
-test("buildTakosumiReleaseCommands bundles instead of uploading through Wrangler for managed targets", () => {
-  const commands = buildTakosumiReleaseCommands(
-    {
-      ...rawOutputs,
-      cloudflare_account_id: "ts_acc_takosumi_cloud",
-    },
-    "production",
-    {
-      containersRollout: "none",
-    },
-  );
-
-  assert.equal(
-    commands.at(-1),
-    `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env' '' '--containers-rollout' 'none' '--dry-run' '--outdir' '${releaseWranglerBundleDir("production")}'`,
-  );
-});
-
-test("releaseChildEnv requires a compat API base for virtual Cloudflare outputs", () => {
+test("releaseChildEnv rejects virtual managed accounts before native activation", () => {
   assert.throws(
     () =>
       releaseChildEnv(
         { cloudflare_account_id: "ts_acc_takosumi_cloud" },
         {
           PATH: "/bin",
-          CLOUDFLARE_API_TOKEN: "token",
+          CLOUDFLARE_API_TOKEN: "operator-token",
+          TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend-acc",
         },
       ),
-    /require TAKOS_CLOUDFLARE_API_BASE_URL or CLOUDFLARE_API_BASE_URL/,
+    /canonical Resource\/Run lifecycle/,
+  );
+});
+
+test("buildTakosumiReleaseCommands cannot bypass managed lifecycle ownership with a backend account", () => {
+  assert.throws(
+    () =>
+      buildTakosumiReleaseCommands(
+        { ...rawOutputs, cloudflare_account_id: "ts_acc_takosumi_cloud" },
+        "production",
+        { wranglerAccountId: "backend-acc" },
+      ),
+    /canonical Resource\/Run lifecycle/,
+  );
+});
+
+test("Takos release helper has no managed Cloudflare compatibility activation path", () => {
+  const source = readFileSync(
+    new URL("../takosumi-release.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    source,
+    /\/compat\/cloudflare|managed_compat|deployManagedCompatWorker|ensureManagedCompatPublicRoute/u,
+  );
+});
+
+test("buildTakosumiReleaseCommands uses the native Wrangler account for Vectorize", () => {
+  const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
+    wranglerAccountId: "backend_acc",
+  });
+
+  assert.equal(
+    commands[1],
+    "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'backend_acc'",
   );
 });
 
@@ -1436,41 +1354,6 @@ test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs",
   );
 });
 
-test("ensureWorkersDevSubdomain uses Cloudflare-compatible API base for managed targets", async () => {
-  const requests = [];
-  const result = await ensureWorkersDevSubdomain(
-    {
-      service_runtime_name: "takos-test",
-      cloudflare_account_id: "ts_acc_takosumi_cloud",
-      launch_url: "https://takos-test.example-subdomain.workers.dev",
-    },
-    {
-      CLOUDFLARE_API_TOKEN: "token_123",
-      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
-    },
-    async (url, init) => {
-      requests.push({ url, init });
-      return new Response(
-        JSON.stringify({
-          success: true,
-          result: { enabled: true, previews_enabled: false },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    },
-  );
-
-  assert.deepEqual(result, {
-    skipped: false,
-    result: { enabled: true, previews_enabled: false },
-  });
-  assert.equal(requests.length, 1);
-  assert.equal(
-    requests[0].url,
-    "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
-  );
-});
-
 test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
   let called = false;
   const result = await ensureWorkersDevSubdomain(
@@ -1491,78 +1374,6 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
     reason: "no_workers_dev_launch_url",
   });
   assert.equal(called, false);
-});
-
-test("ensureManagedCompatPublicRoute discovers the virtual zone and creates the declared route", async () => {
-  const calls = [];
-  const result = await ensureManagedCompatPublicRoute(
-    {
-      ...rawOutputs,
-      cloudflare_account_id: "ts_acc_takosumi_cloud",
-      public_url: "https://workspace-takos.app.takos.jp",
-    },
-    {
-      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
-      CLOUDFLARE_API_TOKEN: "compat-token",
-      CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
-    },
-    async (input, init = {}) => {
-      const request = new Request(input, init);
-      calls.push({
-        url: request.url,
-        method: request.method,
-        authorization: request.headers.get("authorization"),
-        body:
-          request.method === "POST" ? await request.clone().json() : undefined,
-      });
-      if (request.url.endsWith("/zones?name=app.takos.jp")) {
-        return Response.json({ success: true, result: [] });
-      }
-      if (request.url.endsWith("/zones?name=takos.jp")) {
-        return Response.json({
-          success: true,
-          result: [{ id: "zone_takosumi_cloud", name: "takos.jp" }],
-        });
-      }
-      return Response.json(
-        { success: true, result: { id: "route_1" } },
-        { status: 201 },
-      );
-    },
-  );
-
-  assert.equal(result.skipped, false);
-  assert.equal(result.pattern, "workspace-takos.app.takos.jp/*");
-  assert.deepEqual(calls, [
-    {
-      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=workspace-takos.app.takos.jp",
-      method: "GET",
-      authorization: "Bearer compat-token",
-      body: undefined,
-    },
-    {
-      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=app.takos.jp",
-      method: "GET",
-      authorization: "Bearer compat-token",
-      body: undefined,
-    },
-    {
-      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=takos.jp",
-      method: "GET",
-      authorization: "Bearer compat-token",
-      body: undefined,
-    },
-    {
-      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones/zone_takosumi_cloud/workers/routes",
-      method: "POST",
-      authorization: "Bearer compat-token",
-      body: {
-        pattern: "workspace-takos.app.takos.jp/*",
-        script: "takos-test",
-      },
-    },
-  ]);
 });
 
 test("ensureWorkersDevSubdomain skips API enablement without Cloudflare API token", async () => {
@@ -1663,298 +1474,6 @@ test("ensureWorkersDevSubdomain skips API enablement when Wrangler-owned Worker 
     reason: "workers_dev_api_unavailable",
   });
   assert.equal(requests.length, 1);
-});
-
-test("deployManagedCompatWorker uploads Wrangler bundle and assets through the compatibility API", async () => {
-  const previousCwd = process.cwd();
-  const root = mkdtempSync(resolve(tmpdir(), "takos-managed-upload-"));
-  const requests: {
-    url: string;
-    method: string;
-    authorization: string | null;
-    assetAuthorization: string | null;
-    metadata?: Record<string, unknown>;
-    manifest?: Record<string, { hash: string; size: number }>;
-    assetHashes?: string[];
-  }[] = [];
-  let assetUploadRequestCount = 0;
-  try {
-    process.chdir(root);
-    mkdirSync("deploy/cloudflare", { recursive: true });
-    mkdirSync("dist/assets", { recursive: true });
-    mkdirSync(releaseWranglerBundleDir("production"), { recursive: true });
-    writeFileSync("dist/index.html", "<main>Takos</main>");
-    writeFileSync("dist/assets/app.js", "console.log('takos');");
-    writeFileSync(
-      resolve(releaseWranglerBundleDir("production"), "index.js"),
-      "export default { fetch() { return new Response('ok'); } };",
-    );
-    writeFileSync(
-      ".takos-release-secrets.production.json",
-      JSON.stringify({
-        OIDC_CLIENT_SECRET: "oidc-secret-value",
-        ENCRYPTION_KEY: "encryption-secret-value",
-      }),
-      { mode: 0o600 },
-    );
-    writeFileSync(
-      productionWranglerConfig,
-      [
-        'name = "takos-test"',
-        'main = "../../src/worker/cloudflare-entrypoint.ts"',
-        'compatibility_date = "2026-04-01"',
-        'compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]',
-        "",
-        "[vars]",
-        'ADMIN_DOMAIN = "takos-test.app.takos.jp"',
-        "",
-        "[assets]",
-        'directory = "../../dist"',
-        'binding = "ASSETS"',
-        "run_worker_first = true",
-        "",
-        "[[kv_namespaces]]",
-        'binding = "HOSTNAME_ROUTING"',
-        'id = "kv_hostname"',
-        "",
-        "[[durable_objects.bindings]]",
-        'name = "RUNTIME_CONTAINER"',
-        'class_name = "TakosRuntimeContainer"',
-        "",
-        "[[migrations]]",
-        'tag = "v1"',
-        'new_sqlite_classes = ["TakosRuntimeContainer"]',
-        "",
-        "[[containers]]",
-        'class_name = "TakosRuntimeContainer"',
-        "",
-        "[[r2_buckets]]",
-        'binding = "WORKER_BUNDLES"',
-        'bucket_name = "takos-test-worker-bundles"',
-        "",
-        "[[queues.producers]]",
-        'binding = "RUN_QUEUE"',
-        'queue = "takos-test-runs"',
-        "",
-        "[[d1_databases]]",
-        'binding = "DB"',
-        'database_id = "d1_db"',
-        "",
-        "[[vectorize]]",
-        'binding = "VECTORIZE"',
-        'index_name = "takos-test-embeddings"',
-        "",
-        "[ai]",
-        'binding = "AI"',
-        "",
-        "[[services]]",
-        'binding = "TAKOS_EGRESS"',
-        'service = "takos-test"',
-        "",
-      ].join("\n"),
-    );
-
-    const result = await deployManagedCompatWorker(
-      {
-        ...rawOutputs,
-        cloudflare_account_id: "ts_acc_takosumi_cloud",
-      },
-      "production",
-      {
-        CLOUDFLARE_API_TOKEN: "compat-token",
-        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
-      },
-      async (url, init) => {
-        const request = new Request(url, init);
-        const entry = {
-          url: request.url,
-          method: request.method,
-          authorization: request.headers.get("authorization"),
-          assetAuthorization: request.headers.get(
-            "x-takosumi-cloudflare-assets-authorization",
-          ),
-        };
-        requests.push(entry);
-        if (request.url.endsWith("/assets-upload-session")) {
-          const body = await request.json();
-          entry.manifest = body.manifest;
-          return new Response(
-            JSON.stringify({
-              success: true,
-              result: {
-                buckets: Object.values(body.manifest).map((item) => [
-                  item.hash,
-                ]),
-                jwt: "assets-session-jwt",
-              },
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (request.url.endsWith("/workers/assets/upload?base64=true")) {
-          const form = await request.formData();
-          entry.assetHashes = [...form.keys()];
-          assetUploadRequestCount += 1;
-          if (assetUploadRequestCount === 1) {
-            return new Response(null, { status: 202 });
-          }
-          return new Response(
-            JSON.stringify({
-              success: true,
-              result: { jwt: "assets-complete-jwt" },
-            }),
-            { status: 201, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (request.url.endsWith("/workers/scripts/takos-test")) {
-          const form = await request.formData();
-          const metadata = JSON.parse(
-            await (form.get("metadata") as Blob).text(),
-          );
-          entry.metadata = metadata;
-          assert.equal(
-            await (form.get("index.js") as Blob).text(),
-            "export default { fetch() { return new Response('ok'); } };",
-          );
-          return new Response(
-            JSON.stringify({
-              success: true,
-              result: { id: "takos-test", script_name: "takos-test" },
-            }),
-            { status: 201, headers: { "content-type": "application/json" } },
-          );
-        }
-        return new Response(JSON.stringify({ success: false }), {
-          status: 404,
-          headers: { "content-type": "application/json" },
-        });
-      },
-    );
-
-    assert.equal(result.workerName, "takos-test");
-    assert.equal(result.assets?.manifestEntries, 2);
-    assert.equal(requests.length, 4);
-    assert.equal(
-      requests.every(
-        (request) => request.authorization === "Bearer compat-token",
-      ),
-      true,
-    );
-    assert.equal(requests[1].assetAuthorization, "Bearer assets-session-jwt");
-    assert.equal(requests[2].assetAuthorization, "Bearer assets-session-jwt");
-    assert.deepEqual(Object.keys(requests[0].manifest ?? {}).sort(), [
-      "/assets/app.js",
-      "/index.html",
-    ]);
-    assert.deepEqual(
-      [
-        ...(requests[1].assetHashes ?? []),
-        ...(requests[2].assetHashes ?? []),
-      ].sort(),
-      Object.values(requests[0].manifest ?? {})
-        .map((entry) => entry.hash)
-        .sort(),
-    );
-    const metadata = requests[3].metadata ?? {};
-    assert.equal(metadata.main_module, "index.js");
-    assert.deepEqual(metadata.compatibility_flags, [
-      "nodejs_compat",
-      "global_fetch_strictly_public",
-    ]);
-    assert.deepEqual(metadata.assets, {
-      jwt: "assets-complete-jwt",
-      config: { run_worker_first: true },
-    });
-    assert.deepEqual(metadata.containers, [
-      { class_name: "TakosRuntimeContainer" },
-    ]);
-    assert.deepEqual(metadata.migrations, {
-      new_tag: "v1",
-      steps: [{ new_sqlite_classes: ["TakosRuntimeContainer"] }],
-    });
-    assert.deepEqual(
-      (metadata.bindings as Array<Record<string, unknown>>).map((binding) => [
-        binding.name,
-        binding.type,
-      ]),
-      [
-        ["ADMIN_DOMAIN", "plain_text"],
-        ["OIDC_CLIENT_SECRET", "secret_text"],
-        ["ENCRYPTION_KEY", "secret_text"],
-        ["HOSTNAME_ROUTING", "kv_namespace"],
-        ["RUNTIME_CONTAINER", "durable_object_namespace"],
-        ["RUN_QUEUE", "queue"],
-        ["WORKER_BUNDLES", "r2_bucket"],
-        ["DB", "d1"],
-        ["VECTORIZE", "vectorize"],
-        ["TAKOS_EGRESS", "service"],
-        ["AI", "ai"],
-        ["ASSETS", "assets"],
-      ],
-    );
-    const secretBindings = (
-      metadata.bindings as Array<Record<string, unknown>>
-    ).filter((binding) => binding.type === "secret_text");
-    assert.deepEqual(secretBindings, [
-      {
-        name: "OIDC_CLIENT_SECRET",
-        type: "secret_text",
-        text: "oidc-secret-value",
-      },
-      {
-        name: "ENCRYPTION_KEY",
-        type: "secret_text",
-        text: "encryption-secret-value",
-      },
-    ]);
-    assert.equal(JSON.stringify(result).includes("oidc-secret-value"), false);
-  } finally {
-    process.chdir(previousCwd);
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("deployManagedCompatWorker fails before upload when release secrets are missing", async () => {
-  const previousCwd = process.cwd();
-  const root = mkdtempSync(resolve(tmpdir(), "takos-managed-secrets-"));
-  let requestCount = 0;
-  try {
-    process.chdir(root);
-    mkdirSync("deploy/cloudflare", { recursive: true });
-    mkdirSync(releaseWranglerBundleDir("production"), { recursive: true });
-    writeFileSync(
-      resolve(releaseWranglerBundleDir("production"), "index.js"),
-      "export default {};",
-    );
-    writeFileSync(
-      productionWranglerConfig,
-      ['name = "takos-test"', 'compatibility_date = "2026-04-01"'].join("\n"),
-    );
-
-    await assert.rejects(
-      deployManagedCompatWorker(
-        {
-          ...rawOutputs,
-          cloudflare_account_id: "ts_acc_takosumi_cloud",
-        },
-        "production",
-        {
-          CLOUDFLARE_API_TOKEN: "compat-token",
-          TAKOS_CLOUDFLARE_API_BASE_URL:
-            "https://compat.example.test/client/v4",
-        },
-        async () => {
-          requestCount += 1;
-          return new Response(null, { status: 500 });
-        },
-      ),
-      /requires the generated release secrets file/u,
-    );
-    assert.equal(requestCount, 0);
-  } finally {
-    process.chdir(previousCwd);
-    rmSync(root, { recursive: true, force: true });
-  }
 });
 
 test("waitForWranglerDeployment retries until Wrangler reports an active version", async () => {
@@ -2316,43 +1835,6 @@ test("staging Worker content readback uses the v2 API with Bearer auth", async (
     [
       "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content/v2",
       "https://takos-test.example-subdomain.workers.dev/health",
-    ],
-  );
-  assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
-});
-
-test("verifyReleaseDeployment uses Cloudflare-compatible API base for managed targets", async () => {
-  const requests = [];
-  const result = await verifyReleaseDeployment(
-    {
-      ...rawOutputs,
-      cloudflare_account_id: "ts_acc_takosumi_cloud",
-      launch_url: "https://takos-test.app.takos.jp",
-    },
-    "production",
-    {
-      CLOUDFLARE_API_TOKEN: "token_123",
-      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
-      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
-    },
-    async (url, init) => {
-      requests.push({ url, init });
-      if (String(url).includes("/content")) {
-        return new Response("/* real worker */\n".repeat(128), {
-          status: 200,
-        });
-      }
-      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
-    },
-  );
-
-  assert.equal(result.artifact.workerName, "takos-test");
-  assert.equal(result.health.status, 200);
-  assert.deepEqual(
-    requests.map((request) => String(request.url)),
-    [
-      "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content/v2",
-      "https://takos-test.app.takos.jp/health",
     ],
   );
   assert.equal(requests[0].init.headers.authorization, "Bearer token_123");

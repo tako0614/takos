@@ -4,7 +4,7 @@ import process from "node:process";
 import { QUEUE_CONSUMERS } from "./queue-consumer-config.ts";
 
 // The Workers API may accept an upload before the Queues API can resolve the
-// same Worker. Each compat request is bounded independently, so retry the
+// same Worker. Each Cloudflare API request is bounded independently, so retry the
 // idempotent consumer declaration across that propagation window.
 const WORKER_PROPAGATION_RETRY_DELAYS_MS = [0, 15_000, 30_000];
 
