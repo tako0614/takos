@@ -18,6 +18,7 @@ import {
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
+  isTakosumiManagedReleaseTarget,
   isRetryableBunInstallFailure,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
@@ -955,6 +956,20 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
       CLOUDFLARE_ACCOUNT_ID: "acc_from_outputs",
     },
   );
+});
+
+test("managed target selection is explicit and never treats a real provider account as canonical Cloud", () => {
+  assert.equal(
+    isTakosumiManagedReleaseTarget({
+      cloudflare_account_id: "ts_acc_managed",
+    }),
+    true,
+  );
+  assert.equal(
+    isTakosumiManagedReleaseTarget({ cloudflare_account_id: "acc_123" }),
+    false,
+  );
+  assert.equal(isTakosumiManagedReleaseTarget({}), false);
 });
 
 test("releaseChildEnv prefers the native Containers token for release helpers", () => {
