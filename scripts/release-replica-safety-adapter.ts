@@ -13,11 +13,13 @@ import {
   actionResult,
   assertControllerAuthority,
   assertDistinctTargets,
+  assertManagedPublicRouteAbsent,
   assertFreshReplica,
   assertTimestamp,
   candidateContext,
   canonicalJson,
   digestJson,
+  ensureManagedPublicRoute,
   envelopeArgument,
   exactManagedReadback,
   healthReadback,
@@ -132,7 +134,7 @@ function configFingerprint(
     resourceId: expectedResourceId(target),
     operatorPolicyDigest: envelope.authority.operatorPolicyDigest,
     candidateManifestDigest: envelope.candidate.manifestDigest,
-    healthOrigin: new URL(target.healthUrl).origin,
+    healthPath: target.healthPath,
   });
 }
 
@@ -250,10 +252,12 @@ async function provision(
       activation.status === "succeeded",
     "managed replica activation did not succeed",
   );
-  const health = await healthReadback(replica.healthUrl);
+  const route = await ensureManagedPublicRoute(replica);
+  const health = await healthReadback(route.healthUrl);
   const managed = managedEvidence({
     candidate,
     activation: activation.activation,
+    route,
     health,
   });
   invariant(
@@ -449,6 +453,10 @@ async function cleanupPlan(
       method: "DELETE",
       path: `${resourcePath(replica)}&managedBy=opentofu`,
     },
+    postconditions: {
+      canonicalResourceStatus: 404,
+      activeOwnedPublicRouteInterfaces: 0,
+    },
     productionFallback: false,
   };
   const path = evidencePath(envelope, "cleanup-plan");
@@ -502,6 +510,26 @@ async function destroy(
       await Bun.sleep(2_000);
     }
     invariant(deleted, "canonical replica Resource was not deleted in time");
+    let routeRetired = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await assertManagedPublicRouteAbsent(replica);
+        routeRetired = true;
+        break;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !error.message.includes("still has an active public route Interface")
+        ) {
+          throw error;
+        }
+      }
+      await Bun.sleep(2_000);
+    }
+    invariant(
+      routeRetired,
+      "managed replica public route Interface was not retired in time",
+    );
     writeEvidence(path, {
       kind: "takos.managed-edge-worker-replica-destroy-attestation@v1",
       status: "destroyed",
@@ -511,6 +539,7 @@ async function destroy(
       targetInventoryDigest: inventory.targetInventoryDigest,
       deletedAt: new Date().toISOString(),
       readbackStatus: 404,
+      activeOwnedPublicRouteInterfaces: 0,
       productionFallback: false,
     });
   }

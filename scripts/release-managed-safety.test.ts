@@ -13,10 +13,14 @@ import { sha256Bytes } from "./release-candidate-contract.ts";
 import {
   SURFACE_ID,
   assertDistinctTargets,
+  assertManagedPublicRouteAbsent,
   digestJson,
+  ensureManagedPublicRoute,
+  healthReadback,
   localQualification,
   managedEvidence,
   managedTarget,
+  readManagedPublicRoute,
   type CandidateContext,
   type ManagedTarget,
   type ReleaseEnvelope,
@@ -41,7 +45,7 @@ function digest(character: string): string {
 function target(
   workspaceId: string,
   resourceName: string,
-  healthUrl: string,
+  healthPath = "/health",
 ): ManagedTarget {
   return {
     paths: {} as ManagedTarget["paths"],
@@ -53,27 +57,19 @@ function target(
     accessFile: "/operator/access",
     configFile: "/operator/config",
     secretsFile: "/operator/secrets",
-    healthUrl,
+    healthPath,
   };
 }
 
 describe("managed Takos release safety", () => {
   test("requires staging and replica to be distinct canonical targets", () => {
-    const staging = target(
-      "workspace-staging",
-      "takos-staging",
-      "https://staging.example.test/health",
-    );
-    const replica = target(
-      "workspace-replica",
-      "takos-replica",
-      "https://replica.example.test/health",
-    );
+    const staging = target("workspace-staging", "takos-staging");
+    const replica = target("workspace-replica", "takos-replica");
     expect(() => assertDistinctTargets(staging, replica)).not.toThrow();
     expect(() =>
       assertDistinctTargets(
         staging,
-        target(staging.workspaceId, replica.resourceName, replica.healthUrl),
+        target(staging.workspaceId, replica.resourceName),
       ),
     ).toThrow("Workspace identities must be distinct");
   });
@@ -121,6 +117,10 @@ describe("managed Takos release safety", () => {
     const evidence = managedEvidence({
       candidate,
       activation,
+      route: {
+        healthUrl: "https://replica.example.test/health",
+        digest: digest("8"),
+      },
       health: { status: 200, digest: digest("7") },
     });
     expect(evidence.resourceId).toBe(
@@ -132,6 +132,7 @@ describe("managed Takos release safety", () => {
       runtimeRegistryDigest: digest("3"),
       managedDeploymentDigest: digest("6"),
       resourceGeneration: 1,
+      publicRouteDigest: digest("8"),
       healthStatus: 200,
     });
     expect(() =>
@@ -143,12 +144,16 @@ describe("managed Takos release safety", () => {
             resource: { ...activation.managed.resource, phase: "Pending" },
           },
         },
+        route: {
+          healthUrl: "https://replica.example.test/health",
+          digest: digest("8"),
+        },
         health: { status: 200, digest: digest("7") },
       }),
     ).toThrow("not exact Ready");
   });
 
-  test("loads only 0600 operator files and rejects production health hosts", () => {
+  test("loads only 0600 operator files and validates an absolute health path", () => {
     const root = mkdtempSync(join(tmpdir(), "takos-managed-policy-"));
     roots.push(root);
     chmodSync(root, 0o700);
@@ -168,7 +173,7 @@ describe("managed Takos release safety", () => {
         kind: "takos.managed-edge-worker-release@v1",
       }),
       "managed-secrets.json": "{}",
-      "health-url": "https://replica.example.test/health\n",
+      "health-path": "/health\n",
     };
     for (const [name, body] of Object.entries(files)) {
       const path = join(directory, name);
@@ -179,12 +184,169 @@ describe("managed Takos release safety", () => {
     expect(managedTarget("replica")).toMatchObject({
       workspaceId: "workspace-replica",
       resourceName: "takos-replica",
-      healthUrl: "https://replica.example.test/health",
+      healthPath: "/health",
     });
-    writeFileSync(join(directory, "health-url"), "https://takos.jp/health\n", {
+    writeFileSync(join(directory, "health-path"), "https://takos.jp/health\n", {
       mode: 0o600,
     });
-    expect(() => managedTarget("replica")).toThrow("production hostname");
+    expect(() => managedTarget("replica")).toThrow("absolute wildcard-free");
+    writeFileSync(join(directory, "health-path"), "//example.test/health\n", {
+      mode: 0o600,
+    });
+    expect(() => managedTarget("replica")).toThrow("absolute wildcard-free");
+  });
+
+  test("retries bounded transient network and HTTP health failures", async () => {
+    const attempts: string[] = [];
+    const fetchImpl = (async () => {
+      attempts.push("fetch");
+      if (attempts.length === 1) throw new TypeError("network unavailable");
+      if (attempts.length === 2) {
+        return new Response("pending", { status: 503 });
+      }
+      return Response.json({ ok: true });
+    }) as unknown as typeof fetch;
+    const waits: number[] = [];
+    const result = await healthReadback("https://replica.example.test/health", {
+      fetchImpl,
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+      },
+      timeoutMs: 5_000,
+    });
+    expect(result.status).toBe(200);
+    expect(attempts).toHaveLength(3);
+    expect(waits).toHaveLength(2);
+  });
+
+  test("materializes and reuses the exact Resource-owned public route", async () => {
+    const root = mkdtempSync(join(tmpdir(), "takos-managed-route-"));
+    roots.push(root);
+    chmodSync(root, 0o700);
+    const accessFile = join(root, "access-token");
+    writeFileSync(accessFile, "a".repeat(32), { mode: 0o600 });
+    chmodSync(accessFile, 0o600);
+    const managed = {
+      ...target("workspace-replica", "takos-replica"),
+      accessFile,
+    };
+    const resourceId = "tkrn:workspace-replica:EdgeWorker:takos-replica";
+    const endpoint = "https://ew-test.app-staging.takos.jp/";
+    const resource = {
+      id: resourceId,
+      kind: "EdgeWorker",
+      metadata: {
+        space: managed.workspaceId,
+        name: managed.resourceName,
+        generation: 2,
+      },
+      status: {
+        phase: "Ready",
+        observedGeneration: 2,
+        outputs: { url: endpoint },
+      },
+    };
+    let iface: Record<string, unknown> | undefined;
+    let binding: Record<string, unknown> | undefined;
+    let writes = 0;
+    const fetchImpl = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const method = init?.method ?? "GET";
+      if (url.pathname.startsWith("/v1/resources/EdgeWorker/")) {
+        return Response.json(resource);
+      }
+      if (url.pathname === "/v1/interfaces" && method === "GET") {
+        return Response.json({ interfaces: iface ? [iface] : [] });
+      }
+      if (url.pathname === "/v1/interfaces" && method === "POST") {
+        writes += 1;
+        const request = JSON.parse(String(init?.body)) as Record<
+          string,
+          unknown
+        >;
+        iface = {
+          kind: "Interface",
+          metadata: {
+            id: "if_route",
+            workspaceId: request.workspaceId,
+            name: request.name,
+            ownerRef: request.ownerRef,
+            generation: 1,
+          },
+          spec: request.spec,
+          status: {
+            phase: "Resolved",
+            observedGeneration: 1,
+            resolvedRevision: 1,
+            resolvedInputs: { endpoint },
+          },
+        };
+        return Response.json(iface, { status: 201 });
+      }
+      if (
+        url.pathname === "/v1/interfaces/if_route/bindings" &&
+        method === "GET"
+      ) {
+        return Response.json({ bindings: binding ? [binding] : [] });
+      }
+      if (
+        url.pathname === "/v1/interfaces/if_route/bindings" &&
+        method === "POST"
+      ) {
+        writes += 1;
+        const request = JSON.parse(String(init?.body)) as Record<
+          string,
+          unknown
+        >;
+        binding = {
+          kind: "InterfaceBinding",
+          metadata: {
+            id: "ifb_route",
+            workspaceId: managed.workspaceId,
+            generation: 1,
+          },
+          spec: { interfaceId: "if_route", ...request },
+          status: {
+            phase: "Ready",
+            observedInterfaceRevision: 1,
+          },
+        };
+        return Response.json(binding, { status: 201 });
+      }
+      return Response.json({ error: "unexpected_request" }, { status: 404 });
+    }) as typeof fetch;
+
+    const first = await ensureManagedPublicRoute(managed, fetchImpl);
+    const replay = await ensureManagedPublicRoute(managed, fetchImpl);
+    expect(first.healthUrl).toBe(`${endpoint}health`);
+    expect(first.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(replay).toEqual(first);
+    expect(writes).toBe(2);
+
+    iface = undefined;
+    await expect(readManagedPublicRoute(managed, fetchImpl)).rejects.toThrow(
+      "public route Interface is absent",
+    );
+    expect(writes).toBe(2);
+    await expect(
+      assertManagedPublicRouteAbsent(managed, fetchImpl),
+    ).resolves.toBeUndefined();
+    iface = {
+      kind: "Interface",
+      metadata: { id: "if_stale" },
+    };
+    await expect(
+      assertManagedPublicRouteAbsent(managed, fetchImpl),
+    ).rejects.toThrow("still has an active public route Interface");
+
+    resource.status.outputs.url = "https://app.takosumi.com/";
+    await expect(ensureManagedPublicRoute(managed, fetchImpl)).rejects.toThrow(
+      "not an isolated credential-free system URL",
+    );
+    expect(writes).toBe(2);
   });
 
   test("binds local Docker qualification to the exact workflow and v0.10.35 images", () => {

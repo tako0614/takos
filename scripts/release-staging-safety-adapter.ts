@@ -10,6 +10,7 @@ import {
   SURFACE_ID,
   assertControllerAuthority,
   candidateContext,
+  ensureManagedPublicRoute,
   envelopeArgument,
   healthReadback,
   invariant,
@@ -51,10 +52,12 @@ async function main(): Promise<void> {
       activation.status === "succeeded",
     "managed staging activation did not succeed",
   );
-  const health = await healthReadback(target.healthUrl);
+  const route = await ensureManagedPublicRoute(target);
+  const health = await healthReadback(route.healthUrl);
   const managed = managedEvidence({
     candidate,
     activation: activation.activation,
+    route,
     health,
   });
   const readbackAt = new Date().toISOString();

@@ -45,6 +45,10 @@ const RESOURCE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const MANAGED_VERSION_RE = /^ewv_[0-9a-f]{64}$/u;
 const MANAGED_DEPLOYMENT_RE = /^ewd_[0-9a-f]{64}$/u;
+const MANAGED_ROUTE_TYPE = "http.route";
+const MANAGED_ROUTE_VERSION = "v1alpha1";
+const MANAGED_ROUTE_PERMISSION = "edge.request";
+const MANAGED_ROUTE_PATH_PATTERN = "/*";
 const PREVIOUS_QUALIFICATION_IMAGES = Object.freeze({
   worker:
     "ghcr.io/tako0614/takos-worker@sha256:ba8f0af05473728707168fc3a2e37568691767b706b3a78378c0e61ad485fc9b",
@@ -137,7 +141,7 @@ export type ManagedPaths = {
   access: string;
   config: string;
   secrets: string;
-  health: string;
+  healthPath: string;
 };
 
 export type ManagedTarget = {
@@ -150,7 +154,7 @@ export type ManagedTarget = {
   accessFile: string;
   configFile: string;
   secretsFile: string;
-  healthUrl: string;
+  healthPath: string;
 };
 
 export type CandidateContext = {
@@ -171,8 +175,14 @@ export type ManagedEvidence = {
   managedDeploymentDigest: string;
   canonicalResourceEtag: string;
   resourceGeneration: number;
+  publicRouteDigest: string;
   healthReadbackDigest: string;
   healthStatus: number;
+};
+
+export type ManagedPublicRoute = {
+  healthUrl: string;
+  digest: string;
 };
 
 export function invariant(
@@ -284,7 +294,7 @@ export function managedPaths(kind: "staging" | "replica"): ManagedPaths {
     access: join(base, "access-token"),
     config: join(base, "managed-config.json"),
     secrets: join(base, "managed-secrets.json"),
-    health: join(base, "health-url"),
+    healthPath: join(base, "health-path"),
   };
 }
 
@@ -330,24 +340,20 @@ export function managedTarget(kind: "staging" | "replica"): ManagedTarget {
     /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(workspaceId),
     `${kind} workspace is invalid`,
   );
-  const healthUrl = readPrivateText(
-    paths.health,
+  const healthPath = readPrivateText(
+    paths.healthPath,
     paths.root,
-    `${kind} health URL`,
-  );
-  const parsedHealth = new URL(healthUrl);
-  invariant(
-    parsedHealth.protocol === "https:" &&
-      !parsedHealth.username &&
-      !parsedHealth.password &&
-      !parsedHealth.hash,
-    `${kind} health URL must be credential-free HTTPS`,
+    `${kind} health path`,
   );
   invariant(
-    !new Set(["takos.jp", "www.takos.jp", "app.takosumi.com"]).has(
-      parsedHealth.hostname,
-    ),
-    `${kind} health URL points at a production hostname`,
+    healthPath.startsWith("/") &&
+      !healthPath.startsWith("//") &&
+      healthPath.length <= 512 &&
+      !healthPath.includes("?") &&
+      !healthPath.includes("#") &&
+      !healthPath.includes("*") &&
+      !/[\s\\]/u.test(healthPath),
+    `${kind} health path must be one absolute wildcard-free URL path`,
   );
   ensurePrivateFile(paths.access, paths.root, `${kind} access file`);
   ensurePrivateFile(paths.config, paths.root, `${kind} config file`);
@@ -364,7 +370,7 @@ export function managedTarget(kind: "staging" | "replica"): ManagedTarget {
     accessFile: realpathSync(paths.access),
     configFile: realpathSync(paths.config),
     secretsFile: realpathSync(paths.secrets),
-    healthUrl: parsedHealth.toString(),
+    healthPath,
   };
 }
 
@@ -379,10 +385,6 @@ export function assertDistinctTargets(
   invariant(
     staging.resourceName !== replica.resourceName,
     "staging and replica EdgeWorker names must be distinct",
-  );
-  invariant(
-    staging.healthUrl !== replica.healthUrl,
-    "staging and replica health URLs must be distinct",
   );
 }
 
@@ -585,41 +587,80 @@ function imageDigest(
   return value;
 }
 
-export async function healthReadback(url: string): Promise<{
+export async function healthReadback(
+  url: string,
+  options: {
+    fetchImpl?: typeof fetch;
+    wait?: (milliseconds: number) => Promise<void>;
+    timeoutMs?: number;
+  } = {},
+): Promise<{
   status: number;
   digest: string;
 }> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "GET",
-      headers: { accept: "application/json, text/plain;q=0.9" },
-      redirect: "error",
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const wait = options.wait ?? ((milliseconds) => Bun.sleep(milliseconds));
+  const deadline = Date.now() + (options.timeoutMs ?? 30_000);
+  let lastStatus: number | undefined;
+  let lastNetworkFailure: string | undefined;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    invariant(
+      remaining > 0,
+      lastStatus === undefined
+        ? lastNetworkFailure
+          ? `managed health readback timed out after ${lastNetworkFailure}`
+          : "managed health readback timed out"
+        : `managed health readback failed with HTTP ${lastStatus}`,
+    );
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(remaining, 5_000),
+    );
+    let response: Response | undefined;
+    try {
+      response = await fetchImpl(url, {
+        method: "GET",
+        headers: { accept: "application/json, text/plain;q=0.9" },
+        redirect: "error",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      lastNetworkFailure =
+        error instanceof Error ? error.name : "unknown network failure";
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response) {
+      await wait(Math.min(1_000, Math.max(1, deadline - Date.now())));
+      continue;
+    }
+    if (response.ok) {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      invariant(
+        bytes.byteLength <= MAX_HTTP_BYTES,
+        "managed health response is too large",
+      );
+      return {
+        status: response.status,
+        digest: sha256Bytes(bytes),
+      };
+    }
+    lastStatus = response.status;
+    invariant(
+      new Set([404, 409, 425, 429, 500, 502, 503, 504]).has(response.status),
+      `managed health readback failed with HTTP ${response.status}`,
+    );
+    await response.body?.cancel().catch(() => undefined);
+    await wait(Math.min(1_000, Math.max(1, deadline - Date.now())));
   }
-  invariant(
-    response.ok,
-    `managed health readback failed with HTTP ${response.status}`,
-  );
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  invariant(
-    bytes.byteLength <= MAX_HTTP_BYTES,
-    "managed health response is too large",
-  );
-  return {
-    status: response.status,
-    digest: sha256Bytes(bytes),
-  };
 }
 
 export function managedEvidence(input: {
   candidate: CandidateContext;
   activation: Record<string, unknown>;
+  route: ManagedPublicRoute;
   health: { status: number; digest: string };
 }): { resourceId: string; evidence: ManagedEvidence } {
   const managed = record(input.activation.managed, "managed activation");
@@ -680,6 +721,7 @@ export function managedEvidence(input: {
       managedDeploymentDigest: String(deployment.digest),
       canonicalResourceEtag: String(deployment.canonicalResourceEtag),
       resourceGeneration: Number(resource.generation),
+      publicRouteDigest: input.route.digest,
       healthReadbackDigest: input.health.digest,
       healthStatus: input.health.status,
     },
@@ -697,20 +739,30 @@ function bearer(target: ManagedTarget): string {
 
 export async function managedRequest(
   target: ManagedTarget,
-  method: "GET" | "DELETE",
+  method: "GET" | "POST" | "DELETE",
   path: string,
-  { allowNotFound = false }: { allowNotFound?: boolean } = {},
+  {
+    allowNotFound = false,
+    body,
+    fetchImpl = fetch,
+  }: {
+    allowNotFound?: boolean;
+    body?: unknown;
+    fetchImpl?: typeof fetch;
+  } = {},
 ): Promise<{ status: number; body?: Record<string, unknown> }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   let response: Response;
   try {
-    response = await fetch(new URL(path, `${target.origin}/`), {
+    response = await fetchImpl(new URL(path, `${target.origin}/`), {
       method,
       headers: {
         accept: "application/json",
         authorization: `Bearer ${bearer(target)}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       redirect: "error",
       signal: controller.signal,
     });
@@ -735,6 +787,326 @@ export async function managedRequest(
       "managed API response",
     ),
   };
+}
+
+function publicRouteIdentity(target: ManagedTarget): {
+  resourceId: string;
+  name: string;
+  principalId: string;
+} {
+  const resourceId = `tkrn:${target.workspaceId}:EdgeWorker:${target.resourceName}`;
+  const digest = createHash("sha256")
+    .update(`takos-release-public-route\0${resourceId}`)
+    .digest("hex");
+  return {
+    resourceId,
+    name: `takos-release-route-${digest.slice(0, 32)}`,
+    principalId: `takos-release-edge:${digest}`,
+  };
+}
+
+function publicRouteSpec(identity: ReturnType<typeof publicRouteIdentity>) {
+  return {
+    type: MANAGED_ROUTE_TYPE,
+    version: MANAGED_ROUTE_VERSION,
+    document: {
+      principalId: identity.principalId,
+      permission: MANAGED_ROUTE_PERMISSION,
+      pathPattern: MANAGED_ROUTE_PATH_PATTERN,
+    },
+    inputs: {
+      endpoint: {
+        source: "resource_output",
+        resourceId: identity.resourceId,
+        outputName: "url",
+      },
+    },
+    access: { visibility: "public", resourceUriInput: "endpoint" },
+  };
+}
+
+function canonicalPublicEndpoint(
+  resource: Record<string, unknown>,
+  target: ManagedTarget,
+  identity: ReturnType<typeof publicRouteIdentity>,
+): string {
+  const metadata = record(resource.metadata, "Resource metadata");
+  const status = record(resource.status, "Resource status");
+  const outputs = record(status.outputs, "Resource outputs");
+  invariant(
+    resource.id === identity.resourceId &&
+      resource.kind === "EdgeWorker" &&
+      metadata.space === target.workspaceId &&
+      metadata.name === target.resourceName &&
+      Number.isSafeInteger(metadata.generation) &&
+      Number(metadata.generation) > 0 &&
+      status.phase === "Ready" &&
+      status.observedGeneration === metadata.generation &&
+      typeof outputs.url === "string",
+    "managed public route requires the exact Ready EdgeWorker url Output",
+  );
+  const endpoint = new URL(outputs.url as string);
+  invariant(
+    endpoint.protocol === "https:" &&
+      !endpoint.username &&
+      !endpoint.password &&
+      !endpoint.port &&
+      !endpoint.search &&
+      !endpoint.hash &&
+      (endpoint.pathname === "/" || endpoint.pathname === "") &&
+      !endpoint.hostname.includes("*") &&
+      endpoint.hostname !== "takos.jp" &&
+      endpoint.hostname !== "www.takos.jp" &&
+      endpoint.hostname !== "app.takosumi.com" &&
+      !endpoint.hostname.endsWith(".app.takos.jp"),
+    "managed public route endpoint is not an isolated credential-free system URL",
+  );
+  endpoint.pathname = "/";
+  return endpoint.toString();
+}
+
+function exactPublicRouteInterface(input: {
+  value: unknown;
+  target: ManagedTarget;
+  identity: ReturnType<typeof publicRouteIdentity>;
+  endpoint: string;
+}): {
+  id: string;
+  generation: number;
+  resolvedRevision: number;
+} {
+  const iface = record(input.value, "managed public route Interface");
+  const metadata = record(iface.metadata, "Interface metadata");
+  const ownerRef = record(metadata.ownerRef, "Interface ownerRef");
+  const status = record(iface.status, "Interface status");
+  const resolvedInputs = record(
+    status.resolvedInputs,
+    "Interface resolved inputs",
+  );
+  invariant(
+    iface.kind === "Interface" &&
+      typeof metadata.id === "string" &&
+      metadata.id.length > 0 &&
+      metadata.workspaceId === input.target.workspaceId &&
+      metadata.name === input.identity.name &&
+      ownerRef.kind === "Resource" &&
+      ownerRef.id === input.identity.resourceId &&
+      Number.isSafeInteger(metadata.generation) &&
+      Number(metadata.generation) > 0 &&
+      canonicalJson(iface.spec) ===
+        canonicalJson(publicRouteSpec(input.identity)) &&
+      status.phase === "Resolved" &&
+      status.observedGeneration === metadata.generation &&
+      Number.isSafeInteger(status.resolvedRevision) &&
+      Number(status.resolvedRevision) > 0 &&
+      resolvedInputs.endpoint === input.endpoint,
+    "managed public route Interface is not exact Resolved",
+  );
+  return {
+    id: metadata.id as string,
+    generation: Number(metadata.generation),
+    resolvedRevision: Number(status.resolvedRevision),
+  };
+}
+
+function exactPublicRouteBinding(input: {
+  value: unknown;
+  target: ManagedTarget;
+  identity: ReturnType<typeof publicRouteIdentity>;
+  interfaceId: string;
+  interfaceRevision: number;
+}): { id: string; generation: number } {
+  const binding = record(input.value, "managed public route Binding");
+  const metadata = record(binding.metadata, "InterfaceBinding metadata");
+  const spec = record(binding.spec, "InterfaceBinding spec");
+  const status = record(binding.status, "InterfaceBinding status");
+  const expectedSpec = {
+    interfaceId: input.interfaceId,
+    subjectRef: { kind: "Principal", id: input.identity.principalId },
+    permissions: [MANAGED_ROUTE_PERMISSION],
+    delivery: { type: "none" },
+  };
+  invariant(
+    binding.kind === "InterfaceBinding" &&
+      typeof metadata.id === "string" &&
+      metadata.id.length > 0 &&
+      metadata.workspaceId === input.target.workspaceId &&
+      Number.isSafeInteger(metadata.generation) &&
+      Number(metadata.generation) > 0 &&
+      canonicalJson(spec) === canonicalJson(expectedSpec) &&
+      status.phase === "Ready" &&
+      status.observedInterfaceRevision === input.interfaceRevision,
+    "managed public route Binding is not exact Ready",
+  );
+  return { id: metadata.id as string, generation: Number(metadata.generation) };
+}
+
+async function managedPublicRoute(
+  target: ManagedTarget,
+  create: boolean,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ManagedPublicRoute> {
+  const identity = publicRouteIdentity(target);
+  const resourceResponse = await managedRequest(
+    target,
+    "GET",
+    resourcePath(target),
+    { fetchImpl },
+  );
+  const endpoint = canonicalPublicEndpoint(
+    record(resourceResponse.body, "canonical Resource"),
+    target,
+    identity,
+  );
+  const query = new URLSearchParams({
+    workspaceId: target.workspaceId,
+    type: MANAGED_ROUTE_TYPE,
+    ownerKind: "Resource",
+    ownerId: identity.resourceId,
+    includeRetired: "false",
+  });
+  const listed = record(
+    (
+      await managedRequest(target, "GET", `/v1/interfaces?${query}`, {
+        fetchImpl,
+      })
+    ).body,
+    "Interface list",
+  );
+  invariant(Array.isArray(listed.interfaces), "Interface list is invalid");
+  let interfaces = listed.interfaces as unknown[];
+  invariant(
+    interfaces.length <= 1,
+    "managed EdgeWorker has multiple active public route Interfaces",
+  );
+  if (interfaces.length === 0) {
+    invariant(create, "managed public route Interface is absent");
+    const created = await managedRequest(target, "POST", "/v1/interfaces", {
+      fetchImpl,
+      body: {
+        workspaceId: target.workspaceId,
+        name: identity.name,
+        ownerRef: { kind: "Resource", id: identity.resourceId },
+        spec: publicRouteSpec(identity),
+      },
+    });
+    interfaces = [record(created.body, "created Interface")];
+  }
+  const iface = exactPublicRouteInterface({
+    value: interfaces[0],
+    target,
+    identity,
+    endpoint,
+  });
+  const bindingList = record(
+    (
+      await managedRequest(
+        target,
+        "GET",
+        `/v1/interfaces/${encodeURIComponent(iface.id)}/bindings`,
+        { fetchImpl },
+      )
+    ).body,
+    "InterfaceBinding list",
+  );
+  invariant(
+    Array.isArray(bindingList.bindings),
+    "InterfaceBinding list is invalid",
+  );
+  let bindings = (bindingList.bindings as unknown[]).filter((value) => {
+    const candidate = record(value, "InterfaceBinding");
+    return (
+      record(candidate.status, "InterfaceBinding status").phase !== "Revoked"
+    );
+  });
+  invariant(
+    bindings.length <= 1,
+    "managed public route Interface has multiple active Bindings",
+  );
+  if (bindings.length === 0) {
+    invariant(create, "managed public route Binding is absent");
+    const created = await managedRequest(
+      target,
+      "POST",
+      `/v1/interfaces/${encodeURIComponent(iface.id)}/bindings`,
+      {
+        fetchImpl,
+        body: {
+          subjectRef: { kind: "Principal", id: identity.principalId },
+          permissions: [MANAGED_ROUTE_PERMISSION],
+          delivery: { type: "none" },
+        },
+      },
+    );
+    bindings = [record(created.body, "created InterfaceBinding")];
+  }
+  const binding = exactPublicRouteBinding({
+    value: bindings[0],
+    target,
+    identity,
+    interfaceId: iface.id,
+    interfaceRevision: iface.resolvedRevision,
+  });
+  const healthUrl = new URL(target.healthPath, endpoint).toString();
+  return {
+    healthUrl,
+    digest: digestJson({
+      kind: "takos.managed-edge-worker-public-route@v1",
+      resourceId: identity.resourceId,
+      endpoint,
+      healthPath: target.healthPath,
+      healthUrl,
+      interfaceId: iface.id,
+      interfaceGeneration: iface.generation,
+      interfaceResolvedRevision: iface.resolvedRevision,
+      bindingId: binding.id,
+      bindingGeneration: binding.generation,
+      principalId: identity.principalId,
+      permission: MANAGED_ROUTE_PERMISSION,
+      pathPattern: MANAGED_ROUTE_PATH_PATTERN,
+    }),
+  };
+}
+
+export async function assertManagedPublicRouteAbsent(
+  target: ManagedTarget,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const identity = publicRouteIdentity(target);
+  const query = new URLSearchParams({
+    workspaceId: target.workspaceId,
+    type: MANAGED_ROUTE_TYPE,
+    ownerKind: "Resource",
+    ownerId: identity.resourceId,
+    includeRetired: "false",
+  });
+  const listed = record(
+    (
+      await managedRequest(target, "GET", `/v1/interfaces?${query}`, {
+        fetchImpl,
+      })
+    ).body,
+    "Interface list",
+  );
+  invariant(Array.isArray(listed.interfaces), "Interface list is invalid");
+  invariant(
+    listed.interfaces.length === 0,
+    "deleted managed EdgeWorker still has an active public route Interface",
+  );
+}
+
+export async function ensureManagedPublicRoute(
+  target: ManagedTarget,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ManagedPublicRoute> {
+  return await managedPublicRoute(target, true, fetchImpl);
+}
+
+export async function readManagedPublicRoute(
+  target: ManagedTarget,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ManagedPublicRoute> {
+  return await managedPublicRoute(target, false, fetchImpl);
 }
 
 export function resourcePath(target: ManagedTarget): string {
@@ -763,10 +1135,9 @@ export async function exactManagedReadback(input: {
   health: { status: number; digest: string };
   bindingDigest: string;
 }> {
-  const [resourceResponse, statusResponse, health] = await Promise.all([
+  const [resourceResponse, statusResponse] = await Promise.all([
     managedRequest(input.target, "GET", resourcePath(input.target)),
     managedRequest(input.target, "GET", releaseStatusPath(input.target)),
-    healthReadback(input.target.healthUrl),
   ]);
   const resource = record(resourceResponse.body, "canonical Resource");
   const metadata = record(resource.metadata, "Resource metadata");
@@ -801,6 +1172,12 @@ export async function exactManagedReadback(input: {
       deployment.state === "active",
     "managed replica deployment readback drifted",
   );
+  const route = await readManagedPublicRoute(input.target);
+  invariant(
+    route.digest === input.expected.publicRouteDigest,
+    "managed public route readback drifted",
+  );
+  const health = await healthReadback(route.healthUrl);
   invariant(
     health.status === input.expected.healthStatus &&
       health.digest === input.expected.healthReadbackDigest,
@@ -815,6 +1192,7 @@ export async function exactManagedReadback(input: {
         digest: deployment.digest,
         state: deployment.state,
       },
+      publicRouteDigest: route.digest,
       health,
     }),
   };
