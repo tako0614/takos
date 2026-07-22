@@ -429,7 +429,7 @@ jobs:
         working-directory: takos
 
       - name: Login to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # pinned: v4.2.0 (2026)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -782,7 +782,7 @@ jobs:
           version: ${{ env.RELEASE_BUILDX_VERSION }}
 
       - name: Login to GHCR for digest-only promotion
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # pinned: v4.2.0 (2026)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
