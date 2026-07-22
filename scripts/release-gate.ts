@@ -40,6 +40,10 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'check:web-unresolved-identifiers'],
   },
   {
+    name: 'validate-dependency-security',
+    command: ['bun', 'run', 'validate:dependency-security'],
+  },
+  {
     name: 'lint:agent-docs',
     command: ['bun', 'run', 'lint:agent-docs'],
   },

@@ -1,0 +1,63 @@
+{
+  "kind": "takos.dependency-audit-waivers@v1",
+  "reviewedAt": "2026-07-22",
+  "reviewAfter": "2026-08-05",
+  "scope": {
+    "owner": "vitepress",
+    "ownerVersion": "1.6.4",
+    "ownerDependencyRange": "^5.4.14",
+    "viteVersion": "5.4.21",
+    "esbuildVersion": "0.21.5",
+    "vulnerableOccurrences": [
+      {
+        "package": "esbuild",
+        "version": "0.21.5",
+        "path": "node_modules/vitepress/node_modules/vite/node_modules/esbuild/package.json"
+      },
+      {
+        "package": "vite",
+        "version": "5.4.21",
+        "path": "node_modules/vitepress/node_modules/vite/package.json"
+      }
+    ],
+    "devOnly": true,
+    "productionReachable": false,
+    "condition": "The high-severity path is limited to the Vite development server on Windows alternate paths. Takos production ships static documentation output and never runs or publishes the VitePress development server.",
+    "upstreamTracking": "https://github.com/vuejs/vitepress/releases",
+    "removeWhen": "Remove this waiver as soon as a stable VitePress release accepts a Vite version newer than 6.4.2. VitePress 2 prereleases are not a GA dependency."
+  },
+  "advisories": [
+    {
+      "package": "esbuild",
+      "id": 1102341,
+      "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+      "severity": "moderate",
+      "vulnerableVersions": "<=0.24.2",
+      "title": "esbuild enables any website to send any requests to the development server and read the response"
+    },
+    {
+      "package": "vite",
+      "id": 1116229,
+      "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+      "severity": "moderate",
+      "vulnerableVersions": "<=6.4.1",
+      "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling"
+    },
+    {
+      "package": "vite",
+      "id": 1120784,
+      "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+      "severity": "moderate",
+      "vulnerableVersions": "<=6.4.2",
+      "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+    },
+    {
+      "package": "vite",
+      "id": 1123525,
+      "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+      "severity": "high",
+      "vulnerableVersions": "<=6.4.2",
+      "title": "vite: `server.fs.deny` bypass on Windows alternate paths"
+    }
+  ]
+}
