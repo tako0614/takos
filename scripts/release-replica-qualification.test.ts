@@ -22,6 +22,7 @@ import {
   POSTGRES_SCHEMA_CANONICALIZATION,
   PREVIOUS_VERSION,
   readDigestAuthority,
+  replicaNamePrefix,
   REQUIRED_NODE_VERSION,
   resolveLinuxAmd64Image,
   sha256Bytes,
@@ -49,9 +50,7 @@ describe("release replica qualification", () => {
       "BHzqEQkyk1rOK3bMnwEpUSbhdZpuHriE9XdkjzsYVNQ4nfzRF7VM2dj4cUf5XU8",
     );
 
-    expect(POSTGRES_SCHEMA_CANONICALIZATION).toBe(
-      "pg_dump-restrict-pair-v1",
-    );
+    expect(POSTGRES_SCHEMA_CANONICALIZATION).toBe("pg_dump-restrict-pair-v1");
     expect(sha256Bytes(first)).not.toBe(sha256Bytes(second));
     expect(sha256Bytes(canonicalPostgresSchemaDump(first))).toBe(
       sha256Bytes(canonicalPostgresSchemaDump(second)),
@@ -66,8 +65,9 @@ describe("release replica qualification", () => {
         ),
       ),
     ).not.toBe(sha256Bytes(canonicalPostgresSchemaDump(first)));
-    expect(canonicalPostgresSchemaDump("CREATE TABLE stable (id integer);"))
-      .toBe("CREATE TABLE stable (id integer);");
+    expect(
+      canonicalPostgresSchemaDump("CREATE TABLE stable (id integer);"),
+    ).toBe("CREATE TABLE stable (id integer);");
     expect(() =>
       canonicalPostgresSchemaDump(
         "\\restrict opening\n\\unrestrict different\n",
@@ -81,21 +81,22 @@ describe("release replica qualification", () => {
     ).toThrow("pg_dump restriction line format drifted");
   });
 
-  test("locks the previous release digests to immutable v0.10.36 evidence", () => {
+  test("locks the previous release digests to the latest stable v0.10.35 evidence", () => {
     const fixture = JSON.parse(
       readFileSync(
-        new URL("./fixtures/release-replica-v0.10.36.json", import.meta.url),
+        new URL("./fixtures/release-replica-v0.10.35.json", import.meta.url),
         "utf8",
       ),
     ) as {
       version: string;
       sourceCommit: string;
-      candidateArtifact: {
-        id: number;
-        name: string;
-        archiveSize: number;
-        manifestSha256: string;
-        manifestSize: number;
+      release: {
+        tag: string;
+        tagCommit: string;
+        publishedAt: string;
+        immutable: boolean;
+        authority: string;
+        assets: Array<{ name: string; digest: string; size: number }>;
       };
       buildRun: { id: number; attempt: number };
       images: Record<
@@ -112,17 +113,16 @@ describe("release replica qualification", () => {
     );
 
     expect(fixture).toMatchObject({
-      version: "0.10.36",
-      sourceCommit: "a545d037aae542b3a2447edf1c58f3373cb5b5b6",
-      candidateArtifact: {
-        id: 8439777422,
-        name: "takos-release-candidate-0.10.36-a545d037aae5",
-        archiveSize: 6526485,
-        manifestSha256:
-          "bd41ead7bfb67194469a00baf1ed3b36c5fe11822094c654a1b10b1db370af32",
-        manifestSize: 3360,
+      version: "0.10.35",
+      sourceCommit: "d2dbcb406e6a8871e4c0b8bf243afc978331f323",
+      release: {
+        tag: "v0.10.35",
+        tagCommit: "d17c4baee4e2f500cdb61d6298bd67fc887147b2",
+        publishedAt: "2026-07-19T04:21:13Z",
+        immutable: false,
+        authority: "replica-comparison-only",
       },
-      buildRun: { id: 29678450835, attempt: 1 },
+      buildRun: { id: 29673093536, attempt: 1 },
       images: {
         worker: { repository: "ghcr.io/tako0614/takos-worker" },
         agent: { repository: "ghcr.io/tako0614/takos-agent" },
@@ -133,8 +133,17 @@ describe("release replica qualification", () => {
     });
     expect(PREVIOUS_VERSION).toBe(fixture.version);
     expect(fixture.images.agent.digest).toBe(
-      "sha256:be681bb79a274270b8f6399bb2bd3ac15cbcaafda5bdd6b17007d6b8c369e9e8",
+      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
     );
+    expect(fixture.release.immutable).toBe(false);
+    expect(fixture.release.authority).toBe("replica-comparison-only");
+    expect(fixture.release.assets.map((asset) => asset.name)).toEqual([
+      "install-config-patch.json",
+      "release-manifest.json",
+      "takos-worker-release.tar.gz",
+      "takos-worker-release.tar.gz.sha256",
+      "takosumi-artifact.json",
+    ]);
     for (const [name, envName] of [
       ["worker", "PREVIOUS_WORKER_DIGEST"],
       ["agent", "PREVIOUS_AGENT_DIGEST"],
@@ -144,13 +153,21 @@ describe("release replica qualification", () => {
         `  ${envName}: ${fixture.images[name].digest}\n`,
       );
     }
-    for (const supersededDigest of [
-      "sha256:ba8f0af05473728707168fc3a2e37568691767b706b3a78378c0e61ad485fc9b",
-      "sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6",
-      "sha256:3164eb048307bc054b848f61656d4899ef1bed6ea4e43636ec852580eca4e474",
+    for (const unpublishedCandidateDigest of [
+      "sha256:77b766e2d90d5aa51d9bff79c39794c3731e8609810d55749928c4ce9d4cb33a",
+      "sha256:be681bb79a274270b8f6399bb2bd3ac15cbcaafda5bdd6b17007d6b8c369e9e8",
+      "sha256:88a638e5f5a904585d71020aaa2fd20649148e08997435437a3b8275bf1d958d",
     ]) {
-      expect(workflow).not.toContain(supersededDigest);
+      expect(workflow).not.toContain(unpublishedCandidateDigest);
     }
+    expect(workflow).toContain(
+      '--output "${GITHUB_WORKSPACE}/evidence/local-docker-qualification.json"',
+    );
+    expect(workflow).toContain("sha256sum local-docker-qualification.json");
+    expect(workflow).not.toContain(
+      "sha256sum evidence/local-docker-qualification.json",
+    );
+    expect(workflow).not.toContain("release-replica-qualification.json");
   });
 
   test("reads both OCI index and selected child only through exact digest refs", () => {
@@ -164,7 +181,7 @@ describe("release replica qualification", () => {
       "--raw",
     ]);
     expect(() =>
-      exactRawManifestInspectCommand("ghcr.io/tako0614/takos-worker:0.10.36"),
+      exactRawManifestInspectCommand("ghcr.io/tako0614/takos-worker:0.10.35"),
     ).toThrow("digest-pinned");
   });
 
@@ -203,6 +220,9 @@ describe("release replica qualification", () => {
 
   test("hash output is canonical SHA-256", () => {
     expect(sha256Bytes("replica")).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(replicaNamePrefix("release-id")).toMatch(
+      /^takos-replica-[0-9a-f]{12}$/,
+    );
   });
 
   test("compares SHA-256 authority without runtime string equality", () => {
@@ -313,12 +333,12 @@ describe("release replica qualification", () => {
     expect(
       resolveLinuxAmd64Image(
         indexRef,
-        "ghcr.io/tako0614/takos-agent:0.10.36",
+        "ghcr.io/tako0614/takos-agent:0.10.35",
         rawIndex,
       ),
     ).toEqual({
       publishedIndex: indexRef,
-      sourceTag: "ghcr.io/tako0614/takos-agent:0.10.36",
+      sourceTag: "ghcr.io/tako0614/takos-agent:0.10.35",
       rawIndexDigest: sha256Bytes(rawIndex),
       rawIndexBodySize: rawIndex.byteLength,
       transportSize: rawIndex.byteLength,
@@ -331,7 +351,7 @@ describe("release replica qualification", () => {
     expect(() =>
       resolveLinuxAmd64Image(
         indexRef,
-        "ghcr.io/tako0614/takos-agent:0.10.36",
+        "ghcr.io/tako0614/takos-agent:0.10.35",
         changedRawIndex,
       ),
     ).toThrow("raw OCI index digest drifted");
@@ -355,7 +375,7 @@ describe("release replica qualification", () => {
     expect(() =>
       resolveLinuxAmd64Image(
         `ghcr.io/tako0614/takos-agent@${sha256Bytes(duplicateRawIndex)}`,
-        "ghcr.io/tako0614/takos-agent:0.10.36",
+        "ghcr.io/tako0614/takos-agent:0.10.35",
         duplicateRawIndex,
       ),
     ).toThrow("exactly one linux/amd64");

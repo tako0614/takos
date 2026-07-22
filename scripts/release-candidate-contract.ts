@@ -30,6 +30,23 @@ type ImageDigest = {
   versionRef: string;
   latestRef: string;
   digest: string;
+  cloudflareRegistryRef?: string;
+  cloudflareRegistryTagRef?: string;
+  cloudflareRegistryDigest?: string;
+};
+
+type ToolchainEvidence = {
+  bunVersion: "1.3.14";
+  nodeVersion: "v24.18.0";
+  runnerImage: "ubuntu-24.04";
+  buildxVersion: "v0.35.0";
+  lockfileDigest: string;
+};
+
+type ManagedStagingContract = {
+  configDigest: string;
+  targetFingerprint: string;
+  healthChecks: Array<{ name: string; bindingDigest: string }>;
 };
 
 export type CandidateManifest = {
@@ -48,7 +65,9 @@ export type CandidateManifest = {
   provenanceDigests: string[];
   configDigest: string;
   policyDigest: string;
+  toolchain: ToolchainEvidence;
   toolchainDigest: string;
+  staging: ManagedStagingContract;
 };
 
 type BuildInput = {
@@ -159,11 +178,72 @@ function requireExactKeys(
   );
 }
 
+function managedStagingContract(input: {
+  releaseAssets: NamedDigest[];
+  ociImages: ImageDigest[];
+}): ManagedStagingContract {
+  const archive = input.releaseAssets.find(
+    (asset) => asset.name === "takos-worker-release.tar.gz",
+  );
+  const managedImages = input.ociImages
+    .filter((image) => image.cloudflareRegistryDigest)
+    .map((image) => ({
+      name: image.name,
+      ref: image.cloudflareRegistryRef,
+      digest: image.cloudflareRegistryDigest,
+    }));
+  invariant(archive, "managed staging Worker archive is missing");
+  invariant(
+    managedImages.length === 2,
+    "managed staging requires two Cloudflare Container digest refs",
+  );
+  const configDigest = sha256Bytes(
+    JSON.stringify({
+      mode: "takosumi-managed-edge-worker",
+      archiveDigest: archive.digest,
+      containerImages: managedImages,
+    }),
+  );
+  return {
+    configDigest,
+    targetFingerprint: sha256Bytes(
+      JSON.stringify({
+        surfaceId: "takos-release-artifacts",
+        environment: "staging",
+        lifecycle: "canonical-edge-worker-resource-ready-confirm-v1",
+      }),
+    ),
+    healthChecks: [
+      {
+        name: "exact Worker archive and Cloudflare Container digest refs",
+        bindingDigest: configDigest,
+      },
+      {
+        name: "canonical EdgeWorker Ready and active deployment confirmation",
+        bindingDigest: sha256Bytes(
+          "canonical-edge-worker-resource-ready-confirm-v1",
+        ),
+      },
+      {
+        name: "public managed staging health readback",
+        bindingDigest: sha256Bytes("managed-staging-health-v1"),
+      },
+    ],
+  };
+}
+
 export function buildCandidateManifest(input: BuildInput): CandidateManifest {
   validateIdentity(input);
   const outputDir = resolve(input.outputDir);
   const evidenceDir = join(outputDir, "evidence", "image-digests");
   mkdirSync(evidenceDir, { recursive: true });
+  const toolchain: ToolchainEvidence = {
+    bunVersion: "1.3.14",
+    nodeVersion: "v24.18.0",
+    runnerImage: "ubuntu-24.04",
+    buildxVersion: "v0.35.0",
+    lockfileDigest: sha256File(input.toolchainPath),
+  };
 
   const imageEvidence = REQUIRED_IMAGES.map((name) => {
     const metadataSource = join(input.imageDigestDir, `${name}.json`);
@@ -204,13 +284,32 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
         ]),
       `${name} metadata must contain only the exact candidate tag`,
     );
+    invariant(
+      JSON.stringify(metadata.toolchain) === JSON.stringify(toolchain),
+      `${name} build toolchain evidence drifted`,
+    );
     if (name !== "takos-worker") {
       invariant(
         typeof metadata.cloudflareRegistryRef === "string" &&
-          metadata.cloudflareRegistryRef.endsWith(
+          new RegExp(
+            `^registry\\.cloudflare\\.com/[^/]+/${name}@sha256:[0-9a-f]{64}$`,
+          ).test(metadata.cloudflareRegistryRef),
+        `${name} Cloudflare registry digest ref is required`,
+      );
+      invariant(
+        typeof metadata.cloudflareRegistryTagRef === "string" &&
+          metadata.cloudflareRegistryTagRef.endsWith(
             `/${name}:candidate-${input.candidateRunId}-1`,
           ),
-        `${name} Cloudflare registry candidate ref is required`,
+        `${name} Cloudflare registry candidate tag ref is required`,
+      );
+      invariant(
+        typeof metadata.cloudflareRegistryDigest === "string" &&
+          SHA256_RE.test(metadata.cloudflareRegistryDigest) &&
+          metadata.cloudflareRegistryRef.endsWith(
+            `@${metadata.cloudflareRegistryDigest}`,
+          ),
+        `${name} Cloudflare registry digest readback is required`,
       );
     }
     requireEvidenceJson(sbomSource, `${name} SBOM`);
@@ -225,6 +324,15 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
         versionRef: `${metadata.image}:${input.version}`,
         latestRef: `${metadata.image}:latest`,
         digest: metadata.digest,
+        ...(name === "takos-worker"
+          ? {}
+          : {
+              cloudflareRegistryRef: metadata.cloudflareRegistryRef as string,
+              cloudflareRegistryTagRef:
+                metadata.cloudflareRegistryTagRef as string,
+              cloudflareRegistryDigest:
+                metadata.cloudflareRegistryDigest as string,
+            }),
       } satisfies ImageDigest,
       sbomDigest: sha256File(sbomSource),
       provenanceDigest: sha256File(provenanceSource),
@@ -265,7 +373,9 @@ export function buildCandidateManifest(input: BuildInput): CandidateManifest {
     ),
     configDigest: config.digest,
     policyDigest: sha256File(input.policyPath),
-    toolchainDigest: sha256File(input.toolchainPath),
+    toolchain,
+    toolchainDigest: sha256Bytes(JSON.stringify(toolchain)),
+    staging: managedStagingContract({ releaseAssets, ociImages }),
   };
   invariant(
     new Set(manifest.artifactDigests).size === manifest.artifactDigests.length,
@@ -312,7 +422,9 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
       "provenanceDigests",
       "configDigest",
       "policyDigest",
+      "toolchain",
       "toolchainDigest",
+      "staging",
     ],
     "candidate manifest",
   );
@@ -354,7 +466,17 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
   for (const [index, image] of manifest.ociImages.entries()) {
     requireExactKeys(
       image as unknown as Record<string, unknown>,
-      ["name", "versionRef", "latestRef", "digest"],
+      image.name === "takos-worker"
+        ? ["name", "versionRef", "latestRef", "digest"]
+        : [
+            "name",
+            "versionRef",
+            "latestRef",
+            "digest",
+            "cloudflareRegistryRef",
+            "cloudflareRegistryTagRef",
+            "cloudflareRegistryDigest",
+          ],
       `${image.name} image`,
     );
     invariant(SHA256_RE.test(image.digest), `${image.name} digest is invalid`);
@@ -413,13 +535,27 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
         ]),
       `${image.name} metadata candidate tag drifted`,
     );
+    invariant(
+      JSON.stringify(metadata.toolchain) === JSON.stringify(manifest.toolchain),
+      `${image.name} metadata toolchain drifted`,
+    );
     if (image.name !== "takos-worker") {
       invariant(
-        typeof metadata.cloudflareRegistryRef === "string" &&
-          metadata.cloudflareRegistryRef.endsWith(
+        metadata.cloudflareRegistryRef === image.cloudflareRegistryRef &&
+          metadata.cloudflareRegistryTagRef ===
+            image.cloudflareRegistryTagRef &&
+          metadata.cloudflareRegistryDigest ===
+            image.cloudflareRegistryDigest &&
+          typeof image.cloudflareRegistryRef === "string" &&
+          image.cloudflareRegistryRef.endsWith(
+            `@${image.cloudflareRegistryDigest}`,
+          ) &&
+          typeof image.cloudflareRegistryTagRef === "string" &&
+          image.cloudflareRegistryTagRef.endsWith(
             `/${image.name}:candidate-${input.candidateRunId}-1`,
-          ),
-        `${image.name} Cloudflare registry candidate ref drifted`,
+          ) &&
+          SHA256_RE.test(image.cloudflareRegistryDigest ?? ""),
+        `${image.name} Cloudflare registry digest readback drifted`,
       );
     }
   }
@@ -482,9 +618,30 @@ export function verifyCandidateManifest(input: VerifyInput): CandidateManifest {
     sha256File(input.policyPath) === manifest.policyDigest,
     "policyDigest drifted",
   );
+  const expectedToolchain: ToolchainEvidence = {
+    bunVersion: "1.3.14",
+    nodeVersion: "v24.18.0",
+    runnerImage: "ubuntu-24.04",
+    buildxVersion: "v0.35.0",
+    lockfileDigest: sha256File(input.toolchainPath),
+  };
   invariant(
-    sha256File(input.toolchainPath) === manifest.toolchainDigest,
+    JSON.stringify(manifest.toolchain) === JSON.stringify(expectedToolchain),
+    "toolchain evidence drifted",
+  );
+  invariant(
+    sha256Bytes(JSON.stringify(expectedToolchain)) === manifest.toolchainDigest,
     "toolchainDigest drifted",
+  );
+  invariant(
+    JSON.stringify(manifest.staging) ===
+      JSON.stringify(
+        managedStagingContract({
+          releaseAssets: manifest.releaseAssets,
+          ociImages: manifest.ociImages,
+        }),
+      ),
+    "managed staging contract drifted",
   );
   return manifest;
 }

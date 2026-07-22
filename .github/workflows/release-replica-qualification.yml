@@ -49,9 +49,9 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PREVIOUS_WORKER_DIGEST: sha256:77b766e2d90d5aa51d9bff79c39794c3731e8609810d55749928c4ce9d4cb33a
-  PREVIOUS_AGENT_DIGEST: sha256:be681bb79a274270b8f6399bb2bd3ac15cbcaafda5bdd6b17007d6b8c369e9e8
-  PREVIOUS_RUNTIME_DIGEST: sha256:88a638e5f5a904585d71020aaa2fd20649148e08997435437a3b8275bf1d958d
+  PREVIOUS_WORKER_DIGEST: sha256:ba8f0af05473728707168fc3a2e37568691767b706b3a78378c0e61ad485fc9b
+  PREVIOUS_AGENT_DIGEST: sha256:8e01bf1a2eb3530d8ed941acc455ebe01e021e9e025eaa5bfe1119dd8647c0d6
+  PREVIOUS_RUNTIME_DIGEST: sha256:3164eb048307bc054b848f61656d4899ef1bed6ea4e43636ec852580eca4e474
 
 jobs:
   qualify:
@@ -82,10 +82,13 @@ jobs:
 
       - name: Verify reviewed qualification workflow authority
         shell: bash
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
         run: |
           set -euo pipefail
           [[ "${GITHUB_REF}" == "refs/heads/main" ]]
           [[ "$(git -C control rev-parse HEAD)" == "${GITHUB_SHA}" ]]
+          [[ "${GITHUB_SHA}" == "${SOURCE_COMMIT}" ]]
           main_sha="$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | awk '{print $1}')"
           [[ "${main_sha}" == "${GITHUB_SHA}" ]]
 
@@ -217,7 +220,7 @@ jobs:
             --candidate-manifest "${GITHUB_WORKSPACE}/candidate/release-candidate-manifest.json" \
             --digest-authority-dir "${DIGEST_AUTHORITY_DIR}" \
             --source-dir "${GITHUB_WORKSPACE}/source" \
-            --output "${GITHUB_WORKSPACE}/evidence/release-replica-qualification.json" \
+            --output "${GITHUB_WORKSPACE}/evidence/local-docker-qualification.json" \
             --worker-digest "${WORKER_DIGEST}" \
             --agent-digest "${AGENT_DIGEST}" \
             --runtime-digest "${RUNTIME_DIGEST}" \
@@ -225,11 +228,14 @@ jobs:
             --previous-agent-digest "${PREVIOUS_AGENT_DIGEST}" \
             --previous-runtime-digest "${PREVIOUS_RUNTIME_DIGEST}"
           jq -e '.status == "verified" and .productionEquivalent == true' \
-            evidence/release-replica-qualification.json >/dev/null
+            evidence/local-docker-qualification.json >/dev/null
           [[ "$(stat -c '%a' evidence)" == "700" ]]
-          [[ "$(stat -c '%a' evidence/release-replica-qualification.json)" == "600" ]]
-          sha256sum evidence/release-replica-qualification.json \
-            > evidence/release-replica-qualification.json.sha256
+          [[ "$(stat -c '%a' evidence/local-docker-qualification.json)" == "600" ]]
+          (
+            cd evidence
+            sha256sum local-docker-qualification.json \
+              > local-docker-qualification.json.sha256
+          )
 
       - name: Upload immutable qualification evidence
         if: always() && steps.qualify.outcome != 'skipped'

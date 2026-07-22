@@ -1,9 +1,9 @@
 {
   "name": "@takos/takos",
-  "version": "0.10.38",
+  "version": "0.11.0",
   "takosRelease": {
     "name": "takos",
-    "version": "0.10.38"
+    "version": "0.11.0"
   },
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -60,7 +60,6 @@
     "release-manifest:check-clean": "bun scripts/build-release-manifest.ts --require-clean-git",
     "release-manifest:check-artifacts": "bun scripts/build-release-manifest.ts --require-clean-git --require-image-digests",
     "release-worker-artifact:build": "bun scripts/build-worker-release-artifact.ts",
-    "release-staging:qualify": "bun scripts/release-staging-qualification.ts",
     "install-config:generate": "bun scripts/control/install-config-from-worker-artifact.mjs",
     "deploy:service": "bun scripts/control/deploy.mjs",
     "deploy:takosumi-release": "bun scripts/control/takosumi-release.mjs",

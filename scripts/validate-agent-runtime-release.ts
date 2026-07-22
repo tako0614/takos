@@ -392,6 +392,46 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     );
   }
   const workflowEnv = asRecord(workflow.env);
+  const bunSetupSteps = allSteps.filter((step) =>
+    stringValue(step.uses).includes("oven-sh/setup-bun@"),
+  );
+  const nodeSetupSteps = allSteps.filter((step) =>
+    stringValue(step.uses).includes("actions/setup-node@"),
+  );
+  const buildxSetupSteps = allSteps.filter((step) =>
+    stringValue(step.uses).includes("docker/setup-buildx-action@"),
+  );
+  if (
+    workflowEnv?.RELEASE_BUN_VERSION !== "1.3.14" ||
+    workflowEnv?.RELEASE_NODE_VERSION !== "24.18.0" ||
+    workflowEnv?.RELEASE_BUILDX_VERSION !== "v0.35.0" ||
+    workflowEnv?.RELEASE_RUNNER_IMAGE !== "ubuntu-24.04" ||
+    (jobs &&
+      Object.values(jobs).some(
+        (job) => asRecord(job)?.["runs-on"] !== "ubuntu-24.04",
+      )) ||
+    bunSetupSteps.length === 0 ||
+    bunSetupSteps.some(
+      (step) =>
+        asRecord(step.with)?.["bun-version"] !==
+        "${{ env.RELEASE_BUN_VERSION }}",
+    ) ||
+    nodeSetupSteps.length === 0 ||
+    nodeSetupSteps.some(
+      (step) =>
+        asRecord(step.with)?.["node-version"] !==
+        "${{ env.RELEASE_NODE_VERSION }}",
+    ) ||
+    buildxSetupSteps.length === 0 ||
+    buildxSetupSteps.some(
+      (step) =>
+        asRecord(step.with)?.version !== "${{ env.RELEASE_BUILDX_VERSION }}",
+    )
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must pin the release Bun, Node, Buildx, and runner toolchain`,
+    );
+  }
   if (
     typeof workflowEnv?.TAKOSUMI_SOURCE_REF !== "string" ||
     !/^[0-9a-f]{40}$/u.test(workflowEnv.TAKOSUMI_SOURCE_REF)
@@ -600,7 +640,11 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     !promoteOciRun.includes('image="${version_ref%:*}"') ||
     !promoteOciRun.includes('digest_ref="${image}@${digest}"') ||
     promoteOciRun.includes(".digestRef") ||
-    !promoteOciRun.includes("--raw")
+    !promoteOciRun.includes(
+      'docker buildx imagetools inspect "${version_ref}"',
+    ) ||
+    !promoteOciRun.includes("sed -n 's/^Digest:") ||
+    promoteOciRun.includes("--raw")
   ) {
     errors.push(
       `${WORKFLOW_PATH} must promote and read back exact OCI content digests`,
@@ -617,7 +661,11 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     !latestReadbackRun.includes('image="${version_ref%:*}"') ||
     !latestReadbackRun.includes('digest_ref="${image}@${digest}"') ||
     latestReadbackRun.includes(".digestRef") ||
-    !latestReadbackRun.includes("--raw")
+    !latestReadbackRun.includes(
+      'docker buildx imagetools inspect "${promoted_ref}"',
+    ) ||
+    !latestReadbackRun.includes("sed -n 's/^Digest:") ||
+    latestReadbackRun.includes("--raw")
   ) {
     errors.push(
       `${WORKFLOW_PATH} must advance latest only after release creation and read back every stable OCI tag`,
@@ -625,7 +673,7 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   }
   const publishStep = promoteSteps.find(
     (step) =>
-      step.name === "Publish exact candidate bytes as stable GitHub release",
+      step.name === "Create draft GitHub release with exact candidate bytes",
   );
   const publishRun = shellCode(publishStep?.run);
   const publishAssets = [
@@ -638,7 +686,8 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !publishRun.includes("gh release create") ||
     !publishRun.includes("--verify-tag") ||
-    !publishRun.includes("--latest") ||
+    !publishRun.includes("--draft") ||
+    publishRun.includes("--latest") ||
     publishStep?.["working-directory"] !== "takos" ||
     publishAssets.some(
       (asset) => !publishRun.includes(`../candidate/assets/${asset}`),
@@ -646,7 +695,7 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
     text.includes("--clobber")
   ) {
     errors.push(
-      `${WORKFLOW_PATH} must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber`,
+      `${WORKFLOW_PATH} must create a new draft release from the checked-out Takos repository and exact candidate bytes without clobber`,
     );
   }
   if (
@@ -664,6 +713,8 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   );
   const preflightRun = shellCode(preflightStep?.run);
   if (
+    !preflightRun.includes("immutable-releases") ||
+    !preflightRun.includes(".enabled == true") ||
     !preflightRun.includes("already exists") ||
     !preflightRun.includes("TARGET_FINGERPRINT") ||
     !preflightRun.includes('.versionRef | sub(":" + $version + "$"; "")') ||
@@ -681,12 +732,33 @@ function validateReleaseWorkflow(text: string, errors: string[]): void {
   if (
     !readbackRun.includes("takos.release-safety-adapter-result@v1") ||
     !readbackRun.includes("release-safety-readback.json") ||
+    !readbackRun.includes("gh release upload") ||
+    !readbackRun.includes(
+      'gh release edit "${RELEASE_TAG}" --draft=false --latest',
+    ) ||
+    !readbackRun.includes(".isImmutable == true") ||
+    !readbackRun.includes('gh release verify "${RELEASE_TAG}"') ||
+    !readbackRun.includes("immutable_verified") ||
+    !readbackRun.includes("expected_final_assets") ||
     !readbackRun.includes('gh release download "${RELEASE_TAG}"') ||
     !readbackRun.includes(".releaseAssets[] | [.name, .digest]") ||
     readbackRun.includes(".name, .path, .digest")
   ) {
     errors.push(
       `${WORKFLOW_PATH} must emit and independently read back the fixed-adapter result`,
+    );
+  }
+  if (
+    !publishStep ||
+    !latestReadbackStep ||
+    !readbackStep ||
+    promoteSteps.indexOf(publishStep) >=
+      promoteSteps.indexOf(latestReadbackStep) ||
+    promoteSteps.indexOf(latestReadbackStep) >=
+      promoteSteps.indexOf(readbackStep)
+  ) {
+    errors.push(
+      `${WORKFLOW_PATH} must create the draft before latest OCI promotion and seal it immutable only after final readback`,
     );
   }
 }

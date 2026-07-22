@@ -60,7 +60,10 @@ export function cleanGitCheckoutCommit(
 
 type StagingContainerSelection = {
   readonly descriptorDigest: string;
-  readonly runtime: { readonly registryRef: string; readonly sourceDigest: string };
+  readonly runtime: {
+    readonly registryRef: string;
+    readonly sourceDigest: string;
+  };
   readonly executor: {
     readonly registryRef: string;
     readonly sourceDigest: string;
@@ -79,7 +82,9 @@ function candidateImageDigest(
   manifest: CandidateManifest,
   name: "takos-worker-runtime" | "takos-agent",
 ): string {
-  const digest = manifest.ociImages.find((image) => image.name === name)?.digest;
+  const digest = manifest.ociImages.find(
+    (image) => image.name === name,
+  )?.digest;
   invariant(
     typeof digest === "string" && SHA256_RE.test(digest),
     `candidate ${name} OCI digest is missing`,
@@ -88,17 +93,23 @@ function candidateImageDigest(
 }
 
 function candidateRegistryRef(
+  manifest: CandidateManifest,
   value: unknown,
   image: "takos-worker-runtime" | "takos-agent",
-  runId: string,
 ): string {
-  invariant(typeof value === "string", `candidate ${image} registry ref is missing`);
-  const escapedRunId = runId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   invariant(
-    new RegExp(
-      `^registry\\.cloudflare\\.com/[^/]+/${image}:candidate-${escapedRunId}-1$`,
-    ).test(value),
-    `candidate ${image} registry ref drifted`,
+    typeof value === "string",
+    `candidate ${image} registry ref is missing`,
+  );
+  const sealed = manifest.ociImages.find((entry) => entry.name === image);
+  invariant(
+    sealed?.cloudflareRegistryRef === value &&
+      /^registry\.cloudflare\.com\/[^/]+\/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/u.test(
+        value,
+      ) &&
+      sealed.cloudflareRegistryDigest &&
+      value.endsWith(`@${sealed.cloudflareRegistryDigest}`),
+    `candidate ${image} Cloudflare digest ref drifted`,
   );
   return value;
 }
@@ -156,14 +167,14 @@ export function sealedStagingContainerSelection(input: {
     "candidate container image selection",
   );
   const runtimeRef = candidateRegistryRef(
+    input.manifest,
     containerImages.runtime,
     "takos-worker-runtime",
-    input.manifest.workflowRunId,
   );
   const executorRef = candidateRegistryRef(
+    input.manifest,
     containerImages.executor,
     "takos-agent",
-    input.manifest.workflowRunId,
   );
   invariant(
     runtimeRef.split("/")[1] === executorRef.split("/")[1],
@@ -173,7 +184,10 @@ export function sealedStagingContainerSelection(input: {
     descriptorDigest: descriptorAsset.digest,
     runtime: {
       registryRef: runtimeRef,
-      sourceDigest: candidateImageDigest(input.manifest, "takos-worker-runtime"),
+      sourceDigest: candidateImageDigest(
+        input.manifest,
+        "takos-worker-runtime",
+      ),
     },
     executor: {
       registryRef: executorRef,
@@ -262,7 +276,11 @@ export function buildStagingEvidence(input: {
       observedContainers.size === 4 &&
       observedContainers.get("TakosRuntimeContainer") ===
         input.containers.runtime.registryRef &&
-      ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"].every(
+      [
+        "ExecutorContainerTier1",
+        "ExecutorContainerTier2",
+        "ExecutorContainerTier3",
+      ].every(
         (className) =>
           observedContainers.get(className) ===
           input.containers.executor.registryRef,
@@ -404,7 +422,10 @@ export async function runStagingQualification(input: {
   return evidence;
 }
 
-export function writePrivateEvidence(outputPath: string, evidence: unknown): void {
+export function writePrivateEvidence(
+  outputPath: string,
+  evidence: unknown,
+): void {
   const output = resolve(outputPath);
   const parent = dirname(output);
   mkdirSync(parent, { recursive: true, mode: 0o700 });
@@ -432,15 +453,7 @@ export function writePrivateEvidence(outputPath: string, evidence: unknown): voi
 }
 
 if (import.meta.main) {
-  const evidence = await runStagingQualification({
-    releaseId: requiredArgument("--release-id"),
-    candidateDir: requiredArgument("--candidate-dir"),
-    sourceDir: requiredArgument("--source-dir"),
-    sourceCommit: requiredArgument("--source-commit"),
-    version: requiredArgument("--version"),
-    candidateRunId: requiredArgument("--candidate-run-id"),
-    candidateManifestDigest: requiredArgument("--candidate-manifest-digest"),
-    output: requiredArgument("--output"),
-  });
-  process.stdout.write(`${JSON.stringify(evidence)}\n`);
+  throw new Error(
+    "Direct staging qualification is retired. Use the takos-ecosystem release-safety stage controller and its registered managed adapter.",
+  );
 }

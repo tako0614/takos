@@ -33,6 +33,17 @@ function fixture() {
   const sourceCommit = "1".repeat(40);
   const takosumiSourceCommit = "2".repeat(40);
   const candidateRunId = "12345";
+  const policyPath = join(root, "policy.yml");
+  const toolchainPath = join(root, "bun.lock");
+  writeFileSync(policyPath, "policy");
+  writeFileSync(toolchainPath, "toolchain");
+  const toolchain = {
+    bunVersion: "1.3.14",
+    nodeVersion: "v24.18.0",
+    runnerImage: "ubuntu-24.04",
+    buildxVersion: "v0.35.0",
+    lockfileDigest: sha256File(toolchainPath),
+  };
   REQUIRED_IMAGES.forEach((name, index) => {
     const digest = `sha256:${String(index + 1).repeat(64)}`;
     writeFileSync(
@@ -44,10 +55,13 @@ function fixture() {
         digestRef: `ghcr.io/tako0614/${name}@${digest}`,
         tags: [`ghcr.io/tako0614/${name}:candidate-${candidateRunId}-1`],
         commit: sourceCommit,
+        toolchain,
         ...(name === "takos-worker"
           ? {}
           : {
-              cloudflareRegistryRef: `registry.cloudflare.com/account/${name}:candidate-${candidateRunId}-1`,
+              cloudflareRegistryRef: `registry.cloudflare.com/account/${name}@${digest}`,
+              cloudflareRegistryTagRef: `registry.cloudflare.com/account/${name}:candidate-${candidateRunId}-1`,
+              cloudflareRegistryDigest: digest,
             }),
       }),
     );
@@ -67,10 +81,6 @@ function fixture() {
   )) {
     writeFileSync(join(release, name), `bytes:${name}`);
   }
-  const policyPath = join(root, "policy.yml");
-  const toolchainPath = join(root, "bun.lock");
-  writeFileSync(policyPath, "policy");
-  writeFileSync(toolchainPath, "toolchain");
   return {
     root,
     images,
@@ -91,7 +101,7 @@ describe("release candidate contract", () => {
     const manifest = buildCandidateManifest({
       repository: "https://github.com/tako0614/takos.git",
       sourceCommit: input.sourceCommit,
-      version: "0.10.36",
+      version: "0.11.0",
       takosumiSourceCommit: input.takosumiSourceCommit,
       candidateRunId: input.candidateRunId,
       builtAt: "2026-07-19T00:00:00.000Z",
@@ -127,7 +137,9 @@ describe("release candidate contract", () => {
         "provenanceDigests",
         "configDigest",
         "policyDigest",
+        "toolchain",
         "toolchainDigest",
+        "staging",
       ].sort(),
     );
     expect(Object.keys(manifest.ociImages[0]).sort()).toEqual(
@@ -158,7 +170,7 @@ describe("release candidate contract", () => {
     const manifest = buildCandidateManifest({
       repository: "https://github.com/tako0614/takos.git",
       sourceCommit: input.sourceCommit,
-      version: "0.10.36",
+      version: "0.11.0",
       takosumiSourceCommit: input.takosumiSourceCommit,
       candidateRunId: input.candidateRunId,
       imageDigestDir: input.images,
@@ -202,7 +214,7 @@ describe("release candidate contract", () => {
       buildCandidateManifest({
         repository: "https://github.com/tako0614/takos.git",
         sourceCommit: input.sourceCommit,
-        version: "0.10.36",
+        version: "0.11.0",
         takosumiSourceCommit: input.takosumiSourceCommit,
         candidateRunId: input.candidateRunId,
         imageDigestDir: input.images,

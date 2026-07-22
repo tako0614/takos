@@ -1,10 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import {
-  createHash,
-  generateKeyPairSync,
-  randomBytes,
-} from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import {
   chmodSync,
   lstatSync,
@@ -24,7 +20,7 @@ const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 const COMMIT_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const RELEASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-export const PREVIOUS_VERSION = "0.10.36";
+export const PREVIOUS_VERSION = "0.10.35";
 const POSTGRES_IMAGE =
   "postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229";
 const REDIS_IMAGE =
@@ -514,11 +510,7 @@ export function exactRegistryBody(
       commandOutput.byteLength <= MAX_OCI_INDEX_BYTES + 1,
     "raw manifest transport size is invalid",
   );
-  const asIs = compareSha256Bytes(
-    commandOutput,
-    expectedDigest,
-    authorityPath,
-  );
+  const asIs = compareSha256Bytes(commandOutput, expectedDigest, authorityPath);
   const canTrimLineFeed = commandOutput.at(-1) === 0x0a;
   const trimmedBody = canTrimLineFeed
     ? commandOutput.slice(0, commandOutput.byteLength - 1)
@@ -576,9 +568,7 @@ function parseOptions(): Options {
     candidateRunId,
     candidateManifestDigest,
     candidateManifest: resolve(requiredArgument("--candidate-manifest")),
-    digestAuthorityDir: resolve(
-      requiredArgument("--digest-authority-dir"),
-    ),
+    digestAuthorityDir: resolve(requiredArgument("--digest-authority-dir")),
     sourceDir: resolve(requiredArgument("--source-dir")),
     output: resolve(requiredArgument("--output")),
     candidate: {
@@ -804,9 +794,14 @@ async function pullAndReadBackExactImages(images: ImageSet): Promise<ImageSet> {
   return readback;
 }
 
+export function replicaNamePrefix(releaseId: string): string {
+  const start = "sha256:".length;
+  const suffix = sha256Bytes(releaseId).slice(start, start + 12);
+  return `takos-replica-${suffix}`;
+}
+
 function replicaNames(releaseId: string): ReplicaNames {
-  const suffix = sha256Bytes(releaseId).slice("sha256:".length, 12);
-  const prefix = `takos-replica-${suffix}`;
+  const prefix = replicaNamePrefix(releaseId);
   return {
     prefix,
     network: `${prefix}-network`,
@@ -1461,9 +1456,8 @@ async function main(): Promise<void> {
     process.version === REQUIRED_NODE_VERSION,
     `controller Node version drifted: expected ${REQUIRED_NODE_VERSION}, got ${process.version}`,
   );
-  const nodeVersionReadback = (
-    await command([process.execPath, "--version"])
-  ).stdout;
+  const nodeVersionReadback = (await command([process.execPath, "--version"]))
+    .stdout;
   invariant(
     nodeVersionReadback === process.version,
     `controller Node executable readback drifted: process=${process.version}, child=${nodeVersionReadback}`,
@@ -1576,11 +1570,11 @@ async function main(): Promise<void> {
     const after = await databaseEvidence(names, secrets);
     invariant(
       before.migrationCount === after.migrationCount,
-      `${options.version} unexpectedly changed the migration lineage`,
+      `${manifest.version} unexpectedly changed the migration lineage`,
     );
     invariant(
       before.schemaFingerprint === after.schemaFingerprint,
-      `${options.version} changed the database schema without a migration-lineage change`,
+      `${manifest.version} changed the database schema without a migration-lineage change`,
     );
     const profiles = await containerProfiles(names);
     const confinement = hostSecurityQualifies(securityOptions, profiles);
