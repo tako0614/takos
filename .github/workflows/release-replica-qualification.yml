@@ -189,7 +189,7 @@ jobs:
           [[ "$(find "${authority_dir}" -mindepth 1 -maxdepth 1 -type f | wc -l)" == "4" ]]
 
       - name: Login to GHCR for exact digest pulls only
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # pinned: v4.2.0 (2026)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
