@@ -227,7 +227,7 @@ test("agent runtime release validator rejects clobber publication", async () => 
   const input = await actualInputs();
   input.workflowText += "\n# forbidden mutation: --clobber\n";
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber",
+    ".github/workflows/release-artifacts.yml must create a new draft release from the checked-out Takos repository and exact candidate bytes without clobber",
   );
 });
 
@@ -235,17 +235,72 @@ test("agent runtime release validator requires tag notes to run in the checked-o
   const input = await actualInputs();
   input.workflowText = input.workflowText.replace(
     [
-      "      - name: Publish exact candidate bytes as stable GitHub release",
+      "      - name: Create draft GitHub release with exact candidate bytes",
       "        shell: bash",
       "        working-directory: takos",
     ].join("\n"),
     [
-      "      - name: Publish exact candidate bytes as stable GitHub release",
+      "      - name: Create draft GitHub release with exact candidate bytes",
       "        shell: bash",
     ].join("\n"),
   );
   expect(validateAgentRuntimeReleaseContract(input)).toContain(
-    ".github/workflows/release-artifacts.yml must create a new stable release from the checked-out Takos repository and exact candidate bytes without clobber",
+    ".github/workflows/release-artifacts.yml must create a new draft release from the checked-out Takos repository and exact candidate bytes without clobber",
+  );
+});
+
+test("agent runtime release validator requires the exact release toolchain", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    'RELEASE_BUILDX_VERSION: "v0.35.0"',
+    'RELEASE_BUILDX_VERSION: "latest"',
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must pin the release Bun, Node, Buildx, and runner toolchain",
+  );
+});
+
+test("agent runtime release validator requires every setup step to consume the pins", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "bun-version: ${{ env.RELEASE_BUN_VERSION }}",
+    "bun-version: latest",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must pin the release Bun, Node, Buildx, and runner toolchain",
+  );
+});
+
+test("agent runtime release validator requires a draft before immutable publication", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "            --draft \\\n",
+    "",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must create a new draft release from the checked-out Takos repository and exact candidate bytes without clobber",
+  );
+});
+
+test("agent runtime release validator requires repository immutable releases", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    "          jq -e '.enabled == true' <<<\"\${immutable_settings}\" >/dev/null",
+    "          jq -e '.enabled == false' <<<\"\${immutable_settings}\" >/dev/null",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must fail closed on reused versions and bind the stable target fingerprint",
+  );
+});
+
+test("agent runtime release validator requires immutable GitHub verification", async () => {
+  const input = await actualInputs();
+  input.workflowText = input.workflowText.replace(
+    '              gh release verify "\${RELEASE_TAG}" >/dev/null; then',
+    "              true; then",
+  );
+  expect(validateAgentRuntimeReleaseContract(input)).toContain(
+    ".github/workflows/release-artifacts.yml must emit and independently read back the fixed-adapter result",
   );
 });
 

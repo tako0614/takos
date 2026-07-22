@@ -6,6 +6,19 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.11.0 — Canonical managed Worker lifecycle
+
+- Materialize managed Takos Workers through the canonical Takosumi EdgeWorker
+  lifecycle and retire the former managed Cloudflare compatibility release.
+- Fail closed before mutation when the reviewed managed binding set is missing
+  or drifts from the release request.
+- Keep the independently released Takos mobile client outside the distribution
+  artifact and its release workflow.
+- Repin the agent engine to the reviewed main commit and resolve the wrapper's
+  `quinn-proto` dependency to the patched 0.11.15 release.
+- Resolve the Takos website's vulnerable archive and glob transitive
+  dependencies without changing its rendered product surface.
+
 ## 0.10.38 — Stable release publication repair
 
 - Publish the sealed GitHub Release from the checked-out Takos repository so

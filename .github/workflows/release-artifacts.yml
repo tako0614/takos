@@ -93,14 +93,18 @@ permissions:
 env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  TAKOSUMI_SOURCE_REF: c96eb35bcce70e5c1eebbcb47e0d25faa366658d
-  RELEASE_SAFETY_CONTROLLER_COMMIT: "65f73a39899e4c8c01083fec3c6c97d432b7aaf2"
-  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:782766cb0c9b0ab9cdcb88b43b7ce8d09a1525f337e9440da6c769ca225fbbce"
+  RELEASE_BUN_VERSION: "1.3.14"
+  RELEASE_NODE_VERSION: "24.18.0"
+  RELEASE_BUILDX_VERSION: "v0.35.0"
+  RELEASE_RUNNER_IMAGE: "ubuntu-24.04"
+  TAKOSUMI_SOURCE_REF: 245a4b26927f45513a4e8e212d10810b775d9b01
+  RELEASE_SAFETY_CONTROLLER_COMMIT: "c56b92d56abd8bbe9f66de37e87e419b4dd04e67"
+  RELEASE_SAFETY_ADAPTER_DIGEST: "sha256:45d134b47db1c6697d34e6173352c407587269aae7d2e17a8f670b9bb3cc468b"
 
 jobs:
   validate:
     name: Release gate inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     outputs:
       release_version: ${{ steps.source.outputs.release_version }}
@@ -228,7 +232,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
-          bun-version: latest
+          bun-version: ${{ env.RELEASE_BUN_VERSION }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
 
       - name: Cache Bun deps
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
@@ -258,7 +266,7 @@ jobs:
 
   cloudflare-container-registry-preflight:
     name: Cloudflare Container registry preflight
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: validate
     if: inputs.phase == 'candidate'
@@ -272,7 +280,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
-          bun-version: latest
+          bun-version: ${{ env.RELEASE_BUN_VERSION }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
 
       - name: Cache Bun deps
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
@@ -319,7 +331,7 @@ jobs:
 
   oci-images:
     name: OCI image (${{ matrix.image }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     needs: [validate, cloudflare-container-registry-preflight]
     if: inputs.phase == 'candidate' && needs.validate.result == 'success' && needs.cloudflare-container-registry-preflight.result == 'success'
@@ -379,9 +391,12 @@ jobs:
           fi
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
-        if: matrix.prebuild != '' || matrix.cloudflare_container == true
         with:
-          bun-version: latest
+          bun-version: ${{ env.RELEASE_BUN_VERSION }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
 
       - name: Compile agent wrapper against pinned engine
         if: matrix.image == 'takos-agent'
@@ -392,6 +407,8 @@ jobs:
         run: bun run validate:agent-engine-source
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
+        with:
+          version: ${{ env.RELEASE_BUILDX_VERSION }}
 
       - name: Cache Bun deps
         if: matrix.prebuild != ''
@@ -440,6 +457,7 @@ jobs:
 
       - name: Record image digest metadata
         shell: bash
+        working-directory: takos
         env:
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
@@ -447,11 +465,16 @@ jobs:
           AGENT_ENGINE_COMMIT: ${{ needs.validate.outputs.agent_engine_commit }}
         run: |
           set -euo pipefail
+          [[ "$(bun --version)" == "${RELEASE_BUN_VERSION}" ]]
+          [[ "$(node --version)" == "v${RELEASE_NODE_VERSION}" ]]
+          buildx_version="$(docker buildx version | awk '{print $2}')"
+          [[ "${buildx_version}" == "${RELEASE_BUILDX_VERSION}" ]]
+          lockfile_digest="sha256:$(sha256sum bun.lock | awk '{print $1}')"
           if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "Invalid image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
             exit 1
           fi
-          mkdir -p dist/image-digests
+          mkdir -p ../dist/image-digests
           tags_json="$(printf '%s\n' "${IMAGE_TAGS}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
           jq -n \
             --arg name "${{ matrix.image }}" \
@@ -461,6 +484,11 @@ jobs:
             --arg commit "${GITHUB_SHA}" \
             --arg agentEngineCommit "${AGENT_ENGINE_COMMIT}" \
             --arg workflowRun "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg bunVersion "${RELEASE_BUN_VERSION}" \
+            --arg nodeVersion "v${RELEASE_NODE_VERSION}" \
+            --arg runnerImage "${RELEASE_RUNNER_IMAGE}" \
+            --arg buildxVersion "${RELEASE_BUILDX_VERSION}" \
+            --arg lockfileDigest "${lockfile_digest}" \
             --argjson tags "${tags_json}" \
             '({
               name: $name,
@@ -471,18 +499,25 @@ jobs:
               commit: $commit,
               workflowRun: $workflowRun,
               sbom: true,
-              provenance: true
+              provenance: true,
+              toolchain: {
+                bunVersion: $bunVersion,
+                nodeVersion: $nodeVersion,
+                runnerImage: $runnerImage,
+                buildxVersion: $buildxVersion,
+                lockfileDigest: $lockfileDigest
+              }
             } + (if $name == "takos-agent" then {
               agentEngineCommit: $agentEngineCommit
-            } else {} end))' > "dist/image-digests/${{ matrix.image }}.json"
+            } else {} end))' > "../dist/image-digests/${{ matrix.image }}.json"
           docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
-            --format '{{ json .SBOM }}' > "dist/image-digests/${{ matrix.image }}.sbom.json"
+            --format '{{ json .SBOM }}' > "../dist/image-digests/${{ matrix.image }}.sbom.json"
           docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
-            --format '{{ json .Provenance }}' > "dist/image-digests/${{ matrix.image }}.provenance.json"
+            --format '{{ json .Provenance }}' > "../dist/image-digests/${{ matrix.image }}.provenance.json"
           jq -e 'type == "object" or type == "array"' \
-            "dist/image-digests/${{ matrix.image }}.sbom.json" >/dev/null
+            "../dist/image-digests/${{ matrix.image }}.sbom.json" >/dev/null
           jq -e 'type == "object" or type == "array"' \
-            "dist/image-digests/${{ matrix.image }}.provenance.json" >/dev/null
+            "../dist/image-digests/${{ matrix.image }}.provenance.json" >/dev/null
 
       - name: Build and publish Cloudflare Container image
         if: matrix.cloudflare_container == true
@@ -509,6 +544,13 @@ jobs:
           fi
           cf_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           local_tag="${{ matrix.image }}:${cf_tag}"
+          existing_images="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers images list --json --filter '^${{ matrix.image }}$')"
+          if jq -e --arg name "${{ matrix.image }}" --arg tag "${cf_tag}" \
+            'any(.[]; .name == $name and (.tags | index($tag) != null))' \
+            <<<"${existing_images}" >/dev/null; then
+            echo "Cloudflare Container tag ${local_tag} already exists; candidate tags are one-time authorities." >&2
+            exit 1
+          fi
           if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "Invalid OCI image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
             exit 1
@@ -524,9 +566,21 @@ jobs:
           if [[ ${status} -ne 0 ]]; then
             exit "${status}"
           fi
-          cloudflare_ref="$(printf '%s\n' "${output}" | grep -Eo 'registry\.cloudflare\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(:[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})' | tail -n 1 || true)"
-          if [[ -z "${cloudflare_ref}" ]]; then
-            cloudflare_ref="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${local_tag}"
+          cloudflare_tag_ref="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${local_tag}"
+          credentials="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers registries credentials --pull --expiration-minutes 5 --json)"
+          registry_password="$(jq -er '.password | select(type == "string" and length > 0)' <<<"${credentials}")"
+          printf '%s' "${registry_password}" | docker login registry.cloudflare.com --username v1 --password-stdin >/dev/null
+          unset credentials registry_password
+          cloudflare_digest="$(docker buildx imagetools inspect "${cloudflare_tag_ref}" | sed -n 's/^Digest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)$/\1/p')"
+          if [[ ! "${cloudflare_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Cloudflare Container digest readback is invalid for ${cloudflare_tag_ref}." >&2
+            exit 1
+          fi
+          cloudflare_ref="${cloudflare_tag_ref%:*}@${cloudflare_digest}"
+          digest_readback="$(docker buildx imagetools inspect "${cloudflare_ref}" | sed -n 's/^Digest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)$/\1/p')"
+          if [[ "${digest_readback}" != "${cloudflare_digest}" ]]; then
+            echo "Cloudflare Container digest ref readback drifted for ${{ matrix.image }}." >&2
+            exit 1
           fi
           image_metadata_file="../dist/image-digests/${{ matrix.image }}.json"
           if [[ ! -f "${image_metadata_file}" ]]; then
@@ -536,9 +590,13 @@ jobs:
           tmp="$(mktemp)"
           jq \
             --arg cloudflareRegistryRef "${cloudflare_ref}" \
+            --arg cloudflareRegistryTagRef "${cloudflare_tag_ref}" \
+            --arg cloudflareRegistryDigest "${cloudflare_digest}" \
             --arg cloudflareRegistryTag "${cf_tag}" \
             '. + {
               cloudflareRegistryRef: $cloudflareRegistryRef,
+              cloudflareRegistryTagRef: $cloudflareRegistryTagRef,
+              cloudflareRegistryDigest: $cloudflareRegistryDigest,
               cloudflareRegistryTag: $cloudflareRegistryTag
             }' \
             "${image_metadata_file}" > "${tmp}"
@@ -555,7 +613,7 @@ jobs:
 
   release-candidate:
     name: Build immutable release candidate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [validate, oci-images]
     if: inputs.phase == 'candidate' && needs.validate.result == 'success' && needs.oci-images.result == 'success'
@@ -576,7 +634,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
-          bun-version: latest
+          bun-version: ${{ env.RELEASE_BUN_VERSION }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
 
       - name: Cache Bun deps
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
@@ -692,7 +754,7 @@ jobs:
 
   promote:
     name: Promote exact candidate digests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: validate
     if: inputs.phase == 'promote' && needs.validate.result == 'success'
@@ -709,9 +771,15 @@ jobs:
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
-          bun-version: latest
+          bun-version: ${{ env.RELEASE_BUN_VERSION }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # pinned: v6.5.0 (2026)
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
+        with:
+          version: ${{ env.RELEASE_BUILDX_VERSION }}
 
       - name: Login to GHCR for digest-only promotion
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
@@ -832,6 +900,8 @@ jobs:
           CANDIDATE_MANIFEST: ${{ steps.candidate.outputs.manifest }}
         run: |
           set -euo pipefail
+          immutable_settings="$(gh api "repos/${GITHUB_REPOSITORY}/immutable-releases")"
+          jq -e '.enabled == true' <<<"${immutable_settings}" >/dev/null
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists; immutable versions are never overwritten." >&2
             exit 1
@@ -875,14 +945,14 @@ jobs:
             docker buildx imagetools create \
               --tag "${version_ref}" \
               "${digest_ref}"
-            readback="sha256:$(docker buildx imagetools inspect "${version_ref}" --raw | sha256sum | awk '{print $1}')"
+            readback="$(docker buildx imagetools inspect "${version_ref}" | sed -n 's/^Digest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)$/\1/p')"
             if [[ "${readback}" != "${digest}" ]]; then
               echo "OCI readback drift for ${version_ref}: ${readback} != ${digest}" >&2
               exit 1
             fi
           done < <(jq -r '.ociImages[] | [.versionRef, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
 
-      - name: Publish exact candidate bytes as stable GitHub release
+      - name: Create draft GitHub release with exact candidate bytes
         shell: bash
         working-directory: takos
         env:
@@ -896,8 +966,8 @@ jobs:
             ../candidate/assets/takos-worker-release.tar.gz \
             ../candidate/assets/takos-worker-release.tar.gz.sha256 \
             ../candidate/assets/takosumi-artifact.json \
+            --draft \
             --verify-tag \
-            --latest \
             --title "Takos ${RELEASE_TAG}" \
             --notes-from-tag
 
@@ -912,7 +982,7 @@ jobs:
             digest_ref="${image}@${digest}"
             docker buildx imagetools create --tag "${latest_ref}" "${digest_ref}"
             for promoted_ref in "${version_ref}" "${latest_ref}"; do
-              readback="sha256:$(docker buildx imagetools inspect "${promoted_ref}" --raw | sha256sum | awk '{print $1}')"
+              readback="$(docker buildx imagetools inspect "${promoted_ref}" | sed -n 's/^Digest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)$/\1/p')"
               if [[ "${readback}" != "${digest}" ]]; then
                 echo "OCI readback drift for ${promoted_ref}: ${readback} != ${digest}" >&2
                 exit 1
@@ -939,11 +1009,11 @@ jobs:
           RELEASE_URL: ${{ steps.target.outputs.release_url }}
         run: |
           set -euo pipefail
-          release_json="$(gh release view "${RELEASE_TAG}" --json url,tagName,isDraft,isPrerelease,assets)"
+          release_json="$(gh release view "${RELEASE_TAG}" --json url,tagName,isDraft,isPrerelease,isImmutable,assets)"
           jq -e \
             --arg tag "${RELEASE_TAG}" \
             --arg url "${RELEASE_URL}" \
-            '.tagName == $tag and .url == $url and .isDraft == false and .isPrerelease == false' \
+            '.tagName == $tag and .url == $url and .isDraft == true and .isPrerelease == false and .isImmutable == false' \
             <<<"${release_json}" >/dev/null
           actual_assets="$(jq -c '[.assets[].name] | sort' <<<"${release_json}")"
           expected_assets='["install-config-patch.json","release-manifest.json","takos-worker-release.tar.gz","takos-worker-release.tar.gz.sha256","takosumi-artifact.json"]'
@@ -1014,6 +1084,47 @@ jobs:
             --dir "${RUNNER_TEMP}/result-readback"
           cmp -s release-safety-readback.json \
             "${RUNNER_TEMP}/result-readback/release-safety-readback.json"
+
+          gh release edit "${RELEASE_TAG}" --draft=false --latest
+          final_release_json=""
+          immutable_verified=false
+          for attempt in $(seq 1 60); do
+            final_release_json="$(gh release view "${RELEASE_TAG}" --json url,tagName,isDraft,isPrerelease,isImmutable,assets)"
+            if jq -e '.isDraft == false and .isImmutable == true' \
+              <<<"${final_release_json}" >/dev/null && \
+              gh release verify "${RELEASE_TAG}" >/dev/null; then
+              immutable_verified=true
+              break
+            fi
+            sleep 10
+          done
+          if [[ "${immutable_verified}" != true ]]; then
+            echo "GitHub did not seal and attest the immutable release before the bounded deadline." >&2
+            exit 1
+          fi
+          jq -e \
+            --arg tag "${RELEASE_TAG}" \
+            --arg url "${RELEASE_URL}" \
+            '.tagName == $tag and .url == $url and .isDraft == false and .isPrerelease == false and .isImmutable == true' \
+            <<<"${final_release_json}" >/dev/null
+          final_assets="$(jq -c '[.assets[].name] | sort' <<<"${final_release_json}")"
+          expected_final_assets='["install-config-patch.json","release-manifest.json","release-safety-readback.json","takos-worker-release.tar.gz","takos-worker-release.tar.gz.sha256","takosumi-artifact.json"]'
+          if [[ "${final_assets}" != "${expected_final_assets}" ]]; then
+            echo "Immutable release assets differ from the sealed final set." >&2
+            exit 1
+          fi
+          final_readback_dir="${RUNNER_TEMP}/immutable-release-readback"
+          mkdir -p "${final_readback_dir}"
+          gh release download "${RELEASE_TAG}" --dir "${final_readback_dir}"
+          while IFS=$'\t' read -r name digest; do
+            readback="sha256:$(sha256sum "${final_readback_dir}/${name}" | awk '{print $1}')"
+            if [[ "${readback}" != "${digest}" ]]; then
+              echo "Immutable GitHub release asset readback drift for ${name}." >&2
+              exit 1
+            fi
+          done < <(jq -r '.releaseAssets[] | [.name, .digest] | @tsv' "${CANDIDATE_MANIFEST}")
+          cmp -s release-safety-readback.json \
+            "${final_readback_dir}/release-safety-readback.json"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:

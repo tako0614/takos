@@ -2,10 +2,39 @@
   "kind": "takos.release-replica.previous-release-evidence.v1",
   "version": "0.10.35",
   "sourceCommit": "d2dbcb406e6a8871e4c0b8bf243afc978331f323",
-  "releaseManifest": {
-    "assetId": 482077911,
-    "sha256": "62163dbc722b7acca61fe07f7f9707dd0f89383e5e49c5cd39c7edb75fd403c3",
-    "size": 23567
+  "release": {
+    "tag": "v0.10.35",
+    "tagCommit": "d17c4baee4e2f500cdb61d6298bd67fc887147b2",
+    "publishedAt": "2026-07-19T04:21:13Z",
+    "immutable": false,
+    "authority": "replica-comparison-only",
+    "assets": [
+      {
+        "name": "install-config-patch.json",
+        "digest": "sha256:185d679250da1fc0a7c4f45691245053550399483aeb77cf8b83456f906492da",
+        "size": 5611
+      },
+      {
+        "name": "release-manifest.json",
+        "digest": "sha256:62163dbc722b7acca61fe07f7f9707dd0f89383e5e49c5cd39c7edb75fd403c3",
+        "size": 23567
+      },
+      {
+        "name": "takos-worker-release.tar.gz",
+        "digest": "sha256:bb43eebc1b5a6e38b45409b5900d6af2266a719120f501cd1caa76195a51f9c9",
+        "size": 4929199
+      },
+      {
+        "name": "takos-worker-release.tar.gz.sha256",
+        "digest": "sha256:9bf49bc140ff2469602e47c8547c82c800505504d7b664f24843ce3aae2a9c6b",
+        "size": 94
+      },
+      {
+        "name": "takosumi-artifact.json",
+        "digest": "sha256:eaca97e9b7389eb4602bbfe19bdde007e9aa197b7e7be108243b4a26e8bdf453",
+        "size": 1150
+      }
+    ]
   },
   "buildRun": {
     "id": 29673093536,

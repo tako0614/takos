@@ -22,9 +22,8 @@ import {
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
-const runtimeRef =
-  "registry.cloudflare.com/acc/takos-worker-runtime:candidate-12345-1";
-const executorRef = "registry.cloudflare.com/acc/takos-agent:candidate-12345-1";
+const runtimeRef = `registry.cloudflare.com/acc/takos-worker-runtime@${digest("7")}`;
+const executorRef = `registry.cloudflare.com/acc/takos-agent@${digest("6")}`;
 
 const manifest = {
   sourceCommit: "a".repeat(40),
@@ -32,8 +31,22 @@ const manifest = {
   tag: "v0.10.37",
   workflowRunId: "12345",
   ociImages: [
-    { name: "takos-agent", digest: digest("6") },
-    { name: "takos-worker-runtime", digest: digest("7") },
+    {
+      name: "takos-agent",
+      digest: digest("6"),
+      cloudflareRegistryRef: executorRef,
+      cloudflareRegistryTagRef:
+        "registry.cloudflare.com/acc/takos-agent:candidate-12345-1",
+      cloudflareRegistryDigest: digest("6"),
+    },
+    {
+      name: "takos-worker-runtime",
+      digest: digest("7"),
+      cloudflareRegistryRef: runtimeRef,
+      cloudflareRegistryTagRef:
+        "registry.cloudflare.com/acc/takos-worker-runtime:candidate-12345-1",
+      cloudflareRegistryDigest: digest("7"),
+    },
   ],
   artifactDigests: [digest("6"), digest("7"), digest("2"), digest("5")],
   releaseAssets: [
