@@ -19,7 +19,7 @@ const DEPLOYMENT_DIGEST = `sha256:${"d".repeat(64)}`;
 const VERSION_ID = `ewv_${"c".repeat(64)}`;
 const DEPLOYMENT_ID = `ewd_${"d".repeat(64)}`;
 
-test("managed Takos release stages exact bytes and confirms only canonical Ready", async () => {
+test("managed Takos release accepts an absent initial release and confirms only canonical Ready", async () => {
   const fixture = makeFixture({ secretNames: ["SESSION_SECRET"] });
   try {
     const archiveBytes = new TextEncoder().encode("exact worker archive");
@@ -58,7 +58,8 @@ test("managed Takos release stages exact bytes and confirms only canonical Ready
       );
 
       if (url.pathname.endsWith(`/edge-worker-releases/${RESOURCE}`)) {
-        return json({ versions: [], deployments: [], secrets: [] });
+        expect(init?.method).toBe("GET");
+        return json({ error: "not_found" }, 404);
       }
       if (url.pathname.endsWith("/artifacts")) {
         const purpose = headers.get("x-takosumi-artifact-purpose");
