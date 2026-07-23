@@ -83,11 +83,12 @@ export async function releaseTakosumiManagedEdgeWorker({
       requestJson(fetchImpl, token, settings.baseUrl, {
         method: "GET",
         path: cloudReleasePath(settings, ""),
+        allowNotFound: true,
       }),
     ]);
   const archiveSha256 = `sha256:${archiveHex}`;
   const expectedActiveDeploymentDigest = expectedActiveDigest(
-    status,
+    status ?? { deployments: [] },
     config.expectedActiveDeploymentDigest,
   );
 
@@ -868,6 +869,13 @@ async function requestJson(fetchImpl, token, baseUrl, request) {
   }
   if (!response.ok) {
     const code = safeErrorCode(body);
+    if (
+      request.allowNotFound === true &&
+      response.status === 404 &&
+      code === "not_found"
+    ) {
+      return null;
+    }
     throw new Error(
       `Takosumi managed release request failed: ${request.method} ${url.pathname} HTTP ${response.status}${code ? ` (${code})` : ""}.`,
     );
