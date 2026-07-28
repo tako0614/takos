@@ -36,16 +36,10 @@ import { logWarn } from "../shared/utils/logger.ts";
 import { UnsupportedOperationError } from "../shared/utils/unsupported-operation.ts";
 import {
   ensurePostgresAccountsTableShape,
-  ensurePostgresDeploymentsTableShape,
-  ensurePostgresResourcesTableShape,
   ensurePostgresRunsTableShape,
-  ensurePostgresServicesTableShape,
   ensureServerMigrations,
   ensureServerPostgresMigrations,
   ensureSqliteAccountsTableShape,
-  ensureSqliteDeploymentsTableShape,
-  ensureSqliteResourcesTableShape,
-  ensureSqliteServicesTableShape,
 } from "./d1-migrations.ts";
 import {
   createPostgresPreparedStatement,
@@ -299,10 +293,7 @@ export async function createSqliteSqlDatabase(
   }
   const libsqlClient = client as LibsqlClient;
   await ensureServerMigrations(libsqlClient, migrationsDir);
-  await ensureSqliteServicesTableShape(libsqlClient);
   await ensureSqliteAccountsTableShape(libsqlClient);
-  await ensureSqliteDeploymentsTableShape(libsqlClient);
-  await ensureSqliteResourcesTableShape(libsqlClient);
 
   const runStatement = <T = Record<string, unknown>>(
     statement: SqlPreparedStatementBinding,
@@ -362,10 +353,7 @@ export async function createPostgresSqlDatabase(
     "migrations",
   );
   await ensureServerPostgresMigrations(pool, migrationsDir);
-  await ensurePostgresServicesTableShape(pool);
   await ensurePostgresAccountsTableShape(pool);
-  await ensurePostgresDeploymentsTableShape(pool);
-  await ensurePostgresResourcesTableShape(pool);
   await ensurePostgresRunsTableShape(pool);
   // A transaction (BEGIN..COMMIT) must execute on a single dedicated
   // `PoolClient`, because `pool.query()` may hand out a different backend

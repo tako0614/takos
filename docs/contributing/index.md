@@ -17,19 +17,23 @@
 
 ## 検証
 
-- ecosystem root `docs/quality/` — ecosystem 横断の quality index。
-- ecosystem root `docs/quality/acceptance-matrix.md`
-  — local / repository-proven acceptance coverage。
-- ecosystem root `docs/quality/takosumi-completion-audit.md`
-  — repo regression evidence と live operator evidence を分離する strict completion gate。
-- ecosystem root `docs/quality/platform-readiness-evidence-summary.md`
-  — public-safe hosted Takosumi readiness / hardening summary。
-- ecosystem root `docs/quality/release-gate.md` — Takos
-  product の release validator。
+Takos の portable complete gate は product root の `bun run check` です。format
+check、lint/static analysis、type/compile、portable tests、portable build を一度に
+検証します。cross-repo 検証は sibling `takos-control` root で次を使います。
+
+```bash
+bun run check:workspace -- --changed
+bun run check:workspace -- --task TASK-0003
+bun run check:workspace -- --all
+```
+
+live service、operator-private state、readiness evidence、recovery drill は別の
+credential boundary と cadence を持ち、product check や release approval に
+混ぜません。
 
 ## Smoke テスト
 
-- [`smoke.md`](./smoke.md) — Takos product root の current smoke / release gate。
+- [`smoke.md`](./smoke.md) — Takos product root の portable gate と focused local smoke。
 - [`runtime-agent-api-smoke.md`](./runtime-agent-api-smoke.md) — runtime-agent API の Takosumi test path。
 - [`router-config-smoke.md`](./router-config-smoke.md) — router config contract の Takosumi test path。
 - [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke と local Compose proof。
@@ -44,8 +48,14 @@
 ## Operator-owned Infrastructure
 
 self-host / cloud 接続は Takos product source checks と live operator proof を分けます。source-controlled な current proof は
-`bun run release-gate` / `bun scripts/build-release-manifest.ts` / `bun run validate:opentofu-secrets` です。実機 proof は
-target URL、provider credential、operator が編集した env file、private evidence ref を持つ runbook に添付します。
+`bun run check` です。candidate manifest、artifact digest、secret-policy claim は
+deploy entrypoint が owner gate として集める内部 evidence であり、deploy の
+authority ではありません。実機 proof は target URL、provider credential、
+operator が編集した env file、private evidence ref を持つ runbook に添付します。
+
+publication / hosted deploy はこの repository の entrypoint を使います。詳細は
+[`smoke.md`](./smoke.md) に記載しています。self-host 先への deploy は
+self-hoster 自身の runbook と authority に従います。
 
 ## Takosumi Capsule Lifecycle
 

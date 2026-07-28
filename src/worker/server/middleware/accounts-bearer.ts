@@ -29,19 +29,10 @@ function normalizeConfiguredUrl(value: string | undefined): string | undefined {
   }
 }
 
-function requestOrigin(requestUrl: string): string | undefined {
-  try {
-    return new URL(requestUrl).origin;
-  } catch {
-    return undefined;
-  }
-}
-
 const readCompatibleScopes = new Set([
   "openid",
   "profile",
   "email",
-  "events:subscribe",
   ...ALL_API_BEARER_SCOPES.filter((scope) => scope.endsWith(":read")),
 ]);
 
@@ -79,6 +70,19 @@ export interface AccountsBearerResolverDeps {
   getPlatformConfig: typeof getPlatformConfig;
 }
 
+/**
+ * Verified Takosumi Accounts authority retained only for this request. This
+ * lets an explicit facade consumer forward the inbound access token without
+ * requiring a browser-stored refresh-token delegation. Never persist or log
+ * this value.
+ */
+export interface AccountsBearerAuthContext {
+  accessToken: string;
+  subjectId: string;
+  workspaceId: string;
+  scopes: string[];
+}
+
 export type ResolveAccountsBearerResult =
   /** No `Bearer` token on the request. */
   | { kind: "no-bearer" }
@@ -95,12 +99,19 @@ export type ResolveAccountsBearerResult =
   /** Token valid but the resolved user id has no cached user record. */
   | { kind: "user-not-found" }
   /** Token valid and the cached user resolved. */
-  | { kind: "ok"; user: User; userId: string; scopes: string[] };
+  | {
+      kind: "ok";
+      user: User;
+      userId: string;
+      scopes: string[];
+      accountsBearer?: AccountsBearerAuthContext;
+    };
 
 /**
  * Single-sourced Takosumi Accounts Bearer pipeline: extraction →
  * unsupported app-local bearer / Accounts-candidate classification →
- * configured-issuer JWT verification → `getCachedUser` (+ optional scope gate).
+ * configured Accounts UserInfo verification → `getCachedUser`
+ * (+ optional scope gate).
  * Both `resolveRequestUser` (cookie-or-bearer) and `requireOAuthAuth`
  * (bearer-only, scoped) consume this and map the returned `kind` to their own
  * status codes / response shapes.
@@ -149,11 +160,9 @@ export async function resolveAccountsBearerFromHeader<
   const issuer = normalizeConfiguredUrl(
     deps.getPlatformConfig(c).oidcIssuerUrl,
   );
-  const origin = requestOrigin(c.req.url);
 
   const selfBearer = await deps.resolveSelfIssuedBearer({
     authorizationHeader,
-    origin: origin ?? issuer ?? "",
     issuer: issuer ?? null,
     db: dbBinding,
     env: c.env,
@@ -171,5 +180,23 @@ export async function resolveAccountsBearerFromHeader<
 
   const user = await deps.getCachedUser(c, selfBearer.userId);
   if (!user) return { kind: "user-not-found" };
-  return { kind: "ok", user, userId: selfBearer.userId, scopes };
+  return {
+    kind: "ok",
+    user,
+    userId: selfBearer.userId,
+    scopes,
+    // Only expose forwarding authority when UserInfo binds the token to one
+    // exact Workspace. General Takos user authentication still succeeds
+    // without it, but Workspace-scoped Interface/Capsule facades fail closed.
+    ...(selfBearer.workspaceId
+      ? {
+          accountsBearer: {
+            accessToken: bearer,
+            subjectId: selfBearer.subject,
+            workspaceId: selfBearer.workspaceId,
+            scopes,
+          },
+        }
+      : {}),
+  };
 }

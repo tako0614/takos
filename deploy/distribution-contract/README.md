@@ -5,9 +5,9 @@ This directory owns the Takos product distribution profile contract.
 - `takos-distribution-profile-v1.schema.json` is the structural contract for
   `deploy/distributions/*.json`.
 - `bun scripts/build-release-manifest.ts` records the schema digest and each
-  official profile digest in the release manifest. The release gate uses that
-  manifest evidence; do not document a standalone distribution validator unless
-  the matching package script exists.
+  official profile digest in candidate evidence. `bun run check` is the complete
+  product gate; candidate preparation may call the manifest builder internally,
+  but it is not a separate release authority or public package command.
 - Takosumi owns deploy/runtime lifecycle semantics. This contract only describes
   Takos product distribution overlays and the evidence needed to prove each
   target.

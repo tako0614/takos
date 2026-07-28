@@ -45,6 +45,7 @@ export type InstallableAppInstallConfig = {
 export type InstallableAppAccountsConfig = {
   baseUrl: string;
   token?: string;
+  subjectId?: string;
   headers?: HeadersInit;
   fetch?: InstallableAppFetch;
 };
@@ -540,7 +541,7 @@ function exactPlanReferenceFromBody(
   return { runId, capsuleId: expectedCapsuleId };
 }
 
-export async function planInstallableAppInstallation(
+export async function planInstallableAppCapsule(
   input: InstallableAppPlanInput,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -578,7 +579,7 @@ export async function planInstallableAppInstallation(
   };
 }
 
-export async function applyInstallableAppInstallation(
+export async function applyInstallableAppCapsule(
   input: InstallableAppApplyInput,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -715,11 +716,7 @@ export async function applyInstallableAppRevision(
 }
 
 function canonicalStatus(value: unknown): string {
-  return readString(value) === "active"
-    ? "ready"
-    : readString(value) === "pending"
-      ? "installing"
-      : (readString(value) ?? "unknown");
+  return readString(value) ?? "unknown";
 }
 
 async function sourceForCapsule(
@@ -744,13 +741,11 @@ function localCapsuleDto(
 ): Record<string, unknown> {
   const capsuleId = readString(capsule.id);
   return {
-    id: capsuleId,
-    installation_id: capsuleId,
+    capsule_id: capsuleId,
     app_id: readString(capsule.name),
     name: readString(capsule.name),
     status: canonicalStatus(capsule.status),
     environment: readString(capsule.environment) ?? DEFAULT_ENVIRONMENT,
-    runtime_mode: readString(capsule.environment),
     source: source
       ? {
           type: "git",
@@ -764,7 +759,7 @@ function localCapsuleDto(
   };
 }
 
-export async function listInstallableAppInstallations(
+export async function listInstallableAppCapsules(
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -791,26 +786,26 @@ export async function listInstallableAppInstallations(
       localCapsuleDto(capsule, await sourceForCapsule(capsule, accountsConfig)),
     ),
   );
-  return { status: upstream.status, body: { installations: rows } };
+  return { status: upstream.status, body: { capsules: rows } };
 }
 
-export async function listInstallableAppInstallationsWithServices(
+export async function listInstallableAppCapsulesWithServices(
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
-  const upstream = await listInstallableAppInstallations(
+  const upstream = await listInstallableAppCapsules(
     workspaceId,
     accountsConfig,
   );
   if (upstream.status >= 400) return upstream;
-  const rows = Array.isArray(upstream.body?.installations)
-    ? upstream.body.installations
+  const rows = Array.isArray(upstream.body?.capsules)
+    ? upstream.body.capsules
     : [];
   const enriched = await Promise.all(
     rows.map(async (row) => {
       const record = readRecord(row);
-      const capsuleId = readString(record?.id);
+      const capsuleId = readString(record?.capsule_id);
       if (!record || !capsuleId) return row;
       const services = await fetchCapsuleWorkloadServices(
         capsuleId,
@@ -822,10 +817,10 @@ export async function listInstallableAppInstallationsWithServices(
       return { ...record, services };
     }),
   );
-  return { status: upstream.status, body: { installations: enriched } };
+  return { status: upstream.status, body: { capsules: enriched } };
 }
 
-export async function listInstallableAppInstallationServices(
+export async function listInstallableAppCapsuleServices(
   capsuleId: string,
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,
@@ -848,11 +843,11 @@ export async function listInstallableAppInstallationServices(
   });
   return {
     status: 200,
-    body: { installation_id: capsuleId, services },
+    body: { capsule_id: capsuleId, services },
   };
 }
 
-export async function deleteInstallableAppInstallation(
+export async function deleteInstallableAppCapsule(
   capsuleId: string,
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,

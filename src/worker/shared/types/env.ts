@@ -117,11 +117,16 @@ export interface ContainerHostEnv {
 // subset of the full Env bindings.
 // ---------------------------------------------------------------------------
 
-export type RunnerEnv = DbEnv & {
+export type RunnerEnv = DbEnv & AiEnv & {
   EXECUTOR_HOST?: FetchBinding;
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   RUN_NOTIFIER: DurableNamespaceBinding;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
+  OIDC_ISSUER_URL?: string;
+  OIDC_CLIENT_ID?: string;
+  ENCRYPTION_KEY?: string;
+  TAKOSUMI_ACCOUNTS_URL?: string;
+  TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
 };
 
 export type IndexerEnv = DbEnv & {

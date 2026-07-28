@@ -49,7 +49,6 @@ export function normalizeNavigationState(
         : stayingInStorage
           ? previous.fileLine
           : undefined,
-      ref: undefined,
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
@@ -81,36 +80,6 @@ export function normalizeNavigationState(
       storagePath: undefined,
       filePath: undefined,
       fileLine: undefined,
-      ref: undefined,
-    };
-  }
-
-  if (nextView === "repo") {
-    const stayingInRepo = previous.view === "repo";
-    const nextFilePathSpecified = hasRouteStateField(nextState, "filePath");
-    const nextFileLineSpecified = hasRouteStateField(nextState, "fileLine");
-    const nextRefSpecified = hasRouteStateField(nextState, "ref");
-    return {
-      ...merged,
-      filePath: nextFilePathSpecified
-        ? nextState.filePath
-        : stayingInRepo
-          ? previous.filePath
-          : undefined,
-      fileLine: nextFileLineSpecified
-        ? nextState.fileLine
-        : stayingInRepo
-          ? previous.fileLine
-          : undefined,
-      ref: nextRefSpecified
-        ? nextState.ref
-        : stayingInRepo
-          ? previous.ref
-          : undefined,
-      storagePath: undefined,
-      threadId: undefined,
-      runId: undefined,
-      messageId: undefined,
     };
   }
 
@@ -130,20 +99,6 @@ export function normalizeNavigationState(
       storagePath: undefined,
       filePath: undefined,
       fileLine: undefined,
-      ref: undefined,
-      threadId: undefined,
-      runId: undefined,
-      messageId: undefined,
-    };
-  }
-
-  if (nextView === "deploy") {
-    return {
-      ...merged,
-      storagePath: undefined,
-      filePath: undefined,
-      fileLine: undefined,
-      ref: undefined,
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
@@ -156,7 +111,6 @@ export function normalizeNavigationState(
     storagePath: undefined,
     filePath: undefined,
     fileLine: undefined,
-    ref: undefined,
     threadId: undefined,
     runId: undefined,
     messageId: undefined,

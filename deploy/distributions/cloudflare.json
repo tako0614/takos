@@ -230,7 +230,7 @@
   },
   "metadata": {
     "official": true,
-    "releaseGateTask": "bun run release-gate"
+    "candidateGateTask": "bun run check"
   },
   "operatorProfile": {
     "distribution": "takos",

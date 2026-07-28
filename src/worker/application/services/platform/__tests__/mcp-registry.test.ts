@@ -9,7 +9,6 @@ import { stub } from "@takos/test/mock";
 import {
   listMcpServers,
   registerExternalMcpServer,
-  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
 } from "../mcp/crud.ts";
 import { mcpRemoveServerHandler } from "../../../tools/custom/mcp.ts";
@@ -135,25 +134,6 @@ function externalRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("registerExternalMcpServer rejects a name already published in the space", async () => {
-  const env = makeMcpEnv({
-    mcpServers: [],
-    publications: [publicationRow()],
-  }) as unknown as Env;
-
-  await assertRejects(
-    () =>
-      registerExternalMcpServer(env.DB, env as Env, {
-        spaceId: "space_1",
-        initiatorUserId: "user-1",
-        name: "shared-mcp",
-        url: "https://external.example/mcp",
-      }),
-    Error,
-    'MCP server "shared-mcp" already exists as a publication in this space',
-  );
-});
-
 test("registerExternalMcpServer rejects reusing a Workspace name for a different endpoint", async () => {
   const env = makeMcpEnv({
     mcpServers: [
@@ -253,23 +233,7 @@ test("registerExternalMcpServer persists a validated public server as auth_mode 
   assertEquals(rows.mcpServers[0]?.oauthAccessToken, undefined);
 });
 
-test("updateMcpServer rejects rename collisions with published MCP servers", async () => {
-  const env = makeMcpEnv({
-    mcpServers: [externalRow({ name: "old-name" })],
-    publications: [publicationRow()],
-  }) as unknown as Env;
-
-  await assertRejects(
-    () =>
-      updateMcpServer(env.DB, "space_1", "srv_1", {
-        name: "shared-mcp",
-      }),
-    Error,
-    'MCP server "shared-mcp" already exists as a publication in this space',
-  );
-});
-
-test("listMcpServers keeps publication and external MCP rows visible", async () => {
+test("listMcpServers ignores local publications and keeps configured external MCP visible", async () => {
   const servers = await listMcpServers(
     (
       makeMcpEnv({
@@ -280,97 +244,14 @@ test("listMcpServers keeps publication and external MCP rows visible", async () 
     "space_1",
   );
 
-  assertEquals(servers.length, 2);
+  assertEquals(servers.length, 1);
   assertEquals(
     servers.map((server) => [server.id, server.name, server.sourceType]),
-    [
-      ["publication:pub_1", "shared-mcp", "publication"],
-      ["srv_1", "shared-mcp", "external"],
-    ],
+    [["srv_1", "shared-mcp", "external"]],
   );
 });
 
-test("listMcpServers marks bearer-auth MCP publications", async () => {
-  const servers = await listMcpServers(
-    (
-      makeMcpEnv({
-        mcpServers: [],
-        publications: [
-          publicationRow({
-            specJson: JSON.stringify({
-              name: "shared-mcp",
-              publisher: "web",
-              type: "protocol.mcp.server",
-              outputs: { url: { kind: "url", routeRef: "mcp" } },
-              auth: { bearer: { secretRef: "MCP_TOKEN" } },
-            }),
-          }),
-        ],
-      }) as Env
-    ).DB,
-    "space_1",
-  );
-
-  assertEquals(servers.length, 1);
-  assertEquals(servers[0]?.id, "publication:pub_1");
-  assertEquals(servers[0]?.authMode, "bearer_token");
-});
-
-test("listMcpServers marks v1 bearer-auth MCP publications", async () => {
-  const servers = await listMcpServers(
-    (
-      makeMcpEnv({
-        mcpServers: [],
-        publications: [
-          publicationRow({
-            specJson: JSON.stringify({
-              name: "shared-mcp",
-              publisher: "web",
-              type: "protocol.mcp.server",
-              outputs: { url: { kind: "url", routeRef: "mcp" } },
-              auth: { kind: "bearer", secretRef: "MCP_TOKEN" },
-            }),
-          }),
-        ],
-      }) as Env
-    ).DB,
-    "space_1",
-  );
-
-  assertEquals(servers.length, 1);
-  assertEquals(servers[0]?.id, "publication:pub_1");
-  assertEquals(servers[0]?.authMode, "bearer_token");
-});
-
-test("resolvePublicationMcpServerAccessToken rejects dangling bearer-auth publications", async () => {
-  const env = makeMcpEnv({
-    mcpServers: [],
-    publications: [
-      publicationRow({
-        ownerServiceId: null,
-        specJson: JSON.stringify({
-          name: "shared-mcp",
-          publisher: "web",
-          type: "protocol.mcp.server",
-          outputs: { url: { kind: "url", routeRef: "mcp" } },
-          auth: { bearer: { secretRef: "MCP_TOKEN" } },
-        }),
-      }),
-    ],
-  }) as Env;
-
-  await assertRejects(
-    () =>
-      resolvePublicationMcpServerAccessToken(env.DB, env, {
-        spaceId: "space_1",
-        serverId: "publication:pub_1",
-      }),
-    Error,
-    "declares bearer auth secretRef but has no owner service",
-  );
-});
-
-test("loadMcpTools keeps same-name publication and external servers distinct", async () => {
+test("loadMcpTools ignores local publications and loads configured external servers", async () => {
   const sdkTool = {
     name: "ping",
     description: "Ping",
@@ -430,21 +311,10 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
     );
 
     assertEquals(result.failedServers, []);
-    assertEquals(result.tools.size, 2);
+    assertEquals(result.tools.size, 1);
     const keys = Array.from(result.tools.keys());
     assertEquals(keys.includes("ping"), true);
-    assertEquals(
-      keys.some((key) => key !== "ping"),
-      true,
-    );
-    const publicationTool = result.tools.get("ping")?.definition;
-    const externalTool = result.tools.get(
-      keys.find((key) => key !== "ping")!,
-    )?.definition;
-    assertEquals(publicationTool?.namespace, "mcp");
-    assertEquals(publicationTool?.family, "mcp.shared-mcp");
-    assertEquals(publicationTool?.risk_level, "low");
-    assertEquals(publicationTool?.side_effects, true);
+    const externalTool = result.tools.get("ping")?.definition;
     assertEquals(externalTool?.namespace, "mcp");
     assertEquals(externalTool?.family, "mcp.shared-mcp");
     assertEquals(externalTool?.risk_level, "medium");

@@ -35,5 +35,5 @@
   evidence are stored privately by the operator.
 - Public docs describe the policy and baseline contract shape; they do not
   publish customer-specific legal evidence or security operations artifacts.
-- Dependency inventory and license review are refreshed on dependency-changing
-  releases.
+- Dependency inventory and license review are refreshed in the same change
+  whenever committed dependencies or lockfiles change.

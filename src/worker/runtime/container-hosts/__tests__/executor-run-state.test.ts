@@ -1,37 +1,23 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
-import { readRunBootstrapInstallationContext } from "../executor-run-state.ts";
+import { readRunBootstrapCapsuleContext } from "../executor-run-state.ts";
 
-test("readRunBootstrapInstallationContext extracts install namespace context", () => {
+test("readRunBootstrapCapsuleContext extracts the canonical capsule context", () => {
   assertEquals(
-    readRunBootstrapInstallationContext(JSON.stringify({
-      installationId: " inst_1 ",
-      runtimeNamespace: " shared-cell://tokyo-cell-01/namespaces/inst_1 ",
+    readRunBootstrapCapsuleContext(JSON.stringify({
+      capsule_id: " cap_1 ",
+      runtimeNamespace: " shared-cell://tokyo-cell-01/namespaces/cap_1 ",
     })),
     {
-      installationId: "inst_1",
-      runtimeNamespace: "shared-cell://tokyo-cell-01/namespaces/inst_1",
+      capsuleId: "cap_1",
+      runtimeNamespace: "shared-cell://tokyo-cell-01/namespaces/cap_1",
     },
   );
 });
 
-test("readRunBootstrapInstallationContext supports nested Accounts materialization context", () => {
-  assertEquals(
-    readRunBootstrapInstallationContext(JSON.stringify({
-      accounts: { installationId: "inst_nested" },
-      runtimeBinding: {
-        target_id: "shared-cell://tokyo-cell-01/namespaces/inst_nested",
-      },
-    })),
-    {
-      installationId: "inst_nested",
-      runtimeNamespace: "shared-cell://tokyo-cell-01/namespaces/inst_nested",
-    },
-  );
-});
-
-test("readRunBootstrapInstallationContext ignores invalid run input", () => {
-  assertEquals(readRunBootstrapInstallationContext("{not json"), {});
-  assertEquals(readRunBootstrapInstallationContext(JSON.stringify([])), {});
-  assertEquals(readRunBootstrapInstallationContext(null), {});
+test("readRunBootstrapCapsuleContext ignores missing or invalid run input", () => {
+  assertEquals(readRunBootstrapCapsuleContext(JSON.stringify({})), {});
+  assertEquals(readRunBootstrapCapsuleContext("{not json"), {});
+  assertEquals(readRunBootstrapCapsuleContext(JSON.stringify([])), {});
+  assertEquals(readRunBootstrapCapsuleContext(null), {});
 });

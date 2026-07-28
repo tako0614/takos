@@ -2,9 +2,9 @@
 import { dirname } from "node:path";
 import * as runtime from "./runtime.ts";
 import {
-  AGENT_ENGINE_SOURCE_PATH,
+  INTEGRATION_LOCK_PATH,
   type AgentEngineSource,
-  validateAgentEngineSource,
+  validateIntegrationLockSource,
 } from "./validate-agent-runtime-release.ts";
 
 type JsonValue =
@@ -173,7 +173,7 @@ const gitInfo = await collectGitInfo();
 const canonicalLayout = await collectCanonicalLayout();
 assertCleanGitState(gitInfo, canonicalLayout, options);
 const release = await collectReleaseIdentity(options);
-const agentEngineSource = await collectAgentEngineSource();
+const agentEngineSource = await collectAgentEngineSource(gitInfo.commit);
 
 const manifest = {
   schemaVersion: 1,
@@ -336,21 +336,25 @@ async function collectReleaseIdentity(
   };
 }
 
-async function collectAgentEngineSource(): Promise<AgentEngineSource> {
+async function collectAgentEngineSource(
+  takosCommit: string | null | undefined,
+): Promise<AgentEngineSource> {
+  const integrationLockPath =
+    runtime.env.get("TAKOS_INTEGRATION_LOCK_PATH") ?? INTEGRATION_LOCK_PATH;
   let parsed: unknown;
   try {
-    parsed = await readJson<unknown>(AGENT_ENGINE_SOURCE_PATH);
+    parsed = await readJson<unknown>(integrationLockPath);
   } catch (error) {
     console.error(
-      `Agent engine source validation failed:\n- ${AGENT_ENGINE_SOURCE_PATH} could not be read: ${
+      `Integration lock validation failed:\n- ${INTEGRATION_LOCK_PATH} could not be read: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
     runtime.exit(1);
   }
-  const validation = validateAgentEngineSource(parsed);
+  const validation = validateIntegrationLockSource(parsed, takosCommit ?? "");
   if (!validation.source) {
-    console.error("Agent engine source validation failed:");
+    console.error("Integration lock validation failed:");
     for (const error of validation.errors) console.error(`- ${error}`);
     runtime.exit(1);
   }
@@ -373,7 +377,7 @@ function collectSourceProvenance(
     agentEngine: {
       repository: agentEngineSource.repository,
       commit: agentEngineSource.commit,
-      pin: AGENT_ENGINE_SOURCE_PATH,
+      pin: INTEGRATION_LOCK_PATH,
     },
   };
 }

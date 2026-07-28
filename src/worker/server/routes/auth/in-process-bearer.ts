@@ -1,20 +1,19 @@
 // Takosumi Accounts Bearer validation for the Takos product worker.
 //
-// Takos no longer embeds the Takosumi Accounts handler. JWT access tokens are
-// verified against the configured issuer's JWKS over HTTP, then resolved to the
-// local app user via `authIdentities` keyed by `${issuer}#${sub}`.
-import * as jose from "jose";
+// Takos no longer embeds the Takosumi Accounts handler. Accounts owns opaque
+// OAuth access tokens and PATs, so this resource server delegates validation to
+// the configured issuer's UserInfo endpoint, then resolves the returned subject
+// to the local app user via `authIdentities` keyed by `${issuer}#${sub}`.
 import { and, eq } from "drizzle-orm";
+import { TAKOSUMI_ACCOUNTS_USERINFO_PATH } from "@takosjp/takosumi-accounts-contract";
 import type { Env, User } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { accounts, authIdentities, getDb } from "../../../infra/db/index.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { extractBearerToken } from "../../middleware/bearer-token-classification.ts";
+import { provisionOidcUser } from "./provisioning.ts";
 
-const SELF_BEARER_ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"] as const;
-
-// Mirrors TAKOSUMI_ACCOUNTS_JWKS_PATH without importing the account worker.
-const SELF_JWKS_PATH = "/oauth/jwks";
+const ACCOUNTS_USERINFO_TIMEOUT_MS = 10_000;
 
 export type SelfIssuedBearerResult =
   /** No `Bearer` token on the request. */
@@ -23,56 +22,23 @@ export type SelfIssuedBearerResult =
   | { kind: "no-issuer" }
   /** Bearer present but failed local verification / user resolution. */
   | { kind: "invalid" }
-  /** Token verified against the issuer JWKS and the local user resolved. */
+  /** Token verified by Accounts UserInfo and the local user resolved. */
   | {
       kind: "ok";
       user: User;
       userId: string;
       subject: string;
       scopes: string[];
+      workspaceId?: string;
     };
 
 /**
- * Whether a verified JWT payload is an OIDC `id_token` rather than an OAuth
- * access token.
- *
- * Takosumi Accounts signs `id_token`s with the same key it publishes at
- * `/oauth/jwks`, while some deployments may also mint JWT access tokens. A JWT
- * `id_token` presented as a Bearer here must NOT be accepted as a full API
- * access token: `id_token`s
- * routinely leak through front-channel redirect URLs, `id_token_hint`
- * parameters, and logs, and are treated as lower-sensitivity than access tokens.
- *
- * We reject `id_token`s by their hallmark OIDC claims (an `aud` set to the
- * relying-party `client_id`, or an OIDC `nonce` / `auth_time`) and only allow a
- * JWT that positively declares itself an access token (an OAuth `scope`/`scp` or
- * a `token_use` marker). This stays forward-compatible if JWT access tokens
- * (e.g. RFC 9068 `at+jwt`, which carry `scope`) are ever introduced.
+ * Parse the OAuth scope claim from Accounts UserInfo. The current contract
+ * emits a space-delimited `scope`; the array aliases keep the consumer
+ * tolerant of compatible OIDC providers without inspecting token shape.
  */
-export function isOidcIdToken(payload: jose.JWTPayload): boolean {
-  const claims = payload as Record<string, unknown>;
-  const hasAccessTokenMarker = typeof claims.token_use === "string" ||
-    claims.scope !== undefined ||
-    claims.scopes !== undefined ||
-    claims.scp !== undefined;
-  if (hasAccessTokenMarker) return false;
-  return (
-    claims.aud !== undefined ||
-    claims.nonce !== undefined ||
-    claims.auth_time !== undefined
-  );
-}
-
-/**
- * Parse the OAuth scope claim from a verified issuer JWT payload. Mirrors
- * the `scope` / `scopes` / `scp` precedence used by the remote introspection
- * path so the scope gate behaves identically for issuer JWT tokens.
- */
-function parseTokenScopes(payload: jose.JWTPayload): string[] {
-  const source =
-    (payload as Record<string, unknown>).scope ??
-    (payload as Record<string, unknown>).scopes ??
-    (payload as Record<string, unknown>).scp;
+function parseTokenScopes(payload: Record<string, unknown>): string[] {
+  const source = payload.scope ?? payload.scopes ?? payload.scp;
   if (typeof source === "string") {
     return source
       .split(/\s+/)
@@ -90,30 +56,82 @@ function parseTokenScopes(payload: jose.JWTPayload): string[] {
   return [];
 }
 
-/**
- * Fetch the configured Takosumi Accounts issuer JWKS.
- */
-async function loadIssuerJwks(
-  issuer: string,
-  _env: Env,
-): Promise<jose.JSONWebKeySet | null> {
-  const base = issuer.replace(/\/+$/g, "");
-  const response = await fetch(`${base}${SELF_JWKS_PATH}`, {
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) return null;
-  const body = (await response
-    .json()
-    .catch(() => null)) as jose.JSONWebKeySet | null;
-  if (!body || !Array.isArray(body.keys)) return null;
-  return body;
+function resolveWorkspaceEvidence(
+  payload: Record<string, unknown>,
+): { valid: boolean; workspaceId?: string } {
+  const takosumi =
+    payload.takosumi &&
+      typeof payload.takosumi === "object" &&
+      !Array.isArray(payload.takosumi)
+      ? (payload.takosumi as Record<string, unknown>)
+      : undefined;
+  const workspaceId = profileString(takosumi?.workspace_id);
+  const memberships = Array.isArray(payload.workspace_memberships)
+    ? payload.workspace_memberships
+      .map(profileString)
+      .filter((value): value is string => value !== undefined)
+    : [];
+  if (
+    workspaceId &&
+    memberships.length > 0 &&
+    !memberships.includes(workspaceId)
+  ) {
+    return { valid: false };
+  }
+  if (workspaceId) return { valid: true, workspaceId };
+  return memberships.length === 1
+    ? { valid: true, workspaceId: memberships[0] }
+    : { valid: true };
 }
+
+function hasAcceptedAudience(payload: Record<string, unknown>, env: Env): boolean {
+  // Accounts PAT UserInfo currently has no `aud`; PAT authority is instead
+  // issuer + active-token + scope based. Any ordinary OAuth response that does
+  // carry `aud` must be bound to one of this Takos host's registered clients.
+  if (payload.aud === undefined) return true;
+  const actual = Array.isArray(payload.aud)
+    ? payload.aud.filter((value): value is string => typeof value === "string")
+    : typeof payload.aud === "string"
+    ? [payload.aud]
+    : [];
+  const accepted = [env.OIDC_CLIENT_ID, env.OIDC_MOBILE_CLIENT_ID]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  return accepted.length > 0 &&
+    actual.some((audience) => accepted.includes(audience));
+}
+
+function normalizeAccountsBaseUrl(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function accountsUserInfoUrl(env: Env, issuer: string): string {
+  const base =
+    normalizeAccountsBaseUrl(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+    normalizeAccountsBaseUrl(env.OIDC_DISCOVERY_URL) ??
+    issuer.replace(/\/+$/, "");
+  return `${base}${TAKOSUMI_ACCOUNTS_USERINFO_PATH}`;
+}
+
+type SelfIssuedUserResolution = {
+  identityFound: boolean;
+  user: User | null;
+};
 
 async function resolveSelfIssuedUser(input: {
   db: SqlDatabaseBinding;
   issuer: string;
   subject: string;
-}): Promise<User | null> {
+}): Promise<SelfIssuedUserResolution> {
   const db = getDb(input.db);
   const providerSub = `${input.issuer}#${input.subject}`;
   const identity = await db
@@ -128,89 +146,149 @@ async function resolveSelfIssuedUser(input: {
       ),
     )
     .get();
-  if (!identity) return null;
+  if (!identity) return { identityFound: false, user: null };
 
   const row = await db
     .select()
     .from(accounts)
     .where(eq(accounts.id, identity.userId))
     .get();
-  if (!row || row.status !== "active") return null;
+  if (!row || row.status !== "active") {
+    return { identityFound: true, user: null };
+  }
 
   return {
-    id: row.id,
-    principal_id: undefined,
-    email: row.email ?? "",
-    name: row.name,
-    username: row.slug,
-    principal_kind: "user",
-    bio: row.bio,
-    picture: row.picture,
-    trust_tier: row.trustTier,
-    setup_completed: row.setupCompleted,
-    created_at: textDate(row.createdAt),
-    updated_at: textDate(row.updatedAt),
+    identityFound: true,
+    user: {
+      id: row.id,
+      principal_id: undefined,
+      email: row.email ?? "",
+      name: row.name,
+      username: row.slug,
+      principal_kind: "user",
+      bio: row.bio,
+      picture: row.picture,
+      trust_tier: row.trustTier,
+      setup_completed: row.setupCompleted,
+      created_at: textDate(row.createdAt),
+      updated_at: textDate(row.updatedAt),
+    },
   };
 }
 
+function profileString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const detail = String(error).toLowerCase();
+  return detail.includes("unique constraint") ||
+    detail.includes("sqlite_constraint_unique");
+}
+
+async function resolveOrProvisionSelfIssuedUser(input: {
+  db: SqlDatabaseBinding;
+  issuer: string;
+  subject: string;
+  claims: Record<string, unknown>;
+}): Promise<User | null> {
+  const providerSub = `${input.issuer}#${input.subject}`;
+  const emailSnapshot = profileString(input.claims.email) ?? null;
+  const verifiedEmail = input.claims.email_verified === true
+    ? emailSnapshot
+    : null;
+
+  // A concurrent first request can observe the same missing identity. The
+  // account+identity batch is atomic and the provider/sub unique index chooses
+  // one winner; losers re-read that winner instead of creating another user.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const current = await resolveSelfIssuedUser(input);
+    if (current.identityFound) return current.user;
+
+    try {
+      await provisionOidcUser(
+        input.db,
+        {
+          subject: input.subject,
+          email: verifiedEmail,
+          name: profileString(input.claims.name) ??
+            profileString(input.claims.preferred_username),
+          picture: profileString(input.claims.picture),
+        },
+        {
+          id: crypto.randomUUID(),
+          providerSub,
+          emailSnapshot,
+          emailKind: verifiedEmail ? "oidc_verified" : "unknown",
+        },
+      );
+    } catch (error) {
+      if (!isUniqueConstraintViolation(error)) throw error;
+      // Either this exact issuer/sub won elsewhere, or another new subject
+      // claimed the same owner slug. Re-read both constraints and retry.
+      continue;
+    }
+
+    const provisioned = await resolveSelfIssuedUser(input);
+    if (provisioned.identityFound) return provisioned.user;
+  }
+
+  return (await resolveSelfIssuedUser(input)).user;
+}
+
 /**
- * Verify a Takosumi Accounts JWT Bearer token and resolve the local user.
+ * Verify a Takosumi Accounts opaque Bearer token and resolve the local user.
  *
- * `issuer` must be the normalized Takosumi Accounts issuer. The user is
- * resolved via the existing `authIdentities` lookup.
+ * Token prefixes are display/generation details, not a routing mechanism.
+ * Accounts UserInfo is the authority for OAuth access tokens and PATs and also
+ * rejects OIDC id_tokens, so Takos never parses or guesses the token format.
  */
 export async function resolveSelfIssuedBearer(input: {
   authorizationHeader: string | null | undefined;
-  origin: string;
   issuer: string | null;
   db: SqlDatabaseBinding | undefined;
   env: Env;
-  /**
-   * Test seam: override the JWKS loader. Production callers omit this and the
-   * real {@link loadIssuerJwks} is used.
-   */
-  loadJwks?: (
-    issuer: string,
-    env: Env,
-  ) => Promise<jose.JSONWebKeySet | null>;
+  /** Test seam for the external Accounts authority. */
+  fetchImpl?: typeof fetch;
 }): Promise<SelfIssuedBearerResult> {
   const token = extractBearerToken(input.authorizationHeader);
   if (!token) return { kind: "no-bearer" };
   if (!input.issuer) return { kind: "no-issuer" };
   if (!input.db) return { kind: "invalid" };
 
-  const jwks = await (input.loadJwks ?? loadIssuerJwks)(
-    input.issuer,
-    input.env,
-  );
-  if (!jwks) return { kind: "invalid" };
-
-  let payload: jose.JWTPayload;
+  let response: Response;
   try {
-    const keySet = jose.createLocalJWKSet(jwks);
-    ({ payload } = await jose.jwtVerify(token, keySet, {
-      issuer: input.issuer,
-      algorithms: [...SELF_BEARER_ALGORITHMS],
-    }));
+    response = await (input.fetchImpl ?? fetch)(
+      new Request(accountsUserInfoUrl(input.env, input.issuer), {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(ACCOUNTS_USERINFO_TIMEOUT_MS),
+      }),
+    );
   } catch {
     return { kind: "invalid" };
   }
-
-  // Refuse OIDC id_tokens: they are signed by the same issuer key the JWKS
-  // serves, so a relying party's id_token (or any captured id_token) would
-  // otherwise be accepted as a full API access token. Only opaque access tokens
-  // are legitimate, and those never reach this JWT path.
-  if (isOidcIdToken(payload)) {
+  if (!response.ok) return { kind: "invalid" };
+  const payload = await response.json().catch(() => null);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { kind: "invalid" };
   }
-
-  const subject = typeof payload.sub === "string" ? payload.sub.trim() : "";
+  const claims = payload as Record<string, unknown>;
+  const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
   if (!subject) return { kind: "invalid" };
+  if (!hasAcceptedAudience(claims, input.env)) return { kind: "invalid" };
+  const workspace = resolveWorkspaceEvidence(claims);
+  if (!workspace.valid) return { kind: "invalid" };
 
-  const user = await resolveSelfIssuedUser({
+  const user = await resolveOrProvisionSelfIssuedUser({
     db: input.db,
     issuer: input.issuer,
     subject,
+    claims,
   });
   if (!user) return { kind: "invalid" };
 
@@ -219,6 +297,9 @@ export async function resolveSelfIssuedBearer(input: {
     user,
     userId: user.id,
     subject,
-    scopes: parseTokenScopes(payload),
+    scopes: parseTokenScopes(claims),
+    ...(workspace.workspaceId
+      ? { workspaceId: workspace.workspaceId }
+      : {}),
   };
 }

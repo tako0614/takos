@@ -4,8 +4,9 @@
  * remote: `git clone https://<host>/git/<owner>/<repo>.git`.
  *
  * Scope: `git-upload-pack` (clone/fetch) only. `git-receive-pack` (push) is
- * intentionally refused — writes go through the Takos repository API/UI. Objects
- * are streamed as an undeltified packfile (see `pack.ts`).
+ * intentionally refused. Collaborative hosting and writes belong to the
+ * installed `takos-git` Capsule through its `source.git.smart_http` Interface.
+ * Objects are streamed as an undeltified packfile (see `pack.ts`).
  *
  * Auth: HTTP Basic where the password is a Takos access token (username is
  * ignored, matching the GitHub PAT convention). Public repositories allow
@@ -25,7 +26,7 @@ import {
   pktLineString,
 } from "../../application/services/takos-git/local/core/pack-common.ts";
 import { concatBytes } from "../../application/services/takos-git/local/core/sha1.ts";
-import { checkRepoAccess } from "../../application/services/source/repos.ts";
+import { checkRepoAccess } from "../../application/services/source/repository-read.ts";
 import { resolveAccountsBearerFromHeader } from "../middleware/accounts-bearer.ts";
 import { authDeps } from "../middleware/auth.ts";
 import { toGitBucket } from "../../shared/utils/git-bucket.ts";
@@ -36,9 +37,7 @@ const AGENT = "agent=takos-git/0.1";
 
 /** Return a plain ArrayBuffer view suitable for a Response body. */
 function bytesToBody(bytes: Uint8Array): ArrayBuffer {
-  if (
-    bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
-  ) {
+  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
     return bytes.buffer as ArrayBuffer;
   }
   return bytes.slice().buffer as ArrayBuffer;
@@ -90,12 +89,14 @@ function basicPassword(header: string | undefined): string | null {
 }
 
 type AuthOutcome =
-  | { ok: true; userId: string | null }
-  | { ok: false; response: Response };
+  { ok: true; userId: string | null } | { ok: false; response: Response };
 
 function unauthorized(): Response {
   return new Response(
-    JSON.stringify({ error: "authentication required", code: "git_unauthorized" }),
+    JSON.stringify({
+      error: "authentication required",
+      code: "git_unauthorized",
+    }),
     {
       status: 401,
       headers: {
@@ -108,7 +109,10 @@ function unauthorized(): Response {
 
 function notFoundResponse(): Response {
   return new Response(
-    JSON.stringify({ error: "repository not found", code: "git_repository_not_found" }),
+    JSON.stringify({
+      error: "repository not found",
+      code: "git_repository_not_found",
+    }),
     { status: 404, headers: { "content-type": "application/json" } },
   );
 }
@@ -209,9 +213,10 @@ function buildUploadPackAdvertisement(refs: AdvertisedRefs): Uint8Array {
   return concatBytes(...parts);
 }
 
-function parseUploadPackRequest(
-  body: Uint8Array,
-): { wants: string[]; haves: string[] } {
+function parseUploadPackRequest(body: Uint8Array): {
+  wants: string[];
+  haves: string[];
+} {
   const wants: string[] = [];
   const haves: string[] = [];
   const decoder = new TextDecoder();
@@ -231,11 +236,12 @@ function parseUploadPackRequest(
 
 const gitSmartHttp = new Hono<{ Bindings: Env }>();
 
-// Push is not served here — the object store is written through the repo API.
+// Push is not served here. The standalone takos-git Capsule owns writes.
 function pushDisabled(): Response {
   return new Response(
     JSON.stringify({
-      error: "push over git is disabled; commit through the Takos API or UI",
+      error:
+        "push is unavailable on the Takos compatibility endpoint; use the installed takos-git source.git.smart_http Interface",
       code: "git_push_disabled",
     }),
     { status: 403, headers: { "content-type": "application/json" } },
@@ -255,7 +261,11 @@ gitSmartHttp.get("/git/:owner/:repo/info/refs", async (c) => {
     );
   }
 
-  const repo = await resolveRepo(c.env, c.req.param("owner"), c.req.param("repo"));
+  const repo = await resolveRepo(
+    c.env,
+    c.req.param("owner"),
+    c.req.param("repo"),
+  );
   if (!repo) return notFoundResponse();
 
   const auth = await authenticateRead(c, repo);
@@ -273,7 +283,11 @@ gitSmartHttp.get("/git/:owner/:repo/info/refs", async (c) => {
 });
 
 gitSmartHttp.post("/git/:owner/:repo/git-upload-pack", async (c) => {
-  const repo = await resolveRepo(c.env, c.req.param("owner"), c.req.param("repo"));
+  const repo = await resolveRepo(
+    c.env,
+    c.req.param("owner"),
+    c.req.param("repo"),
+  );
   if (!repo) return notFoundResponse();
 
   const auth = await authenticateRead(c, repo);
@@ -281,7 +295,10 @@ gitSmartHttp.post("/git/:owner/:repo/git-upload-pack", async (c) => {
 
   if (!c.env.GIT_OBJECTS) {
     return c.json(
-      { error: "git object storage is not configured", code: "git_storage_not_configured" },
+      {
+        error: "git object storage is not configured",
+        code: "git_storage_not_configured",
+      },
       501,
     );
   }
@@ -300,7 +317,10 @@ gitSmartHttp.post("/git/:owner/:repo/git-upload-pack", async (c) => {
   for (const want of wants) {
     if (!refs.tips.has(want)) {
       return c.json(
-        { error: "want is not an advertised ref of this repository", code: "git_invalid_want" },
+        {
+          error: "want is not an advertised ref of this repository",
+          code: "git_invalid_want",
+        },
         400,
       );
     }
@@ -323,7 +343,10 @@ gitSmartHttp.post("/git/:owner/:repo/git-upload-pack", async (c) => {
         missing: missing.length,
       });
       return c.json(
-        { error: "repository objects are incomplete", code: "git_repository_incomplete" },
+        {
+          error: "repository objects are incomplete",
+          code: "git_repository_incomplete",
+        },
         500,
       );
     }
@@ -338,7 +361,10 @@ gitSmartHttp.post("/git/:owner/:repo/git-upload-pack", async (c) => {
     });
   } catch (err) {
     logError("upload-pack failed", err, { module: "routes/git-smart-http" });
-    return c.json({ error: "failed to build pack", code: "git_pack_failed" }, 500);
+    return c.json(
+      { error: "failed to build pack", code: "git_pack_failed" },
+      500,
+    );
   }
 });
 

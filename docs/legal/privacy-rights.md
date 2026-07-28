@@ -98,8 +98,9 @@ allows preference storage for language, theme, and device-local UI choices.
   account status to `pending_deletion`.
 - Auth middleware must reject non-`active` accounts, so existing cookie sessions
   cannot continue after deletion request acceptance.
-- Release validation must include `cd takos && bun run test` or narrower
-  route tests after privacy handler changes.
+- After privacy-handler changes, the required portable owner gate is
+  `cd takos && bun run check`. Narrow route tests are useful during diagnosis
+  but do not replace it.
 
 ## Sources
 

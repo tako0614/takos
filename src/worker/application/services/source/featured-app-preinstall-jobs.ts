@@ -42,8 +42,8 @@ import {
   resolveFeaturedAppInstallConfig,
 } from "./featured-app-resolution.ts";
 import {
-  applyInstallableAppInstallation,
-  planInstallableAppInstallation,
+  applyInstallableAppCapsule,
+  planInstallableAppCapsule,
 } from "./installable-app-install.ts";
 
 function hasTransactionSupport(db: FeaturedAppCatalogEnv["DB"]): boolean {
@@ -167,7 +167,7 @@ export async function applyFeaturedAppInstallation(
     token: config.token,
     fetch: featuredAppCatalogDeps.fetch,
   };
-  const plan = await planInstallableAppInstallation(
+  const plan = await planInstallableAppCapsule(
     {
       workspaceId: config.workspaceId,
       appId: entry.appId ?? entry.name,
@@ -190,7 +190,7 @@ export async function applyFeaturedAppInstallation(
     );
   }
   const expected = readExpectedGuard(plan.body);
-  const applied = await applyInstallableAppInstallation(
+  const applied = await applyInstallableAppCapsule(
     {
       workspaceId: config.workspaceId,
       expected,

@@ -139,9 +139,13 @@ async function runtimeMcpInterfaceConfig(
  * the fence is skipped.
  */
 export async function ensureRunLease(
-  env: Env,
+  env: Pick<Env, "DB">,
   runId: string,
-  body: Record<string, unknown>,
+  body: {
+    readonly serviceId?: unknown;
+    readonly workerId?: unknown;
+    readonly leaseVersion?: unknown;
+  },
   options: { readonly allowTerminalRetry?: boolean } = {},
 ): Promise<Response | null> {
   const serviceId = readRunServiceId(body);
@@ -564,7 +568,6 @@ export async function handleSkillCatalog(
       {
         type: agentType,
         systemPrompt: "",
-        tools: [],
       },
       history,
     );
@@ -636,7 +639,6 @@ export async function handleSkillRuntimeContext(
       {
         type: agentType,
         systemPrompt: "",
-        tools: [],
       },
       history,
     );
@@ -1759,7 +1761,13 @@ export async function handleToolCatalog(
   try {
     executor = await dependencies.createExecutor(runId, env);
     return ok({
-      tools: executor.getAvailableTools(),
+      tools: executor.getAvailableTools().map((tool) => ({
+        ...tool,
+        // This is an executor-host protocol attestation, not provider-supplied
+        // metadata: execute() installs the same side-effect name set into the
+        // Worker-owned ToolOperation fence before dispatch.
+        durable_idempotency: tool.side_effects === true,
+      })),
       mcpFailedServers: executor.mcpFailedServers,
     });
   } catch (e: unknown) {
@@ -1776,7 +1784,11 @@ export async function handleToolExecute(
   env: Env,
   dependencies: RemoteToolExecutorDependencies = remoteToolExecutorDependencies,
 ): Promise<Response> {
-  const { runId, toolCall } = body as { runId?: string; toolCall?: ToolCall };
+  const { runId, toolCall, idempotencyKey } = body as {
+    runId?: string;
+    toolCall?: ToolCall;
+    idempotencyKey?: unknown;
+  };
   if (!runId || !toolCall || typeof toolCall !== "object") {
     return err("Missing runId or toolCall", 400);
   }
@@ -1787,6 +1799,14 @@ export async function handleToolExecute(
     toolCall.arguments == null
   ) {
     return err("Invalid toolCall payload", 400);
+  }
+  if (
+    idempotencyKey !== undefined &&
+    (typeof idempotencyKey !== "string" ||
+      idempotencyKey.trim().length === 0 ||
+      new TextEncoder().encode(idempotencyKey.trim()).byteLength > 512)
+  ) {
+    return err("Invalid idempotencyKey", 400);
   }
 
   // A superseded container must not keep running side-effecting tools (deploys,
@@ -1812,7 +1832,12 @@ export async function handleToolExecute(
       stopMonitor.signal,
     );
     try {
-      const result = await executor.execute(toolCall);
+      const result = await executor.execute(
+        toolCall,
+        typeof idempotencyKey === "string"
+          ? { idempotencyKey: idempotencyKey.trim() }
+          : undefined,
+      );
       // Cancellation can race a handler that ignores AbortSignal. Never return
       // its stale result to the superseded container.
       if (abortController.signal.aborted) return err("Lease lost", 409);

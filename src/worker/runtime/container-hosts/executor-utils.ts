@@ -236,11 +236,7 @@ export interface AiRunBinding {
  * endpoint is reachable only if its required scope is in the token's set.
  */
 export type ProxyScope =
-  | "run-lifecycle"
-  | "conversation"
-  | "tools"
-  | "skills"
-  | "provider-keys";
+  "run-lifecycle" | "conversation" | "tools" | "skills" | "provider-keys";
 
 export type ProxyCapability = ProxyScope;
 
@@ -373,7 +369,10 @@ export function classifyProxyError(e: unknown): {
 
 export { base64ToBytes };
 
-export function readRunServiceId(body: Record<string, unknown>): string | null {
+export function readRunServiceId(body: {
+  readonly serviceId?: unknown;
+  readonly workerId?: unknown;
+}): string | null {
   if (typeof body.serviceId === "string" && body.serviceId.length > 0) {
     return body.serviceId;
   }

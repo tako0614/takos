@@ -22,4 +22,4 @@ bun test deploy/accounts-cloudflare/src/worker_test.ts
 ```
 
 Provider-owned S3 / R2 / GCS live proof belongs in hosted Takosumi or
-distribution target evidence.
+distribution target evidence. It is not release approval by itself.

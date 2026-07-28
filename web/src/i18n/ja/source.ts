@@ -194,7 +194,7 @@ export const source = {
   uninstalledItem: "{name}をアンインストールしました",
   uninstallConfirmTitle: "アプリをアンインストールしますか？",
   uninstallConfirmMessage:
-    "「{name}」をアンインストールすると、稼働中の Installation と worker が削除されます。この操作は元に戻せません。",
+    "「{name}」をアンインストールすると、稼働中の Capsule と worker が削除されます。この操作は元に戻せません。",
   deleteStoreConfirmTitle: "ストアを削除しますか？",
   deleteStoreConfirmMessage:
     "「{name}」を削除します。この操作は元に戻せません。",

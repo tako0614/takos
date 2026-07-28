@@ -221,6 +221,10 @@ pub struct ToolDefinition {
     pub risk_level: Option<String>,
     #[serde(default)]
     pub side_effects: Option<bool>,
+    /// Executor-host protocol attestation that this exact tool name is routed
+    /// through the Worker-owned durable ToolOperation fence.
+    #[serde(default)]
+    pub durable_idempotency: bool,
 }
 
 #[allow(dead_code)]
@@ -415,20 +419,21 @@ impl ControlRpcClient {
         tool_call_id: &str,
         name: &str,
         arguments: Value,
+        idempotency_key: Option<&str>,
     ) -> AppResult<RpcToolResult> {
-        self.post_control_json(
-            "tool-execute",
-            json!({
-                "runId": self.run_id,
-                "leaseVersion": self.lease_version,
-                "toolCall": {
-                    "id": tool_call_id,
-                    "name": name,
-                    "arguments": arguments,
-                }
-            }),
-        )
-        .await
+        let mut payload = json!({
+            "runId": self.run_id,
+            "leaseVersion": self.lease_version,
+            "toolCall": {
+                "id": tool_call_id,
+                "name": name,
+                "arguments": arguments,
+            }
+        });
+        if let Some(idempotency_key) = idempotency_key {
+            payload["idempotencyKey"] = Value::String(idempotency_key.to_string());
+        }
+        self.post_control_json("tool-execute", payload).await
     }
 
     pub async fn save_engine_checkpoint(
@@ -1314,6 +1319,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tool_execute_forwards_the_engine_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
+        let address = listener.local_addr().expect("test listener address");
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test server should accept");
+            let mut buffer = [0_u8; 4096];
+            let mut request = Vec::new();
+            let mut expected_len: Option<usize> = None;
+            loop {
+                let read = stream.read(&mut buffer).expect("request should read");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if expected_len.is_none() {
+                    if let Some(header_end) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        let headers = String::from_utf8_lossy(&request[..header_end]);
+                        let content_len = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().ok())
+                                    .flatten()
+                            })
+                            .unwrap_or(0);
+                        expected_len = Some(header_end + 4 + content_len);
+                    }
+                }
+                if expected_len.is_some_and(|length| request.len() >= length) {
+                    break;
+                }
+            }
+            let response_body =
+                r#"{"tool_call_id":"call-1","output":"ok","outcome_uncertain":false}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                response_body.len(),
+                response_body,
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("response should write");
+            String::from_utf8(request).expect("request should be utf8")
+        });
+
+        let client = control_rpc_client_with_env_cleared(&StartPayload {
+            run_id: "run-idempotent".to_string(),
+            worker_id: "worker-idempotent".to_string(),
+            service_id: Some("service-idempotent".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(9),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-idempotent".to_string()),
+            checkpoint_protocol_version: Some(1),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+
+        client
+            .tool_execute(
+                "call-1",
+                "publish",
+                json!({ "ref": "v1" }),
+                Some("loop:loop-1:tool:1:0:publish"),
+            )
+            .await
+            .expect("tool execute should succeed");
+
+        let request = handle.join().expect("test server should join");
+        let body = request
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body)
+            .expect("request should include http body");
+        let parsed: serde_json::Value =
+            serde_json::from_str(body).expect("request body should be json");
+
+        assert_eq!(parsed["idempotencyKey"], "loop:loop-1:tool:1:0:publish");
+        assert_eq!(parsed["toolCall"]["name"], "publish");
+        assert_eq!(parsed["leaseVersion"], 9);
+    }
+
+    #[tokio::test]
     async fn control_rpc_client_complete_run_carries_atomic_transcript() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
         let address = listener.local_addr().expect("test listener address");
@@ -1575,6 +1666,8 @@ mod tests {
         let session_id = SessionId::new();
         let loop_id = LoopId::new();
         let checkpoint = LoopState {
+            checkpoint_version: 1,
+            graph_id: "external-context-v1".to_string(),
             session_id,
             loop_id,
             current_node: "execute_tools".to_string(),

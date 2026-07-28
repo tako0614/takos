@@ -6,7 +6,7 @@ COPY takos/containers/agent/Cargo.toml takos/containers/agent/Cargo.lock ./
 COPY takos/containers/agent/src ./src
 COPY takos-agent-engine /work/takos-agent-engine
 
-RUN cargo build --release
+RUN cargo build --locked --release
 
 FROM debian:bookworm-slim
 

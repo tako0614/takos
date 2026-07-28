@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 const imageNames = [
@@ -23,26 +23,22 @@ test("release manifest records the package version source and pinned agent engin
     const packageConfig = JSON.parse(
       await readFile(resolve(repoRoot, "package.json"), "utf8"),
     );
-    const engineSource = JSON.parse(
-      await readFile(
-        resolve(repoRoot, "containers/agent/engine-source.json"),
-        "utf8",
-      ),
-    );
+    const integrationLock = actualIntegrationLock();
+    const engineCommit = integrationLock.repos["takos-agent-engine"].commit;
     expect(manifest.release.version).toBe(packageConfig.takosRelease.version);
     expect(manifest.sourceProvenance.releaseVersion).toEqual({
       source: "package.json#takosRelease.version",
       value: packageConfig.takosRelease.version,
     });
     expect(manifest.sourceProvenance.agentEngine).toEqual({
-      repository: engineSource.repository,
-      commit: engineSource.commit,
-      pin: "containers/agent/engine-source.json",
+      repository: "tako0614/takos-agent-engine",
+      commit: engineCommit,
+      pin: "../takos-control/integration.lock.json",
     });
     const agentImage = manifest.officialImages.images.find(
       (image: { name: string }) => image.name === "takos-agent",
     );
-    expect(agentImage.sourceCommits.agentEngine).toBe(engineSource.commit);
+    expect(agentImage.sourceCommits.agentEngine).toBe(engineCommit);
     expect(manifest.officialImages.complete).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -112,12 +108,8 @@ async function writeImageRecords(
   const packageConfig = JSON.parse(
     await readFile(resolve(repoRoot, "package.json"), "utf8"),
   );
-  const engineSource = JSON.parse(
-    await readFile(
-      resolve(repoRoot, "containers/agent/engine-source.json"),
-      "utf8",
-    ),
-  );
+  const engineCommit =
+    actualIntegrationLock().repos["takos-agent-engine"].commit;
   const commit = commandText(["git", "rev-parse", "HEAD"]);
   const remote = commandText(["git", "config", "--get", "remote.origin.url"]);
   const owner =
@@ -145,8 +137,7 @@ async function writeImageRecords(
           commit,
           ...(name === "takos-agent"
             ? {
-                agentEngineCommit:
-                  agentEngineCommitOverride ?? engineSource.commit,
+                agentEngineCommit: agentEngineCommitOverride ?? engineCommit,
               }
             : {}),
           sbom: true,
@@ -164,7 +155,12 @@ async function runManifest(
   output: string,
   candidateRunId?: string,
 ) {
-  const process = Bun.spawn(
+  const integrationLockPath = resolve(dirname(output), "integration.lock.json");
+  await writeFile(
+    integrationLockPath,
+    `${JSON.stringify(actualIntegrationLock(), null, 2)}\n`,
+  );
+  const child = Bun.spawn(
     [
       "bun",
       "scripts/build-release-manifest.ts",
@@ -177,16 +173,43 @@ async function runManifest(
     ],
     {
       cwd: repoRoot,
+      env: {
+        ...Bun.env,
+        TAKOS_INTEGRATION_LOCK_PATH: integrationLockPath,
+      },
       stdout: "pipe",
       stderr: "pipe",
     },
   );
   const [status, stdout, stderr] = await Promise.all([
-    process.exited,
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
   ]);
   return { status, stdout, stderr };
+}
+
+function actualIntegrationLock() {
+  return {
+    kind: "takos.integration-lock@v1",
+    generatedAt: "2026-07-28T00:00:00.000Z",
+    generatedBy: {
+      gate: "check:public-ci",
+      controlCommit: "c".repeat(40),
+    },
+    repos: {
+      takos: { commit: commandText(["git", "rev-parse", "HEAD"]) },
+      "takos-agent-engine": {
+        commit: commandText([
+          "git",
+          "-C",
+          "../takos-agent-engine",
+          "rev-parse",
+          "HEAD",
+        ]),
+      },
+    },
+  };
 }
 
 function commandText(command: string[]): string {

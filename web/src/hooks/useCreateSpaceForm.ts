@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { getErrorMessage } from "@takos/worker-platform-utils/errors";
+import { getErrorMessage } from "../lib/errors.ts";
 
 interface UseCreateSpaceFormOptions {
   onCreate: (

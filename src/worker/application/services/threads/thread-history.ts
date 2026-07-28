@@ -121,6 +121,7 @@ function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
       root_thread_id: rootThreadId,
       root_run_id: rootRunId,
       agent_type: row.agentType,
+      model: row.model ?? null,
       status: row.status as RunStatus,
       input: row.input,
       output: row.output ?? null,

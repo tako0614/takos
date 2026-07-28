@@ -22,7 +22,6 @@ import {
   toPublicationRecord,
   upsertServiceConsumeRow,
 } from "./service-publications-db.ts";
-import { resolveRuntimeProjectionExportDefinition } from "./runtime-projection-exports.ts";
 
 export type ConsumePublicationDefinition = {
   publication: AppPublication;
@@ -59,14 +58,6 @@ export async function syncConsumeState(
   return {};
 }
 
-function resolveTakosSystemConsumeDefinition(
-  _consume: AppConsume,
-  runtimeProjection: ConsumePublicationDefinition | null,
-): ConsumePublicationDefinition {
-  if (runtimeProjection) return runtimeProjection;
-  throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
-}
-
 export async function resolveConsumePublicationDefinition(
   env: Pick<Env, "DB"> &
     Partial<Pick<Env, "ADMIN_DOMAIN" | "AUTH_PUBLIC_BASE_URL">>,
@@ -76,22 +67,15 @@ export async function resolveConsumePublicationDefinition(
     consumerGroupId?: string | null;
   },
 ): Promise<ConsumePublicationDefinition | null> {
-  const runtimeProjection = resolveRuntimeProjectionExportDefinition(env, {
-    spaceId: params.spaceId,
-    name: params.consume.publication,
-  });
   if (isReservedTakosPublicationSource(params.consume.publication)) {
-    return resolveTakosSystemConsumeDefinition(
-      params.consume,
-      runtimeProjection,
-    );
+    throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
   }
   const row = await getPublicationRowByRef(env, {
     spaceId: params.spaceId,
     ref: params.consume.publication,
     consumerGroupId: params.consumerGroupId,
   });
-  if (!row) return runtimeProjection;
+  if (!row) return null;
   const record = toPublicationRecord(row);
   return { publication: record.publication, outputs: record.outputs, record };
 }

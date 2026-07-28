@@ -4,12 +4,10 @@ import { Hono } from "hono";
 
 import {
   buildFileHandlerOpenUrl,
-  projectFileHandlerPublication,
   storageManagementRouteDeps,
 } from "../storage-management.ts";
 import storageManagement from "../storage-management.ts";
 import { routeAuthDeps } from "../../route-auth.ts";
-import type { PublicationRecord } from "../../../../application/services/platform/service-publications.ts";
 
 test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
   assertEquals(
@@ -34,30 +32,145 @@ test("buildFileHandlerOpenUrl requires a :id path template", () => {
   );
 });
 
-test("projectFileHandlerPublication keeps only :id-templated handlers", () => {
-  const valid = createPublicationRecord({
-    id: "pub_1",
-    name: "markdown",
-    path: "/files/:id",
-    url: "https://files.example.com/files/:id",
+test("file-handler discovery is an authorized Takosumi Interface view", async () => {
+  const originalRequireSpaceAccess = routeAuthDeps.requireSpaceAccess;
+  const originalResolveAuthorization =
+    storageManagementRouteDeps.resolveRuntimeInterfaceAuthorization;
+  const originalFetchInterfaces =
+    storageManagementRouteDeps.fetchAuthorizedRuntimeInterfaces;
+  const selectors: unknown[] = [];
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: {
+      user: { id: string; principal_id: string };
+    };
+  }>();
+  app.use("*", async (c, next) => {
+    c.set("user", {
+      id: "local-user",
+      principal_id: "local-principal",
+    });
+    await next();
   });
-  const legacy = createPublicationRecord({
-    id: "pub_2",
-    name: "legacy",
-    path: "/files/open",
-    url: "https://files.example.com/files/open",
-  });
+  app.route("/", storageManagement as never);
 
-  assertEquals(projectFileHandlerPublication(valid, 0), {
-    idx: 0,
-    id: "publication:pub_1",
-    name: "markdown",
-    title: "Markdown",
-    mimeTypes: ["text/markdown"],
-    extensions: [".md"],
-    open_url: "https://files.example.com/files/:id",
-  });
-  assertEquals(projectFileHandlerPublication(legacy, 1), null);
+  try {
+    routeAuthDeps.requireSpaceAccess = async () =>
+      ({ space: { id: "local-workspace" } }) as never;
+    storageManagementRouteDeps.resolveRuntimeInterfaceAuthorization =
+      async (_env, userId) => {
+        assertEquals(userId, "local-user");
+        return {
+          baseUrl: "https://accounts.takosumi.test",
+          token: "delegated-token",
+          subjectId: "takosumi-principal",
+          workspaceId: "takosumi-workspace",
+        };
+      };
+    storageManagementRouteDeps.fetchAuthorizedRuntimeInterfaces = async (
+      selector,
+    ) => {
+      selectors.push(selector);
+      return [
+        {
+          interface: {
+            apiVersion: "takosumi.dev/v1alpha1",
+            kind: "Interface",
+            metadata: {
+              id: "if_markdown",
+              workspaceId: "takosumi-workspace",
+              name: "markdown",
+              ownerRef: { kind: "Capsule", id: "capsule_office" },
+              generation: 2,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              updatedAt: "2026-07-02T00:00:00.000Z",
+            },
+            spec: {
+              type: "interface.file.handler",
+              version: "1",
+              document: {
+                display: { title: "Markdown" },
+                mimeTypes: ["TEXT/MARKDOWN"],
+                extensions: ["md"],
+              },
+              inputs: {
+                openUrl: {
+                  source: "literal",
+                  value: "https://files.example.test/files/:id",
+                },
+              },
+              access: { visibility: "workspace" },
+            },
+            status: {
+              phase: "Resolved",
+              observedGeneration: 2,
+              resolvedRevision: 4,
+              resolvedInputs: {
+                openUrl: "https://files.example.test/files/:id",
+              },
+            },
+          },
+          binding: {
+            apiVersion: "takosumi.dev/v1alpha1",
+            kind: "InterfaceBinding",
+            metadata: {
+              id: "ifb_markdown",
+              workspaceId: "takosumi-workspace",
+              generation: 1,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              updatedAt: "2026-07-01T00:00:00.000Z",
+            },
+            spec: {
+              interfaceId: "if_markdown",
+              subjectRef: {
+                kind: "Principal",
+                id: "takosumi-principal",
+              },
+              permissions: ["file.open"],
+              delivery: { type: "none" },
+            },
+            status: {
+              phase: "Ready",
+              observedInterfaceRevision: 4,
+            },
+          },
+        },
+      ] as never;
+    };
+
+    const response = await app.request(
+      "/local-workspace/storage/file-handlers?mime=text%2Fmarkdown",
+      {},
+      { DB: {} },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(selectors, [
+      {
+        workspaceId: "takosumi-workspace",
+        type: "interface.file.handler",
+        permission: "file.open",
+        deliveryTypes: ["none"],
+      },
+    ]);
+    assertEquals(await response.json(), {
+      handlers: [
+        {
+          id: "if_markdown",
+          name: "markdown",
+          title: "Markdown",
+          mime_types: ["text/markdown"],
+          extensions: [".md"],
+          open_url: "https://files.example.test/files/:id",
+        },
+      ],
+    });
+  } finally {
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    storageManagementRouteDeps.resolveRuntimeInterfaceAuthorization =
+      originalResolveAuthorization;
+    storageManagementRouteDeps.fetchAuthorizedRuntimeInterfaces =
+      originalFetchInterfaces;
+  }
 });
 
 test("PATCH storage with move and rename does not fall back to a partial move when rename fails", async () => {
@@ -134,35 +247,3 @@ test("PATCH storage with move and rename does not fall back to a partial move wh
     storageManagementRouteDeps.renameStorageItem = originalRenameStorageItem;
   }
 });
-
-function createPublicationRecord(options: {
-  id: string;
-  name: string;
-  path: string;
-  url: string;
-}): PublicationRecord {
-  return {
-    id: options.id,
-    name: options.name,
-    sourceType: "runtime_projection",
-    groupId: "space_1",
-    ownerServiceId: "svc_1",
-    catalogName: null,
-    publicationType: "interface.file.handler",
-    publication: {
-      name: options.name,
-      publisher: "web",
-      type: "interface.file.handler",
-      outputs: { url: { kind: "url", routeRef: "files" } },
-      display: { title: "Markdown" },
-      spec: {
-        mimeTypes: ["TEXT/MARKDOWN"],
-        extensions: ["md"],
-      },
-    },
-    outputs: [],
-    resolved: { url: options.url },
-    createdAt: "2026-04-18T00:00:00.000Z",
-    updatedAt: "2026-04-18T00:00:00.000Z",
-  };
-}

@@ -191,7 +191,7 @@ export const source = {
   uninstalledItem: "{name} uninstalled",
   uninstallConfirmTitle: "Uninstall this app?",
   uninstallConfirmMessage:
-    'Uninstalling "{name}" tears down its running Installation and worker. This cannot be undone.',
+    'Uninstalling "{name}" tears down its running Capsule and worker. This cannot be undone.',
   deleteStoreConfirmTitle: "Delete this store?",
   deleteStoreConfirmMessage: 'Deleting "{name}" cannot be undone.',
   removeFromStoreConfirmTitle: "Remove this item?",

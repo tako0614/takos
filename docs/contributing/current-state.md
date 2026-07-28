@@ -16,7 +16,7 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 
 ## Canonical Layout
 
-- `src/worker`: Takos Worker source owner and Hono route composition, including worker-native Git Smart HTTP (read-only clone/fetch served from the R2 object store; push via the repository API).
+- `src/worker`: Takos Worker source owner and Hono route composition, including the migration-only worker-native Git Smart HTTP endpoint (read-only clone/fetch from the R2 object store). Push and collaborative hosting belong to an installed standalone `takos-git` Capsule.
 - `web`: browser UI.
 - `containers/agent`: agent execution container.
 - `deploy/cloudflare`, `deploy/opentofu` (Cloudflare module), and `deploy/distributions/cloudflare.json`: product deploy artifacts.
@@ -59,9 +59,9 @@ A Capsule points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, a
 - [Takosumi model](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
 
-## Current Exit Criteria
+## Portable Verification Boundary
 
-The local / CI-equivalent exit criteria prove repository consistency, route
-shape, and static docs alignment. They do not prove hosted Takosumi public
-access; that requires private operator evidence and the platform access live
-audit.
+`bun run check` proves repository consistency, route shape, portable behavior,
+and static docs alignment. It does not prove release readiness, authorize
+promotion, or prove hosted Takosumi public access; those require the Release
+the deploy record and separate private operator evidence.

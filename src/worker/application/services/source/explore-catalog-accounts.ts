@@ -31,7 +31,7 @@ export type CatalogCapsuleRecord = {
   capsuleId: string;
   appId: string;
   status: string;
-  runtimeMode: string | null;
+  environment: string | null;
   sourceUrl: string | null;
   sourceRef: string | null;
   sourceCommit: string | null;
@@ -103,19 +103,7 @@ function requestHeaders(config: CatalogTakosumiCapsulesReadConfig): Headers {
 }
 
 function canonicalCapsuleStatus(value: unknown): string {
-  switch (readString(value)) {
-    case "pending":
-      return "installing";
-    case "active":
-      return "ready";
-    case "stale":
-    case "error":
-    case "disabled":
-    case "destroyed":
-      return readString(value)!;
-    default:
-      return "unknown";
-  }
+  return readString(value) ?? "unknown";
 }
 
 async function readSource(
@@ -149,7 +137,7 @@ async function projectCapsule(
     capsuleId,
     appId,
     status: canonicalCapsuleStatus(capsule.status),
-    runtimeMode: readString(capsule.environment),
+    environment: readString(capsule.environment),
     sourceUrl: readString(source?.url),
     sourceRef: readString(source?.defaultRef),
     sourceCommit: null,

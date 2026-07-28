@@ -7,8 +7,6 @@ Disallow: /me
 Disallow: /me/
 Disallow: /api
 Disallow: /api/
-Disallow: /workers
-Disallow: /workers/
 Disallow: /internal
 Disallow: /internal/
 Disallow: /_internal

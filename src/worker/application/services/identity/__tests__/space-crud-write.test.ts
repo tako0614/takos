@@ -4,7 +4,7 @@ import { assertEquals, assertExists } from "@takos/test/assert";
 import type { Env } from "../../../../shared/types/index.ts";
 import { spaceCrudDeps } from "../space-crud-shared.ts";
 import {
-  createWorkspaceWithDefaultRepo,
+  createWorkspace,
   spaceCrudWriteDeps,
 } from "../space-crud-write.ts";
 
@@ -80,7 +80,7 @@ function createWorkspaceDb() {
   };
 }
 
-test("createWorkspaceWithDefaultRepo enqueues featured app preinstall after space bootstrap", async () => {
+test("createWorkspace enqueues featured app preinstall without creating Git hosting state", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
@@ -115,18 +115,17 @@ test("createWorkspaceWithDefaultRepo enqueues featured app preinstall after spac
   }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
-    const result = await createWorkspaceWithDefaultRepo(
+    const result = await createWorkspace(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
       { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
-    assertEquals(result.workspace.id, "space-1");
-    assertExists(result.repository);
+    assertEquals(result.id, "space-1");
     assertEquals(accountRows.length, 1);
     assertEquals(membershipRows.length, 1);
-    assertEquals(repositoryRows.length, 1);
+    assertEquals(repositoryRows.length, 0);
     assertEquals(enqueueCalls.length, 1);
     assertEquals(enqueueCalls[0].spaceId, "space-1");
     assertEquals(enqueueCalls[0].createdByAccountId, "user-1");
@@ -139,7 +138,7 @@ test("createWorkspaceWithDefaultRepo enqueues featured app preinstall after spac
   }
 });
 
-test("createWorkspaceWithDefaultRepo skips featured app preinstall when explicitly disabled", async () => {
+test("createWorkspace skips featured app preinstall when explicitly disabled", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
@@ -159,7 +158,7 @@ test("createWorkspaceWithDefaultRepo skips featured app preinstall when explicit
   }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
-    const result = await createWorkspaceWithDefaultRepo(
+    const result = await createWorkspace(
       { DB: db } as Env,
       "user-1",
       "Blank Team",
@@ -170,11 +169,10 @@ test("createWorkspaceWithDefaultRepo skips featured app preinstall when explicit
       },
     );
 
-    assertEquals(result.workspace.id, "space-blank");
-    assertExists(result.repository);
+    assertEquals(result.id, "space-blank");
     assertEquals(accountRows.length, 1);
     assertEquals(membershipRows.length, 1);
-    assertEquals(repositoryRows.length, 1);
+    assertEquals(repositoryRows.length, 0);
     assertEquals(enqueueCalled, false);
     assertEquals(processCalled, false);
   } finally {
@@ -184,7 +182,7 @@ test("createWorkspaceWithDefaultRepo skips featured app preinstall when explicit
   }
 });
 
-test("createWorkspaceWithDefaultRepo still creates the space when featured app enqueue fails (idempotent compensation)", async () => {
+test("createWorkspace still creates the space when featured app enqueue fails (idempotent compensation)", async () => {
   // The space bundle is committed atomically via drizzle.batch before the
   // preinstall job is enqueued. The enqueue is deterministic-id +
   // onConflictDoNothing, so a transient enqueue failure is recoverable on a
@@ -206,18 +204,17 @@ test("createWorkspaceWithDefaultRepo still creates the space when featured app e
   }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
-    const result = await createWorkspaceWithDefaultRepo(
+    const result = await createWorkspace(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
       { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
-    assertEquals(result.workspace.id, "space-1");
-    assertExists(result.repository);
+    assertEquals(result.id, "space-1");
     assertEquals(accountRows.length, 1);
     assertEquals(membershipRows.length, 1);
-    assertEquals(repositoryRows.length, 1);
+    assertEquals(repositoryRows.length, 0);
     // No preinstall job id was returned, so post-commit processing is skipped.
     assertEquals(processCalled, false);
   } finally {
@@ -227,7 +224,7 @@ test("createWorkspaceWithDefaultRepo still creates the space when featured app e
   }
 });
 
-test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processing fails", async () => {
+test("createWorkspace succeeds when immediate preinstall processing fails", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
@@ -243,18 +240,17 @@ test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processi
   }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
-    const result = await createWorkspaceWithDefaultRepo(
+    const result = await createWorkspace(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
       { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
-    assertEquals(result.workspace.id, "space-1");
-    assertExists(result.repository);
+    assertEquals(result.id, "space-1");
     assertEquals(accountRows.length, 1);
     assertEquals(membershipRows.length, 1);
-    assertEquals(repositoryRows.length, 1);
+    assertEquals(repositoryRows.length, 0);
   } finally {
     spaceCrudDeps.resolveUserPrincipalId = originalResolveUserPrincipalId;
     spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = originalEnqueue;

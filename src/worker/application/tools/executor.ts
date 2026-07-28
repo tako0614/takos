@@ -12,6 +12,7 @@ import type { ToolResolver } from "./resolver.ts";
 import { CircuitBreaker, type CircuitStats } from "./circuit-breaker.ts";
 import {
   checkIdempotency,
+  checkIdempotencyForOperationKey,
   completeOperation,
   markOperationUncertain,
 } from "./idempotency.ts";
@@ -27,6 +28,14 @@ import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 // Public error-classifier exports.
 export { ErrorCodes, ToolError } from "./tool-error-classifier.ts";
 export type { ErrorCode, ErrorSeverity } from "./tool-error-classifier.ts";
+
+export interface ToolExecutionOptions {
+  /**
+   * Stable checkpoint identity assigned by the agent engine. When present it
+   * supersedes the legacy tool-name/arguments-derived operation identity.
+   */
+  idempotencyKey?: string;
+}
 
 // Extracted modules
 import { classifyError, SEVERITY_HINTS } from "./tool-error-classifier.ts";
@@ -46,7 +55,10 @@ export {
 } from "./executor-utils.ts";
 
 export interface ToolExecutorLike {
-  execute(toolCall: ToolCall): Promise<ToolResult>;
+  execute(
+    toolCall: ToolCall,
+    options?: ToolExecutionOptions,
+  ): Promise<ToolResult>;
   getAvailableTools(): ToolDefinition[];
   readonly mcpFailedServers: string[];
   cleanup(): void | Promise<void>;
@@ -220,7 +232,10 @@ export class ToolExecutor implements ToolExecutorLike {
     this.sideEffectTools = new Set(toolNames);
   }
 
-  async execute(toolCall: ToolCall): Promise<ToolResult> {
+  async execute(
+    toolCall: ToolCall,
+    options: ToolExecutionOptions = {},
+  ): Promise<ToolResult> {
     // --- Circuit-breaker guard ---
     const blocked = this.circuitBreaker.guard(toolCall.id, toolCall.name);
     if (blocked) {
@@ -259,12 +274,19 @@ export class ToolExecutor implements ToolExecutorLike {
       // Idempotency guard for side-effect tools
       const db = this.db;
       if (this.sideEffectTools.has(toolCall.name) && db) {
-        const idempotencyResult = await checkIdempotency(
-          db,
-          this.context.runId,
-          toolCall.name,
-          toolCall.arguments,
-        );
+        const idempotencyResult = options.idempotencyKey
+          ? await checkIdempotencyForOperationKey(
+              db,
+              this.context.runId,
+              toolCall.name,
+              options.idempotencyKey,
+            )
+          : await checkIdempotency(
+              db,
+              this.context.runId,
+              toolCall.name,
+              toolCall.arguments,
+            );
 
         if (idempotencyResult.action === "cached") {
           return {

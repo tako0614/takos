@@ -40,7 +40,7 @@ export function createTakosWorker() {
       env: Parameters<typeof background.queue>[1],
       ctx: PlatformExecutionContext,
     ): Promise<void> {
-      await background.queue(batch, env, ctx);
+      await background.queue(batch, env);
     },
 
     async scheduled(

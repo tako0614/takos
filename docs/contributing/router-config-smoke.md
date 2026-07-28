@@ -14,11 +14,12 @@ bun test \
   core/api/deploy_control_model_routes_test.ts
 ```
 
-Takos product 側の distribution profile は次で、routing / binding metadata
-を含む official distribution artifacts の digest と release manifest evidence
-を記録します。
+Takos product側のdistribution metadataのsource整合性はportable gateで検証します。
 
 ```sh
 cd takos
-bun scripts/build-release-manifest.ts
+bun run check
 ```
+
+immutable candidateのdigestは、公式release時に`takos-control`のRelease
+deploy entrypoint の owner gate が生成・固定します。

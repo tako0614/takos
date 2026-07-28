@@ -23,11 +23,7 @@ export interface AgentExecutorProxyConfigEnv {
   TAKOS_AGENT_TOOL_ALLOWLIST?: string;
 }
 
-export interface AgentExecutorContainerEnvVars extends Record<string, string> {
-  TAKOS_AGENT_BIND_HOST: string;
-  TAKOS_AGENT_CONTROL_RPC_BASE_URL: string;
-  TAKOS_AGENT_START_TOKEN?: string;
-}
+export type AgentExecutorContainerEnvVars = Record<string, string>;
 
 /**
  * Generate a cryptographically random proxy token (32 bytes, base64url-encoded).

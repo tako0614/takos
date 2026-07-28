@@ -71,16 +71,6 @@ export const API_BEARER_SCOPES: Record<string, ApiBearerScope> = {
     description: "Execute agents",
     category: "resource",
   },
-  "repos:read": {
-    name: "repos:read",
-    description: "Read repositories",
-    category: "resource",
-  },
-  "repos:write": {
-    name: "repos:write",
-    description: "Write repositories",
-    category: "resource",
-  },
   "mcp:invoke": {
     name: "mcp:invoke",
     description:
@@ -91,11 +81,6 @@ export const API_BEARER_SCOPES: Record<string, ApiBearerScope> = {
     name: "mcp:manage",
     description:
       "Manage MCP connections, Registry credentials, and tool policy",
-    category: "resource",
-  },
-  "events:subscribe": {
-    name: "events:subscribe",
-    description: "Subscribe to space lifecycle events",
     category: "resource",
   },
 };

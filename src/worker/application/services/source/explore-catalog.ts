@@ -37,14 +37,14 @@ import {
 } from "./explore-catalog-accounts.ts";
 import {
   canonicalSourceKeys,
-  type CatalogInstallationProjection,
+  type CatalogCapsuleProjection,
   featuredAppPackageAppId,
   featuredAppSourceKey,
-  mapCatalogInstallationResponse,
+  mapCatalogCapsuleResponse,
   mapFeaturedAppCatalogItem,
   normalizeCatalogRepositoryUrlKey,
   shouldIncludeFeaturedAppEntry,
-  toCatalogInstallationProjection,
+  toCatalogCapsuleProjection,
 } from "./explore-catalog-featured-apps.ts";
 
 export type {
@@ -370,7 +370,7 @@ export async function listCatalogItems(
     { ratingAvg: number | null; ratingCount: number }
   >();
 
-  const appInstallationMap = new Map<string, CatalogInstallationProjection>();
+  const capsuleMap = new Map<string, CatalogCapsuleProjection>();
   if (options.spaceId) {
     const canonicalCapsules = await fetchCatalogCapsulesForWorkspace(
       options.spaceId,
@@ -384,7 +384,7 @@ export async function listCatalogItems(
       }
     }
     for (const [key, capsule] of capsuleByKey) {
-      appInstallationMap.set(key, toCatalogInstallationProjection(capsule));
+      capsuleMap.set(key, toCatalogCapsuleProjection(capsule));
     }
   }
 
@@ -401,8 +401,8 @@ export async function listCatalogItems(
       packageRelease,
       options.repositoryBaseUrl,
     );
-    const sourceAppInstallation = source
-      ? appInstallationMap.get(
+    const sourceCapsule = source
+      ? capsuleMap.get(
           featuredAppSourceKey({
             repositoryUrl: source.repository_url,
             ref: source.ref,
@@ -410,11 +410,11 @@ export async function listCatalogItems(
           }),
         )
       : undefined;
-    const packageAppInstallation = packageRelease?.appId
-      ? appInstallationMap.get(packageRelease.appId)
+    const packageCapsule = packageRelease?.appId
+      ? capsuleMap.get(packageRelease.appId)
       : undefined;
-    const installation = options.spaceId
-      ? (packageAppInstallation ?? sourceAppInstallation)
+    const capsule = options.spaceId
+      ? (packageCapsule ?? sourceCapsule)
       : undefined;
     const packageInfo = {
       available: !!packageRelease,
@@ -465,8 +465,8 @@ export async function listCatalogItems(
       item.source = source;
     }
 
-    if (options.spaceId) {
-      item.installation = mapCatalogInstallationResponse(installation);
+    if (capsule) {
+      item.capsule = mapCatalogCapsuleResponse(capsule);
     }
 
     if (options.type === "repo") {
@@ -497,8 +497,8 @@ export async function listCatalogItems(
     .map((entry) =>
       mapFeaturedAppCatalogItem(
         entry,
-        appInstallationMap.get(featuredAppPackageAppId(entry)) ??
-          appInstallationMap.get(featuredAppSourceKey(entry)),
+        capsuleMap.get(featuredAppPackageAppId(entry)) ??
+          capsuleMap.get(featuredAppSourceKey(entry)),
         featuredAppTimestamp,
       ),
     );

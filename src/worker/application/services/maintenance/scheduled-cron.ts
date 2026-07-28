@@ -5,14 +5,11 @@
 // - cron-family classifiers (quarter-hour, hourly) — production wrangler.toml
 //   uses offset cron strings, dev callers use canonical forms; both must
 //   dispatch to the same maintenance jobs
-// - scheduledWorkflowWindowMinutes for the workflow-trigger scan window
 // - runScheduledFamilyMaintenance: the core fanout used by both the
 //   POST /internal/scheduled HTTP route and Workers cron triggers
 import type { Env } from "../../../shared/types/index.ts";
 import {
   cleanupDeadSessions,
-  reconcileStuckDomains,
-  runCustomDomainReverification,
   runSnapshotGcBatch,
 } from "./index.ts";
 import { runR2OrphanedObjectGcBatch } from "../r2/orphaned-object-gc.ts";
@@ -40,18 +37,10 @@ export function isHourlyCron(cron: string): boolean {
   return HOURLY_CRONS.has(cron);
 }
 
-export function scheduledWorkflowWindowMinutes(cron: string): number {
-  if (isHourlyCron(cron)) return 60;
-  if (isQuarterHourCron(cron)) return 15;
-  return 1;
-}
-
 export type ScheduledJobError = { job: string; error: string };
 
 export type ScheduledFamilyMaintenanceDeps = {
   cleanupDeadSessions: typeof cleanupDeadSessions;
-  reconcileStuckDomains: typeof reconcileStuckDomains;
-  runCustomDomainReverification: typeof runCustomDomainReverification;
   runR2OrphanedObjectGcBatch: typeof runR2OrphanedObjectGcBatch;
   runSnapshotGcBatch: typeof runSnapshotGcBatch;
   runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
@@ -62,8 +51,6 @@ export type ScheduledFamilyMaintenanceDeps = {
 
 const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
   cleanupDeadSessions,
-  reconcileStuckDomains,
-  runCustomDomainReverification,
   runR2OrphanedObjectGcBatch,
   runSnapshotGcBatch,
   runWorkflowArtifactGcBatch,
@@ -88,35 +75,6 @@ export async function runScheduledFamilyMaintenance(
   const runHourlyJobs = isHourlyCron(cron) || cron === "* * * * *";
 
   if (runQuarterHourJobs) {
-    try {
-      const summary = await deps.runCustomDomainReverification(env, {
-        batchSize: 200,
-      });
-      const reconSummary = await deps.reconcileStuckDomains(env);
-
-      if (logSuccesses) {
-        deps.logInfo("custom-domain reverification completed", {
-          module: "cron",
-          ...{
-            cron,
-            ...summary,
-          },
-        });
-        deps.logInfo("stuck-domain reconciliation completed", {
-          module: "cron",
-          ...{
-            cron,
-            ...reconSummary,
-          },
-        });
-      }
-    } catch (error) {
-      errors.push({
-        job: "custom-domains",
-        error: toScheduledError(error),
-      });
-    }
-
     try {
       const summary = await deps.processFeaturedAppPreinstallJobs(env, {
         limit: 10,

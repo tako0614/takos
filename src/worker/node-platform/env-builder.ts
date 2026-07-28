@@ -53,7 +53,6 @@ import type {
 import type { RoutingStore } from "../shared/types/routing.ts";
 import { disposeRedisClient } from "../local-platform/redis-bindings.ts";
 import { removeLocalDataDir } from "../local-platform/persistent-bindings.ts";
-import type { TenantWorkerRuntimeRegistry } from "../local-platform/tenant-worker-runtime.ts";
 
 import {
   DEFAULT_LOCAL_DOMAINS,
@@ -87,6 +86,7 @@ import {
   buildDispatcher,
   collectImplicitForwardTargets,
 } from "./resolvers/dispatch-resolver.ts";
+import { resolveRuntimeHostBinding } from "./resolvers/runtime-host-resolver.ts";
 
 // ---------------------------------------------------------------------------
 // Local development placeholder defaults
@@ -194,7 +194,6 @@ async function buildSharedState() {
 }
 
 let sharedPromise: Promise<SharedState> | null = null;
-const dispatchRegistries = new Set<TenantWorkerRuntimeRegistry>();
 
 function getSharedState(): Promise<SharedState> {
   if (!sharedPromise) {
@@ -414,7 +413,7 @@ export interface DisposeOptions {
 
 /**
  * Tear down the shared singleton state, closing DB connections, Redis
- * clients, and dispatch registries.
+ * clients.
  *
  * Pass `{ clearData: true }` to also remove the local data directory.
  */
@@ -436,14 +435,6 @@ export async function disposeNodePlatformState(
       () => undefined /* dispose: db close is best-effort during teardown */,
     );
   }
-  await Promise.all(
-    Array.from(dispatchRegistries, (registry) =>
-      registry
-        .dispose()
-        .catch(() => undefined /* dispose: registry teardown is best-effort */),
-    ),
-  );
-  dispatchRegistries.clear();
   await disposeRedisClient();
 
   if (opts?.clearData) {
@@ -460,6 +451,7 @@ export async function disposeNodePlatformState(
 
 export async function createNodeWebEnv(): Promise<Env> {
   const { shared, config } = await getInitializedState();
+  const runtimeHost = resolveRuntimeHostBinding();
 
   return {
     DB: shared.db,
@@ -470,6 +462,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     RUN_NOTIFIER: shared.runNotifier,
     NOTIFICATION_NOTIFIER: shared.notificationNotifier,
     RATE_LIMITER_DO: shared.rateLimiterDo,
+    ...(runtimeHost ? { RUNTIME_HOST: runtimeHost } : {}),
     RUN_QUEUE: shared.runQueue,
     INDEX_QUEUE: shared.indexQueue,
     WORKFLOW_QUEUE: shared.workflowQueue,
@@ -584,15 +577,11 @@ export async function createNodeWebEnv(): Promise<Env> {
 
 export async function createNodeDispatchEnv(): Promise<NodeDispatchEnv> {
   const { shared, config } = await getInitializedState();
+  const runtimeHost = resolveRuntimeHostBinding();
 
   const dispatcher = await buildDispatcher({
-    dataDir: shared.dataDir,
-    db: shared.db,
-    workerBundles: shared.workerBundles,
-    encryptionKey: config.ENCRYPTION_KEY,
-    pgPool: shared.pgPool,
     forwardTargets: { ...collectImplicitForwardTargets() },
-    dispatchRegistries,
+    ...(runtimeHost ? { runtimeHost } : {}),
   });
 
   return {

@@ -1,17 +1,34 @@
 import {
-  takosumiCapsuleOutputsPath,
-  takosumiInterfacesPath,
-  takosumiSessionApiUrl,
-} from "../takosumi-control-paths.ts";
+  fetchAuthorizedRuntimeInterfaces,
+  type AuthorizedRuntimeInterface,
+  type RuntimeInterfaceFetch,
+} from "../platform/runtime-interface-client.ts";
+import {
+  projectAuthorizedFileHandler,
+  projectAuthorizedUiSurface,
+  safeRuntimeUrl,
+} from "../platform/runtime-interface-profiles.ts";
+import {
+  FILE_HANDLER_INTERFACE_TYPE,
+  FILE_HANDLER_OPEN_PERMISSION,
+  MCP_SERVER_INTERFACE_TYPE,
+  MCP_SERVER_INTERFACE_VERSION,
+  MCP_SERVER_INVOKE_PERMISSION,
+  UI_SURFACE_INTERFACE_TYPE,
+  UI_SURFACE_OPEN_PERMISSION,
+} from "takosumi-contract";
 
 /**
- * Takos launcher/service presentation derived from canonical Takosumi records.
- * Interfaces are the runtime authority. Ordinary OpenTofu Outputs are included
- * only as value-free apply evidence and never become launch endpoints.
+ * Takos launcher/service presentation derived from authorized Takosumi
+ * Interface + InterfaceBinding records. OpenTofu Outputs are apply evidence,
+ * never runtime discovery.
  */
 
 export type WorkloadServiceStatus =
-  "ready" | "not_configured" | "unavailable" | "unknown";
+  | "ready"
+  | "not_configured"
+  | "unavailable"
+  | "unknown";
 
 export interface CapsuleWorkloadServiceSummary {
   id: string;
@@ -25,149 +42,92 @@ export interface CapsuleWorkloadServiceSummary {
 export interface TakosumiControlReadConfig {
   baseUrl: string;
   token?: string;
-  headers?: HeadersInit;
-  fetch?: (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ) => Promise<Response>;
+  subjectId?: string;
+  fetch?: RuntimeInterfaceFetch;
 }
 
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function outputEvidenceServices(
-  body: Record<string, unknown> | null,
-): CapsuleWorkloadServiceSummary[] {
-  const output = readRecord(body?.output);
-  const publicOutputs = readRecord(output?.publicOutputs);
-  if (!publicOutputs) return [];
-  return Object.keys(publicOutputs)
-    .sort((left, right) => left.localeCompare(right))
-    .map((name) => ({
-      id: `output:${name}`,
-      capability: "opentofu.output",
-      status: "ready" as const,
-      // Output values are not a runtime registry. Interface input mappings own
-      // the endpoint projection and authorization boundary.
-      endpoint: null,
-      secret_configured: false,
-      token_expires_at: null,
-    }));
-}
-
-function interfaceStatus(value: unknown): WorkloadServiceStatus {
-  switch (readString(value)) {
-    case "Resolved":
-      return "ready";
-    case "Pending":
-    case "NotReady":
-      return "not_configured";
-    case "Unknown":
-    case "Terminating":
-    case "Retired":
-      return "unavailable";
-    default:
-      return "unknown";
-  }
-}
-
-function resolvedInterfaceEndpoint(
-  record: Record<string, unknown>,
-): string | null {
-  const spec = readRecord(record.spec);
-  const status = readRecord(record.status);
-  if (!spec || !status || readString(status.phase) !== "Resolved") return null;
-  const resolvedInputs = readRecord(status.resolvedInputs);
-  if (!resolvedInputs) return null;
-  const access = readRecord(spec.access);
-  const resourceUriInput = readString(access?.resourceUriInput);
-  if (resourceUriInput) return readString(resolvedInputs[resourceUriInput]);
-
-  // These are consumer-profile rules for the two first-party runtime types,
-  // not Output-name inference. Unknown Interface types remain discoverable but
-  // do not gain an endpoint by convention.
-  const type = readString(spec.type);
-  if (type === "interface.ui.surface") return readString(resolvedInputs.url);
-  if (type === "mcp.server" || type === "protocol.mcp.server") {
-    return (
-      readString(resolvedInputs.endpoint) ?? readString(resolvedInputs.url)
-    );
-  }
-  return null;
-}
-
-function interfaceService(
-  value: unknown,
-): CapsuleWorkloadServiceSummary | null {
-  const record = readRecord(value);
-  const metadata = readRecord(record?.metadata);
-  const spec = readRecord(record?.spec);
-  const status = readRecord(record?.status);
-  const id = readString(metadata?.id);
-  const name = readString(metadata?.name);
-  const type = readString(spec?.type);
-  if (!record || !id || !name || !type || !status) return null;
+function readyService(
+  entry: AuthorizedRuntimeInterface,
+  endpoint: string,
+): CapsuleWorkloadServiceSummary {
   return {
-    id: `interface:${name}`,
-    capability: type,
-    status: interfaceStatus(status.phase),
-    endpoint: resolvedInterfaceEndpoint(record),
+    id: `interface:${entry.interface.metadata.name}`,
+    capability: entry.interface.spec.type,
+    status: "ready",
+    endpoint,
     secret_configured: false,
     token_expires_at: null,
   };
 }
 
-export function projectCapsuleWorkloadServices(
-  outputBody: Record<string, unknown> | null,
-  interfacesBody: Record<string, unknown> | null,
-): CapsuleWorkloadServiceSummary[] {
-  const interfaces = Array.isArray(interfacesBody?.interfaces)
-    ? interfacesBody.interfaces
-        .map(interfaceService)
-        .filter(
-          (service): service is CapsuleWorkloadServiceSummary =>
-            service !== null,
-        )
-    : [];
-  return [...interfaces, ...outputEvidenceServices(outputBody)];
-}
-
-/** Local Takos UI DTO; the legacy key is intentionally confined to this edge. */
-export function capsuleRuntimeToServicesBody(
-  capsuleId: string,
-  outputBody: Record<string, unknown> | null,
-  interfacesBody: Record<string, unknown> | null,
-): Record<string, unknown> {
-  return {
-    installation_id: capsuleId,
-    services: projectCapsuleWorkloadServices(outputBody, interfacesBody),
-  };
-}
-
-function requestHeaders(config: TakosumiControlReadConfig): Headers {
-  const headers = new Headers(config.headers);
-  headers.set("accept", "application/json");
-  if (config.token?.trim()) {
-    headers.set("authorization", `Bearer ${config.token.trim()}`);
+function projectMcpService(
+  entry: AuthorizedRuntimeInterface,
+): CapsuleWorkloadServiceSummary | null {
+  const iface = entry.interface;
+  if (
+    iface.spec.type !== MCP_SERVER_INTERFACE_TYPE ||
+    iface.spec.version !== MCP_SERVER_INTERFACE_VERSION ||
+    !iface.spec.inputs?.endpoint
+  ) {
+    return null;
   }
-  return headers;
+  const endpoint = safeRuntimeUrl(iface.status.resolvedInputs?.endpoint);
+  return endpoint ? readyService(entry, endpoint) : null;
 }
 
-async function readJsonRecord(
-  response: Response,
-): Promise<Record<string, unknown> | null> {
-  if (!response.ok) return null;
-  const body = (await response.json().catch(() => null)) as unknown;
-  return readRecord(body);
+async function fetchAuthorizedCapsuleInterfaces(
+  capsuleId: string,
+  workspaceId: string,
+  config: Required<
+    Pick<TakosumiControlReadConfig, "baseUrl" | "token" | "subjectId">
+  > &
+    Pick<TakosumiControlReadConfig, "fetch">,
+): Promise<CapsuleWorkloadServiceSummary[]> {
+  const request = (
+    type: string,
+    permission: string,
+    deliveryTypes: readonly string[],
+  ) =>
+    fetchAuthorizedRuntimeInterfaces(
+      {
+        workspaceId,
+        ownerKind: "Capsule",
+        ownerId: capsuleId,
+        type,
+        permission,
+        deliveryTypes,
+      },
+      config,
+    );
+  const [uiEntries, fileEntries, mcpEntries] = await Promise.all([
+    request(UI_SURFACE_INTERFACE_TYPE, UI_SURFACE_OPEN_PERMISSION, ["none"]),
+    request(FILE_HANDLER_INTERFACE_TYPE, FILE_HANDLER_OPEN_PERMISSION, [
+      "none",
+    ]),
+    request(MCP_SERVER_INTERFACE_TYPE, MCP_SERVER_INVOKE_PERMISSION, [
+      "none",
+      "oauth2",
+    ]),
+  ]);
+
+  return [
+    ...uiEntries.flatMap((entry) => {
+      const surface = projectAuthorizedUiSurface(entry);
+      return surface ? [readyService(entry, surface.url)] : [];
+    }),
+    ...fileEntries.flatMap((entry, index) => {
+      const handler = projectAuthorizedFileHandler(entry, index);
+      return handler ? [readyService(entry, handler.openUrl)] : [];
+    }),
+    ...mcpEntries.flatMap((entry) => {
+      const service = projectMcpService(entry);
+      return service ? [service] : [];
+    }),
+  ].sort(
+    (left, right) =>
+      left.capability.localeCompare(right.capability) ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 export async function fetchCapsuleWorkloadServices(
@@ -175,28 +135,16 @@ export async function fetchCapsuleWorkloadServices(
   workspaceId: string,
   config: TakosumiControlReadConfig | undefined,
 ): Promise<CapsuleWorkloadServiceSummary[]> {
-  if (!config) return [];
-  const outputUrl = takosumiSessionApiUrl(
-    config.baseUrl,
-    takosumiCapsuleOutputsPath(capsuleId),
-  );
-  const interfacesUrl = takosumiSessionApiUrl(
-    config.baseUrl,
-    takosumiInterfacesPath(),
-  );
-  interfacesUrl.searchParams.set("workspaceId", workspaceId);
-  interfacesUrl.searchParams.set("ownerKind", "Capsule");
-  interfacesUrl.searchParams.set("ownerId", capsuleId);
-  const fetchImpl = config.fetch ?? fetch;
+  const token = config?.token?.trim();
+  const subjectId = config?.subjectId?.trim();
+  if (!config || !token || !subjectId) return [];
   try {
-    const [outputResponse, interfacesResponse] = await Promise.all([
-      fetchImpl(outputUrl, { headers: requestHeaders(config) }),
-      fetchImpl(interfacesUrl, { headers: requestHeaders(config) }),
-    ]);
-    return projectCapsuleWorkloadServices(
-      await readJsonRecord(outputResponse),
-      await readJsonRecord(interfacesResponse),
-    );
+    return await fetchAuthorizedCapsuleInterfaces(capsuleId, workspaceId, {
+      baseUrl: config.baseUrl,
+      token,
+      subjectId,
+      ...(config.fetch ? { fetch: config.fetch } : {}),
+    });
   } catch {
     return [];
   }

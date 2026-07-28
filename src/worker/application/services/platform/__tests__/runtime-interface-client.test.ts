@@ -144,6 +144,34 @@ test("runtime Interface discovery rejects unsupported credential delivery", asyn
   assertEquals(authorized, []);
 });
 
+test("runtime Interface discovery fences an exact owner when requested", async () => {
+  const requestedUrls: URL[] = [];
+  const authorized = await fetchAuthorizedRuntimeInterfaces(
+    {
+      ...selector,
+      ownerKind: "Capsule",
+      ownerId: "capsule_docs",
+    },
+    {
+      baseUrl: "https://internal-app.takosumi.test",
+      token: "delegated-accounts-token",
+      subjectId: "pairwise-user",
+      fetch: async (input) => {
+        const url = new URL(input);
+        requestedUrls.push(url);
+        if (url.pathname === "/v1/interfaces") {
+          return Response.json({ interfaces: [resolvedInterface()] });
+        }
+        return Response.json({ bindings: [readyBinding()] });
+      },
+    },
+  );
+
+  assertEquals(authorized, []);
+  assertEquals(requestedUrls[0]?.searchParams.get("ownerKind"), "Capsule");
+  assertEquals(requestedUrls[0]?.searchParams.get("ownerId"), "capsule_docs");
+});
+
 test("runtime Interface token response is invocation-only and non-reusable", async () => {
   const resource = "https://app.takosumi.test/gateway/ai/v1";
   const valid = await issueRuntimeInterfaceAccessToken(

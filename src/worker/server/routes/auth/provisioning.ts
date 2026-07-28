@@ -2,7 +2,7 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
 import { getDb } from "../../../infra/db/index.ts";
-import { accounts } from "../../../infra/db/schema.ts";
+import { accounts, authIdentities } from "../../../infra/db/schema.ts";
 import { eq } from "drizzle-orm";
 
 const ALLOWED_RETURN_PATHS: readonly string[] = [
@@ -64,6 +64,13 @@ type OidcUserProfile = {
   picture?: string | null;
 };
 
+export type OidcIdentityProvisioning = {
+  id: string;
+  providerSub: string;
+  emailSnapshot: string | null;
+  emailKind: "oidc_verified" | "unknown";
+};
+
 type ProvisionedAuthUser = {
   id: string;
   email: string | null;
@@ -103,6 +110,7 @@ async function resolveOwnerAccountSlug(
 export async function provisionOidcUser(
   dbBinding: SqlDatabaseBinding,
   profile: OidcUserProfile,
+  identity?: OidcIdentityProvisioning,
 ): Promise<ProvisionedAuthUser> {
   const db = getDb(dbBinding);
 
@@ -132,7 +140,7 @@ export async function provisionOidcUser(
   const username = await resolveOwnerAccountSlug(dbBinding);
   const timestamp = new Date().toISOString();
 
-  await db.insert(accounts).values({
+  const accountInsert = db.insert(accounts).values({
     id: userId,
     type: "user",
     status: "active",
@@ -149,6 +157,26 @@ export async function provisionOidcUser(
     createdAt: timestamp,
     updatedAt: timestamp,
   });
+  if (identity) {
+    // D1's batch is atomic. Creating the account and its issuer/sub identity in
+    // one write group means a concurrent request that loses the unique
+    // (provider, provider_sub) race cannot leave an orphan local account.
+    await db.batch([
+      accountInsert,
+      db.insert(authIdentities).values({
+        id: identity.id,
+        userId,
+        provider: "oidc",
+        providerSub: identity.providerSub,
+        emailSnapshot: identity.emailSnapshot,
+        emailKind: identity.emailKind,
+        linkedAt: timestamp,
+        lastLoginAt: timestamp,
+      }),
+    ]);
+  } else {
+    await accountInsert;
+  }
 
   return {
     id: userId,

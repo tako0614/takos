@@ -3,30 +3,21 @@ import type {
   SqlDatabaseBinding,
 } from "../../../shared/types/bindings.ts";
 import type {
-  Env,
   Repository,
   RepositoryVisibility,
-  SpaceRole,
 } from "../../../shared/types/index.ts";
-import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
-import {
-  accounts,
-  repositories,
-  type SqlDatabaseLike,
-} from "../../../infra/db/index.ts";
-import { and, desc, eq } from "drizzle-orm";
-import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
+import { accounts, repositories } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 import { sourceServiceDeps } from "./deps.ts";
+import { toApiRepositoryFromDb } from "./repository-read.ts";
 
-export interface RepoAccess {
-  repo: Repository;
-  spaceId: string;
-  role: SpaceRole;
-}
-
-export interface CheckRepoAccessOptions {
-  allowPublicRead?: boolean;
-}
+export {
+  checkRepoAccess,
+  getRepositoryById,
+  listRepositoriesBySpace,
+  toApiRepositoryFromDb,
+} from "./repository-read.ts";
+export type { CheckRepoAccessOptions, RepoAccess } from "./repository-read.ts";
 
 export interface CreateRepositoryInput {
   spaceId: string;
@@ -51,100 +42,7 @@ export class RepositoryCreationError extends Error {
   }
 }
 
-function toRepositoryVisibility(value: string): RepositoryVisibility {
-  return value === "public" ? "public" : "private";
-}
-
-type RepositoryRow = SelectOf<typeof repositories>;
 type SourceDrizzleDb = ReturnType<typeof sourceServiceDeps.getDb>;
-
-export function toApiRepositoryFromDb(row: RepositoryRow): Repository {
-  const repository = {
-    id: row.id,
-    space_id: row.accountId,
-    name: row.name,
-    description: row.description,
-    visibility: toRepositoryVisibility(row.visibility),
-    default_branch: row.defaultBranch,
-    forked_from_id: row.forkedFromId,
-    stars: row.stars,
-    forks: row.forks,
-    git_enabled: row.gitEnabled,
-    featured: row.featured,
-    install_count: row.installCount,
-    created_at: row.createdAt,
-    updated_at: row.updatedAt,
-  };
-
-  return repository;
-}
-
-export async function checkRepoAccess(
-  env: Pick<Env, "DB">,
-  repoId: string,
-  userId: string | null | undefined,
-  requiredRoles?: SpaceRole[],
-  options: CheckRepoAccessOptions = {},
-): Promise<RepoAccess | null> {
-  if (!isValidOpaqueId(repoId)) return null;
-
-  const normalizedUserId = typeof userId === "string" && isValidOpaqueId(userId)
-    ? userId
-    : null;
-
-  const drizzle = sourceServiceDeps.getDb(env.DB);
-  const row = await drizzle.select().from(repositories).where(
-    eq(repositories.id, repoId),
-  ).get();
-  const repo = row ? toApiRepositoryFromDb(row) : null;
-
-  if (!repo) return null;
-
-  if (normalizedUserId) {
-    const access = await sourceServiceDeps.checkSpaceAccess(
-      env.DB,
-      repo.space_id,
-      normalizedUserId,
-      requiredRoles,
-    );
-    if (access) {
-      return { repo, spaceId: repo.space_id, role: access.membership.role };
-    }
-  }
-
-  if (
-    options.allowPublicRead && !requiredRoles && repo.visibility === "public"
-  ) {
-    return { repo, spaceId: repo.space_id, role: "viewer" };
-  }
-
-  return null;
-}
-
-export async function getRepositoryById(
-  db: SqlDatabaseLike,
-  repoId: string,
-): Promise<Repository | null> {
-  if (!isValidOpaqueId(repoId)) return null;
-
-  const drizzle = sourceServiceDeps.getDb(db);
-  const row = await drizzle.select().from(repositories).where(
-    eq(repositories.id, repoId),
-  ).get();
-  return row ? toApiRepositoryFromDb(row) : null;
-}
-
-export async function listRepositoriesBySpace(
-  db: SqlDatabaseLike,
-  spaceId: string,
-): Promise<Repository[]> {
-  const drizzle = sourceServiceDeps.getDb(db);
-  const rows = await drizzle.select().from(repositories)
-    .where(eq(repositories.accountId, spaceId))
-    .orderBy(desc(repositories.updatedAt))
-    .all();
-  return rows.map(toApiRepositoryFromDb);
-}
 
 async function resolveRepositoryInitActor(
   db: SourceDrizzleDb,
@@ -157,11 +55,15 @@ async function resolveRepositoryInitActor(
     };
   }
 
-  const actor = await db.select({
-    name: accounts.name,
-    slug: accounts.slug,
-    email: accounts.email,
-  }).from(accounts).where(eq(accounts.id, actorAccountId)).get();
+  const actor = await db
+    .select({
+      name: accounts.name,
+      slug: accounts.slug,
+      email: accounts.email,
+    })
+    .from(accounts)
+    .where(eq(accounts.id, actorAccountId))
+    .get();
 
   if (!actor) {
     return {
@@ -193,7 +95,8 @@ export async function createRepository(
     );
   }
 
-  const space = await db.select({ id: accounts.id })
+  const space = await db
+    .select({ id: accounts.id })
     .from(accounts)
     .where(eq(accounts.id, input.spaceId))
     .get();
@@ -202,12 +105,15 @@ export async function createRepository(
     throw new RepositoryCreationError("Space not found", "SPACE_NOT_FOUND");
   }
 
-  const existing = await db.select({ id: repositories.id })
+  const existing = await db
+    .select({ id: repositories.id })
     .from(repositories)
-    .where(and(
-      eq(repositories.accountId, input.spaceId),
-      eq(repositories.name, name),
-    ))
+    .where(
+      and(
+        eq(repositories.accountId, input.spaceId),
+        eq(repositories.name, name),
+      ),
+    )
     .get();
 
   if (existing) {
@@ -266,9 +172,11 @@ export async function createRepository(
     );
   }
 
-  const row = await db.select().from(repositories).where(
-    eq(repositories.id, id),
-  ).get();
+  const row = await db
+    .select()
+    .from(repositories)
+    .where(eq(repositories.id, id))
+    .get();
   if (!row) {
     throw new RepositoryCreationError(
       "Failed to create repository",

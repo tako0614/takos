@@ -1,7 +1,7 @@
 // Source explore facade: keeps catalog/query exports in one domain entrypoint.
 
 export type {
-  CatalogInstallationResponse,
+  CatalogCapsuleResponse,
   CatalogItemResponse,
   CatalogPackageResponse,
   CatalogRepoResponse,

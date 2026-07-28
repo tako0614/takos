@@ -21,7 +21,8 @@ Current first-party examples are normal removable Capsules:
 
 - `takos-computer` publishes sandbox shell, file, and process tools;
 - `takos-storage` publishes Workspace drive tools and separately exposes `storage.object` to app consumers;
-- `takos-git` publishes repository-management tools and separately exposes `source.git.smart_http`.
+- `takos-git` publishes repository-management tools and separately exposes
+  `source.git.smart_http` / `source.git.hosting`.
 
 Takos does not copy these tools into its static registry. Installing or removing the Capsule and its service-side
 Interface adds or removes its MCP tools through the Takosumi Interface API.

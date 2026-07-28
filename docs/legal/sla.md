@@ -18,13 +18,13 @@ and operations owners before publishing.
 
 ## 1. サービス可用性目標 (Service Availability Target)
 
-| プラン                          | 月次可用性目標 | 計測対象                                        |
-| ------------------------------- | -------------- | ----------------------------------------------- |
-| Shared-cell (default)           | `[99.5%]`      | Takos Web / API endpoints, dashboard access     |
-| Dedicated (enterprise)          | `[99.9%]`      | Customer-isolated workload, dedicated endpoints |
-| Git service profile (shared)    | `[99.5%]`      | Git Smart HTTP push / fetch                     |
-| Git service profile (dedicated) | `[99.9%]`      | Git Smart HTTP push / fetch (dedicated)         |
-| Agent runtime profile           | `[99.0%]`      | Agent run start latency < `[60s]`               |
+| プラン                                    | 月次可用性目標 | 計測対象                                        |
+| ----------------------------------------- | -------------- | ----------------------------------------------- |
+| Shared-cell (default)                     | `[99.5%]`      | Takos Web / API endpoints, dashboard access     |
+| Dedicated (enterprise)                    | `[99.9%]`      | Customer-isolated workload, dedicated endpoints |
+| Installed `takos-git` profile (shared)    | `[99.5%]`      | Git Smart HTTP push / fetch                     |
+| Installed `takos-git` profile (dedicated) | `[99.9%]`      | Git Smart HTTP push / fetch (dedicated)         |
+| Agent runtime profile                     | `[99.0%]`      | Agent run start latency < `[60s]`               |
 
 可用性は **暦月単位** で計測します。計測対象の endpoint は
 [Status Page](/legal/status-page) で公開されます。

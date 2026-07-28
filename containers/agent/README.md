@@ -149,8 +149,9 @@ Docker image は ecosystem root から作成します。
 docker build -f takos/containers/agent/Dockerfile -t takos-agent .
 ```
 
-release前は`containers/agent/engine-source.json`のpin、sibling checkoutのHEAD/clean state、wrapper compatibilityを
-一体で検証します。未commit engine差分を古いSHAで表現しません。
+release前は sibling `../takos-control/integration.lock.json` の Takos / agent-engine commit、engine checkout の
+HEAD/clean state、wrapper compatibilityを一体で検証します。未commit engine差分を古いSHAで表現せず、
+個別repo内に同じpinを複製しません。
 
 ```sh
 bun run validate:agent-engine-source

@@ -1,64 +1,13 @@
 import { desc, eq, or } from "drizzle-orm";
-import {
-  accountMemberships,
-  accounts,
-  repositories,
-} from "../../../infra/db/index.ts";
+import { accountMemberships, accounts } from "../../../infra/db/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import type { Env, Repository, Space } from "../../../shared/types/index.ts";
-import { generateId } from "../../../shared/utils/index.ts";
-
-export type InitDefaultRepositoryResult = {
-  created: boolean;
-  repository: Repository | null;
-};
+import type { Env, Space } from "../../../shared/types/index.ts";
 import {
   accountToWorkspace,
-  type RepoSummary,
   spaceCrudDeps,
   type SpaceListItem,
-  toRepository,
-  toRepositoryFromSummary,
   toSpaceListItem,
 } from "./space-crud-shared.ts";
-
-export async function findLatestRepositoryBySpaceId(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<RepoSummary | null> {
-  const drizzle = spaceCrudDeps.getDb(db);
-  const repo = await drizzle
-    .select({
-      id: repositories.id,
-      name: repositories.name,
-      default_branch: repositories.defaultBranch,
-    })
-    .from(repositories)
-    .where(eq(repositories.accountId, spaceId))
-    .orderBy(desc(repositories.updatedAt))
-    .limit(1)
-    .get();
-  return repo || null;
-}
-
-async function loadLatestRepositoriesBySpace(
-  db: SqlDatabaseBinding,
-  spaceIds: Iterable<string>,
-): Promise<Map<string, RepoSummary | null>> {
-  const latestRepoBySpace = new Map<string, RepoSummary | null>();
-
-  for (const spaceId of spaceIds) {
-    if (latestRepoBySpace.has(spaceId)) {
-      continue;
-    }
-    latestRepoBySpace.set(
-      spaceId,
-      await findLatestRepositoryBySpaceId(db, spaceId),
-    );
-  }
-
-  return latestRepoBySpace;
-}
 
 export async function loadSpaceById(db: SqlDatabaseBinding, spaceId: string) {
   const drizzle = spaceCrudDeps.getDb(db);
@@ -81,71 +30,6 @@ async function loadCanonicalSpaceByIdOrSlug(
     .where(or(eq(accounts.id, idOrSlug), eq(accounts.slug, idOrSlug)))
     .limit(1)
     .get();
-}
-
-export async function getRepositoryById(
-  db: SqlDatabaseBinding,
-  repoId: string,
-): Promise<Repository | null> {
-  const drizzle = spaceCrudDeps.getDb(db);
-  const repo = await drizzle
-    .select()
-    .from(repositories)
-    .where(eq(repositories.id, repoId))
-    .limit(1)
-    .get();
-
-  return repo ? toRepository(repo) : null;
-}
-
-/**
- * Initialize the default `main` repository for a workspace.
- *
- * Idempotent: when the space already has a repository, returns the most
- * recently updated one with `created: false`. Otherwise inserts the default
- * repository and returns it with `created: true`.
- */
-export async function initDefaultRepository(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<InitDefaultRepositoryResult> {
-  const drizzle = spaceCrudDeps.getDb(db);
-
-  const existing = await drizzle
-    .select()
-    .from(repositories)
-    .where(eq(repositories.accountId, spaceId))
-    .orderBy(desc(repositories.updatedAt))
-    .limit(1)
-    .get() ?? null;
-
-  if (existing) {
-    return {
-      created: false,
-      repository: await getRepositoryById(db, existing.id),
-    };
-  }
-
-  const repoId = generateId();
-  const timestamp = new Date().toISOString();
-
-  await drizzle.insert(repositories).values({
-    id: repoId,
-    accountId: spaceId,
-    name: "main",
-    description: "Default repository for workspace",
-    visibility: "private",
-    defaultBranch: "main",
-    stars: 0,
-    forks: 0,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  });
-
-  return {
-    created: true,
-    repository: await getRepositoryById(db, repoId),
-  };
 }
 
 export async function listWorkspacesForUser(
@@ -189,30 +73,7 @@ export async function listWorkspacesForUser(
     return [];
   }
 
-  const latestRepoBySpace = await loadLatestRepositoriesBySpace(
-    env.DB,
-    memberships.map((membership) => membership.spaceId),
-  );
-
-  return memberships.map((membership) =>
-    toSpaceListItem(
-      membership,
-      latestRepoBySpace.get(membership.spaceId) ?? null,
-    )
-  );
-}
-
-export async function getWorkspaceWithRepository(
-  env: Env,
-  workspace: Space,
-): Promise<{ workspace: Space; repository: Repository | null }> {
-  return {
-    workspace,
-    repository: toRepositoryFromSummary(
-      workspace,
-      await findLatestRepositoryBySpaceId(env.DB, workspace.id),
-    ),
-  };
+  return memberships.map((membership) => toSpaceListItem(membership));
 }
 
 export async function getWorkspaceByIdOrSlug(

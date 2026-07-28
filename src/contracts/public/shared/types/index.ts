@@ -16,22 +16,12 @@ export type {
   AgentTaskStatus,
 } from "../../../../worker/shared/types/agent-tasks.ts";
 
-export type {
-  User,
-} from "../../../../worker/shared/types/identity.ts";
+export type { User } from "../../../../worker/shared/types/identity.ts";
 
 export type {
   Memory,
   Reminder,
 } from "../../../../worker/shared/types/memories.ts";
-
-export type {
-  PullRequestCommentAuthorType,
-  PullRequestStatus,
-  Repository,
-  RepositoryVisibility,
-  ReviewStatus,
-} from "../../../../worker/shared/types/repositories.ts";
 
 export type {
   Run,

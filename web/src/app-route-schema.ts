@@ -1,5 +1,4 @@
-import { isDeploySection } from "./types/index.ts";
-import type { DeploySection, RouteState, View } from "./types/index.ts";
+import type { RouteState, View } from "./types/index.ts";
 
 type RouteParts = string[];
 type RouteMatch = (parts: RouteParts, search: string) => RouteState | undefined;
@@ -12,14 +11,10 @@ export type AppRouteComponentKey =
   | "tokushoho"
   | "share"
   | "store"
-  | "space-repo"
-  | "repo"
   | "chat"
-  | "repos"
   | "storage"
   | "apps"
   | "connections"
-  | "deploy"
   | "memory"
   | "settings"
   | "space-settings"
@@ -47,13 +42,6 @@ const LEGAL_PAGE_TO_PATH = new Map<string, string>([
   ["tokushoho", "/legal/tokushoho"],
 ]);
 
-const DEPLOY_ALIAS_SECTIONS = {
-  resources: "resources",
-  workers: "workers",
-  deployments: "workers",
-  services: "workers",
-} as const satisfies Partial<Record<string, DeploySection>>;
-
 export function normalizeStoreTab(value?: string): "discover" | "installed" {
   return value === "installed" ? "installed" : "discover";
 }
@@ -70,12 +58,6 @@ export function getRouteParentPath(path: string): string {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 1) return "/";
   return `/${parts.slice(0, -1).join("/")}`;
-}
-
-function parseDeploySection(
-  value: string | undefined,
-): DeploySection | undefined {
-  return isDeploySection(value) ? value : undefined;
 }
 
 function appendSearchParams(pathname: string, params: URLSearchParams): string {
@@ -102,23 +84,6 @@ function applyRouteSearchParams(route: RouteState, search: string): RouteState {
       ...route,
       runId,
       messageId,
-    };
-  }
-
-  if (route.view === "repo") {
-    const filePath = params.get("path") || undefined;
-    const fileLine = parsePositiveRouteInt(params.get("line"));
-    const ref = params.get("ref") || undefined;
-
-    if (!filePath && !fileLine && !ref) {
-      return route;
-    }
-
-    return {
-      ...route,
-      filePath,
-      fileLine,
-      ref,
     };
   }
 
@@ -186,26 +151,6 @@ function buildChatPath(state: RouteState): string {
   return appendSearchParams("/chat", params);
 }
 
-function buildDeployPath(state: RouteState): string {
-  if (state.spaceId) {
-    if (state.deploySection && state.deploySection !== "workers") {
-      return `/deploy/w/${state.spaceId}/${state.deploySection}`;
-    }
-    return `/deploy/w/${state.spaceId}`;
-  }
-  if (state.deploySection && state.deploySection !== "workers") {
-    return `/deploy/${state.deploySection}`;
-  }
-  return "/deploy";
-}
-
-function buildReposPath(state: RouteState): string {
-  if (state.spaceId) {
-    return `/repos/${state.spaceId}`;
-  }
-  return "/repos";
-}
-
 function buildAppsPath(state: RouteState): string {
   if (state.spaceId) {
     return `/apps/${state.spaceId}`;
@@ -243,31 +188,6 @@ function buildStoragePath(state: RouteState): string {
   }
 
   return "/storage";
-}
-
-function buildRepoPath(state: RouteState): string | undefined {
-  // Single-owner model: repos are addressed by space id, never by `@username`.
-  if (!(state.spaceId && state.repoId)) {
-    return undefined;
-  }
-  const basePath = `/w/${state.spaceId}/repos/${state.repoId}`;
-
-  const params = new URLSearchParams();
-  if (state.ref) {
-    params.set("ref", state.ref);
-  }
-  if (state.filePath) {
-    params.set("path", state.filePath);
-  }
-  if (
-    typeof state.fileLine === "number" &&
-    Number.isFinite(state.fileLine) &&
-    state.fileLine > 0
-  ) {
-    params.set("line", String(state.fileLine));
-  }
-
-  return appendSearchParams(basePath, params);
 }
 
 export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
@@ -405,42 +325,6 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
       state.view === "chat" ? buildChatPath(state) : undefined,
   },
   {
-    key: "repos",
-    componentKey: "repos",
-    componentPatterns: ["/repos/:spaceId?"],
-    placement: "protected",
-    match: (parts) => {
-      if (parts[0] === "repos") {
-        return parts[1]
-          ? { view: "repos", spaceId: parts[1] }
-          : { view: "repos" };
-      }
-      if (parts[0] === "w" && parts[1] && parts[2] === "repos" && !parts[3]) {
-        return { view: "repos", spaceId: parts[1], spaceSlug: parts[1] };
-      }
-      return undefined;
-    },
-    build: (state) =>
-      state.view === "repos" ? buildReposPath(state) : undefined,
-  },
-  {
-    key: "space-repo",
-    componentKey: "space-repo",
-    componentPatterns: ["/w/:spaceId/repos/:repoId"],
-    placement: "public",
-    match: (parts) =>
-      parts[0] === "w" && parts[1] && parts[2] === "repos" && parts[3]
-        ? {
-            view: "repo",
-            spaceId: parts[1],
-            spaceSlug: parts[1],
-            repoId: parts[3],
-          }
-        : undefined,
-    build: (state) =>
-      state.view === "repo" ? buildRepoPath(state) : undefined,
-  },
-  {
     key: "storage",
     componentKey: "storage",
     componentPatterns: [
@@ -505,65 +389,6 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     },
     build: (state) =>
       state.view === "connections" ? buildConnectionsPath(state) : undefined,
-  },
-  {
-    key: "deploy",
-    componentKey: "deploy",
-    componentPatterns: [
-      "/deploy",
-      "/deploy/:segment",
-      "/deploy/:spaceId/:section?",
-      "/deploy/w/:spaceId/:section?",
-      "/resources",
-      "/workers",
-      "/deployments",
-      "/services",
-    ],
-    placement: "protected",
-    match: (parts) => {
-      const aliasSection =
-        DEPLOY_ALIAS_SECTIONS[parts[0] as keyof typeof DEPLOY_ALIAS_SECTIONS];
-      if (aliasSection) {
-        return { view: "deploy", deploySection: aliasSection };
-      }
-
-      if (parts[0] !== "deploy") {
-        return undefined;
-      }
-
-      if (parts[1] === "w") {
-        if (parts[2]) {
-          const deploySection = parseDeploySection(parts[3]) || "workers";
-          return {
-            view: "deploy",
-            spaceId: parts[2],
-            deploySection,
-          };
-        }
-        return { view: "deploy", deploySection: "workers" };
-      }
-
-      const maybeSection = parseDeploySection(parts[1]);
-      if (maybeSection) {
-        return {
-          view: "deploy",
-          deploySection: maybeSection,
-        };
-      }
-
-      if (parts[1]) {
-        const deploySection = parseDeploySection(parts[2]) || "workers";
-        return {
-          view: "deploy",
-          spaceId: parts[1],
-          deploySection,
-        };
-      }
-
-      return { view: "deploy", deploySection: "workers" };
-    },
-    build: (state) =>
-      state.view === "deploy" ? buildDeployPath(state) : undefined,
   },
   {
     key: "settings",

@@ -9,18 +9,15 @@ import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
 import type { CatalogCapsuleRecord } from "./explore-catalog-accounts.ts";
 import type { CapsuleWorkloadServiceSummary } from "./takosumi-workload-services.ts";
 
-export type CatalogInstallationProjection = {
-  groupId: string | null;
-  groupName: string | null;
-  version: string | null;
-  commitSha: string | null;
-  deployedAt: string | null;
-  installationId?: string | null;
-  appId?: string | null;
-  status?: string | null;
-  runtimeMode?: string | null;
-  installedAt?: string | null;
-  updatedAt?: string | null;
+export type CatalogCapsuleProjection = {
+  capsuleId: string;
+  appId: string;
+  status: string;
+  environment: string | null;
+  sourceRef: string | null;
+  sourceCommit: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
   services?: CapsuleWorkloadServiceSummary[];
 };
 
@@ -76,63 +73,36 @@ export function canonicalSourceKeys(capsule: CatalogCapsuleRecord): string[] {
   );
 }
 
-export function toCatalogInstallationProjection(
+export function toCatalogCapsuleProjection(
   capsule: CatalogCapsuleRecord,
-): CatalogInstallationProjection {
+): CatalogCapsuleProjection {
   return {
-    groupId: null,
-    groupName: null,
-    version: capsule.sourceRef,
-    commitSha: capsule.sourceCommit,
-    deployedAt: null,
-    installationId: capsule.capsuleId,
+    capsuleId: capsule.capsuleId,
     appId: capsule.appId,
     status: capsule.status,
-    runtimeMode: capsule.runtimeMode,
-    installedAt: capsule.createdAt,
+    environment: capsule.environment,
+    sourceRef: capsule.sourceRef,
+    sourceCommit: capsule.sourceCommit,
+    createdAt: capsule.createdAt,
     updatedAt: capsule.updatedAt,
     ...(capsule.services.length > 0 ? { services: capsule.services } : {}),
   };
 }
 
-export function mapCatalogInstallationResponse(
-  installation: CatalogInstallationProjection | undefined,
+export function mapCatalogCapsuleResponse(
+  capsule: CatalogCapsuleProjection,
 ) {
-  if (!installation) {
-    return {
-      installed: false,
-      group_id: null,
-      group_name: null,
-      installed_version: null,
-      installed_commit: null,
-      deployed_at: null,
-    };
-  }
   return {
-    installed: true,
-    ...(installation.installationId !== undefined
-      ? { installation_id: installation.installationId }
-      : {}),
-    ...(installation.appId !== undefined ? { app_id: installation.appId } : {}),
-    ...(installation.status !== undefined
-      ? { status: installation.status }
-      : {}),
-    ...(installation.runtimeMode !== undefined
-      ? { runtime_mode: installation.runtimeMode }
-      : {}),
-    group_id: installation.groupId,
-    group_name: installation.groupName,
-    installed_version: installation.version,
-    installed_commit: installation.commitSha,
-    deployed_at: installation.deployedAt,
-    ...(installation.installedAt !== undefined
-      ? { installed_at: installation.installedAt }
-      : {}),
-    ...(installation.updatedAt !== undefined
-      ? { updated_at: installation.updatedAt }
-      : {}),
-    ...(installation.services !== undefined
-      ? { services: installation.services }
+    capsule_id: capsule.capsuleId,
+    app_id: capsule.appId,
+    status: capsule.status,
+    environment: capsule.environment,
+    source_ref: capsule.sourceRef,
+    source_commit: capsule.sourceCommit,
+    created_at: capsule.createdAt,
+    updated_at: capsule.updatedAt,
+    ...(capsule.services !== undefined
+      ? { services: capsule.services }
       : {}),
   };
 }
@@ -220,7 +190,7 @@ function mapFeaturedAppInstallableApp(
 
 export function mapFeaturedAppCatalogItem(
   entry: FeaturedAppCatalogEntry,
-  installation: CatalogInstallationProjection | undefined,
+  capsule: CatalogCapsuleProjection | undefined,
   timestamp: string,
 ): CatalogItemResponse {
   const tags = featuredAppTags(entry);
@@ -285,8 +255,8 @@ export function mapFeaturedAppCatalogItem(
   if (installableApp) {
     item.installable_app = installableApp;
   }
-  if (installation) {
-    item.installation = mapCatalogInstallationResponse(installation);
+  if (capsule) {
+    item.capsule = mapCatalogCapsuleResponse(capsule);
   }
   return item;
 }

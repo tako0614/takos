@@ -25,16 +25,17 @@ account-plane policy (account / billing / OIDC / dashboard) は Takosumi Account
 
 ## Current Boundary
 
-Takos product routes expose workspace, thread, run, tools, resource, app-installation, and workspace service APIs. Takosumi Accounts
-owns account-plane identity, account/billing policy, OIDC issuer behavior, and dashboard-backed installation flow. Takos
-product routes should call the external Takosumi Accounts / deploy-control APIs instead of creating a separate
-product-local deployment surface.
+Takos product routes expose workspace, thread, run, tools, and app-launcher
+APIs. Capsule inventory and lifecycle routes below are authenticated projections
+to the external Takosumi control plane; Takos does not persist or execute a
+second service, Resource, or Deployment lifecycle. Takosumi Accounts owns
+account-plane identity, account/billing policy, OIDC issuer behavior, and the
+dashboard-backed installation flow.
 
 ## Capsule API
 
 Current public/product API markers:
 
-- `/api/public/v1/deployments`
 - `/api/spaces/:spaceId/threads/search`
 - `/api/threads/:threadId/runs`
 - `/api/threads/:threadId/messages/search`
@@ -49,13 +50,18 @@ Current public/product API markers:
 - `/api/explore/catalog`
 - `/api/explore/repos/by-name/:username/:repoName`
 - `/api/explore/packages/by-repo/:repoId/reviews`
-- `/api/repositories/:repoId/commits/:commitSha`
-- `/api/services/*`
-- `/api/spaces/:spaceId/resources/*`
-- `/api/spaces/:spaceId/app-installations`
-- `/api/spaces/:spaceId/app-installations/git-url/dry-run`
+- `/api/spaces/:spaceId/capsules`
+- `/api/spaces/:spaceId/capsules/:capsuleId/services`
+- `/api/spaces/:spaceId/capsules/git-url/plan`
+- `/api/spaces/:spaceId/capsules/git-url/apply`
 - `/_takosumi/launch`
 - `/git/:owner/:repo.git/info/refs`
+
+`/git/:owner/:repo.git/*` は既存 repository の clone / fetch 用 read-only
+compatibility endpoint です。`git-receive-pack` は拒否されます。repository writes、
+pull request、review、release などの collaborative hosting API は Takos Worker に
+mount せず、installed `takos-git` の `source.git.smart_http` /
+`source.git.hosting` Interface を利用します。
 
 ## Deploy authority
 

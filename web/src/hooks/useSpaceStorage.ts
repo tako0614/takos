@@ -2,7 +2,7 @@ import { type Accessor, createSignal } from "solid-js";
 import type { StorageFile } from "../types/index.ts";
 import type { RpcResponse } from "../lib/rpc.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
-import { getErrorMessage } from "@takos/worker-platform-utils/errors";
+import { getErrorMessage } from "../lib/errors.ts";
 import { useI18n } from "../store/i18n.ts";
 
 interface UseSpaceStorageReturn {

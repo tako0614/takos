@@ -26,12 +26,17 @@ import {
 } from "./storage-operations.ts";
 import {
   buildPublicUrl,
-  isPublicationType,
-  listPublications,
-  type PublicationRecord,
-  publicationResolvedUrl,
-  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../../../application/services/platform/service-publications.ts";
+import { resolveRuntimeInterfaceAuthorization } from "../../../application/services/platform/runtime-interface-authorization.ts";
+import { fetchAuthorizedRuntimeInterfaces } from "../../../application/services/platform/runtime-interface-client.ts";
+import {
+  projectAuthorizedFileHandler,
+  type AuthorizedFileHandler,
+} from "../../../application/services/platform/runtime-interface-profiles.ts";
+import {
+  FILE_HANDLER_INTERFACE_TYPE,
+  FILE_HANDLER_OPEN_PERMISSION,
+} from "takosumi-contract";
 
 export const storageManagementRouteDeps = {
   listStorageFiles,
@@ -43,6 +48,8 @@ export const storageManagementRouteDeps = {
   moveStorageItem,
   bulkDeleteStorageItems,
   deleteR2Objects,
+  resolveRuntimeInterfaceAuthorization,
+  fetchAuthorizedRuntimeInterfaces,
 };
 
 export function buildFileHandlerOpenUrl(
@@ -56,16 +63,6 @@ export function buildFileHandlerOpenUrl(
   return buildPublicUrl(serviceHostname, openPath, { id: fileId });
 }
 
-export type ProjectedFileHandler = {
-  idx: number;
-  id: string;
-  name: string;
-  title?: string;
-  mimeTypes: string[];
-  extensions: string[];
-  open_url: string;
-};
-
 export function interfaceFileHandlerPathHasIdTemplate(
   path: string | undefined,
 ): boolean {
@@ -73,64 +70,6 @@ export function interfaceFileHandlerPathHasIdTemplate(
     typeof path === "string" &&
     path.split("/").some((segment) => segment === ":id")
   );
-}
-
-function readStringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
-function normalizeHandlerExtension(value: string): string {
-  const lower = value.toLowerCase();
-  return lower.startsWith(".") ? lower : `.${lower}`;
-}
-
-export function projectFileHandlerPublication(
-  record: PublicationRecord,
-  idx: number,
-): ProjectedFileHandler | null {
-  if (
-    !isPublicationType(
-      record.publicationType,
-      RUNTIME_PROJECTION_CAPABILITIES.interfaceFileHandler,
-    )
-  ) {
-    return null;
-  }
-  const openUrl = publicationResolvedUrl(record);
-  if (!openUrl) return null;
-  const path = (() => {
-    try {
-      return new URL(openUrl).pathname;
-    } catch {
-      return undefined;
-    }
-  })();
-  if (!interfaceFileHandlerPathHasIdTemplate(path)) return null;
-
-  const spec = record.publication.spec ?? {};
-  const mimeTypes = readStringList(spec.mimeTypes).map((value) =>
-    value.toLowerCase(),
-  );
-  const extensions = readStringList(spec.extensions).map(
-    normalizeHandlerExtension,
-  );
-  if (mimeTypes.length === 0 && extensions.length === 0) return null;
-
-  return {
-    idx,
-    id: `publication:${record.id}`,
-    name: record.name,
-    ...(record.publication.display?.title
-      ? { title: record.publication.display.title }
-      : {}),
-    mimeTypes,
-    extensions,
-    open_url: openUrl,
-  };
 }
 
 const app = new Hono<SpaceAccessRouteEnv>()
@@ -160,13 +99,26 @@ const app = new Hono<SpaceAccessRouteEnv>()
         : undefined;
       const normalizedMime = mime?.toLowerCase();
 
-      const access = c.get("access");
-
+      const authorization =
+        await storageManagementRouteDeps.resolveRuntimeInterfaceAuthorization(
+          c.env,
+          c.get("user").id,
+        );
       const projected = (
-        await listPublications({ DB: c.env.DB }, access.space.id)
+        await storageManagementRouteDeps.fetchAuthorizedRuntimeInterfaces(
+          {
+            workspaceId: authorization.workspaceId,
+            type: FILE_HANDLER_INTERFACE_TYPE,
+            permission: FILE_HANDLER_OPEN_PERMISSION,
+            deliveryTypes: ["none"],
+          },
+          authorization,
+        )
       )
-        .map(projectFileHandlerPublication)
-        .filter((handler): handler is ProjectedFileHandler => handler !== null);
+        .map(projectAuthorizedFileHandler)
+        .filter(
+          (handler): handler is AuthorizedFileHandler => handler !== null,
+        );
 
       // filter: mime と ext のいずれかが指定されたら、そのいずれかにマッチするものを残す
       const filtered = projected.filter((p) => {
@@ -213,7 +165,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
           title: p.title,
           mime_types: p.mimeTypes,
           extensions: p.extensions,
-          open_url: p.open_url,
+          open_url: p.openUrl,
         })),
       });
     },

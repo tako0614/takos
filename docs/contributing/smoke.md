@@ -1,7 +1,7 @@
-# Current Takos Smoke Commands
+# Takos Check and Local Smoke
 
-> このページでわかること: Takos product root で使う current smoke / release
-> gate。
+> このページでわかること: Takos product root の portable complete gate と、
+> production authorityを持たない local smoke。
 
 Takos product の smoke は `takos/` で実行します。Takosumi kernel の in-process
 deploy lifecycle は `takosumi/` 側の test と local-substrate smoke が正本です。
@@ -11,11 +11,11 @@ deploy lifecycle は `takosumi/` 側の test と local-substrate smoke が正本
 ```sh
 cd takos
 bun run check
-bun run docs:build
-bun run web:build
-bun run validate:opentofu-secrets
-bun scripts/build-release-manifest.ts
 ```
+
+`bun run check` がformat check、lint/static analysis、type/compile、portable
+tests、portable buildをまとめて実行します。leaf commandをrelease checklist
+として手作業で再構成しません。
 
 起動済み local stack に対する HTTP smoke は次です。
 
@@ -24,15 +24,15 @@ cd takos
 bun run local:smoke
 ```
 
-## Broad local gate
+## Official release
 
-リリース候補の広い local proof は次です。
+production surfaceのdeployはこのrepositoryのentrypointを使います。共通ruleは
+sibling `takos-control`の`engineering.policy.json`→`deploy`が正本です。
 
-```sh
-cd takos
-bun run release-gate
+```bash
+bun run deploy
 ```
 
-Cloudflare / self-hosted の live proof は operator-owned evidence です。public
-source の release manifest は distribution profile と artifact metadata を記録しますが、
-live URL、provider credential、実 runner の成功までは証明しません。
+local checkやsmokeはproductionを証明・変更せず、promotion authorityも与えません。
+Cloudflare / self-hostedのlive proofはoperator-owned evidenceです。self-host先への
+deploymentはそのself-hosterのauthorityであり、公式hosted promotionとは別です。

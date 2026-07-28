@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  applyInstallableAppInstallation,
+  applyInstallableAppCapsule,
   applyInstallableAppRevision,
-  deleteInstallableAppInstallation,
-  listInstallableAppInstallationServices,
-  listInstallableAppInstallations,
-  planInstallableAppInstallation,
+  deleteInstallableAppCapsule,
+  listInstallableAppCapsuleServices,
+  listInstallableAppCapsules,
+  planInstallableAppCapsule,
   planInstallableAppRevision,
 } from "../installable-app-install.ts";
 
@@ -91,7 +91,7 @@ describe("canonical Capsule install client", () => {
       gitUrl: "https://github.com/acme/office.git",
       ref: "v1.0.0",
     };
-    const plan = await planInstallableAppInstallation(source, config);
+    const plan = await planInstallableAppCapsule(source, config);
     expect(plan.status).toBe(201);
     expect(plan.body?.expected).toEqual({
       workspaceId: "ws_1",
@@ -99,7 +99,7 @@ describe("canonical Capsule install client", () => {
       capsuleId: "cap_1",
       runId: "run_plan",
     });
-    const applied = await applyInstallableAppInstallation(
+    const applied = await applyInstallableAppCapsule(
       {
         workspaceId: source.workspaceId,
         expected: plan.body!.expected as Record<string, unknown>,
@@ -127,7 +127,7 @@ describe("canonical Capsule install client", () => {
       fetch: async () => json({ error: "must not fetch" }, 500),
     };
     await expect(
-      applyInstallableAppInstallation(
+      applyInstallableAppCapsule(
         {
           workspaceId: "ws_owner",
           expected: {
@@ -220,7 +220,7 @@ describe("canonical Capsule install client", () => {
     );
   });
 
-  test("lists canonical Capsules and projects Interface authority separately from Output evidence", async () => {
+  test("lists canonical Capsules verbatim and never treats Outputs as services", async () => {
     const fetch = async (input: string | URL | Request) => {
       const url = new URL(
         input instanceof Request ? input.url : input.toString(),
@@ -250,47 +250,21 @@ describe("canonical Capsule install client", () => {
       if (url.pathname === "/api/v1/capsules/cap_1") {
         return json({ capsule: { id: "cap_1", workspaceId: "ws_1" } });
       }
-      if (url.pathname === "/api/v1/capsules/cap_1/outputs") {
-        return json({
-          output: { publicOutputs: { launch_url: "https://ignored.test" } },
-        });
-      }
-      if (url.pathname === "/v1/interfaces") {
-        return json({
-          interfaces: [
-            {
-              metadata: { id: "if_1", name: "ui" },
-              spec: {
-                type: "interface.ui.surface",
-                access: { resourceUriInput: "url" },
-              },
-              status: {
-                phase: "Resolved",
-                resolvedInputs: { url: "https://office.test" },
-              },
-            },
-          ],
-        });
-      }
+      if (url.pathname.endsWith("/outputs"))
+        throw new Error("Outputs must not be requested for runtime discovery");
       return json({ error: "unexpected" }, 500);
     };
     const config = { baseUrl: "https://operator.test", fetch };
-    const listed = await listInstallableAppInstallations("ws_1", config);
-    expect(listed.body?.installations).toEqual([
-      expect.objectContaining({ id: "cap_1", status: "ready" }),
+    const listed = await listInstallableAppCapsules("ws_1", config);
+    expect(listed.body?.capsules).toEqual([
+      expect.objectContaining({ capsule_id: "cap_1", status: "active" }),
     ]);
-    const services = await listInstallableAppInstallationServices(
+    const services = await listInstallableAppCapsuleServices(
       "cap_1",
       "ws_1",
       config,
     );
-    expect(services.body?.services).toEqual([
-      expect.objectContaining({
-        id: "interface:ui",
-        endpoint: "https://office.test",
-      }),
-      expect.objectContaining({ id: "output:launch_url", endpoint: null }),
-    ]);
+    expect(services.body).toEqual({ capsule_id: "cap_1", services: [] });
   });
 
   test("deletes only a Capsule in the requested Workspace and applies its returned destroy Run", async () => {
@@ -306,7 +280,7 @@ describe("canonical Capsule install client", () => {
       if (method === "DELETE") return json({ run: { id: "run_destroy" } }, 202);
       return json({ run: { id: "run_destroy_apply" } }, 202);
     };
-    const result = await deleteInstallableAppInstallation("cap_1", "ws_1", {
+    const result = await deleteInstallableAppCapsule("cap_1", "ws_1", {
       baseUrl: "https://operator.test",
       fetch,
     });

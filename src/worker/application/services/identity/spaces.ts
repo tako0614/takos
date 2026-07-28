@@ -1,16 +1,11 @@
 export type { SpaceListItem } from "./space-crud.ts";
 export {
-  createWorkspaceWithDefaultRepo,
+  createWorkspace,
   deleteWorkspace,
   ensurePersonalWorkspace,
-  findLatestRepositoryBySpaceId,
   getOrCreatePersonalWorkspace,
   getPersonalWorkspace,
-  getRepositoryById,
   getWorkspaceByIdOrSlug,
-  getWorkspaceWithRepository,
-  initDefaultRepository,
-  type InitDefaultRepositoryResult,
   listWorkspacesForUser,
   loadSpaceById,
   updateWorkspace,

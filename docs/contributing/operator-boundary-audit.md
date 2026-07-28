@@ -42,5 +42,6 @@ allowlist は Takosumi deploy-control plane の ProviderConnection / ProviderBin
 - 実 backend と self-host docs は operator-owned proof として扱う。
 - README / current-state / hosting docs は `ProviderConnection / ProviderBinding / policy` / OpenTofu /
   StateVersion / Output の語彙を使う。
-- Takos product release gate は source-controlled plan review までを扱い、live
-  provider proof は operator evidence (`apply` type Run / Output) として分離する。
+- Takos portable source check は repository consistency だけを扱う。deploy は
+  owning repository の entrypoint、live provider proof は別 cadence の operator
+  evidence (`apply` type Run / Output) として分離する。

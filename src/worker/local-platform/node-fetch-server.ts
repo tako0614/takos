@@ -20,7 +20,7 @@ function toRequest(request: http.IncomingMessage): Request {
   const method = request.method ?? "GET";
   const body = method === "GET" || method === "HEAD"
     ? undefined
-    : Readable.toWeb(request) as ReadableStream<Uint8Array>;
+    : Readable.toWeb(request) as unknown as ReadableStream<Uint8Array>;
   return new Request(
     url,
     {
@@ -49,7 +49,7 @@ async function writeResponse(
   }
 
   const body = Readable.fromWeb(
-    response.body as NodeReadableStream<Uint8Array>,
+    response.body as unknown as NodeReadableStream<Uint8Array>,
   );
   // pipeline destroys both streams (and cancels the underlying Web
   // ReadableStream reader via the fromWeb adapter) on any error or early close

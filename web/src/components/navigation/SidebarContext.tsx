@@ -5,12 +5,10 @@ export interface SidebarCallbacks {
   // Navigation
   onNewChat: () => void;
   onNavigateStorage: () => void;
-  onNavigateDeploy: () => void;
   onNavigateApps: () => void;
   onNavigateConnections: () => void;
   onNavigateMemory: () => void;
   onNavigateStore: () => void;
-  onNavigateRepos: () => void;
   onOpenSearch: () => void;
   // Space navigation
   onCreateSpace: () => void;
@@ -18,8 +16,6 @@ export interface SidebarCallbacks {
   onExitSpace: () => void;
   onNavigateSpaceChat: () => void;
   onNavigateSpaceStorage: () => void;
-  onNavigateSpaceDeploy: () => void;
-  onNavigateSpaceRepos: () => void;
   onNavigateSpaceApps: () => void;
   onNavigateSpaceConnections: () => void;
   onNavigateSpaceSettings: () => void;

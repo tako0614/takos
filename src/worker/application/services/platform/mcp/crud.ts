@@ -27,16 +27,6 @@ import {
 import { encryptToken, saltFor } from "./crypto.ts";
 import { beginMcpAuthorization, mcpServiceDeps } from "./oauth.ts";
 import {
-  isPublicationType,
-  listPublications,
-  publicationResolvedUrl,
-  RUNTIME_PROJECTION_CAPABILITIES,
-} from "../service-publications.ts";
-import {
-  readPublicationAuthSecretRef,
-  resolvePublicationAuthToken,
-} from "./auth-secret.ts";
-import {
   BadRequestError,
   ConflictError,
 } from "@takos/worker-platform-utils/errors";
@@ -253,12 +243,6 @@ export async function registerExternalMcpServer(
     );
   }
 
-  await assertNoPublishedMcpServerNameCollision(
-    dbBinding,
-    params.spaceId,
-    params.name,
-  );
-
   const db = mcpServiceDeps.getDb(dbBinding);
   const existing = await db
     .select({
@@ -463,88 +447,19 @@ export async function getMcpServerWithTokens(
   spaceId: string,
   serverId: string,
 ): Promise<SelectOf<typeof mcpServers> | null> {
-  if (serverId.startsWith("publication:")) {
-    const publicationId = serverId.slice("publication:".length);
-    const publication = (
-      await listPublications({ DB: dbBinding }, spaceId)
-    ).find((record) => record.id === publicationId);
-    if (
-      !publication ||
-      !isPublicationType(
-        publication.publicationType,
-        RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
-      )
-    ) {
-      return null;
-    }
-    const url = publicationResolvedUrl(publication);
-    if (!url) return null;
-    const authSecretRef = readPublicationAuthSecretRef(publication);
-    const row: SelectOf<typeof mcpServers> = {
-      id: serverId,
-      accountId: spaceId,
-      name: publication.name,
-      url,
-      transport: "streamable-http",
-      sourceType: "publication",
-      authMode: authSecretRef ? "bearer_token" : "takos_oidc",
-      serviceId: publication.ownerServiceId,
-      bundleDeploymentId: null,
-      oauthAccessToken: null,
-      oauthRefreshToken: null,
-      oauthTokenExpiresAt: null,
-      oauthScope: null,
-      oauthIssuerUrl: null,
-      oauthResourceUri: null,
-      oauthResourceMetadataUrl: null,
-      oauthClientId: null,
-      oauthClientSecret: null,
-      oauthClientIdIssuedAt: null,
-      oauthClientSecretExpiresAt: null,
-      oauthRegistrationMode: null,
-      oauthTokenEndpointAuthMethod: null,
-      enabled: true,
-      createdAt: publication.createdAt,
-      updatedAt: publication.updatedAt,
-    };
-    return row;
-  }
-
   const db = mcpServiceDeps.getDb(dbBinding);
   const row = await db
     .select()
     .from(mcpServers)
-    .where(and(eq(mcpServers.id, serverId), eq(mcpServers.accountId, spaceId)))
+    .where(
+      and(
+        eq(mcpServers.id, serverId),
+        eq(mcpServers.accountId, spaceId),
+        eq(mcpServers.sourceType, "external"),
+      ),
+    )
     .get();
   return row ?? null;
-}
-
-export async function resolvePublicationMcpServerAccessToken(
-  dbBinding: SqlDatabaseBinding,
-  env: Pick<Env, "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN">,
-  params: { spaceId: string; serverId: string },
-): Promise<string | null> {
-  if (!params.serverId.startsWith("publication:")) return null;
-  const publicationId = params.serverId.slice("publication:".length);
-  const publication = (
-    await listPublications({ DB: dbBinding }, params.spaceId)
-  ).find((record) => record.id === publicationId);
-  if (
-    !publication ||
-    !isPublicationType(
-      publication.publicationType,
-      RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
-    )
-  ) {
-    return null;
-  }
-  const authSecretRef = readPublicationAuthSecretRef(publication);
-  return await resolvePublicationAuthToken(dbBinding, env, {
-    spaceId: params.spaceId,
-    publicationName: publication.name,
-    ownerServiceId: publication.ownerServiceId,
-    authSecretRef,
-  });
 }
 
 export async function listMcpServers(
@@ -555,45 +470,15 @@ export async function listMcpServers(
   const rows = await db
     .select()
     .from(mcpServers)
-    .where(eq(mcpServers.accountId, spaceId))
-    .orderBy(mcpServers.createdAt)
-    .all();
-  const publicationServers = (
-    await listPublications({ DB: dbBinding }, spaceId)
-  )
-    .filter((record) =>
-      isPublicationType(
-        record.publicationType,
-        RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
+    .where(
+      and(
+        eq(mcpServers.accountId, spaceId),
+        eq(mcpServers.sourceType, "external"),
       ),
     )
-    .map((record): McpServerRecord | null => {
-      const url = publicationResolvedUrl(record);
-      if (!url) return null;
-      const authSecretRef = readPublicationAuthSecretRef(record);
-      return {
-        id: `publication:${record.id}`,
-        spaceId,
-        name: record.name,
-        url,
-        transport: "streamable-http",
-        sourceType: "publication",
-        authMode: authSecretRef ? "bearer_token" : "takos_oidc",
-        serviceId: record.ownerServiceId,
-        bundleDeploymentId: null,
-        oauthScope: null,
-        oauthIssuerUrl: null,
-        oauthRegistrationMode: null,
-        oauthTokenExpiresAt: null,
-        authorizationStatus: "managed",
-        enabled: true,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt,
-      };
-    })
-    .filter((record): record is McpServerRecord => record !== null);
-  const configuredServers = rows.map(mapMcpServerRow);
-  return [...publicationServers, ...configuredServers];
+    .orderBy(mcpServers.createdAt)
+    .all();
+  return rows.map(mapMcpServerRow);
 }
 
 export async function deleteMcpServer(
@@ -641,14 +526,6 @@ export async function updateMcpServer(
       "Managed MCP server names are controlled by their source declaration",
     );
   }
-  if (patch.name !== undefined) {
-    await assertNoPublishedMcpServerNameCollision(
-      dbBinding,
-      spaceId,
-      patch.name,
-    );
-  }
-
   const updateData: Partial<InsertOf<typeof mcpServers>> = {
     updatedAt: new Date().toISOString(),
   };
@@ -666,24 +543,4 @@ export async function updateMcpServer(
     .where(eq(mcpServers.id, serverId))
     .get();
   return updated ? mapMcpServerRow(updated) : null;
-}
-
-async function assertNoPublishedMcpServerNameCollision(
-  dbBinding: SqlDatabaseBinding,
-  spaceId: string,
-  name: string,
-): Promise<void> {
-  const publishedServers = (
-    await listPublications({ DB: dbBinding }, spaceId)
-  ).filter((record) =>
-    isPublicationType(
-      record.publicationType,
-      RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
-    ),
-  );
-  if (publishedServers.some((record) => record.name === name)) {
-    throw new ConflictError(
-      `MCP server "${name}" already exists as a publication in this space`,
-    );
-  }
 }

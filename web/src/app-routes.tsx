@@ -1,4 +1,4 @@
-import { createMemo, type JSX, lazy, Match, Show, Switch } from "solid-js";
+import { createMemo, type JSX, lazy, Match, Switch } from "solid-js";
 import { Navigate, Route, useParams } from "@solidjs/router";
 import { LoadingScreen } from "./components/common/LoadingScreen.tsx";
 import {
@@ -8,17 +8,11 @@ import {
   PUBLIC_APP_ROUTE_SCHEMAS,
 } from "./app-route-schema.ts";
 import { useAuth } from "./hooks/useAuth.tsx";
-import { findSpaceByIdentifier, getSpaceIdentifier } from "./lib/spaces.ts";
-import { useBreakpoint } from "./hooks/useBreakpoint.ts";
+import { getSpaceIdentifier } from "./lib/spaces.ts";
 import { useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
 import { buildStorageNavigationState } from "./views/storage/storage-page-state.ts";
-import type {
-  DeploySection,
-  RouteState,
-  Thread,
-  UserSettings,
-} from "./types/index.ts";
+import type { RouteState, Thread } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
 import { isHomeEntryPath } from "./lib/home-entry-path.ts";
 import { LoginPage } from "./views/app/AuthViews.tsx";
@@ -40,11 +34,6 @@ const SourcePage = lazy(() =>
     default: module.SourcePage,
   })),
 );
-const RepoDetailPage = lazy(() =>
-  import("./views/repos/RepoDetailPage.tsx").then((module) => ({
-    default: module.RepoDetailPage,
-  })),
-);
 const ChatPage = lazy(() =>
   import("./views/chat/ChatPage.tsx").then((module) => ({
     default: module.ChatPage,
@@ -58,16 +47,6 @@ const AppsPage = lazy(() =>
 const ConnectionsPage = lazy(() =>
   import("./views/connections/ConnectionsPage.tsx").then((module) => ({
     default: module.ConnectionsPage,
-  })),
-);
-const ReposPanel = lazy(() =>
-  import("./views/repos/ReposPanel.tsx").then((module) => ({
-    default: module.ReposPanel,
-  })),
-);
-const DeployPanel = lazy(() =>
-  import("./views/app/space/DeployPanel.tsx").then((module) => ({
-    default: module.DeployPanel,
   })),
 );
 const StoragePage = lazy(() =>
@@ -196,77 +175,6 @@ function StoreRoute() {
   );
 }
 
-function RepoRoute() {
-  const auth = useAuth();
-  const navigation = useNavigation();
-  const { t } = useI18n();
-  const currentPath = useCurrentPath();
-  const route = createMemo(() => navigation.route);
-  const guard = useSpaceRouteGuard(() => null, route);
-  const backSpace = createMemo(() =>
-    navigation.routeSpaceId
-      ? findSpaceByIdentifier(
-          auth.spaces,
-          navigation.routeSpaceId,
-          t("personal"),
-        )
-      : navigation.preferredSpace,
-  );
-  const backSpaceId = createMemo(() => {
-    const space = backSpace();
-    return space ? getSpaceIdentifier(space) : undefined;
-  });
-
-  return (
-    <Switch
-      fallback={
-        <RouteSurface>
-          <RepoDetailPage
-            repoId={route().repoId}
-            initialFilePath={route().filePath}
-            initialFileLine={route().fileLine}
-            initialRef={route().ref}
-            onBack={() => navigation.navigate({ view: "store" })}
-            isAuthenticated={false}
-            onRequireLogin={() => auth.redirectToLogin(currentPath())}
-          />
-        </RouteSurface>
-      }
-    >
-      <Match when={auth.authState === "loading"}>
-        <AuthLoadingGate />
-      </Match>
-      <Match
-        when={
-          auth.authState === "authenticated" && guard.hasInvalidSpaceRoute()
-        }
-      >
-        <AuthenticatedLayout>
-          <SpaceNotFoundMessage />
-        </AuthenticatedLayout>
-      </Match>
-      <Match when={auth.authState === "authenticated"}>
-        <AuthenticatedLayout>
-          <RouteSurface>
-            <RepoDetailPage
-              spaceId={backSpaceId()}
-              repoId={route().repoId}
-              initialFilePath={route().filePath}
-              initialFileLine={route().fileLine}
-              initialRef={route().ref}
-              onBack={() => {
-                navigation.navigateToChat(backSpaceId());
-              }}
-              isAuthenticated
-              onRequireLogin={() => auth.redirectToLogin(currentPath())}
-            />
-          </RouteSurface>
-        </AuthenticatedLayout>
-      </Match>
-    </Switch>
-  );
-}
-
 function ChatRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
@@ -328,125 +236,6 @@ function ChatRoute() {
             }}
             onNewThreadCreated={navigation.handleNewThreadCreated}
           />
-        </RouteSurface>
-      </Match>
-    </Switch>
-  );
-}
-
-function ReposRoute() {
-  const auth = useAuth();
-  const navigation = useNavigation();
-  const route = createMemo(() => navigation.route);
-  const resolvedSpaceId = createMemo(
-    () => navigation.routeSpaceId ?? navigation.preferredSpaceId,
-  );
-  const guard = useSpaceRouteGuard(() => {
-    const spaceId = resolvedSpaceId();
-    return spaceId ? { view: "repos", spaceId } : null;
-  }, route);
-
-  return (
-    <Switch>
-      <Match when={guard.canonicalHref()}>
-        {(href) => <Navigate href={href()} />}
-      </Match>
-      <Match when={guard.isPending()}>
-        <LoadingScreen />
-      </Match>
-      <Match when={guard.hasInvalidSpaceRoute()}>
-        <SpaceNotFoundMessage />
-      </Match>
-      <Match when={!resolvedSpaceId() && !auth.spacesLoaded}>
-        <LoadingScreen />
-      </Match>
-      <Match when={!resolvedSpaceId()}>
-        <NoSpaceAvailableMessage />
-      </Match>
-      <Match when={resolvedSpaceId()}>
-        {(spaceId) => (
-          <RouteSurface>
-            <ReposPanel
-              spaceId={spaceId()}
-              onNavigateToRepo={(navSpaceId: string, repoId: string) =>
-                navigation.navigate({
-                  view: "repo",
-                  spaceId: navSpaceId,
-                  repoId,
-                })
-              }
-            />
-          </RouteSurface>
-        )}
-      </Match>
-    </Switch>
-  );
-}
-
-function DeployRoute() {
-  const auth = useAuth();
-  const navigation = useNavigation();
-  const breakpoint = useBreakpoint();
-  const route = createMemo(() => navigation.route);
-  const currentDeploySection = createMemo(
-    () => navigation.route.deploySection || "workers",
-  );
-  const deploySpaceId = createMemo(
-    () =>
-      navigation.routeSpaceId ??
-      navigation.selectedSpaceId ??
-      navigation.preferredSpaceId,
-  );
-  const guard = useSpaceRouteGuard(
-    () => ({
-      view: "deploy",
-      spaceId: deploySpaceId() ?? undefined,
-      deploySection: currentDeploySection(),
-    }),
-    route,
-  );
-
-  return (
-    <Switch>
-      <Match when={guard.canonicalHref()}>
-        {(href) => <Navigate href={href()} />}
-      </Match>
-      <Match when={guard.isPending()}>
-        <LoadingScreen />
-      </Match>
-      <Match when={guard.hasInvalidSpaceRoute()}>
-        <SpaceNotFoundMessage />
-      </Match>
-      <Match when={!deploySpaceId() && !auth.spacesLoaded}>
-        <LoadingScreen />
-      </Match>
-      <Match when>
-        <RouteSurface>
-          <Show when={deploySpaceId()} fallback={<NoSpaceAvailableMessage />}>
-            {(spaceId) => (
-              <DeployPanel
-                spaceId={spaceId()}
-                spaces={auth.spaces}
-                activeSection={currentDeploySection()}
-                onSectionChange={(section: DeploySection) => {
-                  navigation.navigate({
-                    view: "deploy",
-                    spaceId: spaceId(),
-                    deploySection: section,
-                  });
-                }}
-                user={auth.user}
-                userSettings={auth.userSettings}
-                onSettingsChange={(settings: UserSettings) =>
-                  auth.setUserSettings(settings)
-                }
-                onSpacesRefresh={() => {
-                  void auth.fetchSpaces(auth.user);
-                }}
-                isMobile={breakpoint.isMobile}
-              />
-            )}
-          </Show>
         </RouteSurface>
       </Match>
     </Switch>
@@ -744,14 +533,10 @@ const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   tokushoho: TokushohoRoute,
   share: ShareRoute,
   store: StoreRoute,
-  "space-repo": RepoRoute,
-  repo: RepoRoute,
   chat: ChatRoute,
-  repos: ReposRoute,
   storage: StorageRoute,
   apps: AppsRoute,
   connections: ConnectionsRoute,
-  deploy: DeployRoute,
   memory: MemoryRoute,
   settings: SettingsRoute,
   "space-settings": SpaceSettingsRoute,

@@ -284,7 +284,6 @@ export async function resolveSkillPlanForRun(
     {
       type: input.agentType,
       systemPrompt: "",
-      tools: [],
     },
     input.history,
   );
@@ -295,7 +294,6 @@ export async function resolveSkillPlanForRun(
     {
       type: input.agentType,
       systemPrompt: "",
-      tools: [],
     },
     skillContext,
     {

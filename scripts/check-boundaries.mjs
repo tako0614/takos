@@ -7,7 +7,9 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const ignoredDirs = new Set([
   'node_modules',
   'dist',
+  'target',
   '.git',
+  '.opentofu-plan',
   '.wrangler',
   'coverage',
 ]);

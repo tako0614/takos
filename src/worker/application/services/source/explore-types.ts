@@ -74,19 +74,15 @@ export interface CatalogPackageResponse {
   published_at: string | null;
 }
 
-export interface CatalogInstallationResponse {
-  installed: boolean;
-  installation_id?: string | null;
-  app_id?: string | null;
-  status?: string | null;
-  runtime_mode?: string | null;
-  group_id: string | null;
-  group_name: string | null;
-  installed_version: string | null;
-  installed_commit: string | null;
-  installed_at?: string | null;
-  updated_at?: string | null;
-  deployed_at: string | null;
+export interface CatalogCapsuleResponse {
+  capsule_id: string;
+  app_id: string;
+  status: string;
+  environment: string | null;
+  source_ref: string | null;
+  source_commit: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   services?: CatalogWorkloadServiceResponse[];
 }
 
@@ -128,7 +124,7 @@ export interface CatalogItemResponse {
   package: CatalogPackageResponse;
   source?: CatalogDeploySourceResponse;
   installable_app?: CatalogInstallableAppResponse;
-  installation?: CatalogInstallationResponse;
+  capsule?: CatalogCapsuleResponse;
 }
 
 export interface CatalogResult {

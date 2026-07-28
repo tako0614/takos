@@ -17,7 +17,10 @@ import {
   getCachedUser,
   isValidUserId,
 } from "../../application/services/identity/user-cache.ts";
-import { resolveAccountsBearer } from "./accounts-bearer.ts";
+import {
+  type AccountsBearerAuthContext,
+  resolveAccountsBearer,
+} from "./accounts-bearer.ts";
 import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
 
@@ -35,6 +38,7 @@ import {
 
 type AuthVariables = {
   user?: User;
+  accounts_bearer?: AccountsBearerAuthContext;
   /**
    * Phase 18.2 H11: when the auth middleware rotates the cookie session ID,
    * it stashes the new session ID here so the downstream response handler
@@ -85,6 +89,7 @@ async function resolveRequestUser(
   user: User | null;
   errorResponse?: Response;
   rotatedSessionId?: string;
+  accountsBearer?: AccountsBearerAuthContext;
 }> {
   const services = authDeps.getPlatformServices(c);
   const dbBinding = services.sql?.binding;
@@ -135,7 +140,10 @@ async function resolveRequestUser(
         }
         return { user: null };
       case "ok":
-        return { user: bearer.user };
+        return {
+          user: bearer.user,
+          accountsBearer: bearer.accountsBearer,
+        };
     }
   }
 
@@ -267,6 +275,9 @@ export const requireAuth: AuthMiddleware = async (
     throw new AuthenticationError();
   }
   c.set("user", resolved.user);
+  if (resolved.accountsBearer) {
+    c.set("accounts_bearer", resolved.accountsBearer);
+  }
   applyRotatedSessionCookie(c, resolved.rotatedSessionId);
 
   await next();
@@ -289,6 +300,9 @@ export const optionalAuth: AuthMiddleware = async (c, next) => {
     }
     if (resolved.user) {
       c.set("user", resolved.user);
+    }
+    if (resolved.accountsBearer) {
+      c.set("accounts_bearer", resolved.accountsBearer);
     }
     applyRotatedSessionCookie(c, resolved.rotatedSessionId);
   } catch (err) {

@@ -24,7 +24,6 @@ import type {
   ScheduleTrigger,
   VolumeMount,
 } from "../app-manifest-types.ts";
-import { TAKOS_RUNTIME_PROJECTION_PUBLICATIONS } from "../app-interface-contract.ts";
 import {
   asOptionalBoolean,
   asOptionalInteger,
@@ -385,10 +384,7 @@ function parseConsume(prefix: string, raw: unknown): AppConsume[] | undefined {
       record.publication,
       `${consumePrefix}.publication`,
     );
-    if (
-      publication.startsWith("takos.") &&
-      publication !== TAKOS_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage
-    ) {
+    if (publication.startsWith("takos.")) {
       throw new Error(
         `${consumePrefix}.publication '${publication}' is not supported by the Capsule desired-state projection contract; request runtime authority through the Takos runtime binding contract`,
       );

@@ -7,7 +7,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use takos_agent_engine::model::ToolCallRequest;
-use takos_agent_engine::tools::executor::{ToolCallResult, ToolExecutionKind, ToolExecutor};
+use takos_agent_engine::tools::executor::{
+    ToolCallResult, ToolExecutionContext, ToolExecutionKind, ToolExecutor,
+};
 use takos_agent_engine::{EngineError, Result};
 use tokio_util::sync::CancellationToken;
 
@@ -74,6 +76,41 @@ impl CompositeToolExecutor {
             *fatal_error = Some(error);
         }
     }
+
+    async fn execute_call(
+        &self,
+        call: ToolCallRequest,
+        idempotency_key: Option<&str>,
+    ) -> Result<ToolCallResult> {
+        let tool_name = call.name.clone();
+        let tool_arguments = call.arguments.clone();
+        let tool_call_id = call.id.clone().unwrap_or_else(|| {
+            stable_tool_call_id(
+                self.tool_call_sequence.fetch_add(1, Ordering::Relaxed),
+                &tool_name,
+                &tool_arguments,
+            )
+        });
+
+        // Remote tool dispatch is gated by the operator-managed allowlist.
+        // An unset / empty `TAKOS_AGENT_TOOL_ALLOWLIST` means *no* remote
+        // tools are callable — operators must explicitly opt in.
+        let allowlist = resolve_tool_allowlist();
+        if !is_tool_allowed(&tool_name, allowlist.as_ref()) {
+            let error = format!("tool_not_permitted: {tool_name}");
+            self.client
+                .emit_run_event(
+                    "tool_result",
+                    tool_result_event(&tool_call_id, &tool_name, &error, "", Some(&error), 0),
+                )
+                .await
+                .ok();
+            return Err(EngineError::Tool(error));
+        }
+
+        self.execute_remote_tool(&tool_call_id, &tool_name, &tool_arguments, idempotency_key)
+            .await
+    }
 }
 
 /// Compute the active allowlist for remote tool dispatch. `None` indicates
@@ -119,34 +156,25 @@ impl ToolExecutor for CompositeToolExecutor {
             })
     }
 
+    fn recovery_is_idempotent(&self, call: &ToolCallRequest) -> bool {
+        self.execution_kind(call) == ToolExecutionKind::ReadOnly
+            || self
+                .remote_tools
+                .iter()
+                .find(|tool| tool.name == call.name)
+                .is_some_and(|tool| tool.side_effects == Some(true) && tool.durable_idempotency)
+    }
+
     async fn execute(&self, call: ToolCallRequest) -> Result<ToolCallResult> {
-        let tool_name = call.name.clone();
-        let tool_arguments = call.arguments.clone();
-        let tool_call_id = call.id.clone().unwrap_or_else(|| {
-            stable_tool_call_id(
-                self.tool_call_sequence.fetch_add(1, Ordering::Relaxed),
-                &tool_name,
-                &tool_arguments,
-            )
-        });
+        self.execute_call(call, None).await
+    }
 
-        // Remote tool dispatch is gated by the operator-managed allowlist.
-        // An unset / empty `TAKOS_AGENT_TOOL_ALLOWLIST` means *no* remote
-        // tools are callable — operators must explicitly opt in.
-        let allowlist = resolve_tool_allowlist();
-        if !is_tool_allowed(&tool_name, allowlist.as_ref()) {
-            let error = format!("tool_not_permitted: {tool_name}");
-            self.client
-                .emit_run_event(
-                    "tool_result",
-                    tool_result_event(&tool_call_id, &tool_name, &error, "", Some(&error), 0),
-                )
-                .await
-                .ok();
-            return Err(EngineError::Tool(error));
-        }
-
-        self.execute_remote_tool(&tool_call_id, &tool_name, &tool_arguments)
+    async fn execute_with_context(
+        &self,
+        context: ToolExecutionContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolCallResult> {
+        self.execute_call(call, Some(&context.idempotency_key))
             .await
     }
 }
@@ -157,6 +185,7 @@ impl CompositeToolExecutor {
         tool_call_id: &str,
         tool_name: &str,
         tool_arguments: &Value,
+        idempotency_key: Option<&str>,
     ) -> Result<ToolCallResult> {
         let started_at = Instant::now();
         emit_tool_call_event(&self.client, tool_call_id, tool_name, tool_arguments)
@@ -170,9 +199,12 @@ impl CompositeToolExecutor {
         // cancellation token so an executor lease loss or a cancelled run
         // aborts the in-flight request future instead of waiting for the HTTP
         // timeout. When no token is wired (test paths) we simply await.
-        let execute_future =
-            self.client
-                .tool_execute(tool_call_id, tool_name, tool_arguments.clone());
+        let execute_future = self.client.tool_execute(
+            tool_call_id,
+            tool_name,
+            tool_arguments.clone(),
+            idempotency_key,
+        );
         let rpc_outcome = if let Some(token) = self.cancellation_token.clone() {
             tokio::select! {
                 biased;
@@ -478,6 +510,7 @@ mod tests {
                     parameters: json!({ "type": "object" }),
                     risk_level: Some("low".to_string()),
                     side_effects: Some(false),
+                    durable_idempotency: false,
                 },
                 ToolDefinition {
                     name: "example_read".to_string(),
@@ -485,6 +518,7 @@ mod tests {
                     parameters: json!({ "type": "object" }),
                     risk_level: Some("low".to_string()),
                     side_effects: Some(false),
+                    durable_idempotency: false,
                 },
             ],
         );
@@ -509,6 +543,7 @@ mod tests {
                     parameters: json!({ "type": "object" }),
                     risk_level: Some("low".to_string()),
                     side_effects: Some(false),
+                    durable_idempotency: false,
                 },
                 ToolDefinition {
                     name: "timeline_search".to_string(),
@@ -516,6 +551,7 @@ mod tests {
                     parameters: json!({ "type": "object" }),
                     risk_level: Some("low".to_string()),
                     side_effects: Some(false),
+                    durable_idempotency: false,
                 },
                 ToolDefinition {
                     name: "destructive_read_hint".to_string(),
@@ -523,6 +559,23 @@ mod tests {
                     parameters: json!({ "type": "object" }),
                     risk_level: Some("high".to_string()),
                     side_effects: Some(false),
+                    durable_idempotency: false,
+                },
+                ToolDefinition {
+                    name: "durably_fenced_write".to_string(),
+                    description: "Worker-fenced mutation".to_string(),
+                    parameters: json!({ "type": "object" }),
+                    risk_level: Some("high".to_string()),
+                    side_effects: Some(true),
+                    durable_idempotency: true,
+                },
+                ToolDefinition {
+                    name: "unattested_write".to_string(),
+                    description: "Mutation without executor-host fence proof".to_string(),
+                    parameters: json!({ "type": "object" }),
+                    risk_level: Some("high".to_string()),
+                    side_effects: Some(true),
+                    durable_idempotency: false,
                 },
             ],
         );
@@ -547,6 +600,22 @@ mod tests {
         assert_eq!(
             executor.execution_kind(&call("missing_metadata")),
             ToolExecutionKind::SideEffecting,
+        );
+        assert!(
+            executor.recovery_is_idempotent(&call("durably_fenced_write")),
+            "Worker-fenced mutations may replay the same engine operation key",
+        );
+        assert!(
+            !executor.recovery_is_idempotent(&call("destructive_read_hint")),
+            "side-effect metadata must explicitly guarantee the durable fence",
+        );
+        assert!(
+            !executor.recovery_is_idempotent(&call("missing_metadata")),
+            "unknown remote tools fail closed during checkpoint recovery",
+        );
+        assert!(
+            !executor.recovery_is_idempotent(&call("unattested_write")),
+            "side-effect metadata alone is not durable-fence evidence",
         );
         assert_eq!(
             executor.execution_kind(&call("semantic_search_memory")),
@@ -615,7 +684,7 @@ mod tests {
             CompositeToolExecutor::new(client, Vec::new()).with_cancellation_token(token.clone());
 
         let error = executor
-            .execute_remote_tool("call-uncertain", "publish", &json!({}))
+            .execute_remote_tool("call-uncertain", "publish", &json!({}), None)
             .await
             .expect_err("unknown side effect must stop the engine");
         server.abort();

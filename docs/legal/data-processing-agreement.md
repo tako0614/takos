@@ -152,7 +152,7 @@ risk of processing, including:
 | Authentication           | OAuth / session controls, API token verification, internal service signatures                                        |
 | Encryption               | TLS in transit; managed storage encryption or equivalent at rest                                                     |
 | Secrets                  | Secrets managed through `takosumi-private` operator state and operator secret stores; no secrets in OSS source paths |
-| Change management        | PR review, release gate, migration safety gate, patch management gate                                                |
+| Change management        | PR review; portable owner check; deploy through the owning repository's entrypoint with authoritative readback; independent review and isolated rehearsal for state transitions; patch-management evidence |
 | Logging                  | Request correlation, audit logs, redaction of secrets and sensitive values                                           |
 | Backups                  | Backup / restore cadence and retention documented in operations runbooks                                             |
 | Incident response        | SEV policy, incident response runbook, customer notification process                                                 |

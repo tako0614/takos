@@ -12,7 +12,7 @@ import { ModalProvider, useModals } from "./store/modal.tsx";
 import { NavigationProvider, useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
 
-function AppShell(props: { children: JSX.Element }) {
+function AppShell(props: { children?: JSX.Element }) {
   const auth = useAuth();
   const modal = useModals();
   const navigation = useNavigation();
@@ -72,7 +72,7 @@ function AppShell(props: { children: JSX.Element }) {
   );
 }
 
-function App(props: { children: JSX.Element }) {
+function App(props: { children?: JSX.Element }) {
   return (
     <AuthProvider>
       <ModalProvider>

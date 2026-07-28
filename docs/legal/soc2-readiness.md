@@ -14,7 +14,7 @@ Initial SOC 2 readiness scope:
 | ----------------------- | --------------------------------------------------------------- | ---------------- |
 | Application security    | `takos-worker`, `takos-agent`, Takosumi API boundary            | service owners   |
 | Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles   | operator         |
-| Change management       | PR review, release gate, staging promotion, rollback            | release owner    |
+| Change management       | PR review, candidate preparation, authenticated promotion, protocol-specific recovery | release owner    |
 | Incident response       | SEV policy, incident runbook, postmortem evidence               | on-call owner    |
 | Availability            | SLOs, capacity planning, backup / restore, DR plan              | operations owner |
 | Confidentiality         | secret rotation, access control, private deploy boundary        | security owner   |
@@ -34,11 +34,11 @@ Out of scope for the first readiness pass:
 | CC1 Control environment  | owner map, code of conduct, operating policies             | formal security ownership roster     |
 | CC2 Communication        | docs site, incident updates, support channel               | customer-facing status page evidence |
 | CC3 Risk assessment      | risk register, patch management, threat model backlog      | recurring risk review log            |
-| CC4 Monitoring           | release gate, observability stack, security audit workflow | alert review evidence                |
+| CC4 Monitoring           | release journal/readback, observability stack, security audit workflow | alert review evidence                |
 | CC5 Control activities   | CI gates, migration safety, branch protection policy       | branch protection export             |
 | CC6 Logical access       | OAuth/PAT verification, internal service signatures        | access review cadence                |
 | CC7 System operations    | on-call, SEV, backup/restore, DR                           | executed staging drills              |
-| CC8 Change management    | PR review, release gate, migration gate                    | production sign-off evidence         |
+| CC8 Change management    | PR review, owner check, owner gate then deploy, state-transition approval | production sign-off evidence         |
 | CC9 Vendor risk          | sub-processor list, DPA draft                              | vendor review records                |
 | A1 Availability          | capacity plan, SLOs, backup/restore, DR                    | sustained SLO reporting              |
 | C1 Confidentiality       | secret rotation, private deploy boundary, audit redaction  | data classification register         |
@@ -69,10 +69,13 @@ Out of scope for the first readiness pass:
 ### Change Management
 
 - PR review is required for production code.
-- Release gate is required before promotion.
-- Migration safety validator gates app DB changes.
+- the owner gate must pass before the deploy mutates the target;
+  `promote` is the sole official production-mutation entrypoint.
+- Schema/data migrations use the `STATE_TRANSITION` protocol with independent
+  review, isolated rehearsal, and a forward-repair plan.
 - Patch management validator gates base image policy.
-- Rollback SOP exists and is rehearsed in staging.
+- Reversible deployments rehearse rollback; state transitions rehearse
+  forward repair.
 
 ### Operations
 
@@ -102,7 +105,8 @@ Out of scope for the first readiness pass:
 ### Vendor Management
 
 - Stripe, Cloudflare, AWS, GCP, OpenAI, and hosting providers are listed.
-- Sub-processor list is published before GA.
+- Sub-processor list is published before the provider begins new production
+  processing of Customer Personal Data.
 - Vendor purpose and data category are documented.
 - Vendor security / privacy review evidence is stored privately.
 - New vendor onboarding requires owner approval.
@@ -119,7 +123,7 @@ Out of scope for the first readiness pass:
 | Cost monitoring   | `takosumi-private/operations/cost-monitoring.md`       | billing reconciliation    |
 | Patch management  | `takosumi-private/operations/patch-management.md`      | vulnerability exceptions  |
 | Migration safety  | `takosumi-private/operations/online-db-migrations.md`  | production migration logs |
-| Release gate      | ecosystem root `docs/quality/release-gate.md`          | CI run artifacts          |
+| Candidate and promotion evidence | ecosystem engineering handbook §9 and Takos owner gate | deploy record and readback receipt |
 
 ## Audit Preparation Backlog
 

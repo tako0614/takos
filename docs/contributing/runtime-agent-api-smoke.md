@@ -13,9 +13,9 @@ bun test \
 ```
 
 Takos product の agent 実行面は `takos/containers/agent` と `takos-agent-engine` の tests
-で扱います。product release gate では次を起点に確認します。
+で扱います。Takosのportable product gateは次です。
 
 ```sh
 cd takos
-bun run release-gate
+bun run check
 ```

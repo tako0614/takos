@@ -83,18 +83,15 @@ async function seedRepo() {
     args: ["acc1", "alice"],
   });
   await client.execute({
-    sql:
-      "INSERT INTO repositories (id, account_id, name, visibility, default_branch) VALUES (?, ?, ?, ?, ?)",
+    sql: "INSERT INTO repositories (id, account_id, name, visibility, default_branch) VALUES (?, ?, ?, ?, ?)",
     args: ["repo1", "acc1", "demo", "public", "main"],
   });
   await client.execute({
-    sql:
-      "INSERT INTO branches (id, repo_id, name, commit_sha, is_default) VALUES (?, ?, ?, ?, 1)",
+    sql: "INSERT INTO branches (id, repo_id, name, commit_sha, is_default) VALUES (?, ?, ?, ?, 1)",
     args: ["b1", "repo1", "main", commitSha],
   });
   await client.execute({
-    sql:
-      `INSERT INTO commits (id, repo_id, sha, tree_sha, author_name, author_email,
+    sql: `INSERT INTO commits (id, repo_id, sha, tree_sha, author_name, author_email,
          author_date, committer_name, committer_email, commit_date, message)
        VALUES (?, ?, ?, ?, 'A', 'a@x', '2026', 'A', 'a@x', '2026', 'init')`,
     args: ["c1", "repo1", commitSha, treeSha],
@@ -142,6 +139,11 @@ describe("git smart HTTP serve route", () => {
       env,
     );
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error:
+        "push is unavailable on the Takos compatibility endpoint; use the installed takos-git source.git.smart_http Interface",
+      code: "git_push_disabled",
+    });
   });
 
   test("unknown repo is 404", async () => {
@@ -193,9 +195,21 @@ describe("git smart HTTP serve route", () => {
         input: pack,
       });
       expect(unpack.status).toBe(0);
-      const cat = spawnSync("git", ["-C", repo, "cat-file", "-p", seeded.blobSha]);
+      const cat = spawnSync("git", [
+        "-C",
+        repo,
+        "cat-file",
+        "-p",
+        seeded.blobSha,
+      ]);
       expect(cat.stdout.toString()).toBe("hi\n");
-      const type = spawnSync("git", ["-C", repo, "cat-file", "-t", seeded.commitSha]);
+      const type = spawnSync("git", [
+        "-C",
+        repo,
+        "cat-file",
+        "-t",
+        seeded.commitSha,
+      ]);
       expect(type.stdout.toString().trim()).toBe("commit");
     } finally {
       rmSync(repo, { recursive: true, force: true });

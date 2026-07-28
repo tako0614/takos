@@ -1,18 +1,11 @@
 import { getDb } from "../../../infra/db/index.ts";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import type {
-  Repository,
   SecurityPosture,
   Space,
   SpaceRole,
 } from "../../../shared/types/index.ts";
 import { resolveUserPrincipalId } from "./principals.ts";
-
-export type RepoSummary = {
-  id: string;
-  name: string | null;
-  default_branch: string | null;
-};
 
 export type AccountLikeRow = {
   id: string;
@@ -60,7 +53,6 @@ export interface SpaceListItem {
   created_at: string;
   updated_at: string;
   member_role: SpaceRole;
-  repository: RepoSummary | null;
 }
 
 export function toWorkspaceKind(type: string): Space["kind"] {
@@ -92,62 +84,7 @@ export function accountToWorkspace(row: AccountLikeRow): Space {
   };
 }
 
-export function toRepository(row: {
-  id: string;
-  accountId: string;
-  name: string;
-  description: string | null;
-  visibility: string;
-  defaultBranch: string;
-  forkedFromId: string | null;
-  stars: number;
-  forks: number;
-  gitEnabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}): Repository {
-  return {
-    id: row.id,
-    space_id: row.accountId,
-    name: row.name,
-    description: row.description,
-    visibility: row.visibility as Repository["visibility"],
-    default_branch: row.defaultBranch,
-    forked_from_id: row.forkedFromId,
-    stars: row.stars,
-    forks: row.forks,
-    git_enabled: row.gitEnabled,
-    created_at: row.createdAt,
-    updated_at: row.updatedAt,
-  };
-}
-
-export function toRepositoryFromSummary(
-  workspace: Space,
-  repo: RepoSummary | null,
-): Repository | null {
-  if (!repo) return null;
-
-  return {
-    id: repo.id,
-    space_id: workspace.id,
-    name: repo.name || "main",
-    description: null,
-    visibility: "private",
-    default_branch: repo.default_branch || "main",
-    forked_from_id: null,
-    stars: 0,
-    forks: 0,
-    git_enabled: false,
-    created_at: workspace.created_at,
-    updated_at: workspace.updated_at,
-  } satisfies Repository;
-}
-
-export function toSpaceListItem(
-  row: MembershipWorkspaceRow,
-  repository: RepoSummary | null,
-): SpaceListItem {
+export function toSpaceListItem(row: MembershipWorkspaceRow): SpaceListItem {
   return {
     id: row.spaceId,
     kind: toWorkspaceKind(row.spaceType),
@@ -160,7 +97,6 @@ export function toSpaceListItem(
     created_at: row.spaceCreatedAt,
     updated_at: row.spaceUpdatedAt,
     member_role: row.memberRole as SpaceRole,
-    repository,
   };
 }
 
@@ -175,7 +111,6 @@ export function toPersonalWorkspaceListItem(
     | "createdAt"
     | "updatedAt"
   >,
-  repository: RepoSummary | null,
 ): SpaceListItem {
   return {
     id: row.id,
@@ -189,6 +124,5 @@ export function toPersonalWorkspaceListItem(
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     member_role: "owner",
-    repository,
   };
 }

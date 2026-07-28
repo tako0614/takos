@@ -1355,6 +1355,7 @@ mod tests {
             parameters: serde_json::json!({ "type": "object" }),
             risk_level: Some("low".to_string()),
             side_effects: Some(false),
+            durable_idempotency: false,
         }
     }
 

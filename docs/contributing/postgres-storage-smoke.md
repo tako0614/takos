@@ -21,5 +21,5 @@ cd takos
 bun run test
 ```
 
-Provider-owned live database proof は hosted Takosumi readiness evidence
-または distribution target evidence に添付します。
+Provider-owned live database / recovery proof はoperator-owned evidenceに
+添付します。これはproduct maturityの判定や単独のrelease approvalではありません。

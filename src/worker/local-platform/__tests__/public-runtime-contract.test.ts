@@ -93,7 +93,7 @@ test("local public runtime contract - keeps bootstrap and local runtime exports 
   assertStringIncludes(sourceFetchServer, "serveNodeFetch");
 });
 
-test("local public runtime contract - keeps Miniflare wiring behind the canonical tenant workload runtime factory", async () => {
+test("local public runtime contract - delegates tenant workloads to an external runtime boundary", async () => {
   const envBuilder = await read(
     "node-platform/env-builder.ts",
     sourcePackageRoot,
@@ -111,29 +111,25 @@ test("local public runtime contract - keeps Miniflare wiring behind the canonica
     sourcePackageRoot,
   );
 
-  assertStringIncludes(
-    envBuilder,
-    'from "../local-platform/tenant-worker-runtime.ts"',
-  );
-  assertStringIncludes(
-    dispatchResolver,
-    'from "../../local-platform/tenant-worker-runtime.ts"',
-  );
+  assert(!envBuilder.includes("tenant-worker-runtime"));
+  assert(!envBuilder.includes("dispatchRegistries"));
+  assert(!dispatchResolver.includes("tenant-worker-runtime"));
+  assert(!dispatchResolver.includes("createLocalTenantWorkerRuntimeRegistry"));
   assertStringIncludes(
     dispatchResolver,
-    "createLocalTenantWorkerRuntimeRegistry",
+    "createExternalRuntimeServiceRegistry",
   );
+  assertStringIncludes(envBuilder, "resolveRuntimeHostBinding");
+  assertStringIncludes(dispatchResolver, "runtimeHost?: ServiceBindingFetcher");
   assert(!envBuilder.includes("path.join(shared.dataDir, 'miniflare'"));
   assert(!envBuilder.includes("miniflare-registry"));
   assert(!envBuilder.includes("createDebugMiniflareFetcherRegistry"));
   assert(!envBuilder.includes("createLocalDebugTenantWorkerRuntimeRegistry"));
   assert(!tenantRuntime.includes("TAKOS_LOCAL_DEBUG_TENANT_RUNTIME"));
-  assertStringIncludes(tenantRuntime, 'path.join(dataDir, "tenant-runtime"');
   assertStringIncludes(tenantRuntime, 'import("./miniflare-registry.ts")');
-  assertStringIncludes(tenantRuntime, "createLocalTenantRuntimeRegistry");
-  assertStringIncludes(
-    tenantRuntime,
-    "const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> =>",
+  assert(
+    !dispatchResolver.includes("miniflare") &&
+      !envBuilder.includes("miniflare"),
   );
   assert(!servicesSchema.includes("currentDeploymentId"));
   assert(!servicesSchema.includes("previousDeploymentId"));

@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { validateAgentEngineCheckoutState } from "../../validate-agent-engine-source.ts";
 
 const source = {
-  schemaVersion: 1,
   repository: "tako0614/takos-agent-engine",
   commit: "a".repeat(40),
+  takosCommit: "c".repeat(40),
 };
 
 test("agent engine checkout must match the immutable pin and be clean", () => {

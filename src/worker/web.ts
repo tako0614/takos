@@ -21,13 +21,7 @@ import {
   createTakosDistributionWellKnown,
   createTakosProductWellKnown,
 } from "./server/routes/takosumi-discovery.ts";
-import { runCommonEnvScheduledMaintenance } from "./application/services/common-env/index.ts";
-import { dispatchScheduledComputeTriggers } from "./application/services/deployment/scheduled-triggers.ts";
-import { triggerScheduledWorkflows } from "./application/services/actions/actions-triggers.ts";
-import {
-  runScheduledFamilyMaintenance,
-  scheduledWorkflowWindowMinutes,
-} from "./application/services/maintenance/scheduled-cron.ts";
+import { runScheduledFamilyMaintenance } from "./application/services/maintenance/scheduled-cron.ts";
 import {
   clearFeaturedAppCatalogEntries,
   getFeaturedAppReconcileStatus,
@@ -59,7 +53,6 @@ import {
   getPlatformConfig,
   getPlatformServices,
 } from "./platform/accessors.ts";
-import runtimeHostHandler from "./runtime/container-hosts/runtime-host.ts";
 import executorHostHandler from "./runtime/container-hosts/executor-host.ts";
 
 // Durable Object exports for wrangler.toml bindings.
@@ -290,11 +283,26 @@ app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
   c.json(createTakosDistributionProductCapabilities(new URL(c.req.url).origin)),
 );
 
-app.get("/.well-known/takos", (c) =>
-  c.json(createTakosProductWellKnown(new URL(c.req.url).origin), 200, {
+app.get("/.well-known/takos", (c) => {
+  const result = createTakosProductWellKnown(new URL(c.req.url).origin, c.env);
+  if (!result.ok) {
+    // Fail closed: a document without the external issuer and this host's
+    // mobile client id is not a usable host advertisement, and shipping a
+    // partial one crashed the mobile shells at sign-in. `no-store` so a
+    // misconfigured window is not cached past the operator's fix.
+    return c.json(
+      {
+        error: "mobile_discovery_unconfigured",
+        message: `/.well-known/takos requires ${result.missing.join(", ")} to be set.`,
+      },
+      503,
+      { "Cache-Control": "no-store" },
+    );
+  }
+  return c.json(result.document, 200, {
     "Cache-Control": "public, max-age=300",
-  }),
-);
+  });
+});
 
 // ============================================================================
 // Unified container-host callbacks
@@ -302,13 +310,16 @@ app.get("/.well-known/takos", (c) =>
 // Cloudflare Containers live as Durable Object classes exported by this same
 // Worker. External callbacks from those containers still need stable HTTP paths,
 // so the main worker routes them into the in-process host handlers.
-
-app.all("/forward/*", async (c) => {
-  return runtimeHostHandler.fetch(
-    c.req.raw,
-    withUnifiedContainerHostEnv(c.env) as never,
-  );
-});
+//
+// Only token-verified callbacks may be mounted here: this app is public (a
+// workers.dev hostname is enough to reach it) and nothing ahead of these routes
+// authenticates. The agent-control host verifies a per-run proxy token issued at
+// dispatch before it touches a container. There is deliberately no `/forward/*`
+// mount: the runtime host has no such check, so mounting it publicly handed any
+// anonymous caller a proxy into the runtime container (and let them mint
+// space-scoped session proxy tokens via `/sessions`). The runtime host is
+// reached only through the RUNTIME_HOST service binding / DO stub, which is the
+// trust boundary runtime-host.ts documents.
 
 app.all("/api/internal/v1/agent-control/*", async (c) => {
   return executorHostHandler.fetch(
@@ -358,41 +369,9 @@ app.post("/internal/scheduled", async (c) => {
   const cron = c.req.query("cron") ?? "*/15 * * * *";
   const env = c.env;
   const errors: Array<{ job: string; error: string }> = [];
-  let appScheduleSummary: Awaited<
-    ReturnType<typeof dispatchScheduledComputeTriggers>
-  > | null = null;
-  let workflowScheduleSummary: Awaited<
-    ReturnType<typeof triggerScheduledWorkflows>
-  > | null = null;
 
   try {
     await runScheduledFamilyMaintenance(env, cron, errors);
-    await runCommonEnvScheduledMaintenance({ env, cron, errors });
-    const platform = getPlatformContext(c);
-    if (platform) {
-      appScheduleSummary = await dispatchScheduledComputeTriggers({
-        env,
-        platform,
-        cron,
-        errors,
-      });
-    } else {
-      errors.push({
-        job: "app-schedules",
-        error: "PLATFORM context is unavailable",
-      });
-    }
-    workflowScheduleSummary = await triggerScheduledWorkflows(
-      {
-        db: env.DB,
-        bucket: env.GIT_OBJECTS,
-        queue: env.WORKFLOW_QUEUE,
-        encryptionKey: env.ENCRYPTION_KEY,
-      },
-      {
-        windowMinutes: scheduledWorkflowWindowMinutes(cron),
-      },
-    );
   } catch (error) {
     errors.push({
       job: "scheduled-http",
@@ -403,12 +382,7 @@ app.post("/internal/scheduled", async (c) => {
   if (errors.length > 0) {
     return c.json({ status: "error", cron, errors }, 500);
   }
-  return c.json({
-    status: "ok",
-    cron,
-    appSchedules: appScheduleSummary,
-    workflowSchedules: workflowScheduleSummary,
-  });
+  return c.json({ status: "ok", cron });
 });
 
 app.put("/internal/featured-app-catalog", async (c) => {
@@ -777,60 +751,6 @@ export function createWebWorker(
       await runScheduledFamilyMaintenance(bindings, cron, errors, {
         logSuccesses: true,
       });
-
-      await runCommonEnvScheduledMaintenance({ env: bindings, cron, errors });
-
-      try {
-        const summary = await dispatchScheduledComputeTriggers({
-          env: bindings,
-          platform,
-          cron,
-          errors,
-        });
-        if (summary.targetsDispatched > 0) {
-          logInfo("app schedule dispatch completed", {
-            module: "cron",
-            cron,
-            ...summary,
-          });
-        }
-      } catch (error) {
-        errors.push({
-          job: "app-schedules",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-
-      try {
-        const summary = await triggerScheduledWorkflows(
-          {
-            db: bindings.DB,
-            bucket: bindings.GIT_OBJECTS,
-            queue: bindings.WORKFLOW_QUEUE,
-            encryptionKey: bindings.ENCRYPTION_KEY,
-          },
-          {
-            windowMinutes: scheduledWorkflowWindowMinutes(cron),
-          },
-        );
-        if (summary.triggeredRunIds.length > 0) {
-          logInfo("workflow schedule dispatch completed", {
-            module: "cron",
-            cron,
-            reposScanned: String(summary.reposScanned),
-            workflowsScanned: String(summary.workflowsScanned),
-            schedulesMatched: String(summary.schedulesMatched),
-            triggered: String(summary.triggeredRunIds.length),
-            skippedDuplicates: String(summary.skippedDuplicates),
-            invalidCrons: String(summary.invalidCrons),
-          });
-        }
-      } catch (error) {
-        errors.push({
-          job: "workflow-schedules",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
 
       if (errors.length > 0) {
         logError(

@@ -29,38 +29,29 @@ import { resolveSpaceRole } from "../../application/services/platform/capabiliti
 export type RunBootstrap = {
   status: SelectOf<typeof runs>["status"] | null;
   spaceId: string;
-  installationId?: string;
+  capsuleId?: string;
   runtimeNamespace?: string;
   threadId: string;
   userId: string;
   agentType: string;
 };
 
-export type RunBootstrapInstallationContext = Pick<
+export type RunBootstrapCapsuleContext = Pick<
   RunBootstrap,
-  "installationId" | "runtimeNamespace"
+  "capsuleId" | "runtimeNamespace"
 >;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-export function readRunBootstrapInstallationContext(
+export function readRunBootstrapCapsuleContext(
   input: string | null | undefined,
-): RunBootstrapInstallationContext {
+): RunBootstrapCapsuleContext {
   const parsed = parseRunInputObject(input);
   if (!parsed) return {};
 
-  const installationId =
-    readStringValue(parsed, [
-      "installationId",
-      "installation_id",
-      "appInstallationId",
-      "app_installation_id",
-    ]) ??
-    readNestedStringValue(parsed, ["installation", "id"]) ??
-    readNestedStringValue(parsed, ["appInstallation", "id"]) ??
-    readNestedStringValue(parsed, ["accounts", "installationId"]);
+  const capsuleId = readStringValue(parsed, ["capsule_id"]);
   const runtimeNamespace =
     readStringValue(parsed, [
       "runtimeNamespace",
@@ -74,7 +65,7 @@ export function readRunBootstrapInstallationContext(
     readNestedStringValue(parsed, ["runtimeBinding", "target_id"]);
 
   return {
-    ...(installationId ? { installationId } : {}),
+    ...(capsuleId ? { capsuleId } : {}),
     ...(runtimeNamespace ? { runtimeNamespace } : {}),
   };
 }
@@ -132,7 +123,7 @@ function readNestedStringValue(
 }
 
 export async function resolveExecutionUserIdForRun(
-  env: Env,
+  env: Pick<Env, "DB">,
   runId: string,
 ): Promise<string> {
   const db = getDb(env.DB);
@@ -187,7 +178,7 @@ export async function resolveExecutionUserIdForRun(
  * the viewer fallback after the requester is removed or suspended.
  */
 export async function assertRunExecutionAccess(
-  env: Env,
+  env: Pick<Env, "DB">,
   runId: string,
 ): Promise<{
   userId: string;
@@ -255,7 +246,7 @@ export async function getRunBootstrap(
   return {
     status: run.status,
     spaceId: run.accountId,
-    ...readRunBootstrapInstallationContext(run.input),
+    ...readRunBootstrapCapsuleContext(run.input),
     threadId: run.threadId,
     userId,
     agentType: run.agentType,

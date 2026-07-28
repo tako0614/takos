@@ -20,7 +20,7 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
 ];
 const PERMISSION_SCOPE_DOCS = [TAKOSUMI_OPERATOR_PATH];
 const TAKOSUMI_MODEL_DOCS = [
-  "../docs/platform/runtime-modes.md",
+  "../takos-control/docs/platform/runtime-modes.md",
   TAKOSUMI_MODEL_PATH,
   "docs/platform/upgrade-export.md",
 ];
@@ -35,8 +35,165 @@ const ACCOUNT_MODEL_REQUIRED_TERMS = [
   "email_verified = true",
   "identity.oidc",
   "personal_access_tokens",
-  "公開 contract ではなく private operator evidence shaping",
+  "公開された契約ではなく、オペレーターが非公開で行う証跡整備",
 ];
+const RETIRED_LOCAL_LIFECYCLE_SOURCE_RULES = [
+  {
+    path: "src/worker/server/routes/api.ts",
+    forbidden: [
+      'from "./workers/index.ts"',
+      'from "./resources/index.ts"',
+      'from "./custom-domains.ts"',
+      'from "./groups.ts"',
+      "workersSpaceRoutes",
+      'apiRouter.route("/services"',
+      'apiRouter.route("/resources"',
+    ],
+  },
+  {
+    path: "src/worker/web.ts",
+    forbidden: [
+      "application/services/deployment/",
+      "dispatchScheduledComputeTriggers",
+      "application/services/common-env/",
+      "runCommonEnvScheduledMaintenance",
+    ],
+  },
+  {
+    path: "src/worker/application/services/maintenance/scheduled-cron.ts",
+    forbidden: [
+      "runCustomDomainReverification",
+      "reconcileStuckDomains",
+    ],
+  },
+  {
+    path: "src/worker/runtime/queues/workflow-runner.ts",
+    forbidden: [
+      "./deploy-jobs.ts",
+      "application/services/deployment/",
+      "DeploymentService",
+    ],
+  },
+  {
+    path: "src/worker/runtime/worker/runtime-factory.ts",
+    forbidden: [
+      "./deploy-jobs.ts",
+      "application/services/deployment/",
+      "DeploymentService",
+    ],
+  },
+  {
+    path: "src/worker/local-platform/persistent-d1.ts",
+    forbidden: [
+      "ensureSqliteServicesTableShape",
+      "ensureSqliteDeploymentsTableShape",
+      "ensureSqliteResourcesTableShape",
+      "ensurePostgresServicesTableShape",
+      "ensurePostgresDeploymentsTableShape",
+      "ensurePostgresResourcesTableShape",
+    ],
+  },
+  {
+    path: "src/worker/node-platform/env-builder.ts",
+    forbidden: [
+      "tenant-worker-runtime",
+      "dispatchRegistries",
+    ],
+  },
+  {
+    path: "src/worker/node-platform/resolvers/dispatch-resolver.ts",
+    forbidden: [
+      "tenant-worker-runtime",
+      "miniflare",
+      "SqlDatabaseBinding",
+      "workerBundles",
+      "DeploymentService",
+    ],
+  },
+  {
+    path: "src/contracts/public/public-api.ts",
+    forbidden: [
+      "/api/public/v1/deployments",
+      "DeploymentCreateRequest",
+      "RetiredDeploymentCreateResponse",
+    ],
+  },
+  {
+    path: "src/contracts/public/rpc-types.ts",
+    forbidden: [
+      "/public/v1/deployments",
+      "DeploymentCreateRequest",
+      "RetiredDeploymentCreateResponse",
+    ],
+  },
+  {
+    path: "src/worker/application/tools/tool-policy-types.ts",
+    forbidden: [
+      '"service.',
+      '"custom_domain.',
+      '"deployment.',
+    ],
+  },
+  {
+    path: "src/worker/application/tools/tool-policy-space-operations.ts",
+    forbidden: [
+      "/api/services",
+      '"service.',
+      '"custom_domain.',
+      '"deployment.',
+    ],
+  },
+  {
+    path: "src/worker/server/routes/spaces/routes.ts",
+    forbidden: [
+      "/api/resources/",
+      "resourceAccess",
+    ],
+  },
+  {
+    path: "web/src/app-route-schema.ts",
+    forbidden: [
+      'componentKey: "deploy"',
+      '"/deploy"',
+      '"/resources"',
+      '"/workers"',
+      '"/deployments"',
+      '"/services"',
+    ],
+  },
+  {
+    path: "web/src/types/routing.ts",
+    forbidden: [
+      '| "deploy"',
+      "DeploySection",
+      "deploySection",
+    ],
+  },
+  {
+    path: "web/src/components/layout/AuthenticatedLayout.tsx",
+    forbidden: ['view: "deploy"'],
+  },
+  {
+    path: "web/src/components/navigation/UnifiedSidebar.tsx",
+    forbidden: ['activeView === "deploy"'],
+  },
+  {
+    path: "web/src/components/notifications/notification-target.ts",
+    forbidden: ['view: "deploy"'],
+  },
+] as const;
+const RETIRED_LOCAL_LIFECYCLE_PATHS = [
+  "web/src/hooks/useResourceExplorer.ts",
+  "web/src/hooks/useSpaceResources.ts",
+  "web/src/hooks/useSpaceWorkers.ts",
+  "web/src/hooks/useWorkerSettings.ts",
+  "web/src/views/app/space/DeployPanel.tsx",
+] as const;
+const RETIRED_LOCAL_LIFECYCLE_DIRS = [
+  "web/src/views/workers",
+] as const;
+const RETIRED_DEPLOYMENT_QUEUE_TOMBSTONE_PATH =
+  "src/worker/runtime/queues/deployment-runner.ts";
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
     pattern:
@@ -149,6 +306,20 @@ async function pathExists(path: string): Promise<boolean> {
     }
     throw error;
   }
+}
+
+async function listFilesRecursively(path: string): Promise<string[]> {
+  if (!(await pathExists(path))) return [];
+  const files: string[] = [];
+  for await (const entry of runtime.readDir(path)) {
+    const entryPath = `${path}/${entry.name}`;
+    if (entry.isDirectory) {
+      files.push(...await listFilesRecursively(entryPath));
+    } else if (entry.isFile || entry.isSymlink) {
+      files.push(entryPath);
+    }
+  }
+  return files;
 }
 
 async function readText(
@@ -380,6 +551,81 @@ async function validateAccountModelDocs(
   }
 }
 
+async function validateRetiredLocalLifecycleAuthority(
+  failures: CheckFailure[],
+): Promise<void> {
+  for (const rule of RETIRED_LOCAL_LIFECYCLE_SOURCE_RULES) {
+    const text = await readText(rule.path, failures);
+    for (const forbidden of rule.forbidden) {
+      const index = text.indexOf(forbidden);
+      if (index < 0) continue;
+      failures.push({
+        path: `${rule.path}:${lineNumberAt(text, index)}`,
+        message:
+          `Retired product-local deploy/resource lifecycle marker remains active: ${forbidden}`,
+      });
+    }
+  }
+
+  for (const path of RETIRED_LOCAL_LIFECYCLE_PATHS) {
+    if (!(await pathExists(path))) continue;
+    failures.push({
+      path,
+      message:
+        "Retired product-local deploy/resource UI must not be reintroduced.",
+    });
+  }
+
+  for (const path of RETIRED_LOCAL_LIFECYCLE_DIRS) {
+    const files = await listFilesRecursively(path);
+    for (const file of files) {
+      failures.push({
+        path: file,
+        message:
+          "Retired product-local deploy/resource UI must not be reintroduced.",
+      });
+    }
+  }
+
+  const tombstone = await readText(
+    RETIRED_DEPLOYMENT_QUEUE_TOMBSTONE_PATH,
+    failures,
+  );
+  for (
+    const required of [
+      'lifecycleOwner: "takosumi"',
+      "message.ack()",
+      "MessageQueueBatch<unknown>",
+    ]
+  ) {
+    if (tombstone.includes(required)) continue;
+    failures.push({
+      path: RETIRED_DEPLOYMENT_QUEUE_TOMBSTONE_PATH,
+      message:
+        `Retired deployment queue tombstone must contain: ${required}`,
+    });
+  }
+  for (
+    const forbidden of [
+      "DeploymentService",
+      "./deploy-jobs.ts",
+      "application/services/deployment/",
+      "getDb(",
+    ]
+  ) {
+    const index = tombstone.indexOf(forbidden);
+    if (index < 0) continue;
+    failures.push({
+      path:
+        `${RETIRED_DEPLOYMENT_QUEUE_TOMBSTONE_PATH}:${
+          lineNumberAt(tombstone, index)
+        }`,
+      message:
+        `Retired deployment queue tombstone must not mutate lifecycle state: ${forbidden}`,
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const failures: CheckFailure[] = [];
 
@@ -405,6 +651,7 @@ async function main(): Promise<void> {
   await validateTakosumiModelDocs(failures);
   await validateRuntimeTargetDocs(failures);
   await validateAccountModelDocs(failures);
+  await validateRetiredLocalLifecycleAuthority(failures);
 
   if (failures.length > 0) {
     console.error("Architecture alignment validation failed:");
@@ -429,6 +676,7 @@ async function main(): Promise<void> {
     `Verified runtime target docs in ${RUNTIME_TARGET_DOCS.length} files.`,
   );
   console.log("Verified account model docs.");
+  console.log("Verified retired product-local lifecycle boundaries.");
 }
 
 if (import.meta.main) {

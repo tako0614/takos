@@ -10,11 +10,7 @@ export type {
   ToolClass,
 } from "./tool-policy-types.ts";
 export {
-  CUSTOM_DOMAIN_OPS,
-  DEPLOYMENT_OPS,
   MCP_SERVER_OPS,
-  REPO_OPS,
-  SERVICE_OPS,
   SKILL_OPS,
   SPACE_STORAGE_OPS,
 } from "./tool-policy-types.ts";

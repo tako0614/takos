@@ -46,7 +46,6 @@ import {
   normalizePublicationDefinition,
   publicationAllowedFields,
   publicationOutputContract,
-  isRuntimeProjectionPublicationName,
   type PublicationOutputDescriptor,
   resolveConsumeOutputEnvName,
   RUNTIME_PROJECTION_CAPABILITIES,
@@ -510,8 +509,7 @@ export function validateConsumeReferences(
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
         !publication &&
-        isReservedTakosPublicationSource(consume.publication) &&
-        !isRuntimeProjectionPublicationName(consume.publication)
+        isReservedTakosPublicationSource(consume.publication)
       ) {
         errors.push({
           code: "publication_reserved",
@@ -577,8 +575,7 @@ export function validateConsumeEnvCollision(
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
         !publication &&
-        isReservedTakosPublicationSource(consume.publication) &&
-        !isRuntimeProjectionPublicationName(consume.publication)
+        isReservedTakosPublicationSource(consume.publication)
       ) {
         continue;
       }

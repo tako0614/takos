@@ -3,7 +3,8 @@
 > このページでわかること: Takos / Takosumi ecosystem の first-party
 > license inventory、REUSE / SPDX baseline、third-party inventory の更新ルール。
 
-This page is the release-facing compliance artifact. The canonical policy is
+This page is license evidence consumed by product checks and the deploy
+entrypoint's owner gate; it is not deploy authority. The canonical policy is
 `docs/reference/license-policy.md` in the ecosystem root: network services and
 control planes use `AGPL-3.0-only`, yurucommu family packages and deployable
 network products also use `AGPL-3.0-only`, GPL-dependent apps use
@@ -20,14 +21,14 @@ network products also use `AGPL-3.0-only`, GPL-dependent apps use
 | `takosumi/`                  | `AGPL-3.0-only` | `takosumi/LICENSE`, `.reuse/dep5`, service/dashboard/docs/site package metadata  |
 | `takosumi/accounts/contract` | `MIT`           | package metadata and `takosumi/.reuse/dep5` stanza                               |
 | `takosumi/cli`               | `MIT`           | package metadata and `takosumi/.reuse/dep5` stanza                               |
-| `takosumi/mobile-kit`        | `MIT`           | package metadata and `takosumi/.reuse/dep5` stanza                               |
+| `mobile-kit/`                | `MIT`           | sibling repo `LICENSE`, `.reuse/dep5`, and package metadata                       |
 | `takosumi/provider`          | `MIT`           | `provider/LICENSE` and `takosumi/.reuse/dep5` stanza                             |
 | `takosumi/examples/*`        | `MIT`           | package metadata and `takosumi/.reuse/dep5` stanza                               |
 | `takosumi-cloud/`            | `UNLICENSED`    | private package metadata; no OSS `LICENSE` in the public checkout                |
 | `takosumi-private/`          | no OSS license  | operator state only; realized config and secrets evidence remain private         |
 | `takos-agent-engine/`        | `MIT`           | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                 |
-| `takos-apps/takos-computer/` | `MIT`           | `LICENSE`, `.reuse/dep5`, npm package metadata                                   |
-| `takos-apps/takos-office/`   | `GPL-3.0-only`  | `LICENSE`, `.reuse/dep5`, npm metadata; aligned with GPL dependency posture      |
+| `takos-computer/`            | `MIT`           | sibling repo `LICENSE`, `.reuse/dep5`, npm package metadata                       |
+| `takos-office/`              | `GPL-3.0-only`  | sibling repo `LICENSE`, `.reuse/dep5`, npm metadata; aligned with GPL dependencies |
 | `road-to-me/`                | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, npm / Cargo metadata                                   |
 | `yurucommu-core/`            | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, core package metadata                                  |
 | `@takosjp/yurucommu-api`     | `AGPL-3.0-only` | `packages/api/LICENSE`, package metadata                                         |
@@ -48,8 +49,9 @@ Every public repo in the ecosystem must carry:
 Repos with mixed license surfaces keep a default repo license and add narrower
 `.reuse/dep5` stanzas. Today that applies to:
 
-- `takosumi/`: default `AGPL-3.0-only`; public contracts, CLI, mobile kit,
+- `takosumi/`: default `AGPL-3.0-only`; public contracts, CLI,
   provider, and examples are `MIT`
+- `mobile-kit/`: independent `MIT` sibling shared by the four mobile shells
 - Yurucommu family packages: `yurucommu-core`, `@takosjp/yurucommu-api`,
   `yurucommu`, and `yurumeet` are all `AGPL-3.0-only`
 
@@ -60,20 +62,23 @@ commercial license.
 ## Third-party Inventory
 
 The third-party inventory is published at
-`/legal/third-party-license-inventory`. Release owners update it whenever
-lockfiles change in a way that adds a new license family, introduces copyleft /
-source-available terms, or changes a direct dependency with a known
-commercial-license option.
+`/legal/third-party-license-inventory`. The owning repository updates it in the
+same dependency-changing change whenever a lockfile adds a new license family,
+introduces copyleft / source-available terms, or changes a direct dependency
+with a known commercial-license option.
 
-## Release Gate
+## Candidate Evidence Check
 
-Run from the ecosystem root:
+Run the portable owner gate from the Takos root:
 
 ```sh
-bun run check:license-compliance
+cd takos
+bun run check
 ```
 
-The gate validates:
+Cross-repository license changes also run the `takos-control` workspace gate.
+The deploy entrypoint's owner gate consumes the resulting issuer-bound evidence; the
+check itself does not authorize promotion. The validation covers:
 
 - public repo `LICENSE` files match the approved first-party license inventory
 - `.reuse/dep5` exists and names each expected SPDX license id

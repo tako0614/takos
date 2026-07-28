@@ -7,21 +7,19 @@ import { rpcJson } from "../../lib/rpc.ts";
  * Capsules needing input/provider config go through the /new flow instead.
  */
 interface PlanResponse {
-  readonly source?: { readonly commit?: string };
   readonly expected?: {
-    readonly commit?: string;
-    readonly planDigest?: string;
-    readonly currentDeploymentId?: string | null;
+    readonly workspaceId: string;
+    readonly sourceId?: string;
+    readonly capsuleId: string;
+    readonly runId: string;
   };
-  readonly planDigest?: string;
-  readonly runtime?: { readonly modes?: readonly string[] };
 }
 
 export async function installFromStore(
   spaceId: string,
   src: { git: string; ref: string },
 ): Promise<void> {
-  const base = `/api/spaces/${encodeURIComponent(spaceId)}/app-installations/git-url`;
+  const base = `/api/spaces/${encodeURIComponent(spaceId)}/capsules/git-url`;
   const planRes = await fetch(`${base}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,22 +27,14 @@ export async function installFromStore(
   });
   const plan = await rpcJson<PlanResponse>(planRes);
 
-  const sourceCommit = plan.source?.commit;
-  const expectedCommit = plan.expected?.commit ?? sourceCommit;
-  const planDigest = plan.planDigest ?? plan.expected?.planDigest;
-  const mode = plan.runtime?.modes?.[0] ?? "";
+  if (!plan.expected) {
+    throw new Error("Capsule plan response is missing its exact Run reference");
+  }
 
   const applyRes = await fetch(`${base}/apply`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      git_url: src.git,
-      ref: src.ref,
-      ...(mode ? { mode } : {}),
-      expected_commit: expectedCommit,
-      expected_plan_digest: planDigest,
-      cost_ack: true,
-    }),
+    body: JSON.stringify({ expected: plan.expected }),
   });
   await rpcJson(applyRes);
 }

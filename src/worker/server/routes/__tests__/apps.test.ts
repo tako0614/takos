@@ -1,41 +1,12 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
 import { Hono } from "hono";
-import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import {
   appsRouteDeps,
   registerAppApiRoutes,
   resolveLauncherIcon,
 } from "../apps/routes.ts";
-
-type PreparedRecord = {
-  sql: string;
-  args: unknown[];
-  method: "all" | "first" | "run" | "raw" | "";
-};
-
-type AppRow = {
-  id: string;
-  name: string;
-  description: string | null;
-  icon: string | null;
-  appType: string | null;
-  accountId: string;
-  groupId?: string | null;
-  sourceType?: string | null;
-  publicationType?: string | null;
-  specJson?: string | null;
-  resolvedJson?: string | null;
-  serviceConfig?: string | null;
-  serviceHostname: string | null;
-  serviceStatus: string | null;
-  accountName: string | null;
-  accountSlug: string | null;
-  accountType: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 test("launcher icons use the shared Interface display contract", () => {
   assertEquals(
@@ -69,163 +40,13 @@ test("launcher icons use the shared Interface display contract", () => {
   assertEquals(resolveLauncherIcon("/icon.svg", null), null);
 });
 
-function createFakeSqlDatabase(initialRows: AppRow[]) {
-  const rows = initialRows.map((row) => ({ ...row }));
-  const prepared: PreparedRecord[] = [];
-
-  const db = {
-    prepared,
-    prepare(sql: string) {
-      const record: PreparedRecord = { sql, args: [], method: "" };
-      prepared.push(record);
-
-      const statement = {
-        bind(...values: unknown[]) {
-          record.args = values;
-          return statement;
-        },
-        async all() {
-          record.method = "all";
-          return {
-            results: selectRows(record, rows),
-            success: true as const,
-            meta: emptyMeta(),
-          };
-        },
-        async first<T = Record<string, unknown>>() {
-          record.method = "first";
-          return (selectRows(record, rows)[0] ?? null) as T | null;
-        },
-        async run() {
-          record.method = "run";
-          return {
-            results: [],
-            success: true as const,
-            meta: emptyMeta(),
-          };
-        },
-        async raw() {
-          record.method = "raw";
-          const row = selectRows(record, rows)[0];
-          if (!row) return [];
-
-          const sql = record.sql.toLowerCase();
-          return [
-            [
-              row.id,
-              row.name,
-              row.description,
-              row.icon,
-              row.appType,
-              row.accountId,
-              row.serviceHostname,
-              row.serviceStatus,
-              row.accountName,
-              row.accountSlug,
-              row.accountType,
-            ],
-          ];
-        },
-      };
-
-      return statement;
-    },
-    async batch(statements: Array<{ run(): Promise<unknown> }>) {
-      return await Promise.all(statements.map((statement) => statement.run()));
-    },
-    async exec() {
-      return { count: 0, duration: 0 };
-    },
-    withSession() {
-      return db;
-    },
-    async dump() {
-      return new ArrayBuffer(0);
-    },
-  };
-
-  function selectRows(record: PreparedRecord, source: AppRow[]) {
-    const sql = record.sql.toLowerCase();
-    if (!sql.includes("apps") && !sql.includes("publications")) return [];
-
-    const appId = record.args.find(
-      (value) =>
-        typeof value === "string" && source.some((row) => row.id === value),
-    ) as string | undefined;
-    const accountId = record.args.find(
-      (value) =>
-        typeof value === "string" &&
-        source.some((row) => row.accountId === value),
-    ) as string | undefined;
-
-    if (appId && accountId) {
-      return source.filter(
-        (row) => row.id === appId && row.accountId === accountId,
-      );
-    }
-
-    if (accountId) {
-      return source.filter((row) => row.accountId === accountId);
-    }
-
-    return [];
-  }
-
-  function emptyMeta() {
-    return {
-      changed_db: false,
-      changes: 0,
-      duration: 0,
-      last_row_id: 0,
-      rows_read: 0,
-      rows_written: 0,
-      served_by: "test",
-      size_after: 0,
-    };
-  }
-
-  return { db, prepared, rows };
-}
-
-test("app mutations resolve the requested space before returning not found", async () => {
+test("app launcher is an authorized Takosumi Interface view", async () => {
   const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
-  const accessCalls: Array<{ spaceId: string; userId: string }> = [];
-
-  const { db, prepared } = createFakeSqlDatabase([
-    {
-      id: "app-space-1",
-      name: "space-app",
-      description: "Workspace app",
-      icon: "📦",
-      appType: "custom",
-      accountId: "space-123",
-      groupId: "group-1",
-      sourceType: "runtime_projection",
-      publicationType: "interface.ui.surface",
-      specJson: JSON.stringify({
-        name: "space-app",
-        type: "interface.ui.surface",
-        publisher: "web",
-        outputs: { url: { kind: "url", routeRef: "root" } },
-        display: {
-          title: "Workspace app",
-          icon: "📦",
-        },
-      }),
-      resolvedJson: JSON.stringify({
-        url: "https://app.example",
-      }),
-      serviceConfig: JSON.stringify({}),
-      serviceHostname: null,
-      serviceStatus: null,
-      accountName: "Workspace",
-      accountSlug: "workspace",
-      accountType: "workspace",
-      createdAt: "2026-04-20T00:00:00.000Z",
-      updatedAt: "2026-04-20T00:00:00.000Z",
-    },
-  ]);
-
+  const originalResolveAuthorization =
+    appsRouteDeps.resolveRuntimeInterfaceAuthorization;
+  const originalFetchInterfaces =
+    appsRouteDeps.fetchAuthorizedRuntimeInterfaces;
+  const selectors: unknown[] = [];
   const app = new Hono<{
     Bindings: { DB: unknown };
     Variables: {
@@ -233,28 +54,162 @@ test("app mutations resolve the requested space before returning not found", asy
     };
   }>();
 
-  app.onError((error, c) => {
-    if (isAppError(error)) {
-      return c.json(
-        error.toResponse(),
-        error.statusCode as
-          | 400
-          | 401
-          | 403
-          | 404
-          | 409
-          | 410
-          | 422
-          | 429
-          | 500
-          | 501
-          | 502
-          | 503
-          | 504,
-      );
-    }
-    throw error;
+  app.use("*", async (c, next) => {
+    c.set("user", {
+      id: "local-user",
+      principal_id: "local-principal",
+    });
+    await next();
   });
+  registerAppApiRoutes(app as never);
+
+  try {
+    appsRouteDeps.requireSpaceAccess = async (_c, spaceId, userId) => {
+      assertEquals(spaceId, "local-workspace");
+      assertEquals(userId, "local-user");
+      return { space: { id: "local-workspace-id" } } as never;
+    };
+    appsRouteDeps.resolveRuntimeInterfaceAuthorization = async (_env, userId) => {
+      assertEquals(userId, "local-user");
+      return {
+        baseUrl: "https://accounts.takosumi.test",
+        token: "delegated-token",
+        subjectId: "takosumi-principal",
+        workspaceId: "takosumi-workspace",
+      };
+    };
+    appsRouteDeps.fetchAuthorizedRuntimeInterfaces = async (
+      selector,
+      config,
+    ) => {
+      selectors.push(selector);
+      assertEquals(config.subjectId, "takosumi-principal");
+      return [
+        {
+          interface: {
+            apiVersion: "takosumi.dev/v1alpha1",
+            kind: "Interface",
+            metadata: {
+              id: "if_docs",
+              workspaceId: "takosumi-workspace",
+              name: "docs",
+              ownerRef: { kind: "Capsule", id: "capsule_docs" },
+              generation: 2,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              updatedAt: "2026-07-02T00:00:00.000Z",
+            },
+            spec: {
+              type: "interface.ui.surface",
+              version: "1",
+              document: {
+                launcher: true,
+                display: {
+                  title: "Docs",
+                  description: "Workspace documents",
+                  icon: "/icon.svg",
+                  category: "productivity",
+                  sortOrder: 4,
+                },
+              },
+              inputs: {
+                url: {
+                  source: "literal",
+                  value: "https://docs.example.test/app",
+                },
+              },
+              access: { visibility: "workspace" },
+            },
+            status: {
+              phase: "Resolved",
+              observedGeneration: 2,
+              resolvedRevision: 3,
+              resolvedInputs: { url: "https://docs.example.test/app" },
+            },
+          },
+          binding: {
+            apiVersion: "takosumi.dev/v1alpha1",
+            kind: "InterfaceBinding",
+            metadata: {
+              id: "ifb_docs",
+              workspaceId: "takosumi-workspace",
+              generation: 1,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              updatedAt: "2026-07-01T00:00:00.000Z",
+            },
+            spec: {
+              interfaceId: "if_docs",
+              subjectRef: {
+                kind: "Principal",
+                id: "takosumi-principal",
+              },
+              permissions: ["ui.open"],
+              delivery: { type: "none" },
+            },
+            status: {
+              phase: "Ready",
+              observedInterfaceRevision: 3,
+            },
+          },
+        },
+      ] as never;
+    };
+
+    const response = await app.request(
+      "/apps",
+      {
+        headers: { "X-Takos-Space-Id": "local-workspace" },
+      },
+      { DB: {} },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(selectors, [
+      {
+        workspaceId: "takosumi-workspace",
+        type: "interface.ui.surface",
+        permission: "ui.open",
+        deliveryTypes: ["none"],
+      },
+    ]);
+    assertEquals(await response.json(), {
+      apps: [
+        {
+          id: "if_docs",
+          name: "Docs",
+          description: "Workspace documents",
+          icon: "https://docs.example.test/icon.svg",
+          app_type: "custom",
+          url: "https://docs.example.test/app",
+          space_id: "local-workspace",
+          space_name: null,
+          service_hostname: "docs.example.test",
+          service_status: "ready",
+          source_type: "interface",
+          capsule_id: "capsule_docs",
+          interface_name: "docs",
+          category: "productivity",
+          sort_order: 4,
+          created_at: "2026-07-01T00:00:00.000Z",
+          updated_at: "2026-07-02T00:00:00.000Z",
+        },
+      ],
+    });
+  } finally {
+    appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    appsRouteDeps.resolveRuntimeInterfaceAuthorization =
+      originalResolveAuthorization;
+    appsRouteDeps.fetchAuthorizedRuntimeInterfaces = originalFetchInterfaces;
+  }
+});
+
+test("app Interface views expose no local mutation routes", async () => {
+  const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
+
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: {
+      user: { id: string; principal_id: string };
+    };
+  }>();
 
   app.use("*", async (c, next) => {
     c.set("user", {
@@ -267,14 +222,9 @@ test("app mutations resolve the requested space before returning not found", asy
   registerAppApiRoutes(app as never);
 
   try {
-    appsRouteDeps.requireSpaceAccess = async (_c, spaceId, userId) => {
-      accessCalls.push({ spaceId, userId });
-      return {
-        space: { id: "space-123" },
-      } as never;
+    appsRouteDeps.requireSpaceAccess = async () => {
+      throw new Error("unregistered mutation route performed access work");
     };
-
-    const env = { DB: db };
 
     const headers = {
       "Content-Type": "application/json",
@@ -286,9 +236,9 @@ test("app mutations resolve the requested space before returning not found", asy
       {
         method: "PATCH",
         headers,
-        body: JSON.stringify({ description: "Updated" }),
+        body: "{not-json",
       },
-      env,
+      { DB: {} },
     );
     assertEquals(patchResponse.status, 404);
 
@@ -300,7 +250,7 @@ test("app mutations resolve the requested space before returning not found", asy
           "X-Takos-Space-Id": "space-123",
         },
       },
-      env,
+      { DB: {} },
     );
     assertEquals(clientKeyResponse.status, 404);
 
@@ -312,23 +262,9 @@ test("app mutations resolve the requested space before returning not found", asy
           "X-Takos-Space-Id": "space-123",
         },
       },
-      env,
+      { DB: {} },
     );
     assertEquals(deleteResponse.status, 404);
-
-    assertEquals(accessCalls, [
-      { spaceId: "space-123", userId: "user-1" },
-      { spaceId: "space-123", userId: "user-1" },
-    ]);
-
-    const selectCalls = prepared.filter((entry) =>
-      entry.sql.trim().toLowerCase().startsWith("select"),
-    );
-    assertEquals(selectCalls.length >= 2, true);
-    assertEquals(
-      selectCalls.every((entry) => entry.args.includes("space-123")),
-      true,
-    );
   } finally {
     appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
   }

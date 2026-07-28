@@ -1,8 +1,4 @@
 import type { Hono } from "hono";
-import type {
-  DeploymentCreateRequest,
-  RetiredDeploymentCreateResponse,
-} from "./public-api.ts";
 
 export type ApiVariables = Record<string, unknown>;
 
@@ -201,13 +197,6 @@ type ApiRouteSchema = {
       ApiRouteJson<DataSubjectDeletionRequest>,
       DataSubjectDeletionResponse,
       202
-    >;
-  };
-  "/public/v1/deployments": {
-    $post: JsonEndpoint<
-      ApiRouteJson<DeploymentCreateRequest>,
-      RetiredDeploymentCreateResponse,
-      410
     >;
   };
   "/public/stores/:storeSlug": {

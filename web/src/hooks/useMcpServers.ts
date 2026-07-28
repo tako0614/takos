@@ -1,7 +1,7 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
-import { getErrorMessage } from "@takos/worker-platform-utils/errors";
+import { getErrorMessage } from "../lib/errors.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type { McpServerRecord, McpServerTool } from "../types/index.ts";

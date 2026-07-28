@@ -13,34 +13,6 @@ export const SPACE_STORAGE_OPS = [
   "space_storage.move",
 ] as const;
 
-export const REPO_OPS = [
-  "repo.create",
-  "repo.fork",
-] as const;
-
-export const SERVICE_OPS = [
-  "service.list",
-  "service.create",
-  "service.delete",
-  "service.env.read",
-  "service.env.write",
-  "service.runtime.read",
-  "service.runtime.write",
-] as const;
-
-export const CUSTOM_DOMAIN_OPS = [
-  "custom_domain.list",
-  "custom_domain.add",
-  "custom_domain.verify",
-  "custom_domain.delete",
-] as const;
-
-export const DEPLOYMENT_OPS = [
-  "deployment.history",
-  "deployment.get",
-  "deployment.rollback",
-] as const;
-
 export const SKILL_OPS = [
   "skill.list",
   "skill.get",
@@ -62,10 +34,6 @@ export const MCP_SERVER_OPS = [
 
 export type SpaceOperationId =
   | (typeof SPACE_STORAGE_OPS)[number]
-  | (typeof REPO_OPS)[number]
-  | (typeof SERVICE_OPS)[number]
-  | (typeof CUSTOM_DOMAIN_OPS)[number]
-  | (typeof DEPLOYMENT_OPS)[number]
   | (typeof SKILL_OPS)[number]
   | (typeof MCP_SERVER_OPS)[number];
 

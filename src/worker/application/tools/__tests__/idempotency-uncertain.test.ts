@@ -207,3 +207,90 @@ test("a side-effect timeout records an uncertain outcome", async () => {
     expect(row.rows[0].status).toBe("uncertain");
   });
 });
+
+test("an explicit engine operation key fences concurrent and replayed side effects", async () => {
+  await withOperationsDb(async (db) => {
+    let handlerCalls = 0;
+    let releaseFirst!: () => void;
+    const firstMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const definition: ToolDefinition = {
+      name: "publish",
+      description: "Publish once",
+      category: "mcp",
+      risk_level: "high",
+      side_effects: true,
+      parameters: {
+        type: "object",
+        properties: { ref: { type: "string", description: "release ref" } },
+        required: ["ref"],
+      },
+    };
+    const registered: RegisteredTool = {
+      definition,
+      custom: false,
+      handler: async () => {
+        handlerCalls += 1;
+        await firstMayFinish;
+        return "published";
+      },
+    };
+    const resolver = {
+      resolve: (name: string) =>
+        name === definition.name ? registered : undefined,
+    } as unknown as ToolResolver;
+    const context = {
+      spaceId: "space-1",
+      threadId: "thread-1",
+      runId: "run-engine-key",
+      userId: "user-1",
+      role: "editor",
+      capabilities: [],
+      env: {},
+      db,
+    } as unknown as ToolContext;
+    const executor = new ToolExecutor(resolver, context);
+    executor.setSideEffectTools([definition.name]);
+    const idempotencyKey = "loop:loop-1:tool:1:0:publish";
+    const first = executor.execute(
+      {
+        id: "call-first",
+        name: definition.name,
+        arguments: { ref: "v1" },
+      },
+      { idempotencyKey },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const concurrentPromise = executor.execute(
+      {
+        id: "call-concurrent",
+        name: definition.name,
+        arguments: { ref: "v2" },
+      },
+      { idempotencyKey },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(handlerCalls).toBe(1);
+
+    releaseFirst();
+    const firstResult = await first;
+    const concurrent = await concurrentPromise;
+    expect(concurrent.outcome_uncertain).toBe(true);
+    expect(firstResult.output).toBe("published");
+
+    const replay = await executor.execute(
+      {
+        id: "call-replay",
+        name: definition.name,
+        // The engine key, not caller-controlled argument ordering, is the
+        // durable identity for recovery of this exact checkpointed operation.
+        arguments: { ref: "v3" },
+      },
+      { idempotencyKey },
+    );
+    expect(replay.output).toBe("published");
+    expect(handlerCalls).toBe(1);
+  });
+});

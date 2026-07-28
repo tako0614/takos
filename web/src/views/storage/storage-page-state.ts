@@ -27,8 +27,9 @@ export function shouldEmitStoragePathChange(
   if (!initialLoadComplete) {
     return false;
   }
-  return currentPath !==
-    resolveStorageInitialPath(initialPath, initialFilePath);
+  return (
+    currentPath !== resolveStorageInitialPath(initialPath, initialFilePath)
+  );
 }
 
 export function buildStorageNavigationState(
@@ -44,11 +45,7 @@ export function buildStorageNavigationState(
     threadId: undefined,
     runId: undefined,
     messageId: undefined,
-    username: undefined,
-    repoId: undefined,
-    repoName: undefined,
     workerId: undefined,
-    deploySection: undefined,
     storeTab: undefined,
     shareToken: undefined,
     legalPage: undefined,
@@ -94,7 +91,7 @@ export async function loadStorageFileHandlers(
     const res = await fetchImpl(buildStorageFileHandlersUrl(spaceId, file));
     if (!res.ok) return null;
 
-    const data = await res.json() as { handlers?: FileHandler[] } | null;
+    const data = (await res.json()) as { handlers?: FileHandler[] } | null;
     if (!isCurrentRequest()) return null;
 
     return data?.handlers ?? null;

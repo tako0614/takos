@@ -25,6 +25,8 @@ export interface RuntimeInterfaceSelector {
   readonly type: string;
   readonly permission: string;
   readonly deliveryTypes: readonly string[];
+  readonly ownerKind?: "Workspace" | "Capsule" | "Resource";
+  readonly ownerId?: string;
 }
 
 export interface AuthorizedRuntimeInterface {
@@ -113,6 +115,10 @@ function interfacesUrl(
   url.searchParams.set("type", selector.type);
   url.searchParams.set("phase", "Resolved");
   url.searchParams.set("permission", selector.permission);
+  if (selector.ownerKind && selector.ownerId) {
+    url.searchParams.set("ownerKind", selector.ownerKind);
+    url.searchParams.set("ownerId", selector.ownerId);
+  }
   return url;
 }
 
@@ -171,6 +177,9 @@ function parseResolvedRuntimeInterface(
       ownerRef.kind === "Capsule" ||
       ownerRef.kind === "Resource") &&
     readString(ownerRef.id) !== null &&
+    (selector.ownerKind === undefined ||
+      ownerRef.kind === selector.ownerKind) &&
+    (selector.ownerId === undefined || ownerRef.id === selector.ownerId) &&
     generation !== null &&
     generation >= 1 &&
     spec !== null &&
@@ -268,10 +277,18 @@ export async function fetchAuthorizedRuntimeInterfaces(
   selector: RuntimeInterfaceSelector,
   config: RuntimeInterfaceRequestConfig,
 ): Promise<AuthorizedRuntimeInterface[]> {
+  const ownerId = readString(selector.ownerId);
+  const hasOwnerKind = selector.ownerKind !== undefined;
+  const hasOwnerId = ownerId !== null;
   if (
     !readString(config.token) ||
     !readString(config.subjectId) ||
-    !isValidInterfacePermissionToken(selector.permission)
+    !isValidInterfacePermissionToken(selector.permission) ||
+    hasOwnerKind !== hasOwnerId ||
+    (hasOwnerKind &&
+      selector.ownerKind !== "Workspace" &&
+      selector.ownerKind !== "Capsule" &&
+      selector.ownerKind !== "Resource")
   ) {
     return [];
   }

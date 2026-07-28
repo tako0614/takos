@@ -111,7 +111,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
     "docs/platform/upgrade-export.md",
   );
   for (const required of [
-    "Accounts 台帳操作",
+    "Accounts の記録操作",
     "binding-level review",
     "StateVersion / Output revision",
     "current guarantee としては扱わない",
@@ -123,11 +123,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
     }
   }
   const rollback = await runtime.readTextFile("docs/deploy/rollback.md");
-  if (
-    !rollback.includes(
-      "provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません",
-    )
-  ) {
+  if (!includesRequiredText(rollback, "provider data copy / schema migration の巻き戻し")) {
     errors.push(
       "docs/deploy/rollback.md: missing current rollback data boundary",
     );

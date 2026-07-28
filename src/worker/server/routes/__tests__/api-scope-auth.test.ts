@@ -418,6 +418,34 @@ test("publications API is not mounted before PAT scope checks", async () => {
   }
 });
 
+test("dead space lifecycle events API is not mounted", async () => {
+  const resolveSelfIssuedBearerSpy = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
+    userId: "user-1",
+    subject: "acct_subject",
+    scopes: ["profile"],
+  }));
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
+
+  try {
+    const response = await createApp().fetch(
+      new Request("https://takos.jp/api/events", {
+        headers: { Authorization: "Bearer takpat_profile" },
+      }),
+      createEnv(),
+      {} as ExecutionContext,
+    );
+
+    assertEquals(response.status, 404);
+    assertEquals(response.headers.get("location"), null);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
+  } finally {
+    restoreOauthAuthDeps();
+  }
+});
+
 test("billing API is not mounted before retired bearer auth fallback", async () => {
   const requireAuthSpy = spy(
     async (

@@ -126,7 +126,7 @@ export const storeSearchHandler: ToolHandler = async (args, context) => {
           path: item.installable_app?.source_path ?? "",
         }
         : null,
-      installed_in_current_workspace: item.installation?.installed ?? false,
+      installed_in_current_workspace: item.capsule !== undefined,
     })),
   }, null, 2);
 };

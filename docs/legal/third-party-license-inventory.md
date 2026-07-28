@@ -16,8 +16,8 @@ license strings where available.
 | `takos/deno.lock`                     |          676 |            7 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
 | `takosumi/deno.lock`                  |            0 |            5 |              0 |
-| `takos-apps/takos-office/bun.lock`    |          n/a |          n/a |            n/a |
-| `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
+| `takos-office/bun.lock`               |          n/a |          n/a |            n/a |
+| `takos-computer/bun.lock`             |          n/a |          n/a |            n/a |
 | `yurucommu-core/deno.lock`            |          452 |           12 |              9 |
 | `road-to-me/backend/deno.lock`        |          316 |            2 |              0 |
 | `road-to-me/app/deno.lock`            |          598 |            3 |              0 |
@@ -51,7 +51,7 @@ during the 2026-05-07 review.
 
 | Package                                                             | License                                  | Affected product                                               | Decision                                                                                                                                            |
 | ------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Hyperformula` / `hyperformula@2.7.1`                               | `GPL-3.0-only` with commercial option    | `takos-apps/takos-office` Sheet surface                        | `takos-office` is licensed `GPL-3.0-only` and uses `licenseKey: "gpl-v3"`. A commercial license is required before relicensing the app permissively. |
+| `Hyperformula` / `hyperformula@2.7.1`                               | `GPL-3.0-only` with commercial option    | sibling `takos-office` Sheet surface                            | `takos-office` is licensed `GPL-3.0-only` and uses `licenseKey: "gpl-v3"`. A commercial license is required before relicensing the app permissively. |
 | `@img/sharp-libvips-linux-x64` / `@img/sharp-libvips-linuxmusl-x64` | `LGPL-3.0-or-later`                      | image processing / build pipelines that use `sharp`            | Allowed only as dynamically linked native dependency. Static linking or redistribution changes require review.                                      |
 | `jszip@3.10.1`                                                      | `MIT OR GPL-3.0-or-later`                | archive handling transitive dependency                         | Use MIT option.                                                                                                                                     |
 | `expand-template@2.0.3`                                             | `MIT OR WTFPL`                           | native package install helper transitive dependency            | Use MIT option.                                                                                                                                     |
@@ -60,7 +60,7 @@ during the 2026-05-07 review.
 
 ## Update Rule
 
-When a lockfile changes, the release owner must:
+When a lockfile changes, the owning repository change must:
 
 1. identify added direct dependencies and their licenses
 2. review new copyleft, source-available, unknown, or unlicensed metadata
@@ -68,4 +68,5 @@ When a lockfile changes, the release owner must:
    appears
 4. keep first-party package license metadata aligned with direct copyleft
    dependencies
-5. rerun `bun run check:license-compliance` from the ecosystem root
+5. run the owning repository's `bun run check`; for cross-repository changes,
+   also run the `takos-control` workspace gate

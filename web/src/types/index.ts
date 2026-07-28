@@ -27,26 +27,11 @@ export type {
   ToolExecution,
 } from "./thread.ts";
 
-export type { DeploySection, RouteState, View } from "./routing.ts";
-export { DEPLOY_NAV_SECTIONS, isDeploySection } from "./routing.ts";
+export type { RouteState, View } from "./routing.ts";
 
 export type { ManagedSkill, Skill } from "./skill.ts";
 
 export type { Memory, Reminder } from "./memory.ts";
-
-export type {
-  Branch,
-  Commit,
-  FileContent,
-  FileDiff,
-  PRComment,
-  PRReview,
-  PullRequest,
-  RepoFile,
-  Repository,
-  SyncResult,
-  SyncStatus,
-} from "./repository.ts";
 
 export type { StorageFile } from "./storage.ts";
 

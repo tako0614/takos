@@ -6,7 +6,7 @@ import type {
 } from "../../shared/types/bindings.ts";
 import type { WorkerEnv as Env } from "./env.ts";
 import type { IndexJobQueueMessage } from "../../shared/types/index.ts";
-import { logError } from "../../shared/utils/logger.ts";
+import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { buildWorkersWorkerPlatform } from "../../platform/adapters/workers.ts";
 import type { ControlPlatform } from "../../platform/platform-config.ts";
 import { classifyWorkerQueueName } from "../queues/queue-names.ts";
@@ -128,16 +128,28 @@ export function createWorkerRuntime(
         return handleNotificationPushDlq(batch, bindings);
       }
 
-      // --- workflow / deployment queues ---
+      // Takos no longer owns repository Actions execution. A queue can still
+      // contain messages produced by an older deployment, so acknowledge them
+      // without importing or invoking the retired local materializer.
+      if (queueKind === "workflow_jobs" || queueKind === "workflow_jobs_dlq") {
+        logWarn("Acknowledging retired Takos workflow queue batch", {
+          module: "worker_queue",
+          queue: batch.queue,
+          queueKind,
+          messageCount: batch.messages.length,
+          lifecycleOwner: "takos-git",
+        });
+        for (const message of batch.messages) message.ack();
+        return;
+      }
+
       if (
-        queueKind === "workflow_jobs" ||
-        queueKind === "workflow_jobs_dlq" ||
         queueKind === "deployment_jobs" ||
         queueKind === "deployment_jobs_dlq"
       ) {
-        const { default: workflowRunner } =
-          await import("../queues/workflow-runner.ts");
-        return workflowRunner.queue(batch, bindings);
+        const { default: deploymentRunner } =
+          await import("../queues/deployment-runner.ts");
+        return deploymentRunner.queue(batch);
       }
 
       logError(`Unknown queue: ${batch.queue}`, undefined, {

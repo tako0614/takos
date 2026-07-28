@@ -1,5 +1,6 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { Env, SpaceRole, User } from "../../shared/types/index.ts";
+import type { AccountsBearerAuthContext } from "../middleware/accounts-bearer.ts";
 import type { SpaceAccess } from "../../application/services/identity/space-access.ts";
 import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
 import {
@@ -37,6 +38,7 @@ export {
  */
 export interface BaseVariables {
   user: User;
+  accounts_bearer?: AccountsBearerAuthContext;
 }
 
 /** Route env for endpoints requiring authentication (user is required). */
@@ -48,7 +50,7 @@ export type AuthenticatedRouteEnv = {
 /** Route env for endpoints where authentication is optional. */
 export type OptionalAuthRouteEnv = {
   Bindings: Env;
-  Variables: { user?: User };
+  Variables: { user?: User; accounts_bearer?: AccountsBearerAuthContext };
 };
 
 /** Route env for fully public endpoints (no user context). */

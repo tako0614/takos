@@ -68,6 +68,7 @@ import type {
   ExecutorTier,
   ProxyTokenInfo,
 } from "./executor-utils.ts";
+import type { Env as WorkerEnv } from "../../shared/types/index.ts";
 import {
   claimsMatchRequestBody,
   getRequiredProxyCapability,
@@ -925,6 +926,7 @@ export default {
       const body = (await request.json()) as AgentExecutorDispatchPayload & {
         tier?: unknown;
       };
+      const leaseBody = body as unknown as Record<string, unknown>;
       const { runId } = body;
 
       if (!runId) {
@@ -947,7 +949,7 @@ export default {
       // already been replaced or cancelled. Validate before touching tokens,
       // sweep only older monotonic lease versions, then validate again so a
       // lease transition during the cross-DO sweep cannot start stale work.
-      const leaseError = await ensureRunLease(env, runId, body);
+      const leaseError = await ensureRunLease(env, runId, leaseBody);
       if (leaseError) return leaseError;
       await revokeSupersededRunProxyTokens(
         env,
@@ -956,7 +958,7 @@ export default {
         body.leaseVersion,
         explicitTarget,
       );
-      const leaseRecheck = await ensureRunLease(env, runId, body);
+      const leaseRecheck = await ensureRunLease(env, runId, leaseBody);
       if (leaseRecheck) return leaseRecheck;
 
       if (explicitTarget) {
@@ -1102,7 +1104,15 @@ export default {
         // Dispatch in-process: the Takos Worker and executor-host share this
         // worker isolate, so there is no service-binding hop. The proxy token +
         // scope are already verified and body.runId/serviceId are token-bound.
-        const dispatched = dispatchControlRpc(path, body, env);
+        // The executor host is mounted inside the unified Takos Worker, whose
+        // runtime binding set is the full Worker Env. AgentExecutorEnv stays
+        // narrow for the container-host helpers; widen only at the in-process
+        // control-RPC boundary.
+        const dispatched = dispatchControlRpc(
+          path,
+          body,
+          env as unknown as WorkerEnv,
+        );
         if (!dispatched) {
           return err(`Unknown control RPC path: ${path}`, 404);
         }

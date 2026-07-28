@@ -1,35 +1,14 @@
-/**
- * UI Extension Service
- *
- * bundle deployment による UI 拡張の管理
- */
-
-import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { asRecord } from "../../../shared/utils/guards.ts";
 import {
-  isPublicationType,
-  listPublications,
-  type PublicationRecord,
-  publicationResolvedUrl,
-  RUNTIME_PROJECTION_CAPABILITIES,
-} from "./service-publications.ts";
-
-export interface UIExtension {
-  id: string;
-  spaceId: string;
-  path: string;
-  label: string;
-  icon?: string;
-  bundleR2Key: string;
-  sidebar?: {
-    label: string;
-    icon: string;
-    path?: string;
-    url?: string;
-  };
-  bundleDeploymentId?: string;
-  createdAt: string;
-}
+  fetchAuthorizedRuntimeInterfaces,
+  type AuthorizedRuntimeInterface,
+} from "./runtime-interface-client.ts";
+import type { RuntimeInterfaceAuthorization } from "./runtime-interface-authorization.ts";
+import { projectAuthorizedUiSurface } from "./runtime-interface-profiles.ts";
+import {
+  UI_SURFACE_INTERFACE_TYPE,
+  UI_SURFACE_OPEN_PERMISSION,
+} from "takosumi-contract";
 
 type UISidebarItem = {
   label: string;
@@ -49,47 +28,50 @@ function readOptionalString(
     : undefined;
 }
 
-function sidebarItemFromUiSurfacePublication(
-  record: PublicationRecord,
+export const uiExtensionDeps = {
+  fetchAuthorizedRuntimeInterfaces,
+};
+
+function sidebarItemFromUiSurface(
+  entry: AuthorizedRuntimeInterface,
 ): UISidebarItem | null {
-  const url = publicationResolvedUrl(record);
-  if (!url) return null;
-  const spec = record.publication.spec ?? {};
-  const display = record.publication.display ?? {};
-  const sidebarSpec = asRecord(spec.sidebar);
+  const surface = projectAuthorizedUiSurface(entry);
+  if (!surface) return null;
+  const document = asRecord(entry.interface.spec.document);
+  const sidebarSpec = asRecord(document?.sidebar);
   const label =
-    readOptionalString(sidebarSpec, "label") ?? display.title ?? record.name;
+    readOptionalString(sidebarSpec, "label") ?? surface.name;
   const icon =
     readOptionalString(sidebarSpec, "icon") ??
-    display.icon ??
-    readOptionalString(spec, "icon") ??
+    surface.icon ??
     "app";
   const path = readOptionalString(sidebarSpec, "path");
   return {
     label,
     icon,
     ...(path ? { path } : {}),
-    url,
-    extensionId: `publication:${record.id}`,
+    url: surface.url,
+    extensionId: `interface:${surface.id}`,
   };
 }
 
 /**
- * Get sidebar items for workspace from UiSurface route publications.
+ * Get sidebar items from the caller's exact authorized UI Interfaces.
  */
 export async function getUISidebarItems(
-  db: SqlDatabaseBinding,
-  spaceId: string,
+  authorization: RuntimeInterfaceAuthorization,
 ): Promise<UISidebarItem[]> {
-  const publicationItems = (await listPublications({ DB: db }, spaceId))
-    .filter((record) =>
-      isPublicationType(
-        record.publicationType,
-        RUNTIME_PROJECTION_CAPABILITIES.interfaceUiSurface,
-      ),
+  return (
+    await uiExtensionDeps.fetchAuthorizedRuntimeInterfaces(
+      {
+        workspaceId: authorization.workspaceId,
+        type: UI_SURFACE_INTERFACE_TYPE,
+        permission: UI_SURFACE_OPEN_PERMISSION,
+        deliveryTypes: ["none"],
+      },
+      authorization,
     )
-    .map(sidebarItemFromUiSurfacePublication)
+  )
+    .map(sidebarItemFromUiSurface)
     .filter((item): item is NonNullable<typeof item> => item !== null);
-
-  return publicationItems;
 }

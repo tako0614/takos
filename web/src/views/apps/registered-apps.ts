@@ -15,8 +15,8 @@ export interface RegisteredApp {
   service_hostname: string | null;
   service_status: string | null;
   source_type?: "runtime_projection";
-  group_id?: string | null;
-  publication_name?: string | null;
+  capsule_id?: string | null;
+  interface_name?: string | null;
   category?: string | null;
   sort_order?: number | null;
 }
@@ -103,7 +103,10 @@ export function getAppIconImageSrc(
 
 export async function loadRegisteredApps(
   spaceId: string | undefined,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => Promise<Response> = fetch,
 ): Promise<RegisteredApp[]> {
   if (!spaceId) return [];
 

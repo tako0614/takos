@@ -87,6 +87,40 @@ test("tool catalog and execution use separate request-local executors", async ()
   assertEquals(cleaned, ["executor-1", "executor-2"]);
 });
 
+test("tool catalog attests which side effects take the durable operation fence", async () => {
+  const dependencies: RemoteToolExecutorDependencies = {
+    async createExecutor() {
+      return {
+        mcpFailedServers: [],
+        getAvailableTools: () =>
+          [
+            { name: "publish", side_effects: true },
+            { name: "read", side_effects: false },
+          ] as never,
+        execute: async () => {
+          throw new Error("not used");
+        },
+        cleanup() {},
+      };
+    },
+  };
+
+  const response = await handleToolCatalog(
+    { runId: "run-catalog-fence" },
+    {} as never,
+    dependencies,
+  );
+
+  assertEquals(response.status, 200);
+  const payload = await response.json() as {
+    tools: Array<{ name: string; durable_idempotency: boolean }>;
+  };
+  assertEquals(payload.tools, [
+    { name: "publish", side_effects: true, durable_idempotency: true },
+    { name: "read", side_effects: false, durable_idempotency: false },
+  ]);
+});
+
 test("every tool execution request gets an independent abort signal", async () => {
   const signals: AbortSignal[] = [];
   const dependencies: RemoteToolExecutorDependencies = {
@@ -120,6 +154,39 @@ test("every tool execution request gets an independent abort signal", async () =
   assertEquals(signals.length, 2);
   assertFalse(signals[0] === signals[1]);
   assertEquals(signals.every((signal) => signal.aborted), true);
+});
+
+test("tool execution forwards the engine idempotency key to the durable executor", async () => {
+  let receivedKey: string | undefined;
+  const dependencies: RemoteToolExecutorDependencies = {
+    async createExecutor() {
+      return {
+        mcpFailedServers: [],
+        getAvailableTools: () => [],
+        execute: async (toolCall, options) => {
+          receivedKey = options?.idempotencyKey;
+          return {
+            tool_call_id: toolCall.id,
+            output: "ok",
+          };
+        },
+        cleanup() {},
+      };
+    },
+  };
+
+  const response = await handleToolExecute(
+    {
+      runId: "run-idempotent",
+      idempotencyKey: "loop:loop-1:tool:1:0:publish",
+      toolCall: { id: "call-1", name: "publish", arguments: { ref: "v1" } },
+    },
+    {} as never,
+    dependencies,
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(receivedKey, "loop:loop-1:tool:1:0:publish");
 });
 
 test("tool cleanup is an idempotent no-op for request-local executors", async () => {

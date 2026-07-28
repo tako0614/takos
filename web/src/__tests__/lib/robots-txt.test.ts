@@ -1,6 +1,6 @@
 // Guard rail for apps/web/public/robots.txt — search crawlers should be
 // kept out of authenticated, internal, and machine surfaces. Adding a path
-// like /me or /workers without disallowing it in robots.txt should fail
+// like /me without disallowing it in robots.txt should fail
 // loudly so we don't accidentally index a login redirect or worker probe.
 
 import { strict as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
@@ -20,7 +20,6 @@ test("robots.txt disallows authenticated and internal surfaces", async () => {
       "Disallow: /auth",
       "Disallow: /me",
       "Disallow: /api",
-      "Disallow: /workers",
       "Disallow: /internal",
       "Disallow: /_internal",
     ]

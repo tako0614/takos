@@ -42,6 +42,27 @@
       "takosumi-contract/provider-env-rules": [
         "../takosumi/contract/provider-env-rules.ts"
       ],
+      "takosumi-contract/capabilities": [
+        "../takosumi/contract/capabilities.ts"
+      ],
+      "takosumi-contract/credential-recipes": [
+        "../takosumi/contract/credential-recipes.ts"
+      ],
+      "takosumi-contract/install-configs": [
+        "../takosumi/contract/install-configs.ts"
+      ],
+      "takosumi-contract/interfaces": [
+        "../takosumi/contract/interfaces.ts"
+      ],
+      "takosumi-contract/pagination": [
+        "../takosumi/contract/pagination.ts"
+      ],
+      "takosumi-contract/provider-resolution": [
+        "../takosumi/contract/provider-resolution.ts"
+      ],
+      "takosumi-contract/redaction": [
+        "../takosumi/contract/redaction.ts"
+      ],
       "takosumi-contract/reference/compat": [
         "../takosumi/contract/reference-compat.ts"
       ],

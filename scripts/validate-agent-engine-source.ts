@@ -3,9 +3,9 @@
 import path from "node:path";
 import * as runtime from "./runtime.ts";
 import {
-  AGENT_ENGINE_SOURCE_PATH,
+  INTEGRATION_LOCK_PATH,
   type AgentEngineSource,
-  validateAgentEngineSource,
+  validateIntegrationLockSource,
 } from "./validate-agent-runtime-release.ts";
 
 export function validateAgentEngineCheckoutState(
@@ -28,10 +28,23 @@ export function validateAgentEngineCheckoutState(
 }
 
 async function main(): Promise<void> {
+  const takosRoot = path.resolve(import.meta.dir, "..");
+  const integrationLockPath =
+    runtime.env.get("TAKOS_INTEGRATION_LOCK_PATH") ?? INTEGRATION_LOCK_PATH;
   const parsed = JSON.parse(
-    await runtime.readTextFile(AGENT_ENGINE_SOURCE_PATH),
+    await runtime.readTextFile(integrationLockPath),
   ) as unknown;
-  const sourceValidation = validateAgentEngineSource(parsed);
+  const takosHeadResult = await runtime.runCommand("git", {
+    args: ["rev-parse", "HEAD"],
+    cwd: takosRoot,
+  });
+  if (!takosHeadResult.success) {
+    reportErrors(["failed to resolve Takos HEAD"]);
+  }
+  const sourceValidation = validateIntegrationLockSource(
+    parsed,
+    new TextDecoder().decode(takosHeadResult.stdout).trim(),
+  );
   if (!sourceValidation.source) {
     reportErrors(sourceValidation.errors);
   }
@@ -44,7 +57,9 @@ async function main(): Promise<void> {
   try {
     const info = await runtime.stat(checkout);
     if (!info.isDirectory) {
-      reportErrors([`takos-agent-engine checkout is not a directory: ${checkout}`]);
+      reportErrors([
+        `takos-agent-engine checkout is not a directory: ${checkout}`,
+      ]);
     }
   } catch {
     reportErrors([
@@ -63,7 +78,9 @@ async function main(): Promise<void> {
     }),
   ]);
   if (!headResult.success || !statusResult.success) {
-    reportErrors([`failed to inspect takos-agent-engine checkout at ${checkout}`]);
+    reportErrors([
+      `failed to inspect takos-agent-engine checkout at ${checkout}`,
+    ]);
   }
   const decoder = new TextDecoder();
   const errors = validateAgentEngineCheckoutState(
@@ -80,7 +97,7 @@ async function main(): Promise<void> {
       "--manifest-path",
       "containers/agent/Cargo.toml",
     ],
-    cwd: path.resolve(import.meta.dir, ".."),
+    cwd: takosRoot,
     stdout: "inherit",
     stderr: "inherit",
   });

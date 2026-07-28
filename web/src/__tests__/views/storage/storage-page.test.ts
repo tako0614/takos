@@ -1,7 +1,10 @@
-import { strict as assert, deepStrictEqual as assertEquals, throws as assertThrows } from "node:assert/strict";
+import {
+  strict as assert,
+  deepStrictEqual as assertEquals,
+  throws as assertThrows,
+} from "node:assert/strict";
 import type { FileHandler } from "../../../views/storage/storageUtils.tsx";
 import { test } from "bun:test";
-
 
 const {
   buildStorageNavigationState,
@@ -9,9 +12,8 @@ const {
   resolveStorageInitialPath,
   shouldEmitStoragePathChange,
 } = await import("../../../views/storage/storage-page-state.ts");
-const { buildFileHandlerLaunchUrl } = await import(
-  "../../../views/storage/fileHandlerUrls.ts"
-);
+const { buildFileHandlerLaunchUrl } =
+  await import("../../../views/storage/fileHandlerUrls.ts");
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -24,10 +26,7 @@ function createDeferred<T>() {
 }
 
 test("resolveStorageInitialPath - prefers file parent path", () => {
-  assertEquals(
-    resolveStorageInitialPath("/docs", "/docs/README.md"),
-    "/docs",
-  );
+  assertEquals(resolveStorageInitialPath("/docs", "/docs/README.md"), "/docs");
 });
 
 test("shouldEmitStoragePathChange - waits for initial load", () => {
@@ -58,11 +57,7 @@ test("buildStorageNavigationState - clears stale route state", () => {
     threadId: undefined,
     runId: undefined,
     messageId: undefined,
-    username: undefined,
-    repoId: undefined,
-    repoName: undefined,
     workerId: undefined,
-    deploySection: undefined,
     storeTab: undefined,
     shareToken: undefined,
     legalPage: undefined,
@@ -106,34 +101,40 @@ test("loadStorageFileHandlers - ignores stale responses", async () => {
     ok: true,
     json: () =>
       Promise.resolve({
-        handlers: [{
-          id: "current-handler",
-          name: "Current Handler",
-          mime_types: [],
-          extensions: [],
-          open_url: "https://example.com/current/:id",
-        }],
+        handlers: [
+          {
+            id: "current-handler",
+            name: "Current Handler",
+            mime_types: [],
+            extensions: [],
+            open_url: "https://example.com/current/:id",
+          },
+        ],
       }),
   });
-  assertEquals(await secondRequest, [{
-    id: "current-handler",
-    name: "Current Handler",
-    mime_types: [],
-    extensions: [],
-    open_url: "https://example.com/current/:id",
-  }]);
+  assertEquals(await secondRequest, [
+    {
+      id: "current-handler",
+      name: "Current Handler",
+      mime_types: [],
+      extensions: [],
+      open_url: "https://example.com/current/:id",
+    },
+  ]);
 
   responses["space-a"].resolve({
     ok: true,
     json: () =>
       Promise.resolve({
-        handlers: [{
-          id: "stale-handler",
-          name: "Stale Handler",
-          mime_types: [],
-          extensions: [],
-          open_url: "https://example.com/stale/:id",
-        }],
+        handlers: [
+          {
+            id: "stale-handler",
+            name: "Stale Handler",
+            mime_types: [],
+            extensions: [],
+            open_url: "https://example.com/stale/:id",
+          },
+        ],
       }),
   });
   assertEquals(await firstRequest, null);
@@ -165,7 +166,9 @@ test("loadStorageFileHandlers - includes current file mime and ext query params"
   );
 
   assertEquals(requestedUrls.length, 1);
-  assert(requestedUrls[0].includes("/api/spaces/space-a/storage/file-handlers?"));
+  assert(
+    requestedUrls[0].includes("/api/spaces/space-a/storage/file-handlers?"),
+  );
   assert(requestedUrls[0].includes("mime=text%2Fmarkdown"));
   assert(requestedUrls[0].includes("ext=.md"));
 });

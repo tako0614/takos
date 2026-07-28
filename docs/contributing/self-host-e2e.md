@@ -3,16 +3,17 @@
 > このページでわかること: self-host distribution と local Compose の current
 > proof。
 
-Self-host static proof uses the current local release evidence:
+Self-host static proof uses the portable source gate:
 
 ```sh
 cd takos
 bun run check
-bun run validate:opentofu-secrets
-bun scripts/build-release-manifest.ts
 ```
 
 実 Docker Compose proof は operator-owned local evidence です。
+これらのlocal commandはdeployやproduction mutationを許可しません。verified
+self-host distributionのpublicationはowning repositoryのdeploy entrypoint、
+利用者環境へのdeploymentはself-hoster自身のauthorityです。
 
 ```sh
 cd takos
@@ -27,7 +28,7 @@ TAKOS_LOCAL_ENV_FILE=.env.local bun run local:down
 
 ## Expected Product Services
 
-- `takos-worker` (serves worker-native Git Smart HTTP)
+- `takos-worker` (serves migration-only read-only Git Smart HTTP for existing R2 repositories)
 - `takos-agent`
 
 Takosumi kernel / Takosumi Accounts are substrate / account-plane services, not

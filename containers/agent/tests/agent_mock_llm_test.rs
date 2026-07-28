@@ -184,6 +184,7 @@ fn echo_tool() -> ToolDefinition {
         }),
         risk_level: Some("low".to_string()),
         side_effects: Some(false),
+        durable_idempotency: false,
     }
 }
 

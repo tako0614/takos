@@ -8,7 +8,6 @@ import {
 import { validateApiOpaqueRouteParams } from "../middleware/param-validation.ts";
 import spacesBase from "./spaces/routes.ts";
 import spacesMembers from "./spaces/members.ts";
-import spacesRepos from "./spaces/repositories.ts";
 import spacesStorage from "./spaces/storage.ts";
 import spacesTools from "./spaces/tools.ts";
 import threads from "./threads.ts";
@@ -17,12 +16,6 @@ import search from "./search/index.ts";
 import indexRoutes from "./index/routes.ts";
 import memories from "./memories/index.ts";
 import skills from "./skills.ts";
-import services from "./workers/index.ts";
-import customDomains from "./custom-domains.ts";
-import resources from "./resources/index.ts";
-import sessions from "./sessions/index.ts";
-import repos from "./repos/index.ts";
-import pullRequests from "./pull-requests/index.ts";
 import notifications from "./notifications/index.ts";
 import { registerAppApiRoutes } from "./apps/index.ts";
 import shortcuts, { shortcutGroupRoutes } from "./shortcuts/index.ts";
@@ -32,20 +25,19 @@ import agentTasks from "./agent-tasks/index.ts";
 import authApi from "./auth-api.ts";
 import publicShare from "./public-share/index.ts";
 import mcpRoutes from "./mcp/index.ts";
-import groupsRouter from "./groups.ts";
-import appInstallationsRouter from "./app-installations.ts";
+import capsulesRouter from "./capsules.ts";
 import { createRunSseRouter } from "./runs/sse.ts";
 import { createNotificationSseRouter } from "./notifications/index.ts";
-import { createEventsRouter } from "./events/routes.ts";
-import { workersSpaceRoutes } from "./workers/routes.ts";
 import {
   extractBearerToken,
   isTakosumiAccountsBearerCandidate,
 } from "../middleware/bearer-token-classification.ts";
 import { requireAnyAuth } from "../middleware/oauth-auth.ts";
+import type { AccountsBearerAuthContext } from "../middleware/accounts-bearer.ts";
 // Local type to mirror app Variables
 export type ApiVariables = {
   user?: User;
+  accounts_bearer?: AccountsBearerAuthContext;
 };
 
 type ApiAuthMiddleware = MiddlewareHandler<{
@@ -119,13 +111,6 @@ function requiredApiScopesForRequest(
     return readWriteScope(c, "memories:read", "memories:write");
   }
   if (
-    pathMatches(pathname, "/repos") ||
-    isSpaceScopedFamily(pathname, "repos") ||
-    isSpaceScopedFamily(pathname, "repositories")
-  ) {
-    return readWriteScope(c, "repos:read", "repos:write");
-  }
-  if (
     pathMatches(pathname, "/mcp/search") ||
     pathMatches(pathname, "/mcp/discover") ||
     pathMatches(pathname, "/mcp/tool-confirmations")
@@ -156,11 +141,7 @@ function requiredApiScopesForRequest(
 
   if (
     pathMatches(pathname, "/spaces") ||
-    pathMatches(pathname, "/services") ||
-    pathMatches(pathname, "/deployments") ||
-    pathMatches(pathname, "/resources") ||
     pathMatches(pathname, "/apps") ||
-    pathMatches(pathname, "/sessions") ||
     pathMatches(pathname, "/setup") ||
     pathMatches(pathname, "/shortcuts") ||
     pathMatches(pathname, "/skills") ||
@@ -168,10 +149,8 @@ function requiredApiScopesForRequest(
     isSpaceScopedFamily(pathname, "index") ||
     isSpaceScopedFamily(pathname, "graph") ||
     isSpaceScopedFamily(pathname, "tools") ||
-    isSpaceScopedFamily(pathname, "services") ||
     isSpaceScopedFamily(pathname, "skills") ||
-    isSpaceScopedFamily(pathname, "shortcuts") ||
-    isSpaceScopedFamily(pathname, "groups")
+    isSpaceScopedFamily(pathname, "shortcuts")
   ) {
     return readWriteScope(c, "spaces:read", "spaces:write");
   }
@@ -242,14 +221,6 @@ export function createApiRouter({
     "/runs/:id/*",
     "/artifacts/:id",
     "/artifacts/:id/*",
-    "/repos/:id",
-    "/repos/:id/*",
-    "/services/:id",
-    "/services/:id/*",
-    "/resources/:id",
-    "/resources/:id/*",
-    "/sessions/:id",
-    "/sessions/:id/*",
     "/agent-tasks/:id",
     "/agent-tasks/:id/*",
     "/apps/:id",
@@ -325,18 +296,8 @@ export function createApiRouter({
   apiRouter.use("/reminders/*", scopedApiAuth);
   apiRouter.use("/skills", scopedApiAuth);
   apiRouter.use("/skills/*", scopedApiAuth);
-  apiRouter.use("/services", scopedApiAuth);
-  apiRouter.use("/services/*", scopedApiAuth);
-  apiRouter.use("/deployments", scopedApiAuth);
-  apiRouter.use("/deployments/*", scopedApiAuth);
-  apiRouter.use("/resources", scopedApiAuth);
-  apiRouter.use("/resources/*", scopedApiAuth);
   apiRouter.use("/apps", scopedApiAuth);
   apiRouter.use("/apps/*", scopedApiAuth);
-  apiRouter.use("/sessions", scopedApiAuth);
-  apiRouter.use("/sessions/*", scopedApiAuth);
-  apiRouter.use("/repos", scopedApiAuth);
-  apiRouter.use("/repos/*", scopedApiAuth);
   apiRouter.use("/agent-tasks", scopedApiAuth);
   apiRouter.use("/agent-tasks/*", scopedApiAuth);
   apiRouter.use("/setup", scopedApiAuth);
@@ -356,15 +317,10 @@ export function createApiRouter({
   apiRouter.route("/me", me);
   apiRouter.route("/spaces", spacesBase);
   apiRouter.route("/spaces", spacesMembers);
-  apiRouter.route("/spaces", spacesRepos);
   apiRouter.route("/spaces", spacesStorage);
   apiRouter.route("/spaces", spacesTools);
-  apiRouter.route("/spaces", workersSpaceRoutes);
   apiRouter.route("/shortcuts", shortcuts);
   apiRouter.route("/", shortcutGroupRoutes); // Shortcut groups at /api/spaces/:id/shortcuts/groups
-  apiRouter.route("/services", services);
-  apiRouter.route("/", customDomains);
-  apiRouter.route("/resources", resources);
   registerAppApiRoutes(apiRouter);
   apiRouter.route("/", threads); // Threads routes at /api/spaces/:id/threads and /api/threads/:id
   apiRouter.route("/", runs); // Runs routes at /api/threads/:id/runs, /api/runs/:id, and /api/artifacts/:id
@@ -373,15 +329,10 @@ export function createApiRouter({
   apiRouter.route("/", indexRoutes); // Index routes at /api/spaces/:id/index and /api/spaces/:id/graph
   apiRouter.route("/", memories); // Memory routes for memories and reminders
   apiRouter.route("/", skills); // Skills routes
-  apiRouter.route("/", sessions); // Session routes for Space File Sync
-  apiRouter.route("/", repos); // Repository management routes
   apiRouter.route("/", agentTasks); // Agent task routes
   apiRouter.route("/", notifications); // Notifications routes at /api/notifications
   apiRouter.route("/notifications", createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
-  apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally). NOTE: subscribe side is wired; the group lifecycle producer (emitGroupLifecycleEvent) is not yet called from the deploy engine, so the stream is currently empty — see events/routes.ts.
-  apiRouter.route("/", pullRequests); // Pull request routes for code review
-  apiRouter.route("/", appInstallationsRouter); // Installation-backed app install routes
-  apiRouter.route("/", groupsRouter); // Read-only runtime group inventory at /api/spaces/:id/groups
+  apiRouter.route("/", capsulesRouter); // Canonical Takosumi Capsule facade
   // ================================================================
   // 7. Auth routes (login is public, others require auth)
   // ================================================================

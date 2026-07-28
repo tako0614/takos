@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { Button, Modal, ModalFooter } from "../../components/ui/index.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { rpcJson } from "../../lib/rpc.ts";
@@ -12,119 +12,40 @@ interface GitUrlInstallModalProps {
   initialRef?: string | null;
   initialModulePath?: string | null;
   revision?: {
-    installationId: string;
+    capsuleId: string;
     operation: "upgrade" | "rollback";
   } | null;
   onClose: () => void;
   onApplied?: () => void | Promise<void>;
 }
 
-interface InstallPlanResponse {
-  installPlan?: {
-    repo?: {
-      id?: string;
-      name?: string;
-    };
-  };
-  planDigest?: string;
-  source?: {
-    url?: string;
-    ref?: string;
-    commit?: string;
-  };
-  expected?: {
-    commit?: string;
-    planDigest?: string;
-    currentDeploymentId?: string | null;
-    [key: string]: unknown;
-  };
-  changes?: Array<{
-    op?: string;
-    component?: string;
-    kind?: string;
-  }>;
-  cost?: {
-    meteredBindingCount?: number;
-  };
+interface ExactRunReference {
+  workspaceId: string;
+  capsuleId: string;
+  runId: string;
+  sourceId?: string;
 }
 
-interface InstallCatalogPlanResponse {
-  app?: {
+interface CapsulePlanResponse {
+  source?: {
     id?: string;
     name?: string;
-    description?: string;
-    homepage?: string;
+    url?: string;
+    defaultRef?: string;
   };
-  publisher?: {
+  capsule?: {
     id?: string;
-    verified?: boolean;
+    name?: string;
+    status?: string;
   };
-  source?: {
-    git?: string;
-    ref?: string;
-    commit?: string;
-    sourcePath?: string;
+  run?: {
+    id?: string;
+    status?: string;
   };
-  runtime?: {
-    modes?: string[];
-  };
-  bindings?: Array<{
-    name: string;
-    type: string;
-    required?: boolean;
-  }>;
-  permissions?: {
-    requested?: string[];
-  };
-  cost?: {
-    meteredBindingCount?: number;
-  };
-  risk?: {
-    level?: string;
-    reasons?: string[];
-  };
+  expected?: ExactRunReference;
 }
 
-interface RevisionPlanResponse {
-  expected?: {
-    commit?: string;
-    planDigest?: string;
-    currentDeploymentId?: string | null;
-    [key: string]: unknown;
-  };
-  planDigest?: string;
-  preview: {
-    operation: "upgrade" | "rollback";
-    next: {
-      appId?: string;
-      source: {
-        ref?: string;
-        commit?: string;
-      };
-    };
-    diff?: {
-      permissions?: {
-        added?: string[];
-        removed?: string[];
-        unchanged?: string[];
-      };
-      bindings?: {
-        added?: string[];
-        removed?: string[];
-        unchanged?: string[];
-      };
-    };
-  };
-}
-
-type GitUrlPreviewResponse =
-  InstallPlanResponse | InstallCatalogPlanResponse | RevisionPlanResponse;
-
-function isRevisionPreview(
-  value: GitUrlPreviewResponse,
-): value is RevisionPlanResponse {
-  return "preview" in value;
-}
+type GitUrlPreviewResponse = CapsulePlanResponse;
 
 export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const { t } = useI18n();
@@ -134,7 +55,6 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const [modulePath, setModulePath] = createSignal(
     props.initialModulePath ?? ".",
   );
-  const [mode, setMode] = createSignal("");
   const [preview, setPreview] = createSignal<GitUrlPreviewResponse | null>(
     null,
   );
@@ -143,85 +63,27 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const [installing, setInstalling] = createSignal(false);
 
   const previewTitle = (currentPreview: GitUrlPreviewResponse): string => {
-    if (isRevisionPreview(currentPreview)) {
-      return currentPreview.preview.next.appId ?? t("unknownApp");
-    }
-    if ("app" in currentPreview) {
-      return (
-        currentPreview.app?.name ?? currentPreview.app?.id ?? t("unknownApp")
-      );
-    }
-    const planRun = currentPreview as InstallPlanResponse;
     return (
-      planRun.installPlan?.repo?.name ??
-      planRun.installPlan?.repo?.id ??
+      currentPreview.capsule?.name ??
+      currentPreview.capsule?.id ??
+      currentPreview.source?.name ??
       t("unknownApp")
     );
   };
 
   const previewSourceLabel = (currentPreview: GitUrlPreviewResponse): string =>
-    isRevisionPreview(currentPreview)
-      ? (currentPreview.preview.next.source.commit ??
-        currentPreview.preview.next.source.ref ??
-        ref())
-      : (currentPreview.source?.commit ?? currentPreview.source?.ref ?? ref());
+    currentPreview.source?.url ??
+    currentPreview.source?.defaultRef ??
+    ref();
 
   const previewRiskLabel = (currentPreview: GitUrlPreviewResponse): string =>
-    isRevisionPreview(currentPreview)
-      ? currentPreview.preview.operation
-      : "risk" in currentPreview
-        ? (currentPreview.risk?.level ?? "low")
-        : "plan Run";
-
-  const previewMeteredCount = (
-    currentPreview: GitUrlPreviewResponse,
-  ): number | undefined =>
-    "cost" in currentPreview
-      ? (currentPreview as { cost?: { meteredBindingCount?: number } }).cost
-          ?.meteredBindingCount
-      : undefined;
-
-  const previewBindingLabels = (
-    currentPreview: GitUrlPreviewResponse,
-  ): string[] =>
-    isRevisionPreview(currentPreview)
-      ? [
-          ...(currentPreview.preview.diff?.bindings?.added ?? []).map(
-            (value) => `+${value}`,
-          ),
-          ...(currentPreview.preview.diff?.bindings?.removed ?? []).map(
-            (value) => `-${value}`,
-          ),
-        ]
-      : "bindings" in currentPreview
-        ? (currentPreview.bindings ?? []).map((binding) => binding.name)
-        : "changes" in currentPreview
-          ? (currentPreview.changes ?? []).map(
-              (change) =>
-                `${change.op ?? "change"} ${change.component ?? "component"}`,
-            )
-          : [];
-
-  const previewPermissionLabels = (
-    currentPreview: GitUrlPreviewResponse,
-  ): string[] =>
-    isRevisionPreview(currentPreview)
-      ? [
-          ...(currentPreview.preview.diff?.permissions?.added ?? []).map(
-            (value) => `+${value}`,
-          ),
-          ...(currentPreview.preview.diff?.permissions?.removed ?? []).map(
-            (value) => `-${value}`,
-          ),
-        ]
-      : "permissions" in currentPreview
-        ? (currentPreview.permissions?.requested ?? [])
-        : [];
+    props.revision?.operation ??
+    currentPreview.run?.status ??
+    "plan Run";
 
   const resetPreview = () => {
     setPreview(null);
     setApproved(false);
-    setMode("");
   };
 
   const close = () => {
@@ -245,7 +107,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     try {
       const revision = props.revision;
       const response = await fetch(
-        `/api/spaces/${encodeURIComponent(spaceId)}/app-installations/git-url${
+        `/api/spaces/${encodeURIComponent(spaceId)}/capsules/git-url${
           revision ? "/revision" : ""
         }/plan`,
         {
@@ -257,7 +119,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
             module_path: modulePath().trim() || ".",
             ...(revision
               ? {
-                  installation_id: revision.installationId,
+                  capsule_id: revision.capsuleId,
                   operation: revision.operation,
                 }
               : {}),
@@ -266,11 +128,6 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       );
       const data = await rpcJson<GitUrlPreviewResponse>(response);
       setPreview(data);
-      setMode(
-        !isRevisionPreview(data) && "runtime" in data
-          ? (data.runtime?.modes?.[0] ?? "")
-          : "",
-      );
       setApproved(false);
     } catch (err) {
       showToast(
@@ -291,53 +148,22 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     setInstalling(true);
     try {
       const revision = props.revision;
-      const sourceCommit = isRevisionPreview(currentPreview)
-        ? currentPreview.preview.next.source.commit
-        : currentPreview.source?.commit;
-      const expected =
-        isRevisionPreview(currentPreview) || "expected" in currentPreview
-          ? currentPreview.expected
-          : undefined;
-      const planDigest =
-        "planDigest" in currentPreview
-          ? currentPreview.planDigest
-          : expected?.planDigest;
+      const expected = currentPreview.expected;
+      if (!expected) {
+        throw new Error("Capsule plan response is missing its exact Run reference");
+      }
       const requestBody = revision
         ? {
-            git_url: gitUrl().trim(),
-            ref: ref().trim(),
-            module_path: modulePath().trim() || ".",
-            installation_id: revision.installationId,
+            capsule_id: revision.capsuleId,
             operation: revision.operation,
-            ...(sourceCommit ? { source_commit: sourceCommit } : {}),
-            ...(revision.operation === "upgrade"
-              ? {
-                  ...(expected ? { expected } : {}),
-                  expected_commit: expected?.commit ?? sourceCommit,
-                  expected_plan_digest: planDigest,
-                  expected_current_deployment_id:
-                    expected?.currentDeploymentId ?? null,
-                }
-              : {}),
+            expected,
           }
-        : isRevisionPreview(currentPreview)
-          ? null
-          : {
-              git_url: gitUrl().trim(),
-              ref: ref().trim(),
-              module_path: modulePath().trim() || ".",
-              ...(mode() ? { mode: mode() } : {}),
-              ...(expected ? { expected } : {}),
-              expected_commit: expected?.commit ?? sourceCommit,
-              expected_plan_digest: planDigest,
-              cost_ack: true,
-            };
-      if (!requestBody) return;
+        : { expected };
       await rpcJson(
         await fetch(
           `/api/spaces/${encodeURIComponent(
             spaceId,
-          )}/app-installations/git-url${revision ? "/revision" : ""}/apply`,
+          )}/capsules/git-url${revision ? "/revision" : ""}/apply`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -439,76 +265,6 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                   {previewRiskLabel(currentPreview())}
                 </span>
               </div>
-
-              <Show
-                when={
-                  !isRevisionPreview(currentPreview()) &&
-                  "runtime" in currentPreview() &&
-                  ((currentPreview() as InstallCatalogPlanResponse).runtime
-                    ?.modes?.length ?? 0) > 0
-                }
-              >
-                <label class="mt-4 block space-y-1.5">
-                  <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    {t("runtimeModeLabel")}
-                  </span>
-                  <select
-                    value={mode()}
-                    onChange={(event) => setMode(event.currentTarget.value)}
-                    class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
-                  >
-                    <For
-                      each={
-                        (currentPreview() as InstallCatalogPlanResponse).runtime
-                          ?.modes ?? []
-                      }
-                    >
-                      {(runtimeMode) => (
-                        <option value={runtimeMode}>{runtimeMode}</option>
-                      )}
-                    </For>
-                  </select>
-                </label>
-              </Show>
-
-              <div class="mt-4 grid gap-3 md:grid-cols-2">
-                <div>
-                  <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    {t("bindingsLabel")}
-                  </div>
-                  <div class="mt-2 flex flex-wrap gap-1.5">
-                    <For each={previewBindingLabels(currentPreview())}>
-                      {(binding) => (
-                        <span class="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                          {binding}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    {t("permissionsLabel")}
-                  </div>
-                  <div class="mt-2 flex flex-wrap gap-1.5">
-                    <For each={previewPermissionLabels(currentPreview())}>
-                      {(permission) => (
-                        <span class="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                          {permission}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </div>
-
-              <Show when={(previewMeteredCount(currentPreview()) ?? 0) > 0}>
-                <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
-                  {t("meteredBindingsNotice", {
-                    count: String(previewMeteredCount(currentPreview()) ?? 0),
-                  })}
-                </div>
-              </Show>
 
               <label class="mt-4 flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                 <input

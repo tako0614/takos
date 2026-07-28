@@ -28,13 +28,6 @@ export {
   getMcpEndpointUrlOptions,
 } from "./mcp/validation.ts";
 
-// Publication bearer token metadata
-export {
-  mcpAuthSecretDeps,
-  readPublicationAuthSecretRef,
-  resolvePublicationAuthToken,
-} from "./mcp/auth-secret.ts";
-
 // OAuth flow
 export {
   beginMcpAuthorization,
@@ -58,7 +51,6 @@ export {
   reauthorizeExternalMcpServer,
   reconcileManagedWorkerMcpServer,
   registerExternalMcpServer,
-  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
   upsertManagedMcpServer,
 } from "./mcp/crud.ts";

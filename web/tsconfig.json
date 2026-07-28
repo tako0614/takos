@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "bun"],
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -20,9 +20,7 @@
       "@takosjp/takosumi-accounts-contract": [
         "../../takosumi/accounts/contract/src/mod.ts"
       ],
-      "takos-api-contract/rpc-types": [
-        "../src/contracts/public/rpc-types.ts"
-      ],
+      "takos-api-contract/rpc-types": ["../src/contracts/public/rpc-types.ts"],
       "takos-api-contract/shared/types": [
         "../src/contracts/public/shared/types/index.ts"
       ]

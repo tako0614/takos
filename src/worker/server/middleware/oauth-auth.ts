@@ -9,7 +9,10 @@ import {
   isValidUserId,
 } from "../../application/services/identity/user-cache.ts";
 import { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
-import { resolveAccountsBearer } from "./accounts-bearer.ts";
+import {
+  type AccountsBearerAuthContext,
+  resolveAccountsBearer,
+} from "./accounts-bearer.ts";
 import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
 
@@ -44,6 +47,7 @@ export interface OAuthContext {
 type Variables = {
   user?: User;
   oauth?: OAuthContext;
+  accounts_bearer?: AccountsBearerAuthContext;
 };
 
 export function requireOAuthAuth(
@@ -102,6 +106,9 @@ export function requireOAuthAuth(
           userId: result.userId,
         });
         c.set("user", result.user);
+        if (result.accountsBearer) {
+          c.set("accounts_bearer", result.accountsBearer);
+        }
         await next();
         return;
     }

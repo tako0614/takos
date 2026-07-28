@@ -48,6 +48,20 @@ export interface IdempotencyResult {
   outcomeUncertain?: boolean;
 }
 
+function keyConflictResult(
+  expectedToolName: string,
+  actualToolName: string,
+): IdempotencyResult {
+  return {
+    action: "cached",
+    cachedOutput: "",
+    cachedError:
+      `The operation key for ${expectedToolName} was already used by ${actualToolName}. ` +
+      "Automatic execution is blocked because the checkpoint identity is inconsistent.",
+    outcomeUncertain: true,
+  };
+}
+
 /**
  * Check idempotency guard before executing a side-effect tool.
  * Returns whether to execute, use cached result, or wait.
@@ -59,8 +73,29 @@ export async function checkIdempotency(
   args: Record<string, unknown>,
   clock: Clock = systemClock,
 ): Promise<IdempotencyResult> {
-  const drizzleDb = getDb(db);
   const operationKey = await generateOperationKey(runId, toolName, args);
+  return checkIdempotencyForOperationKey(
+    db,
+    runId,
+    toolName,
+    operationKey,
+    clock,
+  );
+}
+
+/**
+ * Fence a side effect using an operation identity supplied by the agent
+ * engine. The key is still scoped by Run in storage; callers must validate and
+ * bound the untrusted wire value before reaching this function.
+ */
+export async function checkIdempotencyForOperationKey(
+  db: SqlDatabaseBinding,
+  runId: string,
+  toolName: string,
+  operationKey: string,
+  clock: Clock = systemClock,
+): Promise<IdempotencyResult> {
+  const drizzleDb = getDb(db);
 
   const existing = await drizzleDb
     .select()
@@ -74,6 +109,9 @@ export async function checkIdempotency(
     .get();
 
   if (existing) {
+    if (existing.toolName !== toolName) {
+      return keyConflictResult(toolName, existing.toolName);
+    }
     if (existing.status === "completed") {
       return {
         action: "cached",
@@ -144,9 +182,12 @@ export async function checkIdempotency(
         and(
           eq(toolOperations.runId, runId),
           eq(toolOperations.operationKey, operationKey),
-        ),
-      )
-      .get();
+      ),
+    )
+    .get();
+    if (raceCheck && raceCheck.toolName !== toolName) {
+      return keyConflictResult(toolName, raceCheck.toolName);
+    }
     if (raceCheck?.status === "completed") {
       return {
         action: "cached",

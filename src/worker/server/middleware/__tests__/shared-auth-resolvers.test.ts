@@ -86,12 +86,34 @@ test("resolveAccountsBearer: unsupported app-local prefix -> unsupported-app-loc
   assertEquals(r.kind, "unsupported-app-local-bearer");
 });
 
-test("resolveAccountsBearer: opaque non-candidate bearer -> not-accounts", async () => {
+test("resolveAccountsBearer: opaque bearer is delegated to Accounts authority", async () => {
+  let receivedAuthorization: string | null | undefined;
   const r = await resolveAccountsBearer(
     ctxWithAuthHeader("Bearer plain-opaque-token"),
-    bearerDeps({}),
+    bearerDeps({
+      resolveSelfIssuedBearer: async (input) => {
+        receivedAuthorization = input.authorizationHeader;
+        return {
+          kind: "ok",
+          user: USER,
+          userId: USER.id,
+          subject: "tsub_user_1",
+          scopes: ["profile"],
+          workspaceId: "workspace_1",
+        };
+      },
+    }),
   );
-  assertEquals(r.kind, "not-accounts");
+  assertEquals(receivedAuthorization, "Bearer plain-opaque-token");
+  assertEquals(r.kind, "ok");
+  if (r.kind === "ok") {
+    assertEquals(r.accountsBearer, {
+      accessToken: "plain-opaque-token",
+      subjectId: "tsub_user_1",
+      workspaceId: "workspace_1",
+      scopes: ["profile"],
+    });
+  }
 });
 
 test("resolveAccountsBearer: accounts candidate without SQL binding -> no-db", async () => {
@@ -134,7 +156,10 @@ test("resolveAccountsBearer: valid token + scope + user -> ok", async () => {
     { requiredScopes: ["profile"] },
   );
   assertEquals(r.kind, "ok");
-  if (r.kind === "ok") assertEquals(r.user.id, "user-1");
+  if (r.kind === "ok") {
+    assertEquals(r.user.id, "user-1");
+    assertEquals(r.accountsBearer, undefined);
+  }
 });
 
 // --- resolveCookieSession revocation invariant (Phase 18.2 H11) ---

@@ -4,7 +4,6 @@ import {
   decryptAccessToken,
   getMcpServerWithTokens,
   refreshMcpToken,
-  resolvePublicationMcpServerAccessToken,
 } from "../../../application/services/platform/mcp.ts";
 import {
   getMcpToolSupport,
@@ -77,11 +76,6 @@ async function listCurrentServerTools(
         });
       }
     }
-  } else if (server.sourceType === "publication") {
-    accessToken = await resolvePublicationMcpServerAccessToken(db, env, {
-      spaceId,
-      serverId,
-    });
   }
 
   const client = new McpClient(
