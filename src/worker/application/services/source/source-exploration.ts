@@ -3,7 +3,7 @@ import {
   repositories,
   type SqlDatabaseLike,
 } from "../../../infra/db/index.ts";
-import { and, count, eq, gte, like } from "drizzle-orm";
+import { and, count, eq, gte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import type {
   ExploreRepoResponse,
@@ -220,9 +220,9 @@ export function buildBaseConditions(options: {
     conditions.push(gte(field, options.since));
   }
   if (options.searchQuery) {
-    // Note: Drizzle doesn't support OR easily at top level in conditions array,
-    // so we use like on name as primary search
-    conditions.push(like(repositories.name, `%${options.searchQuery}%`));
+    conditions.push(
+      sql`instr(lower(${repositories.name}), lower(${options.searchQuery})) > 0`,
+    );
   }
   return conditions;
 }

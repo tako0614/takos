@@ -1,4 +1,4 @@
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, infoUnits } from "../../../infra/db/index.ts";
 import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
@@ -84,7 +84,7 @@ export const infoUnitSearchHandler: ToolHandler = async (args, context) => {
     .where(
       and(
         eq(infoUnits.accountId, context.spaceId),
-        like(infoUnits.content, `%${query}%`),
+        sql`instr(lower(${infoUnits.content}), lower(${query})) > 0`,
       ),
     )
     .orderBy(desc(infoUnits.createdAt))

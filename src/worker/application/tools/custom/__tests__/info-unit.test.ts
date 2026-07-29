@@ -74,3 +74,56 @@ test("info_unit_search filters Vectorize with the writer's Workspace metadata ke
     client.close();
   }
 });
+
+test("info_unit_search accepts long literal text containing LIKE metacharacters", async () => {
+  const query = `Literal%_\\Needle-${"x".repeat(64)}`;
+  expect(new TextEncoder().encode(query).byteLength).toBeGreaterThan(50);
+
+  const client = createClient({ url: ":memory:" });
+  await client.executeMultiple(`
+    CREATE TABLE info_units (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      thread_id TEXT,
+      run_id TEXT,
+      session_id TEXT,
+      kind TEXT NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      token_count INTEGER NOT NULL DEFAULT 0,
+      segment_index INTEGER NOT NULL DEFAULT 0,
+      segment_count INTEGER NOT NULL DEFAULT 1,
+      vector_id TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await client.batch([
+    {
+      sql: `INSERT INTO info_units
+        (id, account_id, run_id, kind, content)
+        VALUES ('unit_exact', 'space_a', 'run_exact', 'session', ?)`,
+      args: [`before ${query.toUpperCase()} after`],
+    },
+    {
+      sql: `INSERT INTO info_units
+        (id, account_id, run_id, kind, content)
+        VALUES ('unit_decoy', 'space_a', 'run_decoy', 'session', ?)`,
+      args: [query.replace("%_", "unrelated")],
+    },
+  ]);
+  const db = drizzle(client, { schema });
+  try {
+    const output = await infoUnitSearchHandler({ query }, {
+      spaceId: "space_a",
+      db,
+      env: {},
+    } as unknown as ToolContext);
+
+    expect(output).toContain("run:run_exact");
+    expect(output).not.toContain("run:run_decoy");
+  } finally {
+    client.close();
+  }
+});

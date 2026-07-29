@@ -43,10 +43,6 @@ function getR2Key(spaceId: string, fileId: string): string {
   return `spaces/${spaceId}/files/${fileId}`;
 }
 
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&");
-}
-
 function toSpaceFile(f: {
   id: string;
   accountId: string;
@@ -218,7 +214,7 @@ export async function quickSearchPaths(
       and(
         eq(files.accountId, spaceId),
         ne(files.origin, "system"),
-        sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\\'`,
+        sql`instr(lower(${files.path}), lower(${query})) > 0`,
       ),
     )
     .orderBy(desc(files.updatedAt))
@@ -238,7 +234,7 @@ export async function searchFilenames(
   const conditions = [
     eq(files.accountId, spaceId),
     ne(files.origin, "system"),
-    sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\\'`,
+    sql`instr(lower(${files.path}), lower(${query})) > 0`,
   ];
 
   if (fileTypes && fileTypes.length > 0) {

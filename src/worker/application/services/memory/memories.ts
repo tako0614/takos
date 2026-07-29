@@ -9,7 +9,7 @@ import type {
 } from "../../../shared/types/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { getDb, memories, reminders } from "../../../infra/db/index.ts";
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 
 export const MEMORY_TYPES: readonly string[] = [
@@ -194,8 +194,8 @@ export async function searchMemories(
   const conditions = [
     eq(memories.accountId, spaceId),
     or(
-      like(memories.content, `%${query}%`),
-      like(memories.summary, `%${query}%`),
+      sql`instr(lower(${memories.content}), lower(${query})) > 0`,
+      sql`instr(lower(${memories.summary}), lower(${query})) > 0`,
     ),
   ];
 

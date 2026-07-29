@@ -1,5 +1,5 @@
 import { getDb, messages, threads } from "../../../infra/db/index.ts";
-import { and, asc, desc, eq, inArray, like, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   queryRelevantThreadMessages,
   THREAD_MESSAGE_VECTOR_KIND,
@@ -199,7 +199,7 @@ export async function searchSpaceThreads(options: {
       }).from(messages)
         .where(and(
           inArray(messages.threadId, threadIds),
-          like(messages.content, `%${query}%`),
+          sql`instr(lower(${messages.content}), lower(${query})) > 0`,
         ))
         .orderBy(desc(messages.createdAt))
         .limit(limit)
@@ -314,7 +314,7 @@ export async function searchThreadMessages(options: {
     }).from(messages)
       .where(and(
         eq(messages.threadId, threadId),
-        like(messages.content, `%${query}%`),
+        sql`instr(lower(${messages.content}), lower(${query})) > 0`,
       ))
       .orderBy(asc(messages.sequence))
       .limit(limit)
