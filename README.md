@@ -66,6 +66,14 @@ Takos は利用者が触る AI ワークスペースを提供します。Takosum
 
 Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用の構成は通常の OpenTofu モジュールであり、Takosumi から実行することも、運用者が自分の手順で実行することもできます。
 
+Takosumi が同じ Git commit から導入画面を組み立てる場合は、
+[`/.well-known/takosumi.json`](.well-known/takosumi.json) の
+`deploy/opentofu` 宣言を読みます。これは入力名と表示上の projection だけを提案する
+任意の metadata で、provider credential、Cloudflare account、target、実行権限は
+含みません。導入先を選ぶ [`install-options.json`](install-options.json) とも別の
+contract です。最終的な InstallConfig、Plan、Apply の authority は Takosumi 側に
+残ります。
+
 ## リポジトリ構成
 
 ```text

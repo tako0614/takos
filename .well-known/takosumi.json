@@ -1,0 +1,152 @@
+{
+  "apiVersion": "takosumi.com/v1alpha1",
+  "kind": "Repository",
+  "install": {
+    "modules": {
+      "deploy/opentofu": {
+        "inputs": [
+          {
+            "name": "project_name",
+            "source": {
+              "kind": "capsule_name"
+            },
+            "type": "string",
+            "format": "subdomain",
+            "label": {
+              "ja": "ワークスペース名",
+              "en": "Workspace name"
+            },
+            "helper": {
+              "ja": "Takosのサービスとクラウドリソースに使う名前です。",
+              "en": "The name used for the Takos service and its cloud resources."
+            }
+          },
+          {
+            "name": "public_subdomain",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "subdomain",
+            "label": {
+              "ja": "公開サブドメイン",
+              "en": "Public subdomain"
+            },
+            "advanced": true
+          },
+          {
+            "name": "public_url",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "format": "url",
+            "required": false,
+            "label": {
+              "ja": "公開URL",
+              "en": "Public URL"
+            },
+            "helper": {
+              "ja": "空欄の場合は利用可能な公開URLを使います。",
+              "en": "Uses an available public URL when omitted."
+            },
+            "placeholder": "https://takos.example.com"
+          },
+          {
+            "name": "environment",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "label": {
+              "ja": "実行環境",
+              "en": "Environment"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_url",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "Takosumi Accounts URL",
+              "en": "Takosumi Accounts URL"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_issuer_url",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "Takosumi Accounts発行者",
+              "en": "Takosumi Accounts issuer"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_client_id",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "label": {
+              "ja": "Takosumi Accountsクライアント",
+              "en": "Takosumi Accounts client"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_redirect_uri",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "OIDCリダイレクトURL",
+              "en": "OIDC redirect URL"
+            },
+            "advanced": true
+          }
+        ],
+        "installExperience": {
+          "projections": [
+            {
+              "kind": "service_name",
+              "variable": "project_name"
+            },
+            {
+              "kind": "public_endpoint",
+              "variables": {
+                "url": "public_url",
+                "subdomain": "public_subdomain"
+              }
+            },
+            {
+              "kind": "oidc_client",
+              "variables": {
+                "accountsUrl": "takosumi_accounts_url",
+                "issuerUrl": "takosumi_accounts_issuer_url",
+                "clientId": "takosumi_accounts_client_id",
+                "redirectUri": "takosumi_accounts_redirect_uri"
+              },
+              "callbackPath": "/auth/oidc/callback",
+              "scopes": [
+                "openid",
+                "profile",
+                "email"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
