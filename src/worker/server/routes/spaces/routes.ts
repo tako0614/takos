@@ -29,11 +29,9 @@ import { getUISidebarItems } from "../../../application/services/platform/ui-ext
 import { toWorkspaceResponse } from "../../../application/services/identity/response-formatters.ts";
 import { processFeaturedAppPreinstallJobs } from "../../../application/services/source/featured-app-catalog.ts";
 import { getDb } from "../../../infra/db/index.ts";
-import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import {
   repositories,
-  resourceAccess,
-  resources,
   threads,
 } from "../../../infra/db/schema.ts";
 import {
@@ -222,27 +220,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     });
   })
   .get("/:spaceId/export", spaceAccess(), async (c) => {
-    const user = c.get("user");
     const { space } = c.get("access");
 
     const db = getDb(c.env.DB);
 
-    const accessibleResourceIds = await db
-      .select({
-        resourceId: resourceAccess.resourceId,
-        permission: resourceAccess.permission,
-      })
-      .from(resourceAccess)
-      .where(eq(resourceAccess.accountId, space.id))
-      .all();
-    const accessibleIdSet = new Set(
-      accessibleResourceIds.map((r) => r.resourceId),
-    );
-    const accessPermissionMap = new Map(
-      accessibleResourceIds.map((r) => [r.resourceId, r.permission]),
-    );
-
-    const [repoRows, threadRows, resourceRows] = await Promise.all([
+    const [repoRows, threadRows] = await Promise.all([
       db
         .select({
           id: repositories.id,
@@ -266,61 +248,9 @@ export default new Hono<AuthenticatedRouteEnv>()
         )
         .orderBy(desc(threads.updatedAt))
         .all(),
-      db
-        .select({
-          id: resources.id,
-          name: resources.name,
-          type: resources.type,
-          ownerAccountId: resources.ownerAccountId,
-          updatedAt: resources.updatedAt,
-        })
-        .from(resources)
-        .where(
-          and(
-            inArray(resources.type, ["d1", "r2"]),
-            ne(resources.status, "deleted"),
-            or(
-              and(
-                eq(resources.accountId, space.id),
-                eq(resources.ownerAccountId, user.id),
-              ),
-              accessibleIdSet.size > 0
-                ? inArray(resources.id, Array.from(accessibleIdSet))
-                : undefined,
-            ),
-          ),
-        )
-        .orderBy(desc(resources.updatedAt))
-        .all(),
     ]);
 
     const exportedAt = new Date().toISOString();
-
-    const d1Resources = resourceRows
-      .filter((resource) => resource.type === "d1")
-      .map((resource) => ({
-        id: resource.id,
-        name: resource.name,
-        updated_at: resource.updatedAt,
-        access_level:
-          resource.ownerAccountId === user.id
-            ? "owner"
-            : accessPermissionMap.get(resource.id) || "read",
-        export_url: `/api/resources/${resource.id}/d1/export`,
-        method: "POST" as const,
-      }));
-
-    const r2Resources = resourceRows
-      .filter((resource) => resource.type === "r2")
-      .map((resource) => ({
-        id: resource.id,
-        name: resource.name,
-        updated_at: resource.updatedAt,
-        access_level:
-          resource.ownerAccountId === user.id
-            ? "owner"
-            : accessPermissionMap.get(resource.id) || "read",
-      }));
 
     return c.json({
       space: toWorkspaceResponse(space),
@@ -341,16 +271,9 @@ export default new Hono<AuthenticatedRouteEnv>()
         method: "GET" as const,
         formats: ["markdown", "json", "pdf"] as const,
       })),
-      resources: {
-        d1: d1Resources,
-        r2: r2Resources,
-      },
       counts: {
         repositories: repoRows.length,
         threads: threadRows.length,
-        d1_resources: d1Resources.length,
-        r2_resources: r2Resources.length,
-        total_resources: d1Resources.length + r2Resources.length,
       },
     });
   })

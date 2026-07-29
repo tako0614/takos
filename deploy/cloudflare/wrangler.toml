@@ -104,13 +104,6 @@ migrations_dir = "../../db/migrations-control/migrations"
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-hostname-routing-kv-namespace-id"
 
-# KV for rollout health check (optional — enables canary error-rate gating).
-# When unbound, advanceStage() skips health checks and proceeds unconditionally.
-# See ../../src/worker/application/services/platform/rollout.ts:117-129
-[[kv_namespaces]]
-binding = "ROLLOUT_HEALTH_KV"
-id = "replace-with-rollout-health-kv-namespace-id"
-
 # Durable Objects
 [[durable_objects.bindings]]
 name = "SESSION_DO"
@@ -286,11 +279,6 @@ binding = "INDEX_QUEUE"
 queue = "takos-workflow-jobs"
 binding = "WORKFLOW_QUEUE"
 
-# Queue for deployment job execution
-[[queues.producers]]
-queue = "takos-deployment-jobs"
-binding = "DEPLOY_QUEUE"
-
 [[queues.producers]]
 queue = "takos-notification-push"
 binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
@@ -330,18 +318,6 @@ dead_letter_queue = "takos-workflow-jobs-dlq"
 
 [[queues.consumers]]
 queue = "takos-workflow-jobs-dlq"
-max_batch_size = 10
-max_batch_timeout = 60
-
-[[queues.consumers]]
-queue = "takos-deployment-jobs"
-max_batch_size = 1
-max_batch_timeout = 1
-max_retries = 3
-dead_letter_queue = "takos-deployment-jobs-dlq"
-
-[[queues.consumers]]
-queue = "takos-deployment-jobs-dlq"
 max_batch_size = 10
 max_batch_timeout = 60
 
@@ -412,10 +388,6 @@ migrations_dir = "../../db/migrations-control/migrations"
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-staging-hostname-routing-kv-namespace-id"
-
-[[env.staging.kv_namespaces]]
-binding = "ROLLOUT_HEALTH_KV"
-id = "replace-with-staging-rollout-health-kv-namespace-id"
 
 [[env.staging.durable_objects.bindings]]
 name = "SESSION_DO"
@@ -520,10 +492,6 @@ queue = "takos-workflow-jobs-staging"
 binding = "WORKFLOW_QUEUE"
 
 [[env.staging.queues.producers]]
-queue = "takos-deployment-jobs-staging"
-binding = "DEPLOY_QUEUE"
-
-[[env.staging.queues.producers]]
 queue = "takos-notification-push-staging"
 binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
 
@@ -562,18 +530,6 @@ dead_letter_queue = "takos-workflow-jobs-dlq-staging"
 
 [[env.staging.queues.consumers]]
 queue = "takos-workflow-jobs-dlq-staging"
-max_batch_size = 10
-max_batch_timeout = 60
-
-[[env.staging.queues.consumers]]
-queue = "takos-deployment-jobs-staging"
-max_batch_size = 1
-max_batch_timeout = 1
-max_retries = 3
-dead_letter_queue = "takos-deployment-jobs-dlq-staging"
-
-[[env.staging.queues.consumers]]
-queue = "takos-deployment-jobs-dlq-staging"
 max_batch_size = 10
 max_batch_timeout = 60
 

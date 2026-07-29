@@ -8,7 +8,6 @@ import type {
 } from "../../shared/types/bindings.ts";
 import type {
   DbEnv,
-  DeploymentQueueMessage,
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
@@ -93,7 +92,6 @@ export type WorkerEnv = DbEnv & {
   ROUTING_DO?: DurableObjectNamespace;
   SERVICE_INTERNAL_JWT_ISSUER?: string;
   WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
-  DEPLOY_QUEUE?: MessageQueueBinding<DeploymentQueueMessage>;
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
 
   // --- notification pusher delivery ---

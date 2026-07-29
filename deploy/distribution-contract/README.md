@@ -4,18 +4,17 @@ This directory owns the Takos product distribution profile contract.
 
 - `takos-distribution-profile-v1.schema.json` is the structural contract for
   `deploy/distributions/*.json`.
-- `bun scripts/build-release-manifest.ts` records the schema digest and each
-  official profile digest in candidate evidence. `bun run check` is the complete
-  product gate; candidate preparation may call the manifest builder internally,
-  but it is not a separate release authority or public package command.
+- `bun run check` validates the tracked profile with the rest of the Takos
+  product. This repository has no local release-manifest builder or deployment
+  authority.
 - Takosumi owns deploy/runtime lifecycle semantics. This contract only describes
   Takos product distribution overlays and the evidence needed to prove each
   target.
 
-## Resource Shape Topology
+## Service Form Topology
 
-`shapeTopology` records how the Takos distribution maps to Takosumi generic
-Resource Shapes:
+`shapeTopology` is a distribution description of how Takos maps to generic
+Service Forms when an operator chooses the optional form flow:
 
 ```text
 takos-worker -> EdgeWorker
@@ -23,17 +22,15 @@ takos-agent  -> ContainerService
 backing data -> SQLDatabase / KVStore / ObjectBucket / Queue
 ```
 
-Git hosting is worker-native: read-only Smart HTTP clone/fetch is served by
-`takos-worker` from the `ObjectBucket` (R2) git object store, so it maps to the
-`EdgeWorker` + `ObjectBucket` shapes above rather than a separate container
-service. Push goes through the Takos repository API, not Git Smart HTTP.
+Git hosting is not part of this distribution topology. It belongs to the
+independent `takos-git` Capsule and is consumed through declared Interfaces.
 
-This is distribution-profile evidence, not a new Takos-specific Resource Shape
+This is distribution-profile metadata, not a new Takos-specific Service Form
 and not a replacement for the OpenTofu module under `deploy/opentofu`. Takos
 must not introduce a catch-all `takosumi_takos` resource. If the distribution
-needs a service form that the current generic shapes cannot express, add the
-missing generic shape in Takosumi only after the Resource Shape prior-art gate
-passes.
+needs a form that existing generic forms cannot express, add a portable generic
+form to Takoform and an explicit Takosumi adapter rather than product-local
+lifecycle code.
 
 ## Artifact Ownership
 

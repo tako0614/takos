@@ -52,7 +52,7 @@ Output を記録します。
 bun run local:up
 ```
 
-`takos-worker`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。Git ホスティングは `takos-worker` が worker-native で配信します。
+`takos-worker`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。Git hosting は独立した `takos-git` Capsule の Interface を利用します。
 
 ## レイアウト
 
@@ -80,12 +80,11 @@ takos/
 | `bun run local:smoke`            | ローカルサービスのヘルスチェック         |
 | `bun run local:e2e`              | docker compose による E2E スモークテスト |
 | `bun run docs:dev`               | ドキュメントの開発サーバー起動           |
-| `bun run docs:build` / `deploy`  | ドキュメントのビルド / デプロイ          |
+| `bun run docs:build`             | ドキュメントのビルド                    |
 | `bun run lint:docs`              | ドキュメントの lint / build              |
 | `bun run web:build`              | browser UI の production build          |
 | `bun run validate:opentofu-secrets` | OpenTofu tfvars / secret policy 検証 |
-| `bun scripts/build-release-manifest.ts` | distribution profile digest と release evidence manifest の生成 |
-| `bun run release-gate`           | Takos product の local release gate      |
+| `bun run validate:architecture`  | Takos/Takosumi ownership 境界の検証      |
 
 ## ドキュメントの場所
 

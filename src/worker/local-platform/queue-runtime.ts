@@ -7,21 +7,18 @@ export const LOCAL_QUEUE_NAMES = {
   run: "takos-runs",
   index: "takos-index-jobs",
   workflow: "takos-workflow-jobs",
-  deployment: "takos-deployment-jobs",
 } as const;
 
 export const LOCAL_DLQ_QUEUE_NAMES = {
   [LOCAL_QUEUE_NAMES.run]: "takos-runs-dlq",
   [LOCAL_QUEUE_NAMES.index]: "takos-index-jobs-dlq",
   [LOCAL_QUEUE_NAMES.workflow]: "takos-workflow-jobs-dlq",
-  [LOCAL_QUEUE_NAMES.deployment]: "takos-deployment-jobs-dlq",
 } as const;
 
 export const LOCAL_QUEUE_RETRY_LIMITS = {
   [LOCAL_QUEUE_NAMES.run]: 3,
   [LOCAL_QUEUE_NAMES.index]: 2,
   [LOCAL_QUEUE_NAMES.workflow]: 3,
-  [LOCAL_QUEUE_NAMES.deployment]: 3,
 } as const;
 
 export type LocalQueueName = keyof typeof LOCAL_DLQ_QUEUE_NAMES;

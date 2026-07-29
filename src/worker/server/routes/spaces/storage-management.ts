@@ -24,9 +24,6 @@ import {
   requireOAuthScope,
   storageBulkLimiter,
 } from "./storage-operations.ts";
-import {
-  buildPublicUrl,
-} from "../../../application/services/platform/service-publications.ts";
 import { resolveRuntimeInterfaceAuthorization } from "../../../application/services/platform/runtime-interface-authorization.ts";
 import { fetchAuthorizedRuntimeInterfaces } from "../../../application/services/platform/runtime-interface-client.ts";
 import {
@@ -60,7 +57,14 @@ export function buildFileHandlerOpenUrl(
   if (!interfaceFileHandlerPathHasIdTemplate(openPath)) {
     throw new Error("FileHandler path must include :id");
   }
-  return buildPublicUrl(serviceHostname, openPath, { id: fileId });
+  const hostname = serviceHostname.trim();
+  if (!hostname) throw new Error("hostname is required");
+  const path = openPath.trim().replaceAll(":id", encodeURIComponent(fileId));
+  if (!path) throw new Error("path is required");
+  if (hostname.startsWith("http://") || hostname.startsWith("https://")) {
+    return `${hostname}${path}`;
+  }
+  return `https://${hostname}${path}`;
 }
 
 export function interfaceFileHandlerPathHasIdTemplate(

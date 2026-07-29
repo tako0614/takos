@@ -29,12 +29,10 @@ import {
   enqueueFeaturedAppPreinstallJob,
   processFeaturedAppPreinstallJobs,
 } from "../source/featured-app-catalog.ts";
-import { ensureRuntimeProjectionExports } from "../platform/runtime-projection-exports.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
 export const spaceCrudWriteDeps = {
   enqueueFeaturedAppPreinstallJob,
-  ensureRuntimeProjectionExports,
   processFeaturedAppPreinstallJobs,
 };
 
@@ -209,23 +207,6 @@ async function processFeaturedAppsAfterCommit(
   }
 }
 
-async function ensureRuntimeProjectionExportsAfterCommit(
-  env: Env,
-  spaceId: string,
-): Promise<void> {
-  try {
-    await spaceCrudWriteDeps.ensureRuntimeProjectionExports(env, {
-      spaceId,
-    });
-  } catch (error) {
-    logWarn("Failed to seed runtime projection exports", {
-      module: "spaces",
-      spaceId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
 export async function createWorkspaceWithDefaultRepo(
   env: Env,
   userId: string,
@@ -286,8 +267,6 @@ export async function createWorkspaceWithDefaultRepo(
     repoName: "main",
     timestamp,
   });
-
-  await ensureRuntimeProjectionExportsAfterCommit(env, spaceId);
 
   if (shouldInstallFeaturedApps) {
     try {
@@ -423,7 +402,6 @@ export async function getOrCreatePersonalWorkspace(
 ): Promise<SpaceListItem | null> {
   const workspace = await getPersonalWorkspace(env, userId);
   if (workspace) {
-    await ensureRuntimeProjectionExportsAfterCommit(env, userId);
     await enqueuePersonalWorkspaceFeaturedApps(env, userId);
   }
   return workspace;

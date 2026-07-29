@@ -82,25 +82,21 @@ locals {
   #   runs            RUN_QUEUE          | runs_dlq            (DLQ for runs)
   #   index_jobs      INDEX_QUEUE        | index_jobs_dlq      (DLQ)
   #   workflow        WORKFLOW_QUEUE     | workflow_dlq        (DLQ)
-  #   deployment      DEPLOY_QUEUE       | deployment_dlq      (DLQ)
   #   notification    TAKOS_NOTIFICATION_PUSH_QUEUE | notification_dlq (DLQ)
   #
   queues = {
     runs                  = "${var.project_name}-runs"
     index_jobs            = "${var.project_name}-index-jobs"
     workflow              = "${var.project_name}-workflow-jobs"
-    deployment            = "${var.project_name}-deployment-jobs"
     notification_push     = "${var.project_name}-notification-push"
     runs_dlq              = "${var.project_name}-runs-dlq"
     index_jobs_dlq        = "${var.project_name}-index-jobs-dlq"
     workflow_dlq          = "${var.project_name}-workflow-jobs-dlq"
-    deployment_dlq        = "${var.project_name}-deployment-jobs-dlq"
     notification_push_dlq = "${var.project_name}-notification-push-dlq"
   }
 
   kv_namespaces = {
     hostname_routing = "${var.project_name}-hostname-routing"
-    rollout_health   = "${var.project_name}-rollout-health"
   }
 
   vectorize = {
@@ -121,7 +117,7 @@ resource "cloudflare_d1_database" "this" {
   }
 }
 
-# KV namespaces — bindings HOSTNAME_ROUTING, ROLLOUT_HEALTH_KV
+# KV namespaces — binding HOSTNAME_ROUTING
 resource "cloudflare_workers_kv_namespace" "this" {
   for_each   = local.kv_namespaces
   account_id = var.account_id

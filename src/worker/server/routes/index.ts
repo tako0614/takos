@@ -2,7 +2,6 @@
  * Server routes entrypoint for `takos-worker/server/routes`.
  */
 export * from "./api.ts";
-export * from "./rpc-types.ts";
 export * from "./setup.ts";
 export * from "./auth-api.ts";
 

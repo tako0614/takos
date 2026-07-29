@@ -1,5 +1,4 @@
 import {
-  DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
   NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
@@ -7,7 +6,6 @@ import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
 } from "./queue-messages.ts";
 import type {
-  DeploymentQueueMessage,
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
@@ -125,18 +123,4 @@ export function isValidWorkflowJobQueueMessage(
     typeof m.timestamp === "number" &&
     !("secrets" in m)
   );
-}
-
-export function isValidDeploymentQueueMessage(
-  msg: unknown,
-): msg is DeploymentQueueMessage {
-  if (!msg || typeof msg !== "object") return false;
-  const m = msg as Record<string, unknown>;
-  if (m.version !== DEPLOYMENT_QUEUE_MESSAGE_VERSION) return false;
-  if (m.type === "deployment") {
-    return (
-      typeof m.deploymentId === "string" && typeof m.timestamp === "number"
-    );
-  }
-  return false;
 }

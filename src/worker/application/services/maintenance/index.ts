@@ -8,13 +8,6 @@ export {
 } from "./backup-maintenance.ts";
 
 export {
-  type CustomDomainReverificationSummary,
-  reconcileStuckDomains,
-  type ReconcileStuckDomainsSummary,
-  runCustomDomainReverification,
-} from "./custom-domain-maintenance.ts";
-
-export {
   cleanupDeadSessions,
   type CleanupDeadSessionsSummary,
 } from "./session-maintenance.ts";
@@ -24,8 +17,3 @@ export {
   type SnapshotGcBatchSummary,
   type SnapshotGcSpaceResult,
 } from "./snapshot-maintenance.ts";
-
-export {
-  gcOrphanedResources,
-  type ResourceOrphanGcSummary,
-} from "./resource-orphan-gc.ts";

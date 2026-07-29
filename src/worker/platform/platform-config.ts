@@ -57,7 +57,6 @@ export type PlatformQueues = {
   runs?: MessageQueueBinding;
   index?: MessageQueueBinding;
   workflow?: MessageQueueBinding;
-  deployment?: MessageQueueBinding;
 };
 
 export type PlatformObjects = {

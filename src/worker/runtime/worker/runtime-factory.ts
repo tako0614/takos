@@ -143,15 +143,6 @@ export function createWorkerRuntime(
         return;
       }
 
-      if (
-        queueKind === "deployment_jobs" ||
-        queueKind === "deployment_jobs_dlq"
-      ) {
-        const { default: deploymentRunner } =
-          await import("../queues/deployment-runner.ts");
-        return deploymentRunner.queue(batch);
-      }
-
       logError(`Unknown queue: ${batch.queue}`, undefined, {
         module: "worker_queue",
       });

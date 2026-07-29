@@ -8,7 +8,6 @@ import type {
   VectorIndexBinding,
 } from "./bindings.ts";
 import type {
-  DeploymentQueueMessage,
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
@@ -167,7 +166,6 @@ export interface Env
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
-  DEPLOY_QUEUE?: MessageQueueBinding<DeploymentQueueMessage>;
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
   OIDC_ISSUER_URL?: string;
@@ -251,19 +249,6 @@ export interface Env
   K8S_NAMESPACE?: string;
   K8S_DEPLOYMENT_NAME?: string;
   K8S_IMAGE_REGISTRY?: string;
-  TAKOS_APP_DEPLOY_REMOTE_PACKFILE_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_OBJECTS_MAX?: string;
-  TAKOS_APP_DEPLOY_REMOTE_INFLATED_TOTAL_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_OBJECT_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_DELTA_RESULT_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_DELTA_CHAIN_MAX_DEPTH?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_PACKFILE_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_OBJECTS_MAX?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_INFLATED_TOTAL_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_OBJECT_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_RESULT_MAX_BYTES?: string;
-  TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_CHAIN_MAX_DEPTH?: string;
-  TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES?: string;
   /** Operator-replaceable featured app catalog JSON; wins over DB config. */
   TAKOS_FEATURED_APP_CATALOG_JSON?: string;
   /** Operator-replaceable featured app repository list JSON; wins over DB config. */
@@ -290,7 +275,6 @@ export interface Env
   TAKOS_APP_INSTALL_MODE?: string;
   TAKOS_APP_INSTALL_RUNTIME_BASE_URL?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
-  ROLLOUT_HEALTH_KV?: KvStoreBinding;
   ROUTING_STORE?: RoutingStore;
   DISPATCHER?: {
     get(name: string): { fetch(request: Request): Promise<Response> };

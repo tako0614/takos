@@ -62,7 +62,7 @@ output "sql_databases" {
 }
 
 output "kv_namespace_ids" {
-  description = "KV namespace IDs keyed by logical binding (hostname_routing, rollout_health)."
+  description = "KV namespace IDs keyed by logical binding (hostname_routing)."
   value       = { for k, v in cloudflare_workers_kv_namespace.this : k => v.id }
 }
 

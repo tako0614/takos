@@ -8,7 +8,7 @@ import {
   DEFAULT_EXECUTOR_TIER2_MAX_INSTANCES,
   DEFAULT_RUNTIME_CONTAINER_MAX_INSTANCES,
 } from "../src/worker/runtime/container-hosts/executor-capacity.ts";
-import { QUEUE_CONSUMERS } from "./control/queue-consumer-config.ts";
+import { QUEUE_CONSUMERS } from "./queue-consumer-contract.ts";
 
 const WRANGLER_PATH = "deploy/cloudflare/wrangler.toml";
 const WORKFLOW_PATH = ".github/workflows/release-artifacts.yml";
@@ -25,8 +25,6 @@ const QUEUE_NAMES = {
     index_jobs_dlq: "takos-index-jobs-dlq",
     workflow: "takos-workflow-jobs",
     workflow_dlq: "takos-workflow-jobs-dlq",
-    deployment: "takos-deployment-jobs",
-    deployment_dlq: "takos-deployment-jobs-dlq",
     notification_push: "takos-notification-push",
     notification_push_dlq: "takos-notification-push-dlq",
   },
@@ -37,8 +35,6 @@ const QUEUE_NAMES = {
     index_jobs_dlq: "takos-index-jobs-dlq-staging",
     workflow: "takos-workflow-jobs-staging",
     workflow_dlq: "takos-workflow-jobs-dlq-staging",
-    deployment: "takos-deployment-jobs-staging",
-    deployment_dlq: "takos-deployment-jobs-dlq-staging",
     notification_push: "takos-notification-push-staging",
     notification_push_dlq: "takos-notification-push-dlq-staging",
   },

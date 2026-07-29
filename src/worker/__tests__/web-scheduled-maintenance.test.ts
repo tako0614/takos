@@ -33,22 +33,6 @@ function createDeps(
         maxSessionAgeMs: 86400000,
       };
     },
-    reconcileStuckDomains: async () => {
-      calls.push("reconcile");
-      return { scanned: 0, cleaned: 0, reset: 0, errors: 0 };
-    },
-    runCustomDomainReverification: async () => {
-      calls.push("reverify");
-      return {
-        scanned: 0,
-        active: 0,
-        verifying: 0,
-        failed: 0,
-        expired: 0,
-        sslPromoted: 0,
-        errors: 0,
-      };
-    },
     runR2OrphanedObjectGcBatch: async () => {
       calls.push("orphan");
       return {

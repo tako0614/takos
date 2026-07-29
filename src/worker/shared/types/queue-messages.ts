@@ -1,6 +1,5 @@
 export const RUN_QUEUE_MESSAGE_VERSION = 2;
 export const WORKFLOW_QUEUE_MESSAGE_VERSION = 3;
-export const DEPLOYMENT_QUEUE_MESSAGE_VERSION = 1;
 export const INDEX_QUEUE_MESSAGE_VERSION = 1;
 export const NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION = 1;
 export type WorkflowShell =
@@ -110,12 +109,3 @@ export interface WorkflowJobQueueMessage {
   secretIds: string[];
   timestamp: number;
 }
-
-export interface WorkerDeploymentQueueMessage {
-  version: typeof DEPLOYMENT_QUEUE_MESSAGE_VERSION;
-  type: "deployment";
-  deploymentId: string;
-  timestamp: number;
-}
-
-export type DeploymentQueueMessage = WorkerDeploymentQueueMessage;

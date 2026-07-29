@@ -1,7 +1,6 @@
 export type { InsertOf, SelectOf } from "./drizzle-utils.ts";
 
 export {
-  DEPLOYMENT_QUEUE_MESSAGE_VERSION,
   INDEX_JOB_QUEUE_TYPES,
   INDEX_QUEUE_MESSAGE_VERSION,
   NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
@@ -10,11 +9,9 @@ export {
   indexJobDeliveryId,
 } from "./queue-messages.ts";
 export type {
-  DeploymentQueueMessage,
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
-  WorkerDeploymentQueueMessage,
   WorkflowJobDefinition,
   WorkflowJobQueueMessage,
   WorkflowShell,
@@ -22,7 +19,6 @@ export type {
 } from "./queue-messages.ts";
 
 export {
-  isValidDeploymentQueueMessage,
   isValidIndexJobQueueMessage,
   isValidNotificationPushQueueMessage,
   isValidRunQueueMessage,
@@ -96,12 +92,9 @@ export type {
   AgentTaskResumeTarget,
   AgentTaskRunSummary,
   AgentTaskStatus,
-  App,
-  AppType,
   Artifact,
   ArtifactType,
   AuthorType,
-  BindingType,
   FileKind,
   FileOrigin,
   FileVisibility,
@@ -123,22 +116,11 @@ export type {
   ReminderTriggerType,
   Repository,
   RepositoryVisibility,
-  Resource,
-  ResourceAccess,
-  ResourceCapability,
-  ResourcePermission,
-  ResourcePublicType,
-  ResourceStatus,
-  ResourceType,
   ReviewerType,
   ReviewStatus,
   Run,
   RunStatus,
   SecurityPosture,
-  Service,
-  ServiceBinding,
-  ServiceStatus,
-  ServiceType,
   Session,
   Space,
   SpaceFile,

@@ -145,7 +145,6 @@ async function buildSharedState() {
   const runQueue = await resolveQueue("RUN", redisUrl, dataDir);
   const indexQueue = await resolveQueue("INDEX", redisUrl, dataDir);
   const workflowQueue = await resolveQueue("WORKFLOW", redisUrl, dataDir);
-  const deployQueue = await resolveQueue("DEPLOY", redisUrl, dataDir);
 
   const pgPool = await resolvePgPool(postgresUrl);
 
@@ -180,7 +179,6 @@ async function buildSharedState() {
     runQueue,
     indexQueue,
     workflowQueue,
-    deployQueue,
     gitObjects,
     offload,
     tenantSource,
@@ -466,7 +464,6 @@ export async function createNodeWebEnv(): Promise<Env> {
     RUN_QUEUE: shared.runQueue,
     INDEX_QUEUE: shared.indexQueue,
     WORKFLOW_QUEUE: shared.workflowQueue,
-    DEPLOY_QUEUE: shared.deployQueue,
     GIT_OBJECTS: shared.gitObjects,
     TAKOS_OFFLOAD: shared.offload,
     TENANT_SOURCE: shared.tenantSource,

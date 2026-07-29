@@ -2,7 +2,6 @@ import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
 
 import { API_BEARER_SCOPES } from "../../../shared/types/api-scopes.ts";
-import { RUNTIME_PROJECTION_CAPABILITIES } from "../../../application/services/source/app-interface-contract.ts";
 import { createApiRouter } from "../api.ts";
 
 test("Takos API does not mount standalone Git hosting routes", () => {
@@ -29,16 +28,7 @@ test("Takos API does not mount standalone Git hosting routes", () => {
   );
 });
 
-test("Takos delegates Git hosting authority to installed Interface capabilities", () => {
-  assertEquals("sourceRepository" in RUNTIME_PROJECTION_CAPABILITIES, false);
-  assertEquals(
-    RUNTIME_PROJECTION_CAPABILITIES.sourceGitSmartHttp,
-    "source.git.smart_http",
-  );
-  assertEquals(
-    RUNTIME_PROJECTION_CAPABILITIES.sourceGitHosting,
-    "source.git.hosting",
-  );
+test("Takos does not expose Git hosting bearer scopes", () => {
   assertEquals("repos:read" in API_BEARER_SCOPES, false);
   assertEquals("repos:write" in API_BEARER_SCOPES, false);
 });

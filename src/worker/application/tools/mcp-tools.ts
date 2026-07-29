@@ -9,19 +9,9 @@ import {
   getMcpEndpointUrlOptions,
   refreshMcpToken,
 } from "../services/platform/mcp.ts";
-import {
-  readPublicationAuthSecretRef,
-  resolvePublicationAuthToken,
-} from "../services/platform/mcp/auth-secret.ts";
 import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 import type { Database } from "../../infra/db/index.ts";
 import { logError } from "../../shared/utils/logger.ts";
-import {
-  isPublicationType,
-  listPublications,
-  publicationResolvedUrl,
-  RUNTIME_PROJECTION_CAPABILITIES,
-} from "../services/platform/service-publications.ts";
 import { combineSignals } from "@takos/worker-platform-utils/abort";
 import {
   fingerprintMcpTool,
@@ -81,7 +71,6 @@ interface McpServerLoadRecord {
   oauthTokenEndpointAuthMethod: string | null;
   oauthResourceUri: string | null;
   oauthTokenExpiresAt: string | Date | null;
-  authSecretRef?: string | null;
   runtimeInterface?: RuntimeMcpInterfaceAuthority;
 }
 
@@ -346,45 +335,16 @@ export async function loadMcpTools(
         and(eq(mcpServers.accountId, spaceId), eq(mcpServers.enabled, true)),
       )
       .all()
-      .then((rows) => rows as McpServerLoadRecord[]);
-    const publicationServers = (await listPublications({ DB: db }, spaceId))
-      .filter((record) =>
-        isPublicationType(
-          record.publicationType,
-          RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
+      .then((rows) =>
+        (rows as McpServerLoadRecord[]).filter(
+          (row) => row.sourceType !== "publication",
         ),
-      )
-      .map((record): McpServerLoadRecord | null => {
-        const url = publicationResolvedUrl(record);
-        if (!url) return null;
-        const authSecretRef = readPublicationAuthSecretRef(record);
-        return {
-          id: `publication:${record.id}`,
-          accountId: spaceId,
-          name: record.name,
-          url,
-          sourceType: "publication",
-          authMode: authSecretRef ? "bearer_token" : "takos_oidc",
-          serviceId: record.ownerServiceId,
-          bundleDeploymentId: null,
-          oauthAccessToken: null,
-          oauthRefreshToken: null,
-          oauthIssuerUrl: null,
-          oauthClientId: null,
-          oauthClientSecret: null,
-          oauthTokenEndpointAuthMethod: null,
-          oauthResourceUri: null,
-          oauthTokenExpiresAt: null,
-          authSecretRef,
-        };
-      })
-      .filter((record): record is McpServerLoadRecord => record !== null);
+      );
     const runtimeInterfaceServers = runtimeInterfaceConfig
       ? await loadRuntimeMcpInterfaceServers(runtimeInterfaceConfig)
       : [];
     servers = [
       ...runtimeInterfaceServers,
-      ...publicationServers,
       ...storedServers,
     ];
   } catch (err) {
@@ -402,8 +362,6 @@ export async function loadMcpTools(
       switch (sourceType) {
         case "runtime_interface":
           return 0;
-        case "publication":
-          return 1;
         case "external":
           return 3;
         default:
@@ -805,15 +763,6 @@ async function resolveMcpAccessToken(
   if (server.sourceType === "external") {
     await refreshTokenIfNeeded(db, env, drizzle, server);
     return await decryptAccessToken(db, env, server);
-  }
-
-  if (server.sourceType === "publication") {
-    return await resolvePublicationAuthToken(db, env, {
-      spaceId,
-      publicationName: server.name,
-      ownerServiceId: server.serviceId,
-      authSecretRef: server.authSecretRef ?? null,
-    });
   }
 
   // Bearer token auth — decrypt the stored token and pass as access token.

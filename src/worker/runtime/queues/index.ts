@@ -2,7 +2,6 @@
  * Queues barrel — re-exports all queue handler modules
  * for use as `takos-worker/runtime/queues`.
  */
-export * from "./deploy-jobs.ts";
 export * from "./notification-push.ts";
 export * from "./notification-push-policy.ts";
 export * from "./parallel-steps.ts";

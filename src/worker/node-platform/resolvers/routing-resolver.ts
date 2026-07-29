@@ -10,8 +10,9 @@ import {
   createPersistentRoutingStore,
 } from "../../local-platform/routing-store.ts";
 import { createRedisRoutingStore } from "../../local-platform/redis-bindings.ts";
-import type { ActiveRoutingStatus } from "../../application/services/deployment/models.ts";
 import { clearL1, deleteL1 } from "../../application/services/routing/cache.ts";
+
+type ActiveRoutingStatus = "active" | "canary" | "rollback";
 
 // ---------------------------------------------------------------------------
 // Routing store resolver

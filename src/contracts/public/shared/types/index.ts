@@ -29,12 +29,6 @@ export type {
 } from "../../../../worker/shared/types/runs.ts";
 
 export type {
-  AppType,
-  ServiceStatus,
-  ServiceType,
-} from "../../../../worker/shared/types/services-resources.ts";
-
-export type {
   Space,
   SpaceKind,
 } from "../../../../worker/shared/types/spaces.ts";
