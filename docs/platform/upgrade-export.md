@@ -93,7 +93,8 @@ takosumi logs <run-id>
 Update / rollback / export は canonical deploy-control ledgerを正本にします。current implementation では、
 Source snapshot / plan digest / dependency evidence / base StateVersion / Output を pin した reviewed apply が
 新しい StateVersion / Output revision を作る唯一の update authority です。runtime discoveryはInterface、認可はInterfaceBinding、
-commercial billing / usage ingestはoperator extensionとして分離します。
+commercial billing / usage ingestはoperator extensionとして分離します。Accounts の記録操作もアプリの更新とは別に扱い、
+デプロイ履歴を書き換える手段にはしません。
 
 binding-level review は ProviderConnection / ProviderBinding / CredentialRecipe / runtime material / output allowlist の変更を確認するための
 operator review です。provider data copy、schema migration の巻き戻し、source instance の audit chain continuity、pairwise

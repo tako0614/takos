@@ -1,25 +1,43 @@
 # アーキテクチャ
 
-> このページでわかること: Takos の内部構造とサービス間の関係。
+Takos は、利用者向けの AI ワークスペースです。デプロイ管理を内蔵せず、アカウントとアプリの配置は外部の Takosumi と連携します。
 
-## ページ一覧
+## 全体の流れ
 
-- [システムアーキテクチャ](./system-architecture.md) —サービスの境界と役割分担
-- [サービストポロジー](./service-topology.md) —
-  ローカル環境のサービス構成とポート
-- [アプリメタデータ](./app-metadata.md) — アプリ情報を Takos と Takosumi のどちらが持つかの境界
-- [ランタイム / エージェント](./runtime-service.md) —エージェント実行の仕組み
-- [内部トラスト境界](./internal-trust-boundaries.md) — 単一 worker での internal call の正本メカニズム（binding 境界 / 署名 envelope / per-run token）
-- [図](./diagrams.md) —図で全体像を確認
+```text
+ブラウザ
+  ↓
+Takos Worker ── Files / Git / Memory
+  │
+  ├─ エージェント実行サービス
+  └─ アプリや MCP サーバーのツール
 
-## 関連ドキュメント
+Takosumi
+  └─ アカウント、アプリの OpenTofu 実行、実行履歴
+```
 
-| 内容                                      | 詳細ドキュメント                                                                                                                             |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Takosumi Capsule / typed Runs model  | [Takosumi model](https://takosumi.com/docs/reference/model)                                                                                  |
-| Takosumi Accounts / billing / OIDC issuer | [Takosumi operator model](https://takosumi.com/docs/reference/operator)                                                                       |
-| Takosumi deploy-control API               | [Deploy Control API](https://takosumi.com/docs/reference/deploy-control-api)                                                                 |
-| production deploy runbook / secrets       | `takosumi-private/operations/` and operator-local secret store                                                                                |
+Takos Worker は API とブラウザ UI の入口です。エージェント実行サービスは、実行ごとに許可された操作だけを受け取ります。アプリや外部 MCP サーバーのツールは、Workspace の権限を確認してから公開されます。
 
-Takos docs から外部仕様を説明するときは、ここに概要だけ置き、詳細は owning docs
-にリンクします。
+## 読む順番
+
+1. [システム全体](/architecture/system-architecture) — サービスと所有者
+2. [エージェント実行](/architecture/runtime-service) — 一つの依頼が完了するまで
+3. [アプリの公開情報](/architecture/app-interface) — Apps、MCP、file handler の表示方法
+4. [信頼境界](/architecture/internal-trust-boundaries) — サービス間の認証と権限
+
+## 詳細ページ
+
+| ページ | 内容 |
+| --- | --- |
+| [システム全体](/architecture/system-architecture) | Takos と Takosumi の境界 |
+| [サービス構成](/architecture/service-topology) | ローカル環境のサービスとポート |
+| [エージェント実行](/architecture/runtime-service) | 実行、ツール、メモリ |
+| [アプリの公開情報](/architecture/app-interface) | UI、MCP、ファイル形式 |
+| [実行時の接続](/architecture/capsule-runtime-projection) | デプロイ結果から接続を作る方法 |
+| [アプリメタデータ](/architecture/app-metadata) | 名前、URL、機能の所有者 |
+| [信頼境界](/architecture/internal-trust-boundaries) | 内部呼び出しと capability token |
+| [構成図](/architecture/diagrams) | 主な処理の図 |
+
+## 用語について
+
+この章では、API と実装に対応させるため Takosumi 固有の名前も使います。初めて出てくる用語は [用語集](/reference/glossary) で確認できます。利用者向けページでは、可能な限り「アプリ」「実行」「公開先」のような一般的な言葉を使います。

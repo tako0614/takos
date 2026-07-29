@@ -1,41 +1,83 @@
-# デプロイ
+# Takos をセルフホストする
 
-**Takos は OpenTofu-native, Takosumi-managed な AI Workspace distribution です。** Takos の deploy topology は一つの OpenTofu
-module として表現され、`tofu apply` と wrangler artifact upload で Takos product worker を publish します。Accounts /
-deploy-control / dashboard / OpenTofu runner は外部 Takosumi control plane が所有し、Takosumi は
-**Capsule -> Run -> StateVersion -> Output** の ledger を記録します。
+Takos は、自分の Cloudflare アカウントへ配置できます。このリポジトリの `deploy/opentofu` が、必要なクラウドリソースを定義します。
 
-module は `deploy/opentofu` にあり、`var.target = cloudflare`。`cloudflare` target は backing resource (D1 / KV / R2 / Queues) を provision し、Worker-script layer がその binding map を消費する。手書きの wrangler / distribute pipeline は同じ topology の interim materialization であって、別の source of truth ではない。
+このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
-## Current Flow
+## 何が配置されるか
 
-1. `deploy/opentofu` を `tofu apply` して backing resources を作る。
-2. module output を使って wrangler で worker artifact を upload する。
-3. 外部 Takosumi Accounts / deploy-control が Workspaces と明示的に追加された Capsule の plan / apply Run ledger を記録する。
-4. account-plane policy（OIDC clients / billing / domains / dashboard）は Takosumi Accounts plane が所有する。
+現在のセルフホスト構成は Cloudflare に対応します。
 
-## Takos Boundary
+- Takos の Worker と静的 UI
+- D1 データベース
+- R2 バケット
+- KV
+- Queue
+- Vectorize
+- エージェント実行に必要な構成
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the Capsule / Run / StateVersion / Output ledger for the distribution and explicitly installed Capsule apps. account-plane policy（OIDC / billing / dashboard）は
-Takosumi Accounts plane が所有する。
+OpenTofu はリソースと Worker に渡す binding を作ります。Worker のコードは、この binding を使って起動します。
 
-## OpenTofu Module Shape
+## Takosumi は必須か
 
-Takosumi に渡す install 対象は OpenTofu Capsule です。module metadata は Git URL / ref / commit / module path と well-known OpenTofu outputs から解決する。
+OpenTofu モジュール自体は標準的な IaC です。運用者が自分の方法で `tofu plan` / `tofu apply` を実行できます。
 
-```hcl
-module "takos" {
-  source = "github.com/example/takos//deploy/opentofu"
-  target = "cloudflare" # cloudflare only
-}
+Takosumi を使うと、Git ソース、確認済み plan、apply の結果、output、監査記録を一つの管理画面と API で扱えます。Takos 自体は、これらのデプロイ制御を実装しません。
+
+## 必要なもの
+
+- OpenTofu 1.5 以降
+- Cloudflare アカウントと必要な権限
+- Takosumi Accounts の URL、issuer、OIDC client
+- Takos の公開 URL
+- Worker artifact をアップロードする手順
+- 本番用の secret を保管する仕組み
+
+secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しないでください。
+
+## 基本の流れ
+
+1. このリポジトリを tag または commit に固定する
+2. `deploy/opentofu/opentofu.tfvars.example` を参考に、運用環境の入力を用意する
+3. `tofu init` と `tofu plan` を実行する
+4. 作成・変更・削除と料金を確認する
+5. 確認した plan を apply する
+6. 同じ commit から Worker artifact をビルドしてアップロードする
+7. 公開 URL、ログイン、Chat、エージェント実行を確認する
+
+```sh
+cd deploy/opentofu
+tofu init
+tofu plan -var-file=opentofu.tfvars
+tofu apply
 ```
 
-target を選ぶと、typed Runs を経て StateVersion と Output が更新される。Takos product routes は別の product-local deployment surface を露出せず、Takosumi deploy control plane の run ledger を信頼する。
+実際の入力名は [環境と変数](/deploy/environment) を参照してください。Worker の公開は [デプロイ手順](/deploy/deploy) に分けています。
 
-## References
+## アプリとの連携
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+Workspace に追加するアプリも、Git リポジトリにある OpenTofu モジュールとして扱えます。
+
+アプリは、通常の OpenTofu output で起動 URL などを返します。Takos から使う画面、MCP、ファイル形式などは、アプリの公開情報として Takosumi が記録します。認証情報は output に含めません。
+
+詳しくは [OpenTofu output とアプリの公開先](/deploy/runtime-interfaces) を参照してください。
+
+## 配置後の確認
+
+- 公開 URL が 200 を返す
+- OIDC でサインインできる
+- Workspace を作成または開ける
+- Chat からエージェントを実行できる
+- 完了または失敗の状態が記録される
+- 必要な D1、R2、KV、Queue へアクセスできる
+- ロールバックする commit と手順が決まっている
+
+問題がある場合は [トラブルシューティング](/deploy/troubleshooting) を参照してください。
+
+## 関連ページ
+
+- [環境と変数](/deploy/environment)
+- [デプロイ手順](/deploy/deploy)
+- [ルートとドメイン](/deploy/routes)
+- [ロールバック](/deploy/rollback)
+- [トラブルシューティング](/deploy/troubleshooting)

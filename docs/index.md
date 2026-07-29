@@ -3,53 +3,59 @@ layout: home
 
 hero:
   name: Takos
-  text: AI と話しながら作る、セルフホスト型プロダクト
-  tagline: チャット・AI エージェント・メモリ・Workspace を中心機能に持つ、自分で持てる AI プロダクト。新しい Workspace を作ると便利なアプリが自動でそろいます。
+  text: AI に作業を頼み、成果を残すワークスペース
+  tagline: 会話、ファイル、Git、メモリ、アプリ、外部ツールを一つの Workspace で扱えます。
   actions:
     - theme: brand
-      text: Takos 全体像
-      link: /overview/
-    - theme: alt
       text: はじめる
       link: /get-started/
     - theme: alt
-      text: 自前で動かす (セルフホスト)
+      text: ツールを接続する
+      link: /apps/mcp
+    - theme: alt
+      text: セルフホストする
       link: /deploy/
 
 features:
-  - title: チャット
-    details: AI エージェントと会話しながら、ソフトウェアの作成・編集を進められます。
-  - title: AI エージェント
-    details: あなたの指示を受けて作業するエージェント。メモリやスペースと連携して動きます。
-  - title: メモリ
-    details: やり取りや成果を覚えておき、次の作業に活かす記憶のしくみ。
-  - title: スペース
-    details: 個人・チーム・組織ごとに分けられる作業領域。アプリはスペース単位で管理します。
-  - title: アプリが自動でそろう
-    details: 新しい Workspace を作ると、Office (docs / slide / sheet)、PC 操作、自分のための ActivityPub SNS といった便利なアプリ (takos-office / takos-computer / yurucommu) が自動でインストールされます。不要なものはいつでも外せます。
-  - title: 自分で持てる
-    details: Takos はあなたのサーバーにまるごとデプロイできます。データ・ログイン・運用を自分の手元で管理できます。
+  - title: 作業を頼む
+    details: 調査、実装、文書作成などをチャットからエージェントへ依頼できます。
+  - title: 成果を残す
+    details: 会話だけで終わらせず、ファイル、Git、メモリ、アプリに結果を残せます。
+  - title: 道具を追加する
+    details: アプリや MCP サーバーが公開するツールを Workspace ごとに追加できます。
+  - title: 自分で運用する
+    details: OpenTofu モジュールを使って、自分の Cloudflare アカウントへ配置できます。
 ---
 
 ## Takos とは
 
-Takos は、AI エージェントと会話しながらソフトウェアを作成・編集できる、セルフホスト型のプロダクトです。**チャット・AI
-エージェント・メモリ・Workspace**の 4 つを中心機能として持ちます。
+Takos は AI エージェントと一緒に作業するための Web アプリです。中心になる **Workspace** には、会話、ファイル、リポジトリ、メモリ、アプリ、外部ツールがまとまっています。
 
-新しい Workspace を作ると、便利なアプリ (`takos-office` / `takos-computer` / `yurucommu`)
-が自動的にインストールされます。不要なアプリはいつでもアンインストールできます。
+新しい Workspace は空の状態から始まります。`takos-office`、`takos-computer`、`yurucommu` などのアプリが必要なら、Apps から選んで追加します。Takos が知らないアプリでも、対応する Git リポジトリから追加できます。
 
-::: warning すぐに使える公開サービスについて
-ブラウザからすぐに使える公開サインアップ (Use Takos) は、運営者 (operator) が公開準備を整えるまでは閉じています。公開
-入口の案内がない場合は、まずはローカルで試す手順か、自分のサーバーに置く**セルフホスト**の手順を使ってください。Takos
-のセルフホストは誰でも自分のインフラで動かせます。
+## 最初の5分
+
+1. Takos にサインインする
+2. Workspace を作る、または既存の Workspace を開く
+3. Chat で小さな作業を一つ頼む
+4. 必要なら Apps や Connections から道具を追加する
+5. 実行が終わったら、回答と変更内容を確認する
+
+[スタートガイド](/get-started/) では、最初の依頼から結果の確認までを順番に説明します。
+
+## どこから読むか
+
+| 目的 | ページ |
+| --- | --- |
+| まず使う | [スタートガイド](/get-started/) |
+| アプリを追加する | [はじめてのアプリ](/get-started/your-first-app) |
+| 外部ツールを使う | [ツールと接続](/apps/mcp) |
+| 完了通知を受け取る | [通知](/get-started/notifications) |
+| ローカルで開発する | [ローカル開発](/get-started/local-development) |
+| 自分の環境で運用する | [セルフホスト](/deploy/) |
+| 問題を調べる | [トラブルシューティング](/deploy/troubleshooting) |
+| API や用語を確認する | [リファレンス](/reference/) |
+
+::: info 公開サービスについて
+サインアップの可否や利用条件は、Takos を提供する運営者ごとに異なります。利用 URL がない場合は、セルフホストまたはローカル開発の手順を使ってください。
 :::
-
-## 次に読むページ
-
-- [Takos 全体像](/overview/) — Takos が何をするプロダクトで、どんな概念で構成されているか
-- [はじめる](/get-started/) — 最初のセットアップ手順
-- [はじめてのアプリ](/get-started/your-first-app) — 自分のアプリをデプロイする流れ
-- [Install paths](/apps/install-paths) — 3 つの始め方とインストール方法
-- [デプロイ / セルフホスト](/deploy/) — アプリの実行環境の設定と、自分のサーバーで動かす (セルフホスト) 手順
-- [アーキテクチャ](/architecture/) — 内部構造の詳細

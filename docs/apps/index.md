@@ -1,38 +1,38 @@
-# アプリ構成
+# アプリと接続
 
-Takos のアプリは Workspace に install され、launcher、file handler、MCP tools、UI surface として表示されます。裏側では
-Takosumi Capsule が正本です。アプリ repo は Git URL から入る OpenTofu Capsule で、Takosumi は
-**Capsule -> Run -> StateVersion -> Output** の ledger を記録します。
+Takos の機能は、必要なアプリと外部接続を Workspace ごとに追加して広げられます。
 
-## Current Flow
+## アプリ
 
-1. アプリの OpenTofu Capsule (Git URL / ref / module path) を install して Capsule を作る。
-2. `plan` Run で変更、警告、policy decision を review する。
-3. review 済みの saved plan を `apply` Run として apply する。
-4. 成功した apply が StateVersion と Output を記録する。
-5. Takos はその結果を app launcher / tools / handlers / UI surface に投影する。
+アプリは Apps から追加し、起動 URL がある場合は同じ画面から開きます。新しい Workspace にアプリは自動追加されません。
 
-## Takos Boundary
+Takos のホスト環境では、アプリの Git リポジトリにある OpenTofu モジュールを Takosumi が実行します。Takosumi の API では、インストールされた一つのモジュールを **Capsule** と呼びます。通常の利用者は、この名前を覚える必要はありません。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. Takosumi records Run / StateVersion / Output evidence for the applied OpenTofu Capsule, while ProviderConnections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit ProviderConnection, and policy resolves provider allowlists and state handling. account-plane policy（OIDC / billing / dashboard）は Takosumi Accounts plane が所有する。
+追加後に Takos が表示するもの:
 
-## OpenTofu Capsule Shape
+- アプリ名、説明、アイコン
+- 起動 URL と現在の状態
+- ファイルを開けるアプリなら、その対応形式
+- エージェント向けツールを提供するアプリなら、その接続
 
-Takosumi に渡す install 対象は OpenTofu Capsule であり、`var.target` で deploy 先を選ぶ。
+## 接続
 
-```hcl
-module "app" {
-  source = "github.com/example/app//deploy/opentofu"
-  target = "cloudflare" # cloudflare only
-}
-```
+Connections では、外部 MCP サーバーを追加します。MCP は、外部サービスがエージェント向けツールを公開する共通プロトコルです。
 
-target を選ぶと、typed Runs を経て StateVersion と Output が更新され、非機密な endpoint は Output として記録されます。Takos
-product routes は別の product-local deployment surface を露出せず、Takosumi deploy-control plane の run ledger と Capsule output projection を信頼します。
+アプリが MCP サーバーを提供する場合は、デプロイ完了後に Connections へ自動表示されます。利用者が追加した外部サーバーも、同じ画面で管理します。
 
-## References
+## どちらを使うか
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+| やりたいこと | 入口 |
+| --- | --- |
+| 画面を持つアプリを追加したい | Apps |
+| Git リポジトリからサービスを配置したい | Apps |
+| 既存の MCP サーバーへ接続したい | Connections |
+| エージェントが使えるツールを確認したい | Connections または Chat のツール表示 |
+
+## 次に読む
+
+- [はじめてのアプリ](/get-started/your-first-app)
+- [インストール方法](/apps/install-paths)
+- [ツールと接続](/apps/mcp)
+- [ファイルを開くアプリ](/apps/file-handlers)

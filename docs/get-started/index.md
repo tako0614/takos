@@ -1,78 +1,66 @@
-# はじめる
+# スタートガイド
 
-Takos の最初の成功状態は、Workspace を開いて、必要な app を追加し、chat で agent に作業を頼み、その結果が Git / files /
-memory / app launcher に残ることです。OpenTofu や Takosumi の実行台帳は重要ですが、通常の Workspace ユーザーが最初に理解するものではありません。
+このページでは、Workspace を開き、エージェントへ最初の作業を頼み、結果を確認するところまで進めます。
+
+## 事前に必要なもの
+
+- Takos の URL
+- その Takos にサインインできるアカウント
+
+ローカルで起動する場合は、先に [ローカル開発](/get-started/local-development) を実行してください。
 
 ## 1. Workspace を開く
 
-公開 operator、operator が用意した rehearsal 環境、または self-host した Takos で sign in すると、最初に Workspace と app
-launcher が表示されます。Workspace は chat、agent、memory、Git、files、apps をまとめる作業場所です。public Takosumi for
-Platforms signup が closed の間も、rehearsal / self-host では同じ product journey を確認します。
+サインイン後、既存の Workspace を選ぶか、新しく作成します。
 
-最初に見るもの:
+**Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、外部ツールをまとめる作業場所です。新しく作った直後は、必要なアプリや接続がまだない場合があります。
 
-- **Apps**: Git URL から追加した app や、`takos-office` / `takos-computer` / `yurucommu` などの installable app
-- **Chat**: agent に作業を依頼する入口
-- **Memory**: project notes、決定事項、繰り返し使う context
-- **Repos / Files**: agent が作ったコードやファイルを確認する場所
+## 2. 最初の作業を頼む
 
-新規 Workspace に app は自動 install されません。必要な app を選んで追加し、install の途中状態や失敗は Apps 画面から管理します。
+Chat を開き、現在の状態だけで完了できる小さな依頼から始めます。
 
-## 2. Chat で最初の作業を頼む
-
-Chat では、agent に調査、実装、文書化、file 更新、repo 操作を依頼できます。作業結果は会話だけで終わらず、必要に応じて Git diff、files、
-memory、app の状態に反映されます。
-
-例:
-
-- `この Workspace の README を読んで、次にやることを整理して`
-- `takos-office の Docs に新しいメモページを作って`
-- `この app の設定を確認して、必要な変更を PR にして`
-
-Takos は chat だけの UI ではなく、agent が使う Git / files / memory / apps を同じ Workspace に置くための product です。
-
-## 3. Apps から成果物を開く
-
-Apps 画面は Workspace の launcher です。Git URL から明示的に追加した app がここに並びます。app に launch URL がある場合は、
-ここから直接開けます。install 中のものは管理 link から Capsule detail に進めます。
-
-新しい app を追加したい場合は、Apps 画面から Source / Git URL の追加導線に進みます。Takos に中央の公式 app store はありません。
-Store / Source 画面は、Git URL の OpenTofu Capsule を見つけて追加するための discovery surface です。
-
-## 4. Git URL から app を追加する
-
-任意の app は、Git URL、ref、module path を指定して追加します。通常の Workspace ユーザーに見える流れは次の形です。
-
-```txt
-Git URL を入力
-  ↓
-作られるものと注意点を確認
-  ↓
-承認
-  ↓
-Apps launcher に表示
+```text
+この Workspace の README を読んで、次にやることを3つに整理して。
 ```
 
-裏側では Takosumi が compatibility check、plan、apply、StateVersion / Output 記録を行います。ただし product 導線では、
-まず「何が追加され、どこから開けるか」を確認できることが重要です。詳細は [はじめてのアプリ](/get-started/your-first-app) を参照してください。
+文書を作る例:
 
-## 5. 管理者向けの裏側
+```text
+今日決めたことを短いメモにまとめて、成果物として保存して。
+```
 
-operator / self-host 管理者は、Takos distribution を OpenTofu module と wrangler artifact upload で deploy します。この worker は
-Takos product surface を提供し、Accounts / deploy-control / dashboard / OpenTofu runner は外部 Takosumi control plane が所有します。
+作業が始まると、Chat に進行状況が表示されます。エージェントは利用可能なツールだけを使い、権限が必要な操作では確認を求めます。
 
-管理者が見るもの:
+## 3. 結果を確認する
 
-- backing resources: D1 / KV / R2 / Queues / Worker assets / containers
-- account / OIDC / billing / domain policy
-- Source / Connection / Capsule / Run / StateVersion / Output / Activity
-- provider binding outcome: explicit ProviderConnection, required manual input, or policy block
+実行が終わったら、次を確認します。
 
-Workspace ユーザー向けの導線では、これらは Apps、Chat、Memory、Git、Files の裏側に隠れます。
+- Chat の最終回答
+- 作成または変更されたファイル
+- Git の差分やコミット
+- 保存されたメモリ
+- ツール実行前に求められた確認と、その結果
 
-## 次に読むページ
+モバイル push を有効にしている場合、エージェントの回答が完了または失敗したときに通知を受け取れます。詳しくは [通知](/get-started/notifications) を参照してください。
+
+## 4. 足りない道具を追加する
+
+シェル、Git ホスティング、オフィス編集、Web 検索などは、すべてが Takos に組み込まれているわけではありません。
+
+- **Apps**: Git リポジトリからアプリを追加する
+- **Connections**: HTTPS の MCP サーバーを接続する
+
+追加後、エージェントは新しいツールを `toolbox` から探せるようになります。詳しくは [ツールと接続](/apps/mcp) を参照してください。
+
+## 5. アプリを開く
+
+追加済みアプリは Apps に表示されます。起動 URL があるアプリは、そのまま開けます。準備中や失敗の場合は状態と管理画面へのリンクが表示されます。
+
+アプリを追加する手順は [はじめてのアプリ](/get-started/your-first-app) にあります。
+
+## 次に読む
 
 - [はじめてのアプリ](/get-started/your-first-app)
-- [インストール方法](/apps/install-paths)
-- [Git URL からアプリを install する](/platform/store)
-- [Self-host / deploy](/deploy/)
+- [ツールと接続](/apps/mcp)
+- [通知](/get-started/notifications)
+- [ローカル開発](/get-started/local-development)

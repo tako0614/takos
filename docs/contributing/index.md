@@ -31,6 +31,9 @@ live service、operator-private state、readiness evidence、recovery drill は�
 credential boundary と cadence を持ち、product check や release approval に
 混ぜません。
 
+利用者向け docs を変更する場合は、[`documentation-style.md`](./documentation-style.md)
+の順序と用語ルールに従い、`bun run docs:build` も実行します。
+
 ## Smoke テスト
 
 - [`smoke.md`](./smoke.md) — Takos product root の portable gate と focused local smoke。

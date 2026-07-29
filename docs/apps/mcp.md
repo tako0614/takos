@@ -1,226 +1,116 @@
-# MCP Server
+# ツールと接続
 
-MCP servers appear in Takos as tools that can be used from a Workspace. Users install a plain OpenTofu Capsule rather
-than a Takos-specific MCP manifest. After a successful apply, Takosumi resolves the service-side `mcp.server`
-`Interface` inputs from explicitly selected ordinary Outputs, and `InterfaceBinding` authorizes the caller. Takos reads
-only that resolved, authorized view.
+Takos のエージェントは、その Workspace で利用できるツールを実行時に調べて使います。ツール一覧は固定ではありません。
 
-## Current Flow
+## ツールはどこから来るか
 
-1. Install a Git URL/ref that points at an OpenTofu Capsule.
-2. Review the Takosumi `plan` Run and approve the saved plan.
-3. A successful `apply` records StateVersion and Output.
-4. A service-side `InstallConfig.interfaceBlueprints` entry materializes an `mcp.server` Interface whose
-   `inputs.endpoint` explicitly selects the Capsule's ordinary endpoint Output. When the service is realized as a
-   Form-backed Resource, its verified Takoform Form Definition may instead declare the portable Interface descriptor;
-   Takosumi still owns the resulting Interface record and its lifecycle.
-5. A Ready `InterfaceBinding` authorizes the Principal for `mcp.invoke`; Takos then shows the server's tools in the
-   Workspace tool catalog. Credentials are delivered only through a supported binding mechanism, never an Output.
+ツールには三つの入手元があります。
 
-Current first-party examples are normal removable Capsules:
+| 入手元 | 例 | 追加方法 |
+| --- | --- | --- |
+| Takos の基本ツール | メモリ、添付ファイル、成果物、既知 URL の取得 | 最初から利用可能 |
+| インストール済みアプリ | シェル、Git、ストレージ、文書編集 | Apps からアプリを追加 |
+| 外部 MCP サーバー | Web 検索、外部 SaaS の操作 | Connections から接続 |
 
-- `takos-computer` publishes sandbox shell, file, and process tools;
-- `takos-storage` publishes Workspace drive tools and separately exposes `storage.object` to app consumers;
-- `takos-git` publishes repository-management tools and separately exposes
-  `source.git.smart_http` / `source.git.hosting`.
+**MCP (Model Context Protocol)** は、外部サービスがエージェント向けのツールを公開するための共通プロトコルです。
 
-Takos does not copy these tools into its static registry. Installing or removing the Capsule and its service-side
-Interface adds or removes its MCP tools through the Takosumi Interface API.
+エージェントは `toolbox` を使って、現在利用できるツールと使い方を探します。アプリや接続を削除すると、その提供元のツールも利用できなくなります。
 
-Takosumi control operations use this same path when an operator chooses to expose them to agents. The producer is a
-normal operator control MCP Capsule or host adapter with an `mcp.server` Interface and a Principal `mcp.invoke`
-InterfaceBinding. The adapter authenticates the invocation-only Interface token, maps the live MCP operation onto the
-same Takosumi public control service, and lets Takosumi re-evaluate Workspace RBAC, policy, saved-plan guards, Run/state,
-and audit. Takos does not define fixed control tool names, and it does not inject a broad control API token into a
-deployed workload. The exact blueprint and trust model are documented in
-[Takos app Interfaces](/architecture/app-interface#takosumi-control-mcp-の具体的な配信モデル).
+## Takos に含まれる基本ツール
 
-## Connections, not a Store
+Takos が直接提供するのは、次の用途のツールです。
 
-Takos treats MCP as an open connection surface, not as a catalog allowlist. The Connections view accepts any publicly
-reachable HTTPS MCP server URL without embedded credentials on the default port, even when that server does not appear
-in a configured registry. A provider can link to
-`/connections/new?server=<encoded HTTPS URL>` to open the same review flow; the portable identifier in that link is the
-server URL, not a Takos-only listing ID.
+- サブエージェントの実行と待機
+- 成果物の保存
+- 利用できるツールやアプリ候補の検索
+- 既知の HTTPS URL の取得
+- Chat に添付されたファイルの読み取り
+- メモリの保存、検索、リマインダー
+- MCP 接続の追加、一覧、更新、削除
+- Workspace 固有のスキルの管理
 
-The same input also accepts an MCP Registry server ID or a search term. A Workspace can search the preview Official MCP
-Registry together with organization, community, or custom registry-compatible sources. The Official source can be
-disabled per Workspace; when disabled, Takos does not send that Workspace's search terms to it. Takos merges duplicate
-remote endpoints and keeps every source as provenance on the result. Registry metadata is discovery metadata only: an
-"official" source label does not mean that Takos or the MCP project has reviewed, approved, or made the connector safe.
-The connection review therefore shows the actual endpoint host and data destination while marking the connector operator
-and physical execution location unknown unless separate evidence establishes them.
+`web_fetch` は、指定された URL を開くツールです。Web 全体を検索する機能ではありません。Takos に組み込みの `web_search` はないため、Web 検索が必要なら、その機能を公開する MCP サーバーを接続します。
 
-The current registry integration is intentionally live and best-effort. It uses each upstream registry's name search
-and does not maintain a cached full-text security index. Sources must currently be public HTTPS endpoints on the default
-port. A Workspace editor may configure either a bearer credential or one safe custom header; the value is encrypted at
-rest, omitted from every response, and sent only to that normalized Registry endpoint through Takos egress. Changing an
-authenticated Registry host requires entering the credential again. Private-network Registry routing remains a later
-capability. A failed custom source does not hide results from the other enabled sources. Literal endpoints that declare
-required headers or variables are shown but cannot be connected until Takos has an explicit configuration flow for
-those values. Remotes whose endpoint itself is a URL template are omitted because Takos cannot yet disclose their actual
-execution and data-destination host.
+シェル、一般ファイルシステム、Git ホスティング、オブジェクトストレージも Takos の基本ツールではありません。対応するアプリまたは MCP サーバーが必要です。
 
-A bare domain in the same input starts experimental SEP-2127 discovery. Takos reads
-`https://<domain>/.well-known/mcp/catalog.json`, follows its explicit Server Card URLs without following HTTP redirects,
-and accepts only the experimental v1 card media type and schema. Catalog and card documents are bounded, fetched through
-Takos egress, and limited to public HTTPS locations. Server Card claims are advisory discovery metadata: selecting a
-candidate still enters the normal MCP initialize, authorization, connection review, and live `tools/list` flow. This is
-an experimental MCP extension rather than an accepted core MCP specification, so URL input and Registry search remain
-the stable discovery paths.
+## 外部 MCP サーバーを接続する
 
-Keep these three concepts separate in UI and contracts:
+Connections を開き、次のいずれかを入力します。
 
-- **service**: the product the user ultimately wants to use, such as a document service;
-- **connector**: the concrete MCP implementation and operator that receives data and talks to that service;
-- **connection**: one Workspace's configured and, when required, authorized relationship with that connector.
+- 公開 HTTPS MCP URL
+- MCP Registry のサーバー ID
+- Registry で探すサービス名
 
-Takos currently connects to external servers through MCP Streamable HTTP. It also displays npm and OCI package records
-advertised by Registry metadata, including their version, digest, runtime hint, transport, and whether configuration is
-required. Those packages are never executed merely because they appear in search results. When the record includes a
-repository URL, Takos can open the normal Capsule planning flow with that Git URL, version/ref, and repository subfolder.
-The repository must contain a compatible plain OpenTofu/Terraform module; package metadata alone is not an executable
-Takos workload. Planning, applying, state, outputs, and audit therefore remain Takosumi-owned, and a successfully
-projected MCP endpoint returns to the same Connections UX.
+HTTPS URL を直接入力する場合、URL にユーザー名やパスワードを埋め込まないでください。現在の直接接続は、公開 HTTPS と標準ポート 443 を対象にします。
 
-Connections can be exported as strict `takos.mcp.connections` version 1 JSON and imported into another Takos Workspace.
-The portable document contains normalized MCP URLs, Registry source metadata, enabled state, requested OAuth scope, and
-tool fingerprint/policy intent. It never contains OAuth access or refresh tokens, OAuth client credentials, Registry
-credentials, confirmation arguments, or Takos-only catalog IDs. An imported authenticated Registry stays disabled until
-its credential is entered again. Imported tool approvals are staged disabled and require review against the live
-`tools/list`; importing a document cannot silently authorize a tool. Protected connections resume through the normal
-OAuth flow and return authorization links to the user.
+接続前の確認画面には、少なくとも次の情報が表示されます。
 
-MCP tool names remain unchanged when they already satisfy the model provider's function-name contract and do not
-collide. Invalid, overlong, or colliding names receive a stable, bounded server/tool suffix in the model-visible catalog;
-Takos still calls the connector with its original MCP tool name. This prevents one connector from invalidating the whole
-model request or shadowing a Takos/core tool.
+- 実際に接続するホスト
+- データの送信先
+- 認証が必要か
+- サーバーが公開したツール
+- ツールが読み取り専用か、変更を伴うか
 
-Catalog ingestion is bounded before it reaches the run container: at most 64 enabled MCP servers participate in one
-Run, each tool snapshot is limited to 128 KiB, each server catalog to 512 tools / 4 MiB, and the combined runtime catalog
-to 2,048 tools / 8 MiB. An oversized server is rejected as a unit rather than leaving a partially exposed catalog.
+Registry は候補を探すための索引です。Registry に載っていることや、発見元に “Official” と表示されることは、Takos が安全性を保証したという意味ではありません。
 
-The current Run protocol owns synchronous `tools/call` execution. A connector tool that declares
-`execution.taskSupport: "required"` is shown as unsupported and is never exposed to the model, even if an older policy
-row says enabled. Supporting it requires Takos to own MCP Task creation, durable polling, cancellation, and terminal
-result recovery end to end; treating it as an ordinary synchronous call would lose those lifecycle guarantees.
+## アプリから追加されるツール
 
-## External authorization
+Workspace に追加したアプリが MCP エンドポイントを公開している場合、Connections に自動表示されます。
 
-Takos does not silently treat OAuth discovery failure as a public server. It first performs a bounded MCP
-`initialize` handshake without a bearer token and, when the server advertises the tools capability, verifies
-`tools/list`. Only that valid protocol exchange is accepted as a public, no-authorization connection.
+```text
+アプリを追加
+  → デプロイが完了
+  → Takosumi が公開先と利用権限を記録
+  → Takos が接続とツールを表示
+```
 
-For a protected server, Takos follows the MCP 2025-11-25 authorization flow: Protected Resource Metadata, OAuth or OIDC
-authorization-server discovery, PKCE S256, and the resource indicator on authorization, token, and refresh requests.
-OAuth client selection is, in order:
+アプリ側は通常の OpenTofu output から公開 URL を渡します。認証情報を公開 output に含めてはいけません。利用者の権限と認証情報は、公開 URL とは別の経路で扱います。
 
-1. an operator preregistration for that exact resource or authorization server;
-2. Takos's deployment-specific Client ID Metadata Document at `/api/mcp/client.json`;
-3. Dynamic Client Registration;
-4. an explicit manual-registration-required error.
+Takos はアプリのツールを静的な一覧へコピーしません。アプリを更新・削除した場合は、現在の公開内容を取り直します。
 
-Because one Takos deployment can connect to multiple authorization servers, a protected server's authorization server
-must advertise RFC 9207 authorization-response issuer support. Takos opens authorization through an authenticated,
-same-user start route, stores a high-entropy browser nonce encrypted, and carries it only in a short-lived HttpOnly
-callback cookie. Takos accepts the callback only when both that browser binding and the exact `iss` value match. The
-normal Takos session cookie remains `SameSite=Strict`; it is not weakened for OAuth callbacks.
+## 認証が必要な接続
 
-Takos does not fall back to a made-up shared client ID. Access tokens, refresh tokens, and confidential client secrets
-are encrypted at rest and are never returned by the MCP server-list API. A saved client registration is reused only for
-the same authorization-server issuer and while its secret remains valid. OAuth callback persistence also binds the
-token to the exact Workspace, connection name, and normalized MCP endpoint so a same-name endpoint change cannot receive
-the token.
+対応する MCP サーバーでは、Connections から OAuth 認証を開始できます。Takos は、サーバーが案内する認可先と対象リソースが一致することを確認してからブラウザを開きます。
 
-Authentication from the connector to an underlying service remains the connector operator's responsibility. Takos
-authorizes itself to the MCP server; it does not accept an underlying service token for passthrough to that server.
+保存したトークンは暗号化され、接続一覧 API から値を返しません。接続先ホストを変更した場合は、再認証が必要です。
 
-## Tool exposure consent
+OAuth に対応していないカスタム接続では、運営設定により bearer credential または許可されたカスタムヘッダーを使える場合があります。値は URL や OpenTofu output に入れません。
 
-Registry declarations are not the tool authority. Takos fetches the connection's current `tools/list` and fingerprints
-each external tool's name, description, input/output schemas, behavior annotations, and execution contract. A first-seen
-tool is disabled until a Workspace editor reviews it. If any fingerprinted field changes, the tool is disabled and
-requires review again. The Connections view shows the server-provided annotations and Takos's risk/side-effect treatment,
-but annotations alone are not a trust boundary.
+## ツール実行時の確認
 
-The selected fingerprint is included when the user enables or disables a tool. Takos rejects a stale selection and
-revalidates the enabled fingerprint and connection state immediately before execution, so a new schema, another
-Workspace's policy, or a connection disabled after a Run started cannot inherit an earlier approval. Managed and
-Capsule-published tools keep their existing Workspace policy and appear as read-only in this external-tool consent UI.
+外部ツールの説明や結果は、信頼できない入力として扱われます。そこに「権限を与える」「確認を省略する」と書かれていても、利用者の許可にはなりません。
 
-An enabled external tool also has an invocation policy. `confirm_each_time` is the default, including for rows upgraded
-from an older release. Before the call, Takos revalidates the live schema and policy, then creates a ten-minute decision
-bound to the exact Workspace, user, server, tool fingerprint, and canonical arguments. The requesting Run and thread are
-recorded for traceability, but an approval can be consumed by the next exact retry even when the original Run has already
-ended. Arguments are encrypted at rest and their lookup identity is keyed rather than a plaintext digest. The user can
-approve or deny from the authenticated Takos UI; approval is one-time and is consumed before the remote attempt. A
-Workspace editor may deliberately choose `automatic` for a reviewed tool when per-call confirmation is not desired.
+変更や削除を伴うツールでは、設定に応じて実行前に確認を求めます。MCP サーバーが `destructiveHint: true` を返したツールは、接続元に関係なく一度限りの確認が必要です。
 
-That setting does not bypass Takos's high-risk boundary: a tool classified `high` or advertising
-`destructiveHint: true` requires a one-time user decision even when it comes from a managed local server or a
-Capsule-published MCP server, and even when an external tool was otherwise set to `automatic`. Takos revalidates the
-live tool fingerprint before consuming that decision. Explicitly allowlisted local read-only tools continue to run
-without this prompt.
+Takos は実行直前にツール定義が変わっていないかを再確認します。通信が切れて結果を確定できなかった操作は自動再実行しません。外部サービスの状態を確認してから、新しい操作としてやり直してください。
 
-MCP descriptions and results, Web content, repository files, documents, retrieved memory, and all other tool output are
-untrusted data in the agent system prompt. Embedded instructions cannot change the user's goal, grant capabilities, or
-count as confirmation. Destructive or high-risk transitions must follow user-originated intent and any confirmation
-required by Takos; the agent must not infer approval from retrieved content, another agent, or the MCP server itself.
+## 接続の持ち運び
 
-Side-effecting tool calls use a Run-scoped operation key derived from tool name and canonical arguments. Retrying the
-same arguments in one Run therefore returns the recorded result instead of repeating the side effect; this also means an
-intentional second identical call is treated as the same operation. A pending operation is never replayed automatically.
-After 30 minutes without an authoritative outcome it becomes terminal `uncertain`, which is deliberately longer than
-the tool transport timeout. The user must verify the remote system before issuing a new explicit operation.
+Connections は `takos.mcp.connections` version 1 の JSON として export / import できます。
 
-## Built-in tool boundary
+export されるのは URL、発見元、ON/OFF、要求した OAuth scope などの設定です。トークン、カスタムヘッダーの値、過去の確認結果は含まれません。import 後は接続先を再確認し、必要なら再認証します。
 
-Takos has 21 static, Takos-owned tools:
+## 現在の制限
 
-- agent/artifact/discovery: `spawn_agent`, `wait_agent`, `create_artifact`, `store_search`, `toolbox`;
-- web: `web_fetch`;
-- chat attachment: `chat_attachment_read` (only a `file_id` actually attached under the current thread's
-  `/chat-attachments` path; it is not a general storage tool);
-- memory: `remember`, `recall`, `set_reminder`; derived Run search: `info_unit_search`;
-- MCP registration: `mcp_add_server`, `mcp_list_servers`, `mcp_update_server`, `mcp_remove_server`;
-- custom skills: `skill_list`, `skill_get`, `skill_create`, `skill_update`, `skill_toggle`, `skill_delete`.
+- MCP transport は Streamable HTTP
+- 直接接続は公開 HTTPS の標準ポートが対象
+- プライベートネットワーク内の Registry には未対応
+- URL 自体がテンプレートの候補は接続不可
+- ヘッダーや変数の追加入力が必要な Registry 候補は、入力 UI が対応するまで接続不可
+- MCP Tasks の作成、継続ポーリング、キャンセルには未対応
+- 一つのエージェント実行で読み込む接続数とツール数には上限がある
 
-Computer, filesystem, object-storage, and Git operations are not static Takos tools. The agent finds those capabilities
-through `toolbox` after the corresponding Capsule or external MCP server is available.
+## Takos と Takosumi の分担
 
-`web_fetch` opens and extracts a known URL; it does not search the Web. Takos has no built-in `web_search`. Web search is
-available only when a registered external MCP server publishes a suitable search tool. If none is registered, the agent
-must report that search is unavailable and may still use `web_fetch` for URLs supplied by the user or returned by another
-source.
+Takos は、接続先の検索、OAuth、トークン保存、ツール表示、実行前の確認を担当します。
 
-## API authority
+Takosumi は、アプリのインストール、OpenTofu の実行、アプリが公開した接続先、利用権限を管理します。Takosumi の API 用トークンを、アプリやエージェントへそのまま渡すことはありません。
 
-Takos API bearer authority is split by operation. `mcp:invoke` permits connection discovery, server/tool reads, and the
-current user's one-time confirmation decisions. `mcp:manage` permits connection, Registry source, OAuth-start, tool-policy,
-and portable import/export mutations. Neither scope implies the other. Browser sessions retain their normal Workspace
-role checks; these scopes constrain Takosumi Accounts bearer credentials rather than bypassing Workspace membership.
+## 関連ページ
 
-## Boundary
-
-Takos owns external MCP discovery sources, connection OAuth and token persistence, tool display and consent,
-pre-invocation exposure checks, and invocation UX. Takosumi owns the Capsule Source / Run / StateVersion / Output ledger,
-OpenTofu execution and dependency pinning, Interface resolution, InterfaceBinding authorization, and deploy-time
-provider credential, policy, and audit evidence. Provider credentials remain in ProviderConnection / CredentialRecipe /
-ProviderBinding / vault / runner phase boundaries. Runtime credentials require an explicitly supported Binding delivery
-mechanism and never come from public OpenTofu Output values.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [OpenTofu Outputs and runtime Interfaces](/deploy/runtime-interfaces)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
-- [MCP Registry overview](https://modelcontextprotocol.io/registry/about)
-- [MCP Registry schema](https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/server-json/generic-server-json.md)
-- [Experimental MCP Server Card extension](https://github.com/modelcontextprotocol/experimental-ext-server-card)
-- [Experimental Server Card discovery](https://github.com/modelcontextprotocol/experimental-ext-server-card/blob/main/docs/discovery.md)
+- [はじめてのアプリ](/get-started/your-first-app)
+- [OpenTofu output とアプリの公開先](/deploy/runtime-interfaces)
+- [Takos アプリの接続モデル](/architecture/app-interface)
+- [MCP Registry](https://modelcontextprotocol.io/registry/about)
 - [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
 - [MCP tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
-- [OAuth 2.0 Security Best Current Practice (RFC 9700)](https://www.rfc-editor.org/rfc/rfc9700)
-- [OAuth 2.0 Authorization Server Issuer Identification (RFC 9207)](https://www.rfc-editor.org/rfc/rfc9207)

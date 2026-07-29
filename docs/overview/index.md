@@ -1,78 +1,50 @@
-# Takos 全体像
+# Takos の全体像
 
-> このページでわかること: Takos がユーザーに提供する体験と、その裏側で Takosumi が何を管理するか。
+Takos は、AI エージェントへの依頼と、その作業に必要なファイル・Git・メモリ・アプリ・外部ツールを一つにまとめるワークスペースです。
 
-Takos は chat、agent、memory、Git、Workspace、app launcher、MCP tools を一つの作業環境として使うための
-AI workspace distribution です。ユーザーが触る中心は Workspace、チャット、ファイル、リポジトリ、アプリ、ツールです。
+## 利用者が触るもの
 
-アプリや追加サービスは Git URL から入る plain OpenTofu Capsule として install されます。Takos 専用 manifest や
-Takosumi 専用 DSL は要求しません。Takosumi は裏側で Account、Source、Capsule、ProviderConnection、
-ProviderBinding、Run、StateVersion、Output、policy、audit、dashboard、OpenTofu runner を外部 control plane として管理します。
+- **Chat**: エージェントへ依頼し、進行状況と回答を確認する
+- **Files / Repositories**: 作成・変更された成果物を確認する
+- **Memory**: 次の作業でも使う前提や決定を保存する
+- **Apps**: Workspace に追加したアプリを開く
+- **Connections**: MCP サーバーを接続し、利用できるツールを管理する
 
-Self-host された Takos distribution は `takos/deploy/opentofu` の `tofu apply` と worker artifact upload で動きます。この
-module は distribution worker の durable backing infrastructure を provision し、external Takosumi control plane が review/apply
-ledger と policy evidence を記録します。公開 hosted operator を使う場合も、ユーザー体験は Workspace / Apps / Chat に収束し、
-operator が Takosumi Account、Workspace / Project / Capsule、compatibility capability、provider policy を運用します。
+この作業場所を **Workspace** と呼びます。新しい Workspace にアプリは自動追加されません。
 
-`takos-office`, `takos-computer`, `yurucommu` は、ユーザーが選んで追加できる installable app です。
-新しい Workspace に自動 install されるものではなく、追加された後は ledger 上も通常の Capsule app として扱われます。
+## 裏側の役割分担
 
-## 基本概念
+Takos と Takosumi は別のソフトウェアです。
 
-### Takosumi Account
+| ソフトウェア | 担当すること |
+| --- | --- |
+| Takos | Chat、エージェント、Files、Memory、Apps、Connections |
+| Takosumi | ホスト環境のアカウント、アプリのインストール、OpenTofu の実行と履歴 |
 
-ログイン、契約、課金、OIDC issuer の単位です。Takos は app-local profile / preferences / chat data を持ちますが、identity
-level の正本は Takosumi Accounts plane が所有します。
+Takos の利用者は、通常この違いを意識する必要はありません。アプリの追加やセルフホストを行うときだけ、Takosumi の管理画面や API が登場します。
 
-### Takos Workspace
+## アプリとツール
 
-chat、agent、memory、Git repository、app launcher、MCP tools をまとめる Takos 内の作業空間です。
+アプリは Workspace に明示的に追加します。追加に成功すると、アプリを開く URL や、アプリが提供するツールが Takos に表示されます。
 
-### Takosumi Workspace / Project / Capsule
+ツールには二つの種類があります。
 
-Workspace / Project / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output /
-AuditEvent を保持する owner boundary です。Resource Shape API の `Space` は shape namespace / policy scope であり、
-Takos Workspace とは別です。
+1. Takos に最初から含まれる基本ツール
+2. アプリや外部 MCP サーバーから実行時に取得するツール
 
-### App / Capsule
+シェル、Git ホスティング、Web 検索などは常に使えるとは限りません。エージェントは、その Workspace で実際に公開されている機能を `toolbox` から探します。
 
-アプリは Git URL から入る OpenTofu Capsule です。Takosumi が Source と Capsule を登録し、plan / apply /
-destroy Run、StateVersion、Output を記録します。Takos の app 一覧、launcher、MCP service は Capsule Output と
-Takos runtime contract から投影される product surface です。
+## 運用方法
 
-## 始め方
+- 運営者が提供する Takos を使う
+- ローカルの開発環境を起動する
+- OpenTofu モジュールで自分の Cloudflare アカウントへ配置する
 
-| 方法             | 対象             | 概要                                                                                   |
-| ---------------- | ---------------- | -------------------------------------------------------------------------------------- |
-| Use Takos        | すぐに使いたい人 | 公開 operator または rehearsal 環境で Account / Workspace を作成して chat へ進む       |
-| Install from Git | 開発者           | Git URL の Capsule を Workspace / Project に install し、reviewed plan を approve する |
-| Self-host        | 自前運用したい人 | OpenTofu module + wrangler artifact upload で Takos を deploy する                     |
+いずれの場合も、利用者から見える基本操作は同じです。
 
-3 path は同じ ownership model に収束します。違うのは operator が誰か、どの runtime mode を選ぶか、どの Connection / policy を使うかです。
+## 次に読む
 
-## 代表的なユースケース
-
-### すぐに Takos を使いたい
-
-公開 operator が signup を開いている場合、「Use Takos」から Takosumi Account / Takos Workspace を作成し、必要な app を選んで
-追加してから chat を始めます。public signup が closed の間は、operator が用意した rehearsal 環境または Self-host path で同じ
-journey を検証します。
-
-### 自分のアプリをデプロイしたい
-
-アプリのコードを OpenTofu Capsule として Git リポジトリに置き、Git URL を指定して install します。Takosumi が Source、
-Capsule、Run、StateVersion、Output を記録し、Takos は launcher / MCP / file handler などの product surface に
-投影します。
-
-### 完全にセルフホストしたい
-
-Takos を自分の origin に deploy し、Takosumi control plane、provider credentials、backup / DR、billing policy を自分で管理します。
-その Takosumi deploy-control が Capsule / Run / StateVersion / Output を記録します。
-
-## 次に読むページ
-
-- [Install paths](/apps/install-paths) — 3 path の違い
-- [はじめる](/get-started/) — 最初のセットアップ
-- [Deploy 構成](/deploy/) — Cloudflare reference topology
-- [アーキテクチャ](/architecture/) — 内部構造
-- [Takosumi model](https://takosumi.com/docs/reference/model) — Capsule / Run / StateVersion / Output の正本
+- [スタートガイド](/get-started/)
+- [ツールと接続](/apps/mcp)
+- [セルフホスト](/deploy/)
+- [アーキテクチャ](/architecture/)

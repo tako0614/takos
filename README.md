@@ -1,104 +1,99 @@
-# takos
+# Takos
 
-Takos は OpenTofu-native, Takosumi-managed な first-party AI Workspace distribution です。AI エージェントとの会話を通じて
-ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。app / deploy topology は Git-hosted OpenTofu Capsule
-として扱い、Takosumi 専用 manifest や DSL を要求しません。Takos は chat / agent / memory / Git / Workspace /
-app launcher / MCP tools を持つ product Worker で、Accounts / dashboard / Run ledger / OpenTofu runner は外部の
-Takosumi control plane が管理します。
+Takos は、AI エージェントに作業を頼み、その結果をファイル・Git・メモリ・アプリへ残せるワークスペースです。チャットだけでなく、作業に必要な道具と成果物を同じ場所で扱えます。
 
-Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
-`scripts` のローカル実行は `bun` コマンドで行います。
+このリポジトリには、ブラウザ UI、API を提供する Worker、エージェント実行サービス、セルフホスト用の OpenTofu モジュールが入っています。
 
-関連アプリ (`takos-office` / `takos-computer` / `yurucommu` など) は通常の
-Git-hosted OpenTofu Capsule として、Store や Git URL からユーザーが明示的に
-install します。Takos が Workspace 作成時に中央定義の app を自動投入する
-ことはありません。
+ドキュメント: <https://docs.takos.jp/>
 
-📖 ドキュメント: <https://docs.takos.jp/>
+## Takos でできること
 
-<sub>Takos product shell and local entrypoint.</sub>
+- エージェントに調査、実装、文書作成などを依頼する
+- 会話と作業結果を Workspace 単位で整理する
+- 必要なアプリを Git URL から追加して、Apps 画面から開く
+- MCP サーバーを接続し、そのツールをエージェントから使う
+- エージェントの回答が完了または失敗したときに通知を受け取る
+- 自分の Cloudflare アカウントへセルフホストする
 
-## Quick Start
+**Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、接続をまとめる作業場所です。新しい Workspace にアプリは自動追加されません。必要なものだけを選んで追加します。
+
+## まず使ってみる
+
+運営者から Takos の URL を受け取っている場合は、サインインして Workspace を作成し、Chat で次のように依頼します。
+
+```text
+この Workspace の README を読んで、次にやることを3つに整理して。
+```
+
+ローカルで開発環境を起動する場合は、Bun と Docker が必要です。
 
 ```sh
+bun install
 bun run doctor
 bun run local:config
 bun run local:up
 ```
 
-## サービス構成
-
-| Component      | 責務                                                                |
-| -------------- | ------------------------------------------------------------------- |
-| `takos-worker` | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC、worker-native Git Smart HTTP (read-only clone/fetch を R2 object store から配信; push は repository API 経由) |
-| Takos UI       | browser UI source (`web/`)                                          |
-| `takos-agent`  | agent execution container                                           |
-
-ログインや課金は Takosumi Accounts が担当し、デプロイ制御は Takosumi (`../takosumi`) の OpenTofu-native
-Deploy Control API が担当します。Takos worker は OIDC client / resource server として外部 Takosumi origin を利用します。
-
-Takos distribution の deploy topology は `deploy/opentofu` の OpenTofu Capsule です。Takosumi v1 は Git URL /
-commit / module path / well-known OpenTofu outputs などの汎用 metadata から Run を作り、apply 成功後に StateVersion と
-Output を記録します。
-
-[`install-options.json`](install-options.json) は、現在実行可能な Cloudflare OpenTofu module を選ぶための任意の
-`CapsuleSourceOptions` 表示ドキュメントです。Takosumi 専用 manifest ではなく、通常の Git URL + module path での
-直接インストールには不要です。この文書は、それを含む次の通常の安定版タグから利用できます。別クラウドの選択肢は、
-対応する実在 module を出荷したときだけ追加します。
-
-## ローカル compose
+起動後の確認と終了:
 
 ```sh
-bun run local:up
+bun run local:smoke
+bun run local:down
 ```
 
-`takos-worker`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。Git hosting は独立した `takos-git` Capsule の Interface を利用します。
+詳しい手順は [スタートガイド](https://docs.takos.jp/get-started/) と [ローカル開発](https://docs.takos.jp/get-started/local-development) を参照してください。
 
-## レイアウト
+## ツールと接続
+
+Takos には、メモリ、添付ファイル、成果物の保存、既知の URL の取得など、基本的なツールが含まれます。
+
+一方、シェル、Git ホスティング、オブジェクトストレージ、Web 検索などは、存在しない機能を組み込みとして仮定しません。インストール済みアプリや接続済み MCP サーバーが公開したツールを実行時に取得し、エージェントが `toolbox` から探します。
+
+つまり、ツール一覧は固定ではありません。
 
 ```text
-takos/
-  src/
-    worker/    -> Takos Worker entrypoint
-    routes/    -> Hono route 分割
-    contracts/ -> Worker と containers の wire contract
-  web/          -> browser UI
-  containers/
-    agent/      -> agent execution container
-  deploy/       -> デプロイ用アーティファクト (OpenTofu / distribution)
-  docs/         -> プロダクトドキュメント (VitePress site → docs.takos.jp)
+Takos の基本ツール
+  + インストール済みアプリが公開するツール
+  + 接続済み MCP サーバーが公開するツール
+  = その Workspace で利用できるツール
+```
+
+接続方法と安全確認は [ツールと接続](https://docs.takos.jp/apps/mcp) を参照してください。
+
+## Takos と Takosumi
+
+Takos は利用者が触る AI ワークスペースを提供します。Takosumi は別プロジェクトで、ホスト環境のアカウント、アプリのインストール、OpenTofu の実行履歴を管理します。
+
+Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用の構成は通常の OpenTofu モジュールであり、Takosumi から実行することも、運用者が自分の手順で実行することもできます。
+
+## リポジトリ構成
+
+```text
+src/worker/       Worker、API、Takos のサーバー処理
+web/              ブラウザ UI
+containers/agent/ エージェント実行サービス
+deploy/opentofu/  セルフホスト用 OpenTofu モジュール
+docs/             docs.takos.jp のソース
 ```
 
 ## よく使うコマンド
 
-| コマンド                         | 説明                                     |
-| -------------------------------- | ---------------------------------------- |
-| `bun run doctor`                 | ツール・canonical layout・compose の診断 |
-| `bun run check`                  | 軽量な自動チェック                       |
-| `bun run local:up` / `down`      | ローカル compose の起動 / 停止           |
-| `bun run local:logs`             | ローカルサービスのログ                   |
-| `bun run local:smoke`            | ローカルサービスのヘルスチェック         |
-| `bun run local:e2e`              | docker compose による E2E スモークテスト |
-| `bun run docs:dev`               | ドキュメントの開発サーバー起動           |
-| `bun run docs:build`             | ドキュメントのビルド                    |
-| `bun run lint:docs`              | ドキュメントの lint / build              |
-| `bun run web:build`              | browser UI の production build          |
-| `bun run validate:opentofu-secrets` | OpenTofu tfvars / secret policy 検証 |
-| `bun run validate:architecture`  | Takos/Takosumi ownership 境界の検証      |
+| コマンド | 用途 |
+| --- | --- |
+| `bun run doctor` | 必要なツールとローカル構成を確認する |
+| `bun run local:up` / `local:down` | ローカル環境を起動・終了する |
+| `bun run local:logs` | ローカル環境のログを見る |
+| `bun run local:smoke` | 起動したサービスの疎通を確認する |
+| `bun run local:e2e` | ローカル E2E テストを実行する |
+| `bun run check` | 型、テスト、アーキテクチャ境界、ビルドを検証する |
+| `bun run docs:dev` | ドキュメントをローカルで表示する |
+| `bun run docs:build` | ドキュメントをビルドする |
 
-## ドキュメントの場所
+## 次に読む
 
-| 内容                  | 場所                                  |
-| --------------------- | ------------------------------------- |
-| Takos プロダクト docs | `docs/` (このリポジトリ内、VitePress) |
-| プラットフォーム仕様  | `../docs/` (ecosystem root)           |
-| Takosumi docs         | `../takosumi/docs/`                   |
-| Accounts / 課金 docs  | `../takosumi/docs/`                   |
-| Git installer docs    | `../takosumi/docs/`                   |
-| 運用 runbook          | `../takosumi/docs/operations/`        |
-
-## 関連
-
-- [Service Topology](https://docs.takos.jp/architecture/service-topology)
-- [Local Shell Runbook](https://docs.takos.jp/get-started/local-shell)
-- [Component Matrix](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/component-matrix.md)
+- [スタートガイド](https://docs.takos.jp/get-started/)
+- [ツールと接続](https://docs.takos.jp/apps/mcp)
+- [通知](https://docs.takos.jp/get-started/notifications)
+- [セルフホスト](https://docs.takos.jp/deploy/)
+- [トラブルシューティング](https://docs.takos.jp/deploy/troubleshooting)
+- [API リファレンス](https://docs.takos.jp/reference/api)

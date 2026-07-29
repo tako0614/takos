@@ -15,7 +15,7 @@ export default defineConfig({
   lang: "ja",
   title: "Takos Docs",
   description:
-    "AIエージェントによるサービスとソフトウェアの民主化基盤 Takos の全体像、アプリ構成、デプロイ、プラットフォーム仕様をまとめた公式 docs",
+    "AI エージェントに作業を頼み、ファイル・Git・メモリ・アプリへ成果を残す Takos のドキュメント",
   cleanUrls: true,
   lastUpdated: enableLastUpdated,
   srcExclude: ["**/_*.md", "contributing/**", "releases/**"],
@@ -25,14 +25,11 @@ export default defineConfig({
       provider: "local",
     },
     nav: [
-      { text: "概要", link: "/overview/" },
       { text: "はじめる", link: "/get-started/" },
-      { text: "アプリ構成", link: "/apps/" },
-      { text: "デプロイ", link: "/deploy/" },
-      { text: "Operator", link: "/operator/" },
-      { text: "プラットフォーム", link: "/platform/" },
+      { text: "アプリと接続", link: "/apps/" },
+      { text: "セルフホスト", link: "/deploy/" },
+      { text: "アーキテクチャ", link: "/architecture/" },
       { text: "リファレンス", link: "/reference/" },
-      { text: "サンプル", link: "/examples/" },
     ],
     sidebar: [
       {
@@ -44,19 +41,20 @@ export default defineConfig({
         items: [
           { text: "スタートガイド", link: "/get-started/" },
           { text: "はじめてのアプリ", link: "/get-started/your-first-app" },
+          { text: "通知", link: "/get-started/notifications" },
           { text: "プロジェクト構成", link: "/get-started/project-structure" },
           { text: "ローカル開発", link: "/get-started/local-development" },
           { text: "Local Shell", link: "/get-started/local-shell" },
         ],
       },
       {
-        text: "アプリ構成",
+        text: "アプリと接続",
         items: [
           { text: "概要", link: "/apps/" },
-          { text: "Install Paths", link: "/apps/install-paths" },
-          { text: "OIDC Consumer", link: "/apps/oidc-consumer" },
-          { text: "MCP Server", link: "/apps/mcp" },
-          { text: "File Handlers", link: "/apps/file-handlers" },
+          { text: "インストール方法", link: "/apps/install-paths" },
+          { text: "ツールと接続", link: "/apps/mcp" },
+          { text: "ファイルを開くアプリ", link: "/apps/file-handlers" },
+          { text: "OIDC 連携", link: "/apps/oidc-consumer" },
         ],
       },
       {
@@ -69,16 +67,19 @@ export default defineConfig({
         ],
       },
       {
-        text: "デプロイ",
+        text: "セルフホスト",
         items: [
           { text: "概要", link: "/deploy/" },
-          { text: "Service Exports", link: "/deploy/service-exports" },
-          { text: "Routes", link: "/deploy/routes" },
-          { text: "環境変数", link: "/deploy/environment" },
-          { text: "deploy", link: "/deploy/deploy" },
-          { text: "deploy-group", link: "/deploy/deploy-group" },
-          { text: "Repository / Catalog", link: "/deploy/store-deploy" },
-          { text: "Workload Placement", link: "/deploy/namespaces" },
+          {
+            text: "アプリの公開先",
+            link: "/deploy/runtime-interfaces",
+          },
+          { text: "ルートとドメイン", link: "/deploy/routes" },
+          { text: "環境と変数", link: "/deploy/environment" },
+          { text: "デプロイ手順", link: "/deploy/deploy" },
+          { text: "複数サービス", link: "/deploy/deploy-group" },
+          { text: "Git ソース", link: "/deploy/store-deploy" },
+          { text: "実行場所", link: "/deploy/namespaces" },
           { text: "ロールバック", link: "/deploy/rollback" },
           { text: "トラブルシューティング", link: "/deploy/troubleshooting" },
         ],
@@ -168,6 +169,8 @@ export default defineConfig({
       {
         text: "リファレンス",
         items: [
+          { text: "概要", link: "/reference/" },
+          { text: "用語集", link: "/reference/glossary" },
           { text: "API", link: "/reference/api" },
           { text: "Database Ownership", link: "/reference/database" },
         ],
