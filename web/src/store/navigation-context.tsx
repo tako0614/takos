@@ -295,7 +295,7 @@ export const NavigationProvider: ParentComponent = (props) => {
       await fetchAllThreads();
       toast.showToast(
         "success",
-        archive ? t("routingStatus_archived") : t("routingStatus_active"),
+        archive ? t("archiveThread") : t("unarchiveThread"),
       );
     } catch (error) {
       toast.showToast(

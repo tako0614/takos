@@ -128,9 +128,6 @@ export const common = {
   // Fork
   forking: "Forking...",
 
-  // Deployments
-  noDeployments: "No deployments",
-
   // Tools
   version: "Version",
 
@@ -156,6 +153,15 @@ export const common = {
   userNotFound: "User not found",
   failedToLoadRepositories: "Failed to load repositories",
   infrastructure: "Infrastructure",
+  shareResource: "Share",
+  add: "Add",
+  open: "Open",
+  dangerZone: "Danger Zone",
+  saved: "Saved",
+  created: "Created",
+  retry: "Retry",
+  repositories: "Repositories",
+  size: "Size",
   reject: "Reject",
   accept: "Accept",
   new: "New",

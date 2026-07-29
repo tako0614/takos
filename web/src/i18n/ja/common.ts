@@ -130,9 +130,6 @@ export const common = {
   // Fork
   forking: "フォーク中...",
 
-  // Deployments
-  noDeployments: "デプロイがありません",
-
   // Tools
   version: "バージョン",
 
@@ -158,6 +155,15 @@ export const common = {
   userNotFound: "ユーザーが見つかりません",
   failedToLoadRepositories: "リポジトリの読み込みに失敗しました",
   infrastructure: "インフラ",
+  shareResource: "共有",
+  add: "追加",
+  open: "開く",
+  dangerZone: "危険ゾーン",
+  saved: "保存しました",
+  created: "作成しました",
+  retry: "再試行",
+  repositories: "リポジトリ",
+  size: "サイズ",
   reject: "拒否",
   accept: "承認",
   new: "新規",

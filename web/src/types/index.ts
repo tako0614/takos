@@ -4,14 +4,6 @@ export type { User, UserSettings } from "./user.ts";
 
 export type { Space } from "./space.ts";
 
-export type { Resource, Worker } from "./worker.ts";
-
-export type {
-  DeploymentGroup,
-  DeploymentGroupDetail,
-  GroupInventoryItem,
-} from "./group.ts";
-
 export type {
   AgentTask,
   AgentTaskPriority,

@@ -2,7 +2,7 @@ export function PrivacyContent() {
   return (
     <article class="prose prose-zinc prose-sm max-w-none">
       <h1>プライバシーポリシー</h1>
-      <p class="text-zinc-500">最終更新日: 2026年3月17日</p>
+      <p class="text-zinc-500">最終更新日: 2026年7月29日</p>
 
       <p>
         本プライバシーポリシーは、Takos（以下「本サービス」、URL:
@@ -22,11 +22,9 @@ export function PrivacyContent() {
 
       <h3>1.2 ユーザーが作成するコンテンツ</h3>
       <ul>
-        <li>
-          Git リポジトリ（ソースコード、コミット履歴、ブランチ、プルリクエスト）
-        </li>
+        <li>連携したソースの参照情報および本サービス内で利用した内容</li>
         <li>AI エージェントとの会話（スレッド、メッセージ、ツール実行ログ）</li>
-        <li>デプロイしたアプリケーション（Worker コード、設定、環境変数）</li>
+        <li>インストール済みアプリおよび Interface の参照情報</li>
         <li>MCP サーバー設定および連携先サービスの OAuth トークン</li>
       </ul>
 
@@ -62,8 +60,8 @@ export function PrivacyContent() {
         <tbody>
           <tr>
             <td>
-              本サービスの提供・運営（Git ホスティング、AI エージェント実行、
-              Worker デプロイ等）
+              本サービスの提供・運営（AI エージェント実行、ソースおよび
+              インストール済みアプリとの連携等）
             </td>
             <td>契約の履行</td>
           </tr>
