@@ -12,7 +12,7 @@ import { getSpaceIdentifier } from "./lib/spaces.ts";
 import { useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
 import { buildStorageNavigationState } from "./views/storage/storage-page-state.ts";
-import type { RouteState, Thread } from "./types/index.ts";
+import type { RouteState, Thread, UserSettings } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
 import { isHomeEntryPath } from "./lib/home-entry-path.ts";
 import { LoginPage } from "./views/app/AuthViews.tsx";

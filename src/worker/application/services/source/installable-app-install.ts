@@ -5,7 +5,11 @@ import {
 
 import type { Env } from "../../../shared/types/index.ts";
 import { readEnvString } from "./featured-app-validation.ts";
-import { fetchCapsuleWorkloadServices } from "./takosumi-workload-services.ts";
+import {
+  fetchCapsuleWorkloadServices,
+  projectCapsuleUiSurfaceServices,
+  type CapsuleWorkloadServiceSummary,
+} from "./takosumi-workload-services.ts";
 import {
   takosumiCapsulePath,
   takosumiCapsulePlanPath,
@@ -17,10 +21,12 @@ import {
   takosumiSourcesPath,
   takosumiStateVersionRollbackPlanPath,
   takosumiWorkspaceCapsulesPath,
+  takosumiWorkspaceUiSurfacesPath,
 } from "../takosumi-control-paths.ts";
 
 const DEFAULT_INSTALL_CONFIG_ID = "cfg-default-opentofu-capsule";
 const DEFAULT_ENVIRONMENT = "production";
+const PROJECTION_PAGE_LIMIT = 100;
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -719,25 +725,10 @@ function canonicalStatus(value: unknown): string {
   return readString(value) ?? "unknown";
 }
 
-async function sourceForCapsule(
-  capsule: Record<string, unknown>,
-  config: InstallableAppAccountsConfig,
-): Promise<Record<string, unknown> | null> {
-  const sourceId = readString(capsule.sourceId);
-  if (!sourceId) return null;
-  const result = await fetchControlJson(
-    config.baseUrl,
-    takosumiSourcePath(sourceId),
-    { method: "GET" },
-    config,
-  );
-  return result.status < 400 ? readRecord(result.body?.source) : null;
-}
-
 function localCapsuleDto(
   capsule: Record<string, unknown>,
   source: Record<string, unknown> | null,
-  services?: unknown[],
+  services?: readonly unknown[],
 ): Record<string, unknown> {
   const capsuleId = readString(capsule.id);
   return {
@@ -759,9 +750,79 @@ function localCapsuleDto(
   };
 }
 
-export async function listInstallableAppCapsules(
+async function workspaceSourcesPage(
+  workspaceId: string,
+  config: InstallableAppAccountsConfig,
+): Promise<InstallableAppUpstreamResponse> {
+  const url = takosumiSessionApiUrl(config.baseUrl, takosumiSourcesPath());
+  url.searchParams.set("workspaceId", workspaceId);
+  url.searchParams.set("limit", String(PROJECTION_PAGE_LIMIT));
+  return await fetchControlJson(
+    url.toString(),
+    "",
+    { method: "GET" },
+    config,
+  );
+}
+
+async function workspaceUiSurfacesPage(
+  workspaceId: string,
+  config: InstallableAppAccountsConfig,
+): Promise<InstallableAppUpstreamResponse> {
+  const url = takosumiSessionApiUrl(
+    config.baseUrl,
+    takosumiWorkspaceUiSurfacesPath(workspaceId),
+  );
+  url.searchParams.set("limit", String(PROJECTION_PAGE_LIMIT));
+  return await fetchControlJson(
+    url.toString(),
+    "",
+    { method: "GET" },
+    config,
+  );
+}
+
+function sourcesById(
+  body: Record<string, unknown> | null,
+  workspaceId: string,
+): Map<string, Record<string, unknown>> {
+  const sources = Array.isArray(body?.sources) ? body.sources : [];
+  const entries = sources.flatMap((value) => {
+    const source = readRecord(value);
+    const id = readString(source?.id);
+    return source &&
+        id &&
+        readString(source.workspaceId) === workspaceId
+      ? [[id, source] as const]
+      : [];
+  });
+  return new Map(entries);
+}
+
+function servicesByCapsuleId(
+  body: Record<string, unknown> | null,
+  workspaceId: string,
+): Map<string, CapsuleWorkloadServiceSummary[]> {
+  const grouped = new Map<string, CapsuleWorkloadServiceSummary[]>();
+  for (const projected of projectCapsuleUiSurfaceServices(body, workspaceId)) {
+    const services = grouped.get(projected.capsuleId) ?? [];
+    services.push(projected.service);
+    grouped.set(projected.capsuleId, services);
+  }
+  for (const services of grouped.values()) {
+    services.sort(
+      (left, right) =>
+        left.capability.localeCompare(right.capability) ||
+        left.id.localeCompare(right.id),
+    );
+  }
+  return grouped;
+}
+
+async function listInstallableAppCapsuleProjection(
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,
+  includeServices: boolean,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
   const url = takosumiSessionApiUrl(
@@ -769,55 +830,77 @@ export async function listInstallableAppCapsules(
     takosumiWorkspaceCapsulesPath(workspaceId),
   );
   url.searchParams.set("includeDestroyed", "false");
-  const upstream = await fetchControlJson(
-    url.toString(),
-    "",
-    { method: "GET" },
-    accountsConfig,
-  );
-  if (upstream.status >= 400) return upstream;
-  const capsules = Array.isArray(upstream.body?.capsules)
-    ? upstream.body.capsules
+  url.searchParams.set("limit", String(PROJECTION_PAGE_LIMIT));
+  const [capsulePage, sourcePage, uiSurfacePage] = await Promise.all([
+    fetchControlJson(
+      url.toString(),
+      "",
+      { method: "GET" },
+      accountsConfig,
+    ),
+    workspaceSourcesPage(workspaceId, accountsConfig),
+    includeServices
+      ? workspaceUiSurfacesPage(workspaceId, accountsConfig)
+      : Promise.resolve({
+          status: 200,
+          body: { interfaces: [] },
+        } satisfies InstallableAppUpstreamResponse),
+  ]);
+  if (capsulePage.status >= 400) return capsulePage;
+  const capsules = Array.isArray(capsulePage.body?.capsules)
+    ? capsulePage.body.capsules
         .map(readRecord)
         .filter((row): row is Record<string, unknown> => row !== null)
     : [];
-  const rows = await Promise.all(
-    capsules.map(async (capsule) =>
-      localCapsuleDto(capsule, await sourceForCapsule(capsule, accountsConfig)),
-    ),
+  const sourceIndex =
+    sourcePage.status < 400
+      ? sourcesById(sourcePage.body, workspaceId)
+      : new Map<string, Record<string, unknown>>();
+  const serviceIndex =
+    includeServices && uiSurfacePage.status < 400
+      ? servicesByCapsuleId(uiSurfacePage.body, workspaceId)
+      : new Map<string, CapsuleWorkloadServiceSummary[]>();
+  const rows = capsules.map((capsule) => {
+    const capsuleId = readString(capsule.id);
+    const sourceId = readString(capsule.sourceId);
+    return localCapsuleDto(
+      capsule,
+      sourceId ? (sourceIndex.get(sourceId) ?? null) : null,
+      includeServices && capsuleId
+        ? (serviceIndex.get(capsuleId) ?? [])
+        : undefined,
+    );
+  });
+  const nextCursor = readString(capsulePage.body?.nextCursor);
+  return {
+    status: capsulePage.status,
+    body: {
+      capsules: rows,
+      ...(nextCursor ? { nextCursor } : {}),
+    },
+  };
+}
+
+export async function listInstallableAppCapsules(
+  workspaceId: string,
+  config: InstallableAppAccountsConfig | null,
+): Promise<InstallableAppUpstreamResponse> {
+  return await listInstallableAppCapsuleProjection(
+    workspaceId,
+    config,
+    false,
   );
-  return { status: upstream.status, body: { capsules: rows } };
 }
 
 export async function listInstallableAppCapsulesWithServices(
   workspaceId: string,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
-  const accountsConfig = requireAccountsConfig(config);
-  const upstream = await listInstallableAppCapsules(
+  return await listInstallableAppCapsuleProjection(
     workspaceId,
-    accountsConfig,
+    config,
+    true,
   );
-  if (upstream.status >= 400) return upstream;
-  const rows = Array.isArray(upstream.body?.capsules)
-    ? upstream.body.capsules
-    : [];
-  const enriched = await Promise.all(
-    rows.map(async (row) => {
-      const record = readRecord(row);
-      const capsuleId = readString(record?.capsule_id);
-      if (!record || !capsuleId) return row;
-      const services = await fetchCapsuleWorkloadServices(
-        capsuleId,
-        workspaceId,
-        {
-          ...accountsConfig,
-        },
-      );
-      return { ...record, services };
-    }),
-  );
-  return { status: upstream.status, body: { capsules: enriched } };
 }
 
 export async function listInstallableAppCapsuleServices(

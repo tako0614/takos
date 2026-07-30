@@ -44,9 +44,9 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
   const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
   const originalResolveAuthorization =
     appsRouteDeps.resolveRuntimeInterfaceAuthorization;
-  const originalFetchInterfaces =
-    appsRouteDeps.fetchAuthorizedRuntimeInterfaces;
-  const selectors: unknown[] = [];
+  const originalFetchUiSurfaces =
+    appsRouteDeps.fetchAuthorizedUiSurfaceInterfaces;
+  const requestedWorkspaces: string[] = [];
   const app = new Hono<{
     Bindings: { DB: unknown };
     Variables: {
@@ -97,11 +97,11 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
         workspaceId: "takosumi-workspace",
       };
     };
-    appsRouteDeps.fetchAuthorizedRuntimeInterfaces = async (
-      selector,
+    appsRouteDeps.fetchAuthorizedUiSurfaceInterfaces = async (
+      workspaceId,
       config,
     ) => {
-      selectors.push(selector);
+      requestedWorkspaces.push(workspaceId);
       assertEquals(config.subjectId, "takosumi-principal");
       return [
         {
@@ -145,30 +145,7 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
               resolvedInputs: { url: "https://docs.example.test/app" },
             },
           },
-          binding: {
-            apiVersion: "takosumi.dev/v1alpha1",
-            kind: "InterfaceBinding",
-            metadata: {
-              id: "ifb_docs",
-              workspaceId: "takosumi-workspace",
-              generation: 1,
-              createdAt: "2026-07-01T00:00:00.000Z",
-              updatedAt: "2026-07-01T00:00:00.000Z",
-            },
-            spec: {
-              interfaceId: "if_docs",
-              subjectRef: {
-                kind: "Principal",
-                id: "takosumi-principal",
-              },
-              permissions: ["ui.open"],
-              delivery: { type: "none" },
-            },
-            status: {
-              phase: "Ready",
-              observedInterfaceRevision: 3,
-            },
-          },
+          capsuleId: "capsule_docs",
         },
       ] as never;
     };
@@ -181,13 +158,7 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
       { DB: {} },
     );
     assertEquals(response.status, 200);
-    const expectedSelector = {
-      workspaceId: "takosumi-workspace",
-      type: "interface.ui.surface",
-      permission: "ui.open",
-      deliveryTypes: ["none"],
-    };
-    assertEquals(selectors, [expectedSelector]);
+    assertEquals(requestedWorkspaces, ["takosumi-workspace"]);
     const expectedApp = {
       id: "if_docs",
       name: "Docs",
@@ -217,21 +188,17 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
       { DB: {} },
     );
     assertEquals(detailResponse.status, 200);
-    assertEquals(selectors, [
-      expectedSelector,
-      {
-        workspaceId: "takosumi-workspace",
-        type: "interface.ui.surface",
-        permission: "ui.open",
-        deliveryTypes: ["none"],
-      },
+    assertEquals(requestedWorkspaces, [
+      "takosumi-workspace",
+      "takosumi-workspace",
     ]);
     assertEquals(await detailResponse.json(), { app: expectedApp });
   } finally {
     appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
     appsRouteDeps.resolveRuntimeInterfaceAuthorization =
       originalResolveAuthorization;
-    appsRouteDeps.fetchAuthorizedRuntimeInterfaces = originalFetchInterfaces;
+    appsRouteDeps.fetchAuthorizedUiSurfaceInterfaces =
+      originalFetchUiSurfaces;
   }
 });
 

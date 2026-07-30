@@ -33,6 +33,11 @@ export type AuthorizedFileHandler = {
   readonly openUrl: string;
 };
 
+type AuthorizedRuntimeInterfaceProjection = Pick<
+  AuthorizedRuntimeInterface,
+  "interface"
+>;
+
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -75,7 +80,7 @@ function normalizeFileExtension(value: string): string {
 }
 
 export function projectAuthorizedUiSurface(
-  entry: AuthorizedRuntimeInterface,
+  entry: AuthorizedRuntimeInterfaceProjection,
 ): AuthorizedUiSurface | null {
   const iface = entry.interface;
   if (
@@ -111,7 +116,7 @@ export function projectAuthorizedUiSurface(
 }
 
 export function projectAuthorizedFileHandler(
-  entry: AuthorizedRuntimeInterface,
+  entry: AuthorizedRuntimeInterfaceProjection,
   idx: number,
 ): AuthorizedFileHandler | null {
   const iface = entry.interface;

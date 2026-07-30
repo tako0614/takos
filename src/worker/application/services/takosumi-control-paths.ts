@@ -8,6 +8,10 @@ export function takosumiWorkspaceCapsulesPath(workspaceId: string): string {
   return `${TAKOSUMI_SESSION_API_PREFIX}/workspaces/${segment(workspaceId)}/capsules`;
 }
 
+export function takosumiWorkspaceUiSurfacesPath(workspaceId: string): string {
+  return `${TAKOSUMI_SESSION_API_PREFIX}/workspaces/${segment(workspaceId)}/ui-surfaces`;
+}
+
 export function takosumiCapsulePath(capsuleId: string): string {
   return `${TAKOSUMI_SESSION_API_PREFIX}/capsules/${segment(capsuleId)}`;
 }

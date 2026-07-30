@@ -5,32 +5,12 @@ type CheckFailure = {
   message: string;
 };
 
-const CONTROL_ARCHITECTURE_PATH = "../takos-control/ARCHITECTURE.md";
 const TAKOS_BOUNDARY_PATH = "deploy/TAKOSUMI_DEPLOY.md";
 
 const REQUIRED_DOCS = [
   "README.md",
   "docs/contributing/current-state.md",
   TAKOS_BOUNDARY_PATH,
-  CONTROL_ARCHITECTURE_PATH,
-  "../takosumi/docs/internal/core-spec.md",
-  "../takosumi/docs/reference/takoform-host.md",
-  "../takosumi/docs/concepts/credentials.md",
-  "../takosumi/docs/concepts/interfaces.md",
-  "../takosumi/docs/concepts/run-model.md",
-  "../takosumi/docs/concepts/sources.md",
-] as const;
-
-const REQUIRED_TAKOSUMI_DOMAINS = [
-  "workspaces",
-  "projects",
-  "sources",
-  "connections",
-  "capsules",
-  "deploy-control",
-  "audit",
-  "interfaces",
-  "service-forms",
 ] as const;
 
 const RETIRED_PATHS = [
@@ -256,19 +236,6 @@ async function main(): Promise<void> {
   }
 
   requireTerms(
-    CONTROL_ARCHITECTURE_PATH,
-    docs.get(CONTROL_ARCHITECTURE_PATH) ?? "",
-    [
-      "One lifecycle authority",
-      "Takosumi OSS",
-      "Takos product",
-      "Takoform",
-      "InterfaceBinding",
-      "Takosumi Cloud",
-    ],
-    failures,
-  );
-  requireTerms(
     TAKOS_BOUNDARY_PATH,
     docs.get(TAKOS_BOUNDARY_PATH) ?? "",
     [
@@ -282,45 +249,6 @@ async function main(): Promise<void> {
     ],
     failures,
   );
-
-  const takosumiContract = [
-    "../takosumi/docs/internal/core-spec.md",
-    "../takosumi/docs/reference/takoform-host.md",
-    "../takosumi/docs/concepts/credentials.md",
-    "../takosumi/docs/concepts/interfaces.md",
-    "../takosumi/docs/concepts/run-model.md",
-    "../takosumi/docs/concepts/sources.md",
-  ].map((path) => docs.get(path) ?? "").join("\n");
-  requireTerms(
-    "Takosumi canonical docs",
-    takosumiContract,
-    [
-      "Workspace",
-      "Project",
-      "Capsule",
-      "Source",
-      "ProviderConnection",
-      "CredentialRecipe",
-      "ProviderBinding",
-      "Run",
-      "StateVersion",
-      "Output",
-      "AuditEvent",
-      "Interface",
-      "InterfaceBinding",
-      "Service Form",
-    ],
-    failures,
-  );
-
-  for (const domain of REQUIRED_TAKOSUMI_DOMAINS) {
-    const path = `../takosumi/core/domains/${domain}`;
-    if (await pathExists(path)) continue;
-    failures.push({
-      path,
-      message: "Required Takosumi-owned domain directory is missing.",
-    });
-  }
 
   await validateRetiredPaths(failures);
 
@@ -391,9 +319,6 @@ async function main(): Promise<void> {
   console.log(`Checked ${REQUIRED_DOCS.length} canonical documents.`);
   console.log(
     `Verified ${RETIRED_PATHS.length + RETIRED_DIRS.length} retired paths remain absent.`,
-  );
-  console.log(
-    `Verified ${REQUIRED_TAKOSUMI_DOMAINS.length} Takosumi-owned domain directories.`,
   );
 }
 

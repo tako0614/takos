@@ -6,7 +6,7 @@ import {
   requireSpaceAccess,
 } from "../route-auth.ts";
 import { AuthenticationError, NotFoundError } from "@takos/worker-platform-utils/errors";
-import { fetchAuthorizedRuntimeInterfaces } from "../../../application/services/platform/runtime-interface-client.ts";
+import { fetchAuthorizedUiSurfaceInterfaces } from "../../../application/services/platform/runtime-interface-client.ts";
 import { resolveRuntimeInterfaceAuthorization } from "../../../application/services/platform/runtime-interface-authorization.ts";
 import {
   projectAuthorizedUiSurface,
@@ -14,8 +14,6 @@ import {
 } from "../../../application/services/platform/runtime-interface-profiles.ts";
 import {
   resolveDisplayIcon,
-  UI_SURFACE_INTERFACE_TYPE,
-  UI_SURFACE_OPEN_PERMISSION,
 } from "takosumi-contract";
 
 type Variables = {
@@ -53,7 +51,7 @@ const FEATURED_APP_ICON = "";
 export const appsRouteDeps = {
   requireSpaceAccess,
   resolveRuntimeInterfaceAuthorization,
-  fetchAuthorizedRuntimeInterfaces,
+  fetchAuthorizedUiSurfaceInterfaces,
 };
 
 async function resolveAppsSpaceScope(
@@ -95,6 +93,7 @@ export function resolveLauncherIcon(
 function uiSurfaceToPublicApp(
   surface: AuthorizedUiSurface,
   localSpaceIdentifier: string | null,
+  capsuleId: string,
 ): PublicApp {
   return {
     id: surface.id,
@@ -108,8 +107,7 @@ function uiSurfaceToPublicApp(
     service_hostname: hostnameFromUrl(surface.url),
     service_status: "ready",
     source_type: "interface",
-    capsule_id:
-      surface.ownerKind === "Capsule" ? surface.ownerId : null,
+    capsule_id: capsuleId,
     interface_name: surface.interfaceName,
     category: surface.category,
     sort_order: surface.sortOrder,
@@ -146,23 +144,30 @@ export function registerAppApiRoutes<V extends Variables>(
         accountsBearer,
       );
     const authorized =
-      await appsRouteDeps.fetchAuthorizedRuntimeInterfaces(
-        {
-          workspaceId: authorization.workspaceId,
-          type: UI_SURFACE_INTERFACE_TYPE,
-          permission: UI_SURFACE_OPEN_PERMISSION,
-          deliveryTypes: ["none"],
-        },
+      await appsRouteDeps.fetchAuthorizedUiSurfaceInterfaces(
+        authorization.workspaceId,
         authorization,
       );
     return sortPublicApps(
       authorized
-        .map(projectAuthorizedUiSurface)
+        .map((entry) => ({
+          surface: projectAuthorizedUiSurface(entry),
+          capsuleId: entry.capsuleId,
+        }))
         .filter(
-          (surface): surface is AuthorizedUiSurface => surface !== null,
+          (
+            entry,
+          ): entry is {
+            surface: AuthorizedUiSurface;
+            capsuleId: string;
+          } => entry.surface !== null,
         )
-        .map((surface) =>
-          uiSurfaceToPublicApp(surface, localSpaceIdentifier),
+        .map(({ surface, capsuleId }) =>
+          uiSurfaceToPublicApp(
+            surface,
+            localSpaceIdentifier,
+            capsuleId,
+          ),
         ),
     );
   };

@@ -257,6 +257,30 @@ describe("Capsule routes on canonical Takosumi records", () => {
     });
   });
 
+  test("forwards only the exact Takosumi session cookie to Accounts", async () => {
+    authorize();
+    capsulesRouteDeps.resolveInstallableAppAccountsConfig = () => ({
+      baseUrl: "https://operator.test",
+    });
+    let forwardedCookie: string | null = null;
+    capsulesRouteDeps.accountsPlaneFetch = async (request) => {
+      forwardedCookie = request.headers.get("cookie");
+      return Response.json({ subject: "tsub_user" });
+    };
+    const response = await createApp().request(
+      "/spaces/me/capsules",
+      {
+        headers: {
+          cookie:
+            "analytics_id=private-analytics; takosumi_session=sess_current; theme=dark",
+        },
+      },
+      { DB: {} } as Env,
+    );
+    expect(response.status).toBe(401);
+    expect(forwardedCookie).toBe("takosumi_session=sess_current");
+  });
+
   test("plans rollback from a StateVersion and applies its exact Run", async () => {
     authorize();
     capsulesRouteDeps.listInstallableAppCapsules = async () => ({

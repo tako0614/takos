@@ -5,12 +5,10 @@ import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import { appsRouteDeps, registerAppApiRoutes } from "../apps/index.ts";
 
-test("authorized Interface and Binding appear on the Takos launcher", async () => {
+test("bounded authorized Interface projection appears on the Takos launcher", async () => {
   const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
   const originalResolveAuthorization =
     appsRouteDeps.resolveRuntimeInterfaceAuthorization;
-  const originalFetchInterfaces =
-    appsRouteDeps.fetchAuthorizedRuntimeInterfaces;
   const requests: URL[] = [];
   const accessToken = "request-scoped-accounts-token";
   const app = createAppsRouteHarness(accessToken);
@@ -44,22 +42,14 @@ test("authorized Interface and Binding appear on the Takos launcher", async () =
             new Headers(init?.headers).get("authorization"),
             `Bearer ${accessToken}`,
           );
-          if (url.pathname === "/v1/interfaces") {
-            assertEquals(url.searchParams.get("workspaceId"), "workspace-1");
-            assertEquals(
-              url.searchParams.get("type"),
-              "interface.ui.surface",
-            );
-            assertEquals(url.searchParams.get("phase"), "Resolved");
-            assertEquals(url.searchParams.get("permission"), "ui.open");
+          if (
+            url.pathname ===
+            "/api/v1/workspaces/workspace-1/ui-surfaces"
+          ) {
+            assertEquals(url.searchParams.get("limit"), "100");
             return Response.json({ interfaces: [resolvedLauncherInterface()] });
           }
-          assertEquals(
-            url.pathname,
-            "/v1/interfaces/if_launcher/bindings",
-          );
-          assertEquals(url.searchParams.get("permission"), "ui.open");
-          return Response.json({ bindings: [readyLauncherBinding()] });
+          return Response.json({ error: "unexpected path" }, { status: 500 });
         },
       };
     };
@@ -73,7 +63,7 @@ test("authorized Interface and Binding appear on the Takos launcher", async () =
     assertEquals(response.status, 200);
     assertEquals(
       requests.map((request) => request.pathname),
-      ["/v1/interfaces", "/v1/interfaces/if_launcher/bindings"],
+      ["/api/v1/workspaces/workspace-1/ui-surfaces"],
     );
     assertEquals(await response.json(), {
       apps: [
@@ -102,7 +92,6 @@ test("authorized Interface and Binding appear on the Takos launcher", async () =
     appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
     appsRouteDeps.resolveRuntimeInterfaceAuthorization =
       originalResolveAuthorization;
-    appsRouteDeps.fetchAuthorizedRuntimeInterfaces = originalFetchInterfaces;
   }
 });
 
@@ -181,30 +170,6 @@ function resolvedLauncherInterface() {
       observedGeneration: 2,
       resolvedRevision: 4,
       resolvedInputs: { url: "https://opentofu-only.fixture.test/" },
-    },
-  };
-}
-
-function readyLauncherBinding() {
-  return {
-    apiVersion: "takosumi.dev/v1alpha1",
-    kind: "InterfaceBinding",
-    metadata: {
-      id: "ifb_launcher",
-      workspaceId: "workspace-1",
-      generation: 1,
-      createdAt: "2026-07-30T00:00:00.000Z",
-      updatedAt: "2026-07-30T00:00:00.000Z",
-    },
-    spec: {
-      interfaceId: "if_launcher",
-      subjectRef: { kind: "Principal", id: "principal-1" },
-      permissions: ["ui.open"],
-      delivery: { type: "none" },
-    },
-    status: {
-      phase: "Ready",
-      observedInterfaceRevision: 4,
     },
   };
 }

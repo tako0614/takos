@@ -6,7 +6,13 @@ import {
   isValidInterfaceName,
   isValidInterfacePermissionToken,
   TAKOSUMI_API_VERSION,
+  UI_SURFACE_INTERFACE_TYPE,
+  UI_SURFACE_OPEN_PERMISSION,
 } from "takosumi-contract";
+import {
+  takosumiSessionApiUrl,
+  takosumiWorkspaceUiSurfacesPath,
+} from "../takosumi-control-paths.ts";
 
 export type RuntimeInterfaceFetch = (
   input: RequestInfo | URL,
@@ -32,6 +38,11 @@ export interface RuntimeInterfaceSelector {
 export interface AuthorizedRuntimeInterface {
   readonly interface: TakosumiInterface;
   readonly binding: InterfaceBinding;
+}
+
+export interface AuthorizedUiSurfaceInterface {
+  readonly interface: TakosumiInterface;
+  readonly capsuleId: string;
 }
 
 const MAX_INTERFACE_LIST_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -151,7 +162,19 @@ function interfaceTokenUrl(baseUrl: string, interfaceId: string): URL {
   return url;
 }
 
-function parseResolvedRuntimeInterface(
+function workspaceUiSurfacesUrl(
+  baseUrl: string,
+  workspaceId: string,
+): URL {
+  const url = takosumiSessionApiUrl(
+    baseUrl,
+    takosumiWorkspaceUiSurfacesPath(workspaceId),
+  );
+  url.searchParams.set("limit", "100");
+  return url;
+}
+
+export function parseResolvedRuntimeInterface(
   value: unknown,
   selector: RuntimeInterfaceSelector,
 ): TakosumiInterface | null {
@@ -332,6 +355,66 @@ export async function fetchAuthorizedRuntimeInterfaces(
         readonly binding: InterfaceBinding;
       } => entry.binding !== null,
     );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Read the Accounts plane's bounded launcher projection in one request. The
+ * server performs the current Principal Binding join; Takos validates each
+ * returned Interface document and keeps the canonical Capsule owner.
+ */
+export async function fetchAuthorizedUiSurfaceInterfaces(
+  workspaceId: string,
+  config: RuntimeInterfaceRequestConfig,
+): Promise<AuthorizedUiSurfaceInterface[]> {
+  if (
+    !readString(workspaceId) ||
+    !readString(config.token) ||
+    !readString(config.subjectId)
+  ) {
+    return [];
+  }
+  const headers = new Headers({
+    accept: "application/json",
+    authorization: `Bearer ${config.token}`,
+  });
+  try {
+    const response = await (config.fetch ?? fetch)(
+      workspaceUiSurfacesUrl(config.baseUrl, workspaceId),
+      { headers, redirect: "manual" },
+    );
+    if (!response.ok) return [];
+    const body = readRecord(
+      await readBoundedJsonResponse(
+        response,
+        MAX_INTERFACE_LIST_RESPONSE_BYTES,
+      ),
+    );
+    if (!body || !Array.isArray(body.interfaces)) return [];
+    return body.interfaces.slice(0, 100).flatMap((value) => {
+      const iface = parseResolvedRuntimeInterface(value, {
+        workspaceId,
+        type: UI_SURFACE_INTERFACE_TYPE,
+        permission: UI_SURFACE_OPEN_PERMISSION,
+        deliveryTypes: ["none"],
+      });
+      if (
+        !iface ||
+        (iface.metadata.ownerRef.kind !== "Capsule" &&
+          iface.metadata.ownerRef.kind !== "Resource")
+      ) {
+        return [];
+      }
+      const record = readRecord(value);
+      const launcherOwner = readRecord(record?.launcherOwner);
+      const capsuleId =
+        iface.metadata.ownerRef.kind === "Capsule"
+          ? iface.metadata.ownerRef.id
+          : readString(launcherOwner?.capsuleId);
+      return capsuleId ? [{ interface: iface, capsuleId }] : [];
+    });
   } catch {
     return [];
   }

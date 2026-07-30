@@ -34,6 +34,15 @@ Workspace の kind は `user` / `team` / `system` のいずれかに閉じます
 Personal space は `GET /api/me/personal-space` で取得。`slug` で一意に識別でき、`/api/spaces/me` で personal space を指す
 shortcut もある。
 
+## Git state
+
+Workspace の作成は Workspace row と owner membership だけを作り、空の default repository は自動作成しません。
+`POST /api/spaces`、`GET /api/spaces/:spaceId`、Workspace export も repository record を埋め込みません。Git は
+明示的に作成・install された Git capability（通常は `takos-git` の Interface）として接続します。
+
+旧 version で作成済みの repository row はこの変更では削除しません。互換 read や利用者による明示的な移行を壊さず、
+新しい Workspace lifecycle と repository lifecycle を分離するためです。
+
 ## Role
 
 | role     | level | 説明                               |

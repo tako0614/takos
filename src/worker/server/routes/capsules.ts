@@ -217,12 +217,19 @@ function bearerToken(value: string | undefined): string | null {
   return token.length > 0 ? token : null;
 }
 
-function hasAccountsSessionCookie(cookie: string | undefined): boolean {
-  if (!cookie) return false;
-  return cookie.split(";").some((part) => {
-    const [name] = part.trim().split("=", 1);
-    return name === TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME;
-  });
+function accountsSessionCookie(cookie: string | undefined): string | null {
+  if (!cookie) return null;
+  for (const part of cookie.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 1) continue;
+    const name = part.slice(0, separator).trim();
+    if (name !== TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME) continue;
+    const value = part.slice(separator + 1).trim();
+    return value
+      ? `${TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME}=${value}`
+      : null;
+  }
+  return null;
 }
 
 function readAccountsSessionHeader(c: Context<SpaceAccessRouteEnv>): {
@@ -243,9 +250,9 @@ function readAccountsSessionHeader(c: Context<SpaceAccessRouteEnv>): {
     headers.set("x-takosumi-account-session", explicitSession);
     present = true;
   }
-  const cookie = c.req.header("Cookie");
-  if (hasAccountsSessionCookie(cookie)) {
-    headers.set("cookie", cookie ?? "");
+  const cookie = accountsSessionCookie(c.req.header("Cookie"));
+  if (cookie) {
+    headers.set("cookie", cookie);
     present = true;
   }
   return { present, headers };

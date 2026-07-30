@@ -6,9 +6,15 @@ import {
   deleteInstallableAppCapsule,
   listInstallableAppCapsuleServices,
   listInstallableAppCapsules,
+  listInstallableAppCapsulesWithServices,
   planInstallableAppCapsule,
   planInstallableAppRevision,
 } from "../installable-app-install.ts";
+import {
+  TAKOSUMI_API_VERSION,
+  UI_SURFACE_INTERFACE_TYPE,
+  UI_SURFACE_INTERFACE_VERSION,
+} from "takosumi-contract";
 
 type SeenRequest = {
   method: string;
@@ -238,13 +244,14 @@ describe("canonical Capsule install client", () => {
           ],
         });
       }
-      if (url.pathname === "/api/v1/sources/src_1") {
+      if (url.pathname === "/api/v1/sources") {
         return json({
-          source: {
+          sources: [{
             id: "src_1",
+            workspaceId: "ws_1",
             url: "https://github.com/acme/office.git",
             defaultRef: "v1",
-          },
+          }],
         });
       }
       if (url.pathname === "/api/v1/capsules/cap_1") {
@@ -265,6 +272,140 @@ describe("canonical Capsule install client", () => {
       config,
     );
     expect(services.body).toEqual({ capsule_id: "cap_1", services: [] });
+  });
+
+  test("projects a Workspace Capsule page with a constant number of authorized upstream reads", async () => {
+    const seen: string[] = [];
+    const timestamp = "2026-07-30T00:00:00.000Z";
+    const launcher = (
+      id: string,
+      capsuleId: string,
+      url: string,
+      workspaceId = "ws_1",
+    ) => ({
+      apiVersion: TAKOSUMI_API_VERSION,
+      kind: "Interface",
+      metadata: {
+        id,
+        workspaceId,
+        name: `${capsuleId}.launcher`,
+        ownerRef: { kind: "Capsule", id: capsuleId },
+        generation: 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      spec: {
+        type: UI_SURFACE_INTERFACE_TYPE,
+        version: UI_SURFACE_INTERFACE_VERSION,
+        document: { launcher: true, display: { title: capsuleId } },
+        inputs: { url: { source: "literal", value: url } },
+        access: { visibility: "workspace" },
+      },
+      status: {
+        phase: "Resolved",
+        observedGeneration: 1,
+        resolvedRevision: 1,
+        resolvedInputs: { url },
+      },
+    });
+    const fetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      seen.push(`${init?.method ?? "GET"} ${url.pathname}${url.search}`);
+      if (url.pathname === "/api/v1/workspaces/ws_1/capsules") {
+        return json({
+          capsules: [
+            {
+              id: "cap_1",
+              workspaceId: "ws_1",
+              sourceId: "src_1",
+              name: "one",
+              status: "active",
+            },
+            {
+              id: "cap_2",
+              workspaceId: "ws_1",
+              sourceId: "src_2",
+              name: "two",
+              status: "active",
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/api/v1/sources") {
+        return json({
+          sources: [
+            {
+              id: "src_1",
+              workspaceId: "ws_1",
+              url: "https://github.com/acme/one.git",
+              defaultRef: "v1",
+            },
+            {
+              id: "src_2",
+              workspaceId: "ws_1",
+              url: "https://github.com/acme/two.git",
+              defaultRef: "v2",
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/api/v1/workspaces/ws_1/ui-surfaces") {
+        return json({
+          interfaces: [
+            launcher("if_1", "cap_1", "https://one.example.test"),
+            launcher("if_2", "cap_2", "https://two.example.test"),
+            launcher(
+              "if_foreign",
+              "cap_foreign",
+              "https://foreign.example.test",
+              "ws_foreign",
+            ),
+          ],
+        });
+      }
+      throw new Error(`unexpected upstream read: ${url}`);
+    };
+    const result = await listInstallableAppCapsulesWithServices("ws_1", {
+      baseUrl: "https://operator.test",
+      token: "delegated-token",
+      subjectId: "pairwise-user",
+      fetch,
+    });
+
+    expect(result.status).toBe(200);
+    expect(seen).toEqual([
+      "GET /api/v1/workspaces/ws_1/capsules?includeDestroyed=false&limit=100",
+      "GET /api/v1/sources?workspaceId=ws_1&limit=100",
+      "GET /api/v1/workspaces/ws_1/ui-surfaces?limit=100",
+    ]);
+    expect(result.body?.capsules).toEqual([
+      expect.objectContaining({
+        capsule_id: "cap_1",
+        source: expect.objectContaining({
+          url: "https://github.com/acme/one.git",
+        }),
+        services: [
+          expect.objectContaining({
+            endpoint: "https://one.example.test/",
+            status: "ready",
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        capsule_id: "cap_2",
+        source: expect.objectContaining({
+          url: "https://github.com/acme/two.git",
+        }),
+        services: [
+          expect.objectContaining({
+            endpoint: "https://two.example.test/",
+            status: "ready",
+          }),
+        ],
+      }),
+    ]);
   });
 
   test("deletes only a Capsule in the requested Workspace and applies its returned destroy Run", async () => {

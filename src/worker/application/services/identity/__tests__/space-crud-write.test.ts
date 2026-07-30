@@ -123,6 +123,7 @@ test("createWorkspace enqueues featured app preinstall without creating Git host
     );
 
     assertEquals(result.id, "space-1");
+    assertEquals("repository" in result, false);
     assertEquals(accountRows.length, 1);
     assertEquals(membershipRows.length, 1);
     assertEquals(repositoryRows.length, 0);
