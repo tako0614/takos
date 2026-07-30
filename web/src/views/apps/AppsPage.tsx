@@ -1,5 +1,15 @@
-import { createMemo, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from "solid-js";
 import { type TranslationKey, useI18n } from "../../store/i18n.ts";
+import { useConfirmDialog } from "../../store/confirm-dialog.ts";
+import { useToast } from "../../store/toast.ts";
+import { rpcJson } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/index.ts";
 import { toSafeHref } from "../../lib/safeHref.ts";
@@ -11,10 +21,10 @@ import {
   useRegisteredApps,
 } from "./registered-apps.ts";
 import {
-  type CapsuleInstallation,
   type CapsuleServiceSummary,
-  isInflightInstallation,
-  useCapsuleInstallations,
+  type WorkspaceCapsule,
+  isInflightCapsule,
+  useWorkspaceCapsules,
 } from "./inflight-installs.ts";
 
 export interface AppsPageProps {
@@ -30,21 +40,37 @@ const INFLIGHT_STATUS_LABEL: Record<string, TranslationKey> = {
   failed: "installStatusFailed",
 };
 
+const INFLIGHT_POLL_INTERVAL_MS = 5000;
+
 export function AppsPage(props: AppsPageProps) {
   const i18n = useI18n();
   const t = i18n.t;
-  const { apps, loading, error } = useRegisteredApps(() => props.spaceId);
+  const { apps, loading, error, fetchApps } = useRegisteredApps(
+    () => props.spaceId,
+  );
   // Takosumi Capsule projections are the install/deployment truth. This stays
   // fail-soft so a workspace without Accounts config keeps the plain launcher.
-  const { installations } = useCapsuleInstallations(() => props.spaceId);
-  const inflightInstalls = createMemo(() =>
-    installations().filter(isInflightInstallation),
+  const { capsules, refetch: refetchCapsules } = useWorkspaceCapsules(
+    () => props.spaceId,
   );
+  const inflightCapsules = createMemo(() =>
+    capsules().filter(isInflightCapsule),
+  );
+
+  // Poll while installs are in flight so "installing" rows resolve without a
+  // manual reload; the interval stops as soon as nothing is pending.
+  createEffect(() => {
+    if (inflightCapsules().length === 0) return;
+    const timer = setInterval(() => {
+      refetchCapsules();
+      void fetchApps();
+    }, INFLIGHT_POLL_INTERVAL_MS);
+    onCleanup(() => clearInterval(timer));
+  });
   const workspaceCapsules = createMemo(() =>
-    installations().filter(
-      (installation) =>
-        installation.services.length > 0 ||
-        !isInflightInstallation(installation),
+    capsules().filter(
+      (capsule) =>
+        capsule.services.length > 0 || !isInflightCapsule(capsule),
     ),
   );
 
@@ -103,15 +129,22 @@ export function AppsPage(props: AppsPageProps) {
           </div>
 
           <Show when={errorMessage()}>
-            <div class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-              <p>{errorMessage()}</p>
+            <div class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+              <p class="min-w-0 flex-1">{errorMessage()}</p>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void fetchApps()}
+              >
+                {t("retry")}
+              </Button>
             </div>
           </Show>
 
-          {/* In-flight installs from the Takosumi Capsule flow. Lets this page answer
+          {/* In-flight Capsule Runs. Lets this page answer
               "what did I just add?" while keeping launcher routes separate
-              from installation detail routes. */}
-          <Show when={inflightInstalls().length > 0}>
+              from Capsule lifecycle detail routes. */}
+          <Show when={inflightCapsules().length > 0}>
             <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
               <div class="mb-2 flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -119,7 +152,7 @@ export function AppsPage(props: AppsPageProps) {
                 </h2>
               </div>
               <ul class="flex flex-col gap-1">
-                <For each={inflightInstalls()}>
+                <For each={inflightCapsules()}>
                   {(inst) => (
                     <li>
                       <div class="flex items-center justify-between rounded px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-200">
@@ -191,7 +224,9 @@ export function AppsPage(props: AppsPageProps) {
             </div>
           </Show>
 
-          <Show when={!loadingState() && !errorMessage() && hasApps()}>
+          {/* Keep cached content visible even when a refresh failed; only the
+              empty state is gated on the error (we don't know it's empty). */}
+          <Show when={!loadingState() && hasApps()}>
             <div class={LAUNCHER_GRID_CLASS}>
               {apps().map((app) => {
                 const safeHref = toSafeHref(app.url);
@@ -270,11 +305,16 @@ export function AppsPage(props: AppsPageProps) {
             </div>
           </Show>
 
-          <Show when={!loadingState() && !errorMessage() && hasCapsules()}>
-            <CapsuleInstallationsSection
-              installations={workspaceCapsules()}
+          <Show when={!loadingState() && hasCapsules()}>
+            <CapsulesSection
+              capsules={workspaceCapsules()}
               t={t}
               lang={i18n.lang}
+              spaceId={props.spaceId}
+              onRemoved={() => {
+                refetchCapsules();
+                void fetchApps();
+              }}
             />
           </Show>
         </div>
@@ -291,21 +331,23 @@ const LAUNCHER_ITEM_CLASS =
 
 const SKELETON_ITEMS = Array.from({ length: 12 });
 
-function CapsuleInstallationsSection(props: {
-  installations: readonly CapsuleInstallation[];
+function CapsulesSection(props: {
+  capsules: readonly WorkspaceCapsule[];
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   lang: string;
+  spaceId: string;
+  onRemoved: () => void;
 }) {
   const totalServices = () =>
-    props.installations.reduce(
-      (total, installation) => total + installation.services.length,
+    props.capsules.reduce(
+      (total, capsule) => total + capsule.services.length,
       0,
     );
   const readyServices = () =>
-    props.installations.reduce(
-      (total, installation) =>
+    props.capsules.reduce(
+      (total, capsule) =>
         total +
-        installation.services.filter((service) => service.status === "ready")
+        capsule.services.filter((service) => service.status === "ready")
           .length,
       0,
     );
@@ -326,12 +368,14 @@ function CapsuleInstallationsSection(props: {
         </div>
       </div>
       <div class="grid gap-3 lg:grid-cols-2">
-        <For each={props.installations}>
-          {(installation) => (
-            <CapsuleInstallationCard
-              installation={installation}
+        <For each={props.capsules}>
+          {(capsule) => (
+            <CapsuleCard
+              capsule={capsule}
               t={props.t}
               lang={props.lang}
+              spaceId={props.spaceId}
+              onRemoved={props.onRemoved}
             />
           )}
         </For>
@@ -340,17 +384,61 @@ function CapsuleInstallationsSection(props: {
   );
 }
 
-function CapsuleInstallationCard(props: {
-  installation: CapsuleInstallation;
+function CapsuleCard(props: {
+  capsule: WorkspaceCapsule;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   lang: string;
+  spaceId: string;
+  onRemoved: () => void;
 }) {
-  const visibleServices = () => props.installation.services.slice(0, 4);
-  const primaryService = () => getPrimaryService(props.installation.services);
+  const { confirm } = useConfirmDialog();
+  const { showToast } = useToast();
+  const [uninstalling, setUninstalling] = createSignal(false);
+  const visibleServices = () => props.capsule.services.slice(0, 4);
+  const primaryService = () => getPrimaryService(props.capsule.services);
   const primaryHref = () => toSafeHref(primaryService()?.endpoint);
-  const sourceLabel = () => getInstallationSourceLabel(props.installation);
+  const sourceLabel = () => getCapsuleSourceLabel(props.capsule);
   const updatedLabel = () =>
-    formatInstallDate(props.installation.updatedAt, props.lang);
+    formatInstallDate(props.capsule.updatedAt, props.lang);
+
+  // DELETE /spaces/:spaceId/capsules/:capsuleId starts the canonical destroy
+  // Run; confirm destructively and refresh the Capsule listing.
+  const handleUninstall = async () => {
+    if (uninstalling()) return;
+    const name = props.capsule.name;
+    const confirmed = await confirm({
+      title: props.t("uninstallConfirmTitle"),
+      message: props.t("uninstallConfirmMessage", { name }),
+      confirmText: props.t("uninstall"),
+      danger: true,
+    });
+    if (!confirmed) return;
+    setUninstalling(true);
+    try {
+      const res = await fetch(
+        `/api/spaces/${encodeURIComponent(props.spaceId)}/capsules/${
+          encodeURIComponent(props.capsule.id)
+        }`,
+        {
+          method: "DELETE",
+          headers: { accept: "application/json" },
+          credentials: "include",
+        },
+      );
+      await rpcJson(res);
+      showToast("success", props.t("uninstalledItem", { name }));
+      props.onRemoved();
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message
+          ? err.message
+          : props.t("uninstallFailed"),
+      );
+    } finally {
+      setUninstalling(false);
+    }
+  };
 
   return (
     <article class="rounded-lg border border-zinc-200 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -364,14 +452,14 @@ function CapsuleInstallationCard(props: {
               class="min-w-0 break-words text-sm font-semibold leading-5 text-zinc-900 dark:text-zinc-50"
               style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
             >
-              {props.installation.name}
+              {props.capsule.name}
             </h3>
             <span
               class={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${getCapsuleStatusBadgeClass(
-                props.installation.status,
+                props.capsule.status,
               )}`}
             >
-              {formatAppStatusLabel(props.installation.status, props.t)}
+              {formatAppStatusLabel(props.capsule.status, props.t)}
             </span>
           </div>
           <p class="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
@@ -400,7 +488,7 @@ function CapsuleInstallationCard(props: {
         <div class="flex min-w-0 flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
           <span>
             {props.t("appsCapsuleOutputs")}:{" "}
-            {props.installation.services.length}
+            {props.capsule.services.length}
           </span>
           <Show when={updatedLabel()}>
             {(date) => (
@@ -408,19 +496,36 @@ function CapsuleInstallationCard(props: {
             )}
           </Show>
         </div>
-        <Show when={primaryHref()}>
-          {(href) => (
-            <a
-              href={href()}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:outline-zinc-100"
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-60 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
+            onClick={() => void handleUninstall()}
+            disabled={uninstalling()}
+            aria-busy={uninstalling()}
+          >
+            <Show
+              when={uninstalling()}
+              fallback={<Icons.Trash class="h-4 w-4" />}
             >
-              <Icons.ExternalLink class="h-4 w-4" />
-              {props.t("appsCapsuleOpen")}
-            </a>
-          )}
-        </Show>
+              <Icons.Loader class="h-4 w-4 animate-spin" />
+            </Show>
+            {props.t("uninstall")}
+          </button>
+          <Show when={primaryHref()}>
+            {(href) => (
+              <a
+                href={href()}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:outline-zinc-100"
+              >
+                <Icons.ExternalLink class="h-4 w-4" />
+                {props.t("appsCapsuleOpen")}
+              </a>
+            )}
+          </Show>
+        </div>
       </div>
     </article>
   );
@@ -506,16 +611,15 @@ function isLaunchService(service: CapsuleServiceSummary): boolean {
   return key.includes("launch") || key.includes("url") || key.includes("app");
 }
 
-function getInstallationSourceLabel(installation: CapsuleInstallation): string {
+function getCapsuleSourceLabel(capsule: WorkspaceCapsule): string {
   const ref =
-    installation.sourceCommit?.slice(0, 7) ??
-    installation.sourceRef ??
-    installation.mode ??
-    installation.environment;
-  const source = installation.sourceUrl
-    ? getSourceDisplayName(installation.sourceUrl)
-    : installation.mode;
-  return [source, ref].filter(Boolean).join(" @ ") || installation.environment;
+    capsule.sourceCommit?.slice(0, 7) ??
+    capsule.sourceRef ??
+    capsule.environment;
+  const source = capsule.sourceUrl
+    ? getSourceDisplayName(capsule.sourceUrl)
+    : null;
+  return [source, ref].filter(Boolean).join(" @ ") || capsule.environment;
 }
 
 function getSourceDisplayName(sourceUrl: string): string {

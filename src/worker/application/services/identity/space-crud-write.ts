@@ -3,12 +3,10 @@ import {
   accountMemberships,
   accounts,
   getDb,
-  repositories,
 } from "../../../infra/db/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type {
   Env,
-  Repository,
   SecurityPosture,
   Space,
 } from "../../../shared/types/index.ts";
@@ -20,11 +18,7 @@ import {
   type SpaceListItem,
   toPersonalWorkspaceListItem,
 } from "./space-crud-shared.ts";
-import {
-  findLatestRepositoryBySpaceId,
-  getRepositoryById,
-  loadSpaceById,
-} from "./space-crud-read.ts";
+import { loadSpaceById } from "./space-crud-read.ts";
 import {
   enqueueFeaturedAppPreinstallJob,
   processFeaturedAppPreinstallJobs,
@@ -89,8 +83,6 @@ async function createSpaceBundle(
     ownerUserId: string;
     ownerPrincipalId: string;
     description?: string | null;
-    repoId: string;
-    repoName: string;
     timestamp: string;
   },
 ): Promise<void> {
@@ -102,14 +94,12 @@ async function createSpaceBundle(
     ownerUserId,
     ownerPrincipalId,
     description,
-    repoId,
-    repoName,
     timestamp,
   } = params;
 
   const drizzle = getDb(env.DB);
 
-  // The three space-bundle rows (account + owner membership + default repo) are
+  // The two workspace rows (account + owner membership) are
   // a static write group with no intra-group reads, so we persist them with a
   // single drizzle `batch([...])`. On real Cloudflare D1 this maps to the
   // platform `batch()` API, which executes the statements atomically on the
@@ -139,19 +129,6 @@ async function createSpaceBundle(
       status: "active",
       updatedAt: timestamp,
       createdAt: timestamp,
-    }),
-    drizzle.insert(repositories).values({
-      id: repoId,
-      accountId: spaceId,
-      name: repoName,
-      description: `Default repository for ${name}`,
-      visibility: "private",
-      defaultBranch: "main",
-      stars: 0,
-      forks: 0,
-      gitEnabled: false,
-      createdAt: timestamp,
-      updatedAt: timestamp,
     }),
   ]);
 }
@@ -207,7 +184,7 @@ async function processFeaturedAppsAfterCommit(
   }
 }
 
-export async function createWorkspaceWithDefaultRepo(
+export async function createWorkspace(
   env: Env,
   userId: string,
   name: string,
@@ -218,9 +195,8 @@ export async function createWorkspaceWithDefaultRepo(
     description?: string;
     installFeaturedApps?: boolean;
   },
-): Promise<{ workspace: Space; repository: Repository | null }> {
+): Promise<Space> {
   const spaceId = options?.id || generateId();
-  const repoId = generateId();
   const timestamp = new Date().toISOString();
   const kind = options?.kind || "team";
   const trimmedName = name.trim();
@@ -247,7 +223,7 @@ export async function createWorkspaceWithDefaultRepo(
   let preinstallJobId: string | null = null;
   const shouldInstallFeaturedApps = options?.installFeaturedApps ?? false;
 
-  // Persist the space bundle atomically (single D1 batch; see createSpaceBundle).
+  // Persist the workspace atomically (single D1 batch; see createSpaceBundle).
   // The featured-app preinstall job is intentionally a SEPARATE step rather than
   // part of the bundle write: it is enqueued with a deterministic id +
   // onConflictDoNothing, so it acts as idempotent service-layer compensation —
@@ -263,8 +239,6 @@ export async function createWorkspaceWithDefaultRepo(
     ownerUserId: userId,
     ownerPrincipalId,
     description: options?.description ?? null,
-    repoId,
-    repoName: "main",
     timestamp,
   });
 
@@ -295,16 +269,15 @@ export async function createWorkspaceWithDefaultRepo(
   }
 
   const space = await loadSpaceById(env.DB, spaceId);
-  const repository = await getRepositoryById(env.DB, repoId);
   if (!space) {
     throw new Error(
-      `Failed to load created space ${spaceId} (repoId=${repoId}, preinstallJobId=${
+      `Failed to load created space ${spaceId} (preinstallJobId=${
         preinstallJobId ?? "none"
       }): row not visible after commit; likely read-after-write replication delay`,
     );
   }
 
-  return { workspace: accountToWorkspace(space), repository };
+  return accountToWorkspace(space);
 }
 
 export async function updateWorkspace(
@@ -369,8 +342,7 @@ export async function getPersonalWorkspace(
 
   await ensureSelfMembership(env.DB, userId);
 
-  const repo = await findLatestRepositoryBySpaceId(env.DB, userId);
-  return toPersonalWorkspaceListItem(userAccount, repo);
+  return toPersonalWorkspaceListItem(userAccount);
 }
 
 async function enqueuePersonalWorkspaceFeaturedApps(

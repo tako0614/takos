@@ -1,8 +1,8 @@
 /**
- * In-flight control-plane installs for the AppsPage coherence section.
+ * In-flight control-plane Capsules for the AppsPage coherence section.
  *
  * AppsPage reads deployed UI surfaces. This fetches the Takos product facade for
- * the current Space and surfaces installs that are not yet finished/active.
+ * the current Space and surfaces Capsules that are not yet finished/active.
  * It is deliberately FAIL-SOFT and self-contained: it never imports the
  * Takosumi dashboard client, so a missing account-plane session or any error
  * just hides the section instead of hijacking the product page.
@@ -18,13 +18,12 @@ export interface CapsuleServiceSummary {
   readonly token_expires_at: string | null;
 }
 
-export interface CapsuleInstallation {
+export interface WorkspaceCapsule {
   readonly id: string;
   readonly name: string;
   readonly status: string;
   readonly freshness: string | null;
   readonly environment: string;
-  readonly mode: string | null;
   readonly sourceUrl: string | null;
   readonly sourceRef: string | null;
   readonly sourceCommit: string | null;
@@ -33,8 +32,8 @@ export interface CapsuleInstallation {
   readonly services: readonly CapsuleServiceSummary[];
 }
 
-export type InflightInstall = Pick<
-  CapsuleInstallation,
+export type InflightCapsule = Pick<
+  WorkspaceCapsule,
   "id" | "name" | "status" | "environment"
 >;
 
@@ -69,22 +68,15 @@ function readBoolean(value: unknown): boolean {
 
 function readNestedString(
   record: Record<string, unknown>,
-  ...paths: readonly (readonly string[])[]
+  path: readonly string[],
 ): string | null {
-  for (const path of paths) {
-    let current: unknown = record;
-    for (const segment of path) {
-      const parent = readRecord(current);
-      if (!parent) {
-        current = null;
-        break;
-      }
-      current = parent[segment];
-    }
-    const value = readString(current);
-    if (value) return value;
+  let current: unknown = record;
+  for (const segment of path) {
+    const parent = readRecord(current);
+    if (!parent) return null;
+    current = parent[segment];
   }
-  return null;
+  return readString(current);
 }
 
 function sourceRepoName(sourceUrl: string | null): string | null {
@@ -105,20 +97,11 @@ function sourceRepoName(sourceUrl: string | null): string | null {
   }
 }
 
-function installationName(row: Record<string, unknown>): string | null {
-  const sourceUrl = readNestedString(
-    row,
-    ["source", "url"],
-    ["source", "git", "url"],
-    ["source", "git"],
-    ["git_url"],
-  );
+function capsuleName(row: Record<string, unknown>): string | null {
+  const sourceUrl = readNestedString(row, ["source", "url"]);
   return (
     readString(row.name) ??
-    readString(row.title) ??
-    readString(row.app_name) ??
     readString(row.app_id) ??
-    readString(row.appId) ??
     sourceRepoName(sourceUrl)
   );
 }
@@ -130,7 +113,7 @@ function parseService(value: unknown): CapsuleServiceSummary | null {
   if (!id) return null;
   return {
     id,
-    capability: readString(record.capability) ?? "deployment.outputs",
+    capability: readString(record.capability) ?? "unknown",
     status: readString(record.status) ?? "unknown",
     endpoint: readString(record.endpoint),
     secret_configured: readBoolean(record.secret_configured),
@@ -144,30 +127,21 @@ function presentedStatus(status: string, freshness: string | null): string {
   return status;
 }
 
-export function parseCapsuleInstallationsResponse(
+export function parseCapsulesResponse(
   body: unknown,
-): readonly CapsuleInstallation[] {
+): readonly WorkspaceCapsule[] {
   const record = readRecord(body);
-  const rows = Array.isArray(record?.installations) ? record.installations : [];
-  const out: CapsuleInstallation[] = [];
+  const rows = Array.isArray(record?.capsules) ? record.capsules : [];
+  const out: WorkspaceCapsule[] = [];
   for (const row of rows) {
     const item = readRecord(row);
     if (!item) continue;
-    const id =
-      readString(item.id) ??
-      readString(item.installation_id) ??
-      readString(item.installationId);
-    const name = installationName(item);
+    const id = readString(item.capsule_id);
+    const name = capsuleName(item);
     const rawStatus = readString(item.status) ?? "unknown";
     const freshness = readString(item.freshness);
     if (!id || !name || !rawStatus) continue;
-    const sourceUrl = readNestedString(
-      item,
-      ["source", "url"],
-      ["source", "git", "url"],
-      ["source", "git"],
-      ["git_url"],
-    );
+    const sourceUrl = readNestedString(item, ["source", "url"]);
     const services = Array.isArray(item.services)
       ? item.services
           .map(parseService)
@@ -181,44 +155,31 @@ export function parseCapsuleInstallationsResponse(
       status: presentedStatus(rawStatus, freshness),
       freshness,
       environment: readString(item.environment) ?? "production",
-      mode: readString(item.mode) ?? readString(item.runtime_mode),
       sourceUrl,
-      sourceRef: readNestedString(
-        item,
-        ["source", "ref"],
-        ["source", "git", "ref"],
-        ["source", "git_ref"],
-        ["ref"],
-      ),
-      sourceCommit: readNestedString(
-        item,
-        ["source", "commit"],
-        ["source", "git", "commit"],
-        ["source_commit"],
-        ["installed_commit"],
-      ),
-      createdAt: readString(item.created_at) ?? readString(item.createdAt),
-      updatedAt: readString(item.updated_at) ?? readString(item.updatedAt),
+      sourceRef: readNestedString(item, ["source", "ref"]),
+      sourceCommit: readString(item.source_commit),
+      createdAt: readString(item.created_at),
+      updatedAt: readString(item.updated_at),
       services,
     });
   }
   return out;
 }
 
-export function isInflightInstallation(
-  installation: Pick<CapsuleInstallation, "status">,
+export function isInflightCapsule(
+  capsule: Pick<WorkspaceCapsule, "status">,
 ): boolean {
-  return INFLIGHT_STATUSES.has(installation.status.toLowerCase());
+  return INFLIGHT_STATUSES.has(capsule.status.toLowerCase());
 }
 
-async function fetchCapsuleInstallations(
+async function fetchCapsules(
   spaceId: string,
-): Promise<readonly CapsuleInstallation[]> {
+): Promise<readonly WorkspaceCapsule[]> {
   if (!spaceId) return [];
   let res: Response;
   try {
     res = await fetch(
-      `/api/spaces/${encodeURIComponent(spaceId)}/app-installations`,
+      `/api/spaces/${encodeURIComponent(spaceId)}/capsules`,
       { headers: { accept: "application/json" }, credentials: "include" },
     );
   } catch {
@@ -226,46 +187,47 @@ async function fetchCapsuleInstallations(
   }
   // No account-plane session (401), no config (503), or any non-2xx: fail soft.
   if (!res.ok) return [];
-  return parseCapsuleInstallationsResponse(
+  return parseCapsulesResponse(
     await res.json().catch(() => undefined),
   );
 }
 
-export function useCapsuleInstallations(spaceId: Accessor<string | null>): {
-  readonly installations: Accessor<readonly CapsuleInstallation[]>;
+export function useWorkspaceCapsules(spaceId: Accessor<string | null>): {
+  readonly capsules: Accessor<readonly WorkspaceCapsule[]>;
   readonly loading: Accessor<boolean>;
+  /** Re-fetch Capsules while a Run is in flight. */
+  readonly refetch: () => void;
 } {
-  const [resource] = createResource(
+  const [resource, { refetch }] = createResource(
     () => spaceId() ?? "",
-    fetchCapsuleInstallations,
+    fetchCapsules,
   );
   return {
-    installations: () => resource() ?? [],
+    capsules: () => resource() ?? [],
     loading: () => resource.loading,
+    refetch: () => void refetch(),
   };
 }
 
-/**
- * Reactive in-flight installs for the AppsPage section.
- */
-export function useInflightInstalls(spaceId: Accessor<string | null>): {
-  readonly installs: Accessor<readonly InflightInstall[]>;
+/** Reactive in-flight Capsules for the AppsPage section. */
+export function useInflightCapsules(spaceId: Accessor<string | null>): {
+  readonly capsules: Accessor<readonly InflightCapsule[]>;
   readonly loading: Accessor<boolean>;
 } {
   const [resource] = createResource(
     () => spaceId() ?? "",
     async (id) =>
-      (await fetchCapsuleInstallations(id))
-        .filter(isInflightInstallation)
-        .map((installation) => ({
-          id: installation.id,
-          name: installation.name,
-          status: installation.status,
-          environment: installation.environment,
+      (await fetchCapsules(id))
+        .filter(isInflightCapsule)
+        .map((capsule) => ({
+          id: capsule.id,
+          name: capsule.name,
+          status: capsule.status,
+          environment: capsule.environment,
         })),
   );
   return {
-    installs: () => resource() ?? [],
+    capsules: () => resource() ?? [],
     loading: () => resource.loading,
   };
 }

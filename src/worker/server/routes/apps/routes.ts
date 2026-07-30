@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import type { Env, User } from "../../../shared/types/index.ts";
+import type { AccountsBearerAuthContext } from "../../middleware/accounts-bearer.ts";
 import {
   getRequestedSpaceIdentifier,
   requireSpaceAccess,
@@ -19,11 +20,7 @@ import {
 
 type Variables = {
   user?: User;
-  accounts_bearer?: {
-    accessToken: string;
-    subjectId: string;
-    workspaceId: string;
-  };
+  accounts_bearer?: AccountsBearerAuthContext;
 };
 
 /**
@@ -140,12 +137,13 @@ export function registerAppApiRoutes<V extends Variables>(
     env: Env,
     user: User,
     localSpaceIdentifier: string | null,
+    accountsBearer?: Variables["accounts_bearer"],
   ): Promise<PublicApp[]> => {
     const authorization =
       await appsRouteDeps.resolveRuntimeInterfaceAuthorization(
         env,
         user.id,
-        undefined,
+        accountsBearer,
       );
     const authorized =
       await appsRouteDeps.fetchAuthorizedRuntimeInterfaces(

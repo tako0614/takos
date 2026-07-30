@@ -7,11 +7,10 @@ import {
 } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import {
-  createWorkspaceWithDefaultRepo,
+  createWorkspace,
   deleteWorkspace,
   getOrCreatePersonalWorkspace,
   getWorkspaceModelSettings,
-  getWorkspaceWithRepository,
   listWorkspacesForUser,
   updateWorkspace,
   updateWorkspaceModel,
@@ -26,14 +25,12 @@ import {
   resolveHistoryTokenBudget,
 } from "../../../application/services/agent/index.ts";
 import { getUISidebarItems } from "../../../application/services/platform/ui-extensions.ts";
+import { resolveRuntimeInterfaceAuthorization } from "../../../application/services/platform/runtime-interface-authorization.ts";
 import { toWorkspaceResponse } from "../../../application/services/identity/response-formatters.ts";
 import { processFeaturedAppPreinstallJobs } from "../../../application/services/source/featured-app-catalog.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { and, desc, eq, ne } from "drizzle-orm";
-import {
-  repositories,
-  threads,
-} from "../../../infra/db/schema.ts";
+import { threads } from "../../../infra/db/schema.ts";
 import {
   BadRequestError,
   NotFoundError,
@@ -163,7 +160,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const { workspace, repository } = await createWorkspaceWithDefaultRepo(
+        const workspace = await createWorkspace(
           c.env,
           user.id,
           body.name.trim(),
@@ -174,10 +171,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           },
         );
 
-        return c.json(
-          { space: toWorkspaceResponse(workspace), repository },
-          201,
-        );
+        return c.json({ space: toWorkspaceResponse(workspace) }, 201);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to create space";
@@ -194,29 +188,17 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const access = await requireSpaceAccess(c, "me", user.id);
 
-    const { workspace, repository } = await getWorkspaceWithRepository(
-      c.env,
-      access.space,
-    );
-
     return c.json({
-      space: toWorkspaceResponse(workspace),
+      space: toWorkspaceResponse(access.space),
       role: access.membership.role,
-      repository,
     });
   })
   .get("/:spaceId", spaceAccess(), async (c) => {
     const { space, membership } = c.get("access");
 
-    const { workspace, repository } = await getWorkspaceWithRepository(
-      c.env,
-      space,
-    );
-
     return c.json({
-      space: toWorkspaceResponse(workspace),
+      space: toWorkspaceResponse(space),
       role: membership.role,
-      repository,
     });
   })
   .get("/:spaceId/export", spaceAccess(), async (c) => {
@@ -224,44 +206,25 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const db = getDb(c.env.DB);
 
-    const [repoRows, threadRows] = await Promise.all([
-      db
-        .select({
-          id: repositories.id,
-          name: repositories.name,
-          updatedAt: repositories.updatedAt,
-        })
-        .from(repositories)
-        .where(eq(repositories.accountId, space.id))
-        .orderBy(desc(repositories.updatedAt))
-        .all(),
-      db
-        .select({
-          id: threads.id,
-          title: threads.title,
-          status: threads.status,
-          updatedAt: threads.updatedAt,
-        })
-        .from(threads)
-        .where(
-          and(eq(threads.accountId, space.id), ne(threads.status, "deleted")),
-        )
-        .orderBy(desc(threads.updatedAt))
-        .all(),
-    ]);
+    const threadRows = await db
+      .select({
+        id: threads.id,
+        title: threads.title,
+        status: threads.status,
+        updatedAt: threads.updatedAt,
+      })
+      .from(threads)
+      .where(
+        and(eq(threads.accountId, space.id), ne(threads.status, "deleted")),
+      )
+      .orderBy(desc(threads.updatedAt))
+      .all();
 
     const exportedAt = new Date().toISOString();
 
     return c.json({
       space: toWorkspaceResponse(space),
       exported_at: exportedAt,
-      repositories: repoRows.map((repo) => ({
-        id: repo.id,
-        name: repo.name,
-        updated_at: repo.updatedAt,
-        export_url: `/api/repos/${repo.id}/export`,
-        method: "GET" as const,
-      })),
       threads: threadRows.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -272,7 +235,6 @@ export default new Hono<AuthenticatedRouteEnv>()
         formats: ["markdown", "json", "pdf"] as const,
       })),
       counts: {
-        repositories: repoRows.length,
         threads: threadRows.length,
       },
     });
@@ -453,8 +415,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     },
   )
   .get("/:spaceId/sidebar-items", spaceAccess(), async (c) => {
-    const { space } = c.get("access");
-
-    const items = await getUISidebarItems(c.env.DB, space.id);
+    const authorization = await resolveRuntimeInterfaceAuthorization(
+      c.env,
+      c.get("user").id,
+      c.get("accounts_bearer"),
+    );
+    const items = await getUISidebarItems(authorization);
     return c.json({ items });
   });

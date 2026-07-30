@@ -271,6 +271,8 @@ export interface Env
   TAKOS_APP_INSTALLATIONS_URL?: string;
   TAKOS_APP_INSTALL_TOKEN?: string;
   TAKOS_APP_INSTALL_ACCOUNT_ID?: string;
+  /** Local Space id or slug that owns the operator automation Workspace. */
+  TAKOS_APP_INSTALL_SPACE_ID?: string;
   TAKOS_APP_INSTALL_SUBJECT?: string;
   TAKOS_APP_INSTALL_MODE?: string;
   TAKOS_APP_INSTALL_RUNTIME_BASE_URL?: string;

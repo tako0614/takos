@@ -51,6 +51,11 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
     Bindings: { DB: unknown };
     Variables: {
       user: { id: string; principal_id: string };
+      accounts_bearer: {
+        accessToken: string;
+        subjectId: string;
+        workspaceId: string;
+      };
     };
   }>();
 
@@ -58,6 +63,11 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
     c.set("user", {
       id: "local-user",
       principal_id: "local-principal",
+    });
+    c.set("accounts_bearer", {
+      accessToken: "request-access-token",
+      subjectId: "takosumi-principal",
+      workspaceId: "takosumi-workspace",
     });
     await next();
   });
@@ -69,11 +79,20 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
       assertEquals(userId, "local-user");
       return { space: { id: "local-workspace-id" } } as never;
     };
-    appsRouteDeps.resolveRuntimeInterfaceAuthorization = async (_env, userId) => {
+    appsRouteDeps.resolveRuntimeInterfaceAuthorization = async (
+      _env,
+      userId,
+      bearer,
+    ) => {
       assertEquals(userId, "local-user");
+      assertEquals(bearer, {
+        accessToken: "request-access-token",
+        subjectId: "takosumi-principal",
+        workspaceId: "takosumi-workspace",
+      });
       return {
         baseUrl: "https://accounts.takosumi.test",
-        token: "delegated-token",
+        token: bearer?.accessToken ?? "",
         subjectId: "takosumi-principal",
         workspaceId: "takosumi-workspace",
       };
@@ -162,7 +181,44 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
       { DB: {} },
     );
     assertEquals(response.status, 200);
+    const expectedSelector = {
+      workspaceId: "takosumi-workspace",
+      type: "interface.ui.surface",
+      permission: "ui.open",
+      deliveryTypes: ["none"],
+    };
+    assertEquals(selectors, [expectedSelector]);
+    const expectedApp = {
+      id: "if_docs",
+      name: "Docs",
+      description: "Workspace documents",
+      icon: "https://docs.example.test/icon.svg",
+      app_type: "custom",
+      url: "https://docs.example.test/app",
+      space_id: "local-workspace",
+      space_name: null,
+      service_hostname: "docs.example.test",
+      service_status: "ready",
+      source_type: "interface",
+      capsule_id: "capsule_docs",
+      interface_name: "docs",
+      category: "productivity",
+      sort_order: 4,
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-02T00:00:00.000Z",
+    };
+    assertEquals(await response.json(), { apps: [expectedApp] });
+
+    const detailResponse = await app.request(
+      "/apps/if_docs",
+      {
+        headers: { "X-Takos-Space-Id": "local-workspace" },
+      },
+      { DB: {} },
+    );
+    assertEquals(detailResponse.status, 200);
     assertEquals(selectors, [
+      expectedSelector,
       {
         workspaceId: "takosumi-workspace",
         type: "interface.ui.surface",
@@ -170,29 +226,7 @@ test("app launcher is an authorized Takosumi Interface view", async () => {
         deliveryTypes: ["none"],
       },
     ]);
-    assertEquals(await response.json(), {
-      apps: [
-        {
-          id: "if_docs",
-          name: "Docs",
-          description: "Workspace documents",
-          icon: "https://docs.example.test/icon.svg",
-          app_type: "custom",
-          url: "https://docs.example.test/app",
-          space_id: "local-workspace",
-          space_name: null,
-          service_hostname: "docs.example.test",
-          service_status: "ready",
-          source_type: "interface",
-          capsule_id: "capsule_docs",
-          interface_name: "docs",
-          category: "productivity",
-          sort_order: 4,
-          created_at: "2026-07-01T00:00:00.000Z",
-          updated_at: "2026-07-02T00:00:00.000Z",
-        },
-      ],
-    });
+    assertEquals(await detailResponse.json(), { app: expectedApp });
   } finally {
     appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
     appsRouteDeps.resolveRuntimeInterfaceAuthorization =

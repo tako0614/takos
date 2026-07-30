@@ -37,6 +37,7 @@ const RETIRED_PATHS = [
   "scripts/build-release-manifest.ts",
   "scripts/release-gate.ts",
   "scripts/validate-featured-app-opentofu.ts",
+  "src/worker/server/routes/__tests__/apps-source-proof.test.ts",
   "src/worker/runtime/queues/deploy-jobs.ts",
   "src/worker/runtime/queues/deployment-runner.ts",
   "src/worker/server/routes/custom-domains.ts",
@@ -135,6 +136,17 @@ const CURRENT_SOURCE_RULES = [
       "service-publications",
       'sourceType === "publication"',
       'sourceType: "publication"',
+    ],
+  },
+  {
+    path:
+      "src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts",
+    forbidden: [
+      "service_exports",
+      "service_bindings",
+      "runtime_projection",
+      "publication_name",
+      "app_deployments",
     ],
   },
   {
@@ -325,6 +337,24 @@ async function main(): Promise<void> {
     failures.push({
       path: "package.json",
       message: "Portable check must include bun run validate:architecture.",
+    });
+  }
+  if (!/"build"\s*:\s*"[^"]*bun run worker:build/.test(packageText)) {
+    failures.push({
+      path: "package.json",
+      message:
+        "Portable build must traverse the real Worker module graph through bun run worker:build.",
+    });
+  }
+  if (
+    !/"test:product-contracts"\s*:\s*"[^"]*capsules_test\.ts/.test(
+      packageText,
+    )
+  ) {
+    failures.push({
+      path: "package.json",
+      message:
+        "Portable tests must exercise the canonical Capsule and Interface product path.",
     });
   }
 
