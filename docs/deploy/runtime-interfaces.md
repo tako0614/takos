@@ -1,8 +1,9 @@
 # OpenTofu Output とランタイム Interface
 
 Takos のアプリ repository は、ふつうの OpenTofu/Terraform module のままです。Takosumi はその module を Capsule
-として実行し、成功した Run と StateVersion、通常の root Output を記録します。ランタイムの宣言は Takosumi の
-service-side な `Interface` レコードであり、特別な Output schema や repository manifest ではありません。
+として実行し、成功した Run と StateVersion、通常の root Output を記録します。ランタイムの実体と認可は
+Takosumi の service-side な `Interface` / `InterfaceBinding` レコードが所有します。app-owned launcher などの
+宣言案は repository manifest v2 から compile できますが、manifest は実行権限ではありません。
 
 ## 通常の OpenTofu Output
 
@@ -31,10 +32,13 @@ service-side で明示します。これは Interface の宣言ではなく、Ou
 ## Takosumi で Interface を宣言する
 
 Workspace オーナー、オペレーター、または install flow が、Takosumi の service-side 設定に Interface を作成します。
-plain module 向けの recipe path は `InstallConfig.interfaceBlueprints` です。最初の成功した apply 後に blueprint を
-一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。`/v1/interfaces` の service-side
-API から同じ record を明示的に作ることもできます。宣言には、その利用者が理解できる任意の protocol type /
-version を使えます。`document` は任意の non-secret な JSON で、動的な値は明示的な input で接続します。
+app-owned launcher のような plain Capsule の宣言案は、repository の v2 `interfaces[]` から exact snapshot と
+module compatibility をレビューしたうえで `InstallConfig.interfaceBlueprints` に compile されます。最初の
+成功した apply 後に blueprint を一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。
+`launch_url` のような Output は宣言された Interface input の値にすぎず、Output 名から Interface を推測する
+fallback はありません。`/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。
+宣言には、その利用者が理解できる任意の protocol type / version を使えます。`document` は任意の non-secret な
+JSON で、動的な値は明示的な input で接続します。
 
 Form-backed Resource では、verified な Takoform Form Definition の `interfaces[]` descriptor が portable な宣言を
 所有できます。descriptor は open な name / version、non-secret document schema、`literal` / Form output からの

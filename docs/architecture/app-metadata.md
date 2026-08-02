@@ -50,11 +50,15 @@ Takos が所有するのは、対応する type / version の描画・呼び出�
 open-with 選択、chat / agent / memory / Workspace に紐づく product state です。`/api/apps` は別の app metadata
 store ではなく、認可済み UI Interface の read-only view です。
 
-Interface の宣言と Output mapping は service-side の設定として管理し、アプリのリポジトリには Takosumi 専用の
-manifest や provider resource を要求しません。plain Capsule の宣言源は service-side の
-`InstallConfig.interfaceBlueprints` または明示的な Interface API です。Form-backed Resource は、verified な Takoform
-Form Definition の `interfaces[]` descriptor で portable な宣言と input mapping を持てます。Takosumi はその
-descriptor を host-owned Interface に materialize し、InterfaceBinding と lifecycle を引き続き所有します。
+Interface の実体、Output mapping、binding、lifecycle は service-side の Takosumi が所有します。アプリの
+repository は v2 [`/.well-known/takosumi.json`](../../.well-known/takosumi.json) の `interfaces[]` で、launcher
+など app-owned な Interface の宣言案と Output mapping を提案できます。Takosumi は exact source snapshot を
+レビューして DB-owned `InstallConfig.interfaceBlueprints` に compile し、成功した Apply 後に host-owned
+Interface へ materialize します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
+を推測する fallback もありません。Host-managed adapter や control MCP の宣言は、必要に応じて service-side
+`InstallConfig.interfaceBlueprints` または明示的な Interface API に残ります。Form-backed Resource は、verified
+な Takoform Form Definition の `interfaces[]` descriptor で portable な宣言と input mapping を持てます。
+InterfaceBinding と lifecycle はどの経路でも Takosumi が引き続き所有します。
 `InstallConfig.outputAllowlist` は UI / install summary / 外部表示へ公開する通常の Output を選ぶ別の設定であり、
 Interface の宣言ではありません。どの Interface 宣言経路でも binding(認可)はユーザー側に残ります。アプリは
 通常の Capsule として記録され、ユーザーがアンインストールできます。

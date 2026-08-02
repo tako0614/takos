@@ -1,5 +1,5 @@
 {
-  "apiVersion": "takosumi.com/v1",
+  "apiVersion": "takosumi.com/v2",
   "kind": "Repository",
   "install": {
     "modules": {
@@ -143,6 +143,47 @@
                 "redirectUri": "takosumi_accounts_redirect_uri"
               }
             }
+          }
+        ],
+        "interfaces": [
+          {
+            "key": "launcher",
+            "name": "takos.launcher",
+            "spec": {
+              "type": "interface.ui.surface",
+              "version": "1",
+              "document": {
+                "launcher": true,
+                "display": {
+                  "title": "Takos",
+                  "icon": "/logo.png"
+                }
+              },
+              "inputs": {
+                "url": {
+                  "source": "output",
+                  "outputName": "launch_url",
+                  "outputType": "url"
+                }
+              },
+              "access": {
+                "visibility": "workspace"
+              }
+            },
+            "bindingRequests": [
+              {
+                "key": "installer",
+                "subject": {
+                  "source": "installing_principal"
+                },
+                "permissions": [
+                  "ui.open"
+                ],
+                "delivery": {
+                  "type": "none"
+                }
+              }
+            ]
           }
         ]
       }

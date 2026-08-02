@@ -111,7 +111,8 @@ InstallConfig は次のような通常の Interface blueprint と binding propos
 
 最初の成功した apply 後、Takosumi は blueprint を普通の Interface と Ready な Principal InterfaceBinding に
 materialize します。Interface の宣言・binding proposal・認可 authority は service-side にあり、Capsule module に
-Takosumi control credential や Interface write authority を与えません。Takos からは materialize 済みの Interface /
+Takosumi control credential や Interface write authority を与えません。repository manifest v2 の app-owned
+declaration も install review で検証されてから service-side blueprint に compile されます。Takos からは materialize 済みの Interface /
 InterfaceBinding API だけが見えます。
 
 adapter は invocation 用 Interface OAuth token を自分の endpoint で検証し、その Principal / Workspace と現在の
@@ -123,8 +124,10 @@ operator token を Capsule に渡したり、OpenTofu Output に bearer credenti
 ## アプリメタデータ
 
 install や表示用のメタデータは、必ずしも module から来る必要はありません。Git URL、ref、module path、アプリ名、
-アイコン、カテゴリ、`InstallConfig.interfaceBlueprints` による Interface の宣言、Output の input mapping、
-`InstallConfig.outputAllowlist` による公開 Output の選択は、Takosumi の service-side install 設定で管理できます。
+アイコン、カテゴリ、`InstallConfig.interfaceBlueprints` による host-managed Interface の宣言、Output の input
+mapping、`InstallConfig.outputAllowlist` による公開 Output の選択は、Takosumi の service-side install 設定で管理できます。
+app-owned launcher などの repository-owned declaration は v2 `.well-known/takosumi.json` の `interfaces[]` に置けます。
+Takosumi は exact snapshot を検証して service-side blueprint に compile しますが、Output 単独の fallback はありません。
 ソースのリポジトリは普通の OpenTofu module のままであり、Takosumi 専用 provider resource は要求しません。
 Form-backed Resource の portable な宣言は、verified な Takoform Form Definition の `interfaces[]` descriptor に置けます。
 Takosumi はその descriptor から host-owned Interface を materialize しますが、InterfaceBinding は別の明示的な

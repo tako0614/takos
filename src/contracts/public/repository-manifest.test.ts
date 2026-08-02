@@ -23,11 +23,47 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v1");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["modules"]);
   expect(Object.keys(manifest.install.modules)).toEqual([
     "deploy/opentofu",
+  ]);
+  const module = manifest.install.modules["deploy/opentofu"];
+  expect(Object.keys(module).sort()).toEqual([
+    "inputs",
+    "interfaces",
+    "requires",
+  ]);
+  expect(module.interfaces).toEqual([
+    {
+      key: "launcher",
+      name: "takos.launcher",
+      spec: {
+        type: "interface.ui.surface",
+        version: "1",
+        document: {
+          launcher: true,
+          display: { title: "Takos", icon: "/logo.png" },
+        },
+        inputs: {
+          url: {
+            source: "output",
+            outputName: "launch_url",
+            outputType: "url",
+          },
+        },
+        access: { visibility: "workspace" },
+      },
+      bindingRequests: [
+        {
+          key: "installer",
+          subject: { source: "installing_principal" },
+          permissions: ["ui.open"],
+          delivery: { type: "none" },
+        },
+      ],
+    },
   ]);
   expect(options.options.map((option) => option.source.path)).toEqual([
     "deploy/opentofu",
@@ -57,6 +93,45 @@ test("manifest references real variables and only bounded presentation metadata"
       if (input.source.kind === "module_default") {
         expect(variableBlock(source, input.name)).toMatch(/\n\s+default\s+=/);
       }
+    }
+    for (const declaration of module.interfaces) {
+      expect(Object.keys(declaration).sort()).toEqual([
+        "bindingRequests",
+        "key",
+        "name",
+        "spec",
+      ]);
+      expect(declaration.key).toBe("launcher");
+      expect(declaration.name).toBe("takos.launcher");
+      expect(Object.keys(declaration.spec).sort()).toEqual([
+        "access",
+        "document",
+        "inputs",
+        "type",
+        "version",
+      ]);
+      expect(declaration.spec.type).toBe("interface.ui.surface");
+      expect(declaration.spec.version).toBe("1");
+      expect(declaration.spec.document).toEqual({
+        launcher: true,
+        display: { title: "Takos", icon: "/logo.png" },
+      });
+      expect(declaration.spec.inputs).toEqual({
+        url: {
+          source: "output",
+          outputName: "launch_url",
+          outputType: "url",
+        },
+      });
+      expect(declaration.spec.access).toEqual({ visibility: "workspace" });
+      expect(declaration.bindingRequests).toEqual([
+        {
+          key: "installer",
+          subject: { source: "installing_principal" },
+          permissions: ["ui.open"],
+          delivery: { type: "none" },
+        },
+      ]);
     }
   }
   for (const forbidden of [
@@ -107,4 +182,21 @@ interface RepositoryModule {
       variables?: Record<string, string>;
     }>;
   };
+  interfaces: Array<{
+    key: string;
+    name: string;
+    spec: {
+      type: string;
+      version: string;
+      document: Record<string, unknown>;
+      inputs: Record<string, Record<string, unknown>>;
+      access: Record<string, unknown>;
+    };
+    bindingRequests: Array<{
+      key: string;
+      subject: { source: string };
+      permissions: string[];
+      delivery: { type: string };
+    }>;
+  }>;
 }

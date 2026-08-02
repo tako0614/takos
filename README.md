@@ -68,10 +68,13 @@ Takos 自体に独自のデプロイ制御やクラウド provider はありま�
 
 Takosumi が同じ Git commit から導入画面を組み立てる場合は、
 [`/.well-known/takosumi.json`](.well-known/takosumi.json) の
-`deploy/opentofu` 宣言を読みます。これは入力名と表示上の projection だけを提案する
-任意の metadata で、provider credential、Cloudflare account、target、実行権限は
-含みません。導入先を選ぶ [`install-options.json`](install-options.json) とも別の
-contract です。最終的な InstallConfig、Plan、Apply の authority は Takosumi 側に
+`deploy/opentofu` 宣言を読みます。v2 の `interfaces` 宣言は、Takos の
+`interface.ui.surface@1` launcher と `launch_url` Output の明示的な mapping を
+提案し、レビュー後に Takosumi が Interface へ compile します。これは provider
+credential、Cloudflare account、target、実行権限を含まない repository-owned
+metadata です。`launch_url` Output だけで launcher を推測する fallback はありません。
+導入先を選ぶ [`install-options.json`](install-options.json) とも別の contract です。
+最終的な InstallConfig、Plan、Apply、InterfaceBinding の authority は Takosumi 側に
 残ります。
 
 ## リポジトリ構成
