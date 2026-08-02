@@ -248,6 +248,18 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   );
 });
 
+test("release publisher never copies local Rust target caches into its build context", async () => {
+  const source = await readFile(
+    join(import.meta.dir, "release-artifact-deploy.ts"),
+    "utf8",
+  );
+  expect(source).not.toContain('cp(\n    join(root, "containers/agent")');
+  expect(source).toContain(
+    'for (const name of ["Cargo.toml", "Cargo.lock", "Dockerfile"]',
+  );
+  expect(source).toContain('await cp(join(source, "src")');
+});
+
 test("prepare dry-run performs identity reads only and leaves evidence/output absent", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
   const stub = installReadOnlyCommandStub(commit);

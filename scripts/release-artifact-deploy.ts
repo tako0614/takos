@@ -582,12 +582,15 @@ async function prepareAgentBuildContext(
     throw new Error("agent engine source pin is invalid");
   }
   const context = join(temporary, "agent-context");
-  await mkdir(join(context, "takos/containers"), { recursive: true, mode: 0o700 });
-  await cp(
-    join(root, "containers/agent"),
-    join(context, "takos/containers/agent"),
-    { recursive: true },
-  );
+  const source = join(root, "containers/agent");
+  const destination = join(context, "takos/containers/agent");
+  await mkdir(destination, { recursive: true, mode: 0o700 });
+  for (const name of ["Cargo.toml", "Cargo.lock", "Dockerfile"] as const) {
+    await cp(join(source, name), join(destination, name));
+  }
+  await cp(join(source, "src"), join(destination, "src"), {
+    recursive: true,
+  });
   const engine = join(context, "takos-agent-engine");
   await mkdir(engine, { mode: 0o700 });
   await checked(engine, "git", ["init", "--quiet"]);
