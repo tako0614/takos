@@ -25,9 +25,9 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.0/takosumi-artifact.json";
+  "https://github.com/tako0614/takos/releases/download/v0.11.1/takosumi-artifact.json";
 const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.0/takos-worker-release.tar.gz";
+  "https://github.com/tako0614/takos/releases/download/v0.11.1/takos-worker-release.tar.gz";
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -119,7 +119,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.0",
+    releaseTag: "v0.11.1",
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -184,8 +184,14 @@ function tarHeader(path: string, size: number, type = "0"): Uint8Array {
 
 function workerArchive(extra?: { path: string; type: string }): Uint8Array {
   const files = new Map<string, Uint8Array>([
-    ["worker/index.js", new TextEncoder().encode("export default { fetch() {} };")],
-    ["assets/index.html", new TextEncoder().encode("<!doctype html><title>Takos</title>")],
+    [
+      "worker/index.js",
+      new TextEncoder().encode("export default { fetch() {} };"),
+    ],
+    [
+      "assets/index.html",
+      new TextEncoder().encode("<!doctype html><title>Takos</title>"),
+    ],
     [
       "asset-manifest.json",
       new TextEncoder().encode(
@@ -228,9 +234,9 @@ describe("materializer input and topology", () => {
       CF_ACCOUNT_ID: accountId,
     });
     expect((config.containers as unknown[]).length).toBe(4);
-    expect(
-      ((config.queues as { consumers: unknown[] }).consumers).length,
-    ).toBe(8);
+    expect((config.queues as { consumers: unknown[] }).consumers.length).toBe(
+      8,
+    );
     expect((config.migrations as unknown[]).at(-1)).toEqual({
       tag: "v6",
       new_sqlite_classes: [
@@ -271,15 +277,15 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.0",
+          packageVersion: "0.11.1",
           accountId,
           descriptorUrl,
         },
       ),
     ).toThrow(/SourceSnapshot commit/u);
-    expect(() => validateRuntimeSecrets({ ...secrets, UNKNOWN_SECRET: "x" })).toThrow(
-      /not in the Takos secret contract/u,
-    );
+    expect(() =>
+      validateRuntimeSecrets({ ...secrets, UNKNOWN_SECRET: "x" }),
+    ).toThrow(/not in the Takos secret contract/u);
   });
 
   test("requires canonical host source identity and rejects duplicate credentials", () => {
@@ -409,14 +415,7 @@ function expectedConsumers(outputs: TakosOutputs): Record<string, unknown> {
     [q.index_jobs_dlq]: consumer(10, 60, 3, null, 0),
     [q.workflow]: consumer(1, 1, 3, null, 0, q.workflow_dlq),
     [q.workflow_dlq]: consumer(10, 60, 3, null, 0),
-    [q.notification_push]: consumer(
-      5,
-      5,
-      5,
-      5,
-      5,
-      q.notification_push_dlq,
-    ),
+    [q.notification_push]: consumer(5, 5, 5, 5, 5, q.notification_push_dlq),
     [q.notification_push_dlq]: consumer(10, 60, 100, null, 600),
   };
 }
@@ -453,9 +452,24 @@ function fakeDependencies(
   const calls: string[][] = [];
   const consumers = expectedConsumers(outputs);
   const containerShapes = [
-    ["runtime", "standard-2", outputs.capacity.runtime_max_instances, release.containerImages.runtime],
-    ["executor-tier1", "lite", outputs.capacity.tier1_max_instances, release.containerImages.executor],
-    ["executor-tier2", "basic", outputs.capacity.tier2_max_instances, release.containerImages.executor],
+    [
+      "runtime",
+      "standard-2",
+      outputs.capacity.runtime_max_instances,
+      release.containerImages.runtime,
+    ],
+    [
+      "executor-tier1",
+      "lite",
+      outputs.capacity.tier1_max_instances,
+      release.containerImages.executor,
+    ],
+    [
+      "executor-tier2",
+      "basic",
+      outputs.capacity.tier2_max_instances,
+      release.containerImages.executor,
+    ],
     [
       "executor-tier3",
       { vcpu: 1, memory_mib: 12_288, disk_mb: 4_000 },
@@ -470,7 +484,10 @@ function fakeDependencies(
       calls.push(argv);
       if (argv[0] === "deployments") {
         return state.deployed
-          ? ok({ id: "deployment-1", versions: [{ version_id: "version-1", percentage: 100 }] })
+          ? ok({
+              id: "deployment-1",
+              versions: [{ version_id: "version-1", percentage: 100 }],
+            })
           : missing();
       }
       if (argv[0] === "secret" && argv[1] === "list") {
@@ -501,7 +518,8 @@ function fakeDependencies(
       }
       if (argv[0] === "containers" && argv[1] === "info") {
         const index = Number(argv[2]!.split("-").at(-1));
-        const [suffix, instanceType, maxInstances, image] = containerShapes[index]!;
+        const [suffix, instanceType, maxInstances, image] =
+          containerShapes[index]!;
         return ok({
           id: argv[2],
           name: `${outputs.workerName}-${suffix}`,
@@ -530,7 +548,10 @@ function fakeDependencies(
       }
       if (argv[0] === "vectorize" && argv[1] === "get") {
         return state.vector
-          ? ok({ name: outputs.vector.name, config: { dimensions: 768, metric: "cosine" } })
+          ? ok({
+              name: outputs.vector.name,
+              config: { dimensions: 768, metric: "cosine" },
+            })
           : missing();
       }
       if (argv[0] === "vectorize" && argv[1] === "create") {
@@ -679,7 +700,11 @@ describe("materializer lifecycle", () => {
       queueConsumers: 8,
       health: { status: 200 },
     });
-    expect(fake.calls.some((call) => call.slice(0, 4).join(" ") === "d1 migrations apply DB")).toBe(true);
+    expect(
+      fake.calls.some(
+        (call) => call.slice(0, 4).join(" ") === "d1 migrations apply DB",
+      ),
+    ).toBe(true);
     const deploy = fake.calls.find(
       (call) => call[0] === "deploy" && !call.includes("--dry-run"),
     );
@@ -694,13 +719,17 @@ describe("materializer lifecycle", () => {
     expect(JSON.stringify(evidence)).not.toContain(secrets.ENCRYPTION_KEY);
     expect(JSON.stringify(evidence)).not.toContain(accountId);
     expect(JSON.stringify(evidence)).not.toContain(sourceCommit);
-    expect(JSON.stringify(evidence)).not.toContain(rawOutputs.service_runtime_name);
+    expect(JSON.stringify(evidence)).not.toContain(
+      rawOutputs.service_runtime_name,
+    );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
   });
 
   test("keeps stale secrets until the replacement Worker deploy succeeds", async () => {
-    const root = await mkdtemp(join(tmpdir(), "takos-materializer-secret-order-"));
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-secret-order-"),
+    );
     temporaryDirectories.push(root);
     const secretPath = join(root, "runtime-secrets.json");
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
@@ -719,7 +748,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.0",
+      tag: "v0.11.1",
     };
     const fake = fakeDependencies(
       state,
@@ -746,7 +775,9 @@ describe("materializer lifecycle", () => {
   });
 
   test("marks the first failed writer as a partial mutation", async () => {
-    const root = await mkdtemp(join(tmpdir(), "takos-materializer-writer-failure-"));
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-writer-failure-"),
+    );
     temporaryDirectories.push(root);
     const secretPath = join(root, "runtime-secrets.json");
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
@@ -802,14 +833,17 @@ describe("materializer lifecycle", () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
-    const invocation = parseInvocation("pre_destroy", invocationEnv("pre_destroy"));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
     const state: FakeState = {
       deployed: true,
       vector: true,
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.0",
+      tag: "v0.11.1",
     };
     const fake = fakeDependencies(
       state,
@@ -836,7 +870,9 @@ describe("materializer lifecycle", () => {
     });
     expect(fake.calls.some((call) => call[0] === "d1")).toBe(false);
     expect(JSON.stringify(evidence)).not.toContain(sourceCommit);
-    expect(JSON.stringify(evidence)).not.toContain(rawOutputs.service_runtime_name);
+    expect(JSON.stringify(evidence)).not.toContain(
+      rawOutputs.service_runtime_name,
+    );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
   });
@@ -845,7 +881,10 @@ describe("materializer lifecycle", () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
-    const invocation = parseInvocation("pre_destroy", invocationEnv("pre_destroy"));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
     const state: FakeState = {
       deployed: false,
       vector: false,
@@ -878,7 +917,10 @@ describe("materializer lifecycle", () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
-    const invocation = parseInvocation("pre_destroy", invocationEnv("pre_destroy"));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
     const state: FakeState = {
       deployed: true,
       vector: true,
@@ -886,7 +928,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.0",
+      tag: "v0.11.1",
     };
     const fake = fakeDependencies(
       state,
@@ -925,7 +967,10 @@ describe("materializer lifecycle", () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
-    const invocation = parseInvocation("pre_destroy", invocationEnv("pre_destroy"));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
     const state: FakeState = {
       deployed: true,
       vector: true,
@@ -933,7 +978,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.0",
+      tag: "v0.11.1",
     };
     const fake = fakeDependencies(
       state,

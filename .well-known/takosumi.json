@@ -66,6 +66,24 @@
             "advanced": true
           },
           {
+            "name": "cloudflare",
+            "source": {
+              "kind": "user"
+            },
+            "type": "json",
+            "required": true,
+            "label": {
+              "ja": "Cloudflare デプロイ設定",
+              "en": "Cloudflare deployment settings"
+            },
+            "helper": {
+              "ja": "Cloudflare の account_id と、必要なら workers_subdomain を JSON で指定します。認証情報は Provider Connection から別に渡されます。",
+              "en": "Provide the Cloudflare account_id and optional workers_subdomain as JSON. Credentials are delivered separately through a Provider Connection."
+            },
+            "placeholder": "{\"account_id\":\"...\",\"workers_subdomain\":\"...\"}",
+            "advanced": true
+          },
+          {
             "name": "takosumi_accounts_url",
             "source": {
               "kind": "module_default"
@@ -130,11 +148,7 @@
           {
             "kind": "identity.oidc",
             "callbackPath": "/auth/oidc/callback",
-            "scopes": [
-              "openid",
-              "profile",
-              "email"
-            ],
+            "scopes": ["openid", "profile", "email"],
             "deliver": {
               "variables": {
                 "accountsUrl": "takosumi_accounts_url",
@@ -176,9 +190,7 @@
                 "subject": {
                   "source": "installing_principal"
                 },
-                "permissions": [
-                  "ui.open"
-                ],
+                "permissions": ["ui.open"],
                 "delivery": {
                   "type": "none"
                 }

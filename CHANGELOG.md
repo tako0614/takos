@@ -6,6 +6,14 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.11.1 — Installable Cloudflare deployment input
+
+- Declare the non-secret Cloudflare deployment object as a reviewed repository
+  input so Takosumi can create a direct Cloudflare Capsule without bypassing
+  repository-owned install UX validation.
+- Keep provider credentials in a separate Provider Connection and require the
+  compatibility-derived ProviderBinding before Plan.
+
 ## 0.11.0 — Canonical managed Worker lifecycle
 
 - Materialize managed Takos Workers through the canonical Takosumi EdgeWorker

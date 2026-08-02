@@ -2,10 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("../../../", import.meta.url);
-const text = await readFile(
-  new URL(".well-known/takosumi.json", root),
-  "utf8",
-);
+const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
 const manifest = JSON.parse(text) as RepositoryManifest;
 const options = JSON.parse(
   await readFile(new URL("install-options.json", root), "utf8"),
@@ -26,9 +23,7 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(manifest.apiVersion).toBe("takosumi.com/v2");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["modules"]);
-  expect(Object.keys(manifest.install.modules)).toEqual([
-    "deploy/opentofu",
-  ]);
+  expect(Object.keys(manifest.install.modules)).toEqual(["deploy/opentofu"]);
   const module = manifest.install.modules["deploy/opentofu"];
   expect(Object.keys(module).sort()).toEqual([
     "inputs",
@@ -68,6 +63,22 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(options.options.map((option) => option.source.path)).toEqual([
     "deploy/opentofu",
   ]);
+  expect(module.inputs.find((input) => input.name === "cloudflare")).toEqual({
+    name: "cloudflare",
+    source: { kind: "user" },
+    type: "json",
+    required: true,
+    label: {
+      ja: "Cloudflare デプロイ設定",
+      en: "Cloudflare deployment settings",
+    },
+    helper: {
+      ja: "Cloudflare の account_id と、必要なら workers_subdomain を JSON で指定します。認証情報は Provider Connection から別に渡されます。",
+      en: "Provide the Cloudflare account_id and optional workers_subdomain as JSON. Credentials are delivered separately through a Provider Connection.",
+    },
+    placeholder: '{"account_id":"...","workers_subdomain":"..."}',
+    advanced: true,
+  });
 });
 
 test("manifest references real variables and only bounded presentation metadata", () => {
@@ -135,8 +146,6 @@ test("manifest references real variables and only bounded presentation metadata"
     }
   }
   for (const forbidden of [
-    "account_id",
-    '"cloudflare"',
     '"env"',
     '"target"',
     "credential",
@@ -173,7 +182,12 @@ interface RepositoryModule {
   inputs: Array<{
     name: string;
     source: { kind: string };
+    type?: string;
+    required?: boolean;
     label: { ja: string; en: string };
+    helper?: { ja: string; en: string };
+    placeholder?: string;
+    advanced?: boolean;
     secret?: boolean;
   }>;
   installExperience?: {
