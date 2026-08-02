@@ -79,6 +79,12 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     placeholder: '{"account_id":"...","workers_subdomain":"..."}',
     advanced: true,
   });
+  const cloudflareVariable = variableBlock(
+    modules["deploy/opentofu"],
+    "cloudflare",
+  );
+  expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
+  expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
 });
 
 test("manifest references real variables and only bounded presentation metadata", () => {

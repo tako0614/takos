@@ -6,6 +6,12 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.11.2 — Required Cloudflare deployment contract
+
+- Make the required `cloudflare` repository input match the OpenTofu module by
+  removing its synthetic default and requiring an explicit account id.
+- Keep the account coordinate separate from Provider Connection credentials.
+
 ## 0.11.1 — Installable Cloudflare deployment input
 
 - Declare the non-secret Cloudflare deployment object as a reviewed repository

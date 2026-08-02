@@ -147,13 +147,12 @@ variable "takosumi_accounts_redirect_uri" {
 variable "cloudflare" {
   description = "Cloudflare-specific backing-resource settings (provisioned by Takosumi Run with type `apply`)."
   type = object({
-    account_id        = optional(string, "takos-placeholder")
+    account_id        = string
     workers_subdomain = optional(string)
   })
-  default = {}
 
   validation {
-    condition     = var.target != "cloudflare" || var.cloudflare.account_id != "takos-placeholder"
+    condition     = var.target != "cloudflare" || trimspace(var.cloudflare.account_id) != ""
     error_message = "cloudflare.account_id must be set when target is cloudflare."
   }
 
