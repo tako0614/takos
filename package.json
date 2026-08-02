@@ -10,6 +10,7 @@
   "private": true,
   "scripts": {
     "dev": "bun src/worker/local-platform/unified-entrypoint.ts",
+    "deploy": "bun scripts/deploy.mjs",
     "dev:web": "bunx vite --host 0.0.0.0 --config web/vite.config.ts",
     "web:dev": "bun run dev:web",
     "web:build": "bunx vite build --config web/vite.config.ts",
@@ -32,8 +33,9 @@
     "fmt:check": "bun scripts/check-source-format.mjs",
     "check:i18n-dupe": "bun scripts/check-i18n-dupe.mjs",
     "check:website-host": "bun scripts/check-website-host-drift.mjs",
-    "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/worker/actions-engine ./src/contracts && bun run test:product-contracts",
+    "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/worker/actions-engine ./src/contracts && bun run test:product-contracts && bun run test:product-materializer",
     "test:product-contracts": "bun test src/worker/application/services/identity/__tests__/space-crud-write.test.ts src/worker/application/services/platform/__tests__/runtime-interface-client.test.ts src/worker/application/services/source/__tests__/installable-app-install.test.ts src/worker/application/services/source/__tests__/takosumi-workload-services.test.ts src/worker/server/routes/__tests__/api-scope-auth.test.ts src/worker/server/routes/__tests__/apps.test.ts src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts src/worker/server/routes/capsules_test.ts web/src/__tests__/views/apps/inflight-installs.test.ts web/src/__tests__/views/apps/registered-apps.test.ts",
+    "test:product-materializer": "bun test scripts/takos-product-materializer.test.ts scripts/release-staging-qualification.test.ts",
     "test:common": "bun test ./src/worker/platform-utils",
     "test:actions-engine": "bun test ./src/worker/actions-engine",
     "validate:api-docs": "bun scripts/validate-api-docs.ts",
@@ -57,7 +59,9 @@
     "generate:keys": "bun scripts/generate-platform-keys.ts",
     "containers:build:runtime": "bun run --cwd containers/runtime build",
     "containers:build": "bun run containers:build:runtime",
-    "release-worker-artifact:build": "bun scripts/build-worker-release-artifact.ts"
+    "release-worker-artifact:build": "bun scripts/build-worker-release-artifact.ts",
+    "product:activate": "bun scripts/takos-product-materializer.ts post_apply",
+    "product:pre-destroy": "bun scripts/takos-product-materializer.ts pre_destroy"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",

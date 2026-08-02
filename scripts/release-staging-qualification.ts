@@ -16,15 +16,39 @@ import { basename, dirname, join, resolve } from "node:path";
 import {
   type CandidateManifest,
   sha256File,
-  verifyCandidateManifest,
 } from "./release-candidate-contract.ts";
-import { main as activateRelease } from "./control/takosumi-release.mjs";
 
 const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
 const COMMIT_RE = /^[0-9a-f]{40}$/;
-const RUN_ID_RE = /^\d+$/;
 
-type ActivationResult = Awaited<ReturnType<typeof activateRelease>>;
+type ActivationResult = {
+  readonly environment: string;
+  readonly operation: string;
+  readonly status: string;
+  readonly workerArtifact?: { readonly sha256?: string; readonly sizeBytes?: number };
+  readonly activation: {
+    readonly deployment?: { readonly skipped?: boolean; readonly status?: unknown };
+    readonly containers?: {
+      readonly skipped?: boolean;
+      readonly containers: readonly {
+        readonly className: string;
+        readonly image: string;
+      }[];
+    };
+    readonly workerContent?: {
+      readonly workerName?: string;
+      readonly bytes?: number;
+      readonly sha256?: string;
+      readonly skipped?: boolean;
+      readonly reason?: string;
+    };
+    readonly health?: {
+      readonly skipped?: boolean;
+      readonly url?: string;
+      readonly status: number;
+    };
+  };
+};
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -333,93 +357,6 @@ export function buildStagingEvidence(input: {
     ],
     verifiedAt: input.verifiedAt ?? new Date().toISOString(),
   } as const;
-}
-
-export async function runStagingQualification(input: {
-  releaseId: string;
-  candidateDir: string;
-  sourceDir: string;
-  sourceCommit: string;
-  version: string;
-  candidateRunId: string;
-  candidateManifestDigest: string;
-  output: string;
-  env?: Record<string, string | undefined>;
-}) {
-  invariant(COMMIT_RE.test(input.sourceCommit), "source commit is invalid");
-  invariant(
-    RUN_ID_RE.test(input.candidateRunId),
-    "candidate run id is invalid",
-  );
-  invariant(
-    SHA256_RE.test(input.candidateManifestDigest),
-    "candidate manifest digest is invalid",
-  );
-  const sourceDir = resolve(input.sourceDir);
-  const sourceCommit = cleanGitCheckoutCommit(sourceDir, "candidate source");
-  invariant(
-    sourceCommit === input.sourceCommit,
-    "candidate source checkout drifted",
-  );
-  const workflow = readFileSync(
-    join(sourceDir, ".github", "workflows", "release-artifacts.yml"),
-    "utf8",
-  );
-  const takosumiSourceCommit = workflow.match(
-    /^\s*TAKOSUMI_SOURCE_REF:\s*([0-9a-f]{40})\s*$/mu,
-  )?.[1];
-  invariant(takosumiSourceCommit, "candidate Takosumi source ref is missing");
-  const candidateDir = resolve(input.candidateDir);
-  const manifest = verifyCandidateManifest({
-    candidateDir,
-    repository: "https://github.com/tako0614/takos.git",
-    sourceCommit: input.sourceCommit,
-    version: input.version,
-    takosumiSourceCommit,
-    candidateRunId: input.candidateRunId,
-    expectedManifestDigest: input.candidateManifestDigest,
-    policyPath: join(
-      sourceDir,
-      ".github",
-      "workflows",
-      "release-artifacts.yml",
-    ),
-    toolchainPath: join(sourceDir, "bun.lock"),
-  });
-  const controllerDir = resolve(import.meta.dir, "..");
-  const controllerCommit = cleanGitCheckoutCommit(
-    controllerDir,
-    "staging controller",
-  );
-  const containers = sealedStagingContainerSelection({
-    candidateDir,
-    manifest,
-  });
-  const previousCwd = process.cwd();
-  let activation: ActivationResult;
-  try {
-    process.chdir(sourceDir);
-    activation = await activateRelease(
-      ["staging"],
-      buildStagingActivationEnv({
-        candidateDir,
-        manifest,
-        baseEnv: input.env ?? process.env,
-      }),
-    );
-  } finally {
-    process.chdir(previousCwd);
-  }
-  const evidence = buildStagingEvidence({
-    releaseId: input.releaseId,
-    controllerCommit,
-    manifest,
-    manifestDigest: input.candidateManifestDigest,
-    containers,
-    activation,
-  });
-  writePrivateEvidence(input.output, evidence);
-  return evidence;
 }
 
 export function writePrivateEvidence(

@@ -77,6 +77,10 @@ export default defineConfig({
           { text: "ルートとドメイン", link: "/deploy/routes" },
           { text: "環境と変数", link: "/deploy/environment" },
           { text: "デプロイ手順", link: "/deploy/deploy" },
+          {
+            text: "Artifact materializer",
+            link: "/deploy/product-materializer",
+          },
           { text: "複数サービス", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },

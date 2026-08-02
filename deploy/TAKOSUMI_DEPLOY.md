@@ -21,8 +21,14 @@ the normal Capsule plan/apply flow. Takosumi owns:
 
 The module receives ordinary OpenTofu variables. Secret values remain
 operator-owned inputs and are materialized only inside the selected Takosumi
-runner. They are not generated, stored, or forwarded by a Takos package
-script.
+runner. The narrow `product:activate` lifecycle command reads the declared
+0600 runtime-secret file and passes it to the pinned local Wrangler process;
+it never generates, stores, logs, or returns those values.
+
+After apply, Takosumi may invoke the Takos-owned artifact materializer described
+in [`docs/deploy/product-materializer.md`](../docs/deploy/product-materializer.md).
+It consumes the Plan-pinned SourceSnapshot identity and non-sensitive outputs,
+but creates no Takos ledger and has no plan/apply/destroy authority.
 
 ## Optional Service Form projection
 
@@ -56,4 +62,6 @@ bun run check
 
 Production and incident procedures belong to the operator and Takosumi
 documentation. This repository intentionally has no `scripts/control`,
-release-gate, admin CLI, secret writer, or Takosumi deployment command.
+release-gate, admin CLI, secret writer, or Takosumi deployment command. The
+single product materializer is an opaque lifecycle command executed by the
+Takosumi runner, not a restored product-local control plane.

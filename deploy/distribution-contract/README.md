@@ -5,8 +5,9 @@ This directory owns the Takos product distribution profile contract.
 - `takos-distribution-profile-v1.schema.json` is the structural contract for
   `deploy/distributions/*.json`.
 - `bun run check` validates the tracked profile with the rest of the Takos
-  product. This repository has no local release-manifest builder or deployment
-  authority.
+  product. Takos owns its immutable Worker release descriptor and the narrow
+  product materializer; it does not own plan/apply/destroy or a second Run
+  ledger.
 - Takosumi owns deploy/runtime lifecycle semantics. This contract only describes
   Takos product distribution overlays and the evidence needed to prove each
   target.
@@ -29,8 +30,10 @@ This is distribution-profile metadata, not a new Takos-specific Service Form
 and not a replacement for the OpenTofu module under `deploy/opentofu`. Takos
 must not introduce a catch-all `takosumi_takos` resource. If the distribution
 needs a form that existing generic forms cannot express, add a portable generic
-form to Takoform and an explicit Takosumi adapter rather than product-local
-lifecycle code.
+form to Takoform and an explicit Takosumi adapter. The existing
+`product:activate` / `product:pre-destroy` commands are limited to artifact
+materialization that the Cloudflare provider cannot express; they are not a
+generic Takos lifecycle API.
 
 ## Artifact Ownership
 
