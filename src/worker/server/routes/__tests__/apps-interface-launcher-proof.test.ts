@@ -80,7 +80,7 @@ test("bounded authorized Interface projection appears on the Takos launcher", as
           service_status: "ready",
           source_type: "interface",
           capsule_id: "cap_launcher",
-          interface_name: "launcher",
+          interface_name: "takos.launcher",
           category: "test",
           sort_order: 2,
           created_at: "2026-07-30T00:00:00.000Z",
@@ -137,7 +137,7 @@ function resolvedLauncherInterface() {
     metadata: {
       id: "if_launcher",
       workspaceId: "workspace-1",
-      name: "launcher",
+      name: "takos.launcher",
       ownerRef: { kind: "Capsule", id: "cap_launcher" },
       generation: 2,
       createdAt: "2026-07-30T00:00:00.000Z",
