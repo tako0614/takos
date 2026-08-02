@@ -122,6 +122,32 @@ Takos runtime secret JSON を、明示した env/file として同じ run にだ
 hard-link count、mode、size と JSON key set を mutation 前に検査します。runtime secret
 は stdout、evidence、argv、OpenTofu variable/output へ出しません。
 
+runtime secret JSON の必須 key は次の 6 個です。
+
+```text
+ENCRYPTION_KEY
+OIDC_CLIENT_SECRET
+PLATFORM_PRIVATE_KEY
+PLATFORM_PUBLIC_KEY
+TAKOS_AGENT_START_TOKEN
+TAKOS_INTERNAL_API_SECRET
+```
+
+operator がこの JSON を手作業で組み立てずに用意する場合は、Takos repo の generator
+で private output directory に opt-in 生成できます。通常の 6 個の個別ファイルも同時に
+生成され、JSON は `takos-runtime-secrets.json` という正確な key set で mode `0600` に
+なります。既存ファイルは `--force` なしでは上書きされません。
+
+```sh
+bun run generate:keys -- \
+  --env=production \
+  --output=/path/to/private/secrets \
+  --runtime-json
+```
+
+生成した JSON は `TAKOS_RUNTIME_SECRETS_FILE` として lifecycle action に渡し、内容を
+read、print、log へコピーしません。生成物は repository の外に置きます。
+
 ## Lifecycle and recovery
 
 `post_apply` は、全入力と生成した Wrangler config の dry-run、既存 resource ownership

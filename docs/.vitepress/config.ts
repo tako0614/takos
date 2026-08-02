@@ -81,6 +81,10 @@ export default defineConfig({
             text: "Artifact materializer",
             link: "/deploy/product-materializer",
           },
+          {
+            text: "Release artifact publication",
+            link: "/deploy/release-artifact",
+          },
           { text: "複数サービス", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },

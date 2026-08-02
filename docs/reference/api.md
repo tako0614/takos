@@ -70,6 +70,11 @@ Takos の deploy 権威は Takosumi-applied OpenTofu Capsule です。
 同じ topology の **interim materialization** であり、別の source of truth として扱わない。Takos product routes は独自の
 product-local deployment surface を expose せず、Takosumi の deploy control API 経由で plan / apply / destroy を行う。
 
+GitHub Release と Cloudflare Container Registry へ versioned distribution bytes を公開する
+`takos-release-artifact` は product deployment ではありません。これは Takosumi が
+digest 固定して取得する入力を一度だけ発行する surface であり、Workspace、Capsule、
+provider credential、plan、apply、destroy の authority は持ちません。
+
 ## References
 
 - [Deploy overview](/deploy/)

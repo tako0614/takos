@@ -7,14 +7,18 @@
  * and it runs its own embedded accounts plane (its origin is its own OIDC
  * issuer). These are that worker's signing / encryption / internal-RPC secrets.
  *
- * Produces five secret files under `.secrets/<env>/` relative to the current
+ * Produces six secret files under `.secrets/<env>/` relative to the current
  * working directory (override with `--output=<dir>`):
  *
  * - PLATFORM_PRIVATE_KEY   — RSA 2048 PKCS#8 PEM
  * - PLATFORM_PUBLIC_KEY    — RSA 2048 SPKI PEM
  * - ENCRYPTION_KEY         — 32 byte base64 (data encryption key)
+ * - OIDC_CLIENT_SECRET     — 32 byte hex (confidential OIDC client)
  * - TAKOS_AGENT_START_TOKEN — 32 byte hex (executor-host -> agent /start)
  * - TAKOS_INTERNAL_API_SECRET — 32 byte hex (internal tenant API)
+ *
+ * With `--runtime-json`, also emits `takos-runtime-secrets.json` containing
+ * exactly those six names for direct use as `TAKOS_RUNTIME_SECRETS_FILE`.
  *
  * When `--per-cloud` is supplied, ALSO emits an independent per-cloud
  * encryption key for each cloud partition (cloudflare / aws / gcp / k8s /
@@ -29,6 +33,7 @@
  *   bun run generate:keys -- --env=local
  *   bun \
  *     scripts/generate-platform-keys.ts --env=local [--force] [--output=<dir>] \
+ *     [--runtime-json] \
  *     [--per-cloud]
  */
 
@@ -45,9 +50,12 @@ const SECRET_FILES = [
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
   "ENCRYPTION_KEY",
+  "OIDC_CLIENT_SECRET",
   "TAKOS_AGENT_START_TOKEN",
   "TAKOS_INTERNAL_API_SECRET",
 ] as const;
+
+const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
 /**
  * Cloud partitions for which `--per-cloud` emits independent per-cloud
@@ -71,6 +79,7 @@ interface CliOptions {
   force: boolean;
   output: string;
   perCloud: boolean;
+  runtimeJson: boolean;
 }
 
 function fail(message: string): never {
@@ -84,9 +93,11 @@ function usage(): never {
       "Usage:",
       "  bun \\",
       "    scripts/generate-platform-keys.ts --env=staging|production|local \\",
-      "    [--force] [--output=<dir>] [--per-cloud]",
+      "    [--force] [--output=<dir>] [--runtime-json] [--per-cloud]",
       "",
-      "Generates 5 secret files used by the takos product worker.",
+      "Generates 6 secret files used by the takos product worker.",
+      "With --runtime-json, also emits takos-runtime-secrets.json containing",
+      "exactly those 6 names for TAKOS_RUNTIME_SECRETS_FILE.",
       "With --per-cloud, also emits ENCRYPTION_KEY_<CLOUD> for each of",
       "cloudflare / aws / gcp / k8s / selfhosted.",
       "Defaults --output to ./.secrets/<env>/ (relative to the current dir).",
@@ -100,6 +111,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let force = false;
   let output: string | null = null;
   let perCloud = false;
+  let runtimeJson = false;
 
   for (const raw of args) {
     if (raw === "--force") {
@@ -108,6 +120,10 @@ function parseArgs(args: readonly string[]): CliOptions {
     }
     if (raw === "--per-cloud") {
       perCloud = true;
+      continue;
+    }
+    if (raw === "--runtime-json") {
+      runtimeJson = true;
       continue;
     }
     if (raw === "--help" || raw === "-h") {
@@ -152,6 +168,7 @@ function parseArgs(args: readonly string[]): CliOptions {
     force,
     output: output ?? resolve(DEFAULT_SECRETS_BASE, env),
     perCloud,
+    runtimeJson,
   };
 }
 
@@ -292,40 +309,45 @@ async function writeSecret(
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
 
-  const extraNames = options.perCloud ? perCloudSecretFiles() : [];
+  const extraNames = [
+    ...(options.perCloud ? perCloudSecretFiles() : []),
+    ...(options.runtimeJson ? [RUNTIME_SECRETS_FILENAME] : []),
+  ];
 
   await ensureDir(options.output);
   await checkConflicts(options.output, options.force, extraNames);
 
   const { privatePem, publicPem } = await generateRsaKeyPair();
   const encryptionKey = generateBase64Secret(32);
+  const oidcClientSecret = generateHexSecret(32);
   const agentStartToken = generateHexSecret(32);
   const internalApiSecret = generateHexSecret(32);
 
+  const generatedSecrets: Record<(typeof SECRET_FILES)[number], string> = {
+    PLATFORM_PRIVATE_KEY: privatePem,
+    PLATFORM_PUBLIC_KEY: publicPem,
+    ENCRYPTION_KEY: encryptionKey,
+    OIDC_CLIENT_SECRET: oidcClientSecret,
+    TAKOS_AGENT_START_TOKEN: agentStartToken,
+    TAKOS_INTERNAL_API_SECRET: internalApiSecret,
+  };
+
   const written: string[] = [];
-  written.push(
-    await writeSecret(options.output, "PLATFORM_PRIVATE_KEY", privatePem),
-  );
-  written.push(
-    await writeSecret(options.output, "PLATFORM_PUBLIC_KEY", publicPem),
-  );
-  written.push(
-    await writeSecret(options.output, "ENCRYPTION_KEY", encryptionKey),
-  );
-  written.push(
-    await writeSecret(
-      options.output,
-      "TAKOS_AGENT_START_TOKEN",
-      agentStartToken,
-    ),
-  );
-  written.push(
-    await writeSecret(
-      options.output,
-      "TAKOS_INTERNAL_API_SECRET",
-      internalApiSecret,
-    ),
-  );
+  for (const name of SECRET_FILES) {
+    written.push(
+      await writeSecret(options.output, name, generatedSecrets[name]),
+    );
+  }
+
+  if (options.runtimeJson) {
+    written.push(
+      await writeSecret(
+        options.output,
+        RUNTIME_SECRETS_FILENAME,
+        JSON.stringify(generatedSecrets),
+      ),
+    );
+  }
 
   if (options.perCloud) {
     // Independent per-cloud encryption keys ensure that a compromise of one

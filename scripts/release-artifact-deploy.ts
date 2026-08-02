@@ -1,0 +1,1108 @@
+#!/usr/bin/env bun
+
+import { createHash, randomBytes } from "node:crypto";
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+
+const REPOSITORY = "tako0614/takos";
+const IMAGE_NAMES = ["takos-worker-runtime", "takos-agent"] as const;
+const DIGEST_REF =
+  /^registry\.cloudflare\.com\/([0-9a-f]{32})\/(takos-worker-runtime|takos-agent)@(sha256:[0-9a-f]{64})$/u;
+const SHA256 = /^sha256:[0-9a-f]{64}$/u;
+const COMMIT = /^[0-9a-f]{40}$/u;
+const ACCOUNT_ID = /^[0-9a-f]{32}$/u;
+const SEMVER_TAG = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u;
+
+export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
+  surface: "takos-release-artifact",
+  target: "github-release-and-cloudflare-container-registry:takos",
+  covers: [
+    "deploy/cloudflare/wrangler.toml",
+    "containers/runtime",
+    "containers/agent",
+    "scripts/build-worker-release-artifact.ts",
+  ],
+  requiresScripts: ["check", "deploy", "release-worker-artifact:build"],
+  requiresTools: ["bun", "docker", "git", "gh", "wrangler"],
+  requiresEnv: [],
+  triggers: ["published-identity", "authority", "irreversible"],
+  obligations: {
+    provenance:
+      "prepare binds clean pushed main, package version, pinned agent-engine commit, target Cloudflare account, digest-pinned runtime and executor images, exact Worker archive bytes, and descriptor digest in operator-private evidence",
+    "post-conditions":
+      "publish verifies the remote tag resolves to the prepared commit and downloads every GitHub release asset to recheck its SHA-256 before making the draft public",
+    reversal:
+      "published Git tags, registry digest references, and release assets are immutable identities; correction uses a new package version and tag rather than overwriting bytes",
+    "failure-handling":
+      "both phases are dry-run by default, redact provider output, record no credentials, refuse conflicting tags/assets, and adopt only an exact same-commit draft created by a prior interrupted publish",
+    "no-overwrite":
+      "prepare uses non-authoritative nonce upload tags and rejects existing output/evidence paths; only the read-back registry digests become image identities, while publish rejects a foreign tag, non-draft release, or any asset whose remote digest differs from the prepared bytes",
+    "pre-mutation-proof":
+      "prepare reruns the portable complete gate, proves clean pushed main and unused version tag/release identities, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
+    "independent-review":
+      "the release publisher implementation and its dry-run/mutation boundary receive an independent review before execute; no task, branch, green check, or source repository authorizes publication by itself",
+  },
+} as const;
+
+type Phase = "prepare" | "publish";
+
+export type ReleaseArtifactOptions = Readonly<{
+  phase: Phase;
+  tag: string;
+  evidence: string;
+  execute: boolean;
+  config?: string;
+  accountIdFile?: string;
+  tokenFile?: string;
+  outputDir?: string;
+  prepareEvidence?: string;
+}>;
+
+type CommandResult = Readonly<{
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}>;
+
+type PreparedRecord = Readonly<{
+  kind: "takos.release-artifact-prepare@v1";
+  status: "prepared";
+  tag: string;
+  commit: string;
+  version: string;
+  repository: typeof REPOSITORY;
+  accountId: string;
+  portableCheck: { command: "bun run check"; status: "passed" };
+  outputDir: string;
+  descriptor: { path: string; digest: string; url: string };
+  assets: readonly { name: string; path: string; digest: string }[];
+  images: Readonly<Record<(typeof IMAGE_NAMES)[number], string>>;
+  observedAt: string;
+}>;
+
+export const RELEASE_ARTIFACT_USAGE = `Takos release artifact deployment
+
+Usage:
+  bun run deploy -- takos-release-artifact prepare --tag <vsemver> --config <absolute-wrangler.toml> --account-id-file <absolute-0600-file> --cloudflare-api-token-file <absolute-0600-file> --output-dir <absolute-private-dir> --evidence <absolute-json> [--execute]
+  bun run deploy -- takos-release-artifact publish --tag <vsemver> --prepare-evidence <absolute-json> --evidence <absolute-json> [--execute]
+
+Both phases are read-only without --execute. Secret values and provider command
+output are never written to evidence or stdout.`;
+
+export function parseReleaseArtifactArgs(
+  args: readonly string[],
+): ReleaseArtifactOptions {
+  const [phaseValue, ...rest] = args;
+  if (phaseValue !== "prepare" && phaseValue !== "publish") {
+    throw new Error(RELEASE_ARTIFACT_USAGE);
+  }
+  const values = new Map<string, string>();
+  let execute = false;
+  const allowed = new Set([
+    "tag",
+    "config",
+    "account-id-file",
+    "cloudflare-api-token-file",
+    "output-dir",
+    "evidence",
+    "prepare-evidence",
+  ]);
+  for (let index = 0; index < rest.length; index += 1) {
+    const token = rest[index]!;
+    if (token === "--execute") {
+      if (execute) throw new Error("duplicate argument: --execute");
+      execute = true;
+      continue;
+    }
+    if (!token.startsWith("--") || !allowed.has(token.slice(2))) {
+      throw new Error(`unknown argument: ${token}`);
+    }
+    const key = token.slice(2);
+    if (values.has(key)) throw new Error(`duplicate argument: --${key}`);
+    const value = rest[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`missing value for --${key}`);
+    }
+    values.set(key, value);
+    index += 1;
+  }
+  const required = (name: string): string => {
+    const value = values.get(name)?.trim();
+    if (!value) throw new Error(`--${name} is required`);
+    return value;
+  };
+  const tag = required("tag");
+  if (!SEMVER_TAG.test(tag)) throw new Error("--tag must be v-prefixed SemVer");
+  const common = {
+    phase: phaseValue,
+    tag,
+    evidence: required("evidence"),
+    execute,
+  } as const;
+  if (phaseValue === "prepare") {
+    if (values.has("prepare-evidence")) {
+      throw new Error("--prepare-evidence is publish-only");
+    }
+    return {
+      ...common,
+      config: required("config"),
+      accountIdFile: required("account-id-file"),
+      tokenFile: required("cloudflare-api-token-file"),
+      outputDir: required("output-dir"),
+    };
+  }
+  for (const name of [
+    "config",
+    "account-id-file",
+    "cloudflare-api-token-file",
+    "output-dir",
+  ]) {
+    if (values.has(name)) throw new Error(`--${name} is prepare-only`);
+  }
+  return { ...common, prepareEvidence: required("prepare-evidence") };
+}
+
+export async function runReleaseArtifact(
+  options: ReleaseArtifactOptions,
+): Promise<unknown> {
+  assertCanonicalAuthorityEnvironment();
+  const root = await realpath(resolve(import.meta.dir, ".."));
+  const identity = await repositoryIdentity(root);
+  const version = await packageVersion(root);
+  if (options.tag !== `v${version}`) {
+    throw new Error(`release tag must equal package version v${version}`);
+  }
+  await assertPrivatePath(options.evidence, root, false);
+  if (options.phase === "prepare") {
+    return await prepareRelease(root, identity.commit, version, options);
+  }
+  return await publishRelease(root, identity.commit, version, options);
+}
+
+async function prepareRelease(
+  root: string,
+  commit: string,
+  version: string,
+  options: ReleaseArtifactOptions,
+): Promise<unknown> {
+  const config = await physicalFile(options.config!, "config", false);
+  const accountIdFile = await physicalFile(
+    options.accountIdFile!,
+    "account id file",
+    true,
+  );
+  const tokenFile = await physicalFile(options.tokenFile!, "token file", true);
+  const accountId = (await readFile(accountIdFile, "utf8")).trim();
+  if (!ACCOUNT_ID.test(accountId)) throw new Error("account id file is invalid");
+  await assertRegistryConfigAccount(config, accountId);
+  const outputDir = resolve(options.outputDir!);
+  await assertPrivatePath(outputDir, root, false);
+  await assertRemoteReleaseIdentityAvailable(root, options.tag, commit, true);
+
+  const planned = {
+    kind: "takos.release-artifact-prepare@v1",
+    status: "planned",
+    tag: options.tag,
+    commit,
+    version,
+    repository: REPOSITORY,
+    accountId,
+    outputDir,
+    observedAt: new Date().toISOString(),
+  } as const;
+  if (!options.execute) return planned;
+  await ensurePathAbsent(options.evidence);
+  await ensurePathAbsent(outputDir);
+  await checked(root, "bun", ["run", "check"]);
+  await mkdir(outputDir, { recursive: false, mode: 0o700 });
+  await chmod(outputDir, 0o700);
+
+  const token = (await readFile(tokenFile, "utf8")).trim();
+  if (token.length < 20 || token.length > 16_384) {
+    throw new Error("Cloudflare API token file is invalid");
+  }
+  const providerEnv = { ...process.env };
+  for (const name of CLOUDFLARE_AMBIGUOUS_ENV) delete providerEnv[name];
+  providerEnv.CLOUDFLARE_API_TOKEN = token;
+  providerEnv.CLOUDFLARE_ACCOUNT_ID = accountId;
+  providerEnv.WRANGLER_SEND_METRICS = "false";
+  const imageTag = `${version}-${commit.slice(0, 12)}-${randomBytes(8).toString("hex")}`;
+  const temporary = await mkdtemp(join(tmpdir(), "takos-release-artifact-"));
+  try {
+    const runtimeLocal = `takos-worker-runtime:${imageTag}`;
+    await checked(root, "bun", ["run", "containers:build:runtime"]);
+    await checked(root, "docker", [
+      "buildx",
+      "build",
+      "--load",
+      "--platform",
+      "linux/amd64",
+      "--file",
+      join(root, "containers/runtime/Dockerfile"),
+      "--tag",
+      runtimeLocal,
+      join(root, "containers/runtime"),
+    ]);
+    const agentContext = await prepareAgentBuildContext(root, temporary);
+    const agentLocal = `takos-agent:${imageTag}`;
+    await checked(root, "docker", [
+      "buildx",
+      "build",
+      "--load",
+      "--platform",
+      "linux/amd64",
+      "--file",
+      join(agentContext, "takos/containers/agent/Dockerfile"),
+      "--tag",
+      agentLocal,
+      agentContext,
+    ]);
+    await checked(root, "bun", ["run", "web:build"]);
+    const bundleDir = join(temporary, "worker-bundle");
+    await mkdir(bundleDir, { mode: 0o700 });
+    await checked(root, "bunx", [
+      "wrangler",
+      "deploy",
+      "--config",
+      join(root, "deploy/cloudflare/wrangler.toml"),
+      "--env=",
+      "--dry-run",
+      "--containers-rollout",
+      "none",
+      "--outdir",
+      bundleDir,
+    ]);
+    const runtimeRef = await pushImage(
+      root,
+      config,
+      runtimeLocal,
+      accountId,
+      providerEnv,
+    );
+    const agentRef = await pushImage(
+      root,
+      config,
+      agentLocal,
+      accountId,
+      providerEnv,
+    );
+    const images = {
+      "takos-worker-runtime": runtimeRef,
+      "takos-agent": agentRef,
+    } as const;
+    const imageDir = join(temporary, "image-digests");
+    await mkdir(imageDir, { mode: 0o700 });
+    for (const name of IMAGE_NAMES) {
+      await writeFile(
+        join(imageDir, `${name}.json`),
+        `${JSON.stringify({ name, cloudflareRegistryRef: images[name] })}\n`,
+        { mode: 0o600 },
+      );
+    }
+    const epoch = (
+      await checked(root, "git", ["show", "-s", "--format=%ct", commit])
+    ).stdout.trim();
+    await checked(
+      root,
+      "bun",
+      [
+        "scripts/build-worker-release-artifact.ts",
+        "--release-tag",
+        options.tag,
+        "--bundle-dir",
+        bundleDir,
+        "--assets-dir",
+        join(root, "dist"),
+        "--image-digest-dir",
+        imageDir,
+        "--output-dir",
+        outputDir,
+        "--require-cloudflare-container-images",
+      ],
+      {
+        ...process.env,
+        GITHUB_REPOSITORY: REPOSITORY,
+        GITHUB_SHA: commit,
+        GITHUB_REF_NAME: options.tag,
+        SOURCE_DATE_EPOCH: epoch,
+      },
+    );
+    await chmod(outputDir, 0o700);
+    const assetNames = [
+      "takos-worker-release.tar.gz",
+      "takos-worker-release.tar.gz.sha256",
+      "takosumi-artifact.json",
+    ] as const;
+    await Promise.all(
+      assetNames.map((name) => chmod(join(outputDir, name), 0o600)),
+    );
+    const assets = await Promise.all(
+      assetNames.map(async (name) => ({
+        name,
+        path: join(outputDir, name),
+        digest: await fileDigest(join(outputDir, name)),
+      })),
+    );
+    const descriptor = assets.find(
+      (asset) => asset.name === "takosumi-artifact.json",
+    )!;
+    const record: PreparedRecord = {
+      kind: "takos.release-artifact-prepare@v1",
+      status: "prepared",
+      tag: options.tag,
+      commit,
+      version,
+      repository: REPOSITORY,
+      accountId,
+      portableCheck: { command: "bun run check", status: "passed" },
+      outputDir,
+      descriptor: {
+        path: descriptor.path,
+        digest: descriptor.digest,
+        url: `https://github.com/${REPOSITORY}/releases/download/${options.tag}/takosumi-artifact.json`,
+      },
+      assets,
+      images,
+      observedAt: new Date().toISOString(),
+    };
+    await writePrivateJson(options.evidence, record);
+    return publicPrepareResult(record);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
+
+async function publishRelease(
+  root: string,
+  commit: string,
+  version: string,
+  options: ReleaseArtifactOptions,
+): Promise<unknown> {
+  const preparePath = await physicalFile(
+    options.prepareEvidence!,
+    "prepare evidence",
+    true,
+  );
+  const prepared = parsePreparedRecord(
+    JSON.parse(await readFile(preparePath, "utf8")) as unknown,
+  );
+  if (
+    prepared.tag !== options.tag ||
+    prepared.commit !== commit ||
+    prepared.version !== version
+  ) {
+    throw new Error("prepare evidence does not match current release identity");
+  }
+  await assertPrivatePath(prepared.outputDir, root, true);
+  await physicalDirectory(prepared.outputDir, "prepared output directory");
+  for (const asset of prepared.assets) {
+    await assertPrivatePath(asset.path, root, true);
+    await physicalFile(asset.path, `prepared asset ${asset.name}`, true);
+    if ((await fileDigest(asset.path)) !== asset.digest) {
+      throw new Error(`prepared asset changed: ${asset.name}`);
+    }
+  }
+  await assertRemoteReleaseIdentityAvailable(root, options.tag, commit, false);
+  const planned = {
+    kind: "takos.release-artifact-publish@v1",
+    status: "planned",
+    tag: options.tag,
+    commit,
+    descriptor: prepared.descriptor,
+    observedAt: new Date().toISOString(),
+  } as const;
+  if (!options.execute) return planned;
+  await ensurePathAbsent(options.evidence);
+
+  await ensureRemoteTag(root, options.tag, commit);
+  let release = await readRelease(options.tag);
+  if (!release) {
+    await checked(root, "gh", [
+      "release",
+      "create",
+      options.tag,
+      "--repo",
+      REPOSITORY,
+      "--verify-tag",
+      "--draft",
+      "--title",
+      `Takos ${options.tag}`,
+      "--notes",
+      `Immutable Takos worker artifact for ${commit}.`,
+    ]);
+    release = await readRelease(options.tag);
+  }
+  if (!release || !release.isDraft) {
+    throw new Error("release must be an exact draft before asset publication");
+  }
+  const existingByName = new Map(
+    release.assets.map((asset) => [asset.name, asset]),
+  );
+  const expectedNames = new Set(prepared.assets.map((asset) => asset.name));
+  for (const existing of release.assets) {
+    if (!expectedNames.has(existing.name)) {
+      throw new Error(`draft release contains an unexpected asset: ${existing.name}`);
+    }
+  }
+  for (const asset of prepared.assets) {
+    const existing = existingByName.get(asset.name);
+    if (existing) {
+      const remote = await downloadAsset(root, options.tag, asset.name);
+      if (digestBytes(remote) !== asset.digest) {
+        throw new Error(`draft release asset conflicts: ${asset.name}`);
+      }
+      continue;
+    }
+    await checked(root, "gh", [
+      "release",
+      "upload",
+      options.tag,
+      asset.path,
+      "--repo",
+      REPOSITORY,
+    ]);
+  }
+  release = await readRelease(options.tag);
+  if (
+    !release ||
+    !release.isDraft ||
+    release.assets.length !== prepared.assets.length ||
+    release.assets.some((asset) => !expectedNames.has(asset.name))
+  ) {
+    throw new Error("draft release asset closure is incomplete");
+  }
+  for (const asset of prepared.assets) {
+    const remote = await downloadAsset(root, options.tag, asset.name);
+    if (digestBytes(remote) !== asset.digest) {
+      throw new Error(`release asset readback drifted: ${asset.name}`);
+    }
+  }
+  await checked(root, "gh", [
+    "release",
+    "edit",
+    options.tag,
+    "--repo",
+    REPOSITORY,
+    "--draft=false",
+  ]);
+  const published = await readRelease(options.tag);
+  if (!published || published.isDraft) {
+    throw new Error("GitHub release publish readback is incomplete");
+  }
+  const record = {
+    kind: "takos.release-artifact-publish@v1",
+    status: "published",
+    tag: options.tag,
+    commit,
+    releaseUrl: published.url,
+    descriptor: prepared.descriptor,
+    assetDigests: Object.fromEntries(
+      prepared.assets.map((asset) => [asset.name, asset.digest]),
+    ),
+    images: prepared.images,
+    githubImmutable: published.isImmutable,
+    observedAt: new Date().toISOString(),
+  } as const;
+  await writePrivateJson(options.evidence, record);
+  return record;
+}
+
+async function repositoryIdentity(root: string): Promise<{ commit: string }> {
+  const status = await checked(root, "git", [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  if (status.stdout.trim()) throw new Error("Takos repository must be clean");
+  const branch = (await checked(root, "git", ["branch", "--show-current"]))
+    .stdout.trim();
+  if (branch !== "main") throw new Error("Takos repository must be on main");
+  const originUrl = (
+    await checked(root, "git", ["remote", "get-url", "origin"])
+  ).stdout.trim();
+  if (originUrl !== "https://github.com/tako0614/takos.git") {
+    throw new Error("Takos origin must be the canonical GitHub repository");
+  }
+  const commit = (await checked(root, "git", ["rev-parse", "HEAD"]))
+    .stdout.trim();
+  const origin = (await checked(root, "git", ["rev-parse", "origin/main"]))
+    .stdout.trim();
+  const remote = (
+    await checked(root, "git", [
+      "ls-remote",
+      "--exit-code",
+      "origin",
+      "refs/heads/main",
+    ])
+  ).stdout.trim().split(/\s+/u)[0];
+  if (!COMMIT.test(commit) || commit !== origin || commit !== remote) {
+    throw new Error("Takos HEAD must equal pushed origin/main");
+  }
+  return { commit };
+}
+
+async function packageVersion(root: string): Promise<string> {
+  const value = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8"),
+  ) as { version?: unknown; takosRelease?: { version?: unknown } };
+  const version = value.takosRelease?.version;
+  if (typeof version !== "string" || value.version !== version) {
+    throw new Error("package release versions are missing or inconsistent");
+  }
+  if (!SEMVER_TAG.test(`v${version}`)) {
+    throw new Error("package release version is not SemVer");
+  }
+  return version;
+}
+
+async function prepareAgentBuildContext(
+  root: string,
+  temporary: string,
+): Promise<string> {
+  const contract = JSON.parse(
+    await readFile(join(root, "containers/agent/engine-source.json"), "utf8"),
+  ) as { repository?: unknown; commit?: unknown };
+  if (
+    contract.repository !== "tako0614/takos-agent-engine" ||
+    typeof contract.commit !== "string" ||
+    !COMMIT.test(contract.commit)
+  ) {
+    throw new Error("agent engine source pin is invalid");
+  }
+  const context = join(temporary, "agent-context");
+  await mkdir(join(context, "takos/containers"), { recursive: true, mode: 0o700 });
+  await cp(
+    join(root, "containers/agent"),
+    join(context, "takos/containers/agent"),
+    { recursive: true },
+  );
+  const engine = join(context, "takos-agent-engine");
+  await mkdir(engine, { mode: 0o700 });
+  await checked(engine, "git", ["init", "--quiet"]);
+  await checked(engine, "git", [
+    "remote",
+    "add",
+    "origin",
+    "https://github.com/tako0614/takos-agent-engine.git",
+  ]);
+  await checked(engine, "git", [
+    "fetch",
+    "--quiet",
+    "--depth=1",
+    "origin",
+    contract.commit,
+  ]);
+  await checked(engine, "git", ["checkout", "--quiet", "--detach", "FETCH_HEAD"]);
+  const fetchedCommit = (await checked(engine, "git", ["rev-parse", "HEAD"]))
+    .stdout.trim();
+  if (fetchedCommit !== contract.commit) {
+    throw new Error("agent engine remote commit readback is inconsistent");
+  }
+  return context;
+}
+
+async function pushImage(
+  root: string,
+  config: string,
+  localTag: string,
+  accountId: string,
+  env: NodeJS.ProcessEnv,
+): Promise<string> {
+  const local = /^(takos-worker-runtime|takos-agent):([0-9A-Za-z._-]+)$/u.exec(
+    localTag,
+  );
+  if (!local) throw new Error("local release image tag is invalid");
+  const name = local[1]!;
+  await checked(
+    root,
+    "bunx",
+    ["wrangler", "containers", "push", localTag, "--config", config],
+    env,
+  );
+  const remoteTag = `registry.cloudflare.com/${accountId}/${localTag}`;
+  const manifest = await checked(root, "docker", [
+    "manifest",
+    "inspect",
+    "-v",
+    remoteTag,
+  ]);
+  let digest: unknown;
+  try {
+    const parsed = JSON.parse(manifest.stdout) as {
+      Descriptor?: { digest?: unknown };
+    };
+    digest = parsed.Descriptor?.digest;
+  } catch {
+    throw new Error(`published image manifest was invalid for ${name}`);
+  }
+  if (typeof digest !== "string" || !SHA256.test(digest)) {
+    throw new Error(`published image digest was not observable for ${name}`);
+  }
+  return `registry.cloudflare.com/${accountId}/${name}@${digest}`;
+}
+
+async function assertRemoteReleaseIdentityAvailable(
+  root: string,
+  tag: string,
+  commit: string,
+  requireAbsent: boolean,
+): Promise<void> {
+  const tags = await command(root, "git", [
+    "ls-remote",
+    "--tags",
+    "origin",
+    `refs/tags/${tag}`,
+    `refs/tags/${tag}^{}`,
+  ]);
+  if (tags.exitCode !== 0) throw new Error("remote tag readback failed");
+  const lines = tags.stdout.trim().split("\n").filter(Boolean);
+  if (requireAbsent && lines.length > 0) {
+    throw new Error(`remote tag already exists: ${tag}`);
+  }
+  if (!requireAbsent && lines.length > 0) {
+    const resolved = lines.find((line) => line.endsWith(`refs/tags/${tag}^{}`)) ?? lines[0]!;
+    if (resolved.split(/\s+/u)[0] !== commit) {
+      throw new Error(`remote tag ${tag} belongs to another commit`);
+    }
+  }
+  const release = await readRelease(tag);
+  if (requireAbsent && release) throw new Error(`GitHub release already exists: ${tag}`);
+  if (!requireAbsent && release && !release.isDraft) {
+    throw new Error(`GitHub release is already published: ${tag}`);
+  }
+}
+
+async function ensureRemoteTag(
+  root: string,
+  tag: string,
+  commit: string,
+): Promise<void> {
+  const remote = await command(root, "git", [
+    "ls-remote",
+    "--tags",
+    "origin",
+    `refs/tags/${tag}`,
+    `refs/tags/${tag}^{}`,
+  ]);
+  if (remote.exitCode !== 0) throw new Error("remote tag readback failed");
+  if (remote.stdout.trim()) {
+    const lines = remote.stdout.trim().split("\n");
+    const resolved = lines.find((line) => line.endsWith(`refs/tags/${tag}^{}`)) ?? lines[0]!;
+    if (resolved.split(/\s+/u)[0] !== commit) {
+      throw new Error(`remote tag ${tag} belongs to another commit`);
+    }
+    return;
+  }
+  const local = await command(root, "git", ["rev-parse", `refs/tags/${tag}^{}`]);
+  if (local.exitCode === 0 && local.stdout.trim() !== commit) {
+    throw new Error(`local tag ${tag} belongs to another commit`);
+  }
+  if (local.exitCode !== 0) {
+    await checked(root, "git", [
+      "tag",
+      "--annotate",
+      tag,
+      commit,
+      "--message",
+      `Takos ${tag}`,
+    ]);
+  }
+  await checked(root, "git", ["push", "origin", `refs/tags/${tag}`]);
+}
+
+type ReleaseReadback = {
+  isDraft: boolean;
+  isImmutable: boolean;
+  url: string;
+  assets: { name: string; digest?: string }[];
+};
+
+async function readRelease(tag: string): Promise<ReleaseReadback | undefined> {
+  const result = await command(process.cwd(), "gh", [
+    "release",
+    "view",
+    tag,
+    "--repo",
+    REPOSITORY,
+    "--json",
+    "isDraft,isImmutable,url,assets",
+  ]);
+  if (result.exitCode !== 0) {
+    if (/release not found|HTTP 404/iu.test(result.stderr)) return undefined;
+    throw new Error("GitHub release readback failed");
+  }
+  const parsed = JSON.parse(result.stdout) as ReleaseReadback;
+  if (
+    typeof parsed.isDraft !== "boolean" ||
+    typeof parsed.isImmutable !== "boolean" ||
+    typeof parsed.url !== "string" ||
+    !Array.isArray(parsed.assets)
+  ) {
+    throw new Error("GitHub release readback is invalid");
+  }
+  return parsed;
+}
+
+async function downloadAsset(
+  root: string,
+  tag: string,
+  name: string,
+): Promise<Uint8Array> {
+  const directory = await mkdtemp(join(tmpdir(), "takos-release-readback-"));
+  try {
+    await checked(root, "gh", [
+      "release",
+      "download",
+      tag,
+      "--repo",
+      REPOSITORY,
+      "--pattern",
+      name,
+      "--dir",
+      directory,
+    ]);
+    return new Uint8Array(await readFile(join(directory, name)));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+function parsePreparedRecord(value: unknown): PreparedRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("prepare evidence is invalid");
+  }
+  const input = value as Record<string, unknown>;
+  if (
+    input.kind !== "takos.release-artifact-prepare@v1" ||
+    input.status !== "prepared" ||
+    typeof input.tag !== "string" ||
+    typeof input.commit !== "string" ||
+    typeof input.version !== "string" ||
+    input.repository !== REPOSITORY ||
+    typeof input.accountId !== "string" ||
+    !input.portableCheck ||
+    typeof input.portableCheck !== "object" ||
+    typeof input.outputDir !== "string" ||
+    !input.descriptor ||
+    typeof input.descriptor !== "object" ||
+    !Array.isArray(input.assets) ||
+    !input.images ||
+    typeof input.images !== "object" ||
+    typeof input.observedAt !== "string"
+  ) {
+    throw new Error("prepare evidence is invalid");
+  }
+  const descriptor = input.descriptor as Record<string, unknown>;
+  const portableCheck = input.portableCheck as Record<string, unknown>;
+  const assets = input.assets.map((asset) => {
+    if (!asset || typeof asset !== "object" || Array.isArray(asset)) {
+      throw new Error("prepare evidence asset is invalid");
+    }
+    const record = asset as Record<string, unknown>;
+    if (
+      typeof record.name !== "string" ||
+      typeof record.path !== "string" ||
+      typeof record.digest !== "string" ||
+      !SHA256.test(record.digest)
+    ) {
+      throw new Error("prepare evidence asset is invalid");
+    }
+    return { name: record.name, path: record.path, digest: record.digest };
+  });
+  const imagesInput = input.images as Record<string, unknown>;
+  const images = Object.fromEntries(
+    IMAGE_NAMES.map((name) => {
+      const reference = imagesInput[name];
+      if (typeof reference !== "string" || !DIGEST_REF.test(reference)) {
+        throw new Error(`prepare evidence image is invalid: ${name}`);
+      }
+      return [name, reference];
+    }),
+  ) as Record<(typeof IMAGE_NAMES)[number], string>;
+  if (
+    !SEMVER_TAG.test(input.tag) ||
+    !COMMIT.test(input.commit) ||
+    `v${input.version}` !== input.tag ||
+    !ACCOUNT_ID.test(input.accountId) ||
+    portableCheck.command !== "bun run check" ||
+    portableCheck.status !== "passed" ||
+    typeof descriptor.path !== "string" ||
+    typeof descriptor.digest !== "string" ||
+    !SHA256.test(descriptor.digest) ||
+    typeof descriptor.url !== "string"
+  ) {
+    throw new Error("prepare evidence descriptor is invalid");
+  }
+  const expectedAssetNames = [
+    "takos-worker-release.tar.gz",
+    "takos-worker-release.tar.gz.sha256",
+    "takosumi-artifact.json",
+  ] as const;
+  if (
+    assets.length !== expectedAssetNames.length ||
+    new Set(assets.map((asset) => asset.name)).size !== assets.length ||
+    expectedAssetNames.some(
+      (name) => !assets.some((asset) => asset.name === name),
+    ) ||
+    assets.some(
+      (asset) =>
+        resolve(asset.path) !==
+        join(resolve(input.outputDir as string), asset.name),
+    )
+  ) {
+    throw new Error("prepare evidence asset closure is invalid");
+  }
+  const descriptorAsset = assets.find(
+    (asset) => asset.name === "takosumi-artifact.json",
+  )!;
+  if (
+    descriptor.path !== descriptorAsset.path ||
+    descriptor.digest !== descriptorAsset.digest ||
+    descriptor.url !==
+      `https://github.com/${REPOSITORY}/releases/download/${input.tag}/takosumi-artifact.json` ||
+    IMAGE_NAMES.some(
+      (name) => (images[name].match(DIGEST_REF)?.[1] ?? "") !== input.accountId,
+    )
+  ) {
+    throw new Error("prepare evidence identity closure is invalid");
+  }
+  return {
+    kind: "takos.release-artifact-prepare@v1",
+    status: "prepared",
+    tag: input.tag,
+    commit: input.commit,
+    version: input.version,
+    repository: REPOSITORY,
+    accountId: input.accountId,
+    portableCheck: { command: "bun run check", status: "passed" },
+    outputDir: input.outputDir,
+    descriptor: {
+      path: descriptor.path,
+      digest: descriptor.digest,
+      url: descriptor.url,
+    },
+    assets,
+    images,
+    observedAt: input.observedAt,
+  };
+}
+
+function publicPrepareResult(record: PreparedRecord): unknown {
+  return {
+    kind: record.kind,
+    status: record.status,
+    tag: record.tag,
+    commit: record.commit,
+    descriptor: record.descriptor,
+    portableCheck: record.portableCheck,
+    images: record.images,
+    observedAt: record.observedAt,
+  };
+}
+
+async function physicalFile(
+  path: string,
+  label: string,
+  requirePrivate: boolean,
+): Promise<string> {
+  if (!isAbsolute(path)) throw new Error(`${label} path must be absolute`);
+  const info = await lstat(path);
+  const canonical = await realpath(path);
+  if (
+    info.isSymbolicLink() ||
+    !info.isFile() ||
+    info.nlink !== 1 ||
+    canonical !== resolve(path)
+  ) {
+    throw new Error(`${label} must be a physical canonical file`);
+  }
+  if (requirePrivate && (info.mode & 0o077) !== 0) {
+    throw new Error(`${label} must not be group/world accessible`);
+  }
+  return canonical;
+}
+
+async function physicalDirectory(path: string, label: string): Promise<string> {
+  if (!isAbsolute(path)) throw new Error(`${label} path must be absolute`);
+  const info = await lstat(path);
+  const canonical = await realpath(path);
+  if (info.isSymbolicLink() || !info.isDirectory() || canonical !== resolve(path)) {
+    throw new Error(`${label} must be a physical canonical directory`);
+  }
+  if ((info.mode & 0o077) !== 0) {
+    throw new Error(`${label} must not be group/world accessible`);
+  }
+  return canonical;
+}
+
+async function assertRegistryConfigAccount(
+  path: string,
+  accountId: string,
+): Promise<void> {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = Bun.TOML.parse(await readFile(path, "utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    throw new Error("registry Wrangler config is invalid TOML");
+  }
+  const configured = parsed.account_id;
+  if (configured !== undefined && configured !== accountId) {
+    throw new Error("registry Wrangler config account_id does not match account file");
+  }
+}
+
+const CLOUDFLARE_AMBIGUOUS_ENV = [
+  "CF_API_EMAIL",
+  "CF_API_KEY",
+  "CLOUDFLARE_API_EMAIL",
+  "CLOUDFLARE_API_KEY",
+  "CLOUDFLARE_API_USER_SERVICE_KEY",
+  "CLOUDFLARE_BASE_URL",
+  "CLOUDFLARE_CONTAINER_REGISTRY",
+  "CLOUDFLARE_EMAIL",
+  "WRANGLER_API_ENVIRONMENT",
+] as const;
+
+function assertCanonicalAuthorityEnvironment(): void {
+  for (const name of CLOUDFLARE_AMBIGUOUS_ENV) {
+    if (process.env[name]?.trim()) {
+      throw new Error(`ambiguous Cloudflare authority environment: ${name}`);
+    }
+  }
+  const ghHost = process.env.GH_HOST?.trim();
+  if (ghHost && ghHost !== "github.com") {
+    throw new Error("GH_HOST must be github.com for the Takos release");
+  }
+  for (const name of ["GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"] as const) {
+    if (process.env[name]?.trim()) {
+      throw new Error(`ambiguous GitHub authority environment: ${name}`);
+    }
+  }
+}
+
+async function assertPrivatePath(
+  path: string,
+  root: string,
+  mustExist: boolean,
+): Promise<void> {
+  if (!isAbsolute(path)) throw new Error("operator-private path must be absolute");
+  const absolute = resolve(path);
+  const nested = relative(root, absolute);
+  if (nested === "" || (!nested.startsWith("..") && !isAbsolute(nested))) {
+    throw new Error("operator-private path must be outside the repository");
+  }
+  if (mustExist) await stat(absolute);
+}
+
+async function ensurePathAbsent(path: string): Promise<void> {
+  try {
+    await lstat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error(`refusing to overwrite existing path: ${path}`);
+}
+
+async function writePrivateJson(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, {
+    flag: "wx",
+    mode: 0o600,
+  });
+  await chmod(path, 0o600);
+}
+
+async function fileDigest(path: string): Promise<string> {
+  return digestBytes(await readFile(path));
+}
+
+function digestBytes(bytes: Uint8Array): string {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+}
+
+async function checked(
+  cwd: string,
+  executable: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CommandResult> {
+  const result = await command(cwd, executable, args, env);
+  if (result.exitCode !== 0) {
+    throw new Error(`${executable} ${args[0] ?? ""} failed with exit ${result.exitCode}`);
+  }
+  return result;
+}
+
+async function command(
+  cwd: string,
+  executable: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CommandResult> {
+  const child = Bun.spawn([executable, ...args], {
+    cwd,
+    env,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    readBoundedText(child.stdout),
+    readBoundedText(child.stderr),
+    child.exited,
+  ]);
+  return { exitCode, stdout, stderr };
+}
+
+async function readBoundedText(
+  stream: ReadableStream<Uint8Array>,
+): Promise<string> {
+  const limit = 4 * 1024 * 1024;
+  const chunks: Uint8Array[] = [];
+  let retained = 0;
+  const reader = stream.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (retained >= limit) continue;
+    const remaining = limit - retained;
+    const chunk = value.byteLength <= remaining ? value : value.slice(0, remaining);
+    chunks.push(chunk);
+    retained += chunk.byteLength;
+  }
+  const bytes = new Uint8Array(retained);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+if (import.meta.main) {
+  try {
+    const result = await runReleaseArtifact(parseReleaseArtifactArgs(Bun.argv.slice(2)));
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n${RELEASE_ARTIFACT_USAGE}\n`,
+    );
+    process.exit(1);
+  }
+}

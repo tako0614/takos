@@ -149,13 +149,10 @@ Docker image は ecosystem root から作成します。
 docker build -f takos/containers/agent/Dockerfile -t takos-agent .
 ```
 
-release前は sibling `../takos-control/integration.lock.json` の Takos / agent-engine commit、engine checkout の
-HEAD/clean state、wrapper compatibilityを一体で検証します。未commit engine差分を古いSHAで表現せず、
-個別repo内に同じpinを複製しません。
-
-```sh
-bun run validate:agent-engine-source
-```
+release artifact publisher は `containers/agent/engine-source.json` の exact commit を
+canonical `tako0614/takos-agent-engine` remote から一時 build context へ fetch し、
+Docker build 内の `cargo build --locked --release` で wrapper compatibility を検証します。
+local sibling checkout は release source authority には使いません。
 
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。

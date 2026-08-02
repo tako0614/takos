@@ -4,9 +4,16 @@
 // deploy command. Takosumi invokes the SourceSnapshot-owned product materializer
 // as a lifecycle action and retains Run/StateVersion/Output/Audit authority.
 
+import {
+  parseReleaseArtifactArgs,
+  runReleaseArtifact,
+  TAKOS_RELEASE_ARTIFACT_SURFACE,
+} from "./release-artifact-deploy.ts";
+
 const CONTRACT = {
   kind: "takos.deploy-contract@v2",
   surfaces: [
+    TAKOS_RELEASE_ARTIFACT_SURFACE,
     {
       surface: "takos-product-materialization",
       target: "takosumi-runner:cloudflare-self-host-install",
@@ -43,9 +50,26 @@ const CONTRACT = {
   ],
 };
 
-if (process.argv.slice(2).length === 1 && process.argv[2] === "--contract") {
+const args = process.argv.slice(2);
+
+if (args.length === 1 && args[0] === "--contract") {
   process.stdout.write(`${JSON.stringify(CONTRACT, null, 2)}\n`);
   process.exit(0);
+}
+
+if (args[0] === TAKOS_RELEASE_ARTIFACT_SURFACE.surface) {
+  try {
+    const result = await runReleaseArtifact(
+      parseReleaseArtifactArgs(args.slice(1)),
+    );
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.exit(0);
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(1);
+  }
 }
 
 process.stderr.write(
