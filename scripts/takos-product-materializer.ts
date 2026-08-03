@@ -1113,9 +1113,12 @@ function parseJsonOutput(result: CommandResult, label: string): unknown {
 
 function isNotFound(result: CommandResult): boolean {
   if (result.exitCode === 0) return false;
-  return /(?:\b404\b|not[ -]?found|does not exist|no deployments)/iu.test(
-    `${result.stdout}\n${result.stderr}`,
-  );
+  const output = `${result.stdout}\n${result.stderr}`;
+  // Wrangler's Vectorize API uses a structured, resource-specific identity
+  // for an absent index. Keep this exact code narrow instead of treating every
+  // underscore-delimited provider error as an absence.
+  if (/\bvectorize\.index\.not_found\b/u.test(output)) return true;
+  return /(?:\b404\b|not[ -]?found|does not exist|no deployments)/iu.test(output);
 }
 
 function commandFailure(
@@ -1186,6 +1189,37 @@ function parseDeployment(value: unknown): DeploymentReadback {
   };
 }
 
+async function confirmBlankDeploymentAbsent(
+  dependencies: MaterializerDependencies,
+  configPath: string,
+  workerName: string,
+): Promise<void> {
+  const result = await dependencies.runWrangler([
+    "versions",
+    "list",
+    "--name",
+    workerName,
+    "--json",
+    "--config",
+    configPath,
+  ]);
+  if (isNotFound(result)) return;
+  if (result.exitCode !== 0) {
+    throw commandFailure("deployment_readback", result, []);
+  }
+
+  // A successful versions readback means the Worker exists even though the
+  // deployment status was blank. Parse it so blank/malformed output remains an
+  // invalid readback, then refuse to adopt the ambiguous existing Worker.
+  parseJsonOutput(result, "Worker versions readback");
+  throw new MaterializerError({
+    code: "resource_conflict",
+    stage: "readback",
+    message: "Worker versions exist while deployment status is blank",
+    diagnosticDigest: digest(`${result.stdout}\n${result.stderr}`),
+  });
+}
+
 async function deploymentReadback(
   dependencies: MaterializerDependencies,
   configPath: string,
@@ -1200,6 +1234,14 @@ async function deploymentReadback(
     "--config",
     configPath,
   ]);
+  // Wrangler 4.107 (when invoked through Bun in CI) reports an absent Worker
+  // with a successful, completely blank JSON readback. This is the locked CLI
+  // contract. Confirm absence through the versions endpoint before accepting
+  // it; any other blank or malformed response remains fail-closed.
+  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
+    await confirmBlankDeploymentAbsent(dependencies, configPath, workerName);
+    return undefined;
+  }
   if (isNotFound(result)) return undefined;
   if (result.exitCode !== 0) throw commandFailure("deployment_readback", result, []);
   return parseDeployment(parseJsonOutput(result, "deployment readback"));
