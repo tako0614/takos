@@ -34,7 +34,7 @@ descriptor の URL と digest は例であり、選択した Takos release の c
       workingDirectory: ".",
       env: {
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL:
-          "https://github.com/tako0614/takos/releases/download/v0.11.5/takosumi-artifact.json",
+          "https://github.com/tako0614/takos/releases/download/v0.11.6/takosumi-artifact.json",
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256: "sha256:<64 lowercase hex>",
       },
       timeoutSeconds: 3600,
@@ -155,6 +155,11 @@ readback を終えてから mutation を開始します。Vectorize を idempote
 migration、Worker/assets/DO/container/queue/secret を反映した後、deployment/version、
 container、Queue、Vectorize、secret name、公開 `/health` を読み戻します。terminal
 evidence は digest と count だけを返します。
+
+Wrangler の deployment status が成功かつ stdout/stderr とも空の場合は、Cloudflare の
+Worker settings endpoint を直接 readback します。HTTP `200` は Worker が存在するため
+`resource_conflict`、HTTP `404` だけを不在として扱い、それ以外の status または通信
+失敗は digest-only evidence で fail-closed にします。
 
 `pre_destroy` は、既存 Worker version の binding / provenance で ownership を証明して
 から Queue consumer、4 Container application、Vectorize を削除し、不在が収束した後に

@@ -25,9 +25,9 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.5/takosumi-artifact.json";
+  "https://github.com/tako0614/takos/releases/download/v0.11.6/takosumi-artifact.json";
 const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.5/takos-worker-release.tar.gz";
+  "https://github.com/tako0614/takos/releases/download/v0.11.6/takos-worker-release.tar.gz";
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -119,7 +119,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.5",
+    releaseTag: "v0.11.6",
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -277,7 +277,7 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.5",
+          packageVersion: "0.11.6",
           accountId,
           descriptorUrl,
         },
@@ -393,6 +393,7 @@ type FakeState = {
   containers: boolean;
   consumers: boolean;
   blankDeploymentReadback?: boolean;
+  workerPresence?: boolean;
   underscoreVectorNotFound?: boolean;
   blankQueueConsumerReadback?: boolean;
   foreignContainer?: boolean;
@@ -482,6 +483,10 @@ function fakeDependencies(
   ] as const;
   return {
     calls,
+    async readWorkerPresence(workerName) {
+      calls.push(["worker-presence", workerName]);
+      return state.workerPresence ?? state.deployed;
+    },
     async runWrangler(args) {
       const argv = [...args];
       calls.push(argv);
@@ -571,11 +576,6 @@ function fakeDependencies(
       if (argv[0] === "vectorize" && argv[1] === "delete") {
         state.vector = false;
         return success();
-      }
-      if (argv[0] === "versions" && argv[1] === "list") {
-        return state.deployed
-          ? ok([{ id: "version-1" }])
-          : { exitCode: 1, stdout: "", stderr: "10007: Worker does not exist" };
       }
       if (argv[0] === "deploy") {
         if (!argv.includes("--dry-run")) {
@@ -696,6 +696,7 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
+      workerPresence: false,
       underscoreVectorNotFound: true,
     };
     const fake = fakeDependencies(
@@ -725,10 +726,8 @@ describe("materializer lifecycle", () => {
     expect(
       fake.calls.some(
         (call) =>
-          call[0] === "versions" &&
-          call[1] === "list" &&
-          call.includes("--name") &&
-          call.includes(invocation.outputs.workerName),
+          call[0] === "worker-presence" &&
+          call[1] === invocation.outputs.workerName,
       ),
     ).toBe(true);
     const deploy = fake.calls.find(
@@ -752,7 +751,7 @@ describe("materializer lifecycle", () => {
     expect(JSON.stringify(evidence)).not.toContain("version-1");
   });
 
-  test("refuses to adopt a Worker when blank deployment status has versions", async () => {
+  test("refuses to adopt a Worker when blank deployment status confirms presence", async () => {
     const root = await mkdtemp(
       join(tmpdir(), "takos-materializer-ambiguous-deployment-"),
     );
@@ -773,6 +772,7 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
+      workerPresence: true,
       underscoreVectorNotFound: true,
     };
     const fake = fakeDependencies(
@@ -782,14 +782,6 @@ describe("materializer lifecycle", () => {
       descriptorBytes,
       archiveBytes,
     );
-    const runWrangler = fake.runWrangler.bind(fake);
-    fake.runWrangler = async (args, timeoutMs) => {
-      if (args[0] === "versions" && args[1] === "list") {
-        return ok([{ id: "version-1" }]);
-      }
-      return runWrangler(args, timeoutMs);
-    };
-
     let error: unknown;
     try {
       await materializePostApply({
@@ -806,6 +798,12 @@ describe("materializer lifecycle", () => {
       mutationStarted: false,
     });
     expect(fake.calls.some((call) => call[0] === "d1")).toBe(false);
+    expect(fake.calls.some((call) => call[0] === "worker-presence")).toBe(true);
+    expect(
+      fake.calls.some(
+        (call) => call[0] === "deploy" && !call.includes("--dry-run"),
+      ),
+    ).toBe(false);
   });
 
   test("keeps stale secrets until the replacement Worker deploy succeeds", async () => {
@@ -830,7 +828,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.5",
+      tag: "v0.11.6",
     };
     const fake = fakeDependencies(
       state,
@@ -925,7 +923,7 @@ describe("materializer lifecycle", () => {
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.5",
+      tag: "v0.11.6",
     };
     const fake = fakeDependencies(
       state,
@@ -973,6 +971,7 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
+      workerPresence: false,
       underscoreVectorNotFound: true,
       blankQueueConsumerReadback: true,
     };
@@ -989,15 +988,7 @@ describe("materializer lifecycle", () => {
       sourceRoot: join(import.meta.dir, ".."),
       dependencies: fake,
     });
-    expect(
-      fake.calls.some(
-        (call) =>
-          call[0] === "versions" &&
-          call[1] === "list" &&
-          call.includes("--name") &&
-          call.includes(invocation.outputs.workerName),
-      ),
-    ).toBe(true);
+    expect(fake.calls.some((call) => call[0] === "worker-presence")).toBe(true);
     expect(evidence.cleanup).toEqual({
       workerRemoved: 0,
       queueConsumersRemoved: 0,
@@ -1005,6 +996,59 @@ describe("materializer lifecycle", () => {
       vectorIndexesRemoved: 0,
       backingResources: "left_for_opentofu_destroy",
     });
+  });
+
+  test("refuses pre_destroy when blank deployment status confirms Worker presence", async () => {
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
+    const state: FakeState = {
+      deployed: false,
+      vector: false,
+      containers: false,
+      consumers: false,
+      blankDeploymentReadback: true,
+      workerPresence: true,
+      underscoreVectorNotFound: true,
+      blankQueueConsumerReadback: true,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    let error: unknown;
+    try {
+      await materializePreDestroy({
+        invocation,
+        sourceRoot: join(import.meta.dir, ".."),
+        dependencies: fake,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(failureEvidence(error, "pre_destroy")).toMatchObject({
+      code: "resource_conflict",
+      stage: "readback",
+      mutationStarted: false,
+    });
+    expect(fake.calls.some((call) => call[0] === "worker-presence")).toBe(true);
+    expect(
+      fake.calls.some(
+        (call) =>
+          call[0] === "delete" ||
+          (call[0] === "queues" && call[2] === "remove") ||
+          (call[0] === "containers" && call[1] === "delete") ||
+          (call[0] === "vectorize" && call[1] === "delete"),
+      ),
+    ).toBe(false);
   });
 
   test("refuses to delete a same-name container attached to a foreign namespace", async () => {
@@ -1022,7 +1066,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.5",
+      tag: "v0.11.6",
     };
     const fake = fakeDependencies(
       state,
@@ -1072,7 +1116,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.5",
+      tag: "v0.11.6",
     };
     const fake = fakeDependencies(
       state,

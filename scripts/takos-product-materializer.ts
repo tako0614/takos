@@ -171,6 +171,7 @@ type CommandResult = {
 
 export type MaterializerDependencies = {
   runWrangler(args: readonly string[], timeoutMs?: number): Promise<CommandResult>;
+  readWorkerPresence(workerName: string): Promise<boolean>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
   sleep(milliseconds: number): Promise<void>;
@@ -1107,7 +1108,7 @@ function parseJsonOutput(result: CommandResult, label: string): unknown {
     code: "invalid_readback",
     stage: "readback",
     message: `${label} returned invalid JSON`,
-    diagnosticDigest: digest(`${result.stdout}\n${result.stderr}`),
+    diagnosticDigest: digest(`${label}\n${result.stdout}\n${result.stderr}`),
   });
 }
 
@@ -1191,32 +1192,15 @@ function parseDeployment(value: unknown): DeploymentReadback {
 
 async function confirmBlankDeploymentAbsent(
   dependencies: MaterializerDependencies,
-  configPath: string,
   workerName: string,
 ): Promise<void> {
-  const result = await dependencies.runWrangler([
-    "versions",
-    "list",
-    "--name",
-    workerName,
-    "--json",
-    "--config",
-    configPath,
-  ]);
-  if (isNotFound(result)) return;
-  if (result.exitCode !== 0) {
-    throw commandFailure("deployment_readback", result, []);
-  }
-
-  // A successful versions readback means the Worker exists even though the
-  // deployment status was blank. Parse it so blank/malformed output remains an
-  // invalid readback, then refuse to adopt the ambiguous existing Worker.
-  parseJsonOutput(result, "Worker versions readback");
+  const present = await dependencies.readWorkerPresence(workerName);
+  if (!present) return;
   throw new MaterializerError({
     code: "resource_conflict",
     stage: "readback",
-    message: "Worker versions exist while deployment status is blank",
-    diagnosticDigest: digest(`${result.stdout}\n${result.stderr}`),
+    message: "Worker exists while deployment status is blank",
+    diagnosticDigest: digest("Worker presence readback\npresent"),
   });
 }
 
@@ -1236,10 +1220,11 @@ async function deploymentReadback(
   ]);
   // Wrangler 4.107 (when invoked through Bun in CI) reports an absent Worker
   // with a successful, completely blank JSON readback. This is the locked CLI
-  // contract. Confirm absence through the versions endpoint before accepting
-  // it; any other blank or malformed response remains fail-closed.
+  // contract. Confirm absence through the authoritative Worker settings
+  // endpoint before accepting it; any other blank or malformed response
+  // remains fail-closed.
   if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
-    await confirmBlankDeploymentAbsent(dependencies, configPath, workerName);
+    await confirmBlankDeploymentAbsent(dependencies, workerName);
     return undefined;
   }
   if (isNotFound(result)) return undefined;
@@ -2277,6 +2262,38 @@ function createDependencies(input: {
       } finally {
         clearTimeout(timer);
       }
+    },
+    async readWorkerPresence(workerName) {
+      const label = "Worker presence readback";
+      const url = new URL(
+        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/workers/scripts/${encodeURIComponent(workerName)}/settings`,
+      );
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: {
+            authorization: `Bearer ${input.apiToken}`,
+            accept: "application/json",
+          },
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw new MaterializerError({
+          code: "readback_failed",
+          stage: "readback",
+          message: "Worker presence readback failed",
+          diagnosticDigest: digest(`${label}\ntransport`),
+        });
+      }
+      if (response.status === 200) return true;
+      if (response.status === 404) return false;
+      throw new MaterializerError({
+        code: "readback_failed",
+        stage: "readback",
+        message: "Worker presence readback was ambiguous",
+        diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+      });
     },
     async fetchBytes(url, maxBytes) {
       const response = await fetch(url, {
