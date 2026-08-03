@@ -1,7 +1,8 @@
 {
-  "apiVersion": "takosumi.com/v2",
+  "apiVersion": "takosumi.com/v2.1",
   "kind": "Repository",
   "install": {
+    "defaultModule": "deploy/opentofu",
     "modules": {
       "deploy/opentofu": {
         "inputs": [

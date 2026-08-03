@@ -20,9 +20,10 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v2");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2.1");
   expect(manifest.kind).toBe("Repository");
-  expect(Object.keys(manifest.install)).toEqual(["modules"]);
+  expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
+  expect(manifest.install.defaultModule).toBe("deploy/opentofu");
   expect(Object.keys(manifest.install.modules)).toEqual(["deploy/opentofu"]);
   const module = manifest.install.modules["deploy/opentofu"];
   expect(Object.keys(module).sort()).toEqual([
@@ -181,7 +182,10 @@ function referencedVariables(module: RepositoryModule): Set<string> {
 interface RepositoryManifest {
   apiVersion: string;
   kind: string;
-  install: { modules: Record<string, RepositoryModule> };
+  install: {
+    defaultModule: string;
+    modules: Record<string, RepositoryModule>;
+  };
 }
 
 interface RepositoryModule {

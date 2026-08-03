@@ -51,7 +51,7 @@ open-with 選択、chat / agent / memory / Workspace に紐づく product state 
 store ではなく、認可済み UI Interface の read-only view です。
 
 Interface の実体、Output mapping、binding、lifecycle は service-side の Takosumi が所有します。アプリの
-repository は v2 [`/.well-known/takosumi.json`](../../.well-known/takosumi.json) の `interfaces[]` で、launcher
+repository は v2.1 [`/.well-known/takosumi.json`](../../.well-known/takosumi.json) の `interfaces[]` で、launcher
 など app-owned な Interface の宣言案と Output mapping を提案できます。Takosumi は exact source snapshot を
 レビューして DB-owned `InstallConfig.interfaceBlueprints` に compile し、成功した Apply 後に host-owned
 Interface へ materialize します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
