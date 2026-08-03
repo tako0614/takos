@@ -77,22 +77,48 @@ locals {
     offload        = "${var.project_name}-offload"
   }
 
-  # Queue NAMES are free-form; the worker reaches them by BINDING name, so the
-  # names are parameterized under project_name. Logical key -> binding:
+  # Queue names are free-form; the worker reaches them by BINDING name, so the
+  # names are parameterized under project_name. Cloudflare requires queue names
+  # to be shorter than 63 characters (maximum 62). Keep the readable
+  # project/suffix form when it fits, and otherwise retain a readable prefix
+  # plus a stable digest of the full name before the logical suffix. The digest
+  # prevents two long project names that share the retained prefix from
+  # silently claiming the same queue.
+  queue_name_limit      = 62
+  queue_name_hash_chars = 12
+
+  # Logical key -> binding:
   #   runs            RUN_QUEUE          | runs_dlq            (DLQ for runs)
   #   index_jobs      INDEX_QUEUE        | index_jobs_dlq      (DLQ)
   #   workflow        WORKFLOW_QUEUE     | workflow_dlq        (DLQ)
   #   notification    TAKOS_NOTIFICATION_PUSH_QUEUE | notification_dlq (DLQ)
   #
+  queue_suffixes = {
+    runs                  = "runs"
+    index_jobs            = "index-jobs"
+    workflow              = "workflow-jobs"
+    notification_push     = "notification-push"
+    runs_dlq              = "runs-dlq"
+    index_jobs_dlq        = "index-jobs-dlq"
+    workflow_dlq          = "workflow-jobs-dlq"
+    notification_push_dlq = "notification-push-dlq"
+  }
+
   queues = {
-    runs                  = "${var.project_name}-runs"
-    index_jobs            = "${var.project_name}-index-jobs"
-    workflow              = "${var.project_name}-workflow-jobs"
-    notification_push     = "${var.project_name}-notification-push"
-    runs_dlq              = "${var.project_name}-runs-dlq"
-    index_jobs_dlq        = "${var.project_name}-index-jobs-dlq"
-    workflow_dlq          = "${var.project_name}-workflow-jobs-dlq"
-    notification_push_dlq = "${var.project_name}-notification-push-dlq"
+    for key, suffix in local.queue_suffixes : key => (
+      length("${var.project_name}-${suffix}") <= local.queue_name_limit
+      ? "${var.project_name}-${suffix}"
+      : format(
+        "%s-%s-%s",
+        substr(
+          var.project_name,
+          0,
+          local.queue_name_limit - length(suffix) - local.queue_name_hash_chars - 2,
+        ),
+        substr(sha256("${var.project_name}-${suffix}"), 0, local.queue_name_hash_chars),
+        suffix,
+      )
+    )
   }
 
   kv_namespaces = {

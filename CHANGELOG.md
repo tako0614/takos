@@ -6,6 +6,14 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.11.3 — Provider-safe Cloudflare queue names
+
+- Bound every Capsule-derived Cloudflare Queue name below the live provider's
+  63-character limit while preserving the existing readable names when they
+  already fit.
+- Keep long names deterministic and collision-resistant with a stable digest,
+  and exercise the boundary in the portable OpenTofu test gate.
+
 ## 0.11.2 — Required Cloudflare deployment contract
 
 - Make the required `cloudflare` repository input match the OpenTofu module by

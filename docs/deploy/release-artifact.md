@@ -25,7 +25,7 @@ not recorded in evidence.
 Set up a private work area, for example:
 
 ```sh
-private=/var/lib/takos/release-artifacts/v0.11.2
+private=/var/lib/takos/release-artifacts/v0.11.3
 mkdir -p "$private"
 chmod 700 "$private"
 chmod 600 /var/lib/takos/operator/cloudflare-account-id
@@ -40,7 +40,7 @@ writing the output/evidence paths.
 
 ```sh
 bun run deploy -- takos-release-artifact prepare \
-  --tag v0.11.2 \
+  --tag v0.11.3 \
   --config /absolute/path/to/deploy/cloudflare/wrangler.toml \
   --account-id-file /var/lib/takos/operator/cloudflare-account-id \
   --cloudflare-api-token-file /var/lib/takos/operator/cloudflare-api-token \
@@ -62,7 +62,7 @@ path for every attempt because evidence is never overwritten.
 
 ```sh
 bun run deploy -- takos-release-artifact publish \
-  --tag v0.11.2 \
+  --tag v0.11.3 \
   --prepare-evidence "$private/prepare.json" \
   --evidence "$private/publish.json"
 ```
