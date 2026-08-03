@@ -49,6 +49,7 @@ const MAX_INTERFACE_LIST_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_INTERFACE_BINDINGS_RESPONSE_BYTES = 256 * 1024;
 const MAX_INTERFACE_TOKEN_RESPONSE_BYTES = 64 * 1024;
 const MAX_INTERFACE_ACCESS_TOKEN_LENGTH = 8_192;
+const MAX_UI_SURFACE_PAGES = 64;
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -165,12 +166,14 @@ function interfaceTokenUrl(baseUrl: string, interfaceId: string): URL {
 function workspaceUiSurfacesUrl(
   baseUrl: string,
   workspaceId: string,
+  cursor?: string,
 ): URL {
   const url = takosumiSessionApiUrl(
     baseUrl,
     takosumiWorkspaceUiSurfacesPath(workspaceId),
   );
   url.searchParams.set("limit", "100");
+  if (cursor !== undefined) url.searchParams.set("cursor", cursor);
   return url;
 }
 
@@ -381,19 +384,35 @@ export async function fetchAuthorizedUiSurfaceInterfaces(
     authorization: `Bearer ${config.token}`,
   });
   try {
-    const response = await (config.fetch ?? fetch)(
-      workspaceUiSurfacesUrl(config.baseUrl, workspaceId),
-      { headers, redirect: "manual" },
-    );
-    if (!response.ok) return [];
-    const body = readRecord(
-      await readBoundedJsonResponse(
-        response,
-        MAX_INTERFACE_LIST_RESPONSE_BYTES,
-      ),
-    );
-    if (!body || !Array.isArray(body.interfaces)) return [];
-    return body.interfaces.slice(0, 100).flatMap((value) => {
+    const interfaces: unknown[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_UI_SURFACE_PAGES; page += 1) {
+      const response = await (config.fetch ?? fetch)(
+        workspaceUiSurfacesUrl(config.baseUrl, workspaceId, cursor),
+        { headers, redirect: "manual" },
+      );
+      if (!response.ok) return [];
+      const body = readRecord(
+        await readBoundedJsonResponse(
+          response,
+          MAX_INTERFACE_LIST_RESPONSE_BYTES,
+        ),
+      );
+      if (!body || !Array.isArray(body.interfaces)) return [];
+      interfaces.push(...body.interfaces);
+
+      if (body.nextCursor === undefined) {
+        break;
+      }
+      const nextCursor = readString(body.nextCursor);
+      if (!nextCursor || seenCursors.has(nextCursor)) return [];
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+      if (page === MAX_UI_SURFACE_PAGES - 1) return [];
+    }
+
+    return interfaces.flatMap((value) => {
       const iface = parseResolvedRuntimeInterface(value, {
         workspaceId,
         type: UI_SURFACE_INTERFACE_TYPE,
