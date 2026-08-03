@@ -50,6 +50,8 @@ const MAX_INTERFACE_BINDINGS_RESPONSE_BYTES = 256 * 1024;
 const MAX_INTERFACE_TOKEN_RESPONSE_BYTES = 64 * 1024;
 const MAX_INTERFACE_ACCESS_TOKEN_LENGTH = 8_192;
 const MAX_UI_SURFACE_PAGES = 64;
+const MAX_UI_SURFACE_TOTAL_BYTES = 8 * 1024 * 1024;
+const MAX_UI_SURFACE_ITEMS = 512;
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -63,6 +65,10 @@ function readString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function readOpaqueCursor(value: unknown): string | null {
+  return typeof value === "string" && /\S/u.test(value) ? value : null;
+}
+
 function readNonNegativeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ? value
@@ -72,7 +78,7 @@ function readNonNegativeInteger(value: unknown): number | null {
 async function readBoundedJsonResponse(
   response: Response,
   maxBytes: number,
-): Promise<unknown | null> {
+): Promise<{ readonly value: unknown; readonly bytes: number } | null> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel().catch(() => undefined);
@@ -106,7 +112,10 @@ async function readBoundedJsonResponse(
     offset += chunk.byteLength;
   }
   try {
-    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+    return {
+      value: JSON.parse(new TextDecoder().decode(body)) as unknown,
+      bytes: total,
+    };
   } catch {
     return null;
   }
@@ -277,10 +286,12 @@ async function authorizedRuntimeBinding(
     );
     if (!response.ok) return null;
     const body = readRecord(
-      await readBoundedJsonResponse(
-        response,
-        MAX_INTERFACE_BINDINGS_RESPONSE_BYTES,
-      ),
+      (
+        await readBoundedJsonResponse(
+          response,
+          MAX_INTERFACE_BINDINGS_RESPONSE_BYTES,
+        )
+      )?.value,
     );
     if (!body || !Array.isArray(body.bindings)) return null;
     return (
@@ -329,10 +340,12 @@ export async function fetchAuthorizedRuntimeInterfaces(
     );
     if (!response.ok) return [];
     const body = readRecord(
-      await readBoundedJsonResponse(
-        response,
-        MAX_INTERFACE_LIST_RESPONSE_BYTES,
-      ),
+      (
+        await readBoundedJsonResponse(
+          response,
+          MAX_INTERFACE_LIST_RESPONSE_BYTES,
+        )
+      )?.value,
     );
     if (!body || !Array.isArray(body.interfaces)) return [];
     const candidates = body.interfaces
@@ -364,7 +377,7 @@ export async function fetchAuthorizedRuntimeInterfaces(
 }
 
 /**
- * Read the Accounts plane's bounded launcher projection in one request. The
+ * Read the Accounts plane's bounded launcher projection page by page. The
  * server performs the current Principal Binding join; Takos validates each
  * returned Interface document and keeps the canonical Capsule owner.
  */
@@ -384,56 +397,69 @@ export async function fetchAuthorizedUiSurfaceInterfaces(
     authorization: `Bearer ${config.token}`,
   });
   try {
-    const interfaces: unknown[] = [];
+    const authorized: AuthorizedUiSurfaceInterface[] = [];
     const seenCursors = new Set<string>();
+    let totalBytes = 0;
+    let totalItems = 0;
     let cursor: string | undefined;
     for (let page = 0; page < MAX_UI_SURFACE_PAGES; page += 1) {
+      const remainingBytes = MAX_UI_SURFACE_TOTAL_BYTES - totalBytes;
+      if (remainingBytes <= 0) return [];
       const response = await (config.fetch ?? fetch)(
         workspaceUiSurfacesUrl(config.baseUrl, workspaceId, cursor),
         { headers, redirect: "manual" },
       );
       if (!response.ok) return [];
-      const body = readRecord(
-        await readBoundedJsonResponse(
-          response,
-          MAX_INTERFACE_LIST_RESPONSE_BYTES,
-        ),
+      const pageResult = await readBoundedJsonResponse(
+        response,
+        Math.min(MAX_INTERFACE_LIST_RESPONSE_BYTES, remainingBytes),
       );
+      if (!pageResult) return [];
+      totalBytes += pageResult.bytes;
+      if (totalBytes > MAX_UI_SURFACE_TOTAL_BYTES) return [];
+      const body = readRecord(pageResult.value);
       if (!body || !Array.isArray(body.interfaces)) return [];
-      interfaces.push(...body.interfaces);
+      if (
+        body.interfaces.length >
+        MAX_UI_SURFACE_ITEMS - totalItems
+      ) {
+        return [];
+      }
+      totalItems += body.interfaces.length;
+
+      for (const value of body.interfaces) {
+        const iface = parseResolvedRuntimeInterface(value, {
+          workspaceId,
+          type: UI_SURFACE_INTERFACE_TYPE,
+          permission: UI_SURFACE_OPEN_PERMISSION,
+          deliveryTypes: ["none"],
+        });
+        if (
+          !iface ||
+          (iface.metadata.ownerRef.kind !== "Capsule" &&
+            iface.metadata.ownerRef.kind !== "Resource")
+        ) {
+          continue;
+        }
+        const record = readRecord(value);
+        const launcherOwner = readRecord(record?.launcherOwner);
+        const capsuleId =
+          iface.metadata.ownerRef.kind === "Capsule"
+            ? iface.metadata.ownerRef.id
+            : readString(launcherOwner?.capsuleId);
+        if (capsuleId) authorized.push({ interface: iface, capsuleId });
+      }
 
       if (body.nextCursor === undefined) {
         break;
       }
-      const nextCursor = readString(body.nextCursor);
+      const nextCursor = readOpaqueCursor(body.nextCursor);
       if (!nextCursor || seenCursors.has(nextCursor)) return [];
       seenCursors.add(nextCursor);
       cursor = nextCursor;
       if (page === MAX_UI_SURFACE_PAGES - 1) return [];
     }
-
-    return interfaces.flatMap((value) => {
-      const iface = parseResolvedRuntimeInterface(value, {
-        workspaceId,
-        type: UI_SURFACE_INTERFACE_TYPE,
-        permission: UI_SURFACE_OPEN_PERMISSION,
-        deliveryTypes: ["none"],
-      });
-      if (
-        !iface ||
-        (iface.metadata.ownerRef.kind !== "Capsule" &&
-          iface.metadata.ownerRef.kind !== "Resource")
-      ) {
-        return [];
-      }
-      const record = readRecord(value);
-      const launcherOwner = readRecord(record?.launcherOwner);
-      const capsuleId =
-        iface.metadata.ownerRef.kind === "Capsule"
-          ? iface.metadata.ownerRef.id
-          : readString(launcherOwner?.capsuleId);
-      return capsuleId ? [{ interface: iface, capsuleId }] : [];
-    });
+    return authorized;
   } catch {
     return [];
   }
@@ -479,7 +505,9 @@ export async function issueRuntimeInterfaceAccessToken(
     );
   }
   const body = readRecord(
-    await readBoundedJsonResponse(response, MAX_INTERFACE_TOKEN_RESPONSE_BYTES),
+    (
+      await readBoundedJsonResponse(response, MAX_INTERFACE_TOKEN_RESPONSE_BYTES)
+    )?.value,
   );
   const accessToken =
     typeof body?.access_token === "string" ? body.access_token : null;

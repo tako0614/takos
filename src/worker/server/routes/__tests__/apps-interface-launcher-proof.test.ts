@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { assertEquals } from "@takos/test/assert";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
+import { fetchAuthorizedUiSurfaceInterfaces } from "../../../application/services/platform/runtime-interface-client.ts";
 import { appsRouteDeps, registerAppApiRoutes } from "../apps/index.ts";
 
 test("bounded authorized Interface projection appears on the Takos launcher", async () => {
@@ -205,6 +206,85 @@ test("launcher projection fails closed for malformed, empty, or repeated cursors
   }
 });
 
+test("launcher projection echoes opaque cursors without trimming", async () => {
+  const opaqueCursor = "  page-2\t";
+  const requestedCursors: Array<string | null> = [];
+  const authorized = await fetchAuthorizedUiSurfaceInterfaces(
+    "workspace-1",
+    {
+      baseUrl: "https://accounts.takosumi.test",
+      token: "request-scoped-accounts-token",
+      subjectId: "principal-1",
+      fetch: async (input) => {
+        const url = new URL(input);
+        requestedCursors.push(url.searchParams.get("cursor"));
+        if (requestedCursors.length === 1) {
+          return Response.json({
+            interfaces: [],
+            nextCursor: opaqueCursor,
+          });
+        }
+        assertEquals(url.searchParams.get("cursor"), opaqueCursor);
+        return Response.json({ interfaces: [resolvedLauncherInterface()] });
+      },
+    },
+  );
+
+  assertEquals(requestedCursors, [null, opaqueCursor]);
+  assertEquals(authorized.length, 1);
+  assertEquals(authorized[0]?.interface.metadata.id, "if_launcher");
+});
+
+test("launcher projection fails closed on aggregate response budget", async () => {
+  const requests: URL[] = [];
+  const authorized = await fetchAuthorizedUiSurfaceInterfaces(
+    "workspace-1",
+    {
+      baseUrl: "https://accounts.takosumi.test",
+      token: "request-scoped-accounts-token",
+      subjectId: "principal-1",
+      fetch: async (input) => {
+        requests.push(new URL(input));
+        if (requests.length < 3) {
+          return Response.json({
+            interfaces: [resolvedLauncherInterface(3 * 1024 * 1024)],
+            nextCursor: `next-${requests.length}`,
+          });
+        }
+        return Response.json({
+          interfaces: [resolvedLauncherInterface(3 * 1024 * 1024)],
+        });
+      },
+    },
+  );
+
+  assertEquals(authorized, []);
+  assertEquals(requests.length, 3);
+});
+
+test("launcher projection fails closed on aggregate item budget", async () => {
+  const requests: URL[] = [];
+  const authorized = await fetchAuthorizedUiSurfaceInterfaces(
+    "workspace-1",
+    {
+      baseUrl: "https://accounts.takosumi.test",
+      token: "request-scoped-accounts-token",
+      subjectId: "principal-1",
+      fetch: async (input) => {
+        requests.push(new URL(input));
+        return Response.json({
+          interfaces: Array.from({ length: 513 }, () =>
+            resolvedLauncherInterface(),
+          ),
+        });
+      },
+    },
+  );
+
+  assertEquals(authorized, []);
+  assertEquals(requests.length, 1);
+});
+
 function createAppsRouteHarness(accessToken: string) {
   const app = new Hono<{
     Bindings: { DB: unknown };
@@ -240,7 +320,7 @@ function createAppsRouteHarness(accessToken: string) {
   return app;
 }
 
-function resolvedLauncherInterface() {
+function resolvedLauncherInterface(paddingBytes = 0) {
   return {
     apiVersion: "takosumi.dev/v1alpha1",
     kind: "Interface",
@@ -281,5 +361,6 @@ function resolvedLauncherInterface() {
       resolvedRevision: 4,
       resolvedInputs: { url: "https://opentofu-only.fixture.test/" },
     },
+    ...(paddingBytes > 0 ? { padding: "x".repeat(paddingBytes) } : {}),
   };
 }
