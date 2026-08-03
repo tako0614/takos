@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { validateRuntimeSecrets } from "./takos-product-materializer.ts";
+
 const SOURCE_ROOT = resolve(import.meta.dir, "..");
 const GENERATOR = resolve(import.meta.dir, "generate-platform-keys.ts");
 const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
@@ -122,6 +124,7 @@ test("opt-in runtime JSON contains exactly the six materializer names and stays 
       "utf8",
     );
     const runtimeJson = JSON.parse(runtimeContents) as Record<string, unknown>;
+    expect(() => validateRuntimeSecrets(runtimeJson)).not.toThrow();
     expect(Object.keys(runtimeJson).sort()).toEqual(
       [...MATERIALIZER_REQUIRED_SECRET_NAMES].sort(),
     );

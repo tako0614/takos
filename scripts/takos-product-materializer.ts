@@ -1511,7 +1511,10 @@ async function queueReadbacks(
       "queue_consumer_readback",
       [],
     );
-    const parsed = parseJsonOutput(command, `queue ${queue} consumer list`);
+    const parsed =
+      command.exitCode === 0 && command.stdout.trim() === ""
+        ? []
+        : parseJsonOutput(command, `queue ${queue} consumer list`);
     invariant(Array.isArray(parsed), `queue ${queue} consumer list must be an array`, "invalid_readback");
     result.set(
       queue,

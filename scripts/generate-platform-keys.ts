@@ -183,7 +183,6 @@ function toPem(label: string, data: Uint8Array): string {
     `-----BEGIN ${label}-----`,
     ...lines,
     `-----END ${label}-----`,
-    "",
   ].join("\n");
 }
 

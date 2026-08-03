@@ -25,9 +25,9 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.3/takosumi-artifact.json";
+  "https://github.com/tako0614/takos/releases/download/v0.11.4/takosumi-artifact.json";
 const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.3/takos-worker-release.tar.gz";
+  "https://github.com/tako0614/takos/releases/download/v0.11.4/takos-worker-release.tar.gz";
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -119,7 +119,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.3",
+    releaseTag: "v0.11.4",
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -277,7 +277,7 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.3",
+          packageVersion: "0.11.4",
           accountId,
           descriptorUrl,
         },
@@ -392,6 +392,7 @@ type FakeState = {
   vector: boolean;
   containers: boolean;
   consumers: boolean;
+  blankQueueConsumerReadback?: boolean;
   foreignContainer?: boolean;
   foreignVectorBinding?: boolean;
   staleSecret?: boolean;
@@ -538,6 +539,9 @@ function fakeDependencies(
         return success();
       }
       if (argv[0] === "queues" && argv[2] === "list") {
+        if (state.blankQueueConsumerReadback && !state.consumers) {
+          return { exitCode: 0, stdout: "\n", stderr: "" };
+        }
         return ok(state.consumers ? [consumers[argv[3]!]] : []);
       }
       if (argv[0] === "queues" && argv[2] === "remove") {
@@ -748,7 +752,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.3",
+      tag: "v0.11.4",
     };
     const fake = fakeDependencies(
       state,
@@ -843,7 +847,7 @@ describe("materializer lifecycle", () => {
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.3",
+      tag: "v0.11.4",
     };
     const fake = fakeDependencies(
       state,
@@ -877,7 +881,7 @@ describe("materializer lifecycle", () => {
     expect(JSON.stringify(evidence)).not.toContain("version-1");
   });
 
-  test("reports zero removals for an already absent installation", async () => {
+  test("reports zero removals for an already absent installation with blank queue readbacks", async () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
@@ -890,6 +894,7 @@ describe("materializer lifecycle", () => {
       vector: false,
       containers: false,
       consumers: false,
+      blankQueueConsumerReadback: true,
     };
     const fake = fakeDependencies(
       state,
@@ -928,7 +933,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.3",
+      tag: "v0.11.4",
     };
     const fake = fakeDependencies(
       state,
@@ -978,7 +983,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.3",
+      tag: "v0.11.4",
     };
     const fake = fakeDependencies(
       state,
