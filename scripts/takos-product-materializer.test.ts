@@ -28,10 +28,13 @@ import {
 const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
-const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.11/takosumi-artifact.json";
-const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.11/takos-worker-release.tar.gz";
+const packageManifest = (await Bun.file(
+  join(import.meta.dir, "..", "package.json"),
+).json()) as { version: string };
+const packageVersion = packageManifest.version;
+const releaseTag = `v${packageVersion}`;
+const descriptorUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takosumi-artifact.json`;
+const archiveUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takos-worker-release.tar.gz`;
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -123,7 +126,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.11",
+    releaseTag,
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -281,7 +284,7 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.11",
+          packageVersion,
           accountId,
           descriptorUrl,
         },
@@ -986,7 +989,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.11",
+      tag: releaseTag,
     };
     const fake = fakeDependencies(
       state,
@@ -1081,7 +1084,7 @@ describe("materializer lifecycle", () => {
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.11",
+      tag: releaseTag,
     };
     const fake = fakeDependencies(
       state,
@@ -1268,7 +1271,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.11",
+      tag: releaseTag,
     };
     const fake = fakeDependencies(
       state,
@@ -1318,7 +1321,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.11",
+      tag: releaseTag,
     };
     const fake = fakeDependencies(
       state,
