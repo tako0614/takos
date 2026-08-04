@@ -475,6 +475,7 @@ type FakeState = {
   expandedContainerInfo?: boolean;
   containerDeletionReadbacksRemaining?: number;
   containerDeletionRequested?: boolean;
+  workerPresenceReadbacksRemaining?: number;
   message?: string;
   tag?: string;
 };
@@ -583,6 +584,11 @@ function fakeDependencies(
     calls,
     async readWorkerPresence(workerName) {
       calls.push(["worker-presence", workerName]);
+      if (!state.deployed && (state.workerPresenceReadbacksRemaining ?? 0) > 0) {
+        state.workerPresenceReadbacksRemaining =
+          (state.workerPresenceReadbacksRemaining ?? 0) - 1;
+        return true;
+      }
       return state.workerPresence ?? state.deployed;
     },
     async deleteWorker(workerName) {
@@ -874,6 +880,44 @@ describe("materializer lifecycle", () => {
     );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
+  });
+
+  test("pre_destroy confirms Worker deletion through the bounded API presence readback", async () => {
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
+    const state: FakeState = {
+      deployed: true,
+      vector: false,
+      containers: false,
+      consumers: false,
+      workerPresenceReadbacksRemaining: 2,
+      message: existingProvenanceMessage(),
+      tag: releaseTag,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    const evidence = await materializePreDestroy({
+      invocation,
+      sourceRoot: join(import.meta.dir, ".."),
+      dependencies: fake,
+    });
+
+    expect(evidence.status).toBe("succeeded");
+    expect(
+      fake.calls.filter((call) => call[0] === "worker-presence"),
+    ).toHaveLength(3);
+    expect(fake.calls.filter((call) => call[0] === "deployments")).toHaveLength(1);
   });
 
   test("accepts the current Wrangler expanded container capacity readback", async () => {

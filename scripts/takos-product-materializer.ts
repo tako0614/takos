@@ -2949,13 +2949,12 @@ async function waitForChildCleanupAbsence(input: {
 
 async function waitForWorkerAbsence(
   dependencies: MaterializerDependencies,
-  configPath: string,
   workerName: string,
 ): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 12; attempt += 1) {
     try {
-      if (!(await deploymentReadback(dependencies, configPath, workerName))) {
+      if (!(await dependencies.readWorkerPresence(workerName))) {
         return;
       }
       lastError = new MaterializerError({
@@ -3126,11 +3125,7 @@ export async function materializePreDestroy(input: {
     if (previous) {
       await dependencies.deleteWorker(invocation.outputs.workerName);
       completedStages.push("worker_deleted");
-      await waitForWorkerAbsence(
-        dependencies,
-        configPath,
-        invocation.outputs.workerName,
-      );
+      await waitForWorkerAbsence(dependencies, invocation.outputs.workerName);
     }
     return {
       kind: "takos.product-materialization@v1",
