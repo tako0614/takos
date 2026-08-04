@@ -172,6 +172,7 @@ type CommandResult = {
 export type MaterializerDependencies = {
   runWrangler(args: readonly string[], timeoutMs?: number): Promise<CommandResult>;
   readWorkerPresence(workerName: string): Promise<boolean>;
+  readVectorPresence(indexName: string): Promise<boolean>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
   sleep(milliseconds: number): Promise<void>;
@@ -1300,6 +1301,19 @@ async function secretNames(
     "--config",
     configPath,
   ]);
+  // Wrangler 4.107 can represent an absent Worker as a successful, completely
+  // blank secret-list response in the runner. Accept that only after the
+  // authoritative Worker settings endpoint independently proves absence.
+  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
+    const present = await dependencies.readWorkerPresence(workerName);
+    if (!present) return [];
+    throw new MaterializerError({
+      code: "invalid_readback",
+      stage: "readback",
+      message: "Worker secret list is blank while the Worker exists",
+      diagnosticDigest: digest("Worker secret presence readback\npresent"),
+    });
+  }
   if (isNotFound(result)) return [];
   if (result.exitCode !== 0) throw commandFailure("secret_readback", result, []);
   return parseSecretNames(parseJsonOutput(result, "secret list"));
@@ -1362,6 +1376,19 @@ async function vectorReadback(
     "--config",
     configPath,
   ]);
+  // The locked Wrangler runtime can likewise return a successful blank body
+  // for an absent Vectorize index. Do not infer absence from that ambiguous
+  // command result alone: confirm it against the provider API first.
+  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
+    const present = await dependencies.readVectorPresence(expected.name);
+    if (!present) return undefined;
+    throw new MaterializerError({
+      code: "invalid_readback",
+      stage: "readback",
+      message: "Vectorize readback is blank while the index exists",
+      diagnosticDigest: digest("Vectorize presence readback\npresent"),
+    });
+  }
   if (isNotFound(result)) return undefined;
   if (result.exitCode !== 0) throw commandFailure("vector_readback", result, []);
   const observed = parseVector(parseJsonOutput(result, "Vectorize readback"));
@@ -2292,6 +2319,38 @@ function createDependencies(input: {
         code: "readback_failed",
         stage: "readback",
         message: "Worker presence readback was ambiguous",
+        diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+      });
+    },
+    async readVectorPresence(indexName) {
+      const label = "Vectorize presence readback";
+      const url = new URL(
+        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/vectorize/v2/indexes/${encodeURIComponent(indexName)}`,
+      );
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: {
+            authorization: `Bearer ${input.apiToken}`,
+            accept: "application/json",
+          },
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw new MaterializerError({
+          code: "readback_failed",
+          stage: "readback",
+          message: "Vectorize presence readback failed",
+          diagnosticDigest: digest(`${label}\ntransport`),
+        });
+      }
+      if (response.status === 200) return true;
+      if (response.status === 404) return false;
+      throw new MaterializerError({
+        code: "readback_failed",
+        stage: "readback",
+        message: "Vectorize presence readback was ambiguous",
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
       });
     },
