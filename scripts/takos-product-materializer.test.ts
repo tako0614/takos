@@ -25,9 +25,9 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.9/takosumi-artifact.json";
+  "https://github.com/tako0614/takos/releases/download/v0.11.10/takosumi-artifact.json";
 const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.9/takos-worker-release.tar.gz";
+  "https://github.com/tako0614/takos/releases/download/v0.11.10/takos-worker-release.tar.gz";
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -119,7 +119,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.9",
+    releaseTag: "v0.11.10",
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -277,7 +277,7 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.9",
+          packageVersion: "0.11.10",
           accountId,
           descriptorUrl,
         },
@@ -393,7 +393,10 @@ type FakeState = {
   containers: boolean;
   consumers: boolean;
   blankDeploymentReadback?: boolean;
+  blankSecretReadback?: boolean;
+  blankVectorReadback?: boolean;
   workerPresence?: boolean;
+  vectorPresence?: boolean;
   underscoreVectorNotFound?: boolean;
   blankQueueConsumerReadback?: boolean;
   foreignContainer?: boolean;
@@ -487,6 +490,10 @@ function fakeDependencies(
       calls.push(["worker-presence", workerName]);
       return state.workerPresence ?? state.deployed;
     },
+    async readVectorPresence(indexName) {
+      calls.push(["vector-presence", indexName]);
+      return state.vectorPresence ?? state.vector;
+    },
     async runWrangler(args) {
       const argv = [...args];
       calls.push(argv);
@@ -500,6 +507,7 @@ function fakeDependencies(
           : missing();
       }
       if (argv[0] === "secret" && argv[1] === "list") {
+        if (!state.deployed && state.blankSecretReadback) return success();
         return state.deployed
           ? ok(
               [
@@ -559,6 +567,7 @@ function fakeDependencies(
         return success();
       }
       if (argv[0] === "vectorize" && argv[1] === "get") {
+        if (!state.vector && state.blankVectorReadback) return success();
         if (!state.vector && state.underscoreVectorNotFound) {
           return { exitCode: 1, stdout: "", stderr: "vectorize.index.not_found" };
         }
@@ -696,8 +705,10 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
+      blankSecretReadback: true,
+      blankVectorReadback: true,
       workerPresence: false,
-      underscoreVectorNotFound: true,
+      vectorPresence: false,
     };
     const fake = fakeDependencies(
       state,
@@ -721,6 +732,13 @@ describe("materializer lifecycle", () => {
     expect(
       fake.calls.some(
         (call) => call.slice(0, 4).join(" ") === "d1 migrations apply DB",
+      ),
+    ).toBe(true);
+    expect(
+      fake.calls.some(
+        (call) =>
+          call[0] === "vector-presence" &&
+          call[1] === invocation.outputs.vector.name,
       ),
     ).toBe(true);
     expect(
@@ -806,6 +824,56 @@ describe("materializer lifecycle", () => {
     ).toBe(false);
   });
 
+  test("refuses a blank secret readback when the Worker presence API says it exists", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-ambiguous-secrets-"),
+    );
+    temporaryDirectories.push(root);
+    const secretPath = join(root, "runtime-secrets.json");
+    await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
+    await chmod(secretPath, 0o600);
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation("post_apply", {
+      ...invocationEnv("post_apply", digest(descriptorBytes)),
+      TAKOS_RUNTIME_SECRETS_FILE: secretPath,
+    });
+    const state: FakeState = {
+      deployed: false,
+      vector: false,
+      containers: false,
+      consumers: false,
+      blankSecretReadback: true,
+      workerPresence: true,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    let error: unknown;
+    try {
+      await materializePostApply({
+        invocation,
+        sourceRoot: join(import.meta.dir, ".."),
+        dependencies: fake,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(failureEvidence(error, "post_apply")).toMatchObject({
+      code: "invalid_readback",
+      stage: "readback",
+      mutationStarted: false,
+    });
+    expect(fake.calls.some((call) => call[0] === "worker-presence")).toBe(true);
+    expect(fake.calls.some((call) => call[0] === "d1")).toBe(false);
+  });
+
   test("keeps stale secrets until the replacement Worker deploy succeeds", async () => {
     const root = await mkdtemp(
       join(tmpdir(), "takos-materializer-secret-order-"),
@@ -828,7 +896,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.9",
+      tag: "v0.11.10",
     };
     const fake = fakeDependencies(
       state,
@@ -923,7 +991,7 @@ describe("materializer lifecycle", () => {
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.9",
+      tag: "v0.11.10",
     };
     const fake = fakeDependencies(
       state,
@@ -971,8 +1039,9 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
+      blankVectorReadback: true,
       workerPresence: false,
-      underscoreVectorNotFound: true,
+      vectorPresence: false,
       blankQueueConsumerReadback: true,
     };
     const fake = fakeDependencies(
@@ -996,6 +1065,53 @@ describe("materializer lifecycle", () => {
       vectorIndexesRemoved: 0,
       backingResources: "left_for_opentofu_destroy",
     });
+  });
+
+  test("refuses a blank Vectorize readback when the provider API says the index exists", async () => {
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
+    const state: FakeState = {
+      deployed: false,
+      vector: false,
+      containers: false,
+      consumers: false,
+      blankVectorReadback: true,
+      vectorPresence: true,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    let error: unknown;
+    try {
+      await materializePreDestroy({
+        invocation,
+        sourceRoot: join(import.meta.dir, ".."),
+        dependencies: fake,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(failureEvidence(error, "pre_destroy")).toMatchObject({
+      code: "invalid_readback",
+      stage: "readback",
+      mutationStarted: false,
+    });
+    expect(fake.calls.some((call) => call[0] === "vector-presence")).toBe(true);
+    expect(
+      fake.calls.some(
+        (call) => call[0] === "vectorize" && call[1] === "delete",
+      ),
+    ).toBe(false);
   });
 
   test("refuses pre_destroy when blank deployment status confirms Worker presence", async () => {
@@ -1066,7 +1182,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.9",
+      tag: "v0.11.10",
     };
     const fake = fakeDependencies(
       state,
@@ -1116,7 +1232,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.9",
+      tag: "v0.11.10",
     };
     const fake = fakeDependencies(
       state,
