@@ -2522,7 +2522,11 @@ export function createDependencies(input: {
           diagnosticDigest: digest(`${label}\ntransport`),
         });
       }
-      if (response.status === 404) return undefined;
+      // Vectorize returns 410 after an index deletion has completed. Treat the
+      // provider's terminal Gone response like 404 so a fresh destroy plan can
+      // safely resume after a prior lifecycle action removed the index but was
+      // interrupted before OpenTofu destroyed the backing resources.
+      if (response.status === 404 || response.status === 410) return undefined;
       if (response.status !== 200 || !response.body) {
         throw new MaterializerError({
           code: "readback_failed",

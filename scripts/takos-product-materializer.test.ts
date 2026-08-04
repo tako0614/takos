@@ -447,6 +447,29 @@ describe("materializer input and topology", () => {
     );
   });
 
+  test("accepts Vectorize Gone as authoritative absence during recovery", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-vector-gone-"));
+    temporaryDirectories.push(root);
+    let observedRequest: Request | undefined;
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: join(root, "unused-wrangler.mjs"),
+      sourceRoot: root,
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async (input, init) => {
+        observedRequest = new Request(input, init);
+        return new Response(null, { status: 410 });
+      },
+    });
+
+    expect(await dependencies.readVector("takos-embeddings")).toBeUndefined();
+    expect(observedRequest?.method).toBe("GET");
+    expect(observedRequest?.url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/takos-embeddings`,
+    );
+  });
+
   test("requires the Node major supported by the locked Wrangler", () => {
     expect(validateNodeRuntimeVersion("v24.19.0\n")).toBe("v24.19.0");
     expect(() =>
