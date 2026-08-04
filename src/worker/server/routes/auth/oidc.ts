@@ -684,9 +684,9 @@ function delegatedWorkspaceId(
       !Array.isArray(userInfo.takosumi)
     ? (userInfo.takosumi as Record<string, unknown>)
     : undefined;
-  const nestedWorkspaceId = profileString(takosumi?.space_id);
-  const memberships = Array.isArray(userInfo.space_memberships)
-    ? userInfo.space_memberships
+  const nestedWorkspaceId = profileString(takosumi?.workspace_id);
+  const memberships = Array.isArray(userInfo.workspace_memberships)
+    ? userInfo.workspace_memberships
       .map((value) => profileString(value))
       .filter((value): value is string => Boolean(value))
     : [];
