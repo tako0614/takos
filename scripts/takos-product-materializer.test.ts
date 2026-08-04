@@ -25,9 +25,9 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const descriptorUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.10/takosumi-artifact.json";
+  "https://github.com/tako0614/takos/releases/download/v0.11.11/takosumi-artifact.json";
 const archiveUrl =
-  "https://github.com/tako0614/takos/releases/download/v0.11.10/takos-worker-release.tar.gz";
+  "https://github.com/tako0614/takos/releases/download/v0.11.11/takos-worker-release.tar.gz";
 const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
@@ -119,7 +119,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
     kind: "takosumi.worker-artifact@v1",
     app: "takos",
     commit: sourceCommit,
-    releaseTag: "v0.11.10",
+    releaseTag: "v0.11.11",
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -277,7 +277,7 @@ describe("materializer input and topology", () => {
         { ...descriptor(`sha256:${"f".repeat(64)}`), commit: "0".repeat(40) },
         {
           sourceCommit,
-          packageVersion: "0.11.10",
+          packageVersion: "0.11.11",
           accountId,
           descriptorUrl,
         },
@@ -394,10 +394,8 @@ type FakeState = {
   consumers: boolean;
   blankDeploymentReadback?: boolean;
   blankSecretReadback?: boolean;
-  blankVectorReadback?: boolean;
   workerPresence?: boolean;
-  vectorPresence?: boolean;
-  underscoreVectorNotFound?: boolean;
+  invalidVectorShape?: boolean;
   blankQueueConsumerReadback?: boolean;
   foreignContainer?: boolean;
   foreignVectorBinding?: boolean;
@@ -490,9 +488,17 @@ function fakeDependencies(
       calls.push(["worker-presence", workerName]);
       return state.workerPresence ?? state.deployed;
     },
-    async readVectorPresence(indexName) {
-      calls.push(["vector-presence", indexName]);
-      return state.vectorPresence ?? state.vector;
+    async readVector(indexName) {
+      calls.push(["vector-readback", indexName]);
+      return state.vector
+        ? {
+            name: outputs.vector.name,
+            config: {
+              dimensions: state.invalidVectorShape ? 2048 : 768,
+              metric: "cosine",
+            },
+          }
+        : undefined;
     },
     async runWrangler(args) {
       const argv = [...args];
@@ -565,18 +571,6 @@ function fakeDependencies(
           state.consumers = false;
         }
         return success();
-      }
-      if (argv[0] === "vectorize" && argv[1] === "get") {
-        if (!state.vector && state.blankVectorReadback) return success();
-        if (!state.vector && state.underscoreVectorNotFound) {
-          return { exitCode: 1, stdout: "", stderr: "vectorize.index.not_found" };
-        }
-        return state.vector
-          ? ok({
-              name: outputs.vector.name,
-              config: { dimensions: 768, metric: "cosine" },
-            })
-          : missing();
       }
       if (argv[0] === "vectorize" && argv[1] === "create") {
         state.vector = true;
@@ -706,9 +700,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       blankDeploymentReadback: true,
       blankSecretReadback: true,
-      blankVectorReadback: true,
       workerPresence: false,
-      vectorPresence: false,
     };
     const fake = fakeDependencies(
       state,
@@ -737,7 +729,7 @@ describe("materializer lifecycle", () => {
     expect(
       fake.calls.some(
         (call) =>
-          call[0] === "vector-presence" &&
+          call[0] === "vector-readback" &&
           call[1] === invocation.outputs.vector.name,
       ),
     ).toBe(true);
@@ -791,7 +783,6 @@ describe("materializer lifecycle", () => {
       consumers: false,
       blankDeploymentReadback: true,
       workerPresence: true,
-      underscoreVectorNotFound: true,
     };
     const fake = fakeDependencies(
       state,
@@ -896,7 +887,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       staleSecret: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.10",
+      tag: "v0.11.11",
     };
     const fake = fakeDependencies(
       state,
@@ -991,7 +982,7 @@ describe("materializer lifecycle", () => {
       containers: true,
       consumers: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.10",
+      tag: "v0.11.11",
     };
     const fake = fakeDependencies(
       state,
@@ -1039,9 +1030,7 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
       blankDeploymentReadback: true,
-      blankVectorReadback: true,
       workerPresence: false,
-      vectorPresence: false,
       blankQueueConsumerReadback: true,
     };
     const fake = fakeDependencies(
@@ -1067,7 +1056,7 @@ describe("materializer lifecycle", () => {
     });
   });
 
-  test("refuses a blank Vectorize readback when the provider API says the index exists", async () => {
+  test("refuses a malformed Vectorize API readback before cleanup", async () => {
     const archiveBytes = workerArchive();
     const release = descriptor(digest(archiveBytes));
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
@@ -1077,11 +1066,10 @@ describe("materializer lifecycle", () => {
     );
     const state: FakeState = {
       deployed: false,
-      vector: false,
+      vector: true,
       containers: false,
       consumers: false,
-      blankVectorReadback: true,
-      vectorPresence: true,
+      invalidVectorShape: true,
     };
     const fake = fakeDependencies(
       state,
@@ -1106,7 +1094,7 @@ describe("materializer lifecycle", () => {
       stage: "readback",
       mutationStarted: false,
     });
-    expect(fake.calls.some((call) => call[0] === "vector-presence")).toBe(true);
+    expect(fake.calls.some((call) => call[0] === "vector-readback")).toBe(true);
     expect(
       fake.calls.some(
         (call) => call[0] === "vectorize" && call[1] === "delete",
@@ -1129,7 +1117,6 @@ describe("materializer lifecycle", () => {
       consumers: false,
       blankDeploymentReadback: true,
       workerPresence: true,
-      underscoreVectorNotFound: true,
       blankQueueConsumerReadback: true,
     };
     const fake = fakeDependencies(
@@ -1182,7 +1169,7 @@ describe("materializer lifecycle", () => {
       consumers: true,
       foreignContainer: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.10",
+      tag: "v0.11.11",
     };
     const fake = fakeDependencies(
       state,
@@ -1232,7 +1219,7 @@ describe("materializer lifecycle", () => {
       consumers: false,
       foreignVectorBinding: true,
       message: existingProvenanceMessage(),
-      tag: "v0.11.10",
+      tag: "v0.11.11",
     };
     const fake = fakeDependencies(
       state,

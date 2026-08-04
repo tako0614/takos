@@ -172,7 +172,7 @@ type CommandResult = {
 export type MaterializerDependencies = {
   runWrangler(args: readonly string[], timeoutMs?: number): Promise<CommandResult>;
   readWorkerPresence(workerName: string): Promise<boolean>;
-  readVectorPresence(indexName: string): Promise<boolean>;
+  readVector(indexName: string): Promise<unknown | undefined>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
   sleep(milliseconds: number): Promise<void>;
@@ -1365,33 +1365,14 @@ function parseVector(value: unknown): VectorReadback {
 
 async function vectorReadback(
   dependencies: MaterializerDependencies,
-  configPath: string,
   expected: TakosOutputs["vector"],
 ): Promise<VectorReadback | undefined> {
-  const result = await dependencies.runWrangler([
-    "vectorize",
-    "get",
-    expected.name,
-    "--json",
-    "--config",
-    configPath,
-  ]);
-  // The locked Wrangler runtime can likewise return a successful blank body
-  // for an absent Vectorize index. Do not infer absence from that ambiguous
-  // command result alone: confirm it against the provider API first.
-  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
-    const present = await dependencies.readVectorPresence(expected.name);
-    if (!present) return undefined;
-    throw new MaterializerError({
-      code: "invalid_readback",
-      stage: "readback",
-      message: "Vectorize readback is blank while the index exists",
-      diagnosticDigest: digest("Vectorize presence readback\npresent"),
-    });
-  }
-  if (isNotFound(result)) return undefined;
-  if (result.exitCode !== 0) throw commandFailure("vector_readback", result, []);
-  const observed = parseVector(parseJsonOutput(result, "Vectorize readback"));
+  // Wrangler 4.107 can return a successful blank body for both absent and
+  // existing indexes in the runner. Read the authoritative provider API so
+  // absence and the complete dimensions/metric shape are proved together.
+  const value = await dependencies.readVector(expected.name);
+  if (value === undefined) return undefined;
+  const observed = parseVector(value);
   invariant(
     stableJson(observed) === stableJson(expected),
     "existing Vectorize index shape conflicts with the OpenTofu output",
@@ -1402,11 +1383,10 @@ async function vectorReadback(
 
 async function waitForVector(
   dependencies: MaterializerDependencies,
-  configPath: string,
   expected: TakosOutputs["vector"],
 ): Promise<VectorReadback> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const observed = await vectorReadback(dependencies, configPath, expected);
+    const observed = await vectorReadback(dependencies, expected);
     if (observed) return observed;
     await dependencies.sleep(2_000);
   }
@@ -2322,8 +2302,8 @@ function createDependencies(input: {
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
       });
     },
-    async readVectorPresence(indexName) {
-      const label = "Vectorize presence readback";
+    async readVector(indexName) {
+      const label = "Vectorize readback";
       const url = new URL(
         `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/vectorize/v2/indexes/${encodeURIComponent(indexName)}`,
       );
@@ -2345,14 +2325,44 @@ function createDependencies(input: {
           diagnosticDigest: digest(`${label}\ntransport`),
         });
       }
-      if (response.status === 200) return true;
-      if (response.status === 404) return false;
-      throw new MaterializerError({
-        code: "readback_failed",
-        stage: "readback",
-        message: "Vectorize presence readback was ambiguous",
-        diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
-      });
+      if (response.status === 404) return undefined;
+      if (response.status !== 200 || !response.body) {
+        throw new MaterializerError({
+          code: "readback_failed",
+          stage: "readback",
+          message: "Vectorize readback was ambiguous",
+          diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+        });
+      }
+      const bytes = await readStreamBounded(
+        response.body,
+        64 * 1024,
+        "Vectorize readback response",
+        "readback_failed",
+      );
+      let value: unknown;
+      try {
+        value = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+      } catch {
+        throw new MaterializerError({
+          code: "invalid_readback",
+          stage: "readback",
+          message: "Vectorize readback returned invalid JSON",
+          diagnosticDigest: digest(`${label}\ninvalid-json`),
+        });
+      }
+      invariant(
+        value !== null && typeof value === "object" && !Array.isArray(value),
+        "Vectorize readback envelope must be an object",
+        "invalid_readback",
+      );
+      const envelope = value as JsonRecord;
+      invariant(
+        envelope.success !== false,
+        "Vectorize readback API rejected the request",
+        "readback_failed",
+      );
+      return envelope.result;
     },
     async fetchBytes(url, maxBytes) {
       const response = await fetch(url, {
@@ -2506,7 +2516,6 @@ export async function materializePostApply(input: {
     validateQueueOwnership(queueBefore, invocation.outputs, false, false);
     const existingVector = await vectorReadback(
       dependencies,
-      configPath,
       invocation.outputs.vector,
     );
     const existingQueueConsumerCount = [...queueBefore.values()].reduce(
@@ -2554,7 +2563,7 @@ export async function materializePostApply(input: {
         completedStages,
       );
       completedStages.push("vector_created");
-      await waitForVector(dependencies, configPath, invocation.outputs.vector);
+      await waitForVector(dependencies, invocation.outputs.vector);
     }
 
     await requireMutationCommand(
@@ -2645,7 +2654,7 @@ export async function materializePostApply(input: {
       configPath,
       invocation.outputs,
     );
-    await vectorReadback(dependencies, configPath, invocation.outputs.vector);
+    await vectorReadback(dependencies, invocation.outputs.vector);
     const health = await verifyHealth(dependencies, invocation.outputs.publicUrl);
 
     return materializerEvidence({
@@ -2718,7 +2727,7 @@ async function waitForChildCleanupAbsence(input: {
         "invalid_readback",
       );
       invariant(
-        !(await vectorReadback(dependencies, configPath, outputs.vector)),
+        !(await vectorReadback(dependencies, outputs.vector)),
         "Vectorize index still exists after pre_destroy cleanup",
         "invalid_readback",
       );
@@ -2820,7 +2829,6 @@ export async function materializePreDestroy(input: {
     const ownedContainers = containers.filter((item) => ownedNames.has(item.name));
     const vector = await vectorReadback(
       dependencies,
-      configPath,
       invocation.outputs.vector,
     );
     const ownedQueueConsumerCount = [...queues.values()].reduce(
