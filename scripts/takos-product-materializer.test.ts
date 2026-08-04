@@ -423,6 +423,30 @@ describe("materializer input and topology", () => {
     });
   });
 
+  test("deletes a proved Worker through the bounded Cloudflare API", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-delete-"));
+    temporaryDirectories.push(root);
+    let observedRequest: Request | undefined;
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: join(root, "unused-wrangler.mjs"),
+      sourceRoot: root,
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async (input, init) => {
+        observedRequest = new Request(input, init);
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    await dependencies.deleteWorker("takos-example");
+
+    expect(observedRequest?.method).toBe("DELETE");
+    expect(observedRequest?.url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/takos-example?force=true`,
+    );
+  });
+
   test("requires the Node major supported by the locked Wrangler", () => {
     expect(validateNodeRuntimeVersion("v24.19.0\n")).toBe("v24.19.0");
     expect(() =>
@@ -560,6 +584,10 @@ function fakeDependencies(
     async readWorkerPresence(workerName) {
       calls.push(["worker-presence", workerName]);
       return state.workerPresence ?? state.deployed;
+    },
+    async deleteWorker(workerName) {
+      calls.push(["worker-delete", workerName]);
+      state.deployed = false;
     },
     async readVector(indexName) {
       calls.push(["vector-readback", indexName]);
@@ -740,10 +768,6 @@ function fakeDependencies(
             ],
           },
         });
-      }
-      if (argv[0] === "delete") {
-        state.deployed = false;
-        return success();
       }
       return success();
     },
@@ -1190,6 +1214,13 @@ describe("materializer lifecycle", () => {
       consumers: false,
     });
     expect(fake.calls.some((call) => call[0] === "d1")).toBe(false);
+    expect(
+      fake.calls.some(
+        (call) =>
+          call[0] === "worker-delete" &&
+          call[1] === invocation.outputs.workerName,
+      ),
+    ).toBe(true);
     expect(JSON.stringify(evidence)).not.toContain(sourceCommit);
     expect(JSON.stringify(evidence)).not.toContain(
       rawOutputs.service_runtime_name,
@@ -1363,7 +1394,7 @@ describe("materializer lifecycle", () => {
     expect(
       fake.calls.some(
         (call) =>
-          call[0] === "delete" ||
+          call[0] === "worker-delete" ||
           (call[0] === "queues" && call[2] === "remove") ||
           (call[0] === "containers" && call[1] === "delete") ||
           (call[0] === "vectorize" && call[1] === "delete"),
@@ -1416,7 +1447,7 @@ describe("materializer lifecycle", () => {
           (call[0] === "containers" && call[1] === "delete") ||
           (call[0] === "queues" && call[2] === "remove") ||
           (call[0] === "vectorize" && call[1] === "delete") ||
-          call[0] === "delete",
+          call[0] === "worker-delete",
       ),
     ).toBe(false);
   });
@@ -1464,7 +1495,7 @@ describe("materializer lifecycle", () => {
       fake.calls.some(
         (call) =>
           (call[0] === "vectorize" && call[1] === "delete") ||
-          call[0] === "delete",
+          call[0] === "worker-delete",
       ),
     ).toBe(false);
   });

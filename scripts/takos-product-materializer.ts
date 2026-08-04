@@ -174,6 +174,7 @@ type CommandResult = {
 export type MaterializerDependencies = {
   runWrangler(args: readonly string[], timeoutMs?: number): Promise<CommandResult>;
   readWorkerPresence(workerName: string): Promise<boolean>;
+  deleteWorker(workerName: string): Promise<void>;
   readVector(indexName: string): Promise<unknown | undefined>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
@@ -2361,13 +2362,20 @@ async function listCloudflareContainers(input: {
   }
 }
 
+type FetchImpl = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export function createDependencies(input: {
   nodeBin: string;
   wranglerBin: string;
   sourceRoot: string;
   apiToken: string;
   accountId: string;
+  fetchImpl?: FetchImpl;
 }): MaterializerDependencies {
+  const providerFetch: FetchImpl = input.fetchImpl ?? fetch;
   const childEnv: Record<string, string> = {
     CI: "true",
     CLOUDFLARE_API_TOKEN: input.apiToken,
@@ -2431,7 +2439,7 @@ export function createDependencies(input: {
       );
       let response: Response;
       try {
-        response = await fetch(url, {
+        response = await providerFetch(url, {
           headers: {
             authorization: `Bearer ${input.apiToken}`,
             accept: "application/json",
@@ -2456,6 +2464,41 @@ export function createDependencies(input: {
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
       });
     },
+    async deleteWorker(workerName) {
+      const label = "Worker delete";
+      const url = new URL(
+        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/workers/scripts/${encodeURIComponent(workerName)}`,
+      );
+      url.searchParams.set("force", "true");
+      let response: Response;
+      try {
+        response = await providerFetch(url, {
+          method: "DELETE",
+          headers: {
+            authorization: `Bearer ${input.apiToken}`,
+            accept: "application/json",
+          },
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw new MaterializerError({
+          code: "provider_command_failed",
+          stage: "worker_delete",
+          message: "Worker delete failed; provider diagnostics were withheld from lifecycle evidence",
+          mutationStarted: true,
+          diagnosticDigest: digest(`${label}\ntransport`),
+        });
+      }
+      if (response.ok || response.status === 404) return;
+      throw new MaterializerError({
+        code: "provider_command_failed",
+        stage: "worker_delete",
+        message: "Worker delete failed; provider diagnostics were withheld from lifecycle evidence",
+        mutationStarted: true,
+        diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+      });
+    },
     async readVector(indexName) {
       const label = "Vectorize readback";
       const url = new URL(
@@ -2463,7 +2506,7 @@ export function createDependencies(input: {
       );
       let response: Response;
       try {
-        response = await fetch(url, {
+        response = await providerFetch(url, {
           headers: {
             authorization: `Bearer ${input.apiToken}`,
             accept: "application/json",
@@ -2519,7 +2562,7 @@ export function createDependencies(input: {
       return envelope.result;
     },
     async fetchBytes(url, maxBytes) {
-      const response = await fetch(url, {
+      const response = await providerFetch(url, {
         redirect: "follow",
         headers: { accept: "application/octet-stream" },
         signal: AbortSignal.timeout(60_000),
@@ -2538,7 +2581,7 @@ export function createDependencies(input: {
       return bytes;
     },
     async fetchHealth(url) {
-      const response = await fetch(url, {
+      const response = await providerFetch(url, {
         redirect: "error",
         headers: { "cache-control": "no-cache" },
         signal: AbortSignal.timeout(10_000),
@@ -3081,13 +3124,7 @@ export async function materializePreDestroy(input: {
     });
 
     if (previous) {
-      await requireMutationCommand(
-        dependencies,
-        ["delete", invocation.outputs.workerName, "--force", "--config", configPath],
-        "worker_delete",
-        completedStages,
-        { allowAlreadyAbsent: true },
-      );
+      await dependencies.deleteWorker(invocation.outputs.workerName);
       completedStages.push("worker_deleted");
       await waitForWorkerAbsence(
         dependencies,
