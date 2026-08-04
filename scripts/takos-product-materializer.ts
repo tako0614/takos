@@ -17,6 +17,8 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, resolve, sep } from "node:path";
 
 export const WRANGLER_VERSION = "4.107.0";
+export const NODE_EXECUTABLE = "/usr/local/bin/node";
+export const MINIMUM_NODE_MAJOR = 22;
 export const LIFECYCLE_CAPABILITY = "capsule.lifecycle.command.v1";
 
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
@@ -2110,6 +2112,67 @@ async function ensureLockedWrangler(sourceRoot: string): Promise<string> {
   return binPath;
 }
 
+export function validateNodeRuntimeVersion(output: string): string {
+  const version = output.trim();
+  const match = /^v(\d+)\.(\d+)\.(\d+)$/u.exec(version);
+  invariant(
+    match !== null && Number(match[1]) >= MINIMUM_NODE_MAJOR,
+    `Node runtime must be v${MINIMUM_NODE_MAJOR} or newer`,
+    "wrangler_runtime_unavailable",
+  );
+  return version;
+}
+
+async function ensureCompatibleNodeRuntime(
+  nodeExecutable = NODE_EXECUTABLE,
+): Promise<void> {
+  let processHandle: ReturnType<typeof Bun.spawn>;
+  try {
+    processHandle = Bun.spawn([nodeExecutable, "--version"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  } catch {
+    throw new MaterializerError({
+      code: "wrangler_runtime_unavailable",
+      stage: "preflight",
+      message: `Node runtime is unavailable at ${nodeExecutable}`,
+    });
+  }
+  const timer = setTimeout(() => processHandle.kill(), 5_000);
+  let exitCode: number;
+  let stdoutBytes: Uint8Array;
+  let stderrBytes: Uint8Array;
+  try {
+    [exitCode, stdoutBytes, stderrBytes] = await Promise.all([
+      processHandle.exited,
+      readStreamBounded(
+        processHandle.stdout,
+        4 * 1024,
+        "Node version stdout",
+        "wrangler_runtime_unavailable",
+      ),
+      readStreamBounded(
+        processHandle.stderr,
+        4 * 1024,
+        "Node version stderr",
+        "wrangler_runtime_unavailable",
+      ),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+  const stdout = new TextDecoder().decode(stdoutBytes);
+  const stderr = new TextDecoder().decode(stderrBytes);
+  invariant(
+    exitCode === 0 && stderr.trim() === "",
+    "Node runtime version probe failed",
+    "wrangler_runtime_unavailable",
+  );
+  validateNodeRuntimeVersion(stdout);
+}
+
 async function listCloudflareContainers(input: {
   apiToken: string;
   accountId: string;
@@ -2208,7 +2271,8 @@ async function listCloudflareContainers(input: {
   }
 }
 
-function createDependencies(input: {
+export function createDependencies(input: {
+  nodeBin: string;
   wranglerBin: string;
   sourceRoot: string;
   apiToken: string;
@@ -2229,7 +2293,7 @@ function createDependencies(input: {
       if (args[0] === "containers" && args[1] === "list") {
         return listCloudflareContainers(input);
       }
-      const processHandle = Bun.spawn([process.execPath, input.wranglerBin, ...args], {
+      const processHandle = Bun.spawn([input.nodeBin, input.wranglerBin, ...args], {
         cwd: input.sourceRoot,
         env: childEnv,
         stdin: "ignore",
@@ -2599,7 +2663,6 @@ export async function materializePostApply(input: {
       completedStages,
       { timeoutMs: 30 * 60 * 1000 },
     );
-    completedStages.push("worker_deployed");
     const deployment = await waitForActivatedDeployment(
       dependencies,
       configPath,
@@ -2607,6 +2670,7 @@ export async function materializePostApply(input: {
       activationMessage,
       descriptor.releaseTag,
     );
+    completedStages.push("worker_deployed");
 
     // Keep secrets required by the currently serving version until the new
     // Worker version has been accepted. Pruning earlier can break the previous
@@ -3029,8 +3093,10 @@ export async function main(args = Bun.argv.slice(2), env = process.env): Promise
     phase = parsePhase(args);
     const invocation = parseInvocation(phase, env);
     const sourceRoot = resolve(import.meta.dir, "..");
+    await ensureCompatibleNodeRuntime();
     const wranglerBin = await ensureLockedWrangler(sourceRoot);
     const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
       wranglerBin,
       sourceRoot,
       apiToken: invocation.apiToken,

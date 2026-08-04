@@ -84,6 +84,11 @@ non-sensitive raw outputs を受け取ります。少なくとも次を必要と
 - `queues` の main/DLQ 8 entry
 - `vector_indexes.vector` の name/dimensions/metric
 
+Lifecycle command 自体は Bun で動きますが、SourceSnapshot に固定した Wrangler は
+runner の `/usr/local/bin/node` でだけ実行します。Wrangler 4.107.0 の runtime contract
+に合わせて Node 22 以上を preflight で確認し、Node がない・古い・version readback が
+曖昧な場合は provider mutation を開始しません。
+
 ## CredentialRecipe declaration
 
 Cloudflare ProviderConnection の selected auth mode は、通常の provider token と
@@ -160,6 +165,10 @@ Wrangler の deployment status が成功かつ stdout/stderr とも空の場合�
 Worker settings endpoint を直接 readback します。HTTP `200` は Worker が存在するため
 `resource_conflict`、HTTP `404` だけを不在として扱い、それ以外の status または通信
 失敗は digest-only evidence で fail-closed にします。
+
+同様に `wrangler deploy` の exit code `0` だけでは deployment 成功とみなしません。
+exact deployment、100% traffic の version、release tag と provenance message を
+Cloudflare から読み戻した後にだけ `worker_deployed` stage を記録します。
 
 `pre_destroy` は、既存 Worker version の binding / provenance で ownership を証明して
 から Queue consumer、4 Container application、Vectorize を削除し、不在が収束した後に

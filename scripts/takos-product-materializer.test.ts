@@ -5,15 +5,19 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
 import {
+  createDependencies,
   digest,
   failureEvidence,
+  MINIMUM_NODE_MAJOR,
   materializePostApply,
   materializePreDestroy,
+  NODE_EXECUTABLE,
   parseInvocation,
   parseTakosOutputs,
   parseWorkerArchive,
   renderWranglerConfig,
   validateProviderConfigurations,
+  validateNodeRuntimeVersion,
   validateReleaseDescriptor,
   validateRuntimeSecrets,
   type MaterializerDependencies,
@@ -353,7 +357,7 @@ describe("materializer input and topology", () => {
 
     const child = Bun.spawn(
       [
-        process.execPath,
+        NODE_EXECUTABLE,
         join(sourceRoot, "node_modules", "wrangler", "bin", "wrangler.js"),
         "deploy",
         "--dry-run",
@@ -385,6 +389,46 @@ describe("materializer input and topology", () => {
       throw new Error(`Wrangler dry-run failed:\n${stdout}\n${stderr}`);
     }
   });
+
+  test("runs the locked Wrangler entrypoint with the supported Node runtime", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-node-"));
+    temporaryDirectories.push(root);
+    const wranglerBin = join(root, "fake-wrangler.mjs");
+    await writeFile(
+      wranglerBin,
+      [
+        "process.stdout.write(JSON.stringify({",
+        "  executable: process.execPath,",
+        "  args: process.argv.slice(2),",
+        "}));",
+      ].join("\n"),
+    );
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin,
+      sourceRoot: root,
+      apiToken: "test-token",
+      accountId,
+    });
+
+    const result = await dependencies.runWrangler(["--version"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      executable: NODE_EXECUTABLE,
+      args: ["--version"],
+    });
+  });
+
+  test("requires the Node major supported by the locked Wrangler", () => {
+    expect(validateNodeRuntimeVersion("v24.19.0\n")).toBe("v24.19.0");
+    expect(() =>
+      validateNodeRuntimeVersion(`v${MINIMUM_NODE_MAJOR - 1}.99.0`),
+    ).toThrow(/Node runtime must be/u);
+    expect(() => validateNodeRuntimeVersion("1.3.14")).toThrow(
+      /Node runtime must be/u,
+    );
+  });
 });
 
 type FakeState = {
@@ -400,6 +444,7 @@ type FakeState = {
   foreignContainer?: boolean;
   foreignVectorBinding?: boolean;
   staleSecret?: boolean;
+  noopDeploy?: boolean;
   message?: string;
   tag?: string;
 };
@@ -581,7 +626,7 @@ function fakeDependencies(
         return success();
       }
       if (argv[0] === "deploy") {
-        if (!argv.includes("--dry-run")) {
+        if (!argv.includes("--dry-run") && !state.noopDeploy) {
           state.deployed = true;
           state.containers = true;
           state.consumers = true;
@@ -759,6 +804,60 @@ describe("materializer lifecycle", () => {
     );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
+  });
+
+  test("does not claim worker_deployed when Wrangler exits zero without creating a Worker", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-noop-deploy-"),
+    );
+    temporaryDirectories.push(root);
+    const secretPath = join(root, "runtime-secrets.json");
+    await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
+    await chmod(secretPath, 0o600);
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation("post_apply", {
+      ...invocationEnv("post_apply", digest(descriptorBytes)),
+      TAKOS_RUNTIME_SECRETS_FILE: secretPath,
+    });
+    const state: FakeState = {
+      deployed: false,
+      vector: false,
+      containers: false,
+      consumers: false,
+      blankDeploymentReadback: true,
+      blankSecretReadback: true,
+      workerPresence: false,
+      noopDeploy: true,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    let error: unknown;
+    try {
+      await materializePostApply({
+        invocation,
+        sourceRoot: join(import.meta.dir, ".."),
+        dependencies: fake,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    const evidence = failureEvidence(error, "post_apply");
+    expect(evidence).toMatchObject({
+      code: "invalid_readback",
+      stage: "readback",
+      mutationStarted: true,
+      completedStages: ["vector_created", "d1_migrations_applied"],
+    });
+    expect(evidence.completedStages).not.toContain("worker_deployed");
   });
 
   test("refuses to adopt a Worker when blank deployment status confirms presence", async () => {
