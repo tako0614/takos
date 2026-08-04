@@ -44,6 +44,8 @@ const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const MAX_EXPANDED_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 25_000;
 const MAX_COMMAND_OUTPUT_BYTES = 4 * 1024 * 1024;
+const ARTIFACT_DOWNLOAD_ATTEMPTS = 3;
+const ARTIFACT_DOWNLOAD_RETRY_DELAY_MS = 250;
 const REQUIRED_SECRET_NAMES = [
   "ENCRYPTION_KEY",
   "OIDC_CLIENT_SECRET",
@@ -2367,6 +2369,19 @@ type FetchImpl = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+function artifactDownloadStatusIsRetryable(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function artifactDownloadFailure(reason: string): MaterializerError {
+  return new MaterializerError({
+    code: "artifact_download_failed",
+    stage: "artifact",
+    message: "immutable release artifact download failed",
+    diagnosticDigest: digest(`artifact_download\n${reason}`),
+  });
+}
+
 export function createDependencies(input: {
   nodeBin: string;
   wranglerBin: string;
@@ -2566,23 +2581,77 @@ export function createDependencies(input: {
       return envelope.result;
     },
     async fetchBytes(url, maxBytes) {
-      const response = await providerFetch(url, {
-        redirect: "follow",
-        headers: { accept: "application/octet-stream" },
-        signal: AbortSignal.timeout(60_000),
-      });
-      invariant(response.ok, `artifact download returned HTTP ${response.status}`, "artifact_download_failed");
-      const declaredLength = Number(response.headers.get("content-length") ?? "0");
-      invariant(!declaredLength || declaredLength <= maxBytes, "artifact download is too large", "artifact_download_failed");
-      invariant(response.body, "artifact download returned no body", "artifact_download_failed");
-      const bytes = await readStreamBounded(
-        response.body,
-        maxBytes,
-        "artifact download",
-        "artifact_download_failed",
-      );
-      invariant(bytes.byteLength > 0 && bytes.byteLength <= maxBytes, "artifact download size is invalid", "artifact_download_failed");
-      return bytes;
+      let lastFailure = "transport";
+      for (
+        let attempt = 1;
+        attempt <= ARTIFACT_DOWNLOAD_ATTEMPTS;
+        attempt += 1
+      ) {
+        try {
+          const response = await providerFetch(url, {
+            redirect: "follow",
+            headers: { accept: "application/octet-stream" },
+            signal: AbortSignal.timeout(60_000),
+          });
+          if (!response.ok) {
+            lastFailure = `status=${response.status}`;
+            if (
+              attempt === ARTIFACT_DOWNLOAD_ATTEMPTS ||
+              !artifactDownloadStatusIsRetryable(response.status)
+            ) {
+              throw artifactDownloadFailure(lastFailure);
+            }
+            await response.body?.cancel().catch(() => undefined);
+          } else {
+            const declaredLength = Number(
+              response.headers.get("content-length") ?? "0",
+            );
+            invariant(
+              !declaredLength || declaredLength <= maxBytes,
+              "artifact download is too large",
+              "artifact_download_failed",
+            );
+            invariant(
+              response.body,
+              "artifact download returned no body",
+              "artifact_download_failed",
+            );
+            try {
+              const bytes = await readStreamBounded(
+                response.body,
+                maxBytes,
+                "artifact download",
+                "artifact_download_failed",
+              );
+              invariant(
+                bytes.byteLength > 0 && bytes.byteLength <= maxBytes,
+                "artifact download size is invalid",
+                "artifact_download_failed",
+              );
+              return bytes;
+            } catch (error) {
+              if (error instanceof MaterializerError) throw error;
+              lastFailure = "stream";
+              if (attempt === ARTIFACT_DOWNLOAD_ATTEMPTS) {
+                throw artifactDownloadFailure(lastFailure);
+              }
+            }
+          }
+        } catch (error) {
+          if (error instanceof MaterializerError) throw error;
+          lastFailure = "transport";
+          if (attempt === ARTIFACT_DOWNLOAD_ATTEMPTS) {
+            throw artifactDownloadFailure(lastFailure);
+          }
+        }
+        await new Promise((resolveRetry) =>
+          setTimeout(
+            resolveRetry,
+            ARTIFACT_DOWNLOAD_RETRY_DELAY_MS * attempt,
+          )
+        );
+      }
+      throw artifactDownloadFailure(lastFailure);
     },
     async fetchHealth(url) {
       const response = await providerFetch(url, {

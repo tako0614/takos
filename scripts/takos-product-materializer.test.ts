@@ -423,6 +423,62 @@ describe("materializer input and topology", () => {
     });
   });
 
+  test("retries transient immutable artifact transport failures before mutation", async () => {
+    let attempts = 0;
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: "/tmp/unused-wrangler.mjs",
+      sourceRoot: "/tmp",
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async () => {
+        attempts += 1;
+        if (attempts < 3) throw new TypeError("transient transport failure");
+        return new Response("immutable-bytes", { status: 200 });
+      },
+    });
+
+    const bytes = await dependencies.fetchBytes(
+      "https://github.com/tako0614/takos/releases/download/v0.0.0/example",
+      1024,
+    );
+
+    expect(new TextDecoder().decode(bytes)).toBe("immutable-bytes");
+    expect(attempts).toBe(3);
+  });
+
+  test("does not retry a permanent immutable artifact response", async () => {
+    let attempts = 0;
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: "/tmp/unused-wrangler.mjs",
+      sourceRoot: "/tmp",
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async () => {
+        attempts += 1;
+        return new Response("not found", { status: 404 });
+      },
+    });
+    let observed: unknown;
+    try {
+      await dependencies.fetchBytes(
+        "https://github.com/tako0614/takos/releases/download/v0.0.0/missing",
+        1024,
+      );
+    } catch (error) {
+      observed = error;
+    }
+
+    expect(attempts).toBe(1);
+    expect(failureEvidence(observed, "post_apply")).toMatchObject({
+      status: "failed",
+      code: "artifact_download_failed",
+      stage: "artifact",
+      mutationStarted: false,
+    });
+  });
+
   test("deletes a proved Worker through the bounded Cloudflare API", async () => {
     const root = await mkdtemp(join(tmpdir(), "takos-materializer-delete-"));
     temporaryDirectories.push(root);
