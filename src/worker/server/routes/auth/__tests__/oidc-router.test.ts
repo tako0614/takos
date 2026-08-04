@@ -346,8 +346,8 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
         email: "takosumi-user@example.test",
         name: "Takosumi User",
         picture: "https://accounts.example.test/avatar.png",
-        takosumi: { space_id: "workspace-parent-1" },
-        space_memberships: ["workspace-parent-1"],
+        takosumi: { workspace_id: "workspace-parent-1" },
+        workspace_memberships: ["workspace-parent-1"],
       });
     }
     return new Response("not found", { status: 404 });
@@ -784,8 +784,8 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
         email: "legacy@example.test",
         email_verified: true,
         name: "Accounts Name",
-        takosumi: { space_id: "workspace-parent-legacy" },
-        space_memberships: ["workspace-parent-legacy"],
+        takosumi: { workspace_id: "workspace-parent-legacy" },
+        workspace_memberships: ["workspace-parent-legacy"],
       });
     }
     return new Response("not found", { status: 404 });
