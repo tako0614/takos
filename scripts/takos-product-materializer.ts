@@ -1462,6 +1462,86 @@ function expectedContainerShape(
   };
 }
 
+type ContainerCapacity = {
+  readonly vcpu: number;
+  readonly memory_mib: number;
+  readonly disk_mb: number;
+};
+
+const CONTAINER_PRESET_CAPACITIES: Readonly<Record<string, ContainerCapacity>> =
+  Object.freeze({
+    lite: { vcpu: 0.0625, memory_mib: 256, disk_mb: 2_000 },
+    basic: { vcpu: 0.25, memory_mib: 1_024, disk_mb: 4_000 },
+    "standard-2": { vcpu: 1, memory_mib: 6_144, disk_mb: 12_000 },
+  });
+
+function canonicalContainerCapacity(
+  value: unknown,
+  label: string,
+  code: "invalid_input" | "invalid_readback",
+): ContainerCapacity {
+  if (typeof value === "string") {
+    const preset = CONTAINER_PRESET_CAPACITIES[value];
+    invariant(preset, `${label} preset is unsupported`, code);
+    return preset;
+  }
+  invariant(
+    value !== null && typeof value === "object" && !Array.isArray(value),
+    `${label} must be a preset or capacity object`,
+    code,
+  );
+  const item = value as JsonRecord;
+  invariant(
+    typeof item.vcpu === "number" && Number.isFinite(item.vcpu) && item.vcpu > 0,
+    `${label}.vcpu is invalid`,
+    code,
+  );
+  invariant(
+    typeof item.memory_mib === "number" &&
+      Number.isInteger(item.memory_mib) &&
+      item.memory_mib > 0,
+    `${label}.memory_mib is invalid`,
+    code,
+  );
+  invariant(
+    typeof item.disk_mb === "number" &&
+      Number.isInteger(item.disk_mb) &&
+      item.disk_mb > 0,
+    `${label}.disk_mb is invalid`,
+    code,
+  );
+  return {
+    vcpu: item.vcpu,
+    memory_mib: item.memory_mib,
+    disk_mb: item.disk_mb,
+  };
+}
+
+function containerCapacityReadback(configuration: JsonRecord): ContainerCapacity {
+  if (configuration.instance_type !== undefined) {
+    return canonicalContainerCapacity(
+      configuration.instance_type,
+      "container instance type readback",
+      "invalid_readback",
+    );
+  }
+  const disk = configuration.disk;
+  invariant(
+    disk !== null && typeof disk === "object" && !Array.isArray(disk),
+    "container disk readback must be an object",
+    "invalid_readback",
+  );
+  return canonicalContainerCapacity(
+    {
+      vcpu: configuration.vcpu,
+      memory_mib: configuration.memory_mib,
+      disk_mb: (disk as JsonRecord).size_mb,
+    },
+    "expanded container capacity readback",
+    "invalid_readback",
+  );
+}
+
 async function verifyContainers(
   dependencies: MaterializerDependencies,
   configPath: string,
@@ -1487,7 +1567,17 @@ async function verifyContainers(
     invariant(info.name === item.name, `container ${item.name} identity drifted`, "invalid_readback");
     invariant(configuration.image === wanted.image, `container ${item.name} configured image drifted`, "invalid_readback");
     invariant(info.max_instances === wanted.maxInstances, `container ${item.name} capacity drifted`, "invalid_readback");
-    invariant(stableJson(configuration.instance_type) === stableJson(wanted.instanceType), `container ${item.name} instance type drifted`, "invalid_readback");
+    const expectedCapacity = canonicalContainerCapacity(
+      wanted.instanceType,
+      `container ${item.name} expected capacity`,
+      "invalid_input",
+    );
+    invariant(
+      stableJson(containerCapacityReadback(configuration)) ===
+        stableJson(expectedCapacity),
+      `container ${item.name} instance type drifted`,
+      "invalid_readback",
+    );
     invariant(info.rollout_active_grace_period === 900, `container ${item.name} grace period drifted`, "invalid_readback");
   }
 }
@@ -2772,7 +2862,8 @@ async function waitForChildCleanupAbsence(input: {
     mutationStarted,
   } = input;
   let lastError: unknown;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  const maxAttempts = 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const queues = await queueReadbacks(dependencies, configPath, outputs);
       for (const consumers of queues.values()) {
@@ -2798,7 +2889,7 @@ async function waitForChildCleanupAbsence(input: {
       return;
     } catch (error) {
       lastError = error;
-      if (attempt < 11) await dependencies.sleep(3_000);
+      if (attempt + 1 < maxAttempts) await dependencies.sleep(3_000);
     }
   }
   throw new MaterializerError({

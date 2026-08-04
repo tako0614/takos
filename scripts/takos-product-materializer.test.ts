@@ -448,6 +448,9 @@ type FakeState = {
   foreignVectorBinding?: boolean;
   staleSecret?: boolean;
   noopDeploy?: boolean;
+  expandedContainerInfo?: boolean;
+  containerDeletionReadbacksRemaining?: number;
+  containerDeletionRequested?: boolean;
   message?: string;
   tag?: string;
 };
@@ -492,6 +495,28 @@ function consumer(
       retry_delay: retryDelay,
     },
     dead_letter_queue: deadLetterQueue ?? null,
+  };
+}
+
+function expandedContainerConfiguration(instanceType: unknown) {
+  if (instanceType === "lite") {
+    return { vcpu: 0.0625, memory_mib: 256, disk: { size_mb: 2_000 } };
+  }
+  if (instanceType === "basic") {
+    return { vcpu: 0.25, memory_mib: 1_024, disk: { size_mb: 4_000 } };
+  }
+  if (instanceType === "standard-2") {
+    return { vcpu: 1, memory_mib: 6_144, disk: { size_mb: 12_000 } };
+  }
+  const custom = instanceType as {
+    readonly vcpu: number;
+    readonly memory_mib: number;
+    readonly disk_mb: number;
+  };
+  return {
+    vcpu: custom.vcpu,
+    memory_mib: custom.memory_mib,
+    disk: { size_mb: custom.disk_mb },
   };
 }
 
@@ -576,6 +601,14 @@ function fakeDependencies(
         return success();
       }
       if (argv[0] === "containers" && argv[1] === "list") {
+        if (state.containerDeletionRequested && state.containers) {
+          if ((state.containerDeletionReadbacksRemaining ?? 0) > 0) {
+            state.containerDeletionReadbacksRemaining =
+              (state.containerDeletionReadbacksRemaining ?? 0) - 1;
+          } else {
+            state.containers = false;
+          }
+        }
         return ok(
           state.containers
             ? containerShapes.map(([suffix, , , image], index) => ({
@@ -596,7 +629,12 @@ function fakeDependencies(
           name: `${outputs.workerName}-${suffix}`,
           max_instances: maxInstances,
           rollout_active_grace_period: 900,
-          configuration: { image, instance_type: instanceType },
+          configuration: {
+            image,
+            ...(state.expandedContainerInfo
+              ? expandedContainerConfiguration(instanceType)
+              : { instance_type: instanceType }),
+          },
           durable_objects: {
             namespace_id: state.foreignContainer
               ? `foreign-namespace-${index}`
@@ -605,7 +643,12 @@ function fakeDependencies(
         });
       }
       if (argv[0] === "containers" && argv[1] === "delete") {
-        if (argv[2] === "container-3") state.containers = false;
+        if (argv[2] === "container-3") {
+          state.containerDeletionRequested = true;
+          if ((state.containerDeletionReadbacksRemaining ?? 0) === 0) {
+            state.containers = false;
+          }
+        }
         return success();
       }
       if (argv[0] === "queues" && argv[2] === "list") {
@@ -807,6 +850,43 @@ describe("materializer lifecycle", () => {
     );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
+  });
+
+  test("accepts the current Wrangler expanded container capacity readback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-expanded-container-"));
+    temporaryDirectories.push(root);
+    const secretPath = join(root, "runtime-secrets.json");
+    await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
+    await chmod(secretPath, 0o600);
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation("post_apply", {
+      ...invocationEnv("post_apply", digest(descriptorBytes)),
+      TAKOS_RUNTIME_SECRETS_FILE: secretPath,
+    });
+    const fake = fakeDependencies(
+      {
+        deployed: false,
+        vector: false,
+        containers: false,
+        consumers: false,
+        workerPresence: false,
+        expandedContainerInfo: true,
+      },
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    const evidence = await materializePostApply({
+      invocation,
+      sourceRoot: join(import.meta.dir, ".."),
+      dependencies: fake,
+    });
+
+    expect(evidence.status).toBe("succeeded");
   });
 
   test("does not claim worker_deployed when Wrangler exits zero without creating a Worker", async () => {
@@ -1116,6 +1196,41 @@ describe("materializer lifecycle", () => {
     );
     expect(JSON.stringify(evidence)).not.toContain("deployment-1");
     expect(JSON.stringify(evidence)).not.toContain("version-1");
+  });
+
+  test("pre_destroy waits for asynchronously deleted containers to disappear", async () => {
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
+    const state: FakeState = {
+      deployed: true,
+      vector: true,
+      containers: true,
+      consumers: true,
+      containerDeletionReadbacksRemaining: 12,
+      message: existingProvenanceMessage(),
+      tag: releaseTag,
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    const evidence = await materializePreDestroy({
+      invocation,
+      sourceRoot: join(import.meta.dir, ".."),
+      dependencies: fake,
+    });
+
+    expect(evidence.status).toBe("succeeded");
+    expect(state.containers).toBe(false);
   });
 
   test("reports zero removals for an already absent installation with blank queue readbacks", async () => {
