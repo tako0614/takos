@@ -11,21 +11,15 @@ import {
   AuthenticationError,
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
+import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "../../../../contracts/public/accounts-oidc.ts";
+
+export { TAKOS_ACCOUNTS_OAUTH_SCOPES };
 
 const ACCESS_TOKEN_SKEW_MS = 15_000;
 const REFRESH_LEASE_MS = 15_000;
 const REFRESH_WAIT_MS = 100;
 const REFRESH_WAIT_ATTEMPTS = 60;
 const TOKEN_FETCH_TIMEOUT_MS = 10_000;
-
-export const TAKOS_ACCOUNTS_OAUTH_SCOPES = [
-  "openid",
-  "profile",
-  "email",
-  "offline_access",
-  "capsules:read",
-  "capsules:write",
-] as const;
 
 type DelegatedTokenResponse = {
   readonly access_token?: string;

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
+import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "./accounts-oidc.ts";
+
 const root = new URL("../../../", import.meta.url);
 const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
 const manifest = JSON.parse(text) as RepositoryManifest;
@@ -86,6 +88,15 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   );
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
+});
+
+test("the Repository manifest declares every OAuth scope requested by Takos", () => {
+  const module = manifest.install.modules[manifest.install.defaultModule];
+  const oidcRequirement = module.requires.find(
+    (requirement) => requirement.kind === "identity.oidc",
+  );
+
+  expect(oidcRequirement?.scopes).toEqual([...TAKOS_ACCOUNTS_OAUTH_SCOPES]);
 });
 
 test("manifest references real variables and only bounded presentation metadata", () => {
@@ -206,6 +217,10 @@ interface RepositoryModule {
       variables?: Record<string, string>;
     }>;
   };
+  requires: Array<{
+    kind: string;
+    scopes?: string[];
+  }>;
   interfaces: Array<{
     key: string;
     name: string;
