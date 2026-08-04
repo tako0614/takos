@@ -149,7 +149,14 @@
           {
             "kind": "identity.oidc",
             "callbackPath": "/auth/oidc/callback",
-            "scopes": ["openid", "profile", "email"],
+            "scopes": [
+              "openid",
+              "profile",
+              "email",
+              "offline_access",
+              "capsules:read",
+              "capsules:write"
+            ],
             "deliver": {
               "variables": {
                 "accountsUrl": "takosumi_accounts_url",
