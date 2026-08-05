@@ -16,7 +16,8 @@
 # NOTE: all relative paths in this file resolve from THIS config file's
 # directory (takos/deploy/cloudflare/), per wrangler semantics.
 name = "takos"
-account_id = "replace-with-account-id"
+# Account authority is supplied by the selected Provider Connection/operator
+# environment; this portable artifact config never pins an account.
 main = "../../src/worker/cloudflare-entrypoint.ts"
 workers_dev = true
 compatibility_date = "2026-04-01"
