@@ -147,8 +147,11 @@ locals {
 }
 
 resource "takoform_relational_database" "database" {
-  name   = format("%s-db", local.prefix)
-  engine = "sqlite"
+  name          = format("%s-db", local.prefix)
+  engine        = "sqlite"
+  schema_url    = "https://raw.githubusercontent.com/tako0614/takos/bf6446644e1cda24abb12d4a26dac7a4b2ca97e8/deploy/takoform/migrations/schema-bundle.json"
+  schema_sha256 = "6a1037302bc18e38448c0d386d76f5226fe066618988a24c1efc54d1e358df29"
+  schema_format = "takosumi.resource-migrations"
 }
 
 resource "takoform_key_value_store" "hostname_routing" {

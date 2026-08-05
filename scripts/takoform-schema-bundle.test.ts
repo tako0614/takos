@@ -36,4 +36,21 @@ describe("Takos portable relational schema bundle", () => {
     expect(names).toEqual([...names].sort());
     expect(new Set(names).size).toBe(names.length);
   });
+
+  test("pins the portable database to the exact tracked bundle bytes", async () => {
+    const bundle = await readFile(join(root, BUNDLE_RELATIVE_PATH));
+    const moduleSource = await readFile(
+      join(root, "deploy/takoform/main.tf"),
+      "utf8",
+    );
+    const digest = createHash("sha256").update(bundle).digest("hex");
+
+    expect(moduleSource).toContain(`schema_sha256 = "${digest}"`);
+    expect(moduleSource).toContain(
+      '/deploy/takoform/migrations/schema-bundle.json"',
+    );
+    expect(moduleSource).toContain(
+      'schema_format = "takosumi.resource-migrations"',
+    );
+  });
 });
