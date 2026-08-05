@@ -1,5 +1,5 @@
 {
-  "apiVersion": "takosumi.com/v2.1",
+  "apiVersion": "takosumi.com/v2.2",
   "kind": "Repository",
   "install": {
     "defaultModule": "deploy/opentofu",
@@ -164,6 +164,18 @@
                 "clientId": "takosumi_accounts_client_id",
                 "redirectUri": "takosumi_accounts_redirect_uri"
               }
+            }
+          },
+          {
+            "kind": "interface.consume",
+            "key": "ai",
+            "interface": {
+              "type": "takosumi.ai.gateway",
+              "version": "1"
+            },
+            "permissions": ["ai.chat"],
+            "delivery": {
+              "type": "oauth2"
             }
           }
         ],

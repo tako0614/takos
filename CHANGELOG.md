@@ -6,6 +6,14 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.11.20 — Portable AI Interface requirement
+
+- Declare the exact `takosumi.ai.gateway@1` contract and `ai.chat` permission
+  in the repository manifest instead of relying on a host-specific binding.
+- Keep provider names, Interface IDs, endpoints, and credentials out of the
+  repository; Takosumi resolves the Workspace Interface and short-lived grant
+  for the Capsule OIDC pairwise principal.
+
 ## 0.11.3 — Provider-safe Cloudflare queue names
 
 - Bound every Capsule-derived Cloudflare Queue name below the live provider's
