@@ -126,8 +126,11 @@ operator token を Capsule に渡したり、OpenTofu Output に bearer credenti
 install や表示用のメタデータは、必ずしも module から来る必要はありません。Git URL、ref、module path、アプリ名、
 アイコン、カテゴリ、`InstallConfig.interfaceBlueprints` による host-managed Interface の宣言、Output の input
 mapping、`InstallConfig.outputAllowlist` による公開 Output の選択は、Takosumi の service-side install 設定で管理できます。
-app-owned launcher などの repository-owned declaration は v2.1 `.well-known/takosumi.json` の `interfaces[]` に置けます。
+app-owned launcher などの repository-owned declaration は v2.2 `.well-known/takosumi.json` の `interfaces[]` に置けます。
 Takosumi は exact snapshot を検証して service-side blueprint に compile しますが、Output 単独の fallback はありません。
+host Interface の利用要件は同じ文書の `requires[].kind: interface.consume` に exact type/version と最小 permission だけを
+置きます。Interface ID、endpoint、provider、credential は置かず、Takosumi が DB-owned InstallConfig と Capsule OIDC の
+pairwise Principal から通常の InterfaceBinding を解決します。
 ソースのリポジトリは普通の OpenTofu module のままであり、Takosumi 専用 provider resource は要求しません。
 Form-backed Resource の portable な宣言は、verified な Takoform Form Definition の `interfaces[]` descriptor に置けます。
 Takosumi はその descriptor から host-owned Interface を materialize しますが、InterfaceBinding は別の明示的な

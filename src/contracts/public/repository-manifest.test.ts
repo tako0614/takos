@@ -22,7 +22,7 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v2.1");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2.2");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
   expect(manifest.install.defaultModule).toBe("deploy/opentofu");
@@ -97,6 +97,24 @@ test("the Repository manifest declares every OAuth scope requested by Takos", ()
   );
 
   expect(oidcRequirement?.scopes).toEqual([...TAKOS_ACCOUNTS_OAUTH_SCOPES]);
+});
+
+test("the Repository manifest requests AI through the portable host Interface", () => {
+  const module = manifest.install.modules[manifest.install.defaultModule];
+  const requirement = module.requires.find(
+    (candidate) => candidate.kind === "interface.consume",
+  );
+
+  expect(requirement).toEqual({
+    kind: "interface.consume",
+    key: "ai",
+    interface: { type: "takosumi.ai.gateway", version: "1" },
+    permissions: ["ai.chat"],
+    delivery: { type: "oauth2" },
+  });
+  expect(text).not.toContain('"interfaceId"');
+  expect(text).not.toContain('"endpoint"');
+  expect(text).not.toContain('"credentialRef"');
 });
 
 test("manifest references real variables and only bounded presentation metadata", () => {
@@ -220,6 +238,10 @@ interface RepositoryModule {
   requires: Array<{
     kind: string;
     scopes?: string[];
+    key?: string;
+    interface?: { type: string; version: string };
+    permissions?: string[];
+    delivery?: { type: string };
   }>;
   interfaces: Array<{
     key: string;
