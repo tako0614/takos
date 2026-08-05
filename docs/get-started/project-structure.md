@@ -14,7 +14,7 @@ external Takosumi control plane が Capsule / Run / StateVersion / Output / Caps
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu` maps it to a directly connected Cloudflare account and `deploy/takoform` maps it to portable Form resources. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` and `deploy/opentofu/takoform` are peer adapters. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
 
 ## Capsule Shape
 
@@ -26,7 +26,7 @@ A Capsule references the OpenTofu module to deploy:
   "module": {
     "gitUrl": "https://github.com/example/app.git",
     "ref": "main",
-    "path": "deploy/opentofu"
+    "path": "deploy/opentofu/takoform"
   }
 }
 ```

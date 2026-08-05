@@ -14,7 +14,6 @@ export {
   RunNotifierDO,
   SessionDO,
 } from "./web.ts";
-export { TakosRuntimeContainer } from "./runtime/container-hosts/runtime-host.ts";
 export {
   ExecutorContainerTier1,
   ExecutorContainerTier2,

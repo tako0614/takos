@@ -4,7 +4,7 @@
 `apply` type Run -> StateVersion / Output), with a **ProviderConnection / ProviderBinding / policy** owning the provider
 credentials and state handling. The trust boundaries here are properties of that
 Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The contract
-is declared in `deploy/product-resources.json`; `deploy/opentofu` maps it to Cloudflare and `deploy/takoform` maps it to portable Form resources.
+is declared in `deploy/product-resources.json`; `deploy/opentofu/cloudflare` maps it to Cloudflare and `deploy/opentofu/takoform` maps it to portable Form resources.
 `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
 materialization of that same topology.
 
@@ -65,7 +65,7 @@ no signature is required or wanted.** Adding header auth here is theater that in
       (`takosumi-private` / operator-local config) and MUST be asserted there (egress URL not publicly routable); it is **not** enforced by worker
       code. Until that is verified in staging, treat node-profile egress as URL-reachable and keep it network-isolated.
   - The **container callback endpoints exposed by the single worker** MUST stay URL-reachable from the untrusted
-    agent/actions containers: containers call back by URL (`PROXY_BASE_URL`, `TAKOS_AGENT_CONTROL_RPC_BASE_URL`) because a
+    agent execution containers: containers call back by URL (`PROXY_BASE_URL`, `TAKOS_AGENT_CONTROL_RPC_BASE_URL`) because a
     Cloudflare Container cannot hold a service binding. Their boundary is the **per-run token (tier 2)**, not the binding
     — making them binding-only breaks container callbacks. This is exactly why tier 2 (a real credential) exists where
     tier 1 (binding boundary) cannot apply, and why Takosumi's ProviderConnection / ProviderBinding / policy —
@@ -75,7 +75,7 @@ no signature is required or wanted.** Adding header auth here is theater that in
 
 ### 2. Untrusted execution container → worker → per-run capability token (authenticating an untrusted party)
 
-The **agent and actions/workflow containers run untrusted / user-supplied code** and call back via
+The **agent execution containers run untrusted / user-supplied code** and call back via
 `/api/internal/v1/agent-control/*` → `/internal/executor-rpc/*`. This is NOT "internal auth" — it is authenticating an
 untrusted party, so it keeps a real credential:
 
@@ -84,10 +84,10 @@ untrusted party, so it keeps a real credential:
 - every control-RPC handler derives **tenant + thread + identity from the token-bound run, never from the request body**
   (`resolveRunThreadTenant`, `getRunBootstrap`, and the TIER A binding) — a compromised container cannot target another
   tenant;
-- least privilege: secrets forwarded to a workflow container are limited to those the job references
+- least privilege: secrets forwarded to an execution container are limited to those the job references
   (`collectReferencedSecretNames`).
 - Target hardening (tracked, not yet done): split the single coarse `ProxyCapability="control"` into per-purpose scopes
-  and give workflow/actions runs a smaller set than agent runs; gate workflow-container egress deny-by-default.
+  and give execution runs a smaller set than agent runs; gate execution-container egress deny-by-default.
 
 ### 3. Cross-service implementation calls → worker → ONE signed-envelope
 

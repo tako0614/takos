@@ -35,7 +35,6 @@ const packageVersion = packageManifest.version;
 const releaseTag = `v${packageVersion}`;
 const descriptorUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takosumi-artifact.json`;
 const archiveUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takos-worker-release.tar.gz`;
-const runtimeImage = `registry.cloudflare.com/${accountId}/takos-worker-runtime@sha256:${"c".repeat(64)}`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
 
 const rawOutputs = {
@@ -46,7 +45,6 @@ const rawOutputs = {
   launch_url: "https://takos.example.test",
   public_url: "https://takos.example.test",
   executor_capacity: {
-    runtime_max_instances: 2,
     tier1_max_instances: 3,
     tier1_max_concurrent_runs: 4,
     tier2_max_instances: 5,
@@ -77,8 +75,6 @@ const rawOutputs = {
     runs_dlq: "takos-runs-dlq",
     index_jobs: "takos-index-jobs",
     index_jobs_dlq: "takos-index-jobs-dlq",
-    workflow: "takos-workflow-jobs",
-    workflow_dlq: "takos-workflow-jobs-dlq",
     notification_push: "takos-notification-push",
     notification_push_dlq: "takos-notification-push-dlq",
   },
@@ -123,7 +119,7 @@ afterEach(async () => {
 
 function descriptor(archiveDigest: string): ReleaseDescriptor {
   return {
-    kind: "takosumi.worker-artifact@v1",
+    kind: "takosumi.worker-artifact@v2",
     app: "takos",
     commit: sourceCommit,
     releaseTag,
@@ -134,7 +130,7 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
       sha256Prefixed: archiveDigest,
     },
     assetManifest: "asset-manifest.json",
-    containerImages: { runtime: runtimeImage, executor: executorImage },
+    containerImages: { executor: executorImage },
   };
 }
 
@@ -240,18 +236,13 @@ describe("materializer input and topology", () => {
       ADMIN_DOMAIN: "takos.example.test",
       CF_ACCOUNT_ID: accountId,
     });
-    expect((config.containers as unknown[]).length).toBe(4);
+    expect((config.containers as unknown[]).length).toBe(3);
     expect((config.queues as { consumers: unknown[] }).consumers.length).toBe(
-      8,
+      6,
     );
     expect((config.migrations as unknown[]).at(-1)).toEqual({
-      tag: "v6",
-      new_sqlite_classes: [
-        "TakosRuntimeContainer",
-        "ExecutorContainerTier1",
-        "ExecutorContainerTier2",
-        "ExecutorContainerTier3",
-      ],
+      tag: "v7",
+      deleted_classes: ["TakosRuntimeContainer"],
     });
     expect(config.routes).toEqual([
       { pattern: "takos.example.test", custom_domain: true },
@@ -338,7 +329,6 @@ describe("materializer input and topology", () => {
         "export class NotificationNotifierDO {}",
         "export class RateLimiterDO {}",
         "export class RoutingDO {}",
-        "export class TakosRuntimeContainer {}",
         "export class ExecutorContainerTier1 {}",
         "export class ExecutorContainerTier2 {}",
         "export class ExecutorContainerTier3 {}",
@@ -616,6 +606,7 @@ type FakeState = {
   missingQueues?: boolean;
   r2Objects?: Record<string, string[]>;
   foreignContainer?: boolean;
+  legacyRuntimeContainer?: boolean;
   foreignVectorBinding?: boolean;
   staleSecret?: boolean;
   noopDeploy?: boolean;
@@ -641,8 +632,6 @@ function expectedConsumers(outputs: TakosOutputs): Record<string, unknown> {
     [q.runs_dlq]: consumer(10, 60, 3, null, 0),
     [q.index_jobs]: consumer(5, 60, 2, null, 0, q.index_jobs_dlq),
     [q.index_jobs_dlq]: consumer(10, 60, 3, null, 0),
-    [q.workflow]: consumer(1, 1, 3, null, 0, q.workflow_dlq),
-    [q.workflow_dlq]: consumer(10, 60, 3, null, 0),
     [q.notification_push]: consumer(5, 5, 5, 5, 5, q.notification_push_dlq),
     [q.notification_push_dlq]: consumer(10, 60, 100, null, 600),
   };
@@ -702,12 +691,6 @@ function fakeDependencies(
   const calls: string[][] = [];
   const consumers = expectedConsumers(outputs);
   const containerShapes = [
-    [
-      "runtime",
-      "standard-2",
-      outputs.capacity.runtime_max_instances,
-      release.containerImages.runtime,
-    ],
     [
       "executor-tier1",
       "lite",
@@ -807,12 +790,24 @@ function fakeDependencies(
         }
         return ok(
           state.containers
-            ? containerShapes.map(([suffix, , , image], index) => ({
-                id: `container-${index}`,
-                name: `${outputs.workerName}-${suffix}`,
-                state: "ready",
-                image,
-              }))
+            ? [
+                ...containerShapes.map(([suffix, , , image], index) => ({
+                  id: `container-${index}`,
+                  name: `${outputs.workerName}-${suffix}`,
+                  state: "ready",
+                  image,
+                })),
+                ...(state.legacyRuntimeContainer
+                  ? [
+                      {
+                        id: "legacy-runtime-container",
+                        name: `${outputs.workerName}-runtime`,
+                        state: "ready",
+                        image: release.containerImages.executor,
+                      },
+                    ]
+                  : []),
+              ]
             : [],
         );
       }
@@ -839,7 +834,7 @@ function fakeDependencies(
         });
       }
       if (argv[0] === "containers" && argv[1] === "delete") {
-        if (argv[2] === "container-3") {
+        if (argv[2]?.startsWith("container-")) {
           state.containerDeletionRequested = true;
           if ((state.containerDeletionReadbacksRemaining ?? 0) === 0) {
             state.containers = false;
@@ -889,23 +884,18 @@ function fakeDependencies(
             bindings: [
               {
                 type: "durable_object_namespace",
-                class_name: "TakosRuntimeContainer",
+                class_name: "ExecutorContainerTier1",
                 namespace_id: "namespace-0",
               },
               {
                 type: "durable_object_namespace",
-                class_name: "ExecutorContainerTier1",
+                class_name: "ExecutorContainerTier2",
                 namespace_id: "namespace-1",
               },
               {
                 type: "durable_object_namespace",
-                class_name: "ExecutorContainerTier2",
-                namespace_id: "namespace-2",
-              },
-              {
-                type: "durable_object_namespace",
                 class_name: "ExecutorContainerTier3",
-                namespace_id: "namespace-3",
+                namespace_id: "namespace-2",
               },
               {
                 name: "VECTORIZE",
@@ -923,11 +913,6 @@ function fakeDependencies(
                 name: "INDEX_QUEUE",
                 type: "queue",
                 queue_name: outputs.queues.index_jobs,
-              },
-              {
-                name: "WORKFLOW_QUEUE",
-                type: "queue",
-                queue_name: outputs.queues.workflow,
               },
               {
                 name: "TAKOS_NOTIFICATION_PUSH_QUEUE",
@@ -964,6 +949,52 @@ function missing() {
 }
 
 describe("materializer lifecycle", () => {
+  test("fails closed when a retired runtime container remains", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-runtime-residue-"));
+    temporaryDirectories.push(root);
+    const secretPath = join(root, "runtime-secrets.json");
+    await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
+    await chmod(secretPath, 0o600);
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation("post_apply", {
+      ...invocationEnv("post_apply", digest(descriptorBytes)),
+      TAKOS_RUNTIME_SECRETS_FILE: secretPath,
+    });
+    const fake = fakeDependencies(
+      {
+        deployed: true,
+        vector: false,
+        containers: true,
+        consumers: false,
+        legacyRuntimeContainer: true,
+        message: existingProvenanceMessage(),
+        tag: releaseTag,
+      },
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    await expect(
+      materializePostApply({
+        invocation,
+        sourceRoot: join(import.meta.dir, ".."),
+        dependencies: fake,
+      }),
+    ).rejects.toMatchObject({
+      code: "resource_conflict",
+      stage: "readback",
+    });
+    expect(
+      fake.calls.some(
+        (call) => call[0] === "deploy" && !call.includes("--dry-run"),
+      ),
+    ).toBe(false);
+  });
+
   test("post_apply converges and proves artifact, migrations, Worker, containers, queues, secrets, and health", async () => {
     const root = await mkdtemp(join(tmpdir(), "takos-materializer-test-"));
     temporaryDirectories.push(root);
@@ -1001,8 +1032,8 @@ describe("materializer lifecycle", () => {
     expect(evidence.status).toBe("succeeded");
     expect(evidence.checks).toMatchObject({
       d1MigrationsApplied: true,
-      containers: 4,
-      queueConsumers: 8,
+      containers: 3,
+      queueConsumers: 6,
       health: { status: 200 },
     });
     expect(

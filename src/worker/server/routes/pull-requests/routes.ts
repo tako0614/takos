@@ -31,7 +31,6 @@ import {
   findPullRequest,
   getNextPullRequestNumber,
 } from "./read-model.ts";
-import { triggerPrEvent } from "./workflow-trigger.ts";
 
 // ---------------------------------------------------------------------------
 // CRUD Routes (create, list, get, get-diff, update, close)
@@ -94,18 +93,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       updatedAt: timestamp,
     }).returning().get();
     const normalizedPullRequest = toPullRequestRecord(pullRequest);
-
-    triggerPrEvent(c, repoAccess, user.id, {
-      action: "opened",
-      number: normalizedPullRequest.number,
-      title: normalizedPullRequest.title,
-      body: normalizedPullRequest.description,
-      state: "open",
-      merged: false,
-      headRef: normalizedPullRequest.headBranch,
-      baseRef: normalizedPullRequest.baseBranch,
-      authorId: normalizedPullRequest.authorId,
-    });
 
     const userMap = await buildUserLiteMap(db, [user.id]);
     const author = resolveActorLite({
@@ -301,18 +288,6 @@ export default new Hono<AuthenticatedRouteEnv>()
         .get();
       const normalizedUpdated = toPullRequestRecord(updated);
 
-      triggerPrEvent(c, repoAccess, user.id, {
-        action: "edited",
-        number: normalizedUpdated.number,
-        title: normalizedUpdated.title,
-        body: normalizedUpdated.description,
-        state: "open",
-        merged: false,
-        headRef: normalizedUpdated.headBranch,
-        baseRef: normalizedUpdated.baseBranch,
-        authorId: normalizedUpdated.authorId,
-      });
-
       const dto = await buildPullRequestDtoFull(db, normalizedUpdated);
 
       return c.json({ pull_request: dto });
@@ -351,18 +326,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       .returning()
       .get();
     const normalizedUpdated = toPullRequestRecord(updated);
-
-    triggerPrEvent(c, repoAccess, user.id, {
-      action: "closed",
-      number: normalizedUpdated.number,
-      title: normalizedUpdated.title,
-      body: normalizedUpdated.description,
-      state: "closed",
-      merged: false,
-      headRef: normalizedUpdated.headBranch,
-      baseRef: normalizedUpdated.baseBranch,
-      authorId: normalizedUpdated.authorId,
-    });
 
     const dto = await buildPullRequestDtoFull(db, normalizedUpdated);
 

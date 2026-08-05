@@ -6,7 +6,7 @@ Source / Project / Capsule / Run / StateVersion / Output authority behind that W
 
 ## Current Flow
 
-1. Deploy the Takos distribution topology with `deploy/opentofu` and the worker artifact.
+1. Deploy the Takos distribution topology with the selected adapter under `deploy/opentofu` and the worker artifact.
 2. The worker exposes Takos product routes and consumes external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner services.
 3. Create a Takos Workspace; users explicitly add Capsule apps through plan/apply Runs.
 4. Infrastructure lifecycle credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.

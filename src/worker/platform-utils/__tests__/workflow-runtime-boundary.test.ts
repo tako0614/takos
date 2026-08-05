@@ -6,12 +6,18 @@ const workerRoot = path.resolve(import.meta.dir, "../..");
 const entrypoint = path.join(workerRoot, "index.ts");
 
 const forbiddenRuntimeModules = [
+  "/actions-engine/",
   "/application/services/actions/actions-triggers.ts",
   "/application/services/workflow-runs/commands.ts",
   "/application/services/execution/workflow-run-lifecycle.ts",
-  "/runtime/queues/workflow-runner.ts",
-  "/runtime/queues/workflow-job-handler.ts",
 ];
+const forbiddenRuntimeSpecifiers = [
+  "actions-engine",
+  "application/services/actions/",
+  "application/services/execution/workflow-engine",
+  "application/services/execution/workflow-job-scheduler",
+  "application/services/execution/workflow-run-lifecycle",
+] as const;
 
 const moduleSpecifierPattern =
   /(?:from\s*|import\s*\(\s*|import\s*)["']([^"']+)["']/g;
@@ -52,7 +58,7 @@ async function collectReachableModules(root: string): Promise<Set<string>> {
   return reachable;
 }
 
-test("Takos Worker entrypoint cannot reach the retired local Actions materializer", async () => {
+test("Takos Worker entrypoint cannot reach retired Actions or workflow queue code", async () => {
   const reachable = await collectReachableModules(entrypoint);
   const relativeModules = [...reachable].map(
     (file) => `/${path.relative(workerRoot, file).replaceAll(path.sep, "/")}`,
@@ -63,5 +69,25 @@ test("Takos Worker entrypoint cannot reach the retired local Actions materialize
       relativeModules,
       `${forbidden} is reachable from src/worker/index.ts`,
     ).not.toContain(forbidden);
+  }
+
+  const reachableSources = await Promise.all(
+    [...reachable].map((file) => readFile(file, "utf8")),
+  );
+  expect(
+    reachableSources.some((source) => /\bWORKFLOW_QUEUE\b/.test(source)),
+    "WORKFLOW_QUEUE is reachable from src/worker/index.ts",
+  ).toBeFalse();
+
+  for (const source of reachableSources) {
+    const imports = [...source.matchAll(moduleSpecifierPattern)].map(
+      (match) => match[1],
+    );
+    for (const forbidden of forbiddenRuntimeSpecifiers) {
+      expect(
+        imports.some((specifier) => specifier.includes(forbidden)),
+        `retired runtime specifier '${forbidden}' is reachable from src/worker/index.ts`,
+      ).toBeFalse();
+    }
   }
 });

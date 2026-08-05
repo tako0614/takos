@@ -132,7 +132,6 @@ function getWorkerQueues(env: WorkerEnv): Array<ConsumableQueue<unknown>> {
   return [
     requireConsumableQueue(env.RUN_QUEUE, "RUN_QUEUE"),
     requireConsumableQueue(env.INDEX_QUEUE, "INDEX_QUEUE"),
-    requireConsumableQueue(env.WORKFLOW_QUEUE, "WORKFLOW_QUEUE"),
   ];
 }
 

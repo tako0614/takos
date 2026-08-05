@@ -1,7 +1,7 @@
 # Worker artifact materializer
 
-`deploy/opentofu` は D1、KV、R2、Queue などの backing resource を作ります。
-Worker script/assets、Durable Object migration、4 個の Container application、Queue
+`deploy/opentofu/cloudflare` は D1、KV、R2、Queue などの Cloudflare backing resource を作ります。
+Worker script/assets、Durable Object migration、3 個の agent Container application、Queue
 consumer、Vectorize は、Takos が所有する follow-up command
 `scripts/takos-product-materializer.ts` が materialize します。
 
@@ -18,7 +18,7 @@ descriptor の URL と digest は例であり、選択した Takos release の c
 
 ```ts
 {
-  modulePath: "deploy/opentofu",
+  modulePath: "deploy/opentofu/cloudflare",
   sourceBuild: {
     commands: [{ argv: ["bun", "install", "--frozen-lockfile"] }],
     outputs: ["node_modules/wrangler/bin/wrangler.js"],
@@ -171,7 +171,7 @@ exact deployment、100% traffic の version、release tag と provenance message
 Cloudflare から読み戻した後にだけ `worker_deployed` stage を記録します。
 
 `pre_destroy` は、既存 Worker version の binding / provenance で ownership を証明して
-から Queue consumer、4 Container application、Vectorize を削除し、不在が収束した後に
+から Queue consumer、3 agent Container application、Vectorize を削除し、不在が収束した後に
 ownership anchor である Worker を最後に削除します。D1、KV、R2、Queue 本体は削除せず、
 続く OpenTofu destroy に渡します。同名 resource の ownership を証明できない場合や途中
 失敗を成功扱いにせず、同じ stale action の blind retry を要求しません。D1 migration は

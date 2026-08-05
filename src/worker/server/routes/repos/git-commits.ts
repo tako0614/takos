@@ -186,9 +186,6 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
         repoId,
         files: body.files,
         user,
-        executionCtx: c.executionCtx,
-        workflowQueue: c.env.WORKFLOW_QUEUE,
-        encryptionKey: c.env.ENCRYPTION_KEY,
         message: commitMessage,
         appendMode,
       });
@@ -391,9 +388,6 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
         repoId,
         files: body.files,
         user,
-        executionCtx: c.executionCtx,
-        workflowQueue: c.env.WORKFLOW_QUEUE,
-        encryptionKey: c.env.ENCRYPTION_KEY,
         message: body.message,
       });
 

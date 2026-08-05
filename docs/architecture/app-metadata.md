@@ -6,7 +6,7 @@
 Takos にアプリを 1 つ追加すると、そのアプリの実体は Takosumi が **Capsule** (Git URL から取り込むアプリ/イン
 フラの 1 単位。[Takosumi のモデル](https://takosumi.com/docs/reference/model) 参照) として記録し、install / plan / apply の実行記録
 (**Capsule -> Run -> StateVersion -> Output**) を残します。provider の許可範囲、認証情報、state backend、
-Cloudflare Container の実行は **ProviderConnection / ProviderBinding / policy** が所有します。一方で、
+workload placement は **ProviderConnection / ProviderBinding / policy** が所有します。一方で、
 アプリの宣言メタデータは Takosumi の service-side Interface が所有し、Takos はその認可済み view を launcher や
 file handling として描画します。
 
@@ -87,7 +87,7 @@ Sync を経由しません。
 - ProviderConnection / ProviderBinding / policy に紐づく provider の許可範囲、state backend、実行境界
 
 Takos の resource authority は `deploy/product-resources.json` です。Takosumi は
-`deploy/takoform` または `deploy/opentofu` を通常の OpenTofu module として install / apply します。
+`deploy/opentofu/takoform` または `deploy/opentofu/cloudflare` を通常の OpenTofu module として install / apply します。
 前者は選択した Form host、後者は直接接続した Cloudflare account に同じ runtime connections を写します。
 手書きの `wrangler` / distribution pipeline は direct Cloudflare adapter の artifact materialization であり、
 別の resource authority ではありません。

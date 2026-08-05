@@ -3,7 +3,7 @@
 # Takosumi's OpenTofu-native deploy control API.
 #
 # Premise: Takos can be managed by Takosumi as a normal Capsule. The deploy
-# topology is the plain OpenTofu module in deploy/opentofu. The current
+# topology is the plain OpenTofu module in deploy/opentofu/cloudflare. The current
 # Cloudflare target provisions the D1 / KV / R2 / Queues backing resources.
 # Takosumi resolves that Git module as a Capsule, records a
 # plan Run, and applies the reviewed plan through an apply Run that records a new
@@ -50,7 +50,7 @@ fi
 
 if [[ -z "$CAPSULE_ID" ]]; then
   echo "Error: TAKOSUMI_CAPSULE_ID (or --capsule) is required"
-  echo "  The Capsule resolves the Git OpenTofu module (deploy/opentofu)."
+  echo "  The Capsule resolves the Git OpenTofu module (deploy/opentofu/cloudflare)."
   exit 1
 fi
 

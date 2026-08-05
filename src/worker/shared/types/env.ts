@@ -11,7 +11,6 @@ import type {
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
-  WorkflowJobQueueMessage,
 } from "./queue-messages.ts";
 import type { RoutingStore } from "./routing.ts";
 
@@ -85,20 +84,13 @@ export type ContainerHostBinding = DurableNamespaceBinding<
 export interface ContainerHostEnv {
   RUNTIME_HOST?: FetchBinding;
   EXECUTOR_HOST?: FetchBinding;
-  RUNTIME_CONTAINER?: ContainerHostBinding;
   EXECUTOR_CONTAINER?: ContainerHostBinding;
   EXECUTOR_CONTAINER_TIER2?: ContainerHostBinding;
   EXECUTOR_CONTAINER_TIER3?: ContainerHostBinding;
   PROXY_BASE_URL?: string;
   /**
-   * Worker-mediated egress proxy URL handed to the workflow/actions container
-   * (`runtime/container-hosts/runtime-host.ts` `buildRuntimeContainerEnv`).
-   * SECURITY INVARIANT: when set, it MUST resolve to the per-run, SSRF-gated
-   * egress endpoint (proxying through `runtime/worker/egress.ts`), never an open
-   * or transparent proxy. Distinct from `PROXY_BASE_URL` (the control
-   * back-channel). Unset by default — the container then gets no worker-mediated
-   * egress proxy and container-direct outbound must be denied by the infra-layer
-   * Cloudflare Container network policy.
+   * Optional per-run, SSRF-gated egress endpoint for an explicitly installed
+   * external runtime adapter. It must never be an open or transparent proxy.
    */
   TAKOS_EGRESS_PROXY_URL?: string;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
@@ -165,7 +157,6 @@ export interface Env
   // Queues
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
-  WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
   OIDC_ISSUER_URL?: string;

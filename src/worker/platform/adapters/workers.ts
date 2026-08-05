@@ -33,22 +33,6 @@ function defaultContainerHostBaseUrl(env: PlatformEnvIndex): string {
   });
 }
 
-function createInProcessRuntimeHostBinding(
-  env: PlatformEnvIndex,
-): PlatformServiceBinding | undefined {
-  if (!env.RUNTIME_CONTAINER) return undefined;
-  return {
-    async fetch(input: RequestInfo | URL, init?: RequestInit) {
-      const { default: runtimeHost } =
-        await import("../../runtime/container-hosts/runtime-host.ts");
-      return runtimeHost.fetch(new Request(input, init), {
-        ...env,
-        PROXY_BASE_URL: defaultContainerHostBaseUrl(env),
-      } as never);
-    },
-  };
-}
-
 function createInProcessExecutorHostBinding(
   env: PlatformEnvIndex,
 ): PlatformServiceBinding | undefined {
@@ -73,8 +57,7 @@ function buildWorkersPlatform<TBindings extends object>(
   env: TBindings & PlatformEnvIndex,
 ): ControlPlatform<TBindings> {
   const runtimeHost =
-    serviceBindingFromEnv(env, "RUNTIME_HOST") ??
-    createInProcessRuntimeHostBinding(env);
+    serviceBindingFromEnv(env, "RUNTIME_HOST");
   const executorHost =
     serviceBindingFromEnv(env, "EXECUTOR_HOST") ??
     createInProcessExecutorHostBinding(env);
@@ -84,9 +67,9 @@ function buildWorkersPlatform<TBindings extends object>(
     ...(executorHost ? { EXECUTOR_HOST: executorHost } : {}),
   } as TBindings & PlatformEnvIndex;
 
-  // The only workers-specific wiring is the in-process runtime/executor host
-  // fallback (resolved above and merged into `bindings`); the rest of the
-  // config/service map is shared with the node adapter.
+  // The only workers-specific wiring is the in-process agent host fallback.
+  // An optional general-purpose RUNTIME_HOST must be supplied explicitly by
+  // an installed capability or operator adapter.
   return buildPlatformFromEnv(bindings, {
     source: "workers",
     runtimeHost,

@@ -24,21 +24,8 @@ Takos本体が必要とするリソースと接続名の正本は
 [`deploy/product-resources.json`](../../deploy/product-resources.json)です。
 そこにはCloudflare、Takoform、account ID、credentialを書きません。
 
-- [`deploy/opentofu`](../../deploy/opentofu)は、自分のCloudflare accountへ直接置くadapterです。
-- [`deploy/takoform`](../../deploy/takoform)は、同じ論理リソースをTakoform対応hostへ置くadapterです。
-- Takosumiはどちらも普通のOpenTofu moduleとして扱います。Takos専用providerや特別なapply経路はありません。
-
-Cloudflare Workers用entrypointやCloudflare binding変換はCloudflare adapterに残ります。
-API、agent、tool、storageなどの製品ロジックは中立bindingを使い、選んだadapterを知りません。
-
-## クラウドとの境界
-
-Takos本体が必要とするリソースと接続名の正本は
-[`deploy/product-resources.json`](../../deploy/product-resources.json)です。
-そこにはCloudflare、Takoform、account ID、credentialを書きません。
-
-- [`deploy/opentofu`](../../deploy/opentofu)は、自分のCloudflare accountへ直接置くadapterです。
-- [`deploy/takoform`](../../deploy/takoform)は、同じ論理リソースをTakoform対応hostへ置くadapterです。
+- `deploy/opentofu/cloudflare` は、自分のCloudflare accountへ直接置くadapterです。
+- `deploy/opentofu/takoform` は、同じ論理リソースをTakoform対応hostへ置く既定adapterです。
 - Takosumiはどちらも普通のOpenTofu moduleとして扱います。Takos専用providerや特別なapply経路はありません。
 
 Cloudflare Workers用entrypointやCloudflare binding変換はCloudflare adapterに残ります。

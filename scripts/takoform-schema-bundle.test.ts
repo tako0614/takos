@@ -40,7 +40,7 @@ describe("Takos portable relational schema bundle", () => {
   test("pins the portable database to the exact tracked bundle bytes", async () => {
     const bundle = await readFile(join(root, BUNDLE_RELATIVE_PATH));
     const moduleSource = await readFile(
-      join(root, "deploy/takoform/main.tf"),
+      join(root, "deploy/opentofu/takoform/main.tf"),
       "utf8",
     );
     const digest = createHash("sha256").update(bundle).digest("hex");

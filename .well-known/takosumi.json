@@ -2,9 +2,255 @@
   "apiVersion": "takosumi.com/v2.2",
   "kind": "Repository",
   "install": {
-    "defaultModule": "deploy/takoform",
+    "defaultModule": "deploy/opentofu/takoform",
     "modules": {
-      "deploy/opentofu": {
+      "deploy/opentofu/takoform": {
+        "inputs": [
+          {
+            "name": "project_name",
+            "source": {
+              "kind": "capsule_name"
+            },
+            "role": "service_name",
+            "type": "string",
+            "format": "subdomain",
+            "label": {
+              "ja": "ワークスペース名",
+              "en": "Workspace name"
+            },
+            "helper": {
+              "ja": "Takosの論理リソース名に使います。実際のクラウドは選択したTakoform hostが決めます。",
+              "en": "Used for Takos logical resource names. The selected Takoform host chooses the concrete cloud."
+            }
+          },
+          {
+            "name": "public_url",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "format": "url",
+            "required": false,
+            "label": {
+              "ja": "公開URL",
+              "en": "Public URL"
+            },
+            "helper": {
+              "ja": "空欄の場合は実行先が公開URLを割り当てます。",
+              "en": "The destination allocates a public URL when omitted."
+            }
+          },
+          {
+            "name": "agent_image",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "required": true,
+            "label": {
+              "ja": "Agent実行イメージ",
+              "en": "Agent image"
+            },
+            "helper": {
+              "ja": "実行先から取得できるdigest固定OCI imageを指定します。",
+              "en": "A digest-pinned OCI image reachable by the destination."
+            },
+            "placeholder": "ghcr.io/example/takos-agent@sha256:..."
+          },
+          {
+            "name": "worker_release_tag",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "required": true,
+            "label": {
+              "ja": "Takosリリース",
+              "en": "Takos release"
+            },
+            "helper": {
+              "ja": "公開済みの完全なTakosリリースタグを指定します。",
+              "en": "Select an exact published Takos release tag."
+            },
+            "placeholder": "v0.12.0",
+            "advanced": true
+          },
+          {
+            "name": "worker_artifact_url",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "format": "url",
+            "required": true,
+            "label": {
+              "ja": "Worker artifact URL",
+              "en": "Worker artifact URL"
+            },
+            "helper": {
+              "ja": "指定したTakosリリースのimmutable Worker archive URLです。",
+              "en": "The immutable Worker archive URL for the selected Takos release."
+            },
+            "placeholder": "https://github.com/tako0614/takos/releases/download/v0.12.0/takos-worker-release.tar.gz",
+            "advanced": true
+          },
+          {
+            "name": "worker_artifact_sha256",
+            "source": {
+              "kind": "user"
+            },
+            "type": "string",
+            "required": true,
+            "label": {
+              "ja": "Worker artifact SHA-256",
+              "en": "Worker artifact SHA-256"
+            },
+            "helper": {
+              "ja": "公開されたarchiveと一致するSHA-256を指定します。",
+              "en": "Provide the SHA-256 published for that archive."
+            },
+            "placeholder": "sha256:...",
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_url",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "Takosumi Accounts URL",
+              "en": "Takosumi Accounts URL"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_issuer_url",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "Takosumi Accounts発行者",
+              "en": "Takosumi Accounts issuer"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_client_id",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "label": {
+              "ja": "Takosumi Accountsクライアント",
+              "en": "Takosumi Accounts client"
+            },
+            "advanced": true
+          },
+          {
+            "name": "takosumi_accounts_redirect_uri",
+            "source": {
+              "kind": "module_default"
+            },
+            "type": "string",
+            "format": "url",
+            "label": {
+              "ja": "OIDCリダイレクトURL",
+              "en": "OIDC redirect URL"
+            },
+            "advanced": true
+          }
+        ],
+        "requires": [
+          {
+            "kind": "http.endpoint",
+            "deliver": {
+              "variables": {
+                "url": "public_url"
+              }
+            }
+          },
+          {
+            "kind": "identity.oidc",
+            "callbackPath": "/auth/oidc/callback",
+            "scopes": [
+              "openid",
+              "profile",
+              "email",
+              "offline_access",
+              "capsules:read",
+              "capsules:write"
+            ],
+            "deliver": {
+              "variables": {
+                "accountsUrl": "takosumi_accounts_url",
+                "issuerUrl": "takosumi_accounts_issuer_url",
+                "clientId": "takosumi_accounts_client_id",
+                "redirectUri": "takosumi_accounts_redirect_uri"
+              }
+            }
+          },
+          {
+            "kind": "interface.consume",
+            "key": "ai",
+            "interface": {
+              "type": "takosumi.ai.gateway",
+              "version": "1"
+            },
+            "permissions": [
+              "ai.chat"
+            ],
+            "delivery": {
+              "type": "oauth2"
+            }
+          }
+        ],
+        "interfaces": [
+          {
+            "key": "launcher",
+            "name": "takos.launcher",
+            "spec": {
+              "type": "interface.ui.surface",
+              "version": "1",
+              "document": {
+                "launcher": true,
+                "display": {
+                  "title": "Takos",
+                  "icon": "/logo.png"
+                }
+              },
+              "inputs": {
+                "url": {
+                  "source": "output",
+                  "outputName": "launch_url",
+                  "outputType": "url"
+                }
+              },
+              "access": {
+                "visibility": "workspace"
+              }
+            },
+            "bindingRequests": [
+              {
+                "key": "installer",
+                "subject": {
+                  "source": "installing_principal"
+                },
+                "permissions": [
+                  "ui.open"
+                ],
+                "delivery": {
+                  "type": "none"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "deploy/opentofu/cloudflare": {
         "inputs": [
           {
             "name": "project_name",
@@ -173,248 +419,9 @@
               "type": "takosumi.ai.gateway",
               "version": "1"
             },
-            "permissions": ["ai.chat"],
-            "delivery": {
-              "type": "oauth2"
-            }
-          }
-        ],
-        "interfaces": [
-          {
-            "key": "launcher",
-            "name": "takos.launcher",
-            "spec": {
-              "type": "interface.ui.surface",
-              "version": "1",
-              "document": {
-                "launcher": true,
-                "display": {
-                  "title": "Takos",
-                  "icon": "/logo.png"
-                }
-              },
-              "inputs": {
-                "url": {
-                  "source": "output",
-                  "outputName": "launch_url",
-                  "outputType": "url"
-                }
-              },
-              "access": {
-                "visibility": "workspace"
-              }
-            },
-            "bindingRequests": [
-              {
-                "key": "installer",
-                "subject": {
-                  "source": "installing_principal"
-                },
-                "permissions": ["ui.open"],
-                "delivery": {
-                  "type": "none"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "deploy/takoform": {
-        "inputs": [
-          {
-            "name": "project_name",
-            "source": {
-              "kind": "capsule_name"
-            },
-            "role": "service_name",
-            "type": "string",
-            "format": "subdomain",
-            "label": {
-              "ja": "ワークスペース名",
-              "en": "Workspace name"
-            },
-            "helper": {
-              "ja": "Takosの論理リソース名に使います。実際のクラウドは選択したTakoform hostが決めます。",
-              "en": "Used for Takos logical resource names. The selected Takoform host chooses the concrete cloud."
-            }
-          },
-          {
-            "name": "public_url",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "format": "url",
-            "required": false,
-            "label": {
-              "ja": "公開URL",
-              "en": "Public URL"
-            },
-            "helper": {
-              "ja": "空欄の場合は実行先が公開URLを割り当てます。",
-              "en": "The destination allocates a public URL when omitted."
-            }
-          },
-          {
-            "name": "runtime_image",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "required": true,
-            "label": {
-              "ja": "ツール実行イメージ",
-              "en": "Tool runtime image"
-            },
-            "helper": {
-              "ja": "実行先から取得できるdigest固定OCI imageを指定します。",
-              "en": "A digest-pinned OCI image reachable by the destination."
-            },
-            "placeholder": "ghcr.io/example/takos-runtime@sha256:..."
-          },
-          {
-            "name": "executor_image",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "required": true,
-            "label": {
-              "ja": "Agent実行イメージ",
-              "en": "Agent executor image"
-            },
-            "helper": {
-              "ja": "実行先から取得できるdigest固定OCI imageを指定します。",
-              "en": "A digest-pinned OCI image reachable by the destination."
-            },
-            "placeholder": "ghcr.io/example/takos-agent@sha256:..."
-          },
-          {
-            "name": "worker_release_tag",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "label": {
-              "ja": "Takosリリース",
-              "en": "Takos release"
-            },
-            "advanced": true
-          },
-          {
-            "name": "worker_artifact_url",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "format": "url",
-            "label": {
-              "ja": "Worker artifact URL",
-              "en": "Worker artifact URL"
-            },
-            "advanced": true
-          },
-          {
-            "name": "worker_artifact_sha256",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "label": {
-              "ja": "Worker artifact SHA-256",
-              "en": "Worker artifact SHA-256"
-            },
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_url",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "format": "url",
-            "label": {
-              "ja": "Takosumi Accounts URL",
-              "en": "Takosumi Accounts URL"
-            },
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_issuer_url",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "format": "url",
-            "label": {
-              "ja": "Takosumi Accounts発行者",
-              "en": "Takosumi Accounts issuer"
-            },
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_client_id",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "label": {
-              "ja": "Takosumi Accountsクライアント",
-              "en": "Takosumi Accounts client"
-            },
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_redirect_uri",
-            "source": {
-              "kind": "module_default"
-            },
-            "type": "string",
-            "format": "url",
-            "label": {
-              "ja": "OIDCリダイレクトURL",
-              "en": "OIDC redirect URL"
-            },
-            "advanced": true
-          }
-        ],
-        "requires": [
-          {
-            "kind": "http.endpoint",
-            "deliver": {
-              "variables": {
-                "url": "public_url"
-              }
-            }
-          },
-          {
-            "kind": "identity.oidc",
-            "callbackPath": "/auth/oidc/callback",
-            "scopes": [
-              "openid",
-              "profile",
-              "email",
-              "offline_access",
-              "capsules:read",
-              "capsules:write"
+            "permissions": [
+              "ai.chat"
             ],
-            "deliver": {
-              "variables": {
-                "accountsUrl": "takosumi_accounts_url",
-                "issuerUrl": "takosumi_accounts_issuer_url",
-                "clientId": "takosumi_accounts_client_id",
-                "redirectUri": "takosumi_accounts_redirect_uri"
-              }
-            }
-          },
-          {
-            "kind": "interface.consume",
-            "key": "ai",
-            "interface": {
-              "type": "takosumi.ai.gateway",
-              "version": "1"
-            },
-            "permissions": ["ai.chat"],
             "delivery": {
               "type": "oauth2"
             }
@@ -451,7 +458,9 @@
                 "subject": {
                   "source": "installing_principal"
                 },
-                "permissions": ["ui.open"],
+                "permissions": [
+                  "ui.open"
+                ],
                 "delivery": {
                   "type": "none"
                 }

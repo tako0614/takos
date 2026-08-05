@@ -15,8 +15,6 @@
     { "name": "runs-dlq", "shape": "Queue" },
     { "name": "index-jobs", "shape": "Queue" },
     { "name": "index-jobs-dlq", "shape": "Queue" },
-    { "name": "workflow-jobs", "shape": "Queue" },
-    { "name": "workflow-jobs-dlq", "shape": "Queue" },
     { "name": "notification-push", "shape": "Queue" },
     { "name": "notification-push-dlq", "shape": "Queue" },
     { "name": "embeddings", "shape": "VectorIndex" },
@@ -25,10 +23,9 @@
     { "name": "notification-notifier", "shape": "StatefulEntity" },
     { "name": "rate-limiter", "shape": "StatefulEntity" },
     { "name": "routing", "shape": "StatefulEntity" },
-    { "name": "runtime", "shape": "ContainerService" },
-    { "name": "executor-tier-1", "shape": "ContainerService" },
-    { "name": "executor-tier-2", "shape": "ContainerService" },
-    { "name": "executor-tier-3", "shape": "ContainerService" },
+    { "name": "agent-tier-1", "shape": "ContainerService" },
+    { "name": "agent-tier-2", "shape": "ContainerService" },
+    { "name": "agent-tier-3", "shape": "ContainerService" },
     { "name": "maintenance-quarter-hour", "shape": "Schedule" },
     { "name": "maintenance-hourly", "shape": "Schedule" }
   ],
@@ -75,11 +72,6 @@
       "projection": "queue.binding.v1"
     },
     {
-      "name": "WORKFLOW_QUEUE",
-      "resource": "workflow-jobs",
-      "projection": "queue.binding.v1"
-    },
-    {
       "name": "TAKOS_NOTIFICATION_PUSH_QUEUE",
       "resource": "notification-push",
       "projection": "queue.binding.v1"
@@ -115,23 +107,18 @@
       "projection": "stateful.binding.v1"
     },
     {
-      "name": "RUNTIME_CONTAINER",
-      "resource": "runtime",
-      "projection": "service.binding.v1"
-    },
-    {
       "name": "EXECUTOR_CONTAINER",
-      "resource": "executor-tier-1",
+      "resource": "agent-tier-1",
       "projection": "service.binding.v1"
     },
     {
       "name": "EXECUTOR_CONTAINER_TIER2",
-      "resource": "executor-tier-2",
+      "resource": "agent-tier-2",
       "projection": "service.binding.v1"
     },
     {
       "name": "EXECUTOR_CONTAINER_TIER3",
-      "resource": "executor-tier-3",
+      "resource": "agent-tier-3",
       "projection": "service.binding.v1"
     }
   ],

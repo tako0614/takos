@@ -27,6 +27,7 @@ type Options = {
 type ImageDigestRecord = {
   name?: string;
   cloudflareRegistryRef?: string;
+  publicOciRef?: string;
 };
 
 if (import.meta.main) {
@@ -87,7 +88,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
       options.requireCloudflareContainerImages,
     );
     const manifest = {
-      kind: "takosumi.worker-artifact@v1",
+      kind: "takosumi.worker-artifact@v2",
       app: "takos",
       commit: Bun.env.GITHUB_SHA?.trim() || null,
       ref: Bun.env.GITHUB_REF_NAME?.trim() || options.releaseTag,
@@ -182,16 +183,16 @@ async function readContainerImages(
     if (!required) return {};
     throw error;
   }
-  const runtime = byName.get("takos-worker-runtime")?.cloudflareRegistryRef;
   const executor = byName.get("takos-agent")?.cloudflareRegistryRef;
-  if (required && (!runtime || !executor)) {
+  const publicAgent = byName.get("takos-agent")?.publicOciRef;
+  if (required && !executor) {
     throw new Error(
-      "Cloudflare runtime and executor image refs are required for the Takos Worker release artifact.",
+      "The Cloudflare agent image ref is required for the Takos Worker release artifact.",
     );
   }
   return {
-    ...(runtime ? { runtime } : {}),
     ...(executor ? { executor } : {}),
+    ...(publicAgent ? { publicAgent } : {}),
   };
 }
 

@@ -15,9 +15,6 @@ export const DEFAULT_EXECUTOR_POOL_CAPACITY = Object.freeze({
 /** Tier 2 is reserved for explicit dispatch and is not part of the managed pool. */
 export const DEFAULT_EXECUTOR_TIER2_MAX_INSTANCES = 1;
 
-/** The TypeScript runtime container is a separate singleton host. */
-export const DEFAULT_RUNTIME_CONTAINER_MAX_INSTANCES = 1;
-
 /**
  * Let active work run for at least 15 minutes before a rolling update starts
  * the platform's graceful-termination window.

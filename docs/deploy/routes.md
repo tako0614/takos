@@ -1,6 +1,6 @@
 # ルーティング
 
-Takos deploys from `takos/deploy/opentofu` plus one wrangler artifact upload. The resulting worker exposes Takos
+Takos deploys from `takos/deploy/opentofu/cloudflare` plus one wrangler artifact upload. The resulting worker exposes Takos
 product routes and consumes the external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner surfaces. Takosumi
 records **Run**, **StateVersion**, and **Output** evidence. Repository metadata comes from
 generic information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.

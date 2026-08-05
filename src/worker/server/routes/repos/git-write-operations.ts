@@ -1,9 +1,4 @@
-import type { ExecutionContext } from "../../../shared/types/bindings.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
-import {
-  scheduleActionsAutoTrigger,
-  triggerPushWorkflows,
-} from "../../../application/services/actions/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import {
   type GitBucket,
@@ -21,23 +16,12 @@ interface BlobEntry {
   sha: string;
 }
 
-interface PushTriggerParams {
-  repoId: string;
-  branchName: string;
-  before: string;
-  after: string;
-  user: { id: string; name: string; email: string };
-}
-
 interface BaseWriteOptions {
   db: AuthenticatedRouteEnv["Bindings"]["DB"];
   bucket: RepoBucketBinding;
   repoId: string;
   files: FileEntry[];
   user: { id: string; name: string; email: string };
-  executionCtx: ExecutionContext;
-  workflowQueue: AuthenticatedRouteEnv["Bindings"]["WORKFLOW_QUEUE"];
-  encryptionKey: string | undefined;
 }
 
 interface CommitFilesOptions extends BaseWriteOptions {
@@ -47,12 +31,6 @@ interface CommitFilesOptions extends BaseWriteOptions {
 interface ImportFilesOptions extends BaseWriteOptions {
   message: string;
   appendMode: boolean;
-}
-
-function toWorkflowTriggerBucket(
-  bucket: AuthenticatedRouteEnv["Bindings"]["GIT_OBJECTS"],
-) {
-  return bucket;
 }
 
 function buildCommitSignature(
@@ -80,38 +58,6 @@ async function uploadFilesToBlobs(
     entries.push({ path: file.path, sha });
   }
   return entries;
-}
-
-function schedulePushTrigger(
-  options: Pick<
-    BaseWriteOptions,
-    "db" | "bucket" | "executionCtx" | "workflowQueue" | "encryptionKey"
-  >,
-  params: PushTriggerParams,
-  label: string,
-): void {
-  scheduleActionsAutoTrigger(
-    options.executionCtx,
-    () =>
-      triggerPushWorkflows(
-        {
-          db: options.db,
-          bucket: toWorkflowTriggerBucket(options.bucket),
-          queue: options.workflowQueue,
-          encryptionKey: options.encryptionKey,
-        },
-        {
-          repoId: params.repoId,
-          branch: params.branchName,
-          before: params.before,
-          after: params.after,
-          actorId: params.user.id,
-          actorName: params.user.name,
-          actorEmail: params.user.email,
-        },
-      ),
-    label,
-  );
 }
 
 export async function importFilesToDefaultBranch(
@@ -178,18 +124,6 @@ export async function importFilesToDefaultBranch(
     );
   }
 
-  schedulePushTrigger(
-    options,
-    {
-      repoId: options.repoId,
-      branchName: branch.name,
-      before: branch.commit_sha,
-      after: commit.sha,
-      user: options.user,
-    },
-    `repos.gitStore.import repo=${options.repoId} branch=${branch.name}`,
-  );
-
   return {
     commitSha: commit.sha,
     fileCount: fileEntries.length,
@@ -235,18 +169,6 @@ export async function commitFilesToDefaultBranch(
       `Failed to update branch ${branch.name} of repo ${options.repoId} (expected=${branch.commit_sha}, target=${commit.sha}): ${reason}`,
     );
   }
-
-  schedulePushTrigger(
-    options,
-    {
-      repoId: options.repoId,
-      branchName: branch.name,
-      before: branch.commit_sha,
-      after: commit.sha,
-      user: options.user,
-    },
-    `repos.gitStore.commit repo=${options.repoId} branch=${branch.name}`,
-  );
 
   return { commitSha: commit.sha };
 }

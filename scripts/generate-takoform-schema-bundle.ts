@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 export const MIGRATION_DIRECTORY = "db/migrations-control/migrations";
 export const BUNDLE_RELATIVE_PATH =
-  "deploy/takoform/migrations/schema-bundle.json";
+  "deploy/opentofu/takoform/migrations/schema-bundle.json";
 export const MIGRATION_NAME_RE = /^[0-9]{4}_[A-Za-z0-9_-]+\.sql$/u;
 
 const REPOSITORY_ROOT = resolve(fileURLToPath(new URL("../", import.meta.url)));

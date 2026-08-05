@@ -290,7 +290,7 @@ async function main(): Promise<void> {
 
   for (const path of [
     "deploy/cloudflare/wrangler.toml",
-    "deploy/opentofu/modules/cloudflare/main.tf",
+    "deploy/opentofu/cloudflare/modules/platform/main.tf",
     "src/worker/shared/types/env.ts",
   ]) {
     const text = await readRequired(path, failures);

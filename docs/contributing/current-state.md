@@ -8,18 +8,18 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 2. Run a `plan` and review the resulting `plan` type Run and policy decision.
 3. Run `apply` as an `apply` type Run against the reviewed plan; a successful apply updates the StateVersion and Output. Destroy uses `destroy_plan` followed by approved `destroy_apply`.
 4. Repeat plan/apply against the Capsule; typed Run entries form the audit ledger for StateVersion and Output changes.
-5. Connections hold credential references, ProviderBindings bind each provider (and optional alias) to an explicit provider connection (an explicit ProviderConnection), and runner policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
+5. Connections hold credential references, ProviderBindings bind each provider (and optional alias) to an explicit provider connection (an explicit ProviderConnection), and runner policy resolves provider allowlists, state backend, and workload placement. Account-plane policy, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu` maps it to a directly connected Cloudflare account and `deploy/takoform` maps it to portable Form resources. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` and `deploy/opentofu/takoform` are peer adapters. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
 
 ## Canonical Layout
 
 - `src/worker`: Takos Worker source owner and Hono route composition, including the migration-only worker-native Git Smart HTTP endpoint (read-only clone/fetch from the R2 object store). Push and collaborative hosting belong to an installed standalone `takos-git` Capsule.
 - `web`: browser UI.
 - `containers/agent`: agent execution container.
-- `deploy/cloudflare`, `deploy/opentofu` (Cloudflare module), and `deploy/distributions/cloudflare.json`: product deploy artifacts.
+- `deploy/cloudflare` and the peer adapters under `deploy/opentofu`: product deploy artifacts. Cloudflare-specific runtime materialization stays inside the direct Cloudflare adapter.
 
 ## Takosumi Service Boundary
 
@@ -45,7 +45,7 @@ and Cloudflare distribution artifacts.
   "module": {
     "url": "https://github.com/example/app.git",
     "ref": "main",
-    "path": "deploy/opentofu"
+    "path": "deploy/opentofu/takoform"
   }
 }
 ```

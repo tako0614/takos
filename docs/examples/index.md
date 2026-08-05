@@ -4,7 +4,7 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Current Flow
 
-1. Choose a Git URL/ref for an OpenTofu Capsule repo (Takos itself is the module under `deploy/opentofu`, with the current Cloudflare target).
+1. Choose a Git URL/ref for an OpenTofu Capsule repo (Takos publishes peer `deploy/opentofu/takoform` and `deploy/opentofu/cloudflare` modules).
 2. Create the Capsule with target ProviderConnection / ProviderBinding settings.
 3. Run a plan; Takosumi records it as a **`plan` type Run** and surfaces the proposed changes for review.
 4. Apply the reviewed plan; Takosumi records an **`apply` type Run**, and a successful apply updates StateVersion and Output. Destroy uses a reviewed destroy plan followed by destroy apply.

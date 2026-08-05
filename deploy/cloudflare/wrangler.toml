@@ -3,8 +3,8 @@
 ## before deploying.
 ##
 ## DIRECT CLOUDFLARE ADAPTER: ../product-resources.json is the provider-neutral
-## product authority. The OpenTofu module at ../opentofu maps that contract to
-## Cloudflare durable infrastructure and publishes
+## product authority. The OpenTofu module at ../opentofu/cloudflare maps that
+## contract to Cloudflare durable infrastructure and publishes
 ## the non-secret endpoints / binding map. This wrangler.toml is the
 ## WORKER-ARTIFACT HALF of that direct adapter: the worker script
 ## entry, ASSETS, container images, Durable Object migrations, routes, and binding
@@ -127,10 +127,6 @@ name = "ROUTING_DO"
 class_name = "RoutingDO"
 
 [[durable_objects.bindings]]
-name = "RUNTIME_CONTAINER"
-class_name = "TakosRuntimeContainer"
-
-[[durable_objects.bindings]]
 name = "EXECUTOR_CONTAINER"
 class_name = "ExecutorContainerTier1"
 
@@ -175,18 +171,14 @@ new_sqlite_classes = [
   "ExecutorContainerTier3",
 ]
 
-# Runtime / agent images build from the ecosystem source checkout. image /
+[[migrations]]
+tag = "v7"
+deleted_classes = ["TakosRuntimeContainer"]
+
+# Agent images build from the ecosystem source checkout. image /
 # image_build_context are wrangler-config-relative (resolved from
 # takos/deploy/cloudflare). Release installs replace these paths with reviewed
 # Cloudflare registry refs; source builds require sibling takos-agent-engine.
-[[containers]]
-class_name = "TakosRuntimeContainer"
-image = "../../containers/runtime/Dockerfile"
-image_build_context = "../../containers/runtime"
-instance_type = "standard-2"
-max_instances = 1
-rollout_active_grace_period = 900
-
 [[containers]]
 class_name = "ExecutorContainerTier1"
 image = "../../containers/agent/Dockerfile"
@@ -274,11 +266,6 @@ binding = "RUN_QUEUE"
 queue = "takos-index-jobs"
 binding = "INDEX_QUEUE"
 
-# Queue for workflow job execution (GitHub Actions-style workflows)
-[[queues.producers]]
-queue = "takos-workflow-jobs"
-binding = "WORKFLOW_QUEUE"
-
 [[queues.producers]]
 queue = "takos-notification-push"
 binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
@@ -306,18 +293,6 @@ dead_letter_queue = "takos-index-jobs-dlq"
 
 [[queues.consumers]]
 queue = "takos-index-jobs-dlq"
-max_batch_size = 10
-max_batch_timeout = 60
-
-[[queues.consumers]]
-queue = "takos-workflow-jobs"
-max_batch_size = 1
-max_batch_timeout = 1
-max_retries = 3
-dead_letter_queue = "takos-workflow-jobs-dlq"
-
-[[queues.consumers]]
-queue = "takos-workflow-jobs-dlq"
 max_batch_size = 10
 max_batch_timeout = 60
 
@@ -410,10 +385,6 @@ name = "ROUTING_DO"
 class_name = "RoutingDO"
 
 [[env.staging.durable_objects.bindings]]
-name = "RUNTIME_CONTAINER"
-class_name = "TakosRuntimeContainer"
-
-[[env.staging.durable_objects.bindings]]
 name = "EXECUTOR_CONTAINER"
 class_name = "ExecutorContainerTier1"
 
@@ -425,16 +396,8 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-# Runtime / agent images (staging) use the same source/release contract as
+# Agent images (staging) use the same source/release contract as
 # production.
-[[env.staging.containers]]
-class_name = "TakosRuntimeContainer"
-image = "../../containers/runtime/Dockerfile"
-image_build_context = "../../containers/runtime"
-instance_type = "standard-2"
-max_instances = 1
-rollout_active_grace_period = 900
-
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
 image = "../../containers/agent/Dockerfile"
@@ -488,10 +451,6 @@ queue = "takos-index-jobs-staging"
 binding = "INDEX_QUEUE"
 
 [[env.staging.queues.producers]]
-queue = "takos-workflow-jobs-staging"
-binding = "WORKFLOW_QUEUE"
-
-[[env.staging.queues.producers]]
 queue = "takos-notification-push-staging"
 binding = "TAKOS_NOTIFICATION_PUSH_QUEUE"
 
@@ -518,18 +477,6 @@ dead_letter_queue = "takos-index-jobs-dlq-staging"
 
 [[env.staging.queues.consumers]]
 queue = "takos-index-jobs-dlq-staging"
-max_batch_size = 10
-max_batch_timeout = 60
-
-[[env.staging.queues.consumers]]
-queue = "takos-workflow-jobs-staging"
-max_batch_size = 1
-max_batch_timeout = 1
-max_retries = 3
-dead_letter_queue = "takos-workflow-jobs-dlq-staging"
-
-[[env.staging.queues.consumers]]
-queue = "takos-workflow-jobs-dlq-staging"
 max_batch_size = 10
 max_batch_timeout = 60
 

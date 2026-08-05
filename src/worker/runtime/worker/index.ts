@@ -1,8 +1,8 @@
 // Canonical entrypoint for the takos-worker (unified background worker).
-// Consolidates: runner + indexer + workflow-runner + egress.
+// Consolidates: runner + indexer + egress.
 //
 // fetch  → egress proxy (SSRF-protected outbound HTTP, called via service binding)
-// queue  → routes to runner / indexer / workflow-runner handlers by queue name
+// queue  → routes to runner / indexer / notification handlers by queue name
 // scheduled → stale run recovery cron
 export { createWorkerRuntime } from "./runtime-factory.ts";
 

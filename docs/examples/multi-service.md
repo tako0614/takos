@@ -22,7 +22,7 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
   "module": {
     "gitUrl": "https://github.com/example/app.git",
     "ref": "main",
-    "modulePath": "deploy/opentofu"
+    "modulePath": "deploy/opentofu/takoform"
   }
 }
 ```

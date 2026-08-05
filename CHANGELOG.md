@@ -6,6 +6,21 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.0 — Provider-neutral deployment adapters
+
+- Make the provider-neutral resource contract authoritative and expose
+  Takoform and direct Cloudflare as peer OpenTofu adapters, with the portable
+  Takoform path as the default install choice.
+- Replace the generic tool runtime plus executor split with one bounded Takos
+  agent image deployed at three capacity tiers. Shell, browser, desktop, and
+  writable Git hosting remain separately installed capabilities.
+- Retire the incomplete Takos-owned Git Actions UI, API, triggers, and workflow
+  queues. Existing persisted workflow history is preserved; writable Git and
+  optional Actions execution belong to `takos-git`.
+- Publish the same digest-pinned agent image to the Cloudflare registry and
+  public GHCR, and fail closed unless their config and ordered layer digests
+  match before the immutable Worker release is published.
+
 ## 0.11.20 — Portable AI Interface requirement
 
 - Declare the exact `takosumi.ai.gateway@1` contract and `ai.chat` permission

@@ -1,12 +1,3 @@
-/**
- * Distinguishes the kind of run a dispatch is for so the host can mint a
- * least-privilege proxy-token scope set. `"agent"` runs receive the full
- * agent-control scope set; `"workflow"` runs receive a reduced set (no
- * conversation / memory / skill scopes). Optional + defaults to `"agent"` so
- * existing dispatchers (and in-flight payloads) keep the full agent behavior.
- */
-export type AgentExecutorRunKind = "agent" | "workflow";
-
 export interface AgentExecutorDispatchPayload {
   runId: string;
   workerId: string;
@@ -30,11 +21,6 @@ export interface AgentExecutorDispatchPayload {
   controlRpcBaseUrl?: string;
   /** Optional operator start-token forwarded only across the internal DO RPC. */
   startToken?: string;
-  /**
-   * Run kind used to derive the proxy-token scope set. Defaults to `"agent"`
-   * for back-compat when a dispatcher does not set it.
-   */
-  runKind?: AgentExecutorRunKind;
 }
 
 export interface AgentExecutorControlConfig {

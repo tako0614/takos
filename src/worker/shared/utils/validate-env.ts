@@ -53,9 +53,7 @@ const REQUIRED_KEYS = {
     "ENCRYPTION_KEY",
   ],
   "takos-worker": ["DB", "RUN_QUEUE", "RUN_NOTIFIER"],
-  "takos-workflow-runner": ["DB"],
   "takos-indexer": ["DB"],
-  "takos-runtime-host": ["RUNTIME_CONTAINER", "PLATFORM_PUBLIC_KEY"],
   "takos-executor-host": [
     "EXECUTOR_CONTAINER",
     "TAKOS_AGENT_CONTROL_RPC_BASE_URL",
@@ -92,29 +90,8 @@ export function validateRunnerEnv(env: object): string | null {
   return validateEnv("takos-worker", env, REQUIRED_KEYS["takos-worker"]);
 }
 
-export function validateWorkflowRunnerEnv(env: object): string | null {
-  return validateEnv(
-    "takos-workflow-runner",
-    env,
-    REQUIRED_KEYS["takos-workflow-runner"],
-  );
-}
-
 export function validateIndexerEnv(env: object): string | null {
   return validateEnv("takos-indexer", env, REQUIRED_KEYS["takos-indexer"]);
-}
-
-export function validateRuntimeHostEnv(env: object): string | null {
-  const missing = validateEnv(
-    "takos-runtime-host",
-    env,
-    REQUIRED_KEYS["takos-runtime-host"],
-  );
-  if (missing) return missing;
-  if (Reflect.get(env, "JWT_PUBLIC_KEY")) {
-    return "[takos-runtime-host] JWT_PUBLIC_KEY is not a supported runtime-host input; set PLATFORM_PUBLIC_KEY instead";
-  }
-  return null;
 }
 
 export function validateExecutorHostEnv(env: object): string | null {

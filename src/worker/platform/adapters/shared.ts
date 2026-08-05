@@ -229,7 +229,6 @@ export function buildPlatformFromEnv<TBindings extends object>(
     queues: {
       runs: bindings.RUN_QUEUE as Env["RUN_QUEUE"] | undefined,
       index: bindings.INDEX_QUEUE as Env["INDEX_QUEUE"] | undefined,
-      workflow: bindings.WORKFLOW_QUEUE as Env["WORKFLOW_QUEUE"] | undefined,
     },
     objects: {
       gitObjects: bindings.GIT_OBJECTS as Env["GIT_OBJECTS"] | undefined,

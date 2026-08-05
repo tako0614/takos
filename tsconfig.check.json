@@ -3,7 +3,6 @@
   "include": [
     "src/worker/platform-utils/**/*.ts",
     "src/contracts/public/**/*.ts",
-    "src/worker/actions-engine/**/*.ts",
     "src/contracts/**/*.ts"
   ],
   "exclude": [

@@ -5,24 +5,18 @@ export {
   INDEX_QUEUE_MESSAGE_VERSION,
   NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
-  WORKFLOW_QUEUE_MESSAGE_VERSION,
   indexJobDeliveryId,
 } from "./queue-messages.ts";
 export type {
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
-  WorkflowJobDefinition,
-  WorkflowJobQueueMessage,
-  WorkflowShell,
-  WorkflowStep,
 } from "./queue-messages.ts";
 
 export {
   isValidIndexJobQueueMessage,
   isValidNotificationPushQueueMessage,
   isValidRunQueueMessage,
-  isValidWorkflowJobQueueMessage,
 } from "./queue-message-guards.ts";
 
 export type {

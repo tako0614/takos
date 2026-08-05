@@ -21,16 +21,13 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 {
   "spaceId": "space_1",
   "module": {
-    "source": "github.com/example/takos//deploy/opentofu",
+    "source": "github.com/example/takos//deploy/opentofu/cloudflare",
     "ref": "main"
-  },
-  "vars": {
-    "target": "cloudflare"
   }
 }
 ```
 
-Selecting a target runs a `plan` type Run and then an `apply` type Run, which records StateVersion and
+Selecting an adapter runs a `plan` type Run and then an `apply` type Run, which records StateVersion and
 non-sensitive endpoints as Output. Takos product routes rely on the Takosumi deploy-control ledger and
 Capsule output projection instead of exposing a separate product-local deployment surface.
 

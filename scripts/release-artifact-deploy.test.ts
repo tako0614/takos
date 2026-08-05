@@ -13,6 +13,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  assertImageContentMatch,
+  assertPublicAgentReadback,
+  isolatedDockerEnv,
   RELEASE_ARTIFACT_USAGE,
   TAKOS_RELEASE_ARTIFACT_SURFACE,
   parseReleaseArtifactArgs,
@@ -22,6 +25,10 @@ import {
 const commit = "a".repeat(40);
 const accountId = "b".repeat(32);
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
+const imageContent = {
+  configDigest: digest("f"),
+  layerDigests: [digest("1"), digest("2")],
+} as const;
 
 async function packageVersion(): Promise<string> {
   const packageJson = JSON.parse(
@@ -221,7 +228,7 @@ test("rejects phase-specific, duplicate, and malformed arguments", () => {
 test("publishes a contract that requires provenance, readback, and no-overwrite", () => {
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE).toMatchObject({
     surface: "takos-release-artifact",
-    target: "github-release-and-cloudflare-container-registry:takos",
+    target: "github-release-cloudflare-registry-and-public-oci:takos",
     triggers: ["published-identity", "authority", "irreversible"],
   });
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.requiresScripts).toEqual([
@@ -258,6 +265,52 @@ test("release publisher never copies local Rust target caches into its build con
     'for (const name of ["Cargo.toml", "Cargo.lock", "Dockerfile"]',
   );
   expect(source).toContain('await cp(join(source, "src")');
+});
+
+test("registry authentication always receives an isolated Docker config", () => {
+  const base = {
+    DOCKER_CONFIG: "/operator/default-docker",
+    DOCKER_AUTH_CONFIG: '{"auths":{}}',
+  };
+  const isolated = isolatedDockerEnv(base, "/tmp/release/cloudflare-docker");
+  expect(isolated.DOCKER_CONFIG).toBe("/tmp/release/cloudflare-docker");
+  expect(isolated.DOCKER_AUTH_CONFIG).toBeUndefined();
+  expect(base.DOCKER_CONFIG).toBe("/operator/default-docker");
+  expect(base.DOCKER_AUTH_CONFIG).toBe('{"auths":{}}');
+});
+
+test("cross-registry image content drift fails closed", () => {
+  expect(() =>
+    assertImageContentMatch(imageContent, {
+      configDigest: imageContent.configDigest,
+      layerDigests: [imageContent.layerDigests[0], digest("3")],
+    }),
+  ).toThrow("content identities differ");
+  expect(() =>
+    assertImageContentMatch(imageContent, {
+      configDigest: digest("e"),
+      layerDigests: imageContent.layerDigests,
+    }),
+  ).toThrow("content identities differ");
+});
+
+test("publish readback fails closed when GHCR digest or content drifts", () => {
+  const reference = `ghcr.io/tako0614/takos-agent@${digest("a")}`;
+  expect(() =>
+    assertPublicAgentReadback(reference, imageContent, {
+      manifestDigest: digest("b"),
+      content: imageContent,
+    }),
+  ).toThrow("anonymous readback drifted");
+  expect(() =>
+    assertPublicAgentReadback(reference, imageContent, {
+      manifestDigest: digest("a"),
+      content: {
+        configDigest: imageContent.configDigest,
+        layerDigests: [digest("3")],
+      },
+    }),
+  ).toThrow("anonymous content drifted");
 });
 
 test("prepare dry-run performs identity reads only and leaves evidence/output absent", async () => {
@@ -362,10 +415,14 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
           },
         ],
         images: {
-          "takos-worker-runtime":
-            `registry.cloudflare.com/${accountId}/takos-worker-runtime@${digest("c")}`,
           "takos-agent":
             `registry.cloudflare.com/${accountId}/takos-agent@${digest("d")}`,
+        },
+        publicAgentImage:
+          `ghcr.io/tako0614/takos-agent@${digest("e")}`,
+        imageContent: {
+          cloudflare: imageContent,
+          publicOci: imageContent,
         },
         observedAt: "2026-08-02T00:00:00.000Z",
       })}\n`,

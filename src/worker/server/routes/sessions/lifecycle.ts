@@ -2,11 +2,6 @@ import { getDb } from "../../../infra/db/index.ts";
 import { repositories, sessions } from "../../../infra/db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import {
-  scheduleActionsAutoTrigger,
-  triggerPushWorkflows,
-} from "../../../application/services/actions/index.ts";
-import * as gitStore from "../../../application/services/takos-git/index.ts";
-import {
   RuntimeSessionManager,
   type SessionInitResult,
 } from "../../../application/services/sync/index.ts";
@@ -15,17 +10,14 @@ import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 import { toSessionSnakeCase } from "./session-mappers.ts";
 import type { SessionContext } from "./session-mappers.ts";
-import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 import {
   AuthorizationError,
   BadRequestError,
   InternalError,
 } from "@takos/worker-platform-utils/errors";
 import { requireFound, requireParam } from "../validation-utils.ts";
-import {
-  getPlatformConfig,
-  getPlatformServices,
-} from "../../../platform/accessors.ts";
+import { getPlatformServices } from "../../../platform/accessors.ts";
 import type { RuntimeSessionManagerEnv } from "../../../application/services/sync/runtime-session.ts";
 
 type StartSessionBody = {
@@ -151,10 +143,6 @@ export async function stopSession(
   const sessionId = requireParam(c.req.param("sessionId"), "sessionId");
   const services = getPlatformServices(c);
   const dbBinding = services.sql?.binding;
-  const gitObjects = services.objects.gitObjects;
-  const tenantSource = services.objects.tenantSource;
-  const workflowQueue = services.queues.workflow;
-  const config = getPlatformConfig(c);
   if (!dbBinding) {
     throw new InternalError("Database binding unavailable");
   }
@@ -191,17 +179,6 @@ export async function stopSession(
   const syncBranch = session.branch || repo?.defaultBranch || "main";
 
   const runtimeSessionEnv = buildRuntimeSessionManagerEnv(c);
-
-  let pushBeforeSha: string | null = null;
-  try {
-    const branch = await gitStore.getBranch(dbBinding, repoId, syncBranch);
-    pushBeforeSha = branch?.commit_sha || null;
-  } catch (err) {
-    logWarn(
-      `Failed to resolve branch state before sync for ${repoId}/${syncBranch}`,
-      { module: "routes/sessions-lifecycle", detail: err },
-    );
-  }
 
   if (!runtimeSessionEnv) {
     throw new InternalError(
@@ -242,32 +219,6 @@ export async function stopSession(
     status: "stopped",
     updatedAt: new Date().toISOString(),
   }).where(eq(sessions.id, sessionId));
-
-  if (gitResult?.success && gitResult.pushed && gitResult.commitHash) {
-    const afterSha = gitResult.commitHash;
-    scheduleActionsAutoTrigger(
-      c.executionCtx,
-      () =>
-        triggerPushWorkflows(
-          {
-            db: dbBinding,
-            bucket: gitObjects || tenantSource,
-            queue: workflowQueue,
-            encryptionKey: config.encryptionKey,
-          },
-          {
-            repoId,
-            branch: syncBranch,
-            before: pushBeforeSha,
-            after: afterSha,
-            actorId: user.id,
-            actorName: user.name,
-            actorEmail: user.email,
-          },
-        ),
-      `sessions.stop.sync-to-git repo=${repoId} branch=${syncBranch}`,
-    );
-  }
 
   return c.json({
     success: true,

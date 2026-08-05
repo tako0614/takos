@@ -8,14 +8,14 @@ const PLATFORM_HOST = "app.takosumi.com";
 const LOCAL_PLATFORM_HOST = "app.takosumi.test";
 
 const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
-// Takos ships as an OpenTofu Capsule under deploy/opentofu; the deep link
+// Takos ships peer OpenTofu adapters under deploy/opentofu; the deep link
 // points the install wizard at that module path inside the repo so the Capsule
 // resolves to the module root rather than the repo root.
 // Fallback must be immutable because takos.jp can be built without operator
 // env overrides. Release builds should still set VITE_TAKOS_INSTALL_REF to the
 // release tag, but the source fallback must never publish a moving ref.
 const DEFAULT_TAKOS_REF = "a105afda57786cea79db8c50102a26a394a45229";
-const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu";
+const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/takoform";
 
 function installUrl(host: string): string {
   const url = new URL(`https://${host}/install`);
@@ -24,11 +24,6 @@ function installUrl(host: string): string {
   url.searchParams.set("path", takosInstallModulePath());
   url.searchParams.set("name", "takos");
   url.searchParams.set("var.project_name", "takos");
-  url.searchParams.set("varjson.cloudflare", "{}");
-  const workersSubdomain = takosInstallWorkersSubdomain();
-  if (workersSubdomain) {
-    url.searchParams.set("var.cloudflare.workers_subdomain", workersSubdomain);
-  }
   return url.toString();
 }
 
@@ -38,7 +33,7 @@ const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
  * Git/install links land on the Takosumi add flow:
- * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>&varjson.cloudflare={}
+ * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>
  * pre-fills `/new` with the repo coordinates. The visitor reviews the Capsule
  * compatibility result and explicitly creates/plans there.
  */
@@ -105,10 +100,6 @@ function takosInstallModulePath(): string {
   return (
     envString("VITE_TAKOS_INSTALL_MODULE_PATH") ?? DEFAULT_TAKOS_MODULE_PATH
   );
-}
-
-function takosInstallWorkersSubdomain(): string | undefined {
-  return envString("VITE_TAKOS_INSTALL_WORKERS_SUBDOMAIN");
 }
 
 function envString(key: string): string | undefined {

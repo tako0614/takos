@@ -85,8 +85,8 @@ export interface ProxyTokenInfo {
   runtimeProtocolVersion?: number;
   /**
    * The scope set this token grants. Minted as an array of least-privilege
-   * scopes (see proxyScopesForRunKind). A single concrete scope is accepted for
-   * narrow internal callers; unknown values resolve to an empty scope set.
+   * scopes. A single concrete scope is accepted for narrow internal callers;
+   * unknown values resolve to an empty scope set.
    */
   capability: ProxyCapability | ProxyCapability[];
   executorTier?: ExecutorTier;
@@ -240,7 +240,7 @@ export type ProxyScope =
 
 export type ProxyCapability = ProxyScope;
 
-/** Full scope set granted to agent runs. */
+/** Full scope set granted to every bounded Takos agent run. */
 export const AGENT_PROXY_SCOPES: readonly ProxyScope[] = [
   "run-lifecycle",
   "conversation",
@@ -248,30 +248,6 @@ export const AGENT_PROXY_SCOPES: readonly ProxyScope[] = [
   "skills",
   "provider-keys",
 ];
-
-/**
- * Reduced scope set granted to workflow / actions runs. Workflow runs drive
- * run lifecycle, execute tools, and fetch provider keys, but do NOT touch the
- * conversation / memory / skill control-RPC surface that only agent runs need.
- */
-export const WORKFLOW_PROXY_SCOPES: readonly ProxyScope[] = [
-  "run-lifecycle",
-  "tools",
-  "provider-keys",
-];
-
-/**
- * Resolve the scope set a run kind is granted. Defaults to the full agent set
- * for any unknown / unset kind (fail-open ONLY toward the broader agent set,
- * never toward a smaller-than-intended set, so agents never regress).
- */
-export function proxyScopesForRunKind(
-  runKind: "agent" | "workflow" | undefined,
-): ProxyScope[] {
-  return runKind === "workflow"
-    ? [...WORKFLOW_PROXY_SCOPES]
-    : [...AGENT_PROXY_SCOPES];
-}
 
 /**
  * Expand a stored token capability into the concrete scope set it grants.

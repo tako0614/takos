@@ -14,8 +14,6 @@ import {
   AGENT_PROXY_SCOPES,
   agentControlRpcPath,
   isControlRpcPath,
-  proxyScopesForRunKind,
-  WORKFLOW_PROXY_SCOPES,
 } from "../executor-utils.ts";
 
 test("claimsMatchRequestBody passes when body asserts the bound run/service id", () => {
@@ -147,7 +145,7 @@ test("every control endpoint maps to exactly one known scope", () => {
 });
 
 test("an agent run token reaches every control endpoint (no regression)", () => {
-  const agentCapability = proxyScopesForRunKind("agent");
+  const agentCapability = [...AGENT_PROXY_SCOPES];
   // Sanity: the agent scope set is the full scope set.
   assertEquals([...agentCapability].sort(), [...AGENT_PROXY_SCOPES].sort());
   for (const endpoint of CONTROL_RPC_ENDPOINT_NAMES) {
@@ -169,74 +167,6 @@ test("unknown proxy capability is denied for all control endpoints", () => {
       `unknown control capability reached endpoint ${endpoint}`,
     );
   }
-});
-
-test("a workflow run token is denied conversation / memory / skill endpoints", () => {
-  const workflowCapability = proxyScopesForRunKind("workflow");
-  assertEquals(
-    [...workflowCapability].sort(),
-    [...WORKFLOW_PROXY_SCOPES].sort(),
-  );
-
-  // Granted: run-lifecycle, tools, provider-keys endpoints.
-  for (const endpoint of [
-    "heartbeat",
-    "run-status",
-    "run-event",
-    "update-run-status",
-    "tool-execute",
-    "tool-catalog",
-    "api-keys",
-  ]) {
-    assertEquals(
-      isProxyRequestAuthorized(
-        agentControlRpcPath(endpoint),
-        workflowCapability,
-      ),
-      true,
-      `workflow run should be allowed ${endpoint}`,
-    );
-  }
-
-  // Denied: conversation, memory, and skill endpoints a workflow does not need.
-  for (const endpoint of [
-    "conversation-history",
-    "add-message",
-    "skill-catalog",
-    "skill-plan",
-    "skill-runtime-context",
-  ]) {
-    assertEquals(
-      isProxyRequestAuthorized(
-        agentControlRpcPath(endpoint),
-        workflowCapability,
-      ),
-      false,
-      `workflow run should be denied ${endpoint}`,
-    );
-  }
-});
-
-test("workflow and agent both receive run-lifecycle + tools + provider-keys", () => {
-  for (const scope of WORKFLOW_PROXY_SCOPES) {
-    assertEquals(
-      proxyScopesForRunKind("agent").includes(scope),
-      true,
-      `agent must also hold ${scope}`,
-    );
-    assertEquals(
-      proxyScopesForRunKind("workflow").includes(scope),
-      true,
-      `workflow must hold ${scope}`,
-    );
-  }
-});
-
-test("unknown run kind defaults to the full agent scope set", () => {
-  assertEquals(
-    [...proxyScopesForRunKind(undefined)].sort(),
-    [...AGENT_PROXY_SCOPES].sort(),
-  );
 });
 
 test("unknown / non-control paths require no scope and are unauthorized", () => {

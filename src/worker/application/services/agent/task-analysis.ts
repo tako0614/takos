@@ -48,7 +48,7 @@ Analyze the task and return a JSON object with:
   - composite: Complex tasks needing multiple approaches
 - tools: Array of tool names that might be needed
 - needsRepo: Boolean - does this task involve a git repository?
-- needsRuntime: Boolean - does this need runtime container execution (npm, build, etc.)?
+- needsRuntime: Boolean - does this need an installed external compute capability (npm, build, etc.)?
 - usePR: Boolean - should changes go through a PR workflow?
 - needsReview: Boolean - should changes be reviewed before merging?
 - reviewType: "self" | "separate_ai" - who reviews (self = same conversation, separate_ai = new AI session)

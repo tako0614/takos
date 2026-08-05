@@ -9,9 +9,14 @@ import {
   workflowJobs,
 } from "../../../infra/db/index.ts";
 import { eq, lt } from "drizzle-orm";
-import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import type { WorkflowBucket } from "./workflow-engine-types.ts";
+import type {
+  ObjectStoreBinding,
+  SqlDatabaseBinding,
+} from "../../../shared/types/bindings.ts";
 import { logError, logInfo } from "../../../shared/utils/logger.ts";
+
+/** Object storage surface retained for workflow artifact history/GC. */
+export type WorkflowBucket = Pick<ObjectStoreBinding, "put" | "delete">;
 
 // ---------------------------------------------------------------------------
 // storeJobLogs

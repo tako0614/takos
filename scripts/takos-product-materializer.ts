@@ -85,7 +85,6 @@ const RESERVED_BINDING_NAMES = new Set([
   "ROUTING_DO",
   "RUN_NOTIFIER",
   "RUN_QUEUE",
-  "RUNTIME_CONTAINER",
   "SESSION_DO",
   "TAKOS_EGRESS",
   "TAKOS_NOTIFICATION_PUSH_QUEUE",
@@ -94,14 +93,12 @@ const RESERVED_BINDING_NAMES = new Set([
   "TENANT_SOURCE",
   "VECTORIZE",
   "WORKER_BUNDLES",
-  "WORKFLOW_QUEUE",
 ]);
 
 type JsonRecord = Record<string, unknown>;
 type Phase = "post_apply" | "pre_destroy";
 
 export type ExecutorCapacity = {
-  runtime_max_instances: number;
   tier1_max_instances: number;
   tier1_max_concurrent_runs: number;
   tier2_max_instances: number;
@@ -135,13 +132,11 @@ type QueueKey =
   | "runs_dlq"
   | "index_jobs"
   | "index_jobs_dlq"
-  | "workflow"
-  | "workflow_dlq"
   | "notification_push"
   | "notification_push_dlq";
 
 export type ReleaseDescriptor = {
-  kind: "takosumi.worker-artifact@v1";
+  kind: "takosumi.worker-artifact@v2";
   app: "takos";
   commit: string;
   releaseTag: string;
@@ -152,7 +147,10 @@ export type ReleaseDescriptor = {
     sha256Prefixed: string;
   };
   assetManifest: "asset-manifest.json";
-  containerImages: { runtime: string; executor: string };
+  containerImages: {
+    executor: string;
+    publicAgent?: string;
+  };
 };
 
 type Invocation = {
@@ -426,7 +424,6 @@ export function parseTakosOutputs(value: unknown): TakosOutputs {
 
   const capacityInput = record(outputs.executor_capacity, "executor_capacity");
   const capacityKeys = [
-    "runtime_max_instances",
     "tier1_max_instances",
     "tier1_max_concurrent_runs",
     "tier2_max_instances",
@@ -489,8 +486,6 @@ export function parseTakosOutputs(value: unknown): TakosOutputs {
       "runs_dlq",
       "index_jobs",
       "index_jobs_dlq",
-      "workflow",
-      "workflow_dlq",
       "notification_push",
       "notification_push_dlq",
     ],
@@ -723,7 +718,7 @@ export function validateReleaseDescriptor(
   },
 ): ReleaseDescriptor {
   const descriptor = record(value, "release artifact descriptor");
-  invariant(descriptor.kind === "takosumi.worker-artifact@v1", "artifact descriptor kind is invalid");
+  invariant(descriptor.kind === "takosumi.worker-artifact@v2", "artifact descriptor kind is invalid");
   invariant(descriptor.app === "takos", "artifact descriptor app must be takos");
   invariant(descriptor.commit === input.sourceCommit, "artifact commit does not match the SourceSnapshot commit");
   const releaseTag = requiredString(descriptor.releaseTag, "artifact releaseTag", VERSION);
@@ -740,13 +735,24 @@ export function validateReleaseDescriptor(
   const archiveDigest = requiredString(artifact.sha256Prefixed, "Worker artifact digest", SHA256);
   invariant(artifact.sha256 === archiveDigest.slice("sha256:".length), "Worker artifact digest aliases drifted");
   const images = record(descriptor.containerImages, "container image selection");
-  exactKeys(images, ["runtime", "executor"], "container image selection");
-  const runtime = requiredString(images.runtime, "runtime container image", OCI_DIGEST_REF);
+  invariant(
+    Object.keys(images).every((key) =>
+      ["executor", "publicAgent"].includes(key),
+    ) && "executor" in images,
+    "container image selection keys drifted",
+  );
   const executor = requiredString(images.executor, "executor container image", OCI_DIGEST_REF);
-  invariant(runtime.match(OCI_DIGEST_REF)?.[1] === input.accountId, "runtime container image belongs to a different Cloudflare account");
+  const publicAgent =
+    images.publicAgent === undefined
+      ? undefined
+      : requiredString(
+          images.publicAgent,
+          "public agent container image",
+          /^ghcr\.io\/tako0614\/takos-agent@sha256:[0-9a-f]{64}$/u,
+        );
   invariant(executor.match(OCI_DIGEST_REF)?.[1] === input.accountId, "executor container image belongs to a different Cloudflare account");
   return {
-    kind: "takosumi.worker-artifact@v1",
+    kind: "takosumi.worker-artifact@v2",
     app: "takos",
     commit: input.sourceCommit,
     releaseTag,
@@ -757,7 +763,10 @@ export function validateReleaseDescriptor(
       sha256Prefixed: archiveDigest,
     },
     assetManifest: "asset-manifest.json",
-    containerImages: { runtime, executor },
+    containerImages: {
+      executor,
+      ...(publicAgent ? { publicAgent } : {}),
+    },
   };
 }
 
@@ -943,7 +952,6 @@ export async function extractWorkerArchive(
 
 function containerNames(workerName: string) {
   return {
-    runtime: `${workerName}-runtime`,
     tier1: `${workerName}-executor-tier1`,
     tier2: `${workerName}-executor-tier2`,
     tier3: `${workerName}-executor-tier3`,
@@ -956,8 +964,6 @@ function queueConsumers(outputs: TakosOutputs) {
     { queue: outputs.queues.runs_dlq, max_batch_size: 10, max_batch_timeout: 60 },
     { queue: outputs.queues.index_jobs, max_batch_size: 5, max_batch_timeout: 60, max_retries: 2, dead_letter_queue: outputs.queues.index_jobs_dlq },
     { queue: outputs.queues.index_jobs_dlq, max_batch_size: 10, max_batch_timeout: 60 },
-    { queue: outputs.queues.workflow, max_batch_size: 1, max_batch_timeout: 1, max_retries: 3, dead_letter_queue: outputs.queues.workflow_dlq },
-    { queue: outputs.queues.workflow_dlq, max_batch_size: 10, max_batch_timeout: 60 },
     { queue: outputs.queues.notification_push, max_batch_size: 5, max_batch_timeout: 5, max_retries: 5, max_concurrency: 5, retry_delay: 5, dead_letter_queue: outputs.queues.notification_push_dlq },
     { queue: outputs.queues.notification_push_dlq, max_batch_size: 10, max_batch_timeout: 60, max_retries: 100, retry_delay: 600 },
   ] as const;
@@ -1012,7 +1018,6 @@ export function renderWranglerConfig(input: {
         ["NOTIFICATION_NOTIFIER", "NotificationNotifierDO"],
         ["RATE_LIMITER_DO", "RateLimiterDO"],
         ["ROUTING_DO", "RoutingDO"],
-        ["RUNTIME_CONTAINER", "TakosRuntimeContainer"],
         ["EXECUTOR_CONTAINER", "ExecutorContainerTier1"],
         ["EXECUTOR_CONTAINER_TIER2", "ExecutorContainerTier2"],
         ["EXECUTOR_CONTAINER_TIER3", "ExecutorContainerTier3"],
@@ -1033,16 +1038,9 @@ export function renderWranglerConfig(input: {
           "ExecutorContainerTier3",
         ],
       },
+      { tag: "v7", deleted_classes: ["TakosRuntimeContainer"] },
     ],
     containers: [
-      {
-        name: names.runtime,
-        class_name: "TakosRuntimeContainer",
-        image: descriptor.containerImages.runtime,
-        instance_type: "standard-2",
-        max_instances: outputs.capacity.runtime_max_instances,
-        rollout_active_grace_period: 900,
-      },
       {
         name: names.tier1,
         class_name: "ExecutorContainerTier1",
@@ -1079,7 +1077,6 @@ export function renderWranglerConfig(input: {
       producers: [
         ["RUN_QUEUE", outputs.queues.runs],
         ["INDEX_QUEUE", outputs.queues.index_jobs],
-        ["WORKFLOW_QUEUE", outputs.queues.workflow],
         ["TAKOS_NOTIFICATION_PUSH_QUEUE", outputs.queues.notification_push],
       ].map(([binding, queue]) => ({ binding, queue })),
       consumers: queueConsumers(outputs),
@@ -1412,6 +1409,18 @@ type ContainerListEntry = {
   image: string;
 };
 
+function assertNoRetiredRuntimeContainer(
+  containers: readonly ContainerListEntry[],
+  workerName: string,
+): void {
+  const legacyName = `${workerName}-runtime`;
+  invariant(
+    !containers.some((container) => container.name === legacyName),
+    `retired runtime container ${legacyName} still exists; remove it before materialization`,
+    "resource_conflict",
+  );
+}
+
 function parseContainerList(value: unknown): ContainerListEntry[] {
   invariant(Array.isArray(value), "container list readback must be an array", "invalid_readback");
   return value.map((raw, index) => {
@@ -1444,11 +1453,6 @@ function expectedContainerShape(
 ): Record<string, { image: string; instanceType: unknown; maxInstances: number }> {
   const names = containerNames(outputs.workerName);
   return {
-    [names.runtime]: {
-      image: descriptor.containerImages.runtime,
-      instanceType: "standard-2",
-      maxInstances: outputs.capacity.runtime_max_instances,
-    },
     [names.tier1]: {
       image: descriptor.containerImages.executor,
       instanceType: "lite",
@@ -1554,9 +1558,16 @@ async function verifyContainers(
   descriptor: ReleaseDescriptor,
 ): Promise<void> {
   const listed = await containerList(dependencies, configPath);
+  assertNoRetiredRuntimeContainer(listed, outputs.workerName);
   const expected = expectedContainerShape(outputs, descriptor);
   const selected = listed.filter((item) => expected[item.name]);
-  invariant(selected.length === 4, "not all four Takos container applications exist", "invalid_readback");
+  const expectedCount = Object.keys(expected).length;
+  invariant(
+    selected.length === expectedCount &&
+      new Set(selected.map((item) => item.name)).size === expectedCount,
+    "not all expected Takos agent container applications exist",
+    "invalid_readback",
+  );
   for (const item of selected) {
     const wanted = expected[item.name]!;
     invariant(item.image === wanted.image, `container ${item.name} image drifted`, "invalid_readback");
@@ -1889,7 +1900,6 @@ function legacyWorkerBindingsMatch(
     for (const [name, queue] of [
       ["RUN_QUEUE", outputs.queues.runs],
       ["INDEX_QUEUE", outputs.queues.index_jobs],
-      ["WORKFLOW_QUEUE", outputs.queues.workflow],
       ["TAKOS_NOTIFICATION_PUSH_QUEUE", outputs.queues.notification_push],
     ] as const) {
       if (!matches(name, "queue", "queue_name", queue)) return false;
@@ -1901,7 +1911,6 @@ function legacyWorkerBindingsMatch(
       ["NOTIFICATION_NOTIFIER", "NotificationNotifierDO"],
       ["RATE_LIMITER_DO", "RateLimiterDO"],
       ["ROUTING_DO", "RoutingDO"],
-      ["RUNTIME_CONTAINER", "TakosRuntimeContainer"],
       ["EXECUTOR_CONTAINER", "ExecutorContainerTier1"],
       ["EXECUTOR_CONTAINER_TIER2", "ExecutorContainerTier2"],
       ["EXECUTOR_CONTAINER_TIER3", "ExecutorContainerTier3"],
@@ -1969,7 +1978,6 @@ function expectedContainerNamespaces(
   const expected = new Map<string, string>();
   const names = containerNames(outputs.workerName);
   for (const [name, className] of [
-    [names.runtime, "TakosRuntimeContainer"],
     [names.tier1, "ExecutorContainerTier1"],
     [names.tier2, "ExecutorContainerTier2"],
     [names.tier3, "ExecutorContainerTier3"],
@@ -2017,7 +2025,6 @@ function verifyQueueAndVectorOwnership(
     ["VECTORIZE", "vectorize", "index_name", outputs.vector.name],
     ["RUN_QUEUE", "queue", "queue_name", outputs.queues.runs],
     ["INDEX_QUEUE", "queue", "queue_name", outputs.queues.index_jobs],
-    ["WORKFLOW_QUEUE", "queue", "queue_name", outputs.queues.workflow],
     [
       "TAKOS_NOTIFICATION_PUSH_QUEUE",
       "queue",
@@ -2137,7 +2144,6 @@ function materializerEvidence(input: {
     artifact: {
       descriptorDigest: input.descriptorDigest,
       workerArchiveDigest: input.descriptor.artifact.sha256Prefixed,
-      runtimeImageDigest: input.descriptor.containerImages.runtime.match(OCI_DIGEST_REF)![2],
       executorImageDigest: input.descriptor.containerImages.executor.match(OCI_DIGEST_REF)![2],
       renderedConfigDigest: input.configDigest,
     },
@@ -2158,8 +2164,8 @@ function materializerEvidence(input: {
       d1MigrationsApplied: true,
       vectorIndex: true,
       workerDeployment: true,
-      containers: 4,
-      queueConsumers: 8,
+      containers: 3,
+      queueConsumers: 6,
       runtimeSecrets: true,
       health: input.health,
     },
@@ -2885,6 +2891,7 @@ export async function materializePostApply(input: {
       invocation.outputs.workerName,
     );
     const existingContainers = await containerList(dependencies, configPath);
+    assertNoRetiredRuntimeContainer(existingContainers, invocation.outputs.workerName);
     const expectedNames = new Set(Object.keys(expectedContainerShape(invocation.outputs, descriptor)));
     const existingOwnedContainers = existingContainers.filter((item) =>
       expectedNames.has(item.name),
@@ -3115,6 +3122,7 @@ async function waitForChildCleanupAbsence(input: {
         );
       }
       const containers = await containerList(dependencies, configPath);
+      assertNoRetiredRuntimeContainer(containers, outputs.workerName);
       invariant(
         !containers.some((item) => ownedContainerNames.has(item.name)),
         "Takos container application still exists after pre_destroy cleanup",
@@ -3251,6 +3259,7 @@ export async function materializePreDestroy(input: {
     );
     validateQueueOwnership(queues, invocation.outputs, false, false);
     const containers = await containerList(dependencies, configPath);
+    assertNoRetiredRuntimeContainer(containers, invocation.outputs.workerName);
     const ownedNames = new Set<string>(
       Object.values(containerNames(invocation.outputs.workerName)),
     );

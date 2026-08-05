@@ -26,13 +26,14 @@ console.log(JSON.stringify({ ok: true, checked: checks.length }, null, 2));
 
 async function checkRequiredDocs(): Promise<void> {
   const runbookPath = 'deploy/TAKOSUMI_DEPLOY.md';
-  const envExamplePath = 'deploy/opentofu/opentofu.tfvars.example';
+  const envExamplePath = 'deploy/opentofu/cloudflare/opentofu.tfvars.example';
   const runbook = await readText(runbookPath);
   const envExample = await readText(envExamplePath);
   const requiredRunbookTerms = [
     'wrangler secret put',
     'TAKOSUMI_ACCOUNTS_TOKEN',
-    'The OpenTofu module owns durable topology',
+    'deploy/opentofu/takoform',
+    'deploy/opentofu/cloudflare',
     'deploy/cloudflare/wrangler.toml',
   ];
   const requiredExampleTerms = [
@@ -77,7 +78,7 @@ async function checkGitignorePolicy(): Promise<void> {
 async function checkTrackedOpenTofuSecretFiles(): Promise<void> {
   const tracked = await gitLsFiles('deploy/opentofu');
   const allowedTfvars = new Set([
-    'deploy/opentofu/plan/cloudflare-staging.tfvars',
+    'deploy/opentofu/cloudflare/plan/cloudflare-staging.tfvars',
   ]);
   const forbidden = tracked.filter((path) => {
     if (allowedTfvars.has(path)) return false;
@@ -100,7 +101,7 @@ async function checkPlanFixtures(): Promise<void> {
   // Cloudflare has no DB password; its only identity-like value is account_id,
   // which must stay the all-zero placeholder rather than a real account id.
   {
-    const path = 'deploy/opentofu/plan/cloudflare-staging.tfvars';
+    const path = 'deploy/opentofu/cloudflare/plan/cloudflare-staging.tfvars';
     const text = await readText(path);
     if (!text.includes('opentofu_plan_mode = true')) {
       failures.push(`${path} missing opentofu_plan_mode = true`);

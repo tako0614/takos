@@ -56,7 +56,6 @@ export type PlatformRoutingService = {
 export type PlatformQueues = {
   runs?: MessageQueueBinding;
   index?: MessageQueueBinding;
-  workflow?: MessageQueueBinding;
 };
 
 export type PlatformObjects = {

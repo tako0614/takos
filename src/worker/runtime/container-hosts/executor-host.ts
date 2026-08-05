@@ -1,12 +1,12 @@
 /**
  * Executor container host handler
  *
- * Hosts tiered executor containers (runtime containers DO sidecars) and
+ * Hosts tiered agent containers (Cloudflare Container DO sidecars) and
  * forwards container control RPC to the main takos worker. In Cloudflare
  * deployments this is called in-process by the unified takos Worker.
  *
  * Architecture:
- *   takos-worker → POST /dispatch → this worker → container.dispatchStart(...)
+ *   takos-worker → POST /dispatch → this host → container.dispatchStart(...)
  *   container → POST /api/internal/v1/agent-control/* → Takos Worker handlers
  *
  * Implementation is split across focused modules:
@@ -53,7 +53,7 @@ import {
   isAgentControlRpcPath,
   isControlRpcPath,
   parseExecutorTier,
-  proxyScopesForRunKind,
+  AGENT_PROXY_SCOPES,
   recordProxyUsage,
   resolveContainerNamespace,
   resolveExecutorTierCapacity,
@@ -414,11 +414,7 @@ function createExecutorContainerClass(
           runId: body.runId,
           serviceId,
           leaseVersion: body.leaseVersion,
-          // Mint the least-privilege scope SET for this run kind. Agent runs
-          // get the full scope set; workflow runs get the reduced set (no
-          // conversation / memory / skills). Defaults to the agent set when
-          // runKind is unset (back-compat).
-          capability: proxyScopesForRunKind(body.runKind),
+          capability: [...AGENT_PROXY_SCOPES],
           executorTier: tier,
           executorContainerId,
           startedAt: now,

@@ -1,9 +1,6 @@
 export const RUN_QUEUE_MESSAGE_VERSION = 2;
-export const WORKFLOW_QUEUE_MESSAGE_VERSION = 3;
 export const INDEX_QUEUE_MESSAGE_VERSION = 1;
 export const NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION = 1;
-export type WorkflowShell =
-  "bash" | "pwsh" | "python" | "sh" | "cmd" | "powershell";
 
 export interface RunQueueMessage {
   version: typeof RUN_QUEUE_MESSAGE_VERSION;
@@ -59,53 +56,4 @@ export interface IndexJobQueueMessage {
 
 export function indexJobDeliveryId(jobId: string): string {
   return `index-delivery:${jobId}`;
-}
-
-export interface WorkflowStep {
-  id?: string;
-  name?: string;
-  uses?: string;
-  run?: string;
-  with?: Record<string, unknown>;
-  env?: Record<string, string>;
-  if?: string;
-  shell?: WorkflowShell;
-  "working-directory"?: string;
-  "continue-on-error"?: boolean;
-  "timeout-minutes"?: number;
-}
-
-export interface WorkflowJobDefinition {
-  name?: string;
-  "runs-on": string | string[];
-  needs?: string | string[];
-  if?: string;
-  env?: Record<string, string>;
-  defaults?: {
-    run?: {
-      shell?: WorkflowShell;
-      "working-directory"?: string;
-    };
-  };
-  steps: WorkflowStep[];
-  outputs?: Record<string, string>;
-  "timeout-minutes"?: number;
-  "continue-on-error"?: boolean;
-  services?: Record<string, unknown>;
-  container?: unknown;
-}
-
-export interface WorkflowJobQueueMessage {
-  version: typeof WORKFLOW_QUEUE_MESSAGE_VERSION;
-  type: "job";
-  runId: string;
-  jobId: string;
-  repoId: string;
-  ref: string;
-  sha: string;
-  jobKey: string;
-  jobDefinition: WorkflowJobDefinition;
-  env: Record<string, string>;
-  secretIds: string[];
-  timestamp: number;
 }

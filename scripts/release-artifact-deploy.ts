@@ -17,20 +17,22 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const REPOSITORY = "tako0614/takos";
-const IMAGE_NAMES = ["takos-worker-runtime", "takos-agent"] as const;
+const IMAGE_NAMES = ["takos-agent"] as const;
 const DIGEST_REF =
-  /^registry\.cloudflare\.com\/([0-9a-f]{32})\/(takos-worker-runtime|takos-agent)@(sha256:[0-9a-f]{64})$/u;
+  /^registry\.cloudflare\.com\/([0-9a-f]{32})\/(takos-agent)@(sha256:[0-9a-f]{64})$/u;
+const PUBLIC_AGENT_DIGEST_REF =
+  /^ghcr\.io\/tako0614\/takos-agent@(sha256:[0-9a-f]{64})$/u;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/u;
 const SEMVER_TAG = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u;
+const MAX_IMAGE_LAYERS = 256;
 
 export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   surface: "takos-release-artifact",
-  target: "github-release-and-cloudflare-container-registry:takos",
+  target: "github-release-cloudflare-registry-and-public-oci:takos",
   covers: [
     "deploy/cloudflare/wrangler.toml",
-    "containers/runtime",
     "containers/agent",
     "scripts/build-worker-release-artifact.ts",
   ],
@@ -40,15 +42,15 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   triggers: ["published-identity", "authority", "irreversible"],
   obligations: {
     provenance:
-      "prepare binds clean pushed main, package version, pinned agent-engine commit, target Cloudflare account, digest-pinned runtime and executor images, exact Worker archive bytes, and descriptor digest in operator-private evidence",
+      "prepare binds clean pushed main, package version, pinned agent-engine commit, target Cloudflare account, digest-pinned Cloudflare images, the same agent bytes in public GHCR, exact Worker archive bytes, and descriptor digest in operator-private evidence",
     "post-conditions":
-      "publish verifies the remote tag resolves to the prepared commit and downloads every GitHub release asset to recheck its SHA-256 before making the draft public",
+      "publish anonymously re-reads the prepared public GHCR agent identity, verifies the remote tag resolves to the prepared commit, and downloads every GitHub release asset to recheck its SHA-256 before making the draft public",
     reversal:
       "published Git tags, registry digest references, and release assets are immutable identities; correction uses a new package version and tag rather than overwriting bytes",
     "failure-handling":
       "both phases are dry-run by default, redact provider output, record no credentials, refuse conflicting tags/assets, and adopt only an exact same-commit draft created by a prior interrupted publish",
     "no-overwrite":
-      "prepare uses non-authoritative nonce upload tags and rejects existing output/evidence paths; only the read-back registry digests become image identities, while publish rejects a foreign tag, non-draft release, or any asset whose remote digest differs from the prepared bytes",
+      "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; only read-back registry digests become image identities, while publish rejects a foreign tag, non-draft release, or any asset whose remote digest differs from the prepared bytes",
     "pre-mutation-proof":
       "prepare reruns the portable complete gate, proves clean pushed main and unused version tag/release identities, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
     "independent-review":
@@ -76,6 +78,71 @@ type CommandResult = Readonly<{
   stderr: string;
 }>;
 
+/**
+ * Registry-independent identity for a single-platform image manifest.
+ *
+ * Registry manifest digests are not sufficient here: registries may rewrite
+ * the outer media type while preserving the image bytes.  The config digest
+ * and ordered layer digests are the bounded, content-bearing identity we
+ * record in release evidence instead.
+ */
+export type ImageContentIdentity = Readonly<{
+  configDigest: string;
+  layerDigests: readonly string[];
+}>;
+
+export type ImageManifestReadback = Readonly<{
+  manifestDigest: string;
+  content: ImageContentIdentity;
+}>;
+
+export function isolatedDockerEnv(
+  baseEnv: NodeJS.ProcessEnv,
+  dockerConfig: string,
+): NodeJS.ProcessEnv {
+  if (!dockerConfig || !dockerConfig.startsWith("/")) {
+    throw new Error("isolated Docker config path must be absolute");
+  }
+  const isolated = { ...baseEnv, DOCKER_CONFIG: dockerConfig };
+  // DOCKER_AUTH_CONFIG bypasses DOCKER_CONFIG and can silently reintroduce
+  // operator credentials into the supposedly isolated registry session.
+  delete isolated.DOCKER_AUTH_CONFIG;
+  return isolated;
+}
+
+export function assertImageContentMatch(
+  left: ImageContentIdentity,
+  right: ImageContentIdentity,
+): void {
+  if (
+    left.configDigest !== right.configDigest ||
+    left.layerDigests.length !== right.layerDigests.length ||
+    left.layerDigests.some(
+      (digest, index) => digest !== right.layerDigests[index],
+    )
+  ) {
+    throw new Error(
+      "Cloudflare and public agent image content identities differ",
+    );
+  }
+}
+
+export function assertPublicAgentReadback(
+  expectedReference: string,
+  expectedContent: ImageContentIdentity,
+  actual: ImageManifestReadback,
+): void {
+  const expectedDigest = expectedReference.match(PUBLIC_AGENT_DIGEST_REF)?.[1];
+  if (expectedDigest !== actual.manifestDigest) {
+    throw new Error("public GHCR agent image anonymous readback drifted");
+  }
+  try {
+    assertImageContentMatch(expectedContent, actual.content);
+  } catch {
+    throw new Error("public GHCR agent image anonymous content drifted");
+  }
+}
+
 type PreparedRecord = Readonly<{
   kind: "takos.release-artifact-prepare@v1";
   status: "prepared";
@@ -89,6 +156,11 @@ type PreparedRecord = Readonly<{
   descriptor: { path: string; digest: string; url: string };
   assets: readonly { name: string; path: string; digest: string }[];
   images: Readonly<Record<(typeof IMAGE_NAMES)[number], string>>;
+  publicAgentImage: string;
+  imageContent: Readonly<{
+    cloudflare: ImageContentIdentity;
+    publicOci: ImageContentIdentity;
+  }>;
   observedAt: string;
 }>;
 
@@ -241,20 +313,15 @@ async function prepareRelease(
   const imageTag = `${version}-${commit.slice(0, 12)}-${randomBytes(8).toString("hex")}`;
   const temporary = await mkdtemp(join(tmpdir(), "takos-release-artifact-"));
   try {
-    const runtimeLocal = `takos-worker-runtime:${imageTag}`;
-    await checked(root, "bun", ["run", "containers:build:runtime"]);
-    await checked(root, "docker", [
-      "buildx",
-      "build",
-      "--load",
-      "--platform",
-      "linux/amd64",
-      "--file",
-      join(root, "containers/runtime/Dockerfile"),
-      "--tag",
-      runtimeLocal,
-      join(root, "containers/runtime"),
-    ]);
+    const cloudflareDockerConfig = join(
+      temporary,
+      "cloudflare-docker-config",
+    );
+    await mkdir(cloudflareDockerConfig, { mode: 0o700 });
+    const cloudflareEnv = isolatedDockerEnv(
+      providerEnv,
+      cloudflareDockerConfig,
+    );
     const agentContext = await prepareAgentBuildContext(root, temporary);
     const agentLocal = `takos-agent:${imageTag}`;
     await checked(root, "docker", [
@@ -283,31 +350,38 @@ async function prepareRelease(
       "none",
       "--outdir",
       bundleDir,
-    ]);
-    const runtimeRef = await pushImage(
-      root,
-      config,
-      runtimeLocal,
-      accountId,
-      providerEnv,
-    );
-    const agentRef = await pushImage(
+    ], cloudflareEnv);
+    const cloudflareAgent = await pushImage(
       root,
       config,
       agentLocal,
       accountId,
-      providerEnv,
+      cloudflareEnv,
+      temporary,
     );
+    const publicAgent = await pushPublicAgentImage(
+      root,
+      agentLocal,
+      imageTag,
+      temporary,
+      cloudflareAgent.content,
+    );
+    assertImageContentMatch(cloudflareAgent.content, publicAgent.content);
     const images = {
-      "takos-worker-runtime": runtimeRef,
-      "takos-agent": agentRef,
+      "takos-agent": cloudflareAgent.reference,
     } as const;
     const imageDir = join(temporary, "image-digests");
     await mkdir(imageDir, { mode: 0o700 });
     for (const name of IMAGE_NAMES) {
       await writeFile(
         join(imageDir, `${name}.json`),
-        `${JSON.stringify({ name, cloudflareRegistryRef: images[name] })}\n`,
+        `${JSON.stringify({
+          name,
+          cloudflareRegistryRef: images[name],
+          ...(name === "takos-agent"
+            ? { publicOciRef: publicAgent.reference }
+            : {}),
+        })}\n`,
         { mode: 0o600 },
       );
     }
@@ -375,6 +449,11 @@ async function prepareRelease(
       },
       assets,
       images,
+      publicAgentImage: publicAgent.reference,
+      imageContent: {
+        cloudflare: cloudflareAgent.content,
+        publicOci: publicAgent.content,
+      },
       observedAt: new Date().toISOString(),
     };
     await writePrivateJson(options.evidence, record);
@@ -428,6 +507,10 @@ async function publishRelease(
 
   await ensureRemoteTag(root, options.tag, commit);
   let release = await readRelease(options.tag);
+  // The prepared digest is the only public identity available to this phase.
+  // Re-read it anonymously immediately before creating or adopting a release
+  // so a deleted/private GHCR package cannot be published as usable output.
+  await assertPreparedPublicAgentReadback(root, prepared);
   if (!release) {
     await checked(root, "gh", [
       "release",
@@ -512,6 +595,8 @@ async function publishRelease(
       prepared.assets.map((asset) => [asset.name, asset.digest]),
     ),
     images: prepared.images,
+    publicAgentImage: prepared.publicAgentImage,
+    imageContent: prepared.imageContent,
     githubImmutable: published.isImmutable,
     observedAt: new Date().toISOString(),
   } as const;
@@ -622,38 +707,162 @@ async function pushImage(
   localTag: string,
   accountId: string,
   env: NodeJS.ProcessEnv,
-): Promise<string> {
-  const local = /^(takos-worker-runtime|takos-agent):([0-9A-Za-z._-]+)$/u.exec(
+  temporary: string,
+): Promise<{ reference: string; content: ImageContentIdentity }> {
+  const local = /^(takos-agent):([0-9A-Za-z._-]+)$/u.exec(
     localTag,
   );
   if (!local) throw new Error("local release image tag is invalid");
   const name = local[1]!;
+  const dockerConfig = join(temporary, "cloudflare-docker-config");
+  await mkdir(dockerConfig, { recursive: true, mode: 0o700 });
+  const dockerEnv = isolatedDockerEnv(env, dockerConfig);
   await checked(
     root,
     "bunx",
     ["wrangler", "containers", "push", localTag, "--config", config],
-    env,
+    dockerEnv,
   );
   const remoteTag = `registry.cloudflare.com/${accountId}/${localTag}`;
-  const manifest = await checked(root, "docker", [
-    "manifest",
-    "inspect",
-    "-v",
+  const manifest = await imageManifestReadback(root, remoteTag, dockerEnv);
+  return {
+    reference: `registry.cloudflare.com/${accountId}/${name}@${manifest.manifestDigest}`,
+    content: manifest.content,
+  };
+}
+
+async function pushPublicAgentImage(
+  root: string,
+  localTag: string,
+  imageTag: string,
+  temporary: string,
+  expectedCloudflareContent: ImageContentIdentity,
+): Promise<{ reference: string; content: ImageContentIdentity }> {
+  const dockerConfig = join(temporary, "ghcr-docker-config");
+  await mkdir(dockerConfig, { mode: 0o700 });
+  const token = (await checked(root, "gh", ["auth", "token"])).stdout.trim();
+  if (token.length < 20 || token.length > 16_384) {
+    throw new Error("GitHub authentication token is invalid");
+  }
+  const env = isolatedDockerEnv(process.env, dockerConfig);
+  await checkedWithInput(
+    root,
+    "docker",
+    ["login", "ghcr.io", "--username", "tako0614", "--password-stdin"],
+    `${token}\n`,
+    env,
+  );
+  const remoteTag = `ghcr.io/tako0614/takos-agent:${imageTag}`;
+  await checked(root, "docker", ["tag", localTag, remoteTag], env);
+  await checked(root, "docker", ["push", remoteTag], env);
+  const authenticated = await imageManifestReadback(root, remoteTag, env);
+  assertImageContentMatch(expectedCloudflareContent, authenticated.content);
+
+  const anonymousConfig = join(temporary, "ghcr-anonymous-config");
+  await mkdir(anonymousConfig, { mode: 0o700 });
+  const anonymous = await imageManifestReadback(
+    root,
     remoteTag,
-  ]);
-  let digest: unknown;
+    isolatedDockerEnv(process.env, anonymousConfig),
+  );
+  assertPublicAgentReadback(
+    `ghcr.io/tako0614/takos-agent@${authenticated.manifestDigest}`,
+    authenticated.content,
+    anonymous,
+  );
+  return {
+    reference: `ghcr.io/tako0614/takos-agent@${authenticated.manifestDigest}`,
+    content: authenticated.content,
+  };
+}
+
+async function imageManifestReadback(
+  root: string,
+  reference: string,
+  env: NodeJS.ProcessEnv,
+): Promise<ImageManifestReadback> {
+  const manifest = await checked(
+    root,
+    "docker",
+    ["manifest", "inspect", "-v", reference],
+    env,
+  );
+  let parsed: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(manifest.stdout) as {
-      Descriptor?: { digest?: unknown };
-    };
-    digest = parsed.Descriptor?.digest;
+    parsed = JSON.parse(manifest.stdout) as Record<string, unknown>;
   } catch {
-    throw new Error(`published image manifest was invalid for ${name}`);
+    throw new Error(`published image manifest was invalid for ${reference}`);
   }
-  if (typeof digest !== "string" || !SHA256.test(digest)) {
-    throw new Error(`published image digest was not observable for ${name}`);
+  const descriptor = parsed.Descriptor;
+  const manifestDigest =
+    descriptor && typeof descriptor === "object" && !Array.isArray(descriptor)
+      ? (descriptor as Record<string, unknown>).digest
+      : undefined;
+  if (typeof manifestDigest !== "string" || !SHA256.test(manifestDigest)) {
+    throw new Error(`published image digest was not observable for ${reference}`);
   }
-  return `registry.cloudflare.com/${accountId}/${name}@${digest}`;
+  const body =
+    parsed.OCIManifest ??
+    parsed.SchemaV2Manifest ??
+    parsed.DockerV2Schema2;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error(`published image content manifest was missing for ${reference}`);
+  }
+  const content = body as Record<string, unknown>;
+  const config = content.config;
+  const configDigest =
+    config && typeof config === "object" && !Array.isArray(config)
+      ? (config as Record<string, unknown>).digest
+      : undefined;
+  const layers = content.layers;
+  if (
+    typeof configDigest !== "string" ||
+    !SHA256.test(configDigest) ||
+    !Array.isArray(layers) ||
+    layers.length > MAX_IMAGE_LAYERS ||
+    layers.some(
+      (layer) =>
+        !layer ||
+        typeof layer !== "object" ||
+        Array.isArray(layer) ||
+        typeof (layer as Record<string, unknown>).digest !== "string" ||
+        !SHA256.test((layer as Record<string, unknown>).digest as string),
+    )
+  ) {
+    throw new Error(`published image content identity was invalid for ${reference}`);
+  }
+  return {
+    manifestDigest,
+    content: {
+      configDigest,
+      layerDigests: layers.map(
+        (layer) => (layer as Record<string, unknown>).digest as string,
+      ),
+    },
+  };
+}
+
+async function assertPreparedPublicAgentReadback(
+  root: string,
+  prepared: PreparedRecord,
+): Promise<void> {
+  const temporary = await mkdtemp(join(tmpdir(), "takos-release-ghcr-readback-"));
+  try {
+    const dockerConfig = join(temporary, "anonymous-docker-config");
+    await mkdir(dockerConfig, { mode: 0o700 });
+    const readback = await imageManifestReadback(
+      root,
+      prepared.publicAgentImage,
+      isolatedDockerEnv(process.env, dockerConfig),
+    );
+    assertPublicAgentReadback(
+      prepared.publicAgentImage,
+      prepared.imageContent.publicOci,
+      readback,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 async function assertRemoteReleaseIdentityAvailable(
@@ -803,6 +1012,9 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     !Array.isArray(input.assets) ||
     !input.images ||
     typeof input.images !== "object" ||
+    typeof input.publicAgentImage !== "string" ||
+    !input.imageContent ||
+    typeof input.imageContent !== "object" ||
     typeof input.observedAt !== "string"
   ) {
     throw new Error("prepare evidence is invalid");
@@ -834,6 +1046,32 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
       return [name, reference];
     }),
   ) as Record<(typeof IMAGE_NAMES)[number], string>;
+  const imageContentInput = input.imageContent as Record<string, unknown>;
+  const parseContentIdentity = (value: unknown): ImageContentIdentity => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("prepare evidence image content identity is invalid");
+    }
+    const record = value as Record<string, unknown>;
+    if (
+      typeof record.configDigest !== "string" ||
+      !SHA256.test(record.configDigest) ||
+      !Array.isArray(record.layerDigests) ||
+      record.layerDigests.length > MAX_IMAGE_LAYERS ||
+      record.layerDigests.some(
+        (digest) => typeof digest !== "string" || !SHA256.test(digest),
+      )
+    ) {
+      throw new Error("prepare evidence image content identity is invalid");
+    }
+    return {
+      configDigest: record.configDigest,
+      layerDigests: [...record.layerDigests],
+    };
+  };
+  const imageContent = {
+    cloudflare: parseContentIdentity(imageContentInput.cloudflare),
+    publicOci: parseContentIdentity(imageContentInput.publicOci),
+  };
   if (
     !SEMVER_TAG.test(input.tag) ||
     !COMMIT.test(input.commit) ||
@@ -877,6 +1115,13 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
       `https://github.com/${REPOSITORY}/releases/download/${input.tag}/takosumi-artifact.json` ||
     IMAGE_NAMES.some(
       (name) => (images[name].match(DIGEST_REF)?.[1] ?? "") !== input.accountId,
+    ) ||
+    !PUBLIC_AGENT_DIGEST_REF.test(input.publicAgentImage) ||
+    imageContent.cloudflare.configDigest !== imageContent.publicOci.configDigest ||
+    imageContent.cloudflare.layerDigests.length !==
+      imageContent.publicOci.layerDigests.length ||
+    imageContent.cloudflare.layerDigests.some(
+      (digest, index) => digest !== imageContent.publicOci.layerDigests[index],
     )
   ) {
     throw new Error("prepare evidence identity closure is invalid");
@@ -898,6 +1143,8 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     },
     assets,
     images,
+    publicAgentImage: input.publicAgentImage,
+    imageContent,
     observedAt: input.observedAt,
   };
 }
@@ -911,6 +1158,8 @@ function publicPrepareResult(record: PreparedRecord): unknown {
     descriptor: record.descriptor,
     portableCheck: record.portableCheck,
     images: record.images,
+    publicAgentImage: record.publicAgentImage,
+    imageContent: record.imageContent,
     observedAt: record.observedAt,
   };
 }
@@ -1050,6 +1299,33 @@ async function checked(
     throw new Error(`${executable} ${args[0] ?? ""} failed with exit ${result.exitCode}`);
   }
   return result;
+}
+
+async function checkedWithInput(
+  cwd: string,
+  executable: string,
+  args: readonly string[],
+  input: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CommandResult> {
+  const child = Bun.spawn([executable, ...args], {
+    cwd,
+    env,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  child.stdin.write(input);
+  child.stdin.end();
+  const [stdout, stderr, exitCode] = await Promise.all([
+    readBoundedText(child.stdout),
+    readBoundedText(child.stderr),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new Error(`${executable} ${args[0] ?? ""} failed with exit ${exitCode}`);
+  }
+  return { exitCode, stdout, stderr };
 }
 
 async function command(

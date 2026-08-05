@@ -19,10 +19,8 @@ import {
 /**
  * Per-endpoint least-privilege scope map, derived from the single
  * CONTROL_RPC_ENDPOINTS registry (executor-utils.ts). Every control-RPC
- * endpoint maps to exactly one scope. Agent runs hold every scope here;
- * workflow runs hold only the run-lifecycle / tools / provider-keys subset
- * (see proxyScopesForRunKind), so a workflow token cannot reach conversation /
- * memory / skill endpoints.
+ * endpoint maps to exactly one scope. A bounded Takos agent run receives the
+ * full set; each request still has to match the one scope assigned here.
  */
 const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> =
   Object.fromEntries(

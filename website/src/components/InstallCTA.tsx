@@ -37,8 +37,8 @@ export default function InstallCTA() {
                   <CodeBlock terminal>
                     <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
                     <span class='k'>$</span> cd takos{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu init{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu apply -var target=cloudflare
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/takoform init{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/takoform apply
                   </CodeBlock>
                 }
               >

@@ -12,9 +12,9 @@ allowlist は Takosumi deploy-control plane の ProviderConnection / ProviderBin
 - `../takosumi` は Takosumi public contract、OpenTofu-native deploy control
   API、Capsule / Run / StateVersion / Output の run
   ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を消費する。
-- `takos/deploy/cloudflare`、`takos/deploy/opentofu` (Cloudflare module)、
-  `takos/deploy/distributions/cloudflare.json` は Takos product の Cloudflare
-  deploy artifacts を所有する。
+- `takos/deploy/cloudflare` と `takos/deploy/opentofu/cloudflare` は direct
+  Cloudflare adapter の artifact を所有する。`takos/deploy/opentofu/takoform`
+  は同じ中立resource contractをTakoform対応hostへ写す。
 - `takosumi-private` と operator-local environment が concrete Cloudflare credential、OpenTofu state、
   runtime-agent handler wiring、live proof evidence を所有する。
 

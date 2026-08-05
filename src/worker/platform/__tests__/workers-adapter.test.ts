@@ -11,24 +11,20 @@ function fakeContainerNamespace() {
   };
 }
 
-test("workers adapter synthesizes usable in-process container host bindings", async () => {
+test("workers adapter synthesizes only the in-process agent host binding", async () => {
   const env = {
     ADMIN_DOMAIN: "admin.example.com",
     TENANT_BASE_DOMAIN: "app.example.com",
     AUTH_PUBLIC_BASE_URL: "https://admin.example.com",
-    RUNTIME_CONTAINER: fakeContainerNamespace(),
     EXECUTOR_CONTAINER: fakeContainerNamespace(),
     TAKOS_AGENT_START_TOKEN: "test-agent-start-token",
   } as unknown as Env;
 
   const platform = buildWorkersWebPlatform(env);
 
-  assert(platform.bindings.RUNTIME_HOST);
+  assertEquals(platform.bindings.RUNTIME_HOST, undefined);
   assert(platform.bindings.EXECUTOR_HOST);
-  assertEquals(
-    platform.services.hosts.runtimeHost,
-    platform.bindings.RUNTIME_HOST,
-  );
+  assertEquals(platform.services.hosts.runtimeHost, undefined);
   assertEquals(
     platform.services.hosts.executorHost,
     platform.bindings.EXECUTOR_HOST,

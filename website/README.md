@@ -17,7 +17,7 @@ npm run build
 The primary CTA resolves to the Takosumi platform worker install prefill route:
 
 ```txt
-https://app.takosumi.com/install?git=<takos-git-url>&ref=<ref>&path=<module-path>&varjson.cloudflare={}
+https://app.takosumi.com/install?git=<takos-git-url>&ref=<ref>&path=<module-path>
 ```
 
 Defaults are production-safe as a working fallback because the source fallback
@@ -27,17 +27,14 @@ release tag or commit they are publishing:
 ```sh
 VITE_TAKOS_INSTALL_GIT_URL=https://github.com/tako0614/takos.git
 VITE_TAKOS_INSTALL_REF=v1.0.0
-VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu
-VITE_TAKOS_INSTALL_WORKERS_SUBDOMAIN=<optional-workers-dev-subdomain>
+VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu/takoform
 ```
 
-The default public link also includes `name=takos`, `var.project_name=takos`,
-and `varjson.cloudflare={}`. Those are ordinary OpenTofu inputs for
-`deploy/opentofu`; they tell Takosumi to pass the selected Cloudflare Provider
-Connection's account hint into the module instead of Takosumi inventing a
-hidden deployment path. If `VITE_TAKOS_INSTALL_WORKERS_SUBDOMAIN` is set, the
-link also includes `var.cloudflare.workers_subdomain` so the OpenTofu module can
-derive a launch URL.
+The default public link also includes `name=takos` and
+`var.project_name=takos`. It contains no provider-specific input. Takosumi
+resolves the selected Takoform host and its connection through the ordinary
+ProviderBinding flow. A direct Cloudflare install is a separate module choice
+and receives Cloudflare inputs from that module's install form.
 
 `VITE_CLOUD_HOME_URL`, `VITE_CLOUD_USE_TAKOS_URL`, and
 `VITE_CLOUD_INSTALL_URL` can override the full Takosumi URLs when an operator

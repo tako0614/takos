@@ -1,8 +1,9 @@
 # Takos distribution boundary
 
 Takos is a self-hostable product distribution. This repository owns the Takos
-Worker source, browser product, agent runtime, and plain OpenTofu module under
-`deploy/opentofu`.
+Worker source, browser product, agent service, and provider-neutral resource
+contract. The ordinary OpenTofu adapters live side by side under
+`deploy/opentofu/takoform` and `deploy/opentofu/cloudflare`.
 
 Takos does not own a deployment control plane. It does not inject provider
 credentials, execute production plan/apply/destroy, publish Takosumi releases,
@@ -10,20 +11,27 @@ or maintain a second Resource/Run ledger.
 
 ## Installation
 
-An operator registers the Git source and module path `deploy/opentofu` as a
-Takosumi Capsule, binds the required provider through Takosumi, and executes
-the normal Capsule plan/apply flow. Takosumi owns:
+An operator registers the Git source and selects one of the two adapter module
+paths as a Takosumi Capsule. `deploy/opentofu/takoform` is the portable default;
+`deploy/opentofu/cloudflare` is the advanced direct-Cloudflare option. The
+selected provider is bound through Takosumi. Takosumi owns the normal Capsule
+plan/apply flow, including:
 
 - ProviderConnection, CredentialRecipe, and ProviderBinding resolution;
 - runner selection and temporary credential materialization;
 - Run, StateVersion, Output, and AuditEvent records;
 - plan/apply/destroy authority and operator policy.
 
-The module receives ordinary OpenTofu variables. Secret values remain
+Both modules receive ordinary OpenTofu variables. Secret values remain
 operator-owned inputs and are materialized only inside the selected Takosumi
 runner. The narrow `product:activate` lifecycle command reads the declared
-0600 runtime-secret file and passes it to the pinned local Wrangler process;
-it never generates, stores, logs, or returns those values.
+0600 runtime-secret file and passes it to the pinned local Wrangler process
+when the direct Cloudflare adapter is selected; it never generates, stores,
+logs, or returns those values. Cloudflare-specific runtime secrets are
+documented in `deploy/cloudflare/wrangler.toml` and are supplied with
+`wrangler secret put`, never through OpenTofu state or outputs. A
+`TAKOSUMI_ACCOUNTS_TOKEN` is optional and only needed for server-to-server
+Capsule calls.
 
 After apply, Takosumi may invoke the Takos-owned artifact materializer described
 in [`docs/deploy/product-materializer.md`](../docs/deploy/product-materializer.md).

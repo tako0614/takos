@@ -11,7 +11,7 @@ const contract = JSON.parse(
   runtimeConnections: Array<{ name: string; resource: string }>;
 };
 const cloudflareModule = await readFile(
-  new URL("deploy/opentofu/modules/cloudflare/main.tf", root),
+  new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
   "utf8",
 );
 const cloudflareRuntime = await readFile(
@@ -19,7 +19,11 @@ const cloudflareRuntime = await readFile(
   "utf8",
 );
 const takoformModule = await readFile(
-  new URL("deploy/takoform/main.tf", root),
+  new URL("deploy/opentofu/takoform/main.tf", root),
+  "utf8",
+);
+const agentDockerfile = await readFile(
+  new URL("containers/agent/Dockerfile", root),
   "utf8",
 );
 
@@ -55,4 +59,11 @@ test("Cloudflare direct and Takoform adapt every Takos runtime connection", () =
   expect(cloudflareModule).toContain('resource "cloudflare_d1_database"');
   expect(takoformModule).not.toContain("cloudflare_");
   expect(takoformModule).not.toContain("CLOUDFLARE_");
+});
+
+test("the portable agent service uses the image's declared HTTP port", () => {
+  expect(agentDockerfile).toContain("ENV PORT=8080");
+  expect(agentDockerfile).toContain("EXPOSE 8080");
+  expect(takoformModule).toMatch(/ports\s*=\s*\[8080\]/u);
+  expect(takoformModule).toContain('health_check_path = "/health"');
 });

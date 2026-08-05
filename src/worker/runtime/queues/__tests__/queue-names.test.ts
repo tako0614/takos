@@ -14,11 +14,6 @@ test("classifyWorkerQueueName accepts OSS and private queue prefixes", () => {
     classifyWorkerQueueName("takos-index-jobs-dlq"),
     "index_jobs_dlq",
   );
-  assertEquals(classifyWorkerQueueName("takos-workflow-jobs"), "workflow_jobs");
-  assertEquals(
-    classifyWorkerQueueName("takos-workflow-jobs-dlq"),
-    "workflow_jobs_dlq",
-  );
   assertEquals(
     classifyWorkerQueueName("takos-notification-push"),
     "notification_push",
@@ -39,14 +34,6 @@ test("classifyWorkerQueueName accepts OSS and private queue prefixes", () => {
     "index_jobs_dlq",
   );
   assertEquals(
-    classifyWorkerQueueName("takos-selfhost-workflow-jobs"),
-    "workflow_jobs",
-  );
-  assertEquals(
-    classifyWorkerQueueName("takos-selfhost-workflow-jobs-dlq"),
-    "workflow_jobs_dlq",
-  );
-  assertEquals(
     classifyWorkerQueueName("takos-selfhost-notification-push"),
     "notification_push",
   );
@@ -57,10 +44,6 @@ test("classifyWorkerQueueName accepts OSS and private queue prefixes", () => {
 });
 
 test("classifyWorkerQueueName strips staging suffix after dlq suffix", () => {
-  assertEquals(
-    classifyWorkerQueueName("takos-selfhost-workflow-jobs-staging"),
-    "workflow_jobs",
-  );
   assertEquals(
     classifyWorkerQueueName("takos-selfhost-runs-dlq-staging"),
     "runs_dlq",

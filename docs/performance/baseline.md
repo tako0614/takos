@@ -94,8 +94,10 @@ assertion を bypass した kernel-only handler を使用します。
 
 ## latency 目安 (推定)
 
-in-process ベースライン + Cloudflare 側トランスポートのオーバーヘッドから推定した、
-実環境での deploy lifecycle latency 目安です。Takos のデプロイ先は Cloudflare のみです。
+in-process ベースライン + direct Cloudflare adapter のトランスポート
+オーバーヘッドから推定した、実環境での deploy lifecycle latency 目安です。
+これはCloudflare direct profileの参考値であり、Takoform対応hostのlatencyを
+代表しません。
 
 | ターゲット         | resolveDeployment p50 | applyDeployment p50 | 備考                        |
 | ------------------ | --------------------: | ------------------: | --------------------------- |

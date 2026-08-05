@@ -10,8 +10,8 @@ export interface ToolExecution {
  * Canonical Agent RunStatus definition.
  * Shared by Takos control and agent runtime surfaces.
  *
- * NOT the same as the GitHub Actions RunStatus in src/worker/actions-engine/workflow-models.ts
- * ('queued'|'in_progress'|'completed'|'cancelled') — different domain concept.
+ * Workflow execution history has a separate persisted status vocabulary; this
+ * type is only for the agent run domain.
  */
 export type RunStatus =
   | 'pending'

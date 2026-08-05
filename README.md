@@ -13,7 +13,8 @@ Takos は、AI エージェントに作業を頼み、その結果をファイ�
 - 必要なアプリを Git URL から追加して、Apps 画面から開く
 - MCP サーバーを接続し、そのツールをエージェントから使う
 - エージェントの回答が完了または失敗したときに通知を受け取る
-- 自分の Cloudflare アカウントへセルフホストする
+- Takosumi Cloud などの Takoform 対応ホストへ配置する
+- 必要なら自分の Cloudflare アカウントへ直接セルフホストする
 
 **Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、接続をまとめる作業場所です。新しい Workspace にアプリは自動追加されません。必要なものだけを選んで追加します。
 
@@ -67,8 +68,8 @@ Takos は利用者が触る AI ワークスペースを提供します。Takosum
 Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用の構成は通常の OpenTofu モジュールであり、Takosumi から実行することも、運用者が自分の手順で実行することもできます。
 
 Takosumi が同じ Git commit から導入画面を組み立てる場合は、
-[`/.well-known/takosumi.json`](.well-known/takosumi.json) の
-`deploy/opentofu` 宣言を読みます。v2.2 の `interfaces` 宣言は、Takos の
+[`/.well-known/takosumi.json`](.well-known/takosumi.json) の既定
+`deploy/opentofu/takoform` 宣言を読みます。v2.2 の `interfaces` 宣言は、Takos の
 `interface.ui.surface@1` launcher と `launch_url` Output の明示的な mapping を
 提案し、レビュー後に Takosumi が Interface へ compile します。これは provider
 credential、Cloudflare account、target、実行権限を含まない repository-owned
@@ -87,7 +88,7 @@ repository に書きません。`launch_url` Output だけで launcher を推測
 src/worker/       Worker、API、Takos のサーバー処理
 web/              ブラウザ UI
 containers/agent/ エージェント実行サービス
-deploy/opentofu/  セルフホスト用 OpenTofu モジュール
+deploy/opentofu/  provider別のセルフホスト用 OpenTofu adapter
 docs/             docs.takos.jp のソース
 ```
 

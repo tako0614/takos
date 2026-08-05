@@ -24,7 +24,7 @@ features:
   - title: 道具を追加する
     details: アプリや MCP サーバーが公開するツールを Workspace ごとに追加できます。
   - title: 自分で運用する
-    details: OpenTofu モジュールを使って、自分の Cloudflare アカウントへ配置できます。
+    details: OpenTofu モジュールを使って、Takoform対応hostまたは自分のCloudflareアカウントへ配置できます。
 ---
 
 ## Takos とは

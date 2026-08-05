@@ -3,13 +3,11 @@ import {
   INDEX_QUEUE_MESSAGE_VERSION,
   NOTIFICATION_PUSH_QUEUE_MESSAGE_VERSION,
   RUN_QUEUE_MESSAGE_VERSION,
-  WORKFLOW_QUEUE_MESSAGE_VERSION,
 } from "./queue-messages.ts";
 import type {
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
-  WorkflowJobQueueMessage,
 } from "./queue-messages.ts";
 
 function isBoundedIdentifier(value: unknown): value is string {
@@ -93,34 +91,5 @@ export function isValidIndexJobQueueMessage(
     typeof m.timestamp === "number" &&
     Number.isFinite(m.timestamp) &&
     m.timestamp >= 0
-  );
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.values(value).every((v) => typeof v === "string");
-}
-
-export function isValidWorkflowJobQueueMessage(
-  msg: unknown,
-): msg is WorkflowJobQueueMessage {
-  if (!msg || typeof msg !== "object") return false;
-  const m = msg as Record<string, unknown>;
-  return (
-    m.version === WORKFLOW_QUEUE_MESSAGE_VERSION &&
-    m.type === "job" &&
-    typeof m.runId === "string" &&
-    typeof m.jobId === "string" &&
-    typeof m.repoId === "string" &&
-    typeof m.ref === "string" &&
-    typeof m.sha === "string" &&
-    typeof m.jobKey === "string" &&
-    !!m.jobDefinition &&
-    typeof m.jobDefinition === "object" &&
-    isStringRecord(m.env) &&
-    Array.isArray(m.secretIds) &&
-    m.secretIds.every((id) => typeof id === "string") &&
-    typeof m.timestamp === "number" &&
-    !("secrets" in m)
   );
 }

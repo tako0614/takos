@@ -3,8 +3,6 @@ export type WorkerQueueKind =
   | "runs_dlq"
   | "index_jobs"
   | "index_jobs_dlq"
-  | "workflow_jobs"
-  | "workflow_jobs_dlq"
   | "notification_push"
   | "notification_push_dlq";
 
@@ -22,8 +20,6 @@ export function classifyWorkerQueueName(
   if (normalized.endsWith("-runs")) return "runs";
   if (normalized.endsWith("-index-jobs-dlq")) return "index_jobs_dlq";
   if (normalized.endsWith("-index-jobs")) return "index_jobs";
-  if (normalized.endsWith("-workflow-jobs-dlq")) return "workflow_jobs_dlq";
-  if (normalized.endsWith("-workflow-jobs")) return "workflow_jobs";
   if (normalized.endsWith("-notification-push-dlq")) {
     return "notification_push_dlq";
   }

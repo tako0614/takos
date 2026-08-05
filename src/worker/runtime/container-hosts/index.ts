@@ -19,4 +19,3 @@ export {
   ExecutorContainerTier2,
   ExecutorContainerTier3,
 } from "./executor-host.ts";
-export { TakosRuntimeContainer } from "./runtime-host.ts";

@@ -314,12 +314,9 @@ app.get("/.well-known/takos", (c) => {
 // Only token-verified callbacks may be mounted here: this app is public (a
 // workers.dev hostname is enough to reach it) and nothing ahead of these routes
 // authenticates. The agent-control host verifies a per-run proxy token issued at
-// dispatch before it touches a container. There is deliberately no `/forward/*`
-// mount: the runtime host has no such check, so mounting it publicly handed any
-// anonymous caller a proxy into the runtime container (and let them mint
-// space-scoped session proxy tokens via `/sessions`). The runtime host is
-// reached only through the RUNTIME_HOST service binding / DO stub, which is the
-// trust boundary runtime-host.ts documents.
+// dispatch before it touches a container. There is deliberately no generic
+// runtime callback route. Optional runtime capabilities connect through an
+// explicit RUNTIME_HOST binding and remain outside the Takos core deployment.
 
 app.all("/api/internal/v1/agent-control/*", async (c) => {
   return executorHostHandler.fetch(

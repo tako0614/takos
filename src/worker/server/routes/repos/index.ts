@@ -6,11 +6,6 @@ import repoGitAdvanced from "./git-advanced.ts";
 import repoForks from "./forks.ts";
 import repoReleases from "./releases.ts";
 import repoSync from "./sync.ts";
-import repoWorkflows from "./workflows.ts";
-import actionRuns from "./actions/runs.ts";
-import actionJobs from "./actions/jobs.ts";
-import actionSecrets from "./actions/secrets.ts";
-import actionArtifacts from "./actions/artifacts.ts";
 import externalImport from "./external-import.ts";
 
 export default new Hono<AuthenticatedRouteEnv>()
@@ -20,9 +15,4 @@ export default new Hono<AuthenticatedRouteEnv>()
   .route("/", repoForks)
   .route("/", repoReleases)
   .route("/", repoSync)
-  .route("/", repoWorkflows)
-  .route("/", actionRuns)
-  .route("/", actionJobs)
-  .route("/", actionSecrets)
-  .route("/", actionArtifacts)
   .route("/", externalImport);

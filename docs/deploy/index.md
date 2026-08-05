@@ -1,19 +1,19 @@
 # Takos をセルフホストする
 
-Takos は、自分の Cloudflare アカウントへ配置できます。このリポジトリの `deploy/opentofu` が、必要なクラウドリソースを定義します。
+Takos はTakoform対応hostまたは自分のCloudflareアカウントへ配置できます。このリポジトリの `deploy/opentofu/takoform` と `deploy/opentofu/cloudflare` が、同じproduct resource contractをそれぞれのproviderへ写します。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
 ## 何が配置されるか
 
-現在のセルフホスト構成は Cloudflare に対応します。
+既定のTakoform adapterは、選択したTakoform対応hostへ次の論理リソースを要求します。直接Cloudflare adapterを選んだ場合は、それぞれをWorkers、D1、R2、KV、Queues、Vectorize、Containersへ写します。
 
 - Takos の Worker と静的 UI
-- D1 データベース
-- R2 バケット
-- KV
+- relational database
+- object bucket
+- key-value store
 - Queue
-- Vectorize
+- vector index
 - エージェント実行に必要な構成
 
 OpenTofu はリソースと Worker に渡す binding を作ります。Worker のコードは、この binding を使って起動します。
@@ -27,7 +27,7 @@ Takosumi を使うと、Git ソース、確認済み plan、apply の結果、ou
 ## 必要なもの
 
 - OpenTofu 1.5 以降
-- Cloudflare アカウントと必要な権限
+- 選択したTakoform hostへの接続、またはCloudflare direct用のアカウントと必要な権限
 - Takosumi Accounts の URL、issuer、OIDC client
 - Takos の公開 URL
 - Worker artifact をアップロードする手順
@@ -38,15 +38,17 @@ secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しない�
 ## 基本の流れ
 
 1. このリポジトリを tag または commit に固定する
-2. `deploy/opentofu/opentofu.tfvars.example` を参考に、運用環境の入力を用意する
+2. 選んだadapterの変数を確認する。Cloudflare directでは `deploy/opentofu/cloudflare/opentofu.tfvars.example` を参考にする
 3. `tofu init` と `tofu plan` を実行する
 4. 作成・変更・削除と料金を確認する
 5. 確認した plan を apply する
 6. 同じ commit の Worker artifact を app-owned materializer で反映する
 7. 公開 URL、ログイン、Chat、エージェント実行を確認する
 
+Cloudflareへ直接配置する例:
+
 ```sh
-cd deploy/opentofu
+cd deploy/opentofu/cloudflare
 tofu init
 tofu plan -var-file=opentofu.tfvars
 tofu apply

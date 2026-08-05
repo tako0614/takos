@@ -121,8 +121,8 @@ Takos は、次のふつうの module path から順に、install できる Open
 - `opentofu/outputs.tf`
 - `infra/main.tf`
 - `infra/outputs.tf`
-- `deploy/opentofu/main.tf`
-- `deploy/opentofu/outputs.tf`
+- `deploy/opentofu/cloudflare/main.tf`
+- `deploy/opentofu/cloudflare/outputs.tf`
 
 source の検出は module を特定するだけです。HCL の内容や、よく使われる Output 名からランタイムのサービスを推測
 したりはしません。

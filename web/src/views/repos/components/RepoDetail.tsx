@@ -14,7 +14,6 @@ import { CommitList } from "./CommitList.tsx";
 import { RepoCodeSearch } from "./RepoCodeSearch.tsx";
 import { PRList } from "./PRList.tsx";
 import { ReleaseList } from "./ReleaseList.tsx";
-import { ActionsTab } from "./ActionsTab.tsx";
 import { BranchesTab } from "./BranchesTab.tsx";
 import { ForkModal } from "./ForkModal.tsx";
 import { RepoDetailFiles } from "./RepoDetailFiles.tsx";
@@ -31,8 +30,7 @@ type TabType =
   | "commits"
   | "branches"
   | "pull-requests"
-  | "releases"
-  | "actions";
+  | "releases";
 
 interface SelectedFile {
   path: string | null;
@@ -337,11 +335,6 @@ export function RepoDetail(props: RepoDetailProps) {
       label: t("releases"),
       icon: <Icons.Tag class="w-4 h-4" />,
     },
-    {
-      id: "actions",
-      label: t("actions"),
-      icon: <Icons.Terminal class="w-4 h-4" />,
-    },
   ];
 
   const ownerName = () => props.repo.owner_username || props.repo.owner_name;
@@ -576,11 +569,6 @@ export function RepoDetail(props: RepoDetailProps) {
             />
           </Show>
 
-          <Show when={activeTab() === "actions"}>
-            <ActionsTab
-              repoId={props.repo.id}
-            />
-          </Show>
         </div>
       </div>
 

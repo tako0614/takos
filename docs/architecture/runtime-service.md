@@ -11,6 +11,25 @@ Takos product の public/control entrypoint は単一の `takos-worker` です�
 Worker script が export する Durable Object class として配線し、別の `takos-runtime-host` /
 `takos-executor-host` Worker はデプロイしません。
 
+## 実行モデル
+
+Takos は Cloudflare Agents SDK の責務分離を参考にしますが、SDK 自体を product
+contract にはしません。
+
+| 責務 | Takos の正本 | Cloudflare へ直接置く場合の adapter |
+| --- | --- | --- |
+| Agent の identity、Thread、message、状態 | `takos-worker` と product DB / StatefulEntity | Worker と Durable Object |
+| 長時間・再試行可能な Run | Queue、lease、checkpoint、operation ledger | Queue と Container host。将来 Workflows を使う実装も adapter として追加可能 |
+| model / tool loop | `takos-agent` ContainerService | Cloudflare Container |
+| tool discovery / connection | Workspace の MCP と installed Capsule Interface | Worker binding / service bindingへprojection |
+| shell、browser、desktop、Git Actions | Takos core の外。installした app または外部runtime | `takos-computer`、`takos-git`など |
+
+この分離により、Cloudflare Agents SDK の durable agent、streaming、MCP、Workflow
+連携と同じ設計上の利点を保ちながら、Takoform host、別クラウド、ローカルhostでも
+同じ Takos contract を実装できます。Cloudflare Workflows を直接使う実装は
+Cloudflare adapter の選択肢であり、Takosumi Cloud や Takos 本体の必須条件では
+ありません。
+
 ## 各コンポーネントの役割
 
 | コンポーネント                          | 役割                                                                                                                                              |
@@ -26,11 +45,12 @@ Takos のコードは、Worker と container の wire shape を `src/contracts` 
 共通packageに複製しません。
 
 Cloudflare profile では `src/worker/cloudflare-entrypoint.ts` が deploy entrypoint となり、default export の
-`src/worker/index.ts` が Hono routes と Containers DO
-class (`TakosRuntimeContainer` / `ExecutorContainerTier*`) を同じ deploy unit として
-export します。runtime callback は `/forward/*`、agent-control callback は
-`/api/internal/v1/agent-control/*` を同一 Worker 内で受け、service binding が無い環境では
-Worker adapter が in-process container host binding を合成します。
+`src/worker/index.ts` が Hono routes と agent Containers DO class
+(`ExecutorContainerTier*`) を同じ deploy unit として export します。agent-control
+callback は `/api/internal/v1/agent-control/*` を同一 Worker 内で受け、service
+binding が無い環境では Worker adapter が in-process agent host binding を合成します。
+`RUNTIME_HOST` は互換用の外部接続であり、Takos の通常installが汎用runtime
+containerを内蔵することはありません。
 
 ## 1 Run の流れ
 

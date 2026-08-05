@@ -20,36 +20,31 @@ import { resolveGoogleCloudProjectFromProcess } from "../../platform/gcp-project
 // Message queue configuration
 // ---------------------------------------------------------------------------
 
-export type QueueName = "RUN" | "INDEX" | "WORKFLOW";
+export type QueueName = "RUN" | "INDEX";
 
 const SQS_ENV_MAP: Record<QueueName, string> = {
   RUN: "AWS_SQS_RUN_QUEUE_URL",
   INDEX: "AWS_SQS_INDEX_QUEUE_URL",
-  WORKFLOW: "AWS_SQS_WORKFLOW_QUEUE_URL",
 };
 
 const PUBSUB_ENV_MAP: Record<QueueName, string> = {
   RUN: "GCP_PUBSUB_RUN_TOPIC",
   INDEX: "GCP_PUBSUB_INDEX_TOPIC",
-  WORKFLOW: "GCP_PUBSUB_WORKFLOW_TOPIC",
 };
 
 const PUBSUB_SUBSCRIPTION_ENV_MAP: Record<QueueName, string> = {
   RUN: "GCP_PUBSUB_RUN_SUBSCRIPTION",
   INDEX: "GCP_PUBSUB_INDEX_SUBSCRIPTION",
-  WORKFLOW: "GCP_PUBSUB_WORKFLOW_SUBSCRIPTION",
 };
 
 const LOGICAL_QUEUE_NAME_MAP: Record<QueueName, LocalQueueName> = {
   RUN: LOCAL_QUEUE_NAMES.run,
   INDEX: LOCAL_QUEUE_NAMES.index,
-  WORKFLOW: LOCAL_QUEUE_NAMES.workflow,
 };
 
 const PERSISTENT_QUEUE_MAP: Record<QueueName, string> = {
   RUN: "run-queue.json",
   INDEX: "index-queue.json",
-  WORKFLOW: "workflow-queue.json",
 };
 
 // ---------------------------------------------------------------------------

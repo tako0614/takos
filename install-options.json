@@ -13,7 +13,7 @@
       "description": "Deploy the Takoform adapter to a compatible cloud host.",
       "source": {
         "url": "https://github.com/tako0614/takos.git",
-        "path": "deploy/takoform"
+        "path": "deploy/opentofu/takoform"
       }
     },
     {
@@ -22,7 +22,7 @@
       "description": "Advanced: deploy directly into your own Cloudflare account.",
       "source": {
         "url": "https://github.com/tako0614/takos.git",
-        "path": "deploy/opentofu"
+        "path": "deploy/opentofu/cloudflare"
       }
     }
   ]

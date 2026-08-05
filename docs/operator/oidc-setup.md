@@ -6,7 +6,7 @@ Accounts plane が OIDC issuer になります。Takosumi は Takos distribution
 
 ## Current Flow
 
-1. Takos の OpenTofu Capsule (`deploy/takoform` または `deploy/opentofu`) を install して **Capsule** を作る。前者は選択した Form host、後者は接続した Cloudflare account に同じ product contract を materialize する。
+1. Takos の OpenTofu Capsule (`deploy/opentofu/takoform` または `deploy/opentofu/cloudflare`) を install して **Capsule** を作る。前者は選択した Form host、後者は接続した Cloudflare account に同じ product contract を materialize する。
 2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
 3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateVersion** と **Output** を記録する。
 4. ProviderConnection が credential reference を保持し、ProviderBinding が module の使う provider (+ optional alias) ごとに explicit ProviderConnection を解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。
@@ -22,7 +22,7 @@ Takosumi に渡す install 対象は OpenTofu Capsule です。module metadata �
 
 ```hcl
 module "takos" {
-  source = "github.com/tako0614/takos//deploy/takoform"
+  source = "github.com/tako0614/takos//deploy/opentofu/takoform"
 }
 ```
 

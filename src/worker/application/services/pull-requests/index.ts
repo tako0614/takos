@@ -17,9 +17,3 @@ export {
   type Resolution,
   resolveConflictsAndMerge,
 } from "./merge-resolution.ts";
-
-export {
-  createPullRequestEventTask,
-  createPullRequestEventTaskFromAccess,
-  type PullRequestEventDeps,
-} from "./event-tasks.ts";

@@ -51,18 +51,6 @@ export const QUEUE_CONSUMERS: readonly QueueConsumerConfig[] = [
     batchTimeout: 60,
   },
   {
-    queueKey: "workflow",
-    batchSize: 1,
-    batchTimeout: 1,
-    messageRetries: 3,
-    deadLetterQueueKey: "workflow_dlq",
-  },
-  {
-    queueKey: "workflow_dlq",
-    batchSize: 10,
-    batchTimeout: 60,
-  },
-  {
     queueKey: "notification_push",
     batchSize: NOTIFICATION_PUSH_QUEUE_MAX_BATCH_SIZE,
     batchTimeout: NOTIFICATION_PUSH_QUEUE_MAX_BATCH_TIMEOUT_SECONDS,

@@ -1,8 +1,8 @@
 # Takos release artifact runbook
 
 This runbook is for the Takos-owned release artifact: the Worker archive,
-`takosumi-artifact.json`, and the digest-pinned `takos-worker-runtime` and
-`takos-agent` images. Takosumi may consume these outputs, but it does not own
+`takosumi-artifact.json`, and the digest-pinned `takos-agent` image published
+to both the target Cloudflare registry and public GHCR. Takosumi may consume these outputs, but it does not own
 their publication. This publishes distribution bytes only; Takosumi remains
 the sole authority for Capsule plan/apply/destroy lifecycle operations.
 
@@ -49,11 +49,19 @@ bun run deploy -- takos-release-artifact prepare \
 ```
 
 After reviewing the plan, rerun the same command with `--execute`. Prepare
-refuses an existing output/evidence path. It builds both images, uploads them
-under non-authoritative nonce tags, records their read-back immutable digest
-references, builds the exact Worker assets, and writes `prepare.json` with
+refuses an existing output/evidence path. It builds the agent image once,
+uploads the same bytes under non-authoritative nonce tags in both registries,
+records their read-back immutable digest references, builds the exact Worker
+assets, and writes `prepare.json` with
 mode `0600`. Only the digest references are release identities; upload tags are
 never placed in the descriptor.
+
+Each registry push runs with its own `DOCKER_CONFIG` directory under the
+temporary private build directory. The command never uses or changes the
+operator's default Docker config. Prepare reads back both registry manifests
+and records only bounded content identity evidence: the config digest and the
+ordered layer digests. The Cloudflare and public GHCR identities must match;
+any mismatch stops the release before an artifact can be published.
 
 ## Publish
 
@@ -69,6 +77,9 @@ bun run deploy -- takos-release-artifact publish \
 
 With the plan approved, add `--execute` to that command. Publish verifies the
 remote tag and draft release identity, adopts only an exact same-commit draft,
+re-reads the prepared public GHCR image anonymously, and refuses to create or
+adopt the release when its manifest digest, config digest, or ordered layer
+digests have drifted,
 uploads missing assets, downloads every asset again, and compares each
 SHA-256 to the prepared bytes before making the draft public. It then writes
 `publish.json` with the release URL, asset digests, image references, and the
@@ -81,10 +92,13 @@ checkout. Treat the JSON as operator-private release evidence; it contains
 commit, package/tag, account id, paths, asset digests, and image references,
 but never a token or provider command output.
 
-The prepare record is the source for the three asset digests and both
-Cloudflare registry references. Publish performs the remote asset download and
-digest comparison itself. If an independent check is needed, run it against
-the private files and compare the result to the recorded `sha256:<64 hex>`
+The prepare record is the source for the three asset digests, the Cloudflare
+registry reference, the public GHCR reference, and the two registry content
+identities. The identity contains only `configDigest` and ordered
+`layerDigests`, all in `sha256:<64 hex>` form; it never contains credentials or
+provider command output. Prepare also performs an anonymous GHCR readback and
+requires it to match the authenticated readback. If an independent check is
+needed, run it against the private files and compare the result to the recorded
 values; do not replace the evidence with a manually edited copy.
 
 ## Recovery and no-overwrite

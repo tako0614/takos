@@ -1,9 +1,9 @@
 {
   "name": "@takos/takos",
-  "version": "0.11.20",
+  "version": "0.12.0",
   "takosRelease": {
     "name": "takos",
-    "version": "0.11.20"
+    "version": "0.12.0"
   },
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -33,15 +33,14 @@
     "fmt:check": "bun scripts/check-source-format.mjs",
     "check:i18n-dupe": "bun scripts/check-i18n-dupe.mjs",
     "check:website-host": "bun scripts/check-website-host-drift.mjs",
-    "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/worker/actions-engine ./src/contracts && bun run test:product-contracts && bun run test:product-materializer && bun run test:opentofu",
+    "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/contracts && bun run test:product-contracts && bun run test:product-materializer && bun run test:opentofu",
     "test:product-contracts": "bun test src/worker/application/services/identity/__tests__/space-crud-write.test.ts src/worker/application/services/platform/__tests__/runtime-interface-client.test.ts src/worker/application/services/source/__tests__/installable-app-install.test.ts src/worker/application/services/source/__tests__/takosumi-workload-services.test.ts src/worker/server/routes/__tests__/api-scope-auth.test.ts src/worker/server/routes/__tests__/apps.test.ts src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts src/worker/server/routes/capsules_test.ts web/src/__tests__/views/apps/inflight-installs.test.ts web/src/__tests__/views/apps/registered-apps.test.ts",
-    "test:product-materializer": "bun test scripts/takos-product-materializer.test.ts scripts/generate-platform-keys.test.ts scripts/release-artifact-deploy.test.ts scripts/release-staging-qualification.test.ts scripts/takoform-schema-bundle.test.ts",
-    "test:opentofu": "(cd deploy/opentofu && tofu init -backend=false -input=false -lockfile=readonly -no-color && tofu test -no-color) && tofu -chdir=deploy/takoform init -backend=false -input=false -lockfile=readonly -no-color && tofu -chdir=deploy/takoform validate -no-color",
+    "test:product-materializer": "bun test scripts/takos-product-materializer.test.ts scripts/generate-platform-keys.test.ts scripts/release-artifact-deploy.test.ts scripts/takoform-schema-bundle.test.ts",
+    "test:opentofu": "(cd deploy/opentofu/cloudflare && tofu init -backend=false -input=false -lockfile=readonly -no-color && tofu test -no-color) && tofu -chdir=deploy/opentofu/takoform init -backend=false -input=false -lockfile=readonly -no-color && tofu -chdir=deploy/opentofu/takoform validate -no-color",
     "test:common": "bun test ./src/worker/platform-utils",
-    "test:actions-engine": "bun test ./src/worker/actions-engine",
     "validate:api-docs": "bun scripts/validate-api-docs.ts",
     "validate:current-docs": "bun scripts/validate-current-docs.ts",
-    "opentofu:plan-gate": "bun scripts/opentofu-plan-gate.ts",
+    "cloudflare:opentofu:plan-gate": "bun scripts/cloudflare-opentofu-plan-gate.ts",
     "validate:opentofu-secrets": "bun scripts/validate-opentofu-secret-policy.ts",
     "generate:agent-prompts": "bun scripts/generate-agent-prompt-assets.ts",
     "validate:agent-prompts": "bun scripts/generate-agent-prompt-assets.ts --check",
@@ -58,8 +57,8 @@
     "generate:keys": "bun scripts/generate-platform-keys.ts",
     "generate:schema-bundle": "bun scripts/generate-takoform-schema-bundle.ts",
     "check:schema-bundle": "bun scripts/generate-takoform-schema-bundle.ts --check",
-    "containers:build:runtime": "bun run --cwd containers/runtime build",
-    "containers:build": "bun run containers:build:runtime",
+    "containers:build:agent": "docker build -f containers/agent/Dockerfile ..",
+    "containers:build": "bun run containers:build:agent",
     "release-worker-artifact:build": "bun scripts/build-worker-release-artifact.ts",
     "product:activate": "bun scripts/takos-product-materializer.ts post_apply",
     "product:pre-destroy": "bun scripts/takos-product-materializer.ts pre_destroy"

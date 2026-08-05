@@ -19,7 +19,8 @@ const CONTRACT = {
       target: "takosumi-runner:cloudflare-self-host-install",
       covers: [
         "deploy/cloudflare/wrangler.toml",
-        "deploy/opentofu",
+        "deploy/opentofu/cloudflare",
+        "deploy/opentofu/takoform",
         "package.json",
         "scripts/build-worker-release-artifact.ts",
         "scripts/takos-product-materializer.ts",
@@ -36,7 +37,7 @@ const CONTRACT = {
         provenance:
           "the Takosumi host injects the Plan-pinned SourceSnapshot id and full source commit; product:activate requires the descriptor commit and package version to match, verifies the descriptor and Worker archive SHA-256, accepts only digest-pinned container images in the selected Cloudflare account, and records only redacted digests in its terminal evidence",
         "post-conditions":
-          "product:activate reads back the 100 percent Worker deployment and provenance annotations, exact secret-name closure, all four container images and capacities, all eight queue consumers, Vectorize shape, and the public health endpoint before succeeding; product:pre-destroy proves those app-owned follow-up resources absent before OpenTofu destroys backing resources",
+          "product:activate reads back the 100 percent Worker deployment and provenance annotations, exact secret-name closure, all three agent container images and capacities, all six queue consumers, Vectorize shape, and the public health endpoint before succeeding; product:pre-destroy proves those app-owned follow-up resources absent before OpenTofu destroys backing resources",
         reversal:
           "the previous deployment and version ids are captured before mutation, but D1 migrations are forward-only; repair forward by default, or select the preceding exact descriptor only through a fresh reviewed Takosumi plan with explicit schema compatibility proof",
         "failure-handling":

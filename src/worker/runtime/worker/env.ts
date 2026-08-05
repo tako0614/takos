@@ -11,12 +11,11 @@ import type {
   IndexJobQueueMessage,
   NotificationPushQueueMessage,
   RunQueueMessage,
-  WorkflowJobQueueMessage,
 } from "../../shared/types/index.ts";
 
 /**
  * Unified Env for takos-worker.
- * Union of runner + indexer + workflow-runner + egress bindings.
+ * Union of runner + indexer + egress bindings.
  */
 export type WorkerEnv = DbEnv & {
   // --- runner ---
@@ -40,9 +39,8 @@ export type WorkerEnv = DbEnv & {
   TENANT_SOURCE?: ObjectStoreBinding;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
 
-  // --- workflow-runner ---
+  // --- optional external runtime / egress ---
   RUNTIME_HOST?: { fetch(request: Request): Promise<Response> };
-  RUNTIME_CONTAINER?: DurableObjectNamespace;
   ENCRYPTION_KEY?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
@@ -91,7 +89,6 @@ export type WorkerEnv = DbEnv & {
   HOSTNAME_ROUTING: KvStoreBinding;
   ROUTING_DO?: DurableObjectNamespace;
   SERVICE_INTERNAL_JWT_ISSUER?: string;
-  WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
 
   // --- notification pusher delivery ---

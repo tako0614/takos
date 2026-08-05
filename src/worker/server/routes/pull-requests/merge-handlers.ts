@@ -4,10 +4,6 @@ import { type AuthenticatedRouteEnv, parseJsonBody } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import {
-  scheduleActionsAutoTrigger,
-  triggerPushWorkflows,
-} from "../../../application/services/actions/index.ts";
-import {
   checkConflicts,
   ConflictCheckError,
   type Resolution,
@@ -29,8 +25,6 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { findPullRequest } from "./read-model.ts";
-import { triggerPrEvent } from "./workflow-trigger.ts";
-import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 // ---------------------------------------------------------------------------
 // Merge, Conflicts & Resolve routes
@@ -99,46 +93,6 @@ export default new Hono<AuthenticatedRouteEnv>()
         if (!mergeResult.success) {
           return jsonErrorWithStatus(mergeResult.body, mergeResult.status);
         }
-
-        if (mergeResult.pushBefore) {
-          scheduleActionsAutoTrigger(
-            c.executionCtx,
-            () =>
-              triggerPushWorkflows(
-                {
-                  db: c.env.DB,
-                  bucket: c.env.GIT_OBJECTS,
-                  queue: c.env.WORKFLOW_QUEUE,
-                  encryptionKey: c.env.ENCRYPTION_KEY,
-                },
-                {
-                  repoId,
-                  branch: pullRequest.baseBranch,
-                  before: mergeResult.pushBefore,
-                  after: mergeResult.mergeCommit,
-                  actorId: user.id,
-                  actorName: user.name,
-                  actorEmail: user.email,
-                },
-              ),
-            `pull-requests.merge repo=${repoId} branch=${pullRequest.baseBranch}`,
-          );
-        }
-
-        triggerPrEvent(c, repoAccess, user.id, {
-          action: "closed",
-          number: mergeResult.pullRequest.number,
-          title: mergeResult.pullRequest.title,
-          body: mergeResult.pullRequest.description,
-          state: "closed",
-          merged: true,
-          mergedAt: textDateNullable(mergeResult.pullRequest.mergedAt),
-          headRef: mergeResult.pullRequest.headBranch,
-          headSha: mergeResult.headSha,
-          baseRef: mergeResult.pullRequest.baseBranch,
-          baseSha: mergeResult.baseShaForEvent,
-          authorId: mergeResult.pullRequest.authorId,
-        });
 
         return c.json({
           pull_request: await buildPullRequestDtoFull(

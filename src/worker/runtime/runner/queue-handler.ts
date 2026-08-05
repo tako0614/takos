@@ -400,7 +400,7 @@ export async function handleQueue(
       }
 
       // ---------------------------------------------------------------
-      // Dispatch mode: fire-and-forget to runtime container (no 15-min limit)
+      // Dispatch mode: fire-and-forget to the bounded agent container.
       // Service binding provides implicit auth — no JWT needed.
       // ---------------------------------------------------------------
       // API keys are NOT sent in the dispatch payload. The host generates
