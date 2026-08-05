@@ -20,9 +20,10 @@ The primary CTA resolves to the Takosumi platform worker install prefill route:
 https://app.takosumi.com/install?git=<takos-git-url>&ref=<ref>&path=<module-path>
 ```
 
-Defaults are production-safe as a working fallback because the source fallback
-is an immutable commit. GA/release builds should still pin the ref to the
-release tag or commit they are publishing:
+Defaults are production-safe once the named GitHub release is immutable because
+the source fallback is an immutable release tag or full commit. Release builds
+must pin the ref to the release tag or commit they are publishing, and the tag
+must exist before this website is deployed:
 
 ```sh
 VITE_TAKOS_INSTALL_GIT_URL=https://github.com/tako0614/takos.git

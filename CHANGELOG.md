@@ -6,6 +6,15 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.1 — Portable release defaults
+
+- Pin the portable Takoform adapter to the immutable Takos `v0.12.0` Worker
+  archive and public agent image, so a normal install does not ask users for
+  release URLs, hashes, or OCI image coordinates.
+- Keep those defaults digest-pinned and replaceable by ordinary OpenTofu input
+  overrides; direct Cloudflare remains a peer adapter for users connecting
+  their own account.
+
 ## 0.12.0 — Provider-neutral deployment adapters
 
 - Make the provider-neutral resource contract authoritative and expose

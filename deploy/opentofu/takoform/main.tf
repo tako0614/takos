@@ -23,6 +23,7 @@ variable "project_name" {
 variable "worker_release_tag" {
   description = "Takos GitHub release containing the immutable Worker archive."
   type        = string
+  default     = "v0.12.0"
 
   validation {
     condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
@@ -33,11 +34,13 @@ variable "worker_release_tag" {
 variable "worker_artifact_url" {
   description = "Immutable Takos Worker archive URL."
   type        = string
+  default     = "https://github.com/tako0614/takos/releases/download/v0.12.0/takos-worker-release.tar.gz"
 }
 
 variable "worker_artifact_sha256" {
   description = "Expected SHA-256 of worker_artifact_url."
   type        = string
+  default     = "sha256:67550a5a74c67999d28f56b30680c21d8a985a11556d9bf1ffbb4fa51d3f9a16"
 
   validation {
     condition     = can(regex("^(?:sha256:)?[a-f0-9]{64}$", trimspace(var.worker_artifact_sha256)))
@@ -48,6 +51,7 @@ variable "worker_artifact_sha256" {
 variable "agent_image" {
   description = "Digest-pinned OCI image for the bounded Takos agent execution service."
   type        = string
+  default     = "ghcr.io/tako0614/takos-agent@sha256:09ca6ff29ed0cbbe35e0d0e76d17e7bb029bdbdfe3fb4c88b6cdbaf4d280cda2"
 
   validation {
     condition     = can(regex("^[^[:space:]@]+@sha256:[a-f0-9]{64}$", trimspace(var.agent_image)))

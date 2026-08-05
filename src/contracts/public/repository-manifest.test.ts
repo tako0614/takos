@@ -103,18 +103,24 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   );
   expect(
     portable.inputs.find((input) => input.name === "agent_image"),
-  ).toMatchObject({ source: { kind: "user" }, required: true });
-  for (const name of [
-    "worker_release_tag",
-    "worker_artifact_url",
-    "worker_artifact_sha256",
-  ]) {
-    expect(portable.inputs.find((input) => input.name === name)).toMatchObject({
-      source: { kind: "user" },
-      required: true,
+  ).toMatchObject({ source: { kind: "module_default" } });
+  const portableDefaults = {
+    agent_image:
+      "ghcr.io/tako0614/takos-agent@sha256:09ca6ff29ed0cbbe35e0d0e76d17e7bb029bdbdfe3fb4c88b6cdbaf4d280cda2",
+    worker_release_tag: "v0.12.0",
+    worker_artifact_url:
+      "https://github.com/tako0614/takos/releases/download/v0.12.0/takos-worker-release.tar.gz",
+    worker_artifact_sha256:
+      "sha256:67550a5a74c67999d28f56b30680c21d8a985a11556d9bf1ffbb4fa51d3f9a16",
+  } as const;
+  for (const [name, value] of Object.entries(portableDefaults)) {
+    const input = portable.inputs.find((candidate) => candidate.name === name);
+    expect(input).toMatchObject({
+      source: { kind: "module_default" },
     });
-    expect(variableBlock(modules["deploy/opentofu/takoform"], name)).not.toMatch(
-      /\n\s+default\s+=/,
+    expect(input).not.toHaveProperty("required");
+    expect(variableBlock(modules["deploy/opentofu/takoform"], name)).toMatch(
+      new RegExp(`\\n\\s+default\\s+=\\s+"${escapeRegex(value)}"`),
     );
   }
   expect(modules["deploy/opentofu/takoform"]).toContain(
@@ -227,6 +233,10 @@ function variableBlock(source: string, name: string): string {
   const start = source.indexOf(`variable "${name}" {`);
   const next = source.indexOf("\nvariable ", start + 1);
   return source.slice(start, next < 0 ? undefined : next);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function referencedVariables(module: RepositoryModule): Set<string> {

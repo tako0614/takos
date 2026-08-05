@@ -11,10 +11,11 @@ const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
 // Takos ships peer OpenTofu adapters under deploy/opentofu; the deep link
 // points the install wizard at that module path inside the repo so the Capsule
 // resolves to the module root rather than the repo root.
-// Fallback must be immutable because takos.jp can be built without operator
-// env overrides. Release builds should still set VITE_TAKOS_INSTALL_REF to the
-// release tag, but the source fallback must never publish a moving ref.
-const DEFAULT_TAKOS_REF = "a105afda57786cea79db8c50102a26a394a45229";
+// Fallback must resolve to an immutable release because takos.jp can be built
+// without operator env overrides. Publish and verify the GitHub immutable
+// release before deploying a website build that names its tag; never use a
+// moving branch ref.
+const DEFAULT_TAKOS_REF = "v0.12.1";
 const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/takoform";
 
 function installUrl(host: string): string {

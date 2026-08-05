@@ -43,10 +43,9 @@
           {
             "name": "agent_image",
             "source": {
-              "kind": "user"
+              "kind": "module_default"
             },
             "type": "string",
-            "required": true,
             "label": {
               "ja": "Agent実行イメージ",
               "en": "Agent image"
@@ -55,15 +54,15 @@
               "ja": "実行先から取得できるdigest固定OCI imageを指定します。",
               "en": "A digest-pinned OCI image reachable by the destination."
             },
-            "placeholder": "ghcr.io/example/takos-agent@sha256:..."
+            "placeholder": "ghcr.io/tako0614/takos-agent@sha256:...",
+            "advanced": true
           },
           {
             "name": "worker_release_tag",
             "source": {
-              "kind": "user"
+              "kind": "module_default"
             },
             "type": "string",
-            "required": true,
             "label": {
               "ja": "Takosリリース",
               "en": "Takos release"
@@ -78,11 +77,10 @@
           {
             "name": "worker_artifact_url",
             "source": {
-              "kind": "user"
+              "kind": "module_default"
             },
             "type": "string",
             "format": "url",
-            "required": true,
             "label": {
               "ja": "Worker artifact URL",
               "en": "Worker artifact URL"
@@ -97,10 +95,9 @@
           {
             "name": "worker_artifact_sha256",
             "source": {
-              "kind": "user"
+              "kind": "module_default"
             },
             "type": "string",
-            "required": true,
             "label": {
               "ja": "Worker artifact SHA-256",
               "en": "Worker artifact SHA-256"
