@@ -18,6 +18,32 @@ Takosumi
 
 Takos Worker は API とブラウザ UI の入口です。エージェント実行サービスは、実行ごとに許可された操作だけを受け取ります。アプリや外部 MCP サーバーのツールは、Workspace の権限を確認してから公開されます。
 
+## クラウドとの境界
+
+Takos本体が必要とするリソースと接続名の正本は
+[`deploy/product-resources.json`](../../deploy/product-resources.json)です。
+そこにはCloudflare、Takoform、account ID、credentialを書きません。
+
+- [`deploy/opentofu`](../../deploy/opentofu)は、自分のCloudflare accountへ直接置くadapterです。
+- [`deploy/takoform`](../../deploy/takoform)は、同じ論理リソースをTakoform対応hostへ置くadapterです。
+- Takosumiはどちらも普通のOpenTofu moduleとして扱います。Takos専用providerや特別なapply経路はありません。
+
+Cloudflare Workers用entrypointやCloudflare binding変換はCloudflare adapterに残ります。
+API、agent、tool、storageなどの製品ロジックは中立bindingを使い、選んだadapterを知りません。
+
+## クラウドとの境界
+
+Takos本体が必要とするリソースと接続名の正本は
+[`deploy/product-resources.json`](../../deploy/product-resources.json)です。
+そこにはCloudflare、Takoform、account ID、credentialを書きません。
+
+- [`deploy/opentofu`](../../deploy/opentofu)は、自分のCloudflare accountへ直接置くadapterです。
+- [`deploy/takoform`](../../deploy/takoform)は、同じ論理リソースをTakoform対応hostへ置くadapterです。
+- Takosumiはどちらも普通のOpenTofu moduleとして扱います。Takos専用providerや特別なapply経路はありません。
+
+Cloudflare Workers用entrypointやCloudflare binding変換はCloudflare adapterに残ります。
+API、agent、tool、storageなどの製品ロジックは中立bindingを使い、選んだadapterを知りません。
+
 ## 読む順番
 
 1. [システム全体](/architecture/system-architecture) — サービスと所有者
@@ -27,16 +53,16 @@ Takos Worker は API とブラウザ UI の入口です。エージェント実�
 
 ## 詳細ページ
 
-| ページ | 内容 |
-| --- | --- |
-| [システム全体](/architecture/system-architecture) | Takos と Takosumi の境界 |
-| [サービス構成](/architecture/service-topology) | ローカル環境のサービスとポート |
-| [エージェント実行](/architecture/runtime-service) | 実行、ツール、メモリ |
-| [アプリの公開情報](/architecture/app-interface) | UI、MCP、ファイル形式 |
-| [実行時の接続](/architecture/capsule-runtime-projection) | デプロイ結果から接続を作る方法 |
-| [アプリメタデータ](/architecture/app-metadata) | 名前、URL、機能の所有者 |
-| [信頼境界](/architecture/internal-trust-boundaries) | 内部呼び出しと capability token |
-| [構成図](/architecture/diagrams) | 主な処理の図 |
+| ページ                                                   | 内容                            |
+| -------------------------------------------------------- | ------------------------------- |
+| [システム全体](/architecture/system-architecture)        | Takos と Takosumi の境界        |
+| [サービス構成](/architecture/service-topology)           | ローカル環境のサービスとポート  |
+| [エージェント実行](/architecture/runtime-service)        | 実行、ツール、メモリ            |
+| [アプリの公開情報](/architecture/app-interface)          | UI、MCP、ファイル形式           |
+| [実行時の接続](/architecture/capsule-runtime-projection) | デプロイ結果から接続を作る方法  |
+| [アプリメタデータ](/architecture/app-metadata)           | 名前、URL、機能の所有者         |
+| [信頼境界](/architecture/internal-trust-boundaries)      | 内部呼び出しと capability token |
+| [構成図](/architecture/diagrams)                         | 主な処理の図                    |
 
 ## 用語について
 

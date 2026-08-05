@@ -1,13 +1,10 @@
 # Internal Trust Boundaries (canonical mechanism)
 
-**Premise: Takos is the OpenTofu-native AI workspace distribution managed by external Takosumi control plane.** Takosumi is the OpenTofu-native deploy control plane; Takos's whole
-deploy topology — the worker, its Durable Objects, the egress proxy, container callback endpoints, container execution,
-bindings, and routes — is an OpenTofu module that **Takosumi installs and applies** (Capsule -> `plan` type Run ->
+**Premise: Takos owns a provider-neutral resource contract and runtime-specific adapters.** Takosumi installs and applies the selected ordinary OpenTofu module (Capsule -> `plan` type Run ->
 `apply` type Run -> StateVersion / Output), with a **ProviderConnection / ProviderBinding / policy** owning the provider
-credentials, state backend, and Cloudflare Container execution. The trust boundaries here are properties of that
-Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The module
-lives in `deploy/opentofu` (`var.target = cloudflare`); the `cloudflare` target
-provisions the backing resources (D1 / KV / R2 / Queues) and the Worker-script layer consumes the resulting binding map.
+credentials and state handling. The trust boundaries here are properties of that
+Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The contract
+is declared in `deploy/product-resources.json`; `deploy/opentofu` maps it to Cloudflare and `deploy/takoform` maps it to portable Form resources.
 `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
 materialization of that same topology.
 
@@ -48,11 +45,11 @@ no signature is required or wanted.** Adding header auth here is theater that in
   mitigation (required for hard isolation):** deploy egress behind a network egress DMZ / firewall that itself blocks RFC1918
   - link-local + metadata-endpoint destinations, so a rebind cannot reach internal addresses even if the in-worker gate is
     raced. Revisit the in-worker pinning if/when Workers exposes IP-pinned fetch for arbitrary hostnames.
-- **DEPLOY INVARIANT — Takos is OpenTofu-native and Takosumi-managed.** Takos deploy topology is a plain OpenTofu module;
+- **DEPLOY INVARIANT — Takos is provider-neutral and OpenTofu-native.** Takos deploy topology is a product-owned contract plus a selected plain OpenTofu adapter;
   external Takosumi deploy-control installs and applies it as a Capsule (Capsule -> `plan` type Run -> `apply` type Run
   -> StateVersion / Output), with ProviderConnections holding credential references, ProviderBindings resolving each
   provider (+ optional alias) to an explicit ProviderConnection, and policy resolving provider allowlists, state backend,
-  and Cloudflare Container execution; the non-secret service URLs / binding map are recorded as **Output**. The
+  and runtime execution requirements; the non-secret service URLs / binding map are recorded as **Output**. The
   trust-boundary invariants below are therefore **properties of that module, validated by the reviewed plan** — not of
   hand-maintained wrangler. (`takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
   materialization of the same topology and converges onto the Takosumi-applied module; do not treat it as a separate

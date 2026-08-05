@@ -1,8 +1,8 @@
 /**
  * Generic service-call error handling for non-Cloudflare upstream APIs.
  *
- * Cloudflare-specific clients (WfpClient, CloudflareApiClient) use their own
- * error model (CloudflareAPIError / classifyAPIError in wfp/client.ts) because
+ * The Cloudflare WfP adapter uses its own error model
+ * (CloudflareAPIError / classifyAPIError in wfp/client.ts) because
  * they need rate-limit, retry-after, and isRetryable metadata that is specific
  * to the Cloudflare Management API. Merging the two would either bloat the
  * generic model or lose Cloudflare-specific context, so they are intentionally
@@ -27,9 +27,10 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
   504: ErrorCodes.GATEWAY_TIMEOUT,
 };
 
-function mapUpstreamStatus(
-  status: number,
-): { code: ErrorCode; statusCode: number } {
+function mapUpstreamStatus(status: number): {
+  code: ErrorCode;
+  statusCode: number;
+} {
   const mapped = STATUS_TO_CODE[status];
   if (mapped) return { code: mapped, statusCode: status };
   if (status >= 400 && status < 500) {
@@ -82,9 +83,8 @@ export async function parseServiceResponse<T>(
     try {
       return JSON.parse(bodyText) as T;
     } catch (error) {
-      const detail = error instanceof Error && error.message
-        ? `: ${error.message}`
-        : "";
+      const detail =
+        error instanceof Error && error.message ? `: ${error.message}` : "";
       throw new ServiceCallError({
         serviceName,
         upstreamStatus: res.status,

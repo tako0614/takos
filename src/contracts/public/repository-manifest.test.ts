@@ -14,6 +14,10 @@ const modules = {
     new URL("deploy/opentofu/variables.tf", root),
     "utf8",
   ),
+  "deploy/takoform": await readFile(
+    new URL("deploy/takoform/main.tf", root),
+    "utf8",
+  ),
 };
 
 test("Takos publishes the closed Repository manifest for its selectable module", () => {
@@ -25,8 +29,11 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(manifest.apiVersion).toBe("takosumi.com/v2.2");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
-  expect(manifest.install.defaultModule).toBe("deploy/opentofu");
-  expect(Object.keys(manifest.install.modules)).toEqual(["deploy/opentofu"]);
+  expect(manifest.install.defaultModule).toBe("deploy/takoform");
+  expect(Object.keys(manifest.install.modules)).toEqual([
+    "deploy/opentofu",
+    "deploy/takoform",
+  ]);
   const module = manifest.install.modules["deploy/opentofu"];
   expect(Object.keys(module).sort()).toEqual([
     "inputs",
@@ -64,6 +71,7 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     },
   ]);
   expect(options.options.map((option) => option.source.path)).toEqual([
+    "deploy/takoform",
     "deploy/opentofu",
   ]);
   expect(module.inputs.find((input) => input.name === "cloudflare")).toEqual({
@@ -88,6 +96,17 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   );
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
+
+  const portable = manifest.install.modules["deploy/takoform"];
+  expect(
+    portable.inputs.find((input) => input.name === "runtime_image"),
+  ).toMatchObject({ source: { kind: "user" }, required: true });
+  expect(
+    portable.inputs.find((input) => input.name === "executor_image"),
+  ).toMatchObject({ source: { kind: "user" }, required: true });
+  expect(modules["deploy/takoform"]).toContain(
+    'source  = "registry.opentofu.org/tako0614/takoform"',
+  );
 });
 
 test("the Repository manifest declares every OAuth scope requested by Takos", () => {

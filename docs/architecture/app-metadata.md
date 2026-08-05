@@ -86,10 +86,11 @@ Sync を経由しません。
 - plan / apply / destroy の Run (typed Run) と、適用後の StateVersion / Output
 - ProviderConnection / ProviderBinding / policy に紐づく provider の許可範囲、state backend、実行境界
 
-Takos の deploy topology 自体も、`deploy/opentofu` の OpenTofu module (`var.target = cloudflare`) として
-Takosumi が install / apply します。`cloudflare` target では、土台となるリソース (D1 / KV / R2 / Queues) を
-作成します。手書きの `wrangler` / distribute pipeline は、この同じ topology を暫定的に反映する手段 (interim
-materialization) であり、別の正とする情報ではありません。
+Takos の resource authority は `deploy/product-resources.json` です。Takosumi は
+`deploy/takoform` または `deploy/opentofu` を通常の OpenTofu module として install / apply します。
+前者は選択した Form host、後者は直接接続した Cloudflare account に同じ runtime connections を写します。
+手書きの `wrangler` / distribution pipeline は direct Cloudflare adapter の artifact materialization であり、
+別の resource authority ではありません。
 
 アカウント側の policy (account / 課金 / OIDC / dashboard) は Takosumi Accounts plane が持ちます。
 

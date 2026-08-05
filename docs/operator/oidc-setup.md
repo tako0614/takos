@@ -1,12 +1,12 @@
 # OIDC 設定
 
-**Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** Self-host では外部 Takosumi
+**Takos は provider-neutral な resource contract を持つ OpenTofu-native AI workspace distribution です。** Self-host では外部 Takosumi
 Accounts plane が OIDC issuer になります。Takosumi は Takos distribution を Capsule として扱い、
 **Capsule -> Run -> StateVersion -> Output** という run ledger を記録します。OIDC client 設定そのものは account-plane policy であり、Takosumi Accounts plane が所有します。
 
 ## Current Flow
 
-1. Takos の OpenTofu Capsule (`deploy/opentofu`) を install して **Capsule** を作る。`var.target = cloudflare`で、`cloudflare` target は backing resource (D1 / KV / R2 / Queues) を provision する。
+1. Takos の OpenTofu Capsule (`deploy/takoform` または `deploy/opentofu`) を install して **Capsule** を作る。前者は選択した Form host、後者は接続した Cloudflare account に同じ product contract を materialize する。
 2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
 3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateVersion** と **Output** を記録する。
 4. ProviderConnection が credential reference を保持し、ProviderBinding が module の使う provider (+ optional alias) ごとに explicit ProviderConnection を解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。
@@ -22,12 +22,11 @@ Takosumi に渡す install 対象は OpenTofu Capsule です。module metadata �
 
 ```hcl
 module "takos" {
-  source = "github.com/example/takos//deploy/opentofu"
-  target = "cloudflare" # cloudflare only
+  source = "github.com/tako0614/takos//deploy/takoform"
 }
 ```
 
-target を選ぶと、typed Runs を経て StateVersion と Output が更新され、非機密な endpoint は Output として記録される。Takos product routes は別の product-local deployment surface を露出せず、Takosumi deploy control plane の run ledger を信頼する。
+adapter を選ぶと、typed Runs を経て StateVersion と Output が更新され、非機密な endpoint は Output として記録される。Takos product routes は別の product-local deployment surface を露出せず、Takosumi deploy control plane の run ledger を信頼する。
 
 ## References
 

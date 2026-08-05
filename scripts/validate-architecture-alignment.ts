@@ -52,6 +52,7 @@ const RETIRED_PATHS = [
 
 const RETIRED_DIRS = [
   "scripts/control",
+  "src/worker/application/services/cloudflare",
   "src/worker/application/services/common-env",
   "src/worker/application/services/deployment",
   "src/worker/application/services/entities",
@@ -79,6 +80,10 @@ const PACKAGE_FORBIDDEN_MARKERS = [
 ] as const;
 
 const CURRENT_SOURCE_RULES = [
+  {
+    path: "src/worker/application/services/maintenance/index.ts",
+    forbidden: ["Cloudflare", "D1Backup", "runD1Backup"],
+  },
   {
     path: "src/worker/server/routes/api.ts",
     forbidden: [
@@ -119,8 +124,7 @@ const CURRENT_SOURCE_RULES = [
     ],
   },
   {
-    path:
-      "src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts",
+    path: "src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts",
     forbidden: [
       "service_exports",
       "service_bindings",
@@ -172,10 +176,9 @@ async function readRequired(
   } catch (error) {
     failures.push({
       path,
-      message:
-        `Unable to read canonical file: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+      message: `Unable to read canonical file: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     });
     return "";
   }
@@ -216,9 +219,7 @@ function rejectMarkers(
   }
 }
 
-async function validateRetiredPaths(
-  failures: CheckFailure[],
-): Promise<void> {
+async function validateRetiredPaths(failures: CheckFailure[]): Promise<void> {
   for (const path of [...RETIRED_PATHS, ...RETIRED_DIRS]) {
     if (!(await pathExists(path))) continue;
     failures.push({
@@ -259,9 +260,7 @@ async function main(): Promise<void> {
     PACKAGE_FORBIDDEN_MARKERS,
     failures,
   );
-  if (
-    !/"check"\s*:\s*"[^"]*bun run validate:architecture/.test(packageText)
-  ) {
+  if (!/"check"\s*:\s*"[^"]*bun run validate:architecture/.test(packageText)) {
     failures.push({
       path: "package.json",
       message: "Portable check must include bun run validate:architecture.",
@@ -275,9 +274,7 @@ async function main(): Promise<void> {
     });
   }
   if (
-    !/"test:product-contracts"\s*:\s*"[^"]*capsules_test\.ts/.test(
-      packageText,
-    )
+    !/"test:product-contracts"\s*:\s*"[^"]*capsules_test\.ts/.test(packageText)
   ) {
     failures.push({
       path: "package.json",
@@ -291,20 +288,13 @@ async function main(): Promise<void> {
     rejectMarkers(rule.path, text, rule.forbidden, failures);
   }
 
-  for (
-    const path of [
-      "deploy/cloudflare/wrangler.toml",
-      "deploy/opentofu/modules/cloudflare/main.tf",
-      "src/worker/shared/types/env.ts",
-    ]
-  ) {
+  for (const path of [
+    "deploy/cloudflare/wrangler.toml",
+    "deploy/opentofu/modules/cloudflare/main.tf",
+    "src/worker/shared/types/env.ts",
+  ]) {
     const text = await readRequired(path, failures);
-    rejectMarkers(
-      path,
-      text,
-      DISTRIBUTION_FORBIDDEN_MARKERS,
-      failures,
-    );
+    rejectMarkers(path, text, DISTRIBUTION_FORBIDDEN_MARKERS, failures);
   }
 
   if (failures.length > 0) {

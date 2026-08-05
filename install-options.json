@@ -8,9 +8,18 @@
   },
   "options": [
     {
+      "id": "portable-cloud",
+      "title": "Portable cloud",
+      "description": "Deploy the Takoform adapter to a compatible cloud host.",
+      "source": {
+        "url": "https://github.com/tako0614/takos.git",
+        "path": "deploy/takoform"
+      }
+    },
+    {
       "id": "cloudflare",
-      "title": "Cloudflare",
-      "description": "Deploy the Cloudflare OpenTofu module.",
+      "title": "Cloudflare (direct)",
+      "description": "Advanced: deploy directly into your own Cloudflare account.",
       "source": {
         "url": "https://github.com/tako0614/takos.git",
         "path": "deploy/opentofu"

@@ -74,7 +74,7 @@ variable "opentofu_plan_mode" {
 }
 
 variable "public_url" {
-  description = "Canonical public URL for the Takos worker. Takosumi Cloud managed installs set this to an app.takos.jp URL; when unset, launch_url is derived from cloudflare.workers_subdomain."
+  description = "Canonical public URL for the Takos worker. A hosting environment may supply its allocated URL; when unset in this direct adapter, launch_url is derived from cloudflare.workers_subdomain."
   type        = string
   default     = null
 

@@ -1,0 +1,139 @@
+{
+  "apiVersion": "takos.jp/product-resources/v1",
+  "kind": "ProductResourceContract",
+  "product": "takos",
+  "resources": [
+    { "name": "app", "shape": "EdgeWorker" },
+    { "name": "database", "shape": "RelationalDatabase" },
+    { "name": "hostname-routing", "shape": "KeyValueStore" },
+    { "name": "worker-bundles", "shape": "ObjectBucket" },
+    { "name": "tenant-builds", "shape": "ObjectBucket" },
+    { "name": "tenant-source", "shape": "ObjectBucket" },
+    { "name": "git-objects", "shape": "ObjectBucket" },
+    { "name": "offload", "shape": "ObjectBucket" },
+    { "name": "runs", "shape": "Queue" },
+    { "name": "runs-dlq", "shape": "Queue" },
+    { "name": "index-jobs", "shape": "Queue" },
+    { "name": "index-jobs-dlq", "shape": "Queue" },
+    { "name": "workflow-jobs", "shape": "Queue" },
+    { "name": "workflow-jobs-dlq", "shape": "Queue" },
+    { "name": "notification-push", "shape": "Queue" },
+    { "name": "notification-push-dlq", "shape": "Queue" },
+    { "name": "embeddings", "shape": "VectorIndex" },
+    { "name": "session", "shape": "StatefulEntity" },
+    { "name": "run-notifier", "shape": "StatefulEntity" },
+    { "name": "notification-notifier", "shape": "StatefulEntity" },
+    { "name": "rate-limiter", "shape": "StatefulEntity" },
+    { "name": "routing", "shape": "StatefulEntity" },
+    { "name": "runtime", "shape": "ContainerService" },
+    { "name": "executor-tier-1", "shape": "ContainerService" },
+    { "name": "executor-tier-2", "shape": "ContainerService" },
+    { "name": "executor-tier-3", "shape": "ContainerService" },
+    { "name": "maintenance-quarter-hour", "shape": "Schedule" },
+    { "name": "maintenance-hourly", "shape": "Schedule" }
+  ],
+  "runtimeConnections": [
+    { "name": "DB", "resource": "database", "projection": "sql.binding.v1" },
+    {
+      "name": "HOSTNAME_ROUTING",
+      "resource": "hostname-routing",
+      "projection": "keyvalue.binding.v1"
+    },
+    {
+      "name": "WORKER_BUNDLES",
+      "resource": "worker-bundles",
+      "projection": "object.binding.v1"
+    },
+    {
+      "name": "TENANT_BUILDS",
+      "resource": "tenant-builds",
+      "projection": "object.binding.v1"
+    },
+    {
+      "name": "TENANT_SOURCE",
+      "resource": "tenant-source",
+      "projection": "object.binding.v1"
+    },
+    {
+      "name": "GIT_OBJECTS",
+      "resource": "git-objects",
+      "projection": "object.binding.v1"
+    },
+    {
+      "name": "TAKOS_OFFLOAD",
+      "resource": "offload",
+      "projection": "object.binding.v1"
+    },
+    {
+      "name": "RUN_QUEUE",
+      "resource": "runs",
+      "projection": "queue.binding.v1"
+    },
+    {
+      "name": "INDEX_QUEUE",
+      "resource": "index-jobs",
+      "projection": "queue.binding.v1"
+    },
+    {
+      "name": "WORKFLOW_QUEUE",
+      "resource": "workflow-jobs",
+      "projection": "queue.binding.v1"
+    },
+    {
+      "name": "TAKOS_NOTIFICATION_PUSH_QUEUE",
+      "resource": "notification-push",
+      "projection": "queue.binding.v1"
+    },
+    {
+      "name": "VECTORIZE",
+      "resource": "embeddings",
+      "projection": "vector.binding.v1"
+    },
+    {
+      "name": "SESSION_DO",
+      "resource": "session",
+      "projection": "stateful.binding.v1"
+    },
+    {
+      "name": "RUN_NOTIFIER",
+      "resource": "run-notifier",
+      "projection": "stateful.binding.v1"
+    },
+    {
+      "name": "NOTIFICATION_NOTIFIER",
+      "resource": "notification-notifier",
+      "projection": "stateful.binding.v1"
+    },
+    {
+      "name": "RATE_LIMITER_DO",
+      "resource": "rate-limiter",
+      "projection": "stateful.binding.v1"
+    },
+    {
+      "name": "ROUTING_DO",
+      "resource": "routing",
+      "projection": "stateful.binding.v1"
+    },
+    {
+      "name": "RUNTIME_CONTAINER",
+      "resource": "runtime",
+      "projection": "service.binding.v1"
+    },
+    {
+      "name": "EXECUTOR_CONTAINER",
+      "resource": "executor-tier-1",
+      "projection": "service.binding.v1"
+    },
+    {
+      "name": "EXECUTOR_CONTAINER_TIER2",
+      "resource": "executor-tier-2",
+      "projection": "service.binding.v1"
+    },
+    {
+      "name": "EXECUTOR_CONTAINER_TIER3",
+      "resource": "executor-tier-3",
+      "projection": "service.binding.v1"
+    }
+  ],
+  "outputs": [{ "name": "launch_url", "interface": "http.request@1" }]
+}

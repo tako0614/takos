@@ -1,32 +1,28 @@
 # Architecture Diagrams
 
-**Takos is the OpenTofu-native AI workspace distribution managed by external Takosumi control plane.** Takosumi is the OpenTofu-native deploy control plane: Takos's deploy
-topology is an OpenTofu Capsule (`deploy/opentofu`, `var.target = cloudflare`)
-that Takosumi **installs and applies**, recording the run ledger as **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution.
+**Takos owns one provider-neutral resource contract with sibling deployment adapters.** Takosumi installs and applies either `deploy/takoform` or `deploy/opentofu` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the selected provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
 
 ## Deploy flow (Takosumi run ledger)
 
 ```mermaid
 flowchart LR
-  M["Takos OpenTofu module<br/>deploy/opentofu (var.target)"]
+  M["Takos product contract<br/>deploy/product-resources.json"]
+  DA["Selected adapter<br/>deploy/takoform or deploy/opentofu"]
   subgraph TS["Takosumi (deploy control plane)"]
     I["Capsule"]
     P["`plan` type Run<br/>(tofu plan)"]
-    A["`apply` type Run<br/>(tofu apply)"]
+    AP["`apply` type Run<br/>(tofu apply)"]
     DP["`destroy_plan` / `destroy_apply`<br/>(teardown)"]
     O["Output<br/>(non-secret URLs / binding map)"]
   end
   RP["ProviderConnection / ProviderBinding / policy<br/>provider allowlist · credentials ·<br/>state backend · Container execution"]
-  M --> I --> P --> A --> S["StateVersion"] --> O
+  M --> DA --> I --> P --> AP --> S["StateVersion"] --> O
   I --> DP
   RP -. owns execution & credentials .-> P
-  RP -. owns execution & credentials .-> A
+  RP -. owns execution & credentials .-> AP
 ```
 
-For the `cloudflare` target, the applied module provisions the backing resources (D1 / KV / R2 / Queues) and the
-Worker-script layer consumes the resulting binding map. The hand-maintained
-`takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the **interim reference
-materialization** of this same topology, converging onto the Takosumi-applied module — not a separate source of truth.
+The direct Cloudflare adapter provisions D1 / KV / R2 / Queues and uses Wrangler for runtime-only wiring. The Takoform adapter asks the selected host to implement the same logical resources and connections. Neither adapter changes the product contract.
 
 ## Runtime shape (one Worker)
 

@@ -2,11 +2,11 @@
 ## Replace placeholder domains, account IDs, namespace IDs, and resource IDs
 ## before deploying.
 ##
-## SOURCE OF TRUTH: Takos is the first-party AI Workspace distribution on
-## Takosumi. The OpenTofu module at ../opentofu (var.target = cloudflare)
-## provisions the DURABLE infra for the Takos distribution worker and publishes
+## DIRECT CLOUDFLARE ADAPTER: ../product-resources.json is the provider-neutral
+## product authority. The OpenTofu module at ../opentofu maps that contract to
+## Cloudflare durable infrastructure and publishes
 ## the non-secret endpoints / binding map. This wrangler.toml is the
-## WORKER-ARTIFACT HALF of that same Takosumi-native deploy: the worker script
+## WORKER-ARTIFACT HALF of that direct adapter: the worker script
 ## entry, ASSETS, container images, Durable Object migrations, routes, and binding
 ## wiring the OpenTofu provider cannot express. It reads the module outputs and
 ## must stay in sync with the module; it is not a competing source of truth for

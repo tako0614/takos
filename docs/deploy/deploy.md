@@ -1,16 +1,17 @@
 # Takos deployment lifecycle
 
-Takos deploy is an OpenTofu-native, Takosumi-managed distribution lifecycle: `takos/deploy/opentofu` provisions the Takos
-product worker backing resources, and the wrangler artifact upload publishes the Takos product surface. The external
-Takosumi control plane records the run ledger as **Capsule** plus
+Takos owns a provider-neutral resource contract in `deploy/product-resources.json`.
+`deploy/opentofu` is its direct Cloudflare adapter and `deploy/takoform` is its
+portable Form adapter. Takosumi runs the selected ordinary OpenTofu module and
+records the run ledger as **Capsule** plus
 **`plan` type Run** -> **`apply` type Run** -> **StateVersion / Output** entries.
 
 ## Current Flow
 
-1. Run `tofu apply` for `takos/deploy/opentofu` with `var.target = cloudflare`; this provisions the D1/KV/R2/Queues backing resources.
-2. Upload the Takos distribution worker artifact with wrangler, using the module outputs for bindings and routes.
-3. Register or update the Takos Capsule from the Git URL/ref and review the recorded **`plan` type Run** before apply.
-4. `apply` records StateVersion and Output and keeps policy/audit evidence.
+1. Select `deploy/takoform` for a portable Form host or `deploy/opentofu` for a directly connected Cloudflare account.
+2. Register or update the Takos Capsule from the Git URL/ref and review the recorded **`plan` type Run** before apply.
+3. `apply` records StateVersion and Output and keeps policy/audit evidence.
+4. The selected adapter materializes the same product-owned runtime connections and immutable artifacts.
 
 ## Takos Boundary
 

@@ -12,7 +12,7 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takos is delivered as an OpenTofu-native, Takosumi-managed distribution: `deploy/opentofu` (`var.target = cloudflare`) provisions Takos product D1/KV/R2/Queues backing resources, while an external Takosumi control plane records Capsule / Run / StateVersion / Output state, policy decisions, and audit trail.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu` maps it to a directly connected Cloudflare account and `deploy/takoform` maps it to portable Form resources. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
 
 ## Canonical Layout
 
