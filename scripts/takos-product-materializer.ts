@@ -178,6 +178,8 @@ export type MaterializerDependencies = {
   readWorkerPresence(workerName: string): Promise<boolean>;
   deleteWorker(workerName: string): Promise<void>;
   readVector(indexName: string): Promise<unknown | undefined>;
+  listR2Objects(bucketName: string): Promise<readonly string[]>;
+  deleteR2Object(bucketName: string, objectKey: string): Promise<void>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
   sleep(milliseconds: number): Promise<void>;
@@ -1631,15 +1633,20 @@ async function queueReadbacks(
   dependencies: MaterializerDependencies,
   configPath: string,
   outputs: TakosOutputs,
+  options: { readonly allowAbsent?: boolean } = {},
 ): Promise<Map<string, JsonRecord[]>> {
   const result = new Map<string, JsonRecord[]>();
   for (const queue of Object.values(outputs.queues)) {
-    const command = await requireCommand(
-      dependencies,
+    const command = await dependencies.runWrangler(
       ["queues", "consumer", "list", queue, "--json", "--config", configPath],
-      "queue_consumer_readback",
-      [],
     );
+    if (command.exitCode !== 0) {
+      if (options.allowAbsent && isNotFound(command)) {
+        result.set(queue, []);
+        continue;
+      }
+      throw commandFailure("queue_consumer_readback", command, []);
+    }
     const parsed =
       command.exitCode === 0 && command.stdout.trim() === ""
         ? []
@@ -2580,6 +2587,120 @@ export function createDependencies(input: {
       );
       return envelope.result;
     },
+    async listR2Objects(bucketName) {
+      const label = "R2 object list readback";
+      const url = new URL(
+        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/r2/buckets/${encodeURIComponent(bucketName)}/objects`,
+      );
+      url.searchParams.set("per_page", "1000");
+      let response: Response;
+      try {
+        response = await providerFetch(url, {
+          headers: {
+            authorization: `Bearer ${input.apiToken}`,
+            accept: "application/json",
+          },
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw new MaterializerError({
+          code: "readback_failed",
+          stage: "r2_object_readback",
+          message: "R2 object list readback failed",
+          diagnosticDigest: digest(`${label}\ntransport`),
+        });
+      }
+      if (response.status === 404) return [];
+      if (response.status !== 200 || !response.body) {
+        throw new MaterializerError({
+          code: "readback_failed",
+          stage: "r2_object_readback",
+          message: "R2 object list readback was ambiguous",
+          diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+        });
+      }
+      const bytes = await readStreamBounded(
+        response.body,
+        4 * 1024 * 1024,
+        label,
+        "readback_failed",
+      );
+      let value: unknown;
+      try {
+        value = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+      } catch {
+        throw new MaterializerError({
+          code: "invalid_readback",
+          stage: "r2_object_readback",
+          message: "R2 object list returned invalid JSON",
+          diagnosticDigest: digest(`${label}\ninvalid-json`),
+        });
+      }
+      const envelope = record(value, "R2 object list envelope");
+      invariant(
+        envelope.success !== false && Array.isArray(envelope.result),
+        "R2 object list API rejected the request",
+        "readback_failed",
+      );
+      invariant(
+        envelope.result.length <= 1000,
+        "R2 object list exceeded the requested page bound",
+        "invalid_readback",
+      );
+      const keys = envelope.result.map((entry, index) =>
+        requiredString(
+          record(entry, `R2 object[${index}]`).key,
+          `R2 object[${index}].key`,
+        ),
+      );
+      invariant(
+        new Set(keys).size === keys.length,
+        "R2 object list contains duplicate keys",
+        "invalid_readback",
+      );
+      return keys;
+    },
+    async deleteR2Object(bucketName, objectKey) {
+      const label = "R2 object delete";
+      const url = new URL(
+        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/r2/buckets/${encodeURIComponent(bucketName)}/objects/${encodeURIComponent(objectKey)}`,
+      );
+      let response: Response;
+      try {
+        response = await providerFetch(url, {
+          method: "DELETE",
+          headers: {
+            authorization: `Bearer ${input.apiToken}`,
+            accept: "application/json",
+          },
+          redirect: "error",
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw new MaterializerError({
+          code: "provider_command_failed",
+          stage: "r2_object_delete",
+          message:
+            "R2 object delete failed; provider diagnostics were withheld from lifecycle evidence",
+          mutationStarted: true,
+          diagnosticDigest: digest(`${label}\ntransport`),
+        });
+      }
+      if (response.ok || response.status === 404) {
+        await response.body?.cancel().catch(() => undefined);
+        return;
+      }
+      await response.body?.cancel().catch(() => undefined);
+      throw new MaterializerError({
+        code: "provider_command_failed",
+        stage: "r2_object_delete",
+        message:
+          "R2 object delete failed; provider diagnostics were withheld from lifecycle evidence",
+        mutationStarted: true,
+        diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+      });
+    },
     async fetchBytes(url, maxBytes) {
       let lastFailure = "transport";
       for (
@@ -2981,7 +3102,9 @@ async function waitForChildCleanupAbsence(input: {
   const maxAttempts = 100;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const queues = await queueReadbacks(dependencies, configPath, outputs);
+      const queues = await queueReadbacks(dependencies, configPath, outputs, {
+        allowAbsent: true,
+      });
       for (const consumers of queues.values()) {
         invariant(
           !consumers.some((consumer) =>
@@ -3053,6 +3176,36 @@ async function waitForWorkerAbsence(
   });
 }
 
+const R2_OBJECT_DELETE_CONCURRENCY = 16;
+
+async function purgeR2BackingObjects(input: {
+  readonly dependencies: MaterializerDependencies;
+  readonly outputs: TakosOutputs;
+  readonly completedStages: string[];
+}): Promise<number> {
+  let removed = 0;
+  for (const bucketName of Object.values(input.outputs.buckets)) {
+    for (;;) {
+      const keys = await input.dependencies.listR2Objects(bucketName);
+      if (keys.length === 0) break;
+      for (
+        let offset = 0;
+        offset < keys.length;
+        offset += R2_OBJECT_DELETE_CONCURRENCY
+      ) {
+        await Promise.all(
+          keys
+            .slice(offset, offset + R2_OBJECT_DELETE_CONCURRENCY)
+            .map((key) => input.dependencies.deleteR2Object(bucketName, key)),
+        );
+      }
+      removed += keys.length;
+    }
+  }
+  if (removed > 0) input.completedStages.push("r2_objects_deleted");
+  return removed;
+}
+
 export async function materializePreDestroy(input: {
   invocation: Invocation;
   sourceRoot: string;
@@ -3090,7 +3243,12 @@ export async function materializePreDestroy(input: {
         previous,
       );
     }
-    const queues = await queueReadbacks(dependencies, configPath, invocation.outputs);
+    const queues = await queueReadbacks(
+      dependencies,
+      configPath,
+      invocation.outputs,
+      { allowAbsent: true },
+    );
     validateQueueOwnership(queues, invocation.outputs, false, false);
     const containers = await containerList(dependencies, configPath);
     const ownedNames = new Set<string>(
@@ -3200,6 +3358,11 @@ export async function materializePreDestroy(input: {
       completedStages.push("worker_deleted");
       await waitForWorkerAbsence(dependencies, invocation.outputs.workerName);
     }
+    const r2ObjectsRemoved = await purgeR2BackingObjects({
+      dependencies,
+      outputs: invocation.outputs,
+      completedStages,
+    });
     return {
       kind: "takos.product-materialization@v1",
       status: "succeeded",
@@ -3220,6 +3383,7 @@ export async function materializePreDestroy(input: {
         queueConsumersRemoved: ownedQueueConsumerCount,
         containersRemoved: ownedContainers.length,
         vectorIndexesRemoved: vector ? 1 : 0,
+        r2ObjectsRemoved,
         backingResources: "left_for_opentofu_destroy",
       },
       verifiedAt: dependencies.now(),

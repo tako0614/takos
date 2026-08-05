@@ -503,8 +503,74 @@ describe("materializer input and topology", () => {
     );
   });
 
+  test("lists and deletes only objects in the exact OpenTofu-owned R2 bucket", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-r2-"));
+    temporaryDirectories.push(root);
+    const observedRequests: Request[] = [];
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: join(root, "unused-wrangler.mjs"),
+      sourceRoot: root,
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        observedRequests.push(request);
+        if (request.method === "GET") {
+          return Response.json({
+            success: true,
+            result: [{ key: "nested/object.json" }, { key: "root.txt" }],
+          });
+        }
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    expect(await dependencies.listR2Objects("takos-offload")).toEqual([
+      "nested/object.json",
+      "root.txt",
+    ]);
+    await dependencies.deleteR2Object("takos-offload", "nested/object.json");
+
+    expect(observedRequests).toHaveLength(2);
+    expect(observedRequests[0]?.method).toBe("GET");
+    expect(observedRequests[0]?.url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/takos-offload/objects?per_page=1000`,
+    );
+    expect(observedRequests[1]?.method).toBe("DELETE");
+    expect(observedRequests[1]?.url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/takos-offload/objects/nested%2Fobject.json`,
+    );
+    expect(observedRequests[0]?.headers.get("authorization")).toBe(
+      "Bearer test-token",
+    );
+    expect(observedRequests[1]?.headers.get("authorization")).toBe(
+      "Bearer test-token",
+    );
+  });
+
+  test("treats an absent R2 bucket or object as already clean during recovery", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-materializer-r2-absent-"));
+    temporaryDirectories.push(root);
+    const dependencies = createDependencies({
+      nodeBin: NODE_EXECUTABLE,
+      wranglerBin: join(root, "unused-wrangler.mjs"),
+      sourceRoot: root,
+      apiToken: "test-token",
+      accountId,
+      fetchImpl: async () => new Response(null, { status: 404 }),
+    });
+
+    expect(await dependencies.listR2Objects("already-absent")).toEqual([]);
+    await expect(
+      dependencies.deleteR2Object("already-absent", "already-absent"),
+    ).resolves.toBeUndefined();
+  });
+
   test("accepts Vectorize Gone as authoritative absence during recovery", async () => {
-    const root = await mkdtemp(join(tmpdir(), "takos-materializer-vector-gone-"));
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-vector-gone-"),
+    );
     temporaryDirectories.push(root);
     let observedRequest: Request | undefined;
     const dependencies = createDependencies({
@@ -547,6 +613,8 @@ type FakeState = {
   workerPresence?: boolean;
   invalidVectorShape?: boolean;
   blankQueueConsumerReadback?: boolean;
+  missingQueues?: boolean;
+  r2Objects?: Record<string, string[]>;
   foreignContainer?: boolean;
   foreignVectorBinding?: boolean;
   staleSecret?: boolean;
@@ -663,7 +731,10 @@ function fakeDependencies(
     calls,
     async readWorkerPresence(workerName) {
       calls.push(["worker-presence", workerName]);
-      if (!state.deployed && (state.workerPresenceReadbacksRemaining ?? 0) > 0) {
+      if (
+        !state.deployed &&
+        (state.workerPresenceReadbacksRemaining ?? 0) > 0
+      ) {
         state.workerPresenceReadbacksRemaining =
           (state.workerPresenceReadbacksRemaining ?? 0) - 1;
         return true;
@@ -685,6 +756,18 @@ function fakeDependencies(
             },
           }
         : undefined;
+    },
+    async listR2Objects(bucketName) {
+      calls.push(["r2-object-list", bucketName]);
+      return [...(state.r2Objects?.[bucketName] ?? [])];
+    },
+    async deleteR2Object(bucketName, objectKey) {
+      calls.push(["r2-object-delete", bucketName, objectKey]);
+      if (state.r2Objects?.[bucketName]) {
+        state.r2Objects[bucketName] = state.r2Objects[bucketName]!.filter(
+          (key) => key !== objectKey,
+        );
+      }
     },
     async runWrangler(args) {
       const argv = [...args];
@@ -765,6 +848,7 @@ function fakeDependencies(
         return success();
       }
       if (argv[0] === "queues" && argv[2] === "list") {
+        if (state.missingQueues) return missing();
         if (state.blankQueueConsumerReadback && !state.consumers) {
           return { exitCode: 0, stdout: "\n", stderr: "" };
         }
@@ -996,11 +1080,15 @@ describe("materializer lifecycle", () => {
     expect(
       fake.calls.filter((call) => call[0] === "worker-presence"),
     ).toHaveLength(3);
-    expect(fake.calls.filter((call) => call[0] === "deployments")).toHaveLength(1);
+    expect(fake.calls.filter((call) => call[0] === "deployments")).toHaveLength(
+      1,
+    );
   });
 
   test("accepts the current Wrangler expanded container capacity readback", async () => {
-    const root = await mkdtemp(join(tmpdir(), "takos-materializer-expanded-container-"));
+    const root = await mkdtemp(
+      join(tmpdir(), "takos-materializer-expanded-container-"),
+    );
     temporaryDirectories.push(root);
     const secretPath = join(root, "runtime-secrets.json");
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
@@ -1310,6 +1398,13 @@ describe("materializer lifecycle", () => {
       vector: true,
       containers: true,
       consumers: true,
+      r2Objects: {
+        [invocation.outputs.buckets.offload]: [
+          "agent-runs/run-1/request.json",
+          "agent-runs/run-1/result.json",
+        ],
+        [invocation.outputs.buckets.git_objects]: ["objects/aa/bb"],
+      },
       message: existingProvenanceMessage(),
       tag: releaseTag,
     };
@@ -1328,7 +1423,10 @@ describe("materializer lifecycle", () => {
     expect(evidence).toMatchObject({
       status: "succeeded",
       phase: "pre_destroy",
-      cleanup: { backingResources: "left_for_opentofu_destroy" },
+      cleanup: {
+        r2ObjectsRemoved: 3,
+        backingResources: "left_for_opentofu_destroy",
+      },
     });
     expect(state).toMatchObject({
       deployed: false,
@@ -1336,6 +1434,14 @@ describe("materializer lifecycle", () => {
       containers: false,
       consumers: false,
     });
+    expect(
+      Object.values(state.r2Objects ?? {}).every((keys) => keys.length === 0),
+    ).toBe(true);
+    expect(
+      fake.calls.findIndex((call) => call[0] === "worker-delete"),
+    ).toBeLessThan(
+      fake.calls.findIndex((call) => call[0] === "r2-object-delete"),
+    );
     expect(fake.calls.some((call) => call[0] === "d1")).toBe(false);
     expect(
       fake.calls.some(
@@ -1423,8 +1529,54 @@ describe("materializer lifecycle", () => {
       queueConsumersRemoved: 0,
       containersRemoved: 0,
       vectorIndexesRemoved: 0,
+      r2ObjectsRemoved: 0,
       backingResources: "left_for_opentofu_destroy",
     });
+  });
+
+  test("pre_destroy resumes after OpenTofu already removed queues in a partial destroy", async () => {
+    const archiveBytes = workerArchive();
+    const release = descriptor(digest(archiveBytes));
+    const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
+    const invocation = parseInvocation(
+      "pre_destroy",
+      invocationEnv("pre_destroy"),
+    );
+    const state: FakeState = {
+      deployed: false,
+      vector: false,
+      containers: false,
+      consumers: false,
+      missingQueues: true,
+      r2Objects: {},
+    };
+    const fake = fakeDependencies(
+      state,
+      invocation.outputs,
+      release,
+      descriptorBytes,
+      archiveBytes,
+    );
+
+    const evidence = await materializePreDestroy({
+      invocation,
+      sourceRoot: join(import.meta.dir, ".."),
+      dependencies: fake,
+    });
+
+    expect(evidence).toMatchObject({
+      status: "succeeded",
+      cleanup: {
+        workerRemoved: 0,
+        queueConsumersRemoved: 0,
+        containersRemoved: 0,
+        vectorIndexesRemoved: 0,
+        r2ObjectsRemoved: 0,
+      },
+    });
+    expect(
+      fake.calls.some((call) => call[0] === "queues" && call[2] === "list"),
+    ).toBe(true);
   });
 
   test("refuses a malformed Vectorize API readback before cleanup", async () => {
