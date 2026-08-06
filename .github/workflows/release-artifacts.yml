@@ -53,7 +53,7 @@ jobs:
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # pinned: v2
         with:
           tofu_version: 1.12.1
           tofu_wrapper: false
