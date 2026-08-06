@@ -357,7 +357,7 @@ const ja: Strings = {
     tagline: "AI と話す場所は、あなたのサーバーで。",
     copyright: "© Takos contributors — AGPL · Powered by Takosumi.",
     links: [
-      { label: "Docs", href: "https://docs.takos.jp/", external: true },
+      { label: "Docs", href: "/docs/", external: false },
       {
         label: "GitHub",
         href: "https://github.com/tako0614/takos",
@@ -605,7 +605,7 @@ const en: Strings = {
     tagline: "The place you talk to AI is your own server.",
     copyright: "© Takos contributors — AGPL · Powered by Takosumi.",
     links: [
-      { label: "Docs", href: "https://docs.takos.jp/", external: true },
+      { label: "Docs", href: "/docs/", external: false },
       {
         label: "GitHub",
         href: "https://github.com/tako0614/takos",

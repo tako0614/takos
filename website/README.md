@@ -68,3 +68,10 @@ separate unless an operator explicitly chooses to combine them at the Cloudflare
 
 In local-substrate, Caddy serves the prerendered landing at `https://takos.test/` and docs at
 `https://takos.test/docs/`.
+
+## Docs at /docs
+
+`docs.takos.jp` は廃止しました。docs はランディングと同じ Pages プロジェクト
+(`takos-landing`) で `https://takos.jp/docs/` に配信します。`postbuild` が
+`docs/` を `VITEPRESS_BASE=/docs/` でビルドし、`website/.output/public/docs/` に
+統合します。DNS の `docs.takos.jp` レコードは不要になりました。

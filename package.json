@@ -29,7 +29,7 @@
     "docs:build": "bunx vitepress build docs",
     "lint:docs": "bun run docs:build",
     "lint:agent-docs": "bun run validate:agent-docs",
-    "check": "bun run fmt:check && bun run check:schema-bundle && tsc -p tsconfig.check.json --noEmit && bun run check:web-unresolved-identifiers && bun run test && bun run validate:architecture && bun run build",
+    "check": "bun run fmt:check && bun run check:schema-bundle && tsc -p tsconfig.check.json --noEmit && bun run check:web-unresolved-identifiers && bun run test && bun run validate:architecture && bun run lint:docs && bun run build",
     "fmt:check": "bun scripts/check-source-format.mjs",
     "check:i18n-dupe": "bun scripts/check-i18n-dupe.mjs",
     "check:website-host": "bun scripts/check-website-host-drift.mjs",

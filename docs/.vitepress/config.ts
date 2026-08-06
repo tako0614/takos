@@ -13,6 +13,7 @@ const enableLastUpdated = canReadGitTimestamps();
 
 export default defineConfig({
   lang: "ja",
+  base: process.env.VITEPRESS_BASE ?? "/docs/",
   title: "Takos Docs",
   description:
     "AI エージェントに作業を頼み、ファイル・Git・メモリ・アプリへ成果を残す Takos のドキュメント",
