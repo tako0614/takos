@@ -210,6 +210,32 @@ type PreparedRecord = Readonly<{
   observedAt: string;
 }>;
 
+type PublishedRecord = Readonly<{
+  kind: "takos.release-artifact-publish@v2";
+  status: "published";
+  tag: string;
+  commit: string;
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
+  releaseUrl: string;
+  descriptor: PreparedRecord["descriptor"];
+  assetDigests: Readonly<Record<string, string>>;
+  images: PreparedRecord["images"];
+  publicAgentImage: string;
+  imageContent: PreparedRecord["imageContent"];
+  githubImmutable: boolean;
+  publicationAttempt: string;
+  publicationAcknowledgment: "confirmed" | "lost-acknowledgment-read-back";
+  workerSmoke: WorkerReleaseSmokeResult;
+  observedAt: string;
+}>;
+
+type PublicDescriptorIdentity = Readonly<{
+  filename: "takosumi-artifact.json";
+  digest: string;
+  size: number;
+  url: string;
+}>;
+
 type WorkerArtifactDescriptor = Readonly<{
   kind: "takosumi.worker-artifact@v2";
   app: "takos";
@@ -387,7 +413,6 @@ async function prepareRelease(
     repository: REPOSITORY,
     takosumiCompositionSource,
     accountId,
-    outputDir,
     observedAt: new Date().toISOString(),
   } as const;
   if (!options.execute) return planned;
@@ -713,7 +738,7 @@ async function publishRelease(
     tag: options.tag,
     commit,
     takosumiCompositionSource,
-    descriptor: prepared.descriptor,
+    descriptor: publicDescriptorIdentity(prepared.descriptor),
     observedAt: new Date().toISOString(),
   } as const;
   if (!options.execute) return planned;
@@ -762,7 +787,7 @@ async function publishRelease(
       }${createFailureDetail(creation.createExitCode)}`,
     );
   }
-  const record = {
+  const record: PublishedRecord = {
     kind: "takos.release-artifact-publish@v2",
     status: "published",
     tag: options.tag,
@@ -783,7 +808,7 @@ async function publishRelease(
     observedAt: new Date().toISOString(),
   } as const;
   await writePrivateJson(options.evidence, record);
-  return record;
+  return publicPublishResult(record);
 }
 
 async function repositoryIdentity(
@@ -1946,18 +1971,50 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
   };
 }
 
-function publicPrepareResult(record: PreparedRecord): unknown {
+function publicDescriptorIdentity(
+  descriptor: PreparedRecord["descriptor"],
+): PublicDescriptorIdentity {
+  return {
+    filename: "takosumi-artifact.json",
+    digest: descriptor.digest,
+    size: descriptor.size,
+    url: descriptor.url,
+  };
+}
+
+export function publicPrepareResult(record: PreparedRecord): unknown {
   return {
     kind: record.kind,
     status: record.status,
     tag: record.tag,
     commit: record.commit,
     takosumiCompositionSource: record.takosumiCompositionSource,
-    descriptor: record.descriptor,
+    descriptor: publicDescriptorIdentity(record.descriptor),
     portableCheck: record.portableCheck,
     images: record.images,
     publicAgentImage: record.publicAgentImage,
     imageContent: record.imageContent,
+    workerSmoke: record.workerSmoke,
+    observedAt: record.observedAt,
+  };
+}
+
+export function publicPublishResult(record: PublishedRecord): unknown {
+  return {
+    kind: record.kind,
+    status: record.status,
+    tag: record.tag,
+    commit: record.commit,
+    takosumiCompositionSource: record.takosumiCompositionSource,
+    releaseUrl: record.releaseUrl,
+    descriptor: publicDescriptorIdentity(record.descriptor),
+    assetDigests: record.assetDigests,
+    images: record.images,
+    publicAgentImage: record.publicAgentImage,
+    imageContent: record.imageContent,
+    githubImmutable: record.githubImmutable,
+    publicationAttempt: record.publicationAttempt,
+    publicationAcknowledgment: record.publicationAcknowledgment,
     workerSmoke: record.workerSmoke,
     observedAt: record.observedAt,
   };

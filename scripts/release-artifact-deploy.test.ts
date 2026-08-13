@@ -21,6 +21,8 @@ import {
   createOnlyReleaseAfterFinalAbsence,
   createOnlyReleaseCommand,
   isolatedDockerEnv,
+  publicPrepareResult,
+  publicPublishResult,
   RELEASE_ARTIFACT_USAGE,
   TAKOS_RELEASE_ARTIFACT_SURFACE,
   parseReleaseArtifactArgs,
@@ -581,9 +583,9 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
       status: "planned",
       commit,
       accountId,
-      outputDir,
       takosumiCompositionSource,
     });
+    expect(JSON.stringify(result)).not.toContain(root);
     await expect(stat(evidence)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
     expectNoMutationCommands(stub.calls);
@@ -655,11 +657,88 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
       kind: "takos.release-artifact-publish@v2",
       status: "planned",
       commit,
+      descriptor: {
+        filename: "takosumi-artifact.json",
+        digest: fixture.prepared.descriptor.digest,
+        size: fixture.prepared.descriptor.size,
+        url: fixture.prepared.descriptor.url,
+      },
     });
+    expect(JSON.stringify(result)).not.toContain(root);
     await expect(stat(publishEvidence)).rejects.toMatchObject({ code: "ENOENT" });
     expectNoMutationCommands(stub.calls);
   } finally {
     stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("prepare and publish public JSON exclude every operator-private path marker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-public-result-test-"));
+  try {
+    const fixture = await publishFixture(root, await packageVersion());
+    const privateMarkers = {
+      outputDir: fixture.outputDir,
+      descriptorPath: fixture.descriptorPath,
+      archivePath: fixture.assetPath,
+      checksumPath: fixture.checksumPath,
+      prepareEvidence: fixture.prepareEvidence,
+      publishEvidence: join(root, "PRIVATE-PUBLISH-EVIDENCE.json"),
+      configPath: join(root, "PRIVATE-WRANGLER.toml"),
+      tokenPath: join(root, "PRIVATE-TOKEN"),
+      accountPath: join(root, "PRIVATE-ACCOUNT"),
+    };
+    const preparedWithPrivateInputs = {
+      ...fixture.prepared,
+      ...privateMarkers,
+    };
+    const publishedWithPrivateInputs = {
+      kind: "takos.release-artifact-publish@v2" as const,
+      status: "published" as const,
+      tag: fixture.prepared.tag,
+      commit: fixture.prepared.commit,
+      takosumiCompositionSource,
+      releaseUrl: `https://github.com/tako0614/takos/releases/tag/${fixture.prepared.tag}`,
+      descriptor: fixture.prepared.descriptor,
+      assetDigests: Object.fromEntries(
+        fixture.prepared.assets.map((asset: Record<string, any>) => [
+          asset.name,
+          asset.digest,
+        ]),
+      ),
+      images: fixture.prepared.images,
+      publicAgentImage: fixture.prepared.publicAgentImage,
+      imageContent: fixture.prepared.imageContent,
+      githubImmutable: true,
+      publicationAttempt: digest("7"),
+      publicationAcknowledgment: "confirmed" as const,
+      workerSmoke: fixture.prepared.workerSmoke,
+      observedAt: "2026-08-13T00:00:00.000Z",
+      ...privateMarkers,
+    };
+    expect(await readFile(fixture.prepareEvidence, "utf8")).toContain(
+      fixture.descriptorPath,
+    );
+
+    for (const result of [
+      publicPrepareResult(preparedWithPrivateInputs),
+      publicPublishResult(publishedWithPrivateInputs),
+    ]) {
+      const serialized = JSON.stringify(result);
+      for (const marker of Object.values(privateMarkers)) {
+        expect(serialized).not.toContain(marker);
+      }
+      expect(serialized).not.toContain(root);
+      expect(result).toMatchObject({
+        descriptor: {
+          filename: "takosumi-artifact.json",
+          digest: fixture.prepared.descriptor.digest,
+          size: fixture.prepared.descriptor.size,
+          url: fixture.prepared.descriptor.url,
+        },
+      });
+    }
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -1012,8 +1091,11 @@ async function publishFixture(root: string, version: string) {
   await writeDescriptor(descriptor);
   return {
     assetPath,
+    checksumPath,
     descriptor,
     descriptorPath,
+    outputDir,
+    prepared,
     prepareEvidence,
     writeDescriptor,
   };
