@@ -258,7 +258,9 @@ function run(command: string, args: string[]) {
   }
 }
 
-function parseArgs(args: string[]): Options {
+function parseArgs(
+  args: string[],
+): Omit<Options, "takosumiCompositionSource"> {
   const values = new Map<string, string>();
   let requireCloudflareContainerImages = false;
   for (let index = 0; index < args.length; index += 1) {
