@@ -31,6 +31,15 @@ const imageContent = {
   configDigest: digest("f"),
   layerDigests: [digest("1"), digest("2")],
 } as const;
+const takosumiCompositionSource = {
+  kind: "takos.takosumi-composition-source@v1",
+  repository: "tako0614/takosumi",
+  commit: "3173457547e5782545dbcd2d78db0791093909d4",
+  pinDigest: `sha256:${"c".repeat(64)}`,
+} as const;
+const compositionRuntime = {
+  verifyTakosumiCompositionSource: async () => takosumiCompositionSource,
+} as const;
 
 async function packageVersion(): Promise<string> {
   const packageJson = JSON.parse(
@@ -238,6 +247,9 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
     "deploy",
     "release-worker-artifact:build",
   ]);
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.covers).toContain(
+    "takosumi-composition-source.json",
+  );
   for (const obligation of [
     "provenance",
     "post-conditions",
@@ -267,6 +279,12 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["post-conditions"]).toContain(
     "product discovery",
   );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations.provenance).toContain(
+    "Takosumi composition",
+  );
+  expect(
+    TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["pre-mutation-proof"],
+  ).toContain("local/live origin/main");
 });
 
 test("publication has one create-only command with the complete asset closure", () => {
@@ -383,16 +401,19 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
     await privateFile(accountFile, `${accountId}\n`);
     await privateFile(tokenFile, `${"token".repeat(8)}\n`);
 
-    const result = await runReleaseArtifact({
-      phase: "prepare",
-      tag: `v${await packageVersion()}`,
-      config,
-      accountIdFile: accountFile,
-      tokenFile,
-      outputDir,
-      evidence,
-      execute: false,
-    });
+    const result = await runReleaseArtifact(
+      {
+        phase: "prepare",
+        tag: `v${await packageVersion()}`,
+        config,
+        accountIdFile: accountFile,
+        tokenFile,
+        outputDir,
+        evidence,
+        execute: false,
+      },
+      compositionRuntime,
+    );
 
     expect(result).toMatchObject({
       kind: "takos.release-artifact-prepare@v2",
@@ -400,9 +421,49 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
       commit,
       accountId,
       outputDir,
+      takosumiCompositionSource,
     });
     await expect(stat(evidence)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
+    expectNoMutationCommands(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("prepare dry-run rejects a mismatched Takosumi composition before provider work", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const config = join(root, "wrangler.toml");
+    const accountFile = join(root, "account-id");
+    const tokenFile = join(root, "cloudflare-api-token");
+    await privateFile(config, "name = \"takos-test\"\n");
+    await privateFile(accountFile, `${accountId}\n`);
+    await privateFile(tokenFile, `${"token".repeat(8)}\n`);
+
+    await expect(
+      runReleaseArtifact(
+        {
+          phase: "prepare",
+          tag: `v${await packageVersion()}`,
+          config,
+          accountIdFile: accountFile,
+          tokenFile,
+          outputDir: join(root, "output"),
+          evidence: join(root, "prepare.json"),
+          execute: false,
+        },
+        {
+          verifyTakosumiCompositionSource: async () => {
+            throw new Error(
+              "Takosumi composition source HEAD 95e7048b4d2a2277ed2024a4d41a37c5e482640f does not match pinned commit 3173457547e5782545dbcd2d78db0791093909d4",
+            );
+          },
+        },
+      ),
+    ).rejects.toThrow("does not match pinned commit");
     expectNoMutationCommands(stub.calls);
   } finally {
     stub.restore();
@@ -446,6 +507,7 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
         commit,
         version,
         repository: "tako0614/takos",
+        takosumiCompositionSource,
         accountId,
         portableCheck: { command: "bun run check", status: "passed" },
         outputDir,
@@ -506,13 +568,16 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
       })}\n`,
     );
 
-    const result = await runReleaseArtifact({
-      phase: "publish",
-      tag: `v${version}`,
-      prepareEvidence,
-      evidence: publishEvidence,
-      execute: false,
-    });
+    const result = await runReleaseArtifact(
+      {
+        phase: "publish",
+        tag: `v${version}`,
+        prepareEvidence,
+        evidence: publishEvidence,
+        execute: false,
+      },
+      compositionRuntime,
+    );
 
     expect(result).toMatchObject({
       kind: "takos.release-artifact-publish@v2",

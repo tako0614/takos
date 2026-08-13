@@ -22,7 +22,9 @@ const CONTRACT = {
         "deploy/opentofu/cloudflare",
         "deploy/opentofu/takoform",
         "package.json",
+        "takosumi-composition-source.json",
         "scripts/build-worker-release-artifact.ts",
+        "scripts/check-takosumi-composition-source.ts",
         "scripts/takos-product-materializer.ts",
       ],
       requiresScripts: [
@@ -35,7 +37,7 @@ const CONTRACT = {
       triggers: ["irreversible", "authority"],
       obligations: {
         provenance:
-          "the Takosumi host injects the Plan-pinned SourceSnapshot id and full source commit; product:activate requires the descriptor commit and package version to match, verifies the descriptor and Worker archive SHA-256, accepts only digest-pinned container images in the selected Cloudflare account, and records only redacted digests in its terminal evidence",
+          "the Takosumi host injects the Plan-pinned SourceSnapshot id and full Takos source commit; product:activate requires the descriptor commit, package version, and exact Takos-owned Takosumi composition source identity to match that SourceSnapshot, verifies the descriptor and Worker archive SHA-256, accepts only digest-pinned container images in the selected Cloudflare account, and records only redacted digests in its terminal evidence",
         "post-conditions":
           "product:activate reads back the 100 percent Worker deployment and provenance annotations, exact secret-name closure, all three agent container images and capacities, all six queue consumers, Vectorize shape, and the public health endpoint before succeeding; product:pre-destroy proves those app-owned follow-up resources absent before OpenTofu destroys backing resources",
         reversal:

@@ -14,6 +14,13 @@ import { pathToFileURL } from "node:url";
 
 import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
 
+const compositionSource = {
+  kind: "takos.takosumi-composition-source@v1",
+  repository: "tako0614/takosumi",
+  commit: "3173457547e5782545dbcd2d78db0791093909d4",
+  pinDigest: `sha256:${"c".repeat(64)}`,
+} as const;
+
 test("Worker archive identity is independent of the source commit timestamp", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-worker-fixed-point-test-"));
   const bundleDir = join(root, "bundle");
@@ -33,14 +40,16 @@ test("Worker archive identity is independent of the source commit timestamp", as
     await writeFile(join(assetsDir, "index.html"), "<!doctype html><title>Takos</title>\n");
 
     process.env.SOURCE_DATE_EPOCH = "1710000000";
-    await buildWorkerReleaseArtifact({
+    const manifest = await buildWorkerReleaseArtifact({
       bundleDir,
       assetsDir,
       imageDigestDir,
       outputDir: firstOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
     });
+    expect(manifest.takosumiCompositionSource).toEqual(compositionSource);
 
     process.env.SOURCE_DATE_EPOCH = "1720000000";
     await buildWorkerReleaseArtifact({
@@ -50,6 +59,7 @@ test("Worker archive identity is independent of the source commit timestamp", as
       outputDir: secondOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
     });
 
     const [first, second] = await Promise.all([
@@ -107,6 +117,7 @@ await buildWorkerReleaseArtifact(JSON.parse(optionsJson));
       outputDir: firstOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
     });
     runBuildUnderUmask(runner, "077", {
       bundleDir,
@@ -115,6 +126,7 @@ await buildWorkerReleaseArtifact(JSON.parse(optionsJson));
       outputDir: secondOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
     });
 
     const firstArchive = join(firstOutput, "takos-worker-release.tar.gz");
@@ -138,6 +150,65 @@ await buildWorkerReleaseArtifact(JSON.parse(optionsJson));
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Worker archive bytes are independent of absolute checkout paths", async () => {
+  const outer = await mkdtemp(join(tmpdir(), "takos-worker-path-test-"));
+  const firstRoot = join(outer, "short", "takos");
+  const secondRoot = join(
+    outer,
+    "a-deliberately-different-and-longer-checkout-parent",
+    "takos",
+  );
+  const previousEpoch = process.env.SOURCE_DATE_EPOCH;
+  try {
+    for (const root of [firstRoot, secondRoot]) {
+      await Promise.all([
+        mkdir(join(root, "bundle"), { recursive: true }),
+        mkdir(join(root, "assets", "nested"), { recursive: true }),
+        mkdir(join(root, "images"), { recursive: true }),
+      ]);
+      await writeFile(
+        join(root, "bundle", "index.js"),
+        "export default { fetch() { return new Response('ok') } };\n",
+      );
+      await writeFile(
+        join(root, "assets", "nested", "index.html"),
+        "<!doctype html><title>Takos</title>\n",
+      );
+    }
+
+    process.env.SOURCE_DATE_EPOCH = "1700000000";
+    await buildWorkerReleaseArtifact({
+      bundleDir: join(firstRoot, "bundle"),
+      assetsDir: join(firstRoot, "assets"),
+      imageDigestDir: join(firstRoot, "images"),
+      outputDir: join(firstRoot, "output"),
+      releaseTag: "v1.2.3",
+      requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
+    });
+    process.env.SOURCE_DATE_EPOCH = "1800000000";
+    await buildWorkerReleaseArtifact({
+      bundleDir: join(secondRoot, "bundle"),
+      assetsDir: join(secondRoot, "assets"),
+      imageDigestDir: join(secondRoot, "images"),
+      outputDir: join(secondRoot, "output"),
+      releaseTag: "v1.2.3",
+      requireCloudflareContainerImages: false,
+      takosumiCompositionSource: compositionSource,
+    });
+
+    expect(
+      await readFile(join(secondRoot, "output", "takos-worker-release.tar.gz")),
+    ).toEqual(
+      await readFile(join(firstRoot, "output", "takos-worker-release.tar.gz")),
+    );
+  } finally {
+    if (previousEpoch === undefined) delete process.env.SOURCE_DATE_EPOCH;
+    else process.env.SOURCE_DATE_EPOCH = previousEpoch;
+    await rm(outer, { recursive: true, force: true });
   }
 });
 

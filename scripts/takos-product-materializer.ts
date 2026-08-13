@@ -16,6 +16,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, resolve, sep } from "node:path";
 
+import {
+  parseTakosumiCompositionSourceIdentity,
+  readTakosumiCompositionSourceIdentity,
+  type TakosumiCompositionSourceIdentity,
+} from "./check-takosumi-composition-source.ts";
+
 export const WRANGLER_VERSION = "4.107.0";
 export const NODE_EXECUTABLE = "/usr/local/bin/node";
 export const MINIMUM_NODE_MAJOR = 22;
@@ -140,6 +146,7 @@ export type ReleaseDescriptor = {
   app: "takos";
   commit: string;
   releaseTag: string;
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   artifact: {
     filename: "takos-worker-release.tar.gz";
     url: string;
@@ -715,6 +722,7 @@ export function validateReleaseDescriptor(
     packageVersion: string;
     accountId: string;
     descriptorUrl: string;
+    takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   },
 ): ReleaseDescriptor {
   const descriptor = record(value, "release artifact descriptor");
@@ -723,6 +731,23 @@ export function validateReleaseDescriptor(
   invariant(descriptor.commit === input.sourceCommit, "artifact commit does not match the SourceSnapshot commit");
   const releaseTag = requiredString(descriptor.releaseTag, "artifact releaseTag", VERSION);
   invariant(releaseTag === `v${input.packageVersion}`, "artifact releaseTag does not match package.json");
+  const composition = record(
+    descriptor.takosumiCompositionSource,
+    "Takosumi composition source",
+  );
+  let parsedComposition: TakosumiCompositionSourceIdentity | undefined;
+  try {
+    parsedComposition = parseTakosumiCompositionSourceIdentity(composition);
+  } catch {
+    invariant(false, "Takosumi composition source identity is invalid");
+  }
+  invariant(
+    parsedComposition.kind === input.takosumiCompositionSource.kind &&
+      parsedComposition.repository === input.takosumiCompositionSource.repository &&
+      parsedComposition.commit === input.takosumiCompositionSource.commit &&
+      parsedComposition.pinDigest === input.takosumiCompositionSource.pinDigest,
+    "Takosumi composition source does not match the SourceSnapshot pin",
+  );
   assertReleaseUrl(input.descriptorUrl, releaseTag, "takosumi-artifact.json");
   if (descriptor.manifestUrl !== undefined) {
     invariant(descriptor.manifestUrl === input.descriptorUrl, "artifact manifestUrl drifted");
@@ -756,6 +781,7 @@ export function validateReleaseDescriptor(
     app: "takos",
     commit: input.sourceCommit,
     releaseTag,
+    takosumiCompositionSource: input.takosumiCompositionSource,
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -2812,6 +2838,8 @@ export async function materializePostApply(input: {
 }): Promise<ReturnType<typeof materializerEvidence>> {
   const { invocation, sourceRoot, dependencies } = input;
   invariant(invocation.phase === "post_apply", "post_apply invocation is required");
+  const takosumiCompositionSource =
+    await readTakosumiCompositionSourceIdentity(sourceRoot);
   const descriptorBytes = await dependencies.fetchBytes(invocation.descriptorUrl!, MAX_DESCRIPTOR_BYTES);
   invariant(digest(descriptorBytes) === invocation.descriptorDigest, "release artifact descriptor digest mismatch", "artifact_digest_mismatch");
   let descriptorValue: unknown;
@@ -2829,6 +2857,7 @@ export async function materializePostApply(input: {
     packageVersion: await readPackageVersion(sourceRoot),
     accountId: invocation.outputs.accountId,
     descriptorUrl: invocation.descriptorUrl!,
+    takosumiCompositionSource,
   });
   const archiveBytes = await dependencies.fetchBytes(descriptor.artifact.url, MAX_ARCHIVE_BYTES);
   invariant(digest(archiveBytes) === descriptor.artifact.sha256Prefixed, "Worker archive digest mismatch", "artifact_digest_mismatch");

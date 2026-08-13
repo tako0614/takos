@@ -14,6 +14,16 @@ not recorded in evidence.
 
 - Work from a clean `main` checkout whose `HEAD`, `origin/main`, and pushed
   `origin` main ref are identical.
+- Treat `takosumi-composition-source.json` as the Takos-owned authority for the
+  Takosumi contract source compiled into this release. The checkout must use
+  the physical sibling layout `takos/` plus `takosumi/`; the sibling may not be
+  missing, symlinked, substituted by another Git root, or dirty. Its `HEAD`
+  must equal the pinned full commit. Local `origin/main` must equal live
+  canonical GitHub `main`, and that exact main commit must contain the pin in
+  its Git history. This gives the pin a live canonical ancestry proof without
+  making a later main advance change the release composition. A standalone
+  Takos clone without that sibling fails the portable gate and release prepare
+  before compilation.
 - Use the package version as the tag (`v<package version>`); do not choose a
   second tag for the same bytes.
 - Require the portable Takoform defaults in that source tree to name the same
@@ -28,7 +38,7 @@ not recorded in evidence.
 Set up a private work area, for example:
 
 ```sh
-private=/var/lib/takos/release-artifacts/v0.11.11
+private=/var/lib/takos/release-artifacts/v0.12.2
 mkdir -p "$private"
 chmod 700 "$private"
 chmod 600 /var/lib/takos/operator/cloudflare-account-id
@@ -43,7 +53,7 @@ writing the output/evidence paths.
 
 ```sh
 bun run deploy -- takos-release-artifact prepare \
-  --tag v0.11.11 \
+  --tag v0.12.2 \
   --config /absolute/path/to/deploy/cloudflare/wrangler.toml \
   --account-id-file /var/lib/takos/operator/cloudflare-account-id \
   --cloudflare-api-token-file /var/lib/takos/operator/cloudflare-api-token \
@@ -59,10 +69,19 @@ assets, and writes `prepare.json` with
 mode `0600`. Only the digest references are release identities; upload tags are
 never placed in the descriptor.
 
-Before its first remote push, prepare builds the Worker archive with canonical
+Before its first remote push, prepare reruns the complete portable gate and
+rechecks the composition sibling before compilation and after the exact
+archive smoke. The Worker descriptor and private prepare evidence both bind
+the Takosumi composition kind, repository, commit, and composition-pin digest;
+publish rejects evidence from another composition.
+
+Prepare builds the Worker archive with canonical
 archive metadata: owner/group `0`, timestamp `0`, directories `0755`, and
 Worker/static files `0644`, independent of the build process umask and source
-filesystem modes. No archive file has an executable-filesystem contract.
+filesystem modes. Only the Wrangler JavaScript entrypoint is copied, not source
+maps or checkout paths. The archive fixed-point tests cover different absolute
+checkout roots, `SOURCE_DATE_EPOCH` values, and process umasks `022` / `077`.
+No archive file has an executable-filesystem contract.
 Prepare boots those exact bytes through Wrangler local workerd. It
 requires the real Takos `/health` JSON, the unauthenticated `/api/auth/me`
 boundary to return its JSON `401`, and `/.well-known/takosumi` product discovery
@@ -84,7 +103,7 @@ path for every attempt because evidence is never overwritten.
 
 ```sh
 bun run deploy -- takos-release-artifact publish \
-  --tag v0.11.11 \
+  --tag v0.12.2 \
   --prepare-evidence "$private/prepare.json" \
   --evidence "$private/publish.json"
 ```
@@ -111,7 +130,8 @@ checkout. Treat the JSON as operator-private release evidence; it contains
 commit, package/tag, account id, paths, asset digests, and image references,
 but never a token or provider command output.
 
-The prepare record is the source for the three asset digests, the Cloudflare
+The prepare record is the source for the Takos and Takosumi composition source
+closure, the three asset digests, the Cloudflare
 registry reference, the public GHCR reference, and the two registry content
 identities. The identity contains only `configDigest` and ordered
 `layerDigests`, all in `sha256:<64 hex>` form; it never contains credentials or

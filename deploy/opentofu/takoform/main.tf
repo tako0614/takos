@@ -40,7 +40,7 @@ variable "worker_artifact_url" {
 variable "worker_artifact_sha256" {
   description = "Expected SHA-256 of worker_artifact_url."
   type        = string
-  default     = "sha256:c82a75aa2aeaffa09caa61b06cbdc4b9d89c6cdfe5ef16b34ed7e920aa646d99"
+  default     = "sha256:8c3488c06d19f7ef5ece4451e692554a59b32328a051c0272aa3a25eb324fc02"
 
   validation {
     condition     = can(regex("^(?:sha256:)?[a-f0-9]{64}$", trimspace(var.worker_artifact_sha256)))

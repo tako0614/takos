@@ -51,6 +51,13 @@ export default {
       outputDir,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
+      takosumiCompositionSource: {
+        kind: "takos.takosumi-composition-source@v1",
+        repository: "tako0614/takosumi",
+        commit: "3173457547e5782545dbcd2d78db0791093909d4",
+        pinDigest:
+          "sha256:746ea2b8cbbe393f2e962926e9deb5e5cb39f481c92e086e3a028eb923c4d483",
+      },
     });
 
     const result = await smokeWorkerReleaseArchive(
