@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "./accounts-oidc.ts";
@@ -6,6 +7,24 @@ import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "./accounts-oidc.ts";
 const root = new URL("../../../", import.meta.url);
 const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
 const manifest = JSON.parse(text) as RepositoryManifest;
+const packageJson = JSON.parse(
+  await readFile(new URL("package.json", root), "utf8"),
+) as { version: string; takosRelease: { version: string } };
+const packageTag = `v${packageJson.version}`;
+const websiteCloudUrlSource = await readFile(
+  new URL("website/src/lib/cloud-url.ts", root),
+  "utf8",
+);
+const schemaBundleDigest = createHash("sha256")
+  .update(
+    await readFile(
+      new URL(
+        "deploy/opentofu/takoform/migrations/schema-bundle.json",
+        root,
+      ),
+    ),
+  )
+  .digest("hex");
 const options = JSON.parse(
   await readFile(new URL("install-options.json", root), "utf8"),
 ) as { options: Array<{ source: { path: string } }> };
@@ -107,11 +126,11 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   const portableDefaults = {
     agent_image:
       "ghcr.io/tako0614/takos-agent@sha256:09ca6ff29ed0cbbe35e0d0e76d17e7bb029bdbdfe3fb4c88b6cdbaf4d280cda2",
-    worker_release_tag: "v0.12.0",
+    worker_release_tag: packageTag,
     worker_artifact_url:
-      "https://github.com/tako0614/takos/releases/download/v0.12.0/takos-worker-release.tar.gz",
+      `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
     worker_artifact_sha256:
-      "sha256:67550a5a74c67999d28f56b30680c21d8a985a11556d9bf1ffbb4fa51d3f9a16",
+      "sha256:c82a75aa2aeaffa09caa61b06cbdc4b9d89c6cdfe5ef16b34ed7e920aa646d99",
   } as const;
   for (const [name, value] of Object.entries(portableDefaults)) {
     const input = portable.inputs.find((candidate) => candidate.name === name);
@@ -125,6 +144,41 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   }
   expect(modules["deploy/opentofu/takoform"]).toContain(
     'source  = "registry.opentofu.org/tako0614/takoform"',
+  );
+});
+
+test("the selectable source and portable runtime use one exact Takos release", () => {
+  expect(packageJson.takosRelease.version).toBe(packageJson.version);
+  const portableSource = modules["deploy/opentofu/takoform"];
+
+  expect(variableDefault(portableSource, "worker_release_tag")).toBe(
+    packageTag,
+  );
+  expect(variableDefault(portableSource, "worker_artifact_url")).toBe(
+    `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
+  );
+  expect(portableSource).toContain(
+    `schema_url    = "https://raw.githubusercontent.com/tako0614/takos/${packageTag}/deploy/takoform/migrations/schema-bundle.json"`,
+  );
+  expect(portableSource).toContain(
+    `schema_sha256 = "${schemaBundleDigest}"`,
+  );
+  const portableManifest =
+    manifest.install.modules["deploy/opentofu/takoform"];
+  expect(
+    portableManifest.inputs.find(
+      (input) => input.name === "worker_release_tag",
+    )?.placeholder,
+  ).toBe(packageTag);
+  expect(
+    portableManifest.inputs.find(
+      (input) => input.name === "worker_artifact_url",
+    )?.placeholder,
+  ).toBe(
+    `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
+  );
+  expect(websiteCloudUrlSource).toContain(
+    `const DEFAULT_TAKOS_REF = "${packageTag}"`,
   );
 });
 
@@ -233,6 +287,10 @@ function variableBlock(source: string, name: string): string {
   const start = source.indexOf(`variable "${name}" {`);
   const next = source.indexOf("\nvariable ", start + 1);
   return source.slice(start, next < 0 ? undefined : next);
+}
+
+function variableDefault(source: string, name: string): string | undefined {
+  return variableBlock(source, name).match(/\n\s+default\s+=\s+"([^"]+)"/u)?.[1];
 }
 
 function escapeRegex(value: string): string {

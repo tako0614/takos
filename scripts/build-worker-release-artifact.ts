@@ -30,6 +30,12 @@ type ImageDigestRecord = {
   publicOciRef?: string;
 };
 
+// The archive digest is checked into the same source tag that selects it from
+// the portable module. A commit-derived mtime would make that relationship
+// self-referential even though module files are not archive inputs. Canonical
+// metadata keeps the archive identity a function of the Worker and asset bytes.
+const CANONICAL_WORKER_ARCHIVE_EPOCH = "0";
+
 if (import.meta.main) {
   const options = parseArgs(Bun.argv.slice(2));
   await buildWorkerReleaseArtifact(options);
@@ -60,7 +66,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
     const archivePath = join(outputDir, archiveName);
     run("tar", [
       "--sort=name",
-      `--mtime=@${sourceDateEpoch()}`,
+      `--mtime=@${CANONICAL_WORKER_ARCHIVE_EPOCH}`,
       "--owner=0",
       "--group=0",
       "--numeric-owner",
@@ -138,14 +144,6 @@ async function resolveWorkerBundlePath(bundleDir: string): Promise<string> {
     );
   }
   return candidates[0];
-}
-
-function sourceDateEpoch() {
-  const value = Bun.env.SOURCE_DATE_EPOCH?.trim() || "0";
-  if (!/^\d+$/u.test(value)) {
-    throw new Error("SOURCE_DATE_EPOCH must be an integer Unix timestamp.");
-  }
-  return value;
 }
 
 async function buildAssetManifest(directory: string) {

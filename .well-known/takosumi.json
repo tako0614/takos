@@ -71,7 +71,7 @@
               "ja": "公開済みの完全なTakosリリースタグを指定します。",
               "en": "Select an exact published Takos release tag."
             },
-            "placeholder": "v0.12.0",
+            "placeholder": "v0.12.2",
             "advanced": true
           },
           {
@@ -89,7 +89,7 @@
               "ja": "指定したTakosリリースのimmutable Worker archive URLです。",
               "en": "The immutable Worker archive URL for the selected Takos release."
             },
-            "placeholder": "https://github.com/tako0614/takos/releases/download/v0.12.0/takos-worker-release.tar.gz",
+            "placeholder": "https://github.com/tako0614/takos/releases/download/v0.12.2/takos-worker-release.tar.gz",
             "advanced": true
           },
           {

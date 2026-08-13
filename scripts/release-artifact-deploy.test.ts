@@ -14,7 +14,9 @@ import { join } from "node:path";
 
 import {
   assertImageContentMatch,
+  assertPublishedReleaseReadback,
   assertPublicAgentReadback,
+  createOnlyReleaseCommand,
   isolatedDockerEnv,
   RELEASE_ARTIFACT_USAGE,
   TAKOS_RELEASE_ARTIFACT_SURFACE,
@@ -253,6 +255,61 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   expect(RELEASE_ARTIFACT_USAGE).toContain(
     "Secret values and provider command\noutput are never written",
   );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["no-overwrite"]).toContain(
+    "create-only",
+  );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["failure-handling"]).toContain(
+    "lost acknowledgment",
+  );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["post-conditions"]).toContain(
+    "boots the exact downloaded Worker archive",
+  );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["post-conditions"]).toContain(
+    "product discovery",
+  );
+});
+
+test("publication has one create-only command with the complete asset closure", () => {
+  const assets = ["/private/worker.tgz", "/private/checksum", "/private/descriptor"];
+  const command = createOnlyReleaseCommand("v1.2.3", commit, assets);
+
+  expect(command.slice(0, 6)).toEqual([
+    "release",
+    "create",
+    "v1.2.3",
+    ...assets,
+  ]);
+  expect(command).toContain("--target");
+  expect(command).toContain(commit);
+  expect(command).not.toContain("--draft");
+  expect(command).not.toContain("upload");
+  expect(command).not.toContain("edit");
+});
+
+test("authoritative release readback requires immutable state and exact digests", () => {
+  const expected = [{ name: "worker.tgz", digest: digest("a") }];
+  const exact = {
+    isDraft: false,
+    isPrerelease: false,
+    isImmutable: true,
+    tagName: "v1.2.3",
+    url: "https://github.com/tako0614/takos/releases/tag/v1.2.3",
+    assets: expected,
+  };
+
+  expect(() => assertPublishedReleaseReadback("v1.2.3", expected, exact)).not.toThrow();
+  expect(() =>
+    assertPublishedReleaseReadback("v1.2.3", expected, {
+      ...exact,
+      isImmutable: false,
+    }),
+  ).toThrow("state is not exact and immutable");
+  expect(() =>
+    assertPublishedReleaseReadback("v1.2.3", expected, {
+      ...exact,
+      assets: [{ name: "worker.tgz", digest: digest("b") }],
+    }),
+  ).toThrow("asset closure or digest drifted");
 });
 
 test("release publisher never copies local Rust target caches into its build context", async () => {
@@ -338,7 +395,7 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
     });
 
     expect(result).toMatchObject({
-      kind: "takos.release-artifact-prepare@v1",
+      kind: "takos.release-artifact-prepare@v2",
       status: "planned",
       commit,
       accountId,
@@ -383,7 +440,7 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
     await privateFile(
       prepareEvidence,
       `${JSON.stringify({
-        kind: "takos.release-artifact-prepare@v1",
+        kind: "takos.release-artifact-prepare@v2",
         status: "prepared",
         tag: `v${version}`,
         commit,
@@ -424,6 +481,27 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
           cloudflare: imageContent,
           publicOci: imageContent,
         },
+        workerSmoke: {
+          kind: "takos.worker-release-smoke@v1",
+          runtime: "wrangler-local-workerd",
+          archiveDigest: assetDigest,
+          health: {
+            path: "/health",
+            status: 200,
+            bodyDigest: digest("4"),
+          },
+          api: {
+            path: "/api/auth/me",
+            status: 401,
+            bodyDigest: digest("6"),
+          },
+          productDiscovery: {
+            path: "/.well-known/takosumi",
+            status: 200,
+            bodyDigest: digest("5"),
+            apiPath: "/api/v1",
+          },
+        },
         observedAt: "2026-08-02T00:00:00.000Z",
       })}\n`,
     );
@@ -437,7 +515,7 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
     });
 
     expect(result).toMatchObject({
-      kind: "takos.release-artifact-publish@v1",
+      kind: "takos.release-artifact-publish@v2",
       status: "planned",
       commit,
     });
