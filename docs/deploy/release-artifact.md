@@ -23,7 +23,10 @@ not recorded in evidence.
   its Git history. This gives the pin a live canonical ancestry proof without
   making a later main advance change the release composition. A standalone
   Takos clone without that sibling fails the portable gate and release prepare
-  before compilation.
+  before compilation. The verifier rejects every `assume-unchanged` or
+  `skip-worktree` index entry, then compares each pinned-tree entry's physical
+  file type, executable mode, raw Git object hash, or symlink target against
+  the pinned commit independently of index cleanliness flags.
 - Use the package version as the tag (`v<package version>`); do not choose a
   second tag for the same bytes.
 - Require the portable Takoform defaults in that source tree to name the same

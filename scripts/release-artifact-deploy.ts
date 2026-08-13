@@ -68,7 +68,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
     "no-overwrite":
       "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities and performs one create-only GitHub Release operation containing the complete asset closure, with no update, upload, edit, delete, force, or retry path",
     "pre-mutation-proof":
-      "prepare reruns the portable complete gate, proves clean pushed Takos main and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin plus synchronized local/live origin/main and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
+      "prepare reruns the portable complete gate, proves clean pushed Takos main and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin with no hidden index flags plus a physical pinned-tree byte/type/mode proof, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
     "independent-review":
       "the release publisher implementation and its dry-run/mutation boundary receive an independent review before execute; no task, branch, green check, or source repository authorizes publication by itself",
   },

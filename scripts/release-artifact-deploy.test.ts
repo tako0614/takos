@@ -285,6 +285,9 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   expect(
     TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["pre-mutation-proof"],
   ).toContain("local/live origin/main");
+  expect(
+    TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["pre-mutation-proof"],
+  ).toContain("physical pinned-tree byte/type/mode proof");
 });
 
 test("publication has one create-only command with the complete asset closure", () => {
