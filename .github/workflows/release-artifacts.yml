@@ -25,7 +25,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout Takos
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pinned: v6.0.2 (2026)
         with:
           path: takos
           persist-credentials: false
@@ -41,7 +41,7 @@ jobs:
         run: echo "commit=$(bun scripts/check-takosumi-composition-source.ts --print-commit)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout Takosumi source dependency
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pinned: v6.0.2 (2026)
         with:
           repository: tako0614/takosumi
           ref: ${{ steps.takosumi-source.outputs.commit }}
@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout agent engine source dependency
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pinned: v6.0.2 (2026)
         with:
           repository: tako0614/takos-agent-engine
           path: takos-agent-engine
