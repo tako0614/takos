@@ -143,6 +143,19 @@ requires it to match the authenticated readback. If an independent check is
 needed, run it against the private files and compare the result to the recorded
 values; do not replace the evidence with a manually edited copy.
 
+Publish does not treat mutually consistent prepare fields as proof of the
+descriptor. Before release-tag, GitHub Release, or image-provider reads and
+again immediately before the single create-only mutation, it opens each
+prepared asset as a bounded, private, operator-owned physical file without
+following a symlink. It hashes and sizes the archive bytes, checks the canonical
+checksum, and strictly parses the canonical descriptor with no missing,
+unknown, or extra fields. The descriptor must independently close over the
+current Takos commit, package version/tag, portable module release inputs,
+exact Takosumi composition identity, physical archive digest/size, release
+URLs, and prepared image identities. Its recomputed canonical digest and size
+must then match both the descriptor record and asset record in prepare
+evidence.
+
 ## Recovery and no-overwrite
 
 - An interrupted prepare after an image push may leave a non-authoritative

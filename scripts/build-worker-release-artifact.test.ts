@@ -70,6 +70,7 @@ test("Worker archive identity is independent of the source commit timestamp", as
       createHash("sha256").update(first).digest("hex"),
     );
     expect(second).toEqual(first);
+    expect(manifest.artifact.size).toBe(first.byteLength);
   } finally {
     if (previousEpoch === undefined) delete process.env.SOURCE_DATE_EPOCH;
     else process.env.SOURCE_DATE_EPOCH = previousEpoch;

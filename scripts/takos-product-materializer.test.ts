@@ -124,11 +124,16 @@ afterEach(async () => {
   temporaryDirectories = [];
 });
 
-function descriptor(archiveDigest: string): ReleaseDescriptor {
+function descriptor(
+  archiveDigest: string,
+  archiveSize = 1,
+): ReleaseDescriptor {
   return {
     kind: "takosumi.worker-artifact@v2",
     app: "takos",
     commit: sourceCommit,
+    ref: releaseTag,
+    workflowRun: null,
     releaseTag,
     takosumiCompositionSource,
     artifact: {
@@ -136,9 +141,12 @@ function descriptor(archiveDigest: string): ReleaseDescriptor {
       url: archiveUrl,
       sha256: archiveDigest.slice("sha256:".length),
       sha256Prefixed: archiveDigest,
+      size: archiveSize,
+      contentType: "application/gzip",
     },
     assetManifest: "asset-manifest.json",
     containerImages: { executor: executorImage },
+    manifestUrl: descriptorUrl,
   };
 }
 
@@ -995,7 +1003,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1041,7 +1049,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1117,7 +1125,7 @@ describe("materializer lifecycle", () => {
 
   test("pre_destroy confirms Worker deletion through the bounded API presence readback", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1164,7 +1172,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1203,7 +1211,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1257,7 +1265,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1311,7 +1319,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1361,7 +1369,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1409,7 +1417,7 @@ describe("materializer lifecycle", () => {
     await writeFile(secretPath, JSON.stringify(secrets), { mode: 0o600 });
     await chmod(secretPath, 0o600);
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation("post_apply", {
       ...invocationEnv("post_apply", digest(descriptorBytes)),
@@ -1457,7 +1465,7 @@ describe("materializer lifecycle", () => {
 
   test("pre_destroy removes only Takos-owned follow-up resources and leaves backing resources to OpenTofu", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1530,7 +1538,7 @@ describe("materializer lifecycle", () => {
 
   test("pre_destroy waits for asynchronously deleted containers to disappear", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1565,7 +1573,7 @@ describe("materializer lifecycle", () => {
 
   test("reports zero removals for an already absent installation with blank queue readbacks", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1606,7 +1614,7 @@ describe("materializer lifecycle", () => {
 
   test("pre_destroy resumes after OpenTofu already removed queues in a partial destroy", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1651,7 +1659,7 @@ describe("materializer lifecycle", () => {
 
   test("refuses a malformed Vectorize API readback before cleanup", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1697,7 +1705,7 @@ describe("materializer lifecycle", () => {
 
   test("refuses pre_destroy when blank deployment status confirms Worker presence", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1749,7 +1757,7 @@ describe("materializer lifecycle", () => {
 
   test("refuses to delete a same-name container attached to a foreign namespace", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",
@@ -1799,7 +1807,7 @@ describe("materializer lifecycle", () => {
 
   test("refuses to delete a Vectorize index not bound by the owned Worker", async () => {
     const archiveBytes = workerArchive();
-    const release = descriptor(digest(archiveBytes));
+    const release = descriptor(digest(archiveBytes), archiveBytes.byteLength);
     const descriptorBytes = new TextEncoder().encode(JSON.stringify(release));
     const invocation = parseInvocation(
       "pre_destroy",

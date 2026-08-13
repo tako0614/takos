@@ -127,6 +127,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
         url: artifactUrl,
         sha256: archiveSha256,
         sha256Prefixed: `sha256:${archiveSha256}`,
+        size: archiveBytes.byteLength,
         contentType: "application/gzip",
       },
       assetManifest: "asset-manifest.json",

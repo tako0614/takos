@@ -145,6 +145,8 @@ export type ReleaseDescriptor = {
   kind: "takosumi.worker-artifact@v2";
   app: "takos";
   commit: string;
+  ref: string;
+  workflowRun: null;
   releaseTag: string;
   takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   artifact: {
@@ -152,12 +154,15 @@ export type ReleaseDescriptor = {
     url: string;
     sha256: string;
     sha256Prefixed: string;
+    size: number;
+    contentType: "application/gzip";
   };
   assetManifest: "asset-manifest.json";
   containerImages: {
     executor: string;
     publicAgent?: string;
   };
+  manifestUrl: string;
 };
 
 type Invocation = {
@@ -726,11 +731,30 @@ export function validateReleaseDescriptor(
   },
 ): ReleaseDescriptor {
   const descriptor = record(value, "release artifact descriptor");
+  exactKeys(
+    descriptor,
+    [
+      "kind",
+      "app",
+      "commit",
+      "ref",
+      "workflowRun",
+      "releaseTag",
+      "takosumiCompositionSource",
+      "artifact",
+      "assetManifest",
+      "containerImages",
+      "manifestUrl",
+    ],
+    "release artifact descriptor",
+  );
   invariant(descriptor.kind === "takosumi.worker-artifact@v2", "artifact descriptor kind is invalid");
   invariant(descriptor.app === "takos", "artifact descriptor app must be takos");
   invariant(descriptor.commit === input.sourceCommit, "artifact commit does not match the SourceSnapshot commit");
   const releaseTag = requiredString(descriptor.releaseTag, "artifact releaseTag", VERSION);
   invariant(releaseTag === `v${input.packageVersion}`, "artifact releaseTag does not match package.json");
+  invariant(descriptor.ref === releaseTag, "artifact ref does not match releaseTag");
+  invariant(descriptor.workflowRun === null, "artifact workflowRun must be null");
   const composition = record(
     descriptor.takosumiCompositionSource,
     "Takosumi composition source",
@@ -749,16 +773,34 @@ export function validateReleaseDescriptor(
     "Takosumi composition source does not match the SourceSnapshot pin",
   );
   assertReleaseUrl(input.descriptorUrl, releaseTag, "takosumi-artifact.json");
-  if (descriptor.manifestUrl !== undefined) {
-    invariant(descriptor.manifestUrl === input.descriptorUrl, "artifact manifestUrl drifted");
-  }
+  invariant(descriptor.manifestUrl === input.descriptorUrl, "artifact manifestUrl drifted");
   invariant(descriptor.assetManifest === "asset-manifest.json", "asset manifest path is unsupported");
   const artifact = record(descriptor.artifact, "Worker artifact");
+  exactKeys(
+    artifact,
+    [
+      "filename",
+      "url",
+      "sha256",
+      "sha256Prefixed",
+      "size",
+      "contentType",
+    ],
+    "Worker artifact",
+  );
   invariant(artifact.filename === "takos-worker-release.tar.gz", "Worker artifact filename is invalid");
   const archiveUrl = requiredString(artifact.url, "Worker artifact URL");
   assertReleaseUrl(archiveUrl, releaseTag, "takos-worker-release.tar.gz");
   const archiveDigest = requiredString(artifact.sha256Prefixed, "Worker artifact digest", SHA256);
   invariant(artifact.sha256 === archiveDigest.slice("sha256:".length), "Worker artifact digest aliases drifted");
+  invariant(
+    typeof artifact.size === "number" &&
+      Number.isSafeInteger(artifact.size) &&
+      artifact.size > 0 &&
+      artifact.size <= MAX_ARCHIVE_BYTES,
+    "Worker artifact size is invalid",
+  );
+  invariant(artifact.contentType === "application/gzip", "Worker artifact content type is invalid");
   const images = record(descriptor.containerImages, "container image selection");
   invariant(
     Object.keys(images).every((key) =>
@@ -780,6 +822,8 @@ export function validateReleaseDescriptor(
     kind: "takosumi.worker-artifact@v2",
     app: "takos",
     commit: input.sourceCommit,
+    ref: releaseTag,
+    workflowRun: null,
     releaseTag,
     takosumiCompositionSource: input.takosumiCompositionSource,
     artifact: {
@@ -787,12 +831,15 @@ export function validateReleaseDescriptor(
       url: archiveUrl,
       sha256: archiveDigest.slice("sha256:".length),
       sha256Prefixed: archiveDigest,
+      size: artifact.size,
+      contentType: "application/gzip",
     },
     assetManifest: "asset-manifest.json",
     containerImages: {
       executor,
       ...(publicAgent ? { publicAgent } : {}),
     },
+    manifestUrl: input.descriptorUrl,
   };
 }
 
@@ -2860,6 +2907,7 @@ export async function materializePostApply(input: {
     takosumiCompositionSource,
   });
   const archiveBytes = await dependencies.fetchBytes(descriptor.artifact.url, MAX_ARCHIVE_BYTES);
+  invariant(archiveBytes.byteLength === descriptor.artifact.size, "Worker archive size mismatch", "artifact_digest_mismatch");
   invariant(digest(archiveBytes) === descriptor.artifact.sha256Prefixed, "Worker archive digest mismatch", "artifact_digest_mismatch");
   const archiveEntries = await parseWorkerArchive(archiveBytes);
   const secrets = await loadRuntimeSecretsFile(invocation.runtimeSecretsFile!);

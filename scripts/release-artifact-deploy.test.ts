@@ -7,10 +7,11 @@ import {
   readFile,
   rm,
   stat,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   assertImageContentMatch,
@@ -39,6 +40,18 @@ const takosumiCompositionSource = {
 } as const;
 const compositionRuntime = {
   verifyTakosumiCompositionSource: async () => takosumiCompositionSource,
+  verifyPortableWorkerSourceIdentity: async (
+    _root: string,
+    _tag: string,
+    archiveDigest: string,
+  ) => {
+    if (
+      archiveDigest !==
+        "sha256:85f349b2c180f7a0475872fbe0830d2c253156edb681398caf63e7be6de5b5fb"
+    ) {
+      throw new Error("portable source fixture does not select the archive");
+    }
+  },
 } as const;
 
 async function packageVersion(): Promise<string> {
@@ -270,6 +283,9 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["no-overwrite"]).toContain(
     "create-only",
   );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["no-overwrite"]).toContain(
+    "exact canonical schema",
+  );
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["failure-handling"]).toContain(
     "lost acknowledgment",
   );
@@ -479,103 +495,14 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
   const stub = installReadOnlyCommandStub(commit);
   try {
     const version = await packageVersion();
-    const outputDir = join(root, "output");
-    const assetPath = join(outputDir, "takos-worker-release.tar.gz");
-    const checksumPath = join(outputDir, "takos-worker-release.tar.gz.sha256");
-    const descriptorPath = join(outputDir, "takosumi-artifact.json");
-    const prepareEvidence = join(root, "prepare.json");
+    const fixture = await publishFixture(root, version);
     const publishEvidence = join(root, "publish.json");
-    const assetContents = "prepared worker bytes\n";
-    const assetDigest = `sha256:${createHash("sha256")
-      .update(assetContents)
-      .digest("hex")}`;
-    await mkdir(outputDir, { recursive: true, mode: 0o700 });
-    const checksumContents = `${assetDigest}  takos-worker-release.tar.gz\n`;
-    const descriptorContents = "descriptor bytes\n";
-    const checksumDigest = `sha256:${createHash("sha256")
-      .update(checksumContents)
-      .digest("hex")}`;
-    const descriptorDigest = `sha256:${createHash("sha256")
-      .update(descriptorContents)
-      .digest("hex")}`;
-    await privateFile(assetPath, assetContents);
-    await privateFile(checksumPath, checksumContents);
-    await privateFile(descriptorPath, descriptorContents);
-    await privateFile(
-      prepareEvidence,
-      `${JSON.stringify({
-        kind: "takos.release-artifact-prepare@v2",
-        status: "prepared",
-        tag: `v${version}`,
-        commit,
-        version,
-        repository: "tako0614/takos",
-        takosumiCompositionSource,
-        accountId,
-        portableCheck: { command: "bun run check", status: "passed" },
-        outputDir,
-        descriptor: {
-          path: descriptorPath,
-          digest: descriptorDigest,
-          url: `https://github.com/tako0614/takos/releases/download/v${version}/takosumi-artifact.json`,
-        },
-        assets: [
-          {
-            name: "takos-worker-release.tar.gz",
-            path: assetPath,
-            digest: assetDigest,
-          },
-          {
-            name: "takos-worker-release.tar.gz.sha256",
-            path: checksumPath,
-            digest: checksumDigest,
-          },
-          {
-            name: "takosumi-artifact.json",
-            path: descriptorPath,
-            digest: descriptorDigest,
-          },
-        ],
-        images: {
-          "takos-agent":
-            `registry.cloudflare.com/${accountId}/takos-agent@${digest("d")}`,
-        },
-        publicAgentImage:
-          `ghcr.io/tako0614/takos-agent@${digest("e")}`,
-        imageContent: {
-          cloudflare: imageContent,
-          publicOci: imageContent,
-        },
-        workerSmoke: {
-          kind: "takos.worker-release-smoke@v1",
-          runtime: "wrangler-local-workerd",
-          archiveDigest: assetDigest,
-          health: {
-            path: "/health",
-            status: 200,
-            bodyDigest: digest("4"),
-          },
-          api: {
-            path: "/api/auth/me",
-            status: 401,
-            bodyDigest: digest("6"),
-          },
-          productDiscovery: {
-            path: "/.well-known/takosumi",
-            status: 200,
-            bodyDigest: digest("5"),
-            apiPath: "/api/v1",
-          },
-        },
-        observedAt: "2026-08-02T00:00:00.000Z",
-      })}\n`,
-    );
 
     const result = await runReleaseArtifact(
       {
         phase: "publish",
         tag: `v${version}`,
-        prepareEvidence,
+        prepareEvidence: fixture.prepareEvidence,
         evidence: publishEvidence,
         execute: false,
       },
@@ -594,3 +521,389 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("publish rejects literal descriptor bytes before any release provider call", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const version = await packageVersion();
+    const fixture = await publishFixture(root, version);
+    await fixture.writeDescriptor("descriptor bytes\n");
+
+    await expectPublishDescriptorRejection(
+      fixture,
+      version,
+      "invalid JSON",
+    );
+    expectNoReleaseProviderCalls(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+for (const invalid of [
+  {
+    label: "a stale Takosumi composition commit",
+    expected: "composition source",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.takosumiCompositionSource.commit = "9".repeat(40);
+    },
+  },
+  {
+    label: "a stale Takosumi composition pin digest",
+    expected: "composition source",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.takosumiCompositionSource.pinDigest = digest("9");
+    },
+  },
+  {
+    label: "the wrong archive digest",
+    expected: "archive identity",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.artifact.sha256 = "9".repeat(64);
+      descriptor.artifact.sha256Prefixed = digest("9");
+    },
+  },
+  {
+    label: "the wrong archive size",
+    expected: "archive identity",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.artifact.size += 1;
+    },
+  },
+  {
+    label: "the wrong Takos commit",
+    expected: "release identity",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.commit = "9".repeat(40);
+    },
+  },
+  {
+    label: "the wrong release tag",
+    expected: "release identity",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.ref = "v9.9.9";
+      descriptor.releaseTag = "v9.9.9";
+    },
+  },
+  {
+    label: "the wrong descriptor kind",
+    expected: "schema",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.kind = "takosumi.worker-artifact@v1";
+    },
+  },
+  {
+    label: "the wrong app identity",
+    expected: "schema",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.app = "another-app";
+    },
+  },
+  {
+    label: "an unknown descriptor field",
+    expected: "schema",
+    mutate: (descriptor: Record<string, any>) => {
+      descriptor.untrusted = true;
+    },
+  },
+  {
+    label: "a missing descriptor field",
+    expected: "schema",
+    mutate: (descriptor: Record<string, any>) => {
+      delete descriptor.assetManifest;
+    },
+  },
+] as const) {
+  test(`publish rejects ${invalid.label} even when prepare evidence adopts its digest`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+    const stub = installReadOnlyCommandStub(commit);
+    try {
+      const version = await packageVersion();
+      const fixture = await publishFixture(root, version);
+      const descriptor = structuredClone(fixture.descriptor);
+      invalid.mutate(descriptor);
+      await fixture.writeDescriptor(descriptor);
+
+      await expectPublishDescriptorRejection(
+        fixture,
+        version,
+        invalid.expected,
+      );
+      expectNoReleaseProviderCalls(stub.calls);
+    } finally {
+      stub.restore();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("publish rejects noncanonical descriptor JSON with an adopted digest", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const version = await packageVersion();
+    const fixture = await publishFixture(root, version);
+    await fixture.writeDescriptor(JSON.stringify(fixture.descriptor));
+
+    await expectPublishDescriptorRejection(fixture, version, "canonical");
+    expectNoReleaseProviderCalls(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("publish rejects a symlink-substituted descriptor before any release provider call", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const version = await packageVersion();
+    const fixture = await publishFixture(root, version);
+    const alternate = join(root, "alternate-descriptor.json");
+    await privateFile(
+      alternate,
+      `${JSON.stringify(fixture.descriptor, null, 2)}\n`,
+    );
+    await rm(fixture.descriptorPath);
+    await symlink(alternate, fixture.descriptorPath);
+
+    await expectPublishDescriptorRejection(
+      fixture,
+      version,
+      "operator-owned physical file",
+    );
+    expectNoReleaseProviderCalls(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("publish rejects an oversized descriptor before any release provider call", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const version = await packageVersion();
+    const fixture = await publishFixture(root, version);
+    await fixture.writeDescriptor("x".repeat(256 * 1024 + 1));
+
+    await expectPublishDescriptorRejection(
+      fixture,
+      version,
+      "bounded",
+    );
+    expectNoReleaseProviderCalls(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("publish rejects portable source input drift before any release provider call", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
+  const stub = installReadOnlyCommandStub(commit);
+  try {
+    const version = await packageVersion();
+    const fixture = await publishFixture(root, version);
+    await expect(
+      runReleaseArtifact(
+        {
+          phase: "publish",
+          tag: `v${version}`,
+          prepareEvidence: fixture.prepareEvidence,
+          evidence: join(root, "publish.json"),
+          execute: true,
+        },
+        {
+          ...compositionRuntime,
+          verifyPortableWorkerSourceIdentity: async () => {
+            throw new Error("portable source release input drifted");
+          },
+        },
+      ),
+    ).rejects.toThrow("portable source release input drifted");
+    expectNoReleaseProviderCalls(stub.calls);
+  } finally {
+    stub.restore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+type PublishFixture = Awaited<ReturnType<typeof publishFixture>>;
+
+async function publishFixture(root: string, version: string) {
+  const outputDir = join(root, "output");
+  const assetPath = join(outputDir, "takos-worker-release.tar.gz");
+  const checksumPath = join(outputDir, "takos-worker-release.tar.gz.sha256");
+  const descriptorPath = join(outputDir, "takosumi-artifact.json");
+  const prepareEvidence = join(root, "prepare.json");
+  const assetContents = "prepared worker bytes\n";
+  const assetDigest = `sha256:${createHash("sha256")
+    .update(assetContents)
+    .digest("hex")}`;
+  const checksumContents = `${assetDigest.slice("sha256:".length)}  takos-worker-release.tar.gz\n`;
+  const checksumDigest = `sha256:${createHash("sha256")
+    .update(checksumContents)
+    .digest("hex")}`;
+  const tag = `v${version}`;
+  const descriptorUrl =
+    `https://github.com/tako0614/takos/releases/download/${tag}/takosumi-artifact.json`;
+  const archiveUrl =
+    `https://github.com/tako0614/takos/releases/download/${tag}/takos-worker-release.tar.gz`;
+  const descriptor: Record<string, any> = {
+    kind: "takosumi.worker-artifact@v2",
+    app: "takos",
+    commit,
+    ref: tag,
+    workflowRun: null,
+    releaseTag: tag,
+    takosumiCompositionSource,
+    artifact: {
+      filename: "takos-worker-release.tar.gz",
+      url: archiveUrl,
+      sha256: assetDigest.slice("sha256:".length),
+      sha256Prefixed: assetDigest,
+      size: Buffer.byteLength(assetContents),
+      contentType: "application/gzip",
+    },
+    assetManifest: "asset-manifest.json",
+    containerImages: {
+      executor:
+        `registry.cloudflare.com/${accountId}/takos-agent@${digest("d")}`,
+      publicAgent: `ghcr.io/tako0614/takos-agent@${digest("e")}`,
+    },
+    manifestUrl: descriptorUrl,
+  };
+  const prepared: Record<string, any> = {
+    kind: "takos.release-artifact-prepare@v2",
+    status: "prepared",
+    tag,
+    commit,
+    version,
+    repository: "tako0614/takos",
+    takosumiCompositionSource,
+    accountId,
+    portableCheck: { command: "bun run check", status: "passed" },
+    outputDir,
+    descriptor: {
+      path: descriptorPath,
+      digest: "",
+      url: descriptorUrl,
+      size: 0,
+    },
+    assets: [
+      {
+        name: "takos-worker-release.tar.gz",
+        path: assetPath,
+        digest: assetDigest,
+        size: Buffer.byteLength(assetContents),
+      },
+      {
+        name: "takos-worker-release.tar.gz.sha256",
+        path: checksumPath,
+        digest: checksumDigest,
+        size: Buffer.byteLength(checksumContents),
+      },
+      {
+        name: "takosumi-artifact.json",
+        path: descriptorPath,
+        digest: "",
+        size: 0,
+      },
+    ],
+    images: {
+      "takos-agent": descriptor.containerImages.executor,
+    },
+    publicAgentImage: descriptor.containerImages.publicAgent,
+    imageContent: {
+      cloudflare: imageContent,
+      publicOci: imageContent,
+    },
+    workerSmoke: {
+      kind: "takos.worker-release-smoke@v1",
+      runtime: "wrangler-local-workerd",
+      archiveDigest: assetDigest,
+      health: {
+        path: "/health",
+        status: 200,
+        bodyDigest: digest("4"),
+      },
+      api: {
+        path: "/api/auth/me",
+        status: 401,
+        bodyDigest: digest("6"),
+      },
+      productDiscovery: {
+        path: "/.well-known/takosumi",
+        status: 200,
+        bodyDigest: digest("5"),
+        apiPath: "/api/v1",
+      },
+    },
+    observedAt: "2026-08-02T00:00:00.000Z",
+  };
+
+  await mkdir(outputDir, { recursive: true, mode: 0o700 });
+  await privateFile(assetPath, assetContents);
+  await privateFile(checksumPath, checksumContents);
+
+  const writeDescriptor = async (value: unknown): Promise<void> => {
+    const contents = typeof value === "string"
+      ? value
+      : `${JSON.stringify(value, null, 2)}\n`;
+    const descriptorDigest = `sha256:${createHash("sha256")
+      .update(contents)
+      .digest("hex")}`;
+    prepared.descriptor.digest = descriptorDigest;
+    prepared.descriptor.size = Buffer.byteLength(contents);
+    const descriptorAsset = prepared.assets.find(
+      (asset: Record<string, unknown>) =>
+        asset.name === "takosumi-artifact.json",
+    );
+    descriptorAsset.digest = descriptorDigest;
+    descriptorAsset.size = Buffer.byteLength(contents);
+    await privateFile(descriptorPath, contents);
+    await privateFile(prepareEvidence, `${JSON.stringify(prepared)}\n`);
+  };
+  await writeDescriptor(descriptor);
+  return {
+    assetPath,
+    descriptor,
+    descriptorPath,
+    prepareEvidence,
+    writeDescriptor,
+  };
+}
+
+async function expectPublishDescriptorRejection(
+  fixture: PublishFixture,
+  version: string,
+  expected: string,
+): Promise<void> {
+  await expect(
+    runReleaseArtifact(
+      {
+        phase: "publish",
+        tag: `v${version}`,
+        prepareEvidence: fixture.prepareEvidence,
+        evidence: join(dirname(fixture.prepareEvidence), "publish.json"),
+        execute: true,
+      },
+      compositionRuntime,
+    ),
+  ).rejects.toThrow(expected);
+}
+
+function expectNoReleaseProviderCalls(calls: readonly string[][]): void {
+  expect(
+    calls.filter(
+      ([executable, ...args]) =>
+        executable !== "git" ||
+        args[0] === "push" ||
+        args[0] === "tag" ||
+        args.some((argument) => argument.startsWith("refs/tags/")),
+    ),
+  ).toEqual([]);
+}

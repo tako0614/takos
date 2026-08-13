@@ -1,12 +1,14 @@
 #!/usr/bin/env bun
 
 import { createHash, randomBytes } from "node:crypto";
+import { constants as fileConstants } from "node:fs";
 import {
   chmod,
   cp,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   realpath,
@@ -39,6 +41,10 @@ const COMMIT = /^[0-9a-f]{40}$/u;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/u;
 const SEMVER_TAG = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u;
 const MAX_IMAGE_LAYERS = 256;
+const MAX_DESCRIPTOR_BYTES = 256 * 1024;
+const MAX_CHECKSUM_BYTES = 1024;
+const MAX_WORKER_ARCHIVE_BYTES = 64 * 1024 * 1024;
+const BARE_SHA256 = /^[0-9a-f]{64}$/u;
 
 export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   surface: "takos-release-artifact",
@@ -58,7 +64,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   triggers: ["published-identity", "authority", "irreversible"],
   obligations: {
     provenance:
-      "prepare binds clean pushed Takos main, package version, the Takos-owned exact Takosumi composition pin and clean physical sibling source, pinned agent-engine commit, target Cloudflare account, digest-pinned Cloudflare images, the same agent bytes in public GHCR, exact Worker archive bytes, and descriptor digest in operator-private evidence",
+      "prepare binds clean pushed Takos main, package version, the Takos-owned exact Takosumi composition pin and clean physical sibling source, pinned agent-engine commit, target Cloudflare account, digest-pinned Cloudflare images, the same agent bytes in public GHCR, exact Worker archive bytes and size, and a canonical descriptor digest in operator-private evidence; publish independently re-derives that closure from current immutable sources and physical prepared bytes",
     "post-conditions":
       "publish anonymously re-reads the prepared public GHCR agent identity, verifies the create-only remote tag resolves to the prepared commit, downloads every GitHub release asset to recheck its exact SHA-256, then boots the exact downloaded Worker archive in Wrangler local workerd and exercises Takos health, auth-boundary API, and product discovery responses",
     reversal:
@@ -66,7 +72,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
     "failure-handling":
       "both phases are dry-run by default, redact provider output, record no credentials, refuse conflicting identities, and after a possible lost acknowledgment accept success only from authoritative exact tag, release, asset, and runtime readback; otherwise publication is indeterminate and must not be retried",
     "no-overwrite":
-      "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities and performs one create-only GitHub Release operation containing the complete asset closure, with no update, upload, edit, delete, force, or retry path",
+      "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities, then immediately before its one create-only GitHub Release operation re-reads the bounded private operator-owned descriptor without following links and requires its exact canonical schema, current source/composition/archive closure, and prepare digest; there is no update, upload, edit, delete, force, or retry path",
     "pre-mutation-proof":
       "prepare reruns the portable complete gate, proves clean pushed Takos main and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin with no hidden index flags plus a physical pinned-tree byte/type/mode proof, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
     "independent-review":
@@ -92,6 +98,11 @@ export type ReleaseArtifactRuntime = Readonly<{
   verifyTakosumiCompositionSource?: (
     takosRoot: string,
   ) => Promise<TakosumiCompositionSourceIdentity>;
+  verifyPortableWorkerSourceIdentity?: (
+    takosRoot: string,
+    tag: string,
+    archiveDigest: string,
+  ) => Promise<void>;
 }>;
 
 type CommandResult = Readonly<{
@@ -176,8 +187,13 @@ type PreparedRecord = Readonly<{
   accountId: string;
   portableCheck: { command: "bun run check"; status: "passed" };
   outputDir: string;
-  descriptor: { path: string; digest: string; url: string };
-  assets: readonly { name: string; path: string; digest: string }[];
+  descriptor: { path: string; digest: string; url: string; size: number };
+  assets: readonly {
+    name: string;
+    path: string;
+    digest: string;
+    size: number;
+  }[];
   images: Readonly<Record<(typeof IMAGE_NAMES)[number], string>>;
   publicAgentImage: string;
   imageContent: Readonly<{
@@ -186,6 +202,30 @@ type PreparedRecord = Readonly<{
   }>;
   workerSmoke: WorkerReleaseSmokeResult;
   observedAt: string;
+}>;
+
+type WorkerArtifactDescriptor = Readonly<{
+  kind: "takosumi.worker-artifact@v2";
+  app: "takos";
+  commit: string;
+  ref: string;
+  workflowRun: null;
+  releaseTag: string;
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
+  artifact: Readonly<{
+    filename: "takos-worker-release.tar.gz";
+    url: string;
+    sha256: string;
+    sha256Prefixed: string;
+    size: number;
+    contentType: "application/gzip";
+  }>;
+  assetManifest: "asset-manifest.json";
+  containerImages: Readonly<{
+    executor?: string;
+    publicAgent?: string;
+  }>;
+  manifestUrl: string;
 }>;
 
 export const RELEASE_ARTIFACT_USAGE = `Takos release artifact deployment
@@ -302,6 +342,10 @@ export async function runReleaseArtifact(
     identity.commit,
     version,
     takosumiCompositionSource,
+    async (tag, archiveDigest) =>
+      await (runtime.verifyPortableWorkerSourceIdentity
+        ? runtime.verifyPortableWorkerSourceIdentity(root, tag, archiveDigest)
+        : assertPortableWorkerSourceIdentity(root, tag, archiveDigest)),
     options,
   );
 }
@@ -426,11 +470,13 @@ async function prepareRelease(
       "takos-worker-release.tar.gz",
     );
     const preflightArchiveDigest = await fileDigest(preflightArchive);
+    const preflightArchiveSize = (await stat(preflightArchive)).size;
     await assertSourceWorkerIdentity(
       root,
       options.tag,
       commit,
       preflightArchiveDigest,
+      preflightArchiveSize,
       takosumiCompositionSource,
       join(preflightOutputDir, "takosumi-artifact.json"),
     );
@@ -491,6 +537,7 @@ async function prepareRelease(
       options.tag,
       commit,
       preflightArchiveDigest,
+      (await stat(join(outputDir, "takos-worker-release.tar.gz"))).size,
       takosumiCompositionSource,
       join(outputDir, "takosumi-artifact.json"),
     );
@@ -504,11 +551,15 @@ async function prepareRelease(
       assetNames.map((name) => chmod(join(outputDir, name), 0o600)),
     );
     const assets = await Promise.all(
-      assetNames.map(async (name) => ({
-        name,
-        path: join(outputDir, name),
-        digest: await fileDigest(join(outputDir, name)),
-      })),
+      assetNames.map(async (name) => {
+        const path = join(outputDir, name);
+        return {
+          name,
+          path,
+          digest: await fileDigest(path),
+          size: (await stat(path)).size,
+        };
+      }),
     );
     const descriptor = assets.find(
       (asset) => asset.name === "takosumi-artifact.json",
@@ -533,6 +584,7 @@ async function prepareRelease(
       descriptor: {
         path: descriptor.path,
         digest: descriptor.digest,
+        size: descriptor.size,
         url: `https://github.com/${REPOSITORY}/releases/download/${options.tag}/takosumi-artifact.json`,
       },
       assets,
@@ -586,6 +638,8 @@ async function buildReleaseAssets(
       GITHUB_REPOSITORY: REPOSITORY,
       GITHUB_SHA: commit,
       GITHUB_REF_NAME: tag,
+      GITHUB_SERVER_URL: "",
+      GITHUB_RUN_ID: "",
       SOURCE_DATE_EPOCH: epoch,
     },
   );
@@ -596,6 +650,10 @@ async function publishRelease(
   commit: string,
   version: string,
   takosumiCompositionSource: TakosumiCompositionSourceIdentity,
+  verifyPortableWorkerSourceIdentity: (
+    tag: string,
+    archiveDigest: string,
+  ) => Promise<void>,
   options: ReleaseArtifactOptions,
 ): Promise<unknown> {
   const preparePath = await physicalFile(
@@ -621,11 +679,26 @@ async function publishRelease(
   await physicalDirectory(prepared.outputDir, "prepared output directory");
   for (const asset of prepared.assets) {
     await assertPrivatePath(asset.path, root, true);
-    await physicalFile(asset.path, `prepared asset ${asset.name}`, true);
-    if ((await fileDigest(asset.path)) !== asset.digest) {
+    const physical = await readPhysicalPrivateFile(
+      asset.path,
+      `prepared asset ${asset.name}`,
+      maximumPreparedAssetBytes(asset.name),
+    );
+    if (
+      physical.size !== asset.size ||
+      digestBytes(physical.bytes) !== asset.digest
+    ) {
       throw new Error(`prepared asset changed: ${asset.name}`);
     }
   }
+  await assertPreparedReleaseDescriptor(
+    commit,
+    version,
+    options.tag,
+    takosumiCompositionSource,
+    prepared,
+    verifyPortableWorkerSourceIdentity,
+  );
   await assertRemoteReleaseIdentityAvailable(root, options.tag, commit, true);
   const planned = {
     kind: "takos.release-artifact-publish@v2",
@@ -650,6 +723,14 @@ async function publishRelease(
   if (localSmoke.archiveDigest !== localArchive.digest) {
     throw new Error("pre-publication smoke did not exercise the prepared bytes");
   }
+  await assertPreparedReleaseDescriptor(
+    commit,
+    version,
+    options.tag,
+    takosumiCompositionSource,
+    prepared,
+    verifyPortableWorkerSourceIdentity,
+  );
   const creation = await command(
     root,
     "gh",
@@ -763,13 +844,285 @@ async function packageVersion(root: string): Promise<string> {
   return version;
 }
 
-async function assertSourceWorkerIdentity(
+async function assertPreparedReleaseDescriptor(
+  commit: string,
+  version: string,
+  tag: string,
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
+  prepared: PreparedRecord,
+  verifyPortableWorkerSourceIdentity: (
+    tag: string,
+    archiveDigest: string,
+  ) => Promise<void>,
+): Promise<void> {
+  const archiveAsset = prepared.assets.find(
+    (asset) => asset.name === "takos-worker-release.tar.gz",
+  )!;
+  const checksumAsset = prepared.assets.find(
+    (asset) => asset.name === "takos-worker-release.tar.gz.sha256",
+  )!;
+  const descriptorAsset = prepared.assets.find(
+    (asset) => asset.name === "takosumi-artifact.json",
+  )!;
+  const [archive, checksum, descriptorFile] = await Promise.all([
+    readPhysicalPrivateFile(
+      archiveAsset.path,
+      "prepared Worker archive",
+      MAX_WORKER_ARCHIVE_BYTES,
+    ),
+    readPhysicalPrivateFile(
+      checksumAsset.path,
+      "prepared Worker archive checksum",
+      MAX_CHECKSUM_BYTES,
+    ),
+    readPhysicalPrivateFile(
+      descriptorAsset.path,
+      "prepared Worker artifact descriptor",
+      MAX_DESCRIPTOR_BYTES,
+    ),
+  ]);
+  assertPreparedAssetBytes(archiveAsset, archive);
+  assertPreparedAssetBytes(checksumAsset, checksum);
+  assertPreparedAssetBytes(descriptorAsset, descriptorFile);
+
+  const archiveDigest = digestBytes(archive.bytes);
+  const expectedChecksum =
+    `${archiveDigest.slice("sha256:".length)}  takos-worker-release.tar.gz\n`;
+  if (!bytesEqual(checksum.bytes, new TextEncoder().encode(expectedChecksum))) {
+    throw new Error("prepared Worker archive checksum is not canonical");
+  }
+  await verifyPortableWorkerSourceIdentity(tag, archiveDigest);
+
+  const descriptor = parseCanonicalWorkerArtifactDescriptor(
+    descriptorFile.bytes,
+  );
+  if (
+    descriptor.commit !== commit ||
+    descriptor.ref !== tag ||
+    descriptor.releaseTag !== tag ||
+    descriptor.releaseTag !== `v${version}` ||
+    descriptor.workflowRun !== null
+  ) {
+    throw new Error(
+      "Worker artifact descriptor does not match the current release identity",
+    );
+  }
+  try {
+    assertTakosumiCompositionSourceIdentityMatch(
+      takosumiCompositionSource,
+      descriptor.takosumiCompositionSource,
+    );
+  } catch {
+    throw new Error(
+      "Worker artifact descriptor composition source does not match the current pin",
+    );
+  }
+  const archiveUrl =
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-worker-release.tar.gz`;
+  if (
+    descriptor.artifact.url !== archiveUrl ||
+    descriptor.artifact.sha256 !== archiveDigest.slice("sha256:".length) ||
+    descriptor.artifact.sha256Prefixed !== archiveDigest ||
+    descriptor.artifact.size !== archive.size
+  ) {
+    throw new Error(
+      "Worker artifact descriptor archive identity does not match the physical archive",
+    );
+  }
+  const descriptorUrl =
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takosumi-artifact.json`;
+  if (
+    descriptor.manifestUrl !== descriptorUrl ||
+    prepared.descriptor.url !== descriptorUrl
+  ) {
+    throw new Error(
+      "Worker artifact descriptor does not match the current release input URLs",
+    );
+  }
+  if (
+    descriptor.containerImages.executor !== prepared.images["takos-agent"] ||
+    descriptor.containerImages.publicAgent !== prepared.publicAgentImage
+  ) {
+    throw new Error(
+      "Worker artifact descriptor image identity does not match prepare evidence",
+    );
+  }
+
+  const expectedDescriptor: WorkerArtifactDescriptor = {
+    kind: "takosumi.worker-artifact@v2",
+    app: "takos",
+    commit,
+    ref: tag,
+    workflowRun: null,
+    releaseTag: tag,
+    takosumiCompositionSource,
+    artifact: {
+      filename: "takos-worker-release.tar.gz",
+      url: archiveUrl,
+      sha256: archiveDigest.slice("sha256:".length),
+      sha256Prefixed: archiveDigest,
+      size: archive.size,
+      contentType: "application/gzip",
+    },
+    assetManifest: "asset-manifest.json",
+    containerImages: {
+      executor: prepared.images["takos-agent"],
+      publicAgent: prepared.publicAgentImage,
+    },
+    manifestUrl: descriptorUrl,
+  };
+  const expectedBytes = new TextEncoder().encode(
+    `${JSON.stringify(expectedDescriptor, null, 2)}\n`,
+  );
+  const descriptorDigest = digestBytes(expectedBytes);
+  if (
+    !bytesEqual(descriptorFile.bytes, expectedBytes) ||
+    descriptorDigest !== prepared.descriptor.digest ||
+    descriptorDigest !== descriptorAsset.digest ||
+    descriptorFile.size !== prepared.descriptor.size ||
+    descriptorFile.size !== descriptorAsset.size
+  ) {
+    throw new Error(
+      "Worker artifact descriptor canonical digest does not match current sources and prepare evidence",
+    );
+  }
+}
+
+function parseCanonicalWorkerArtifactDescriptor(
+  bytes: Uint8Array,
+): WorkerArtifactDescriptor {
+  let text: string;
+  let value: unknown;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    value = JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("Worker artifact descriptor is invalid JSON");
+  }
+  const input = exactRecord(value, [
+    "app",
+    "artifact",
+    "assetManifest",
+    "commit",
+    "containerImages",
+    "kind",
+    "manifestUrl",
+    "ref",
+    "releaseTag",
+    "takosumiCompositionSource",
+    "workflowRun",
+  ]);
+  const artifact = exactRecord(input.artifact, [
+    "contentType",
+    "filename",
+    "sha256",
+    "sha256Prefixed",
+    "size",
+    "url",
+  ]);
+  const images = jsonRecord(input.containerImages);
+  const imageKeys = Object.keys(images).sort().join("\0");
+  if (imageKeys !== "" && imageKeys !== "executor\0publicAgent") {
+    throw new Error("Worker artifact descriptor schema is invalid");
+  }
+  let composition: TakosumiCompositionSourceIdentity;
+  try {
+    composition = parseTakosumiCompositionSourceIdentity(
+      input.takosumiCompositionSource,
+    );
+  } catch {
+    throw new Error("Worker artifact descriptor schema is invalid");
+  }
+  if (
+    input.kind !== "takosumi.worker-artifact@v2" ||
+    input.app !== "takos" ||
+    typeof input.commit !== "string" ||
+    !COMMIT.test(input.commit) ||
+    typeof input.ref !== "string" ||
+    !SEMVER_TAG.test(input.ref) ||
+    input.workflowRun !== null ||
+    typeof input.releaseTag !== "string" ||
+    !SEMVER_TAG.test(input.releaseTag) ||
+    input.assetManifest !== "asset-manifest.json" ||
+    typeof input.manifestUrl !== "string" ||
+    artifact.filename !== "takos-worker-release.tar.gz" ||
+    typeof artifact.url !== "string" ||
+    typeof artifact.sha256 !== "string" ||
+    !BARE_SHA256.test(artifact.sha256) ||
+    typeof artifact.sha256Prefixed !== "string" ||
+    !SHA256.test(artifact.sha256Prefixed) ||
+    typeof artifact.size !== "number" ||
+    !Number.isSafeInteger(artifact.size) ||
+    artifact.size <= 0 ||
+    artifact.size > MAX_WORKER_ARCHIVE_BYTES ||
+    artifact.contentType !== "application/gzip" ||
+    (imageKeys !== "" &&
+      (typeof images.executor !== "string" ||
+        !DIGEST_REF.test(images.executor) ||
+        typeof images.publicAgent !== "string" ||
+        !PUBLIC_AGENT_DIGEST_REF.test(images.publicAgent)))
+  ) {
+    throw new Error("Worker artifact descriptor schema is invalid");
+  }
+  const canonical = `${JSON.stringify(value, null, 2)}\n`;
+  if (!bytesEqual(bytes, new TextEncoder().encode(canonical))) {
+    throw new Error("Worker artifact descriptor JSON is not canonical");
+  }
+  return {
+    kind: "takosumi.worker-artifact@v2",
+    app: "takos",
+    commit: input.commit,
+    ref: input.ref,
+    workflowRun: null,
+    releaseTag: input.releaseTag,
+    takosumiCompositionSource: composition,
+    artifact: {
+      filename: "takos-worker-release.tar.gz",
+      url: artifact.url,
+      sha256: artifact.sha256,
+      sha256Prefixed: artifact.sha256Prefixed,
+      size: artifact.size,
+      contentType: "application/gzip",
+    },
+    assetManifest: "asset-manifest.json",
+    containerImages: {
+      ...(typeof images.executor === "string"
+        ? { executor: images.executor }
+        : {}),
+      ...(typeof images.publicAgent === "string"
+        ? { publicAgent: images.publicAgent }
+        : {}),
+    },
+    manifestUrl: input.manifestUrl,
+  };
+}
+
+function exactRecord(
+  value: unknown,
+  expectedKeys: readonly string[],
+): Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join("\0") !== [...expectedKeys].sort().join("\0")
+  ) {
+    throw new Error("Worker artifact descriptor schema is invalid");
+  }
+  return value as Record<string, unknown>;
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Worker artifact descriptor schema is invalid");
+  }
+  return value as Record<string, unknown>;
+}
+
+async function assertPortableWorkerSourceIdentity(
   root: string,
   tag: string,
-  commit: string,
   archiveDigest: string,
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
-  descriptorPath: string,
 ): Promise<void> {
   const source = await readFile(
     join(root, "deploy/opentofu/takoform/main.tf"),
@@ -792,22 +1145,41 @@ async function assertSourceWorkerIdentity(
       "portable Takoform defaults do not select the exact prepared Worker release",
     );
   }
-  const descriptor = JSON.parse(
-    await readFile(descriptorPath, "utf8"),
-  ) as Record<string, unknown>;
+}
+
+async function assertSourceWorkerIdentity(
+  root: string,
+  tag: string,
+  commit: string,
+  archiveDigest: string,
+  archiveSize: number,
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
+  descriptorPath: string,
+): Promise<void> {
+  await assertPortableWorkerSourceIdentity(root, tag, archiveDigest);
+  const descriptor = parseCanonicalWorkerArtifactDescriptor(
+    new Uint8Array(await readFile(descriptorPath)),
+  );
+  const expectedArchiveUrl =
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-worker-release.tar.gz`;
+  const expectedDescriptorUrl =
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takosumi-artifact.json`;
   if (
-    descriptor.kind !== "takosumi.worker-artifact@v2" ||
-    descriptor.app !== "takos" ||
     descriptor.commit !== commit ||
-    descriptor.releaseTag !== tag
+    descriptor.ref !== tag ||
+    descriptor.releaseTag !== tag ||
+    descriptor.workflowRun !== null ||
+    descriptor.artifact.url !== expectedArchiveUrl ||
+    descriptor.artifact.sha256 !== archiveDigest.slice("sha256:".length) ||
+    descriptor.artifact.sha256Prefixed !== archiveDigest ||
+    descriptor.artifact.size !== archiveSize ||
+    descriptor.manifestUrl !== expectedDescriptorUrl
   ) {
     throw new Error("Worker artifact descriptor source identity is invalid");
   }
   assertTakosumiCompositionSourceIdentityMatch(
     takosumiCompositionSource,
-    parseTakosumiCompositionSourceIdentity(
-      descriptor.takosumiCompositionSource,
-    ),
+    descriptor.takosumiCompositionSource,
   );
 }
 
@@ -1201,8 +1573,13 @@ async function verifyPublishedRelease(
     for (const asset of prepared.assets) {
       const downloaded = join(directory, asset.name);
       await physicalFile(downloaded, `downloaded asset ${asset.name}`, false);
-      if ((await fileDigest(downloaded)) !== asset.digest) {
-        throw new Error(`downloaded release asset digest drifted: ${asset.name}`);
+      if (
+        (await stat(downloaded)).size !== asset.size ||
+        (await fileDigest(downloaded)) !== asset.digest
+      ) {
+        throw new Error(
+          `downloaded release asset digest or size drifted: ${asset.name}`,
+        );
       }
     }
     const archive = prepared.assets.find(
@@ -1288,11 +1665,19 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
       typeof record.name !== "string" ||
       typeof record.path !== "string" ||
       typeof record.digest !== "string" ||
-      !SHA256.test(record.digest)
+      !SHA256.test(record.digest) ||
+      typeof record.size !== "number" ||
+      !Number.isSafeInteger(record.size) ||
+      record.size <= 0
     ) {
       throw new Error("prepare evidence asset is invalid");
     }
-    return { name: record.name, path: record.path, digest: record.digest };
+    return {
+      name: record.name,
+      path: record.path,
+      digest: record.digest,
+      size: record.size,
+    };
   });
   const imagesInput = input.images as Record<string, unknown>;
   const images = Object.fromEntries(
@@ -1341,7 +1726,10 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     typeof descriptor.path !== "string" ||
     typeof descriptor.digest !== "string" ||
     !SHA256.test(descriptor.digest) ||
-    typeof descriptor.url !== "string"
+    typeof descriptor.url !== "string" ||
+    typeof descriptor.size !== "number" ||
+    !Number.isSafeInteger(descriptor.size) ||
+    descriptor.size <= 0
   ) {
     throw new Error("prepare evidence descriptor is invalid");
   }
@@ -1370,6 +1758,7 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
   if (
     descriptor.path !== descriptorAsset.path ||
     descriptor.digest !== descriptorAsset.digest ||
+    descriptor.size !== descriptorAsset.size ||
     descriptor.url !==
       `https://github.com/${REPOSITORY}/releases/download/${input.tag}/takosumi-artifact.json` ||
     IMAGE_NAMES.some(
@@ -1402,6 +1791,7 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
       path: descriptor.path,
       digest: descriptor.digest,
       url: descriptor.url,
+      size: descriptor.size,
     },
     assets,
     images,
@@ -1506,11 +1896,108 @@ async function physicalFile(
   return canonical;
 }
 
+type PhysicalPrivateFile = Readonly<{
+  bytes: Uint8Array;
+  size: number;
+}>;
+
+async function readPhysicalPrivateFile(
+  path: string,
+  label: string,
+  maximumBytes: number,
+): Promise<PhysicalPrivateFile> {
+  if (!isAbsolute(path)) throw new Error(`${label} path must be absolute`);
+  const expectedPath = resolve(path);
+  const pathInfo = await lstat(expectedPath);
+  const canonical = await realpath(expectedPath);
+  const expectedUid = process.getuid?.();
+  if (
+    pathInfo.isSymbolicLink() ||
+    !pathInfo.isFile() ||
+    pathInfo.nlink !== 1 ||
+    canonical !== expectedPath ||
+    (expectedUid !== undefined && pathInfo.uid !== expectedUid) ||
+    (pathInfo.mode & 0o077) !== 0 ||
+    pathInfo.size <= 0 ||
+    pathInfo.size > maximumBytes
+  ) {
+    throw new Error(
+      `${label} must be one bounded, private, operator-owned physical file`,
+    );
+  }
+
+  const handle = await open(
+    expectedPath,
+    fileConstants.O_RDONLY | fileConstants.O_NOFOLLOW,
+  );
+  try {
+    const before = await handle.stat();
+    if (
+      before.dev !== pathInfo.dev ||
+      before.ino !== pathInfo.ino ||
+      before.size !== pathInfo.size ||
+      before.uid !== pathInfo.uid ||
+      before.mode !== pathInfo.mode
+    ) {
+      throw new Error(`${label} changed while its physical identity was opened`);
+    }
+    const bytes = new Uint8Array(await handle.readFile());
+    const after = await handle.stat();
+    if (
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      after.size !== before.size ||
+      after.mtimeMs !== before.mtimeMs ||
+      after.ctimeMs !== before.ctimeMs ||
+      bytes.byteLength !== before.size
+    ) {
+      throw new Error(`${label} changed while its bytes were read`);
+    }
+    return { bytes, size: before.size };
+  } finally {
+    await handle.close();
+  }
+}
+
+function maximumPreparedAssetBytes(name: string): number {
+  if (name === "takos-worker-release.tar.gz") {
+    return MAX_WORKER_ARCHIVE_BYTES;
+  }
+  if (name === "takos-worker-release.tar.gz.sha256") {
+    return MAX_CHECKSUM_BYTES;
+  }
+  if (name === "takosumi-artifact.json") return MAX_DESCRIPTOR_BYTES;
+  throw new Error(`prepared asset name is invalid: ${name}`);
+}
+
+function assertPreparedAssetBytes(
+  asset: PreparedRecord["assets"][number],
+  physical: PhysicalPrivateFile,
+): void {
+  if (
+    physical.size !== asset.size ||
+    digestBytes(physical.bytes) !== asset.digest
+  ) {
+    throw new Error(`prepared asset changed: ${asset.name}`);
+  }
+}
+
+function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength &&
+    left.every((value, index) => value === right[index]);
+}
+
 async function physicalDirectory(path: string, label: string): Promise<string> {
   if (!isAbsolute(path)) throw new Error(`${label} path must be absolute`);
   const info = await lstat(path);
   const canonical = await realpath(path);
-  if (info.isSymbolicLink() || !info.isDirectory() || canonical !== resolve(path)) {
+  const expectedUid = process.getuid?.();
+  if (
+    info.isSymbolicLink() ||
+    !info.isDirectory() ||
+    canonical !== resolve(path) ||
+    (expectedUid !== undefined && info.uid !== expectedUid)
+  ) {
     throw new Error(`${label} must be a physical canonical directory`);
   }
   if ((info.mode & 0o077) !== 0) {
