@@ -1,9 +1,9 @@
 {
   "name": "@takos/takos",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "takosRelease": {
     "name": "takos",
-    "version": "0.12.1"
+    "version": "0.12.2"
   },
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -35,7 +35,7 @@
     "check:website-host": "bun scripts/check-website-host-drift.mjs",
     "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/contracts && bun run test:product-contracts && bun run test:product-materializer && bun run test:opentofu",
     "test:product-contracts": "bun test src/worker/application/services/identity/__tests__/space-crud-write.test.ts src/worker/application/services/platform/__tests__/runtime-interface-client.test.ts src/worker/application/services/source/__tests__/installable-app-install.test.ts src/worker/application/services/source/__tests__/takosumi-workload-services.test.ts src/worker/server/routes/__tests__/api-scope-auth.test.ts src/worker/server/routes/__tests__/apps.test.ts src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts src/worker/server/routes/capsules_test.ts web/src/__tests__/views/apps/inflight-installs.test.ts web/src/__tests__/views/apps/registered-apps.test.ts",
-    "test:product-materializer": "bun test scripts/takos-product-materializer.test.ts scripts/generate-platform-keys.test.ts scripts/release-artifact-deploy.test.ts scripts/takoform-schema-bundle.test.ts",
+    "test:product-materializer": "bun test scripts/takos-product-materializer.test.ts scripts/generate-platform-keys.test.ts scripts/build-worker-release-artifact.test.ts scripts/smoke-worker-release-artifact.test.ts scripts/release-artifact-deploy.test.ts scripts/takoform-schema-bundle.test.ts",
     "test:opentofu": "(cd deploy/opentofu/cloudflare && tofu init -backend=false -input=false -lockfile=readonly -no-color && tofu test -no-color) && tofu -chdir=deploy/opentofu/takoform init -backend=false -input=false -lockfile=readonly -no-color && tofu -chdir=deploy/opentofu/takoform validate -no-color",
     "test:common": "bun test ./src/worker/platform-utils",
     "validate:api-docs": "bun scripts/validate-api-docs.ts",

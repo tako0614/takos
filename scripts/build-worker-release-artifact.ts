@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
 import {
+  chmod,
   cp,
   lstat,
   mkdir,
@@ -30,6 +31,13 @@ type ImageDigestRecord = {
   publicOciRef?: string;
 };
 
+// The archive digest is checked into the same source tag that selects it from
+// the portable module. A commit-derived mtime would make that relationship
+// self-referential even though module files are not archive inputs. Canonical
+// timestamps and explicit staged modes keep the archive identity a function of
+// the Worker and asset bytes, independent of the caller's filesystem policy.
+const CANONICAL_WORKER_ARCHIVE_EPOCH = "0";
+
 if (import.meta.main) {
   const options = parseArgs(Bun.argv.slice(2));
   await buildWorkerReleaseArtifact(options);
@@ -54,13 +62,14 @@ export async function buildWorkerReleaseArtifact(options: Options) {
       join(packageRoot, "asset-manifest.json"),
       `${JSON.stringify(assetManifest, null, 2)}\n`,
     );
+    await canonicalizePackageModes(packageRoot);
 
     await mkdir(outputDir, { recursive: true });
     const archiveName = "takos-worker-release.tar.gz";
     const archivePath = join(outputDir, archiveName);
     run("tar", [
       "--sort=name",
-      `--mtime=@${sourceDateEpoch()}`,
+      `--mtime=@${CANONICAL_WORKER_ARCHIVE_EPOCH}`,
       "--owner=0",
       "--group=0",
       "--numeric-owner",
@@ -140,14 +149,6 @@ async function resolveWorkerBundlePath(bundleDir: string): Promise<string> {
   return candidates[0];
 }
 
-function sourceDateEpoch() {
-  const value = Bun.env.SOURCE_DATE_EPOCH?.trim() || "0";
-  if (!/^\d+$/u.test(value)) {
-    throw new Error("SOURCE_DATE_EPOCH must be an integer Unix timestamp.");
-  }
-  return value;
-}
-
 async function buildAssetManifest(directory: string) {
   const manifest: Record<string, { hash: string; size: number }> = {};
   for (const path of await walkFiles(directory)) {
@@ -205,6 +206,23 @@ async function walkFiles(directory: string): Promise<string[]> {
     else throw new Error(`Release assets may not contain links: ${path}`);
   }
   return output.sort();
+}
+
+async function canonicalizePackageModes(directory: string): Promise<void> {
+  await chmod(directory, 0o755);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await canonicalizePackageModes(path);
+    } else if (entry.isFile()) {
+      // Worker JavaScript and static web assets are data inputs to workerd;
+      // none are executed from the archive filesystem. Canonical read-only
+      // entry modes keep release identity independent of source modes/umask.
+      await chmod(path, 0o644);
+    } else {
+      throw new Error(`Release assets may not contain links: ${path}`);
+    }
+  }
 }
 
 async function assertRegularFile(path: string, label: string) {

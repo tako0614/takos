@@ -16,6 +16,9 @@ not recorded in evidence.
   `origin` main ref are identical.
 - Use the package version as the tag (`v<package version>`); do not choose a
   second tag for the same bytes.
+- Require the portable Takoform defaults in that source tree to name the same
+  tag, GitHub archive URL, and archive SHA-256. Prepare fails before its first
+  registry push when those values do not close over the built archive bytes.
 - Keep the Wrangler config, Cloudflare account-id file, API-token file,
   output directory, and evidence files outside the repository. Make operator
   directories `0700` and account/token files `0600`.
@@ -56,6 +59,17 @@ assets, and writes `prepare.json` with
 mode `0600`. Only the digest references are release identities; upload tags are
 never placed in the descriptor.
 
+Before its first remote push, prepare builds the Worker archive with canonical
+archive metadata: owner/group `0`, timestamp `0`, directories `0755`, and
+Worker/static files `0644`, independent of the build process umask and source
+filesystem modes. No archive file has an executable-filesystem contract.
+Prepare boots those exact bytes through Wrangler local workerd. It
+requires the real Takos `/health` JSON, the unauthenticated `/api/auth/me`
+boundary to return its JSON `401`, and `/.well-known/takosumi` product discovery
+response (including `/api/v1`), then records the bounded smoke evidence.
+The final archive built after image digest readback must be byte-identical to
+that preflight archive.
+
 Each registry push runs with its own `DOCKER_CONFIG` directory under the
 temporary private build directory. The command never uses or changes the
 operator's default Docker config. Prepare reads back both registry manifests
@@ -76,14 +90,19 @@ bun run deploy -- takos-release-artifact publish \
 ```
 
 With the plan approved, add `--execute` to that command. Publish verifies the
-remote tag and draft release identity, adopts only an exact same-commit draft,
-re-reads the prepared public GHCR image anonymously, and refuses to create or
-adopt the release when its manifest digest, config digest, or ordered layer
-digests have drifted,
-uploads missing assets, downloads every asset again, and compares each
-SHA-256 to the prepared bytes before making the draft public. It then writes
-`publish.json` with the release URL, asset digests, image references, and the
-remote immutability readback.
+tag and GitHub Release identities are both absent, re-reads the prepared public
+GHCR image anonymously, then invokes one create-only GitHub Release operation
+with the tag target and complete three-asset closure. There is no draft,
+upload, edit, update, delete, force, adoption, or retry path.
+
+After creation starts, publish authoritatively re-reads the tag commit and
+immutable non-draft Release, requires the API asset digests and names to be
+exact, downloads all three assets, and hashes their bytes again. It then boots
+the downloaded Worker archive in Wrangler local workerd and exercises the same
+Takos health and product discovery API paths. Only this complete readback may
+produce `publish.json`, which also records whether the create command was
+acknowledged normally or recovered solely from exact lost-acknowledgment
+readback.
 
 ## Evidence and digest readback
 
@@ -106,11 +125,13 @@ values; do not replace the evidence with a manually edited copy.
 - An interrupted prepare after an image push may leave a non-authoritative
   upload tag. It does not consume the versioned Git or GitHub Release identity;
   inspect the failure and rerun only after confirming no tag/release was made.
-- A publish interruption before the draft is public can be resumed with the
-  same prepared evidence and a new publish evidence path. The command skips
-  only assets whose remote bytes have the exact prepared digest.
-- A foreign tag, a published/non-draft release, a conflicting asset, or any
-  digest mismatch is a hard stop. Do not force-push, delete, replace, or edit
+- Once create-only publication starts, never rerun it automatically. A command
+  error may be a lost acknowledgment: the entrypoint accepts success only when
+  authoritative tag, immutable Release, exact downloaded bytes, and Takos
+  runtime smoke all close over the prepared identity. Any incomplete readback
+  is indeterminate and requires operator investigation, not retry or adoption.
+- Any existing tag or Release, a conflicting asset, or any digest/runtime
+  mismatch is a hard stop. Do not force-push, delete, replace, upload, or edit
   the existing identity.
 - Published tags, image tags, and release assets are treated as immutable
   identities. A correction is a new version and tag; there is no in-place
