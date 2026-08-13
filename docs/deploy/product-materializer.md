@@ -34,7 +34,7 @@ descriptor の URL と digest は例であり、選択した Takos release の c
       workingDirectory: ".",
       env: {
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL:
-          "https://github.com/tako0614/takos/releases/download/v0.11.11/takosumi-artifact.json",
+          "https://github.com/tako0614/takos/releases/download/v0.12.2/takosumi-artifact.json",
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256: "sha256:<64 lowercase hex>",
       },
       timeoutSeconds: 3600,
@@ -71,6 +71,10 @@ descriptor の URL と digest は例であり、選択した Takos release の c
 `TAKOSUMI_SOURCE_SNAPSHOT_ID` と `TAKOSUMI_SOURCE_COMMIT` は action `env` では
 ありません。Takosumi host が Plan に固定した SourceSnapshot から生成する reserved
 runner env です。descriptor の `commit` は必ずこの commit と一致しなければなりません。
+Takos SourceSnapshot 内の `takosumi-composition-source.json` も source closure の
+一部です。descriptor の `takosumiCompositionSource` は、その pin の kind、repository、
+commit、pin file SHA-256 と完全一致しなければならず、別の Takosumi checkout で生成した
+Worker archive は materialize しません。
 `TAKOSUMI_OUTPUTS_JSON`、`TAKOSUMI_PROVIDER_CONFIGS_JSON`、
 `TAKOSUMI_RELEASE_CONTEXT_JSON` も host-owned で、action `env` から上書きできません。
 

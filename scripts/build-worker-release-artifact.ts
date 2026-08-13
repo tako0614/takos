@@ -16,6 +16,12 @@ import { tmpdir } from "node:os";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { hash as blake3 } from "blake3-wasm";
 
+import {
+  parseTakosumiCompositionSourceIdentity,
+  readTakosumiCompositionSourceIdentity,
+  type TakosumiCompositionSourceIdentity,
+} from "./check-takosumi-composition-source.ts";
+
 type Options = {
   bundleDir: string;
   assetsDir: string;
@@ -23,6 +29,7 @@ type Options = {
   outputDir: string;
   releaseTag: string;
   requireCloudflareContainerImages: boolean;
+  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
 };
 
 type ImageDigestRecord = {
@@ -39,12 +46,18 @@ type ImageDigestRecord = {
 const CANONICAL_WORKER_ARCHIVE_EPOCH = "0";
 
 if (import.meta.main) {
-  const options = parseArgs(Bun.argv.slice(2));
+  const options = {
+    ...parseArgs(Bun.argv.slice(2)),
+    takosumiCompositionSource: await readTakosumiCompositionSourceIdentity(
+      resolve(import.meta.dir, ".."),
+    ),
+  };
   await buildWorkerReleaseArtifact(options);
 }
 
 export async function buildWorkerReleaseArtifact(options: Options) {
   assertReleaseTag(options.releaseTag);
+  parseTakosumiCompositionSourceIdentity(options.takosumiCompositionSource);
   const bundleDir = resolve(options.bundleDir);
   const assetsDir = resolve(options.assetsDir);
   const outputDir = resolve(options.outputDir);
@@ -108,11 +121,13 @@ export async function buildWorkerReleaseArtifact(options: Options) {
           ? `${Bun.env.GITHUB_SERVER_URL}/${Bun.env.GITHUB_REPOSITORY}/actions/runs/${Bun.env.GITHUB_RUN_ID}`
           : null,
       releaseTag: options.releaseTag,
+      takosumiCompositionSource: options.takosumiCompositionSource,
       artifact: {
         filename: archiveName,
         url: artifactUrl,
         sha256: archiveSha256,
         sha256Prefixed: `sha256:${archiveSha256}`,
+        size: archiveBytes.byteLength,
         contentType: "application/gzip",
       },
       assetManifest: "asset-manifest.json",
@@ -244,7 +259,9 @@ function run(command: string, args: string[]) {
   }
 }
 
-function parseArgs(args: string[]): Options {
+function parseArgs(
+  args: string[],
+): Omit<Options, "takosumiCompositionSource"> {
   const values = new Map<string, string>();
   let requireCloudflareContainerImages = false;
   for (let index = 0; index < args.length; index += 1) {

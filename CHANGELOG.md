@@ -14,6 +14,9 @@ breaking changes bump the minor.
   create-only GitHub Release can satisfy publication readback.
 - Canonicalize archive directory and file modes so the immutable Worker digest
   does not depend on the release operator's process umask or source modes.
+- Pin the exact Takosumi contract checkout compiled into Takos, reject missing,
+  dirty, substituted, or drifting sibling sources, and bind that composition
+  identity into release evidence and the Worker descriptor.
 
 ## 0.12.1 — Portable release defaults
 
