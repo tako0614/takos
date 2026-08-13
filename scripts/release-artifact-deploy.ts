@@ -29,6 +29,7 @@ import {
   verifyTakosumiCompositionSource,
   type TakosumiCompositionSourceIdentity,
 } from "./check-takosumi-composition-source.ts";
+import { assertPhysicalGitTreeMatchesCommit } from "./check-physical-git-tree.ts";
 
 const REPOSITORY = "tako0614/takos";
 const IMAGE_NAMES = ["takos-agent"] as const;
@@ -54,6 +55,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
     "containers/agent",
     "takosumi-composition-source.json",
     "tsconfig.json",
+    "scripts/check-physical-git-tree.ts",
     "scripts/check-takosumi-composition-source.ts",
     "scripts/build-worker-release-artifact.ts",
     "scripts/smoke-worker-release-artifact.ts",
@@ -70,11 +72,11 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
     reversal:
       "published Git tags, registry digest references, and release assets are immutable identities; correction uses a new package version and tag rather than overwriting bytes",
     "failure-handling":
-      "both phases are dry-run by default, redact provider output, record no credentials, refuse conflicting identities, and after a possible lost acknowledgment accept success only from authoritative exact tag, release, asset, and runtime readback; otherwise publication is indeterminate and must not be retried",
+      "both phases are dry-run by default, redact provider output, record no credentials, refuse conflicting identities, and after a possible lost acknowledgment accept success only when a create process was spawned after final absence and authoritative exact tag, nonce-bound release, asset, and runtime readback all succeed; otherwise publication is indeterminate and must not be retried",
     "no-overwrite":
-      "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities, then immediately before its one create-only GitHub Release operation re-reads the bounded private operator-owned descriptor without following links and requires its exact canonical schema, current source/composition/archive closure, and prepare digest; there is no update, upload, edit, delete, force, or retry path",
+      "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities, then immediately before its one create-only GitHub Release operation re-reads the bounded private operator-owned descriptor without following links and requires its exact canonical schema, proves the exact physical Takos HEAD tree, re-reads final tag and Release absence, and mints a per-attempt readback marker; there is no update, upload, edit, delete, force, or retry path",
     "pre-mutation-proof":
-      "prepare reruns the portable complete gate, proves clean pushed Takos main and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin with no hidden index flags plus a physical pinned-tree byte/type/mode proof, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
+      "prepare reruns the portable complete gate, proves clean pushed Takos main with no hidden index flags plus an independent physical HEAD-tree byte/type/mode/symlink proof and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin with the same physical-tree protections, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
     "independent-review":
       "the release publisher implementation and its dry-run/mutation boundary receive an independent review before execute; no task, branch, green check, or source repository authorizes publication by itself",
   },
@@ -110,6 +112,10 @@ type CommandResult = Readonly<{
   stdout: string;
   stderr: string;
 }>;
+
+type SpawnedCommandResult = CommandResult & Readonly<{ spawned: true }>;
+
+class ImmutablePublishedIdentityConflict extends Error {}
 
 /**
  * Registry-independent identity for a single-platform image manifest.
@@ -488,6 +494,7 @@ async function prepareRelease(
       takosumiCompositionSource,
       await verifyComposition(),
     );
+    await assertTakosRepositoryIdentityUnchanged(root, commit);
     const cloudflareAgent = await pushImage(
       root,
       config,
@@ -731,30 +738,30 @@ async function publishRelease(
     prepared,
     verifyPortableWorkerSourceIdentity,
   );
-  const creation = await command(
+  await assertTakosRepositoryIdentityUnchanged(root, commit);
+  const creation = await createOnlyReleaseAfterFinalAbsence(
     root,
-    "gh",
-    createOnlyReleaseCommand(
-      options.tag,
-      commit,
-      prepared.assets.map((asset) => asset.path),
-    ),
+    options.tag,
+    commit,
+    prepared.assets,
   );
   let verified: PublishedReleaseVerification;
   try {
-    verified = await verifyPublishedRelease(root, prepared);
+    verified = await verifyPublishedReleaseAssets(
+      root,
+      prepared,
+      creation.release,
+    );
   } catch (error) {
-    const outcome = creation.exitCode === 0
+    const outcome = creation.createExitCode === 0
       ? "create-only publication was acknowledged but its exact post-condition failed"
       : "publication may have lost its acknowledgment and is indeterminate";
     throw new Error(
       `${outcome}; do not retry or mutate the identity. Authoritative readback failed: ${
         error instanceof Error ? error.message : String(error)
-      }${commandFailureDetail(creation)}`,
+      }${createFailureDetail(creation.createExitCode)}`,
     );
   }
-  const publicationAcknowledgment =
-    creation.exitCode === 0 ? "confirmed" : "lost-acknowledgment-read-back";
   const record = {
     kind: "takos.release-artifact-publish@v2",
     status: "published",
@@ -770,7 +777,8 @@ async function publishRelease(
     publicAgentImage: prepared.publicAgentImage,
     imageContent: prepared.imageContent,
     githubImmutable: verified.release.isImmutable,
-    publicationAcknowledgment,
+    publicationAttempt: creation.publicationAttempt,
+    publicationAcknowledgment: creation.publicationAcknowledgment,
     workerSmoke: verified.workerSmoke,
     observedAt: new Date().toISOString(),
   } as const;
@@ -782,6 +790,21 @@ async function repositoryIdentity(
   root: string,
   requireMain: boolean,
 ): Promise<{ commit: string }> {
+  const gitRoot = (
+    await checked(root, "git", ["rev-parse", "--show-toplevel"])
+  ).stdout.trim();
+  if ((await realpath(resolve(gitRoot))) !== root) {
+    throw new Error("Takos repository must be the exact physical Git root");
+  }
+  const commit = (await checked(root, "git", ["rev-parse", "HEAD"]))
+    .stdout.trim();
+  await assertPhysicalGitTreeMatchesCommit({
+    root,
+    commit,
+    subject: "Takos repository",
+    git: async (physicalRoot, args) =>
+      (await checked(physicalRoot, "git", args)).stdout,
+  });
   const status = await checked(root, "git", [
     "status",
     "--porcelain=v1",
@@ -800,8 +823,6 @@ async function repositoryIdentity(
   if (originUrl !== "https://github.com/tako0614/takos.git") {
     throw new Error("Takos origin must be the canonical GitHub repository");
   }
-  const commit = (await checked(root, "git", ["rev-parse", "HEAD"]))
-    .stdout.trim();
   const upstream = requireMain || branch === "main"
     ? "origin/main"
     : (await checked(root, "git", [
@@ -828,6 +849,16 @@ async function repositoryIdentity(
     throw new Error("Takos HEAD must equal its pushed canonical origin branch");
   }
   return { commit };
+}
+
+async function assertTakosRepositoryIdentityUnchanged(
+  root: string,
+  expectedCommit: string,
+): Promise<void> {
+  const current = await repositoryIdentity(root, true);
+  if (current.commit !== expectedCommit) {
+    throw new Error("Takos repository identity changed during release execution");
+  }
 }
 
 async function packageVersion(root: string): Promise<string> {
@@ -1427,11 +1458,77 @@ async function assertRemoteReleaseIdentityAvailable(
   }
 }
 
+export type CreateOnlyReleaseResult = Readonly<{
+  release: ReleaseReadback;
+  publicationAttempt: string;
+  publicationAcknowledgment: "confirmed" | "lost-acknowledgment-read-back";
+  createExitCode: number;
+}>;
+
+/**
+ * Keeps the final tag/Release absence read and the sole create invocation in
+ * one protocol. The random marker is minted only after absence is observed,
+ * sent in the create request, and required in authoritative readback. An
+ * identity created before this process was spawned therefore cannot be
+ * mistaken for this process losing its acknowledgment.
+ */
+export async function createOnlyReleaseAfterFinalAbsence(
+  root: string,
+  tag: string,
+  commit: string,
+  assets: readonly { name: string; path: string; digest: string }[],
+): Promise<CreateOnlyReleaseResult> {
+  await assertRemoteReleaseIdentityAvailable(root, tag, commit, true);
+  const publicationAttempt = digestBytes(randomBytes(32));
+  const creation = await spawnedCommand(
+    root,
+    "gh",
+    createOnlyReleaseCommand(
+      tag,
+      commit,
+      assets.map((asset) => asset.path),
+      publicationAttempt,
+    ),
+  );
+
+  let release: ReleaseReadback;
+  try {
+    release = await verifyPublishedReleaseMetadata(
+      root,
+      tag,
+      commit,
+      publicationAttempt,
+      assets,
+    );
+  } catch (error) {
+    const outcome = creation.exitCode === 0
+      ? "create-only publication was acknowledged but its exact post-condition failed"
+      : "publication may have lost its acknowledgment and is indeterminate";
+    throw new Error(
+      `${outcome}; do not retry or mutate the identity. Authoritative readback failed: ${
+        error instanceof Error ? error.message : String(error)
+      }${commandFailureDetail(creation)}`,
+    );
+  }
+
+  return {
+    release,
+    publicationAttempt,
+    publicationAcknowledgment: creation.exitCode === 0
+      ? "confirmed"
+      : "lost-acknowledgment-read-back",
+    createExitCode: creation.exitCode,
+  };
+}
+
 export type ReleaseReadback = {
   isDraft: boolean;
   isPrerelease: boolean;
   isImmutable: boolean;
   tagName: string;
+  name: string;
+  body: string;
+  targetCommitish: string;
   url: string;
   assets: { name: string; digest?: string }[];
 };
@@ -1444,7 +1541,7 @@ async function readRelease(tag: string): Promise<ReleaseReadback | undefined> {
     "--repo",
     REPOSITORY,
     "--json",
-    "isDraft,isPrerelease,isImmutable,tagName,url,assets",
+    "isDraft,isPrerelease,isImmutable,tagName,name,body,targetCommitish,url,assets",
   ]);
   if (result.exitCode !== 0) {
     if (/release not found|HTTP 404/iu.test(result.stderr)) return undefined;
@@ -1456,6 +1553,9 @@ async function readRelease(tag: string): Promise<ReleaseReadback | undefined> {
     typeof parsed.isPrerelease !== "boolean" ||
     typeof parsed.isImmutable !== "boolean" ||
     typeof parsed.tagName !== "string" ||
+    typeof parsed.name !== "string" ||
+    typeof parsed.body !== "string" ||
+    typeof parsed.targetCommitish !== "string" ||
     typeof parsed.url !== "string" ||
     !Array.isArray(parsed.assets) ||
     parsed.assets.some(
@@ -1475,7 +1575,11 @@ export function createOnlyReleaseCommand(
   tag: string,
   commit: string,
   assetPaths: readonly string[],
+  publicationAttempt: string,
 ): string[] {
+  if (!SHA256.test(publicationAttempt)) {
+    throw new Error("publication attempt identity is invalid");
+  }
   return [
     "release",
     "create",
@@ -1488,23 +1592,39 @@ export function createOnlyReleaseCommand(
     "--title",
     `Takos ${tag}`,
     "--notes",
-    `Immutable Takos worker artifact for ${commit}.`,
+    releaseNotes(commit, publicationAttempt),
   ];
+}
+
+function releaseNotes(commit: string, publicationAttempt: string): string {
+  return (
+    `Immutable Takos worker artifact for ${commit}.\n\n` +
+    `Publication attempt: ${publicationAttempt}`
+  );
 }
 
 export function assertPublishedReleaseReadback(
   tag: string,
+  commit: string,
+  publicationAttempt: string,
   expectedAssets: readonly { name: string; digest: string }[],
   release: ReleaseReadback,
 ): void {
   if (
     release.tagName !== tag ||
+    release.name !== `Takos ${tag}` ||
+    release.targetCommitish !== commit ||
     release.isDraft ||
     release.isPrerelease ||
     !release.isImmutable ||
     !release.url.trim()
   ) {
     throw new Error("published GitHub Release state is not exact and immutable");
+  }
+  if (release.body !== releaseNotes(commit, publicationAttempt)) {
+    throw new ImmutablePublishedIdentityConflict(
+      "published GitHub Release does not belong to this publication attempt",
+    );
   }
   const expectedByName = new Map(
     expectedAssets.map((asset) => [asset.name, asset.digest]),
@@ -1524,36 +1644,56 @@ type PublishedReleaseVerification = Readonly<{
   workerSmoke: WorkerReleaseSmokeResult;
 }>;
 
-async function verifyPublishedRelease(
+async function verifyPublishedReleaseMetadata(
   root: string,
-  prepared: PreparedRecord,
-): Promise<PublishedReleaseVerification> {
+  tag: string,
+  commit: string,
+  publicationAttempt: string,
+  assets: readonly { name: string; digest: string }[],
+): Promise<ReleaseReadback> {
   const deadline = Date.now() + 30_000;
   let lastReadbackError = "published identity was not visible";
-  let release: ReleaseReadback | undefined;
-  let metadataVerified = false;
   while (Date.now() < deadline) {
     try {
-      const remoteCommit = await remoteTagCommit(root, prepared.tag);
-      if (remoteCommit !== prepared.commit) {
-        throw new Error(
-          `published tag resolved to ${remoteCommit || "<missing>"}, expected ${prepared.commit}`,
+      const remoteCommit = await remoteTagCommit(root, tag);
+      if (remoteCommit && remoteCommit !== commit) {
+        throw new ImmutablePublishedIdentityConflict(
+          `published tag resolved to ${remoteCommit}, expected ${commit}`,
         );
       }
-      release = await readRelease(prepared.tag);
-      if (!release) throw new Error("published GitHub Release is missing");
-      assertPublishedReleaseReadback(prepared.tag, prepared.assets, release);
-      metadataVerified = true;
-      break;
+      const release = await readRelease(tag);
+      if (release) {
+        if (remoteCommit !== commit) {
+          throw new Error("published GitHub Release exists without the exact tag");
+        }
+        assertPublishedReleaseReadback(
+          tag,
+          commit,
+          publicationAttempt,
+          assets,
+          release,
+        );
+        return release;
+      }
+      lastReadbackError = remoteCommit
+        ? "published GitHub Release is missing"
+        : "published tag and GitHub Release are missing";
     } catch (error) {
       lastReadbackError = error instanceof Error ? error.message : String(error);
-      await Bun.sleep(250);
+      if (error instanceof ImmutablePublishedIdentityConflict) {
+        throw error;
+      }
     }
+    await Bun.sleep(250);
   }
-  if (!release || !metadataVerified) {
-    throw new Error(`published identity readback timed out: ${lastReadbackError}`);
-  }
+  throw new Error(`published identity readback timed out: ${lastReadbackError}`);
+}
 
+async function verifyPublishedReleaseAssets(
+  root: string,
+  prepared: PreparedRecord,
+  release: ReleaseReadback,
+): Promise<PublishedReleaseVerification> {
   const directory = await mkdtemp(join(tmpdir(), "takos-release-readback-"));
   try {
     await checked(root, "gh", [
@@ -1614,9 +1754,13 @@ async function remoteTagCommit(root: string, tag: string): Promise<string> {
 }
 
 function commandFailureDetail(result: CommandResult): string {
-  return result.exitCode === 0
+  return createFailureDetail(result.exitCode);
+}
+
+function createFailureDetail(exitCode: number): string {
+  return exitCode === 0
     ? ""
-    : ` Create command exited ${result.exitCode}; output is intentionally omitted.`;
+    : ` Create command exited ${exitCode}; output is intentionally omitted.`;
 }
 
 function parsePreparedRecord(value: unknown): PreparedRecord {
@@ -2154,6 +2298,16 @@ async function command(
     child.exited,
   ]);
   return { exitCode, stdout, stderr };
+}
+
+async function spawnedCommand(
+  cwd: string,
+  executable: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<SpawnedCommandResult> {
+  const result = await command(cwd, executable, args, env);
+  return { ...result, spawned: true };
 }
 
 async function readBoundedText(

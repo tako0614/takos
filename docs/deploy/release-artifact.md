@@ -13,7 +13,12 @@ not recorded in evidence.
 ## Preconditions
 
 - Work from a clean `main` checkout whose `HEAD`, `origin/main`, and pushed
-  `origin` main ref are identical.
+  `origin` main ref are identical. Takos itself may not use any
+  `assume-unchanged` or `skip-worktree` index entry. The release entrypoint
+  independently compares every physical tracked file type, executable mode,
+  blob bytes, and symlink target to the exact `HEAD` tree before reading release
+  inputs, and repeats that proof immediately before the first prepare push or
+  the publish create operation.
 - Treat `takosumi-composition-source.json` as the Takos-owned authority for the
   Takosumi contract source compiled into this release. The checkout must use
   the physical sibling layout `takos/` plus `takosumi/`; the sibling may not be
@@ -74,7 +79,9 @@ never placed in the descriptor.
 
 Before its first remote push, prepare reruns the complete portable gate and
 rechecks the composition sibling before compilation and after the exact
-archive smoke. The Worker descriptor and private prepare evidence both bind
+archive smoke. It also repeats the Takos physical `HEAD`-tree proof after all
+build/smoke work and immediately before the registry mutation. The Worker
+descriptor and private prepare evidence both bind
 the Takosumi composition kind, repository, commit, and composition-pin digest;
 publish rejects evidence from another composition.
 
@@ -111,15 +118,19 @@ bun run deploy -- takos-release-artifact publish \
   --evidence "$private/publish.json"
 ```
 
-With the plan approved, add `--execute` to that command. Publish verifies the
-tag and GitHub Release identities are both absent, re-reads the prepared public
-GHCR image anonymously, then invokes one create-only GitHub Release operation
-with the tag target and complete three-asset closure. There is no draft,
-upload, edit, update, delete, force, adoption, or retry path.
+With the plan approved, add `--execute` to that command. Publish initially
+verifies the tag and GitHub Release identities are both absent, re-reads the
+prepared public GHCR image anonymously, completes exact archive smoke and
+descriptor/source verification, and then re-reads exact tag plus Release
+absence again immediately before one create-only GitHub Release invocation.
+Only after that final absence read does it mint a random publication-attempt
+identity and bind it into the create request's immutable release notes. There
+is no draft, upload, edit, update, delete, force, adoption, or retry path.
 
 After creation starts, publish authoritatively re-reads the tag commit and
-immutable non-draft Release, requires the API asset digests and names to be
-exact, downloads all three assets, and hashes their bytes again. It then boots
+immutable non-draft Release, requires the exact title, target commit, attempt
+identity, API asset digests, and names, downloads all three assets, and hashes
+their bytes again. It then boots
 the downloaded Worker archive in Wrangler local workerd and exercises the same
 Takos health and product discovery API paths. Only this complete readback may
 produce `publish.json`, which also records whether the create command was
@@ -130,8 +141,9 @@ readback.
 
 Keep `prepare.json`, `publish.json`, and the asset directory outside the
 checkout. Treat the JSON as operator-private release evidence; it contains
-commit, package/tag, account id, paths, asset digests, and image references,
-but never a token or provider command output.
+commit, package/tag, account id, paths, asset digests, image references, and the
+public publication-attempt identity, but never a token or provider command
+output.
 
 The prepare record is the source for the Takos and Takosumi composition source
 closure, the three asset digests, the Cloudflare
@@ -162,10 +174,14 @@ evidence.
   upload tag. It does not consume the versioned Git or GitHub Release identity;
   inspect the failure and rerun only after confirming no tag/release was made.
 - Once create-only publication starts, never rerun it automatically. A command
-  error may be a lost acknowledgment: the entrypoint accepts success only when
-  authoritative tag, immutable Release, exact downloaded bytes, and Takos
-  runtime smoke all close over the prepared identity. Any incomplete readback
-  is indeterminate and requires operator investigation, not retry or adoption.
+  error may be a lost acknowledgment only if the create process was actually
+  spawned after the final absence read: the entrypoint accepts success only
+  when authoritative tag, immutable Release, the unpredictable attempt
+  identity minted after that read, exact downloaded bytes, and Takos runtime
+  smoke all close over the prepared identity. A preexisting or racing Release
+  cannot supply that attempt identity and is never adopted. Any incomplete
+  readback is indeterminate and requires operator investigation, not retry or
+  adoption.
 - Any existing tag or Release, a conflicting asset, or any digest/runtime
   mismatch is a hard stop. Do not force-push, delete, replace, upload, or edit
   the existing identity.

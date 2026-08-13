@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   chmod,
   mkdir,
@@ -17,6 +18,7 @@ import {
   assertImageContentMatch,
   assertPublishedReleaseReadback,
   assertPublicAgentReadback,
+  createOnlyReleaseAfterFinalAbsence,
   createOnlyReleaseCommand,
   isolatedDockerEnv,
   RELEASE_ARTIFACT_USAGE,
@@ -73,6 +75,13 @@ function installReadOnlyCommandStub(expectedCommit: string): {
   const calls: string[][] = [];
   const originalSpawn = Bun.spawn;
   const bunRuntime = Bun as unknown as { spawn: typeof Bun.spawn };
+  const repositoryRoot = join(import.meta.dir, "..");
+  const physicalProofPath = "AGENTS.md";
+  const physicalProofBytes = readFileSync(join(repositoryRoot, physicalProofPath));
+  const physicalProofObjectId = createHash("sha1")
+    .update(`blob ${physicalProofBytes.byteLength}\0`)
+    .update(physicalProofBytes)
+    .digest("hex");
   bunRuntime.spawn = ((argv: readonly string[]) => {
     const command = [...argv];
     calls.push(command);
@@ -85,6 +94,10 @@ function installReadOnlyCommandStub(expectedCommit: string): {
     if (executable === "git") {
       if (args[0] === "status") {
         stdout = "";
+      } else if (args[0] === "ls-files") {
+        stdout = `H ${physicalProofPath}\0`;
+      } else if (args[0] === "ls-tree") {
+        stdout = `100644 blob ${physicalProofObjectId}\t${physicalProofPath}\0`;
       } else if (args[0] === "branch") {
         stdout = "main\n";
       } else if (
@@ -92,6 +105,16 @@ function installReadOnlyCommandStub(expectedCommit: string): {
         (args[1] === "HEAD" || args[1] === "origin/main")
       ) {
         stdout = `${expectedCommit}\n`;
+      } else if (
+        args[0] === "rev-parse" &&
+        args[1] === "--show-toplevel"
+      ) {
+        stdout = `${repositoryRoot}\n`;
+      } else if (
+        args[0] === "rev-parse" &&
+        args[1] === "--show-object-format"
+      ) {
+        stdout = "sha1\n";
       } else if (
         args[0] === "remote" &&
         args[1] === "get-url" &&
@@ -263,6 +286,9 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.covers).toContain(
     "takosumi-composition-source.json",
   );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.covers).toContain(
+    "scripts/check-physical-git-tree.ts",
+  );
   for (const obligation of [
     "provenance",
     "post-conditions",
@@ -303,12 +329,23 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   ).toContain("local/live origin/main");
   expect(
     TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["pre-mutation-proof"],
-  ).toContain("physical pinned-tree byte/type/mode proof");
+  ).toContain("physical HEAD-tree byte/type/mode/symlink proof");
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["no-overwrite"]).toContain(
+    "final tag and Release absence",
+  );
+  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["failure-handling"]).toContain(
+    "nonce-bound release",
+  );
 });
 
 test("publication has one create-only command with the complete asset closure", () => {
   const assets = ["/private/worker.tgz", "/private/checksum", "/private/descriptor"];
-  const command = createOnlyReleaseCommand("v1.2.3", commit, assets);
+  const command = createOnlyReleaseCommand(
+    "v1.2.3",
+    commit,
+    assets,
+    digest("7"),
+  );
 
   expect(command.slice(0, 6)).toEqual([
     "release",
@@ -321,6 +358,7 @@ test("publication has one create-only command with the complete asset closure", 
   expect(command).not.toContain("--draft");
   expect(command).not.toContain("upload");
   expect(command).not.toContain("edit");
+  expect(command.join("\n")).toContain(digest("7"));
 });
 
 test("authoritative release readback requires immutable state and exact digests", () => {
@@ -330,23 +368,127 @@ test("authoritative release readback requires immutable state and exact digests"
     isPrerelease: false,
     isImmutable: true,
     tagName: "v1.2.3",
+    name: "Takos v1.2.3",
+    body:
+      `Immutable Takos worker artifact for ${commit}.\n\n` +
+      `Publication attempt: ${digest("7")}`,
+    targetCommitish: commit,
     url: "https://github.com/tako0614/takos/releases/tag/v1.2.3",
     assets: expected,
   };
 
-  expect(() => assertPublishedReleaseReadback("v1.2.3", expected, exact)).not.toThrow();
   expect(() =>
-    assertPublishedReleaseReadback("v1.2.3", expected, {
-      ...exact,
-      isImmutable: false,
-    }),
+    assertPublishedReleaseReadback(
+      "v1.2.3",
+      commit,
+      digest("7"),
+      expected,
+      exact,
+    ),
+  ).not.toThrow();
+  expect(() =>
+    assertPublishedReleaseReadback(
+      "v1.2.3",
+      commit,
+      digest("7"),
+      expected,
+      {
+        ...exact,
+        isImmutable: false,
+      },
+    ),
   ).toThrow("state is not exact and immutable");
   expect(() =>
-    assertPublishedReleaseReadback("v1.2.3", expected, {
-      ...exact,
-      assets: [{ name: "worker.tgz", digest: digest("b") }],
-    }),
+    assertPublishedReleaseReadback(
+      "v1.2.3",
+      commit,
+      digest("7"),
+      expected,
+      {
+        ...exact,
+        assets: [{ name: "worker.tgz", digest: digest("b") }],
+      },
+    ),
   ).toThrow("asset closure or digest drifted");
+  expect(() =>
+    assertPublishedReleaseReadback(
+      "v1.2.3",
+      commit,
+      digest("8"),
+      expected,
+      exact,
+    ),
+  ).toThrow("publication attempt");
+});
+
+test("final pre-create absence rejects a racing release with zero create calls", async () => {
+  const stub = installFinalReleaseRaceStub("preexisting");
+  try {
+    await expect(
+      createOnlyReleaseAfterFinalAbsence(
+        join(import.meta.dir, ".."),
+        "v1.2.3",
+        commit,
+        [{ name: "worker.tgz", path: "/private/worker.tgz", digest: digest("a") }],
+      ),
+    ).rejects.toThrow("GitHub release already exists");
+    expect(stub.calls.filter(isReleaseCreateCommand)).toEqual([]);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("a spawned create with a lost acknowledgment adopts only its nonce-bound exact readback", async () => {
+  const stub = installFinalReleaseRaceStub("lost-acknowledgment");
+  try {
+    const result = await createOnlyReleaseAfterFinalAbsence(
+      join(import.meta.dir, ".."),
+      "v1.2.3",
+      commit,
+      [{ name: "worker.tgz", path: "/private/worker.tgz", digest: digest("a") }],
+    );
+    expect(result.publicationAcknowledgment).toBe(
+      "lost-acknowledgment-read-back",
+    );
+    expect(stub.calls.filter(isReleaseCreateCommand)).toHaveLength(1);
+    expect(result.release.body).toContain(result.publicationAttempt);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("a racing identity created after final absence cannot masquerade as lost acknowledgment", async () => {
+  const stub = installFinalReleaseRaceStub("raced-before-spawn");
+  try {
+    await expect(
+      createOnlyReleaseAfterFinalAbsence(
+        join(import.meta.dir, ".."),
+        "v1.2.3",
+        commit,
+        [{ name: "worker.tgz", path: "/private/worker.tgz", digest: digest("a") }],
+      ),
+    ).rejects.toThrow("does not belong to this publication attempt");
+    expect(stub.calls.filter(isReleaseCreateCommand)).toHaveLength(1);
+  } finally {
+    stub.restore();
+  }
+});
+
+test("a create process that never spawned cannot adopt a racing identity", async () => {
+  const stub = installFinalReleaseRaceStub("spawn-failed");
+  try {
+    await expect(
+      createOnlyReleaseAfterFinalAbsence(
+        join(import.meta.dir, ".."),
+        "v1.2.3",
+        commit,
+        [{ name: "worker.tgz", path: "/private/worker.tgz", digest: digest("a") }],
+      ),
+    ).rejects.toThrow("simulated pre-spawn failure");
+    expect(stub.calls.filter(isReleaseViewCommand)).toHaveLength(1);
+  } finally {
+    stub.restore();
+  }
 });
 
 test("release publisher never copies local Rust target caches into its build context", async () => {
@@ -906,4 +1048,112 @@ function expectNoReleaseProviderCalls(calls: readonly string[][]): void {
         args.some((argument) => argument.startsWith("refs/tags/")),
     ),
   ).toEqual([]);
+}
+
+function installFinalReleaseRaceStub(
+  scenario:
+    | "preexisting"
+    | "raced-before-spawn"
+    | "lost-acknowledgment"
+    | "spawn-failed",
+): { calls: string[][]; restore: () => void } {
+  const calls: string[][] = [];
+  const originalSpawn = Bun.spawn;
+  const bunRuntime = Bun as unknown as { spawn: typeof Bun.spawn };
+  let releaseViews = 0;
+  let publicationBody = "";
+
+  bunRuntime.spawn = ((argv: readonly string[]) => {
+    const command = [...argv];
+    calls.push(command);
+    const [executable, ...args] = command;
+    let stdout = "";
+    let stderr = "";
+    let exitCode = 0;
+
+    if (
+      executable === "git" &&
+      args[0] === "ls-remote" &&
+      args.includes("--tags")
+    ) {
+      stdout = releaseViews === 0
+        ? ""
+        : `${commit}\trefs/tags/v1.2.3\n`;
+    } else if (executable === "gh" && isReleaseViewArgs(args)) {
+      releaseViews += 1;
+      if (scenario === "preexisting") {
+        stdout = releaseReadbackJson("racing publication");
+      } else if (releaseViews === 1) {
+        exitCode = 1;
+        stderr = "release not found";
+      } else {
+        stdout = releaseReadbackJson(
+          scenario === "raced-before-spawn"
+            ? "racing publication"
+            : publicationBody,
+        );
+      }
+    } else if (executable === "gh" && isReleaseCreateArgs(args)) {
+      if (scenario === "spawn-failed") {
+        throw new Error("simulated pre-spawn failure");
+      }
+      if (scenario !== "raced-before-spawn") {
+        publicationBody = args[args.indexOf("--notes") + 1] ?? "";
+      }
+      if (
+        scenario === "lost-acknowledgment" ||
+        scenario === "raced-before-spawn"
+      ) {
+        exitCode = 1;
+        stderr = scenario === "lost-acknowledgment"
+          ? "connection closed after request body was sent"
+          : "release already exists";
+      }
+    } else {
+      throw new Error(`unexpected final-release command: ${command.join(" ")}`);
+    }
+
+    return {
+      stdout: new Blob([stdout]).stream(),
+      stderr: new Blob([stderr]).stream(),
+      exited: Promise.resolve(exitCode),
+    } as unknown as ReturnType<typeof Bun.spawn>;
+  }) as unknown as typeof Bun.spawn;
+
+  return {
+    calls,
+    restore: () => {
+      bunRuntime.spawn = originalSpawn;
+    },
+  };
+}
+
+function releaseReadbackJson(body: string): string {
+  return JSON.stringify({
+    isDraft: false,
+    isPrerelease: false,
+    isImmutable: true,
+    tagName: "v1.2.3",
+    name: "Takos v1.2.3",
+    body,
+    targetCommitish: commit,
+    url: "https://github.com/tako0614/takos/releases/tag/v1.2.3",
+    assets: [{ name: "worker.tgz", digest: digest("a") }],
+  });
+}
+
+function isReleaseViewArgs(args: readonly string[]): boolean {
+  return args[0] === "release" && args[1] === "view";
+}
+
+function isReleaseCreateArgs(args: readonly string[]): boolean {
+  return args[0] === "release" && args[1] === "create";
+}
+
+function isReleaseViewCommand(command: readonly string[]): boolean {
+  return command[0] === "gh" && isReleaseViewArgs(command.slice(1));
+}
+
+function isReleaseCreateCommand(command: readonly string[]): boolean {
+  return command[0] === "gh" && isReleaseCreateArgs(command.slice(1));
 }
