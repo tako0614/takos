@@ -60,7 +60,10 @@ mode `0600`. Only the digest references are release identities; upload tags are
 never placed in the descriptor.
 
 Before its first remote push, prepare builds the Worker archive with canonical
-archive metadata and boots those exact bytes through Wrangler local workerd. It
+archive metadata: owner/group `0`, timestamp `0`, directories `0755`, and
+Worker/static files `0644`, independent of the build process umask and source
+filesystem modes. No archive file has an executable-filesystem contract.
+Prepare boots those exact bytes through Wrangler local workerd. It
 requires the real Takos `/health` JSON, the unauthenticated `/api/auth/me`
 boundary to return its JSON `401`, and `/.well-known/takosumi` product discovery
 response (including `/api/v1`), then records the bounded smoke evidence.

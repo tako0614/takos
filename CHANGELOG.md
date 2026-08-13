@@ -12,6 +12,8 @@ breaking changes bump the minor.
   to the same immutable Takos release instead of launching older Worker bytes.
 - Qualify the exact downloaded Worker archive in a Workers runtime before a
   create-only GitHub Release can satisfy publication readback.
+- Canonicalize archive directory and file modes so the immutable Worker digest
+  does not depend on the release operator's process umask or source modes.
 
 ## 0.12.1 — Portable release defaults
 

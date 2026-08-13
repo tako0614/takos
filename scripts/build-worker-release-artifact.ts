@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
 import {
+  chmod,
   cp,
   lstat,
   mkdir,
@@ -33,7 +34,8 @@ type ImageDigestRecord = {
 // The archive digest is checked into the same source tag that selects it from
 // the portable module. A commit-derived mtime would make that relationship
 // self-referential even though module files are not archive inputs. Canonical
-// metadata keeps the archive identity a function of the Worker and asset bytes.
+// timestamps and explicit staged modes keep the archive identity a function of
+// the Worker and asset bytes, independent of the caller's filesystem policy.
 const CANONICAL_WORKER_ARCHIVE_EPOCH = "0";
 
 if (import.meta.main) {
@@ -60,6 +62,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
       join(packageRoot, "asset-manifest.json"),
       `${JSON.stringify(assetManifest, null, 2)}\n`,
     );
+    await canonicalizePackageModes(packageRoot);
 
     await mkdir(outputDir, { recursive: true });
     const archiveName = "takos-worker-release.tar.gz";
@@ -203,6 +206,23 @@ async function walkFiles(directory: string): Promise<string[]> {
     else throw new Error(`Release assets may not contain links: ${path}`);
   }
   return output.sort();
+}
+
+async function canonicalizePackageModes(directory: string): Promise<void> {
+  await chmod(directory, 0o755);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await canonicalizePackageModes(path);
+    } else if (entry.isFile()) {
+      // Worker JavaScript and static web assets are data inputs to workerd;
+      // none are executed from the archive filesystem. Canonical read-only
+      // entry modes keep release identity independent of source modes/umask.
+      await chmod(path, 0o644);
+    } else {
+      throw new Error(`Release assets may not contain links: ${path}`);
+    }
+  }
 }
 
 async function assertRegularFile(path: string, label: string) {
