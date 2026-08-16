@@ -39,9 +39,9 @@ const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:$
 const takosumiCompositionSource = {
   kind: "takos.takosumi-composition-source@v1",
   repository: "tako0614/takosumi",
-  commit: "3173457547e5782545dbcd2d78db0791093909d4",
+  commit: "cc9175fd78334f9becb29e2a2d249577f6fa5f4e",
   pinDigest:
-    "sha256:746ea2b8cbbe393f2e962926e9deb5e5cb39f481c92e086e3a028eb923c4d483",
+    "sha256:3d35ea8510cdd05e66b3ca3b10e63086f69eb5e8a61919515c66e05cfcc71f31",
 } as const;
 
 const rawOutputs = {

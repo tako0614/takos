@@ -17,7 +17,7 @@ import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
 const compositionSource = {
   kind: "takos.takosumi-composition-source@v1",
   repository: "tako0614/takosumi",
-  commit: "3173457547e5782545dbcd2d78db0791093909d4",
+  commit: "cc9175fd78334f9becb29e2a2d249577f6fa5f4e",
   pinDigest: `sha256:${"c".repeat(64)}`,
 } as const;
 
