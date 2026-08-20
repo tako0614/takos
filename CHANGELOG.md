@@ -6,6 +6,12 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.3 — On-demand executor capacity
+
+- Stop scheduled tier-1 executor prewarming unless the operator explicitly
+  enables it, while preserving ordinary on-demand startup and stale-run
+  recovery.
+
 ## 0.12.2 — Closed release identity
 
 - Bind the selectable source tag and portable Takoform Worker/schema defaults

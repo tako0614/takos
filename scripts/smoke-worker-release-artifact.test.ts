@@ -54,9 +54,9 @@ export default {
       takosumiCompositionSource: {
         kind: "takos.takosumi-composition-source@v1",
         repository: "tako0614/takosumi",
-        commit: "18de43c862fd97264093e6d9cf38565e4d65da81",
+        commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
         pinDigest:
-          "sha256:03d9e1aa6f03d4482ebb22306e38557ff03a4deeac64d8b9ad6f72c9120ec669",
+          "sha256:ef2a8db15c30782021f5d2d10a87e20479589967b3fef4c99ee405e06dcaf62f",
       },
     });
 

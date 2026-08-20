@@ -15,7 +15,7 @@ const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
 // without operator env overrides. Publish and verify the GitHub immutable
 // release before deploying a website build that names its tag; never use a
 // moving branch ref.
-const DEFAULT_TAKOS_REF = "v0.12.2";
+const DEFAULT_TAKOS_REF = "v0.12.3";
 const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/takoform";
 
 function installUrl(host: string): string {

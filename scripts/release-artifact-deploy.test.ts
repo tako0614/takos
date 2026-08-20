@@ -39,7 +39,7 @@ const imageContent = {
 const takosumiCompositionSource = {
   kind: "takos.takosumi-composition-source@v1",
   repository: "tako0614/takosumi",
-  commit: "18de43c862fd97264093e6d9cf38565e4d65da81",
+  commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
   pinDigest: `sha256:${"c".repeat(64)}`,
 } as const;
 const compositionRuntime = {
@@ -621,7 +621,7 @@ test("prepare dry-run rejects a mismatched Takosumi composition before provider 
         {
           verifyTakosumiCompositionSource: async () => {
             throw new Error(
-              "Takosumi composition source HEAD 95e7048b4d2a2277ed2024a4d41a37c5e482640f does not match pinned commit 18de43c862fd97264093e6d9cf38565e4d65da81",
+              "Takosumi composition source HEAD 95e7048b4d2a2277ed2024a4d41a37c5e482640f does not match pinned commit d348acf853eb692f7be5df8115c1ab4490f845c6",
             );
           },
         },
