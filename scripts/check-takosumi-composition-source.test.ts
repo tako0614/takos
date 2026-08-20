@@ -24,7 +24,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-const PINNED_COMMIT = "cc9175fd78334f9becb29e2a2d249577f6fa5f4e";
+const PINNED_COMMIT = "18de43c862fd97264093e6d9cf38565e4d65da81";
 const REVIEW_WORKTREE_COMMIT = "95e7048b4d2a2277ed2024a4d41a37c5e482640f";
 const CURRENT_MAIN_COMMIT = "c471024f57c81efafebc7349693a9ce14dea77f5";
 const PIN = parseTakosumiCompositionSourcePin({
