@@ -9,7 +9,8 @@ entrypoint's owner gate; it is not deploy authority. The canonical policy is
 control planes use `AGPL-3.0-only`, yurucommu family packages and deployable
 network products also use `AGPL-3.0-only`, GPL-dependent apps use
 `GPL-3.0-only`, reusable SDKs/contracts/providers/examples/static site code use
-`MIT`, and closed/operator-private state uses `UNLICENSED` or no OSS `LICENSE`.
+`MIT`, Takoserver explicitly uses `AGPL-3.0-or-later`, and
+closed/operator-private state uses `UNLICENSED` or no OSS `LICENSE`.
 
 ## First-party License Inventory
 
@@ -24,7 +25,10 @@ network products also use `AGPL-3.0-only`, GPL-dependent apps use
 | `mobile-kit/`                | `MIT`           | sibling repo `LICENSE`, `.reuse/dep5`, and package metadata                       |
 | `takosumi/provider`          | `MIT`           | `provider/LICENSE` and `takosumi/.reuse/dep5` stanza                             |
 | `takosumi/examples/*`        | `MIT`           | package metadata and `takosumi/.reuse/dep5` stanza                               |
-| `takosumi-cloud/`            | `UNLICENSED`    | private package metadata; no OSS `LICENSE` in the public checkout                |
+| `takoserver/`                | `AGPL-3.0-or-later` | public control plane `LICENSE`, `.reuse/dep5`, and package metadata           |
+| `takoserver-private/`        | no OSS license  | provider accounts and supply composition remain private                           |
+| `takosumi-hosted/`           | `UNLICENSED`    | Hosted marketplace and broker package metadata; no OSS `LICENSE`                 |
+| `takosumi-cloud/`            | archived        | historical closed delta with no active runtime authority                          |
 | `takosumi-private/`          | no OSS license  | operator state only; realized config and secrets evidence remain private         |
 | `takos-agent-engine/`        | `MIT`           | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                 |
 | `takos-computer/`            | `MIT`           | sibling repo `LICENSE`, `.reuse/dep5`, npm package metadata                       |
@@ -85,7 +89,9 @@ check itself does not authorize promotion. The validation covers:
 - npm / Cargo manifests declare the expected license
 - lockfiles with root package license metadata do not contradict package
   metadata
-- `takosumi-cloud/` stays `UNLICENSED` and does not publish an OSS `LICENSE`
+- `takosumi-hosted/` stays `UNLICENSED` and does not publish an OSS `LICENSE`
+- `takoserver-private/` and `takosumi-private/` do not publish an OSS `LICENSE`
+- archived `takosumi-cloud/` is not required as an active checkout
 - `takosumi-private/` remains private and does not publish an OSS `LICENSE`
 - legal docs include the first-party and third-party inventory artifacts
 
