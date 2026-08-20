@@ -6,7 +6,7 @@ import {
 } from "../runtime-factory.ts";
 import type { WorkerEnv } from "../env.ts";
 
-test("worker scheduled handler invokes stale-run recovery and executor warm pool", async () => {
+test("worker scheduled handler skips executor prewarm by default", async () => {
   const calls: string[] = [];
   const event = {
     cron: "3,18,33,48 * * * *",
@@ -25,10 +25,9 @@ test("worker scheduled handler invokes stale-run recovery and executor warm pool
       };
     },
     async loadExecutorHost() {
+      calls.push("executor-module-loaded");
       return {
-        async scheduled(receivedEvent, receivedEnv) {
-          expect(receivedEvent).toBe(event);
-          expect(receivedEnv).toBe(env);
+        async scheduled() {
           calls.push("executor-warm-pool");
         },
       };
@@ -36,6 +35,37 @@ test("worker scheduled handler invokes stale-run recovery and executor warm pool
   };
 
   await runWorkerRuntimeScheduled(event, env, deps);
+
+  expect(calls).toEqual(["runner"]);
+});
+
+test("worker scheduled handler prewarms only with the exact opt-in flag", async () => {
+  const calls: string[] = [];
+  const event = {
+    cron: "3,18,33,48 * * * *",
+    scheduledTime: Date.now(),
+    waitUntil() {},
+  } satisfies ScheduledEvent;
+  const env = {
+    EXECUTOR_TIER1_PREWARM_ENABLED: "1",
+  } as WorkerEnv;
+
+  await runWorkerRuntimeScheduled(event, env, {
+    async loadRunner() {
+      return {
+        async scheduled() {
+          calls.push("runner");
+        },
+      };
+    },
+    async loadExecutorHost() {
+      return {
+        async scheduled() {
+          calls.push("executor-warm-pool");
+        },
+      };
+    },
+  });
 
   expect(calls.sort()).toEqual(["executor-warm-pool", "runner"]);
 });
@@ -47,7 +77,9 @@ test("worker scheduled handler starts both responsibilities before surfacing fai
     scheduledTime: Date.now(),
     waitUntil() {},
   } satisfies ScheduledEvent;
-  const env = {} as WorkerEnv;
+  const env = {
+    EXECUTOR_TIER1_PREWARM_ENABLED: "1",
+  } as WorkerEnv;
 
   await expect(
     runWorkerRuntimeScheduled(event, env, {

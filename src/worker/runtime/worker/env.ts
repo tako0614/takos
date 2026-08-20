@@ -23,6 +23,7 @@ export type WorkerEnv = DbEnv & {
   EXECUTOR_CONTAINER?: DurableObjectNamespace;
   EXECUTOR_CONTAINER_TIER2?: DurableObjectNamespace;
   EXECUTOR_CONTAINER_TIER3?: DurableObjectNamespace;
+  EXECUTOR_TIER1_PREWARM_ENABLED?: string;
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   RUN_NOTIFIER: DurableObjectNamespace;
   TAKOS_OFFLOAD?: ObjectStoreBinding;

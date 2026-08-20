@@ -50,6 +50,7 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   EXECUTOR_TIER1_WARM_POOL_SIZE?: string;
+  EXECUTOR_TIER1_PREWARM_ENABLED?: string;
   EXECUTOR_TIER1_MAX_CONCURRENT_RUNS?: string;
   EXECUTOR_TIER3_POOL_SIZE?: string;
   EXECUTOR_TIER3_MAX_CONCURRENT_RUNS?: string;

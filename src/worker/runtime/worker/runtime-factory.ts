@@ -40,14 +40,17 @@ export async function runWorkerRuntimeScheduled(
   env: Env,
   deps: WorkerRuntimeScheduledDeps = defaultScheduledDeps,
 ): Promise<void> {
+  const runnerPromise = deps.loadRunner();
+  if (env.EXECUTOR_TIER1_PREWARM_ENABLED !== "1") {
+    const runner = await runnerPromise;
+    await runner.scheduled(event, env);
+    return;
+  }
   const [runner, executorHost] = await Promise.all([
-    deps.loadRunner(),
+    runnerPromise,
     deps.loadExecutorHost(),
   ]);
-  await Promise.all([
-    runner.scheduled(event, env),
-    executorHost.scheduled(event, env),
-  ]);
+  await Promise.all([runner.scheduled(event, env), executorHost.scheduled(event, env)]);
 }
 
 export function createWorkerRuntime(
@@ -137,7 +140,7 @@ export function createWorkerRuntime(
     },
 
     // ---------------------------------------------------------------------------
-    // scheduled: stale run recovery + executor warm-pool maintenance
+    // scheduled: stale run recovery + explicitly opted-in executor prewarm
     // ---------------------------------------------------------------------------
     async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
       const platform = await buildPlatform(env);
