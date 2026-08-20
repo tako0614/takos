@@ -81,6 +81,12 @@ import {
 export type { AgentExecutorEnv, ProxyTokenInfo };
 export { getRequiredProxyCapability };
 
+export function isTier1PrewarmEnabled(
+  env: Pick<AgentExecutorEnv, "EXECUTOR_TIER1_PREWARM_ENABLED">,
+): boolean {
+  return env.EXECUTOR_TIER1_PREWARM_ENABLED === "1";
+}
+
 // ---------------------------------------------------------------------------
 // Durable Objects — Tiered executor containers
 //
@@ -645,6 +651,7 @@ export default {
   },
 
   async scheduled(_event: PlatformScheduledEvent, env: Env): Promise<void> {
+    if (!isTier1PrewarmEnabled(env)) return;
     const envError = envGuard(env);
     if (envError) return;
     try {

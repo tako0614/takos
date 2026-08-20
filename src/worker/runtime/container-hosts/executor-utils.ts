@@ -53,6 +53,8 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_TIER3_POOL_SIZE?: string;
   EXECUTOR_TIER3_MAX_CONCURRENT_RUNS?: string;
   EXECUTOR_POOL_REVISION?: string;
+  /** Explicit opt-in for cron-driven tier-1 container prewarming. */
+  EXECUTOR_TIER1_PREWARM_ENABLED?: string;
   /**
    * Opt-in escape hatch to inject durable provider keys directly into pooled
    * executor containers. Defaults to OFF; see buildAgentExecutorContainerEnvVars.
