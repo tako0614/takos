@@ -24,14 +24,14 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-const PINNED_COMMIT = "d348acf853eb692f7be5df8115c1ab4490f845c6";
+const PIN = parseTakosumiCompositionSourcePin(
+  (await Bun.file(
+    join(import.meta.dir, "..", "takosumi-composition-source.json"),
+  ).json()) as unknown,
+);
+const PINNED_COMMIT = PIN.commit;
 const REVIEW_WORKTREE_COMMIT = "95e7048b4d2a2277ed2024a4d41a37c5e482640f";
 const CURRENT_MAIN_COMMIT = "c471024f57c81efafebc7349693a9ce14dea77f5";
-const PIN = parseTakosumiCompositionSourcePin({
-  kind: "takos.takosumi-composition-source@v1",
-  repository: "tako0614/takosumi",
-  commit: PINNED_COMMIT,
-});
 
 const exactCheckout = {
   gitRoot: "/workspace/takosumi",

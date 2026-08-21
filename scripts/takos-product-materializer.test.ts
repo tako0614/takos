@@ -24,6 +24,7 @@ import {
   type ReleaseDescriptor,
   type TakosOutputs,
 } from "./takos-product-materializer.ts";
+import { readTakosumiCompositionSourceIdentity } from "./check-takosumi-composition-source.ts";
 
 const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
@@ -36,13 +37,10 @@ const releaseTag = `v${packageVersion}`;
 const descriptorUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takosumi-artifact.json`;
 const archiveUrl = `https://github.com/tako0614/takos/releases/download/${releaseTag}/takos-worker-release.tar.gz`;
 const executorImage = `registry.cloudflare.com/${accountId}/takos-agent@sha256:${"d".repeat(64)}`;
-const takosumiCompositionSource = {
-  kind: "takos.takosumi-composition-source@v1",
-  repository: "tako0614/takosumi",
-  commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
-  pinDigest:
-    "sha256:ef2a8db15c30782021f5d2d10a87e20479589967b3fef4c99ee405e06dcaf62f",
-} as const;
+const takosumiCompositionSource =
+  await readTakosumiCompositionSourceIdentity(
+    join(import.meta.dir, ".."),
+  );
 
 const rawOutputs = {
   target: "cloudflare",

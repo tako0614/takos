@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
+import { readTakosumiCompositionSourceIdentity } from "./check-takosumi-composition-source.ts";
 import { smokeWorkerReleaseArchive } from "./smoke-worker-release-artifact.ts";
 
 test("boots exact release archive bytes and exercises Takos minimum HTTP contracts", async () => {
@@ -51,13 +52,10 @@ export default {
       outputDir,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: {
-        kind: "takos.takosumi-composition-source@v1",
-        repository: "tako0614/takosumi",
-        commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
-        pinDigest:
-          "sha256:ef2a8db15c30782021f5d2d10a87e20479589967b3fef4c99ee405e06dcaf62f",
-      },
+      takosumiCompositionSource:
+        await readTakosumiCompositionSourceIdentity(
+          new URL("../", import.meta.url).pathname,
+        ),
     });
 
     const result = await smokeWorkerReleaseArchive(
