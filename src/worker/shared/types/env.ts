@@ -258,12 +258,9 @@ export interface Env
   TAKOS_FEATURED_APP_INSTALL_SUBJECT?: string;
   TAKOS_FEATURED_APP_INSTALL_MODE?: string;
   TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL?: string;
-  /** Takosumi Accounts Capsule projection API base URL for third-party Git URL installs. */
-  TAKOS_APP_INSTALLATIONS_URL?: string;
-  TAKOS_APP_INSTALL_TOKEN?: string;
+  /** Takosumi Workspace id pinned to deployment-wide operator automation. */
   TAKOS_APP_INSTALL_ACCOUNT_ID?: string;
-  /** Local Space id or slug that owns the operator automation Workspace. */
-  TAKOS_APP_INSTALL_SPACE_ID?: string;
+  /** Local Space id or slug that owns the pinned operator automation Workspace. */
   TAKOS_APP_INSTALL_SUBJECT?: string;
   TAKOS_APP_INSTALL_MODE?: string;
   TAKOS_APP_INSTALL_RUNTIME_BASE_URL?: string;

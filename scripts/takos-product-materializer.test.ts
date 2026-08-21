@@ -331,6 +331,12 @@ describe("materializer input and topology", () => {
     expect(() =>
       validateRuntimeSecrets({ ...secrets, UNKNOWN_SECRET: "x" }),
     ).toThrow(/not in the Takos secret contract/u);
+    expect(() =>
+      validateRuntimeSecrets({
+        ...secrets,
+        TAKOS_APP_INSTALL_TOKEN: "legacy-token",
+      }),
+    ).toThrow(/not in the Takos secret contract/u);
   });
 
   test("requires canonical host source identity and rejects duplicate credentials", () => {

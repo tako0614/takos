@@ -141,9 +141,11 @@ export const source = {
   updateApp: "更新",
   updatingApp: "更新中...",
   uninstalledItem: "{name}をアンインストールしました",
+  uninstallPlanCreated:
+    "{name}のアンインストール計画を作成しました。リソースを削除する前に計画をレビューして承認してください。",
   uninstallConfirmTitle: "アプリをアンインストールしますか？",
   uninstallConfirmMessage:
-    "「{name}」をアンインストールすると、稼働中の Capsule と worker が削除されます。この操作は元に戻せません。",
+    "「{name}」の削除計画を作成します。レビューして承認するまでリソースは削除されません。",
   deleteStoreConfirmTitle: "ストアを削除しますか？",
   deleteStoreConfirmMessage:
     "「{name}」を削除します。この操作は元に戻せません。",

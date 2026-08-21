@@ -128,7 +128,7 @@ breaking changes bump the minor.
 - Align the Takos-managed deploy path with Takosumi's final 17-noun model. The
   `scripts/takosumi-deploy.sh` wrapper now takes `TAKOSUMI_CAPSULE_ID`
   (env) / `--capsule` (flag) and calls `/api/v1/capsules/:id/plan` plus
-  `/api/v1/plan-runs/:id/apply`. The deploy workflow passes
+  `/api/v1/runs/:id/apply`. The deploy workflow passes
   `TAKOSUMI_CAPSULE_ID` and `TAKOSUMI_WORKSPACE_ID`. Operators driving the
   wrapper from CI update those secret names.
 - Takos is managed by the embedded Takosumi deploy control as a `Capsule`: a

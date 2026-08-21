@@ -8,7 +8,7 @@ import {
 test("Takos distribution discovery avoids Takosumi control-plane claims", () => {
   const discovery = createTakosDistributionWellKnown("https://takos.test");
   expect(discovery.endpoints.capabilities).toBe(
-    "https://takos.test/v1/capabilities",
+    "https://takos.test/api/v1/capabilities",
   );
   expect(discovery.features.oidc).toBe(false);
   expect(discovery.features.stacks).toBe(false);

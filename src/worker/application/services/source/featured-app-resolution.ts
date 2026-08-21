@@ -98,12 +98,10 @@ export function resolveFeaturedAppInstallConfig(
 ): FeaturedAppInstallConfig | null {
   const controlUrl =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_URL) ??
-    readEnvString(env.TAKOS_APP_INSTALLATIONS_URL) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_URL);
   const token =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_TOKEN) ??
-    readEnvString(env.TAKOS_APP_INSTALL_TOKEN) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_TOKEN);
   const accountId =
     readEnvString(env.TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID) ??

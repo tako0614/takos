@@ -61,6 +61,12 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const [approved, setApproved] = createSignal(false);
   const [previewing, setPreviewing] = createSignal(false);
   const [installing, setInstalling] = createSignal(false);
+  // One logical plan attempt keeps its key across network retries. Editing a
+  // source starts a new logical request and therefore gets a fresh key.
+  const newPlanIdempotencyKey = () => `takos-ui:${crypto.randomUUID()}`;
+  const [idempotencyKey, setIdempotencyKey] = createSignal(
+    newPlanIdempotencyKey(),
+  );
 
   const previewTitle = (currentPreview: GitUrlPreviewResponse): string => {
     return (
@@ -84,6 +90,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const resetPreview = () => {
     setPreview(null);
     setApproved(false);
+    setIdempotencyKey(newPlanIdempotencyKey());
   };
 
   const close = () => {
@@ -112,7 +119,10 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         }/plan`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey(),
+          },
           body: JSON.stringify({
             git_url: gitUrl().trim(),
             ref: ref().trim(),

@@ -28,6 +28,7 @@ import {
   type AuthorizedRuntimeInterface,
   type RuntimeInterfaceRequestConfig,
 } from "../services/platform/runtime-interface-client.ts";
+import { getRuntimeInterfaceProtocolAdapter } from "../services/platform/runtime-interface-profiles.ts";
 import {
   MCP_SERVER_INTERFACE_TYPE,
   MCP_SERVER_INTERFACE_VERSION,
@@ -816,6 +817,14 @@ function runtimeMcpServerFromAuthorized(
   config: RuntimeMcpInterfaceConfig,
 ): McpServerLoadRecord | null {
   const iface = authorized.interface;
+  const protocolAdapter = getRuntimeInterfaceProtocolAdapter(iface.spec.type);
+  if (
+    protocolAdapter.mode !== "executable" ||
+    protocolAdapter.adapter !== "mcp" ||
+    protocolAdapter.version !== MCP_SERVER_INTERFACE_VERSION
+  ) {
+    return null;
+  }
   if (iface.spec.version !== MCP_SERVER_INTERFACE_VERSION) return null;
   const document = readRecord(iface.spec.document);
   if (document?.transport !== "streamable-http") return null;

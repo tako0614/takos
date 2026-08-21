@@ -70,6 +70,7 @@ function nonEmptyString(value: unknown): string | null {
 async function runtimeMcpInterfaceConfig(
   env: Env,
   userId: string,
+  dependencies: RemoteToolExecutorFactoryDependencies,
 ): Promise<
   | {
       workspaceId: string;
@@ -90,7 +91,7 @@ async function runtimeMcpInterfaceConfig(
     issuer;
   if (!issuer || !clientId || !encryptionKey || !baseUrl) return undefined;
   try {
-    const authorization = await accountsDelegatedAuthorization({
+    const authorization = await dependencies.accountsDelegatedAuthorization({
       db: env.DB,
       encryptionKey,
       userId,
@@ -105,6 +106,7 @@ async function runtimeMcpInterfaceConfig(
         baseUrl,
         token: authorization.accessToken,
         subjectId: authorization.subjectId,
+        fetch: dependencies.fetch,
       },
     };
   } catch (error) {
@@ -240,11 +242,14 @@ async function createRemoteToolExecutor(
   runId: string,
   env: Env,
   runAbortSignal?: AbortSignal,
+  dependencies: RemoteToolExecutorFactoryDependencies =
+    remoteToolExecutorFactoryDependencies,
 ): Promise<ToolExecutorLike> {
-  const bootstrap = await getRunBootstrap(env, runId);
+  const bootstrap = await dependencies.getRunBootstrap(env, runId);
   const runtimeMcpInterfaces = await runtimeMcpInterfaceConfig(
     env,
     bootstrap.userId,
+    dependencies,
   );
 
   // The agent acts on behalf of the run's triggering user and must never hold
@@ -279,9 +284,42 @@ export interface RemoteToolExecutorDependencies {
   ): Promise<ToolExecutorLike>;
 }
 
-const remoteToolExecutorDependencies: RemoteToolExecutorDependencies = {
-  createExecutor: createRemoteToolExecutor,
+export interface RemoteToolExecutorFactoryDependencies {
+  readonly getRunBootstrap: typeof getRunBootstrap;
+  readonly accountsDelegatedAuthorization: typeof accountsDelegatedAuthorization;
+  readonly fetch: typeof globalThis.fetch;
+}
+
+const remoteToolExecutorFactoryDependencies: RemoteToolExecutorFactoryDependencies = {
+  getRunBootstrap,
+  accountsDelegatedAuthorization,
+  fetch: globalThis.fetch.bind(globalThis),
 };
+
+/**
+ * Build the request-local production executor while allowing tests to replace
+ * only its external authority/read seams. The ToolResolver and ToolExecutor
+ * remain the same implementations used by the shipped RPC handler.
+ */
+export function createRemoteToolExecutorDependencies(
+  overrides: Partial<RemoteToolExecutorFactoryDependencies> = {},
+): RemoteToolExecutorDependencies {
+  const dependencies = {
+    ...remoteToolExecutorFactoryDependencies,
+    ...overrides,
+  };
+  return {
+    createExecutor: (runId, env, runAbortSignal) =>
+      createRemoteToolExecutor(
+        runId,
+        env,
+        runAbortSignal,
+        dependencies,
+      ),
+  };
+}
+
+const remoteToolExecutorDependencies = createRemoteToolExecutorDependencies();
 
 async function cleanupRequestToolExecutor(
   executor: ToolExecutorLike,

@@ -155,11 +155,17 @@ function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
   return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
 }
 
+/**
+ * Background-only operator automation. Interactive Capsule HTTP routes use
+ * delegated Accounts OAuth and must not call this static-token seam.
+ */
 export async function applyFeaturedAppInstallation(
   entry: FeaturedAppCatalogEntry,
   config: FeaturedAppInstallConfig,
-  _params: {
+  params: {
     mode?: string;
+    /** Durable job/install identity reused when the worker retries. */
+    idempotencyKey?: string;
   },
 ): Promise<unknown> {
   const clientConfig = {
@@ -173,6 +179,9 @@ export async function applyFeaturedAppInstallation(
       appId: entry.appId ?? entry.name,
       gitUrl: entry.repositoryUrl,
       ref: entry.ref,
+      ...(params.idempotencyKey
+        ? { idempotencyKey: params.idempotencyKey }
+        : {}),
       ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
       ...(hasFeaturedAppVariables(entry) ? { variables: entry.variables } : {}),
     },
@@ -367,6 +376,8 @@ async function preinstallFeaturedAppsForSpaceDetailed(
   env: FeaturedAppCatalogEnv,
   params: {
     spaceId: string;
+    /** Durable preinstall job id; used to fence retries for every entry. */
+    jobId?: string;
     createdByAccountId?: string;
     subject?: string;
     timestamp?: string;
@@ -393,8 +404,11 @@ async function preinstallFeaturedAppsForSpaceDetailed(
   }
 
   for (const entry of entries) {
+    const entryKey = entry.appId ?? entry.name;
+    const idempotencyKey = `${params.jobId ?? featuredAppPreinstallJobId(params.spaceId)}:${entryKey}`;
     await applyFeaturedAppInstallation(entry, installConfig, {
       ...(installConfig.mode ? { mode: installConfig.mode } : {}),
+      idempotencyKey,
     });
     installed.push(entry);
   }
@@ -623,6 +637,7 @@ export async function processFeaturedAppPreinstallJobs(
       const plan = await resolvePreinstallPlanForJob(env, row);
       await preinstallFeaturedAppsForSpaceDetailed(env, {
         spaceId: row.spaceId,
+        jobId: row.id,
         createdByAccountId: row.createdByAccountId ?? undefined,
         timestamp,
         entries: plan.entries,

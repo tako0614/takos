@@ -33,7 +33,8 @@ Source 画面が行わないこと:
 
 `takos-office` / `takos-computer` / `yurucommu` は、ユーザーが選んで追加できる installable app です。
 新規 Workspace に自動 install されるものではありません。install の仕組みとしては通常の Git URL Capsule と同じで、
-user は不要なら uninstall できます。
+user は不要なら uninstall を要求できます。uninstall は直ちに削除せず、Takosumi の destroy-plan Run を作成するため、
+レビューと承認が完了するまで Apps launcher の Capsule は残ります。
 
 ## install policy は「何を作れるか」の天井
 

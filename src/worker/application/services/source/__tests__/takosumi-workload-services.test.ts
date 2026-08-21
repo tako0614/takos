@@ -95,7 +95,7 @@ test("Capsule services use exact authorized Interfaces and never Outputs", async
     false,
   );
   for (const url of requested.filter(
-    (candidate) => candidate.pathname === "/v1/interfaces",
+    (candidate) => candidate.pathname === "/api/v1/interfaces",
   )) {
     assertEquals(url.searchParams.get("ownerKind"), "Capsule");
     assertEquals(url.searchParams.get("ownerId"), "capsule_docs");

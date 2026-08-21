@@ -9,7 +9,6 @@ import { routeAuthDeps } from "./route-auth.ts";
 import type { Env } from "../../shared/types/index.ts";
 import type {
   FeaturedAppCatalogEntry,
-  FeaturedAppInstallConfig,
 } from "../../application/services/source/featured-app-catalog.ts";
 
 const originalRouteAuthDeps = { ...routeAuthDeps };
@@ -45,11 +44,28 @@ function authorize(spaceId = "space-local") {
 
 const operatorEnv = {
   DB: {},
-  TAKOS_APP_INSTALLATIONS_URL: "https://operator.test/control",
-  TAKOS_APP_INSTALL_TOKEN: "operator-token",
+  TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://operator.test/control",
+  TAKOSUMI_ACCOUNTS_TOKEN: "operator-token",
   TAKOS_APP_INSTALL_ACCOUNT_ID: "ws_operator",
-  TAKOS_APP_INSTALL_SPACE_ID: "space-local",
 } as Env;
+
+const delegatedEnv = {
+  DB: {},
+  ENCRYPTION_KEY: "encryption-key",
+  OIDC_ISSUER_URL: "https://operator.test",
+  OIDC_CLIENT_ID: "takos",
+} as Env;
+
+function authorizeDelegated(workspaceId = "ws_operator") {
+  capsulesRouteDeps.accountsDelegatedAuthorization = async () => ({
+    accessToken: "delegated-token",
+    workspaceId,
+    subjectId: "pairwise-user",
+  });
+  capsulesRouteDeps.resolveInstallableAppAccountsConfig = () => ({
+    baseUrl: "https://operator.test/control",
+  });
+}
 
 const featuredAppEntry = {
   name: "takos-office",
@@ -62,60 +78,106 @@ const featuredAppEntry = {
   preinstall: false,
 } satisfies FeaturedAppCatalogEntry;
 
-const featuredConfig = {
-  controlUrl: "https://operator.test/control",
-  token: "operator-token",
-  workspaceId: "ws_operator",
-  mode: "shared-cell",
-} satisfies FeaturedAppInstallConfig;
-
 describe("Capsule routes on canonical Takosumi records", () => {
-  test("applies a featured app through explicit operator automation", async () => {
+  test("never falls back to a deployment-wide operator token on HTTP", async () => {
     authorize();
     capsulesRouteDeps.resolveFeaturedAppCatalogForBootstrap =
       async () => [featuredAppEntry];
-    capsulesRouteDeps.resolveFeaturedAppInstallConfig = () =>
-      featuredConfig;
     let call: unknown;
-    capsulesRouteDeps.applyFeaturedAppInstallation = async (
-      entry,
-      config,
-      params,
-    ) => {
-      call = { entry, config, params };
-      return { capsule: { id: "cap_office", status: "active" } };
-    };
 
     const response = await createApp().request(
       "/spaces/me/capsules/apply",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           app_id: "jp.takos.office",
           mode: "shared-cell",
         }),
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "install-http-1",
+        },
       },
       operatorEnv,
     );
+    expect(response.status).toBe(401);
+    expect(call).toBeUndefined();
+  });
+
+  test("featured Capsule HTTP uses delegated auth and the stable plan key", async () => {
+    authorize();
+    authorizeDelegated();
+    capsulesRouteDeps.resolveFeaturedAppCatalogForBootstrap =
+      async () => [featuredAppEntry];
+    const calls: unknown[] = [];
+    capsulesRouteDeps.planInstallableAppCapsule = async (input) => {
+      calls.push({ kind: "plan", input });
+      return {
+        status: 201,
+        body: {
+          expected: {
+            workspaceId: "ws_operator",
+            sourceId: "src_office",
+            capsuleId: "cap_office",
+            runId: "run_office_plan",
+          },
+          capsule: { id: "cap_office", status: "planning" },
+        },
+      };
+    };
+    capsulesRouteDeps.approveAndApplyInstallableAppCapsule = async (input) => {
+      calls.push({ kind: "apply", input });
+      return {
+        status: 202,
+        body: { capsule: { id: "cap_office", status: "active" } },
+      };
+    };
+    const response = await createApp().request(
+      "/spaces/me/capsules/apply",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "featured-http-1",
+        },
+        body: JSON.stringify({ app_id: featuredAppEntry.appId }),
+      },
+      delegatedEnv,
+    );
     expect(response.status).toBe(202);
     expect(await response.json()).toMatchObject({
-      capsule: {
-        capsule_id: "cap_office",
-        status: "active",
-        app_id: "jp.takos.office",
+      subject_source: "oauth_access_token",
+      capsule: { capsule_id: "cap_office", status: "active" },
+    });
+    expect(calls).toEqual([
+      {
+        kind: "plan",
+        input: {
+          workspaceId: "ws_operator",
+          appId: featuredAppEntry.appId,
+          gitUrl: featuredAppEntry.repositoryUrl,
+          ref: featuredAppEntry.ref,
+          idempotencyKey: "featured-http-1",
+        },
       },
-      subject_source: "operator_config",
-    });
-    expect(call).toEqual({
-      entry: featuredAppEntry,
-      config: featuredConfig,
-      params: { mode: "shared-cell" },
-    });
+      {
+        kind: "apply",
+        input: {
+          workspaceId: "ws_operator",
+          expected: {
+            workspaceId: "ws_operator",
+            sourceId: "src_office",
+            capsuleId: "cap_office",
+            runId: "run_office_plan",
+          },
+        },
+      },
+    ]);
   });
 
   test("passes an exact canonical Run reference from plan to apply", async () => {
     authorize();
+    authorizeDelegated();
     const calls: unknown[] = [];
     capsulesRouteDeps.planInstallableAppCapsule = async (
       input,
@@ -133,7 +195,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
         },
       };
     };
-    capsulesRouteDeps.applyInstallableAppCapsule = async (
+    capsulesRouteDeps.approveAndApplyInstallableAppCapsule = async (
       input,
     ) => {
       calls.push({ kind: "apply", input });
@@ -149,10 +211,13 @@ describe("Capsule routes on canonical Takosumi records", () => {
       "/spaces/me/capsules/git-url/plan",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "install-http-2",
+        },
         body: JSON.stringify(source),
       },
-      operatorEnv,
+      delegatedEnv,
     );
     const plan = (await planResponse.json()) as Record<string, unknown>;
     const applyResponse = await app.request(
@@ -162,7 +227,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...source, expected: plan.expected }),
       },
-      operatorEnv,
+      delegatedEnv,
     );
     expect(planResponse.status).toBe(201);
     expect(applyResponse.status).toBe(202);
@@ -174,6 +239,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
           gitUrl: source.git_url,
           ref: "v1",
           modulePath: "modules/app",
+          idempotencyKey: "install-http-2",
         },
       },
       {
@@ -213,7 +279,10 @@ describe("Capsule routes on canonical Takosumi records", () => {
       "/spaces/me/capsules/git-url/plan",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "install-http-3",
+        },
         body: JSON.stringify({
           git_url: "https://github.com/acme/app.git",
           ref: "main",
@@ -263,8 +332,10 @@ describe("Capsule routes on canonical Takosumi records", () => {
       baseUrl: "https://operator.test",
     });
     let forwardedCookie: string | null = null;
+    let requestedPath: string | null = null;
     capsulesRouteDeps.accountsPlaneFetch = async (request) => {
       forwardedCookie = request.headers.get("cookie");
+      requestedPath = new URL(request.url).pathname;
       return Response.json({ subject: "tsub_user" });
     };
     const response = await createApp().request(
@@ -279,10 +350,12 @@ describe("Capsule routes on canonical Takosumi records", () => {
     );
     expect(response.status).toBe(401);
     expect(forwardedCookie).toBe("takosumi_session=sess_current");
+    expect(requestedPath).toBe("/api/v1/account/session/me");
   });
 
   test("plans rollback from a StateVersion and applies its exact Run", async () => {
     authorize();
+    authorizeDelegated();
     capsulesRouteDeps.listInstallableAppCapsules = async () => ({
       status: 200,
       body: { capsules: [{ capsule_id: "cap_1" }] },
@@ -301,7 +374,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
         },
       };
     };
-    capsulesRouteDeps.applyInstallableAppRevision = async (input) => {
+    capsulesRouteDeps.approveAndApplyInstallableAppRevision = async (input) => {
       calls.push({ kind: "apply", input });
       return { status: 202, body: { run: { id: "run_restore" } } };
     };
@@ -317,7 +390,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
           state_version_id: "sv_1",
         }),
       },
-      operatorEnv,
+      delegatedEnv,
     );
     const plan = (await planResponse.json()) as Record<string, unknown>;
     const applyResponse = await app.request(
@@ -332,7 +405,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
           expected: plan.expected,
         }),
       },
-      operatorEnv,
+      delegatedEnv,
     );
     expect(planResponse.status).toBe(201);
     expect(applyResponse.status).toBe(202);
@@ -362,8 +435,78 @@ describe("Capsule routes on canonical Takosumi records", () => {
     ]);
   });
 
+  test("requires and forwards a caller-owned idempotency key for upgrade", async () => {
+    authorize();
+    authorizeDelegated();
+    capsulesRouteDeps.listInstallableAppCapsules = async () => ({
+      status: 200,
+      body: { capsules: [{ capsule_id: "cap_1" }] },
+    });
+    const calls: unknown[] = [];
+    capsulesRouteDeps.planInstallableAppRevision = async (input) => {
+      calls.push(input);
+      return {
+        status: 201,
+        body: {
+          expected: {
+            workspaceId: "ws_operator",
+            sourceId: "src_1",
+            capsuleId: "cap_1",
+            runId: "run_upgrade",
+          },
+        },
+      };
+    };
+    const app = createApp();
+    const missingKey = await app.request(
+      "/spaces/me/capsules/git-url/revision/plan",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "upgrade",
+          capsule_id: "cap_1",
+          ref: "release/v2",
+          git_url: "https://ignored.example/legacy.git",
+        }),
+      },
+      delegatedEnv,
+    );
+    expect(missingKey.status).toBe(400);
+    expect(calls).toHaveLength(0);
+
+    const response = await app.request(
+      "/spaces/me/capsules/git-url/revision/plan",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "revision-http-1",
+        },
+        body: JSON.stringify({
+          operation: "upgrade",
+          capsule_id: "cap_1",
+          ref: "release/v2",
+          git_url: "https://ignored.example/legacy.git",
+        }),
+      },
+      delegatedEnv,
+    );
+    expect(response.status).toBe(201);
+    expect(calls).toEqual([
+      {
+        workspaceId: "ws_operator",
+        capsuleId: "cap_1",
+        operation: "upgrade",
+        ref: "release/v2",
+        idempotencyKey: "revision-http-1",
+      },
+    ]);
+  });
+
   test("lists, reads services, and deletes only canonical Capsule ids", async () => {
     authorize();
+    authorizeDelegated();
     capsulesRouteDeps.listInstallableAppCapsulesWithServices =
       async (workspaceId) => ({
         status: 200,
@@ -383,36 +526,43 @@ describe("Capsule routes on canonical Takosumi records", () => {
     capsulesRouteDeps.deleteInstallableAppCapsule = async (
       capsuleId,
       workspaceId,
-    ) => ({ status: 202, body: { capsuleId, workspaceId } });
+    ) => ({
+      status: 202,
+      body: {
+        run: { id: "run_destroy", workspaceId, capsuleId },
+        expected: { workspaceId, capsuleId, runId: "run_destroy" },
+      },
+    });
     const app = createApp();
     const listed = await app.request(
       "/spaces/me/capsules",
       {},
-      operatorEnv,
+      delegatedEnv,
     );
     const services = await app.request(
       "/spaces/me/capsules/cap_1/services",
       {},
-      operatorEnv,
+      delegatedEnv,
     );
     const deleted = await app.request(
       "/spaces/me/capsules/cap_1",
       { method: "DELETE" },
-      operatorEnv,
+      delegatedEnv,
     );
     expect(await listed.json()).toMatchObject({ workspaceId: "ws_operator" });
     expect(await services.json()).toMatchObject({
       capsuleId: "cap_1",
       workspaceId: "ws_operator",
     });
-    expect(await deleted.json()).toEqual({
-      capsuleId: "cap_1",
-      workspaceId: "ws_operator",
+    expect(await deleted.json()).toMatchObject({
+      run: { id: "run_destroy", workspaceId: "ws_operator", capsuleId: "cap_1" },
+      expected: { workspaceId: "ws_operator", capsuleId: "cap_1", runId: "run_destroy" },
     });
   });
 
   test("rejects a cross-Workspace Capsule id before revision mutation", async () => {
     authorize();
+    authorizeDelegated();
     capsulesRouteDeps.listInstallableAppCapsules = async () => ({
       status: 200,
       body: { capsules: [{ capsule_id: "cap_owned" }] },
@@ -433,16 +583,13 @@ describe("Capsule routes on canonical Takosumi records", () => {
           state_version_id: "sv_1",
         }),
       },
-      operatorEnv,
+      delegatedEnv,
     );
     expect(response.status).toBe(404);
     expect(mutated).toBe(false);
   });
 
-  test("operator automation refuses spaces it is not bound to", async () => {
-    // The operator token is deployment-wide, so an editor in an unbound space
-    // must not reach the shared Takosumi Workspace at all — listing it is how
-    // the "belongs to this space" check itself is answered.
+  test("interactive Capsule routes reject static operator configuration", async () => {
     authorize("space-other");
     let listed = false;
     capsulesRouteDeps.listInstallableAppCapsulesWithServices =
@@ -469,27 +616,10 @@ describe("Capsule routes on canonical Takosumi records", () => {
       { method: "DELETE" },
       operatorEnv,
     );
-    expect(listResponse.status).toBe(403);
-    expect(deleteResponse.status).toBe(403);
+    expect(listResponse.status).toBe(401);
+    expect(deleteResponse.status).toBe(401);
     expect(listed).toBe(false);
     expect(deleted).toBe(false);
-  });
-
-  test("operator automation without a space binding fails closed", async () => {
-    authorize();
-    let listed = false;
-    capsulesRouteDeps.listInstallableAppCapsulesWithServices =
-      async () => {
-        listed = true;
-        return { status: 200, body: { capsules: [] } };
-      };
-    const response = await createApp().request(
-      "/spaces/me/capsules",
-      {},
-      { ...operatorEnv, TAKOS_APP_INSTALL_SPACE_ID: undefined } as Env,
-    );
-    expect(response.status).toBe(403);
-    expect(listed).toBe(false);
   });
 
   test("requires exact Run evidence for apply", async () => {
@@ -512,5 +642,45 @@ describe("Capsule routes on canonical Takosumi records", () => {
         message: "expected exact Run reference is required after Capsule plan",
       },
     });
+  });
+
+  test("rejects a missing or overlong caller-owned idempotency key", async () => {
+    authorize();
+    authorizeDelegated();
+    let planned = false;
+    capsulesRouteDeps.planInstallableAppCapsule = async () => {
+      planned = true;
+      return { status: 201, body: {} };
+    };
+    const response = await createApp().request(
+      "/spaces/me/capsules/git-url/plan",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          git_url: "https://github.com/acme/app.git",
+          ref: "main",
+        }),
+      },
+      delegatedEnv,
+    );
+    expect(response.status).toBe(400);
+    const oversized = await createApp().request(
+      "/spaces/me/capsules/git-url/plan",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Idempotency-Key": "x".repeat(257),
+        },
+        body: JSON.stringify({
+          git_url: "https://github.com/acme/app.git",
+          ref: "main",
+        }),
+      },
+      delegatedEnv,
+    );
+    expect(oversized.status).toBe(400);
+    expect(planned).toBe(false);
   });
 });

@@ -137,6 +137,8 @@ function canonicalCapsuleReadbackFetch(options: {
   name: string;
   sourceUrl: string;
   ref: string;
+  sourceDefaultRef?: string;
+  adoptedResolvedCommit?: string;
   interfaceEndpoint?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -155,6 +157,16 @@ function canonicalCapsuleReadbackFetch(options: {
             name: options.name,
             environment: "production",
             status: "active",
+            ...(options.adoptedResolvedCommit
+              ? {
+                  adoptedSourceRevision: {
+                    sourceSnapshotId: "snap_adopted_1",
+                    ref: options.ref,
+                    path: ".",
+                    resolvedCommit: options.adoptedResolvedCommit,
+                  },
+                }
+              : {}),
             createdAt: options.createdAt ?? "2026-01-06T00:00:00.000Z",
             updatedAt: options.updatedAt ?? "2026-01-06T00:00:00.000Z",
           },
@@ -167,7 +179,7 @@ function canonicalCapsuleReadbackFetch(options: {
           id: "src_1",
           workspaceId: "space-1",
           url: options.sourceUrl,
-          defaultRef: options.ref,
+          defaultRef: options.sourceDefaultRef ?? options.ref,
         },
       });
     }
@@ -178,7 +190,7 @@ function canonicalCapsuleReadbackFetch(options: {
           : { publicOutputs: {} },
       });
     }
-    if (url.pathname.endsWith("/v1/interfaces")) {
+    if (url.pathname.endsWith("/api/v1/interfaces")) {
       return Response.json({
         interfaces: options.interfaceEndpoint
           ? [
@@ -197,7 +209,8 @@ function canonicalCapsuleReadbackFetch(options: {
           : [],
       });
     }
-    return Response.json({ error: "unexpected" }, { status: 500 });
+    // Keep retired paths outside this fixture's alias set.
+    return Response.json({ error: "unexpected" }, { status: 404 });
   };
 }
 
@@ -356,8 +369,8 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
         }),
       },
     });
-    assertEquals(installed.items[0]?.installation?.installed, true);
-    assertEquals(installed.items[0]?.installation?.installed_version, "v1.0.0");
+    assertEquals(installed.items[0]?.capsule?.capsule_id, "inst_repo_app");
+    assertEquals(installed.items[0]?.capsule?.source_ref, "v1.0.0");
   });
 });
 
@@ -427,9 +440,8 @@ test("listCatalogItems marks repository packages installed from the canonical Ta
       backend: null,
       env: "staging",
     });
-    assertEquals(item.installation?.installed, true);
-    assertEquals(item.installation?.installed_version, "v1.0.0");
-    assertEquals(item.installation?.installation_id, "inst_repo_app");
+    assertEquals(item.capsule?.capsule_id, "inst_repo_app");
+    assertEquals(item.capsule?.source_ref, "v1.0.0");
   });
 });
 
@@ -738,7 +750,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
   });
 });
 
-test("listCatalogItems does not infer featured app installation without canonical Takosumi readback", async () => {
+test("listCatalogItems does not infer a featured app Capsule without canonical Takosumi readback", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -766,10 +778,10 @@ test("listCatalogItems does not infer featured app installation without canonica
     now: "2026-04-22T00:00:00.000Z",
   });
 
-  assertEquals(result.items[0]?.installation, undefined);
+  assertEquals(result.items[0]?.capsule, undefined);
 });
 
-test("listCatalogItems overlays featured app installation state from the canonical Takosumi ledger", async () => {
+test("listCatalogItems overlays featured app Capsule state from the canonical Takosumi ledger", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -782,6 +794,8 @@ test("listCatalogItems overlays featured app installation state from the canonic
     name: "jp.takos.office",
     sourceUrl: "https://github.com/tako0614/takos-office.git",
     ref: "v1.2.6",
+    sourceDefaultRef: "main",
+    adoptedResolvedCommit: "0123456789abcdef0123456789abcdef01234567",
     interfaceEndpoint: "https://office.example.test",
     createdAt: "2026-04-22T01:00:00.000Z",
     updatedAt: "2026-04-22T01:05:00.000Z",
@@ -829,36 +843,14 @@ test("listCatalogItems overlays featured app installation state from the canonic
     requests[1]?.url,
     "https://accounts.internal/base/api/v1/sources/src_1",
   );
-  assertEquals(result.items[0]?.installation, {
-    installed: true,
-    installation_id: "inst_office",
+  assertEquals(result.items[0]?.capsule, {
+    capsule_id: "inst_office",
     app_id: "jp.takos.office",
-    status: "ready",
-    runtime_mode: "production",
-    group_id: null,
-    group_name: null,
-    installed_version: "v1.2.6",
-    installed_commit: null,
-    deployed_at: null,
-    installed_at: "2026-04-22T01:00:00.000Z",
+    status: "active",
+    environment: "production",
+    source_ref: "v1.2.6",
+    source_commit: "0123456789abcdef0123456789abcdef01234567",
+    created_at: "2026-04-22T01:00:00.000Z",
     updated_at: "2026-04-22T01:05:00.000Z",
-    services: [
-      {
-        id: "interface:ui",
-        capability: "interface.ui.surface",
-        status: "ready",
-        endpoint: "https://office.example.test",
-        secret_configured: false,
-        token_expires_at: null,
-      },
-      {
-        id: "output:launch_url",
-        capability: "opentofu.output",
-        status: "ready",
-        endpoint: null,
-        secret_configured: false,
-        token_expires_at: null,
-      },
-    ],
   });
 });

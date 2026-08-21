@@ -3,30 +3,28 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   BadRequestError,
   AuthenticationError,
-  AuthorizationError,
   NotFoundError,
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
 
 import {
-  applyFeaturedAppInstallation,
   type FeaturedAppCatalogEntry,
   resolveFeaturedAppCatalogForBootstrap,
-  resolveFeaturedAppInstallConfig,
 } from "../../application/services/source/featured-app-catalog.ts";
 import {
-  applyInstallableAppCapsule,
-  applyInstallableAppRevision,
+  approveAndApplyInstallableAppCapsule,
+  approveAndApplyInstallableAppRevision,
   deleteInstallableAppCapsule,
   planInstallableAppCapsule,
   planInstallableAppRevision,
+  TAKOSUMI_GIT_LIFECYCLE_IDEMPOTENCY_KEY_MAX_BYTES,
   type InstallableAppRevisionOperation,
   type InstallableAppUpstreamResponse,
+  type InstallableAppInstallConfig,
   listInstallableAppCapsuleServices,
   listInstallableAppCapsules,
   listInstallableAppCapsulesWithServices,
   resolveInstallableAppAccountsConfig,
-  resolveInstallableAppInstallConfig,
 } from "../../application/services/source/installable-app-install.ts";
 import {
   parseJsonBody,
@@ -64,17 +62,14 @@ type CapsuleApiRecord = {
 };
 
 export const capsulesRouteDeps = {
-  applyFeaturedAppInstallation,
   resolveFeaturedAppCatalogForBootstrap,
-  resolveFeaturedAppInstallConfig,
   resolveInstallableAppAccountsConfig,
-  resolveInstallableAppInstallConfig,
   listInstallableAppCapsules,
   deleteInstallableAppCapsule,
   planInstallableAppCapsule,
-  applyInstallableAppCapsule,
+  approveAndApplyInstallableAppCapsule,
   planInstallableAppRevision,
-  applyInstallableAppRevision,
+  approveAndApplyInstallableAppRevision,
   listInstallableAppCapsulesWithServices,
   listInstallableAppCapsuleServices,
   accountsDelegatedAuthorization,
@@ -200,7 +195,7 @@ function jsonFromUpstream(
   return c.json(result.body, result.status as ContentfulStatusCode);
 }
 
-const TAKOSUMI_ACCOUNTS_SESSION_ME_PATH = "/v1/account/session/me";
+const TAKOSUMI_ACCOUNTS_SESSION_ME_PATH = "/api/v1/account/session/me";
 const TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME = "takosumi_session";
 
 type AccountsCaller = {
@@ -411,63 +406,10 @@ function callerAccountsConfig(
   };
 }
 
-/**
- * Operator automation is one static token bound to one Takosumi Workspace for
- * the whole deployment, so it carries no per-space authority: without this gate
- * an editor in *any* local space drives the Capsules of every other space, and
- * `assertCapsuleBelongsToSpace()` cannot catch it because it lists that
- * same shared Workspace. The deployment therefore has to name the one space the
- * automation Workspace belongs to (`TAKOS_APP_INSTALL_SPACE_ID`, id or slug);
- * an unset binding fails closed rather than defaulting to "every space".
- */
-function assertOperatorSpaceBinding(c: Context<SpaceAccessRouteEnv>): void {
-  const { space } = c.get("access");
-  const boundSpace = readString(c.env.TAKOS_APP_INSTALL_SPACE_ID);
-  if (!boundSpace || (boundSpace !== space.id && boundSpace !== space.slug)) {
-    throw new AuthorizationError(
-      "Operator Capsule automation is not bound to this space; set TAKOS_APP_INSTALL_SPACE_ID to the space that owns the operator Takosumi Workspace",
-    );
-  }
-}
-
-function operatorRouteConfig(c: Context<SpaceAccessRouteEnv>): {
-  workspaceId: string;
-  installConfig: NonNullable<
-    ReturnType<typeof resolveInstallableAppInstallConfig>
-  >;
-  accountsConfig: NonNullable<
-    ReturnType<typeof resolveInstallableAppAccountsConfig>
-  >;
-} {
-  assertOperatorSpaceBinding(c);
-  const installConfig =
-    capsulesRouteDeps.resolveInstallableAppInstallConfig(c.env);
-  const workspaceId = installConfig?.accountId;
-  const controlUrl = installConfig?.controlUrl;
-  const token = installConfig?.token;
-  if (!installConfig || !workspaceId || !controlUrl || !token) {
-    throw new ServiceUnavailableError(
-      "Operator Capsule automation requires canonical control URL, token, and Takosumi Workspace id",
-    );
-  }
-  return {
-    workspaceId,
-    installConfig,
-    accountsConfig: {
-      baseUrl: controlUrl,
-      token,
-      fetch: (input, init) =>
-        capsulesRouteDeps.accountsPlaneFetch(
-          input instanceof Request ? input : new Request(input, init),
-        ),
-    },
-  };
-}
-
 function callerInstallConfig(
   c: Context<SpaceAccessRouteEnv>,
   caller: AccountsCaller,
-): ReturnType<typeof resolveInstallableAppInstallConfig> {
+): InstallableAppInstallConfig | null {
   const accounts = callerAccountsConfig(c, caller);
   if (!accounts) return null;
   return {
@@ -477,11 +419,48 @@ function callerInstallConfig(
   };
 }
 
+/**
+ * Capsule HTTP is an interactive user surface. A deployment-wide operator
+ * token is deliberately not an alternative here: it has no per-request
+ * Workspace authority and would let any editor drive another Workspace's
+ * Capsule. Static-token automation stays in the background preinstall seam.
+ */
+async function requireAccountsCaller(
+  c: Context<SpaceAccessRouteEnv>,
+): Promise<AccountsCaller> {
+  const caller = await resolveAccountsCaller(c);
+  if (!caller) {
+    throw new AuthenticationError(
+      "Takosumi delegated Workspace authorization is required",
+    );
+  }
+  return caller;
+}
+
+function readRequiredIdempotencyKey(
+  c: Context<SpaceAccessRouteEnv>,
+): string {
+  const key = readString(c.req.header("Idempotency-Key"));
+  if (!key) {
+    throw new BadRequestError(
+      "Idempotency-Key is required for a canonical Git lifecycle plan",
+    );
+  }
+  if (
+    /[\u0000-\u001f\u007f]/u.test(key) ||
+    new TextEncoder().encode(key).byteLength >
+      TAKOSUMI_GIT_LIFECYCLE_IDEMPOTENCY_KEY_MAX_BYTES
+  ) {
+    throw new BadRequestError("Idempotency-Key must be a bounded header value");
+  }
+  return key;
+}
+
 async function applyFeaturedAppCapsuleForRoute(
   c: Context<SpaceAccessRouteEnv>,
   caller: AccountsCaller,
   entry: FeaturedAppCatalogEntry,
-  params: { localWorkspaceId: string },
+  params: { localWorkspaceId: string; idempotencyKey: string },
 ): Promise<InstallableAppUpstreamResponse> {
   const workspaceId = accountsCallerWorkspaceId(
     caller,
@@ -499,6 +478,7 @@ async function applyFeaturedAppCapsuleForRoute(
       appId: entry.appId ?? entry.name,
       gitUrl: entry.repositoryUrl,
       ref: entry.ref,
+      idempotencyKey: params.idempotencyKey,
       ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
       ...(hasFeaturedAppVariables(entry) ? { variables: entry.variables } : {}),
     },
@@ -506,7 +486,7 @@ async function applyFeaturedAppCapsuleForRoute(
   );
   if (plan.status >= 400) return plan;
   const expected = readCanonicalPlanReference(plan.body);
-  return await capsulesRouteDeps.applyInstallableAppCapsule(
+  return await capsulesRouteDeps.approveAndApplyInstallableAppCapsule(
     {
       workspaceId,
       expected,
@@ -519,17 +499,10 @@ async function listInstallableAppCapsulesForRoute(
   c: Context<SpaceAccessRouteEnv>,
   spaceId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsCaller(c);
-  if (caller) {
-    return await capsulesRouteDeps.listInstallableAppCapsules(
-      accountsCallerWorkspaceId(caller, spaceId),
-      callerAccountsConfig(c, caller),
-    );
-  }
-  const operator = operatorRouteConfig(c);
+  const caller = await requireAccountsCaller(c);
   return await capsulesRouteDeps.listInstallableAppCapsules(
-    operator.workspaceId,
-    operator.accountsConfig,
+    accountsCallerWorkspaceId(caller, spaceId),
+    callerAccountsConfig(c, caller),
   );
 }
 
@@ -538,19 +511,11 @@ async function listInstallableAppCapsuleServicesForRoute(
   spaceId: string,
   capsuleId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsCaller(c);
-  if (caller) {
-    return await capsulesRouteDeps.listInstallableAppCapsuleServices(
-      capsuleId,
-      accountsCallerWorkspaceId(caller, spaceId),
-      callerAccountsConfig(c, caller),
-    );
-  }
-  const operator = operatorRouteConfig(c);
+  const caller = await requireAccountsCaller(c);
   return await capsulesRouteDeps.listInstallableAppCapsuleServices(
     capsuleId,
-    operator.workspaceId,
-    operator.accountsConfig,
+    accountsCallerWorkspaceId(caller, spaceId),
+    callerAccountsConfig(c, caller),
   );
 }
 
@@ -558,14 +523,7 @@ async function listInstallableAppCapsulesWithServicesForRoute(
   c: Context<SpaceAccessRouteEnv>,
   spaceId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsCaller(c);
-  if (!caller) {
-    const operator = operatorRouteConfig(c);
-    return await capsulesRouteDeps.listInstallableAppCapsulesWithServices(
-      operator.workspaceId,
-      operator.accountsConfig,
-    );
-  }
+  const caller = await requireAccountsCaller(c);
   return await capsulesRouteDeps.listInstallableAppCapsulesWithServices(
     accountsCallerWorkspaceId(caller, spaceId),
     callerAccountsConfig(c, caller),
@@ -712,25 +670,22 @@ capsulesRouter.post(
     if (!source) {
       throw new BadRequestError("git_url and ref are required");
     }
+    const idempotencyKey = readRequiredIdempotencyKey(c);
     const variables = readOptionalBodyVariables(body);
-    const caller = await resolveAccountsCaller(c);
-    const operator = caller ? null : operatorRouteConfig(c);
-    const installConfig = caller
-      ? callerInstallConfig(c, caller)
-      : operator?.installConfig;
+    const caller = await requireAccountsCaller(c);
+    const installConfig = callerInstallConfig(c, caller);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Capsule plan Run is not configured",
       );
     }
-    const workspaceId = caller
-      ? accountsCallerWorkspaceId(caller, space.id)
-      : operator!.workspaceId;
+    const workspaceId = accountsCallerWorkspaceId(caller, space.id);
     const upstream =
       await capsulesRouteDeps.planInstallableAppCapsule(
         {
           ...source,
           workspaceId,
+          idempotencyKey,
           ...(readOptionalBodyAppId(body)
             ? { appId: readOptionalBodyAppId(body)! }
             : {}),
@@ -758,22 +713,17 @@ capsulesRouter.post(
       );
     }
 
-    const caller = await resolveAccountsCaller(c);
-    const operator = caller ? null : operatorRouteConfig(c);
-    const installConfig = caller
-      ? callerInstallConfig(c, caller)
-      : operator?.installConfig;
+    const caller = await requireAccountsCaller(c);
+    const installConfig = callerInstallConfig(c, caller);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Capsule apply is not configured",
       );
     }
-    const workspaceId = caller
-      ? accountsCallerWorkspaceId(caller, space.id)
-      : operator!.workspaceId;
+    const workspaceId = accountsCallerWorkspaceId(caller, space.id);
 
     const upstream =
-      await capsulesRouteDeps.applyInstallableAppCapsule(
+      await capsulesRouteDeps.approveAndApplyInstallableAppCapsule(
         {
           workspaceId,
           expected,
@@ -795,41 +745,35 @@ capsulesRouter.post(
     }
     const capsuleId = readRequiredCapsuleId(body);
     const operation = readBodyRevisionOperation(body);
-    const source = operation === "upgrade" ? readBodyInstallSource(body) : null;
-    if (operation === "upgrade" && !source) {
-      throw new BadRequestError("git_url and ref are required for upgrade");
-    }
     const revisionRef =
       operation === "rollback"
         ? (readString(body.state_version_id) ?? readString(body.ref))
-        : source?.ref;
+        : readString(body.ref);
     if (!revisionRef) {
-      throw new BadRequestError("state_version_id is required for rollback");
+      throw new BadRequestError(
+        operation === "rollback"
+          ? "state_version_id is required for rollback"
+          : "ref is required for upgrade",
+      );
     }
+    const idempotencyKey =
+      operation === "upgrade" ? readRequiredIdempotencyKey(c) : undefined;
     await assertCapsuleBelongsToSpace(c, space.id, capsuleId);
-    const reason = readString(body.reason) ?? undefined;
-    const caller = await resolveAccountsCaller(c);
-    const operator = caller ? null : operatorRouteConfig(c);
-    const installConfig = caller
-      ? callerInstallConfig(c, caller)
-      : operator?.installConfig;
+    const caller = await requireAccountsCaller(c);
+    const installConfig = callerInstallConfig(c, caller);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Capsule revision plan Run is not configured",
       );
     }
-    const workspaceId = caller
-      ? accountsCallerWorkspaceId(caller, space.id)
-      : operator!.workspaceId;
+    const workspaceId = accountsCallerWorkspaceId(caller, space.id);
     const upstream = await capsulesRouteDeps.planInstallableAppRevision(
       {
         workspaceId,
         capsuleId,
         operation,
         ref: revisionRef,
-        ...(source?.gitUrl ? { gitUrl: source.gitUrl } : {}),
-        ...(source?.modulePath ? { modulePath: source.modulePath } : {}),
-        ...(reason ? { reason } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : {}),
       },
       installConfig,
     );
@@ -855,21 +799,16 @@ capsulesRouter.post(
         "expected exact Run reference is required after Capsule revision plan",
       );
     }
-    const caller = await resolveAccountsCaller(c);
-    const operator = caller ? null : operatorRouteConfig(c);
-    const installConfig = caller
-      ? callerInstallConfig(c, caller)
-      : operator?.installConfig;
+    const caller = await requireAccountsCaller(c);
+    const installConfig = callerInstallConfig(c, caller);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Capsule revision apply is not configured",
       );
     }
-    const workspaceId = caller
-      ? accountsCallerWorkspaceId(caller, space.id)
-      : operator!.workspaceId;
+    const workspaceId = accountsCallerWorkspaceId(caller, space.id);
     const upstream =
-      await capsulesRouteDeps.applyInstallableAppRevision(
+      await capsulesRouteDeps.approveAndApplyInstallableAppRevision(
         {
           workspaceId,
           capsuleId,
@@ -902,53 +841,27 @@ capsulesRouter.post(
       throw new NotFoundError("Installable app");
     }
 
-    const mode = readBodyMode(body, entry);
-    const caller = await resolveAccountsCaller(c);
-    if (caller) {
-      const upstream = await applyFeaturedAppCapsuleForRoute(
-        c,
-        caller,
-        entry,
-        {
-          localWorkspaceId: space.id,
-        },
-      );
-      if (upstream.status >= 400) return jsonFromUpstream(c, upstream);
-      const timestamp = new Date().toISOString();
-      return c.json(
-        {
-          capsule: toCapsuleRecord(entry, upstream.body, {
-            timestamp,
-          }),
-          subject_source: "accounts_session",
-        },
-        202,
-      );
-    }
-
-    assertOperatorSpaceBinding(c);
-    const installConfig =
-      capsulesRouteDeps.resolveFeaturedAppInstallConfig(c.env);
-    if (!installConfig) {
-      throw new ServiceUnavailableError("Capsule install is not configured");
-    }
-
-    const upstream =
-      await capsulesRouteDeps.applyFeaturedAppInstallation(
-        entry,
-        installConfig,
-        {
-          ...(mode ? { mode } : {}),
-        },
-      );
+    readBodyMode(body, entry);
+    const idempotencyKey = readRequiredIdempotencyKey(c);
+    const caller = await requireAccountsCaller(c);
+    const upstream = await applyFeaturedAppCapsuleForRoute(
+      c,
+      caller,
+      entry,
+      {
+        localWorkspaceId: space.id,
+        idempotencyKey,
+      },
+    );
+    if (upstream.status >= 400) return jsonFromUpstream(c, upstream);
     const timestamp = new Date().toISOString();
 
     return c.json(
       {
-        capsule: toCapsuleRecord(entry, upstream, {
+        capsule: toCapsuleRecord(entry, upstream.body, {
           timestamp,
         }),
-        subject_source: "operator_config",
+        subject_source: caller.kind,
       },
       202,
     );
@@ -968,14 +881,9 @@ capsulesRouter.delete(
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     const reason =
       body === null ? undefined : (readString(body.reason) ?? undefined);
-    const caller = await resolveAccountsCaller(c);
-    const operator = caller ? null : operatorRouteConfig(c);
-    const workspaceId = caller
-      ? accountsCallerWorkspaceId(caller, space.id)
-      : operator!.workspaceId;
-    const accountsConfig = caller
-      ? callerAccountsConfig(c, caller)
-      : operator!.accountsConfig;
+    const caller = await requireAccountsCaller(c);
+    const workspaceId = accountsCallerWorkspaceId(caller, space.id);
+    const accountsConfig = callerAccountsConfig(c, caller);
     const upstream =
       await capsulesRouteDeps.deleteInstallableAppCapsule(
         capsuleId,

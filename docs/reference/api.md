@@ -54,8 +54,20 @@ Current public/product API markers:
 - `/api/spaces/:spaceId/capsules/:capsuleId/services`
 - `/api/spaces/:spaceId/capsules/git-url/plan`
 - `/api/spaces/:spaceId/capsules/git-url/apply`
+- `/api/spaces/:spaceId/capsules/git-url/revision/plan`
+- `/api/spaces/:spaceId/capsules/git-url/revision/apply`
+- `/api/spaces/:spaceId/capsules/:capsuleId` (`DELETE` は destroy-plan Run の作成だけを行い、
+  `202` とレビュー用 Run / expected guard を返す。適用は Takosumi 側の承認後に行う)
 - `/_takosumi/launch`
 - `/git/:owner/:repo.git/info/refs`
+
+Git URL の `plan` は呼び出し側が `Idempotency-Key` header を必ず送り、通信再試行でも
+同じ install 操作キーを使います。Capsule HTTP は delegated Accounts Workspace のみを
+受け付け、deployment-wide operator token へはフォールバックしません。
+upgrade の `revision/plan` も同じ規則で、Takos は Git ref だけを Takosumi の耐久
+revision coordinator へ渡します。Source の書換え、同期、Capsule plan は Takosumi が
+所有し、Takos は reviewable Run を受け取ってから別の `revision/apply` を呼びます。
+rollback は既存 StateVersion の rollback-plan を使います。
 
 `/git/:owner/:repo.git/*` は既存 repository の clone / fetch 用 read-only
 compatibility endpoint です。`git-receive-pack` は拒否されます。repository writes、

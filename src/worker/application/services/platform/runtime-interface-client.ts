@@ -10,6 +10,9 @@ import {
   UI_SURFACE_OPEN_PERMISSION,
 } from "takosumi-contract";
 import {
+  takosumiInterfaceBindingsPath,
+  takosumiInterfaceTokenPath,
+  takosumiInterfacesPath,
   takosumiSessionApiUrl,
   takosumiWorkspaceUiSurfacesPath,
 } from "../takosumi-control-paths.ts";
@@ -125,13 +128,7 @@ function interfacesUrl(
   baseUrl: string,
   selector: RuntimeInterfaceSelector,
 ): URL {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.replace(/\/+$/u, "");
-  url.pathname = basePath.endsWith("/v1/interfaces")
-    ? basePath
-    : `${basePath}/v1/interfaces`;
-  url.search = "";
-  url.hash = "";
+  const url = takosumiSessionApiUrl(baseUrl, takosumiInterfacesPath());
   url.searchParams.set("workspaceId", selector.workspaceId);
   url.searchParams.set("type", selector.type);
   url.searchParams.set("phase", "Resolved");
@@ -148,28 +145,19 @@ function interfaceBindingsUrl(
   interfaceId: string,
   permission: string,
 ): URL {
-  const url = new URL(baseUrl);
-  let basePath = url.pathname.replace(/\/+$/u, "");
-  if (!basePath.endsWith("/v1/interfaces")) {
-    basePath = `${basePath}/v1/interfaces`;
-  }
-  url.pathname = `${basePath}/${encodeURIComponent(interfaceId)}/bindings`;
-  url.search = "";
-  url.hash = "";
+  const url = takosumiSessionApiUrl(
+    baseUrl,
+    takosumiInterfaceBindingsPath(interfaceId),
+  );
   url.searchParams.set("permission", permission);
   return url;
 }
 
 function interfaceTokenUrl(baseUrl: string, interfaceId: string): URL {
-  const url = new URL(baseUrl);
-  let basePath = url.pathname.replace(/\/+$/u, "");
-  if (!basePath.endsWith("/v1/interfaces")) {
-    basePath = `${basePath}/v1/interfaces`;
-  }
-  url.pathname = `${basePath}/${encodeURIComponent(interfaceId)}/token`;
-  url.search = "";
-  url.hash = "";
-  return url;
+  return takosumiSessionApiUrl(
+    baseUrl,
+    takosumiInterfaceTokenPath(interfaceId),
+  );
 }
 
 function workspaceUiSurfacesUrl(

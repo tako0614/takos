@@ -11,29 +11,38 @@
 # policy own provider credentials, state backend, and Cloudflare Container
 # execution.
 #
-# Usage: ./scripts/takosumi-deploy.sh [--plan-only] [--target TARGET]
+# Usage:
+#   ./scripts/takosumi-deploy.sh [--target TARGET]
+#   ./scripts/takosumi-deploy.sh --apply-run PLAN_RUN_ID
 #
 # Required env vars:
 #   TAKOSUMI_URL        — Takosumi control plane origin (e.g. https://app.takosumi.com)
 #   TAKOSUMI_TOKEN      — Bearer token for the deploy control API
-#   TAKOSUMI_CAPSULE_ID — existing Capsule to plan/apply
+#   TAKOSUMI_CAPSULE_ID — existing Capsule to plan (not needed with --apply-run)
 #
-# This script:
-# 1. Triggers a plan Run for the Capsule's OpenTofu module
-# 2. Prints the reviewed plan summary
-# 3. (unless --plan-only) applies the reviewed plan through the session/API facade
+# Planning and applying are deliberately separate invocations. The first form
+# creates and prints a reviewable Plan Run, then stops. After review, the second
+# form applies that exact Run id. The script never auto-applies a newly-created
+# plan.
 
 set -euo pipefail
 
-PLAN_ONLY=""
 TARGET="${TAKOSUMI_TARGET:-}"
 CAPSULE_ID="${TAKOSUMI_CAPSULE_ID:-}"
+APPLY_RUN_ID=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --plan-only) PLAN_ONLY="true"; shift ;;
-    --target) TARGET="$2"; shift 2 ;;
-    --capsule) CAPSULE_ID="$2"; shift 2 ;;
+    --plan-only) shift ;;
+    --apply-run)
+      [[ $# -ge 2 ]] || { echo "Error: --apply-run requires a Run id"; exit 1; }
+      APPLY_RUN_ID="$2"; shift 2 ;;
+    --target)
+      [[ $# -ge 2 ]] || { echo "Error: --target requires a value"; exit 1; }
+      TARGET="$2"; shift 2 ;;
+    --capsule)
+      [[ $# -ge 2 ]] || { echo "Error: --capsule requires a Capsule id"; exit 1; }
+      CAPSULE_ID="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -48,7 +57,7 @@ if [[ -z "${TAKOSUMI_TOKEN:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "$CAPSULE_ID" ]]; then
+if [[ -z "$APPLY_RUN_ID" && -z "$CAPSULE_ID" ]]; then
   echo "Error: TAKOSUMI_CAPSULE_ID (or --capsule) is required"
   echo "  The Capsule resolves the Git OpenTofu module (deploy/opentofu/cloudflare)."
   exit 1
@@ -72,15 +81,22 @@ check_response() {
   http_code=$(echo "$response" | tail -1)
   body=$(echo "$response" | head -n -1)
   if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
-    echo "$label OK ($http_code):"
-    echo "$body" | jq . 2>/dev/null || echo "$body"
+    printf '%s' "$body"
   else
-    echo "$label failed ($http_code):"
-    echo "$body" | jq . 2>/dev/null || echo "$body"
+    echo "$label failed ($http_code):" >&2
+    echo "$body" >&2
     exit 1
   fi
-  echo "$body"
 }
+
+if [[ -n "$APPLY_RUN_ID" ]]; then
+  echo "Applying reviewed plan Run ${APPLY_RUN_ID}..."
+  APPLY_RESPONSE=$(api_post "/api/v1/runs/${APPLY_RUN_ID}/apply" "{}")
+  APPLY_OUT=$(check_response "$APPLY_RESPONSE" "apply Run")
+  echo "$APPLY_OUT"
+  echo "Apply Run accepted. Follow the canonical Run until it reaches a terminal state."
+  exit 0
+fi
 
 # 1. Trigger a plan Run for the Capsule's OpenTofu module.
 echo "Triggering plan Run for capsule ${CAPSULE_ID}..."
@@ -90,22 +106,20 @@ if [[ -n "$TARGET" ]]; then
 fi
 PLAN_RESPONSE=$(api_post "/api/v1/capsules/${CAPSULE_ID}/plan" "$PLAN_BODY")
 PLAN_OUT=$(check_response "$PLAN_RESPONSE" "plan Run")
-PLAN_RUN_ID=$(echo "$PLAN_OUT" | jq -r '.run.id // .id // .planRunId // empty' 2>/dev/null || true)
+echo "$PLAN_OUT"
+PLAN_RUN_ID=$(printf '%s' "$PLAN_OUT" | bun -e '
+  try {
+    const value = JSON.parse(await Bun.stdin.text());
+    const id = value?.run?.id ?? value?.id ?? value?.planRunId;
+    if (typeof id === "string") process.stdout.write(id);
+  } catch {}
+' || true)
 
 if [[ -z "$PLAN_RUN_ID" ]]; then
   echo "Error: plan response did not include a run id"
   exit 1
 fi
 
-if [[ -n "$PLAN_ONLY" ]]; then
-  echo "--plan-only: stopping after plan Run (no apply)."
-  exit 0
-fi
-
-# 2. Apply the reviewed plan Run. The server rebuilds and verifies the apply guard.
-echo "Applying reviewed plan Run ${PLAN_RUN_ID}..."
-APPLY_BODY="{}"
-APPLY_RESPONSE=$(api_post "/api/v1/plan-runs/${PLAN_RUN_ID}/apply" "$APPLY_BODY")
-check_response "$APPLY_RESPONSE" "apply Run" >/dev/null
-
-echo "Done. A new StateVersion and Output are recorded after the apply Run succeeds."
+echo "Plan Run ${PLAN_RUN_ID} is ready for review."
+echo "After review, apply it explicitly with:"
+echo "  $0 --apply-run ${PLAN_RUN_ID}"

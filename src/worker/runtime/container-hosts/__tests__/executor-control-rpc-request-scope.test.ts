@@ -1,11 +1,36 @@
-import { test } from "bun:test";
-import { assertEquals, assertFalse } from "@takos/test/assert";
+import { afterEach, test } from "bun:test";
+import { assertEquals, assertFalse, assertStringIncludes } from "@takos/test/assert";
+import { stub } from "@takos/test/mock";
+import { McpClient } from "../../../application/tools/mcp-client.ts";
 import {
+  buildPerRunCapabilityRegistry,
+} from "../../../application/tools/executor-utils.ts";
+import { ToolExecutor } from "../../../application/tools/executor.ts";
+import {
+  createToolResolver,
+  type ToolResolverOptions,
+} from "../../../application/tools/resolver.ts";
+import type {
+  ToolContext,
+} from "../../../application/tools/tool-definitions.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import { OPERATOR_CONTROL_MCP_FIXTURE } from "../../../application/tools/__tests__/fixtures/operator-control-mcp.ts";
+import {
+  accounts,
+} from "../../../infra/db/index.ts";
+import {
+  createRemoteToolExecutorDependencies,
   handleToolCatalog,
   handleToolCleanup,
   handleToolExecute,
   type RemoteToolExecutorDependencies,
 } from "../executor-control-rpc.ts";
+
+const stubs: Array<{ restore(): void }> = [];
+
+afterEach(() => {
+  while (stubs.length > 0) stubs.pop()!.restore();
+});
 
 function envWithBrokenDb(): Record<string, unknown> {
   return {
@@ -24,6 +49,131 @@ function envWithBrokenDb(): Record<string, unknown> {
       },
     },
     TAKOS_OFFLOAD: undefined,
+  };
+}
+
+function rowTable(rows: readonly Record<string, unknown>[]) {
+  return {
+    where: () => ({
+      orderBy: () => ({ all: async () => rows }),
+      all: async () => rows,
+      get: async () => rows[0] ?? null,
+    }),
+    orderBy: () => ({ all: async () => rows }),
+    all: async () => rows,
+    get: async () => rows[0] ?? null,
+  };
+}
+
+function readOnlyMcpDb() {
+  return {
+    select: () => ({
+      from: () => rowTable([]),
+    }),
+    insert: () => {
+      throw new Error("runtime Interface discovery must not persist state");
+    },
+    update: () => {
+      throw new Error("runtime Interface discovery must not persist state");
+    },
+    delete: () => {
+      throw new Error("runtime Interface discovery must not persist state");
+    },
+  } as never;
+}
+
+function productionFactoryMcpDb(userId: string) {
+  const empty = rowTable([]);
+  const account = rowTable([
+    {
+      id: userId,
+      ownerAccountId: userId,
+      securityPosture: "standard",
+    },
+  ]);
+  return {
+    select: () => ({
+      from: (table: unknown) => table === accounts ? account : empty,
+    }),
+    insert: () => {
+      throw new Error("production MCP discovery must not insert domain rows");
+    },
+    update: () => ({
+      set: () => ({
+        where: async () => ({ meta: { changes: 1 } }),
+      }),
+    }),
+    delete: () => ({
+      where: async () => ({ meta: { changes: 1 } }),
+    }),
+    run: async () => ({ meta: { changes: 1 } }),
+  } as never;
+}
+
+function runtimeInterface(revision: number) {
+  const timestamp = "2026-07-19T00:00:00.000Z";
+  const spec = OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec;
+  return {
+    apiVersion: "takosumi.dev/v1alpha1",
+    kind: "Interface",
+    metadata: {
+      id: "if-control",
+      workspaceId: "workspace-1",
+      name: "operator-control-mcp",
+      ownerRef: { kind: "Capsule", id: "capsule-1" },
+      generation: 1,
+      labels: {},
+      materializedFrom: {
+        source: "capsule_blueprint",
+        key: OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.key,
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    spec: {
+      ...spec,
+      inputs: {
+        endpoint: {
+          ...spec.inputs.endpoint,
+          capsuleId: "capsule-1",
+        },
+      },
+    },
+    status: {
+      phase: "Resolved",
+      observedGeneration: 1,
+      resolvedRevision: revision,
+      resolvedInputs: { endpoint: OPERATOR_CONTROL_MCP_FIXTURE.output.value },
+      provenance: {},
+      conditions: [],
+    },
+  };
+}
+
+function runtimeBinding(observedInterfaceRevision: number) {
+  const proposal = OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.bindings[0];
+  const timestamp = "2026-07-19T00:00:00.000Z";
+  return {
+    apiVersion: "takosumi.dev/v1alpha1",
+    kind: "InterfaceBinding",
+    metadata: {
+      id: "ifb-control",
+      workspaceId: "workspace-1",
+      generation: 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    spec: {
+      interfaceId: "if-control",
+      subjectRef: { kind: "Principal", id: "pairwise-user" },
+      permissions: proposal.permissions,
+      delivery: proposal.delivery,
+    },
+    status: {
+      phase: "Ready",
+      observedInterfaceRevision,
+      conditions: [],
+    },
   };
 }
 
@@ -85,6 +235,390 @@ test("tool catalog and execution use separate request-local executors", async ()
   assertEquals(signals[0], undefined);
   assertEquals(signals[1]?.aborted, true);
   assertEquals(cleaned, ["executor-1", "executor-2"]);
+});
+
+test("the same Run refreshes toolbox through a newly resolved MCP Interface", async () => {
+  const db = readOnlyMcpDb();
+  const state = { available: false, revision: 2 };
+  const resolverSnapshots: Array<number | null> = [];
+  const issuedTokens: string[] = [];
+  const mcpCalls: string[] = [];
+  let invalidateAfterBuild = false;
+
+  const controlFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input.toString());
+    assertEquals(
+      new Headers(init?.headers).get("authorization"),
+      "Bearer delegated-accounts-token",
+    );
+    if (url.pathname.endsWith("/token")) {
+      const token = `interface-token-${issuedTokens.length + 1}`;
+      issuedTokens.push(token);
+      return Response.json({
+        access_token: token,
+        token_type: "Bearer",
+        expires_in: 60,
+        expires_at: new Date(Date.now() + 55_000).toISOString(),
+        scope: "mcp.invoke",
+        resource: OPERATOR_CONTROL_MCP_FIXTURE.output.value,
+      });
+    }
+    if (url.pathname.endsWith("/bindings")) {
+      return Response.json({
+        bindings: state.available ? [runtimeBinding(state.revision)] : [],
+      });
+    }
+    if (url.pathname.endsWith("/api/v1/interfaces")) {
+      return Response.json({
+        interfaces: state.available ? [runtimeInterface(state.revision)] : [],
+      });
+    }
+    return new Response(null, { status: 404 });
+  };
+
+  stubs.push(stub(McpClient.prototype as never, "connect", async () => {}));
+  stubs.push(
+    stub(McpClient.prototype as never, "listTools", async () => [
+      {
+        sdkTool: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0],
+        definition: {
+          name: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].name,
+          description: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].description,
+          category: "mcp",
+          parameters: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].inputSchema,
+        },
+      },
+    ]),
+  );
+  stubs.push(
+    stub(
+      McpClient.prototype as never,
+      "callTool",
+      async (name: string) => {
+        mcpCalls.push(name);
+        return "interface-call-ok";
+      },
+    ),
+  );
+  stubs.push(stub(McpClient.prototype as never, "close", async () => {}));
+
+  const env = {
+    DB: db,
+    ENVIRONMENT: "development",
+  } as unknown as Env;
+  const resolverOptions: ToolResolverOptions = {
+    runtimeMcpInterfaces: {
+      workspaceId: "workspace-1",
+      request: {
+        baseUrl: "https://app.takosumi.test",
+        token: "delegated-accounts-token",
+        subjectId: "pairwise-user",
+        fetch: controlFetch,
+      },
+    },
+  };
+  const dependencies: RemoteToolExecutorDependencies = {
+    async createExecutor(_runId, workerEnv, signal) {
+      resolverSnapshots.push(state.available ? state.revision : null);
+      const resolver = await createToolResolver(
+        db,
+        "local-space",
+        workerEnv,
+        resolverOptions,
+      );
+      if (invalidateAfterBuild) {
+        // The executor must retain the revision it catalogued and reject a
+        // changed Interface rather than silently invoking a different server.
+        state.revision += 1;
+        invalidateAfterBuild = false;
+      }
+      const context: ToolContext = {
+        spaceId: "local-space",
+        threadId: "thread-1",
+        runId: _runId,
+        userId: "user-1",
+        role: "owner",
+        capabilities: [],
+        env: workerEnv,
+        db,
+        abortSignal: signal,
+      };
+      const executor = new ToolExecutor(resolver, context);
+      context.capabilityRegistry = buildPerRunCapabilityRegistry(executor);
+      (context as ToolContext & { _toolExecutor?: ToolExecutor })._toolExecutor =
+        executor;
+      return executor;
+    },
+  };
+  const runId = "run-interface-refresh";
+  const executeToolbox = async (
+    id: string,
+    arguments_: Record<string, unknown>,
+  ) => {
+    const response = await handleToolExecute(
+      {
+        runId,
+        toolCall: { id, name: "toolbox", arguments: arguments_ },
+      },
+      env,
+      dependencies,
+    );
+    assertEquals(response.status, 200);
+    return (await response.json()) as {
+      tool_call_id: string;
+      output: string;
+      error?: string;
+    };
+  };
+
+  const initialCatalog = await handleToolCatalog(
+    { runId },
+    env,
+    dependencies,
+  );
+  assertEquals(initialCatalog.status, 200);
+  const initialCatalogBody = (await initialCatalog.json()) as {
+    tools: Array<{ name: string }>;
+  };
+  assertEquals(
+    initialCatalogBody.tools.some((tool) => tool.name === "capsule_plan"),
+    false,
+  );
+
+  const beforeInterface = await executeToolbox("tool-before-interface", {
+    action: "call",
+    tool_name: "capsule_plan",
+  });
+  assertStringIncludes(
+    beforeInterface.error ?? "",
+    "not in the available tool catalog",
+  );
+
+  // The same Run now sees the newly materialized Interface on its next
+  // request. Discovery remains progressive: the model still calls toolbox,
+  // while the Worker refreshes the request-local resolver behind it.
+  state.available = true;
+  const search = await executeToolbox("tool-search-interface", {
+    action: "search",
+    query: "capsule_plan",
+  });
+  const searchPayload = JSON.parse(search.output) as {
+    results: Array<{ name: string; id: string }>;
+  };
+  assertEquals(searchPayload.results.map((result) => result.name), [
+    "capsule_plan",
+  ]);
+  assertEquals(searchPayload.results[0]?.id, "tool:capsule_plan");
+
+  const describe = await executeToolbox("tool-describe-interface", {
+    action: "describe",
+    tool_name: "capsule_plan",
+  });
+  const describePayload = JSON.parse(describe.output) as {
+    tools: Array<{ name: string; available: boolean }>;
+  };
+  assertEquals(describePayload.tools[0]?.name, "capsule_plan");
+  assertEquals(describePayload.tools[0]?.available, true);
+  assertEquals(
+    (describePayload.tools[0] as Record<string, unknown>).family,
+    "mcp.Takosumi_Control",
+  );
+  assertEquals(
+    (describePayload.tools[0] as Record<string, unknown>).risk_level,
+    "low",
+  );
+  assertEquals(
+    (describePayload.tools[0] as Record<string, unknown>).parameters,
+    { type: "object", properties: {} },
+  );
+
+  // A resolver may not carry a stale descriptor across the request boundary:
+  // force a revision change after catalog construction and require the pinned
+  // handler to fence before it reaches MCP.
+  invalidateAfterBuild = true;
+  const staleCall = await executeToolbox("tool-call-stale-interface", {
+    action: "call",
+    tool_name: "capsule_plan",
+  });
+  assertStringIncludes(
+    staleCall.error ?? "",
+    "no longer authorized at its catalog revision",
+  );
+  assertEquals(mcpCalls, []);
+
+  const call = await executeToolbox("tool-call-current-interface", {
+    action: "call",
+    tool_name: "capsule_plan",
+    arguments: {},
+  });
+  assertEquals(call.output, "interface-call-ok");
+  assertEquals(mcpCalls, ["capsule_plan"]);
+  assertEquals(resolverSnapshots, [null, null, 2, 2, 2, 3]);
+  assertEquals(issuedTokens.length > 0, true);
+});
+
+test("production Run authority refreshes a newly resolved MCP Interface in the same Run", async () => {
+  const state = { available: false, revision: 7 };
+  const authorizationUsers: string[] = [];
+  const controlRequests: string[] = [];
+  const mcpCalls: string[] = [];
+  const userId = "user-production-bridge";
+  const runId = "run-production-interface-refresh";
+  const db = productionFactoryMcpDb(userId);
+
+  const controlFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    controlRequests.push(url.pathname);
+    assertEquals(
+      request.headers.get("authorization"),
+      "Bearer delegated-production-token",
+    );
+    if (url.pathname.endsWith("/token")) {
+      return Response.json({
+        access_token: "fresh-interface-token",
+        token_type: "Bearer",
+        expires_in: 60,
+        expires_at: new Date(Date.now() + 55_000).toISOString(),
+        scope: "mcp.invoke",
+        resource: OPERATOR_CONTROL_MCP_FIXTURE.output.value,
+      });
+    }
+    if (url.pathname.endsWith("/bindings")) {
+      return Response.json({
+        bindings: state.available ? [runtimeBinding(state.revision)] : [],
+      });
+    }
+    if (url.pathname.endsWith("/api/v1/interfaces")) {
+      return Response.json({
+        interfaces: state.available ? [runtimeInterface(state.revision)] : [],
+      });
+    }
+    return new Response(null, { status: 404 });
+  };
+
+  stubs.push(stub(McpClient.prototype as never, "connect", async () => {}));
+  stubs.push(
+    stub(McpClient.prototype as never, "listTools", async () => [
+      {
+        sdkTool: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0],
+        definition: {
+          name: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].name,
+          description: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].description,
+          category: "mcp",
+          parameters: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].inputSchema,
+        },
+      },
+    ]),
+  );
+  stubs.push(
+    stub(McpClient.prototype as never, "callTool", async (name: string) => {
+      mcpCalls.push(name);
+      return "production-interface-call-ok";
+    }),
+  );
+  stubs.push(stub(McpClient.prototype as never, "close", async () => {}));
+
+  const dependencies = createRemoteToolExecutorDependencies({
+    getRunBootstrap: async (_env, requestedRunId) => {
+      assertEquals(requestedRunId, runId);
+      return {
+        status: "running",
+        spaceId: userId,
+        threadId: "thread-production-bridge",
+        userId,
+        agentType: "default",
+      };
+    },
+    accountsDelegatedAuthorization: async (input) => {
+      authorizationUsers.push(input.userId);
+      assertEquals(input.access, "read");
+      return {
+        accessToken: "delegated-production-token",
+        workspaceId: "workspace-1",
+        subjectId: "pairwise-user",
+      };
+    },
+    fetch: controlFetch,
+  });
+  const env = {
+    DB: db,
+    ENVIRONMENT: "development",
+    OIDC_ISSUER_URL: "https://app.takosumi.test",
+    OIDC_CLIENT_ID: "toc_takos",
+    ENCRYPTION_KEY: "test-encryption-key",
+    TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://internal-app.takosumi.test",
+  } as unknown as Env;
+
+  const initial = await handleToolCatalog({ runId }, env, dependencies);
+  assertEquals(initial.status, 200);
+  state.available = true;
+
+  const search = await handleToolExecute(
+    {
+      runId,
+      idempotencyKey: "same-run-search",
+      toolCall: {
+        id: "production-search",
+        name: "toolbox",
+        arguments: { action: "search", query: "capsule_plan" },
+      },
+    },
+    env,
+    dependencies,
+  );
+  assertEquals(search.status, 200);
+  const searchResult = await search.json() as { output: string };
+  assertStringIncludes(searchResult.output, "capsule_plan");
+
+  const call = await handleToolExecute(
+    {
+      runId,
+      idempotencyKey: "same-run-call",
+      toolCall: {
+        id: "production-call",
+        name: "toolbox",
+        arguments: {
+          action: "call",
+          tool_name: "capsule_plan",
+          arguments: {},
+        },
+      },
+    },
+    env,
+    dependencies,
+  );
+  assertEquals(call.status, 200);
+  assertEquals((await call.json() as { output: string }).output, "production-interface-call-ok");
+  assertEquals(mcpCalls, ["capsule_plan"]);
+  assertEquals(authorizationUsers, [userId, userId, userId]);
+  assertEquals(controlRequests.includes("/api/v1/interfaces"), true);
+  assertEquals(controlRequests.some((path) => path.endsWith("/token")), true);
+
+  state.available = false;
+  const revoked = await handleToolExecute(
+    {
+      runId,
+      idempotencyKey: "same-run-revoked-call",
+      toolCall: {
+        id: "production-revoked-call",
+        name: "toolbox",
+        arguments: {
+          action: "call",
+          tool_name: "capsule_plan",
+          arguments: {},
+        },
+      },
+    },
+    env,
+    dependencies,
+  );
+  assertEquals(revoked.status, 200);
+  assertStringIncludes(
+    (await revoked.json() as { error?: string }).error ?? "",
+    "not in the available tool catalog",
+  );
+  assertEquals(mcpCalls, ["capsule_plan"]);
 });
 
 test("tool catalog attests which side effects take the durable operation fence", async () => {

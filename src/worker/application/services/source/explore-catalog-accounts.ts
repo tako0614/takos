@@ -129,6 +129,7 @@ async function projectCapsule(
   const appId = readString(capsule?.name);
   const sourceId = readString(capsule?.sourceId);
   if (!capsule || !capsuleId || !appId || !sourceId) return null;
+  const adoptedSourceRevision = readRecord(capsule.adoptedSourceRevision);
   const [source, services] = await Promise.all([
     readSource(sourceId, config),
     fetchCapsuleWorkloadServices(capsuleId, workspaceId, config),
@@ -139,8 +140,9 @@ async function projectCapsule(
     status: canonicalCapsuleStatus(capsule.status),
     environment: readString(capsule.environment),
     sourceUrl: readString(source?.url),
-    sourceRef: readString(source?.defaultRef),
-    sourceCommit: null,
+    sourceRef:
+      readString(adoptedSourceRevision?.ref) ?? readString(source?.defaultRef),
+    sourceCommit: readString(adoptedSourceRevision?.resolvedCommit),
     createdAt: readString(capsule.createdAt),
     updatedAt: readString(capsule.updatedAt),
     services,

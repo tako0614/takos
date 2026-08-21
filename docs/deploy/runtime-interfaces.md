@@ -36,7 +36,7 @@ app-owned launcher のような plain Capsule の宣言案は、repository の v
 module compatibility をレビューしたうえで `InstallConfig.interfaceBlueprints` に compile されます。最初の
 成功した apply 後に blueprint を一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。
 `launch_url` のような Output は宣言された Interface input の値にすぎず、Output 名から Interface を推測する
-fallback はありません。`/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。
+fallback はありません。`/api/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。
 宣言には、その利用者が理解できる任意の protocol type / version を使えます。`document` は任意の non-secret な
 JSON で、動的な値は明示的な input で接続します。
 

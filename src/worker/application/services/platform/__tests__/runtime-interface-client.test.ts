@@ -79,13 +79,15 @@ function readyBinding(overrides: Record<string, unknown> = {}) {
 }
 
 test("runtime Interface discovery requires the exact Principal and revision", async () => {
+  const requestedPaths: string[] = [];
   const config: RuntimeInterfaceRequestConfig = {
     baseUrl: "https://internal-app.takosumi.test",
     token: "delegated-accounts-token",
     subjectId: "pairwise-user",
     fetch: async (input) => {
       const url = new URL(input);
-      if (url.pathname === "/v1/interfaces") {
+      requestedPaths.push(url.pathname);
+      if (url.pathname === "/api/v1/interfaces") {
         return Response.json({ interfaces: [resolvedInterface()] });
       }
       return Response.json({
@@ -114,6 +116,10 @@ test("runtime Interface discovery requires the exact Principal and revision", as
   assertEquals(authorized.length, 1);
   assertEquals(authorized[0]?.interface.metadata.id, "if_ai_gateway");
   assertEquals(authorized[0]?.binding.metadata.id, "ifb_ai_gateway");
+  assertEquals(requestedPaths, [
+    "/api/v1/interfaces",
+    "/api/v1/interfaces/if_ai_gateway/bindings",
+  ]);
 });
 
 test("runtime Interface discovery rejects unsupported credential delivery", async () => {
@@ -123,7 +129,7 @@ test("runtime Interface discovery rejects unsupported credential delivery", asyn
     subjectId: "pairwise-user",
     fetch: async (input) => {
       const url = new URL(input);
-      if (url.pathname === "/v1/interfaces") {
+      if (url.pathname === "/api/v1/interfaces") {
         return Response.json({ interfaces: [resolvedInterface()] });
       }
       return Response.json({
@@ -159,7 +165,7 @@ test("runtime Interface discovery fences an exact owner when requested", async (
       fetch: async (input) => {
         const url = new URL(input);
         requestedUrls.push(url);
-        if (url.pathname === "/v1/interfaces") {
+        if (url.pathname === "/api/v1/interfaces") {
           return Response.json({ interfaces: [resolvedInterface()] });
         }
         return Response.json({ bindings: [readyBinding()] });
@@ -172,22 +178,41 @@ test("runtime Interface discovery fences an exact owner when requested", async (
   assertEquals(requestedUrls[0]?.searchParams.get("ownerId"), "capsule_docs");
 });
 
+test("runtime Interface discovery does not fall back to the retired public path", async () => {
+  const requestedPaths: string[] = [];
+  const authorized = await fetchAuthorizedRuntimeInterfaces(selector, {
+    baseUrl: "https://internal-app.takosumi.test",
+    token: "delegated-accounts-token",
+    subjectId: "pairwise-user",
+    fetch: async (input) => {
+      requestedPaths.push(new URL(input).pathname);
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  assertEquals(authorized, []);
+  assertEquals(requestedPaths, ["/api/v1/interfaces"]);
+});
+
 test("runtime Interface token response is invocation-only and non-reusable", async () => {
   const resource = "https://app.takosumi.test/gateway/ai/v1";
+  let requestedPath: string | undefined;
   const valid = await issueRuntimeInterfaceAccessToken(
     {
       baseUrl: "https://internal-app.takosumi.test",
       token: "delegated-accounts-token",
       subjectId: "pairwise-user",
-      fetch: async () =>
-        Response.json({
+      fetch: async (input) => {
+        requestedPath = new URL(input).pathname;
+        return Response.json({
           access_token: "runtime-interface-token",
           token_type: "Bearer",
           expires_in: 30,
           expires_at: new Date(Date.now() + 30_000).toISOString(),
           scope: "ai.chat",
           resource,
-        }),
+        });
+      },
     },
     {
       interfaceId: "if_ai_gateway",
@@ -197,6 +222,7 @@ test("runtime Interface token response is invocation-only and non-reusable", asy
     },
   );
   assertEquals(valid, "runtime-interface-token");
+  assertEquals(requestedPath, "/api/v1/interfaces/if_ai_gateway/token");
 
   for (const invalidBody of [
     {

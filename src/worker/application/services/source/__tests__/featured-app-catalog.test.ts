@@ -53,6 +53,42 @@ function objectRecord(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+type FeaturedInstallPlanState = {
+  id: string;
+  workspaceId: string;
+  source: Record<string, unknown>;
+  capsule: Record<string, unknown>;
+  options: Record<string, unknown>;
+  phase: "syncing_source" | "reviewable";
+  generation: number;
+  sourceId?: string;
+  capsuleId?: string;
+  planRunId?: string;
+};
+
+const featuredInstallPlans = new Map<string, FeaturedInstallPlanState>();
+
+function featuredInstallPlanBody(
+  state: FeaturedInstallPlanState,
+): Record<string, unknown> {
+  return {
+    id: state.id,
+    workspaceId: state.workspaceId,
+    createdBy: "subject_1",
+    requestDigest: `digest_${state.id}`,
+    source: state.source,
+    capsule: state.capsule,
+    options: state.options,
+    phase: state.phase,
+    generation: state.generation,
+    createdAt: "2026-08-21T00:00:00.000Z",
+    updatedAt: "2026-08-21T00:00:00.000Z",
+    ...(state.sourceId ? { sourceId: state.sourceId } : {}),
+    ...(state.capsuleId ? { capsuleId: state.capsuleId } : {}),
+    ...(state.planRunId ? { planRunId: state.planRunId } : {}),
+  };
+}
+
 function canonicalFeaturedInstallResponse(
   input: string | URL | Request,
   init?: RequestInit,
@@ -62,58 +98,96 @@ function canonicalFeaturedInstallResponse(
     init?.method ?? (input instanceof Request ? input.method : "GET");
   const segments = url.pathname.split("/").filter(Boolean);
   const last = segments.at(-1) ?? "";
-  if (method === "GET" && last === "sources") {
-    return Response.json({ sources: [] });
-  }
-  if (method === "POST" && last === "sources") {
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+  if (
+    method === "POST" &&
+    last === "install-plans" &&
+    segments.at(-3) === "workspaces"
+  ) {
+    const body = JSON.parse(String(init?.body)) as {
+      source: Record<string, unknown>;
+      capsule: Record<string, unknown>;
+      options: Record<string, unknown>;
+    };
+    const capsuleName = String(body.capsule.name);
+    const id = `gip_${capsuleName}`;
+    const state: FeaturedInstallPlanState = {
+      id,
+      workspaceId: segments.at(-2) ?? "",
+      source: body.source,
+      capsule: body.capsule,
+      options: body.options,
+      phase: "syncing_source",
+      generation: 0,
+    };
+    featuredInstallPlans.set(id, state);
     return Response.json(
       {
-        source: {
-          id: `src_${String(body.name)}`,
-          workspaceId: body.workspaceId,
-          name: body.name,
-          url: body.url,
-          defaultRef: body.defaultRef,
-          defaultPath: body.defaultPath,
+        installPlan: featuredInstallPlanBody(state),
+        nextAction: "reconcile",
+        links: {
+          self: `/api/v1/install-plans/${id}`,
+          reconcile: `/api/v1/install-plans/${id}/reconcile`,
         },
       },
       { status: 201 },
     );
   }
-  if (method === "POST" && last === "sync") {
-    return Response.json(
-      { run: { id: `run_sync_${segments.at(-2)}`, status: "succeeded" } },
-      { status: 201 },
-    );
-  }
-  if (method === "GET" && last === "capsules") {
-    return Response.json({ capsules: [] });
-  }
-  if (method === "POST" && last === "capsules") {
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    return Response.json(
-      {
-        capsule: {
-          id: `cap_${String(body.name)}`,
-          workspaceId: segments.at(-2),
-          sourceId: body.sourceId,
-          name: body.name,
-          environment: body.environment,
-        },
+  if (method === "GET" && last !== "reconcile" && segments.at(-2) === "install-plans") {
+    const state = featuredInstallPlans.get(last);
+    if (!state) return Response.json({ error: "unknown install plan" }, { status: 404 });
+    return Response.json({
+      installPlan: featuredInstallPlanBody(state),
+      nextAction: state.phase === "reviewable" ? "review_run" : "reconcile",
+      links: {
+        self: `/api/v1/install-plans/${state.id}`,
+        ...(state.phase === "reviewable"
+          ? { run: `/api/v1/runs/${state.planRunId}` }
+          : { reconcile: `/api/v1/install-plans/${state.id}/reconcile` }),
       },
-      { status: 201 },
-    );
+    });
   }
-  if (method === "POST" && last === "plan") {
-    return Response.json(
-      { run: { id: `run_plan_${segments.at(-2)}` } },
-      { status: 201 },
-    );
+  if (method === "POST" && last === "reconcile" && segments.at(-3) === "install-plans") {
+    const planId = segments.at(-2) ?? "";
+    const state = featuredInstallPlans.get(planId);
+    if (!state) return Response.json({ error: "unknown install plan" }, { status: 404 });
+    const capsuleName = String(state.capsule.name);
+    state.phase = "reviewable";
+    state.generation = 1;
+    state.sourceId = `src_${capsuleName}`;
+    state.capsuleId = `cap_${capsuleName}`;
+    state.planRunId = `run_plan_${capsuleName}`;
+    return Response.json({
+      installPlan: featuredInstallPlanBody(state),
+      nextAction: "review_run",
+      links: {
+        self: `/api/v1/install-plans/${state.id}`,
+        run: `/api/v1/runs/${state.planRunId}`,
+      },
+    });
   }
-  if (method === "POST" && last === "apply") {
+  if (method === "GET" && last.startsWith("run_plan_")) {
+    const state = [...featuredInstallPlans.values()].find(
+      (plan) => plan.planRunId === last,
+    );
+    if (!state) return Response.json({ error: "unknown plan Run" }, { status: 404 });
+    return Response.json({
+      run: {
+        id: last,
+        workspaceId: state.workspaceId,
+        capsuleId: state.capsuleId,
+        type: "plan",
+        status: "succeeded",
+      },
+    });
+  }
+  if (
+    method === "POST" &&
+    last === "apply" &&
+    segments.at(-2)?.startsWith("run_plan_")
+  ) {
+    const planRunId = segments.at(-2) ?? "";
     return Response.json(
-      { run: { id: `run_apply_${segments.at(-2)}` } },
+      { run: { id: `run_apply_${planRunId}`, status: "queued" } },
       { status: 202 },
     );
   }
@@ -326,8 +400,6 @@ test("resolveFeaturedAppInstallConfig resolves explicit canonical operator autom
         TAKOS_FEATURED_APP_INSTALL_URL: "https://installer.internal/control",
         TAKOS_FEATURED_APP_INSTALL_TOKEN: "default-token",
         TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID: "ws_default",
-        TAKOS_APP_INSTALLATIONS_URL: "https://accounts.internal",
-        TAKOS_APP_INSTALL_TOKEN: "shared-token",
         TAKOS_APP_INSTALL_SUBJECT: "tsub_shared",
       }),
     ),
@@ -336,6 +408,19 @@ test("resolveFeaturedAppInstallConfig resolves explicit canonical operator autom
       token: "default-token",
       workspaceId: "ws_default",
     },
+  );
+});
+
+test("resolveFeaturedAppInstallConfig ignores retired generic URL/token aliases", () => {
+  assertEquals(
+    resolveFeaturedAppInstallConfig(
+      {
+        DB: {} as Env["DB"],
+        TAKOS_APP_INSTALLATIONS_URL: "https://legacy.example/control",
+        TAKOS_APP_INSTALL_TOKEN: "legacy-token",
+      } as Env,
+    ),
+    null,
   );
 });
 
@@ -1237,28 +1322,39 @@ test("processFeaturedAppPreinstallJobs applies featured apps through Capsule ins
 
     assertEquals(summary.completed, 1);
     assertEquals(jobStatuses, ["in_progress", "completed"]);
-    assertEquals(sentRequests.length, 21);
+    assertEquals(sentRequests.length, 18);
     assertEquals(
       sentRequests[0].url,
-      "https://installer.internal/control/api/v1/sources?workspaceId=ws_operator",
+      "https://installer.internal/control/api/v1/workspaces/ws_operator/install-plans",
     );
     assertEquals(
       sentRequests[0].headers.get("authorization"),
       "Bearer install-token",
     );
-    const body = await sentRequests[1].json();
+    assertEquals(
+      sentRequests[0].headers.get("Idempotency-Key"),
+      "featured-app-preinstall:space-1:takos-office",
+    );
+    const body = await sentRequests[0].json();
     assertEquals(body, {
-      workspaceId: "ws_operator",
-      name: "takos-office-source",
-      url: "https://github.com/tako0614/takos-office.git",
-      defaultRef: "v0.1.0",
-      defaultPath: ".",
+      source: {
+        name: "takos-office-source",
+        url: "https://github.com/tako0614/takos-office.git",
+        ref: "v0.1.0",
+        path: ".",
+      },
+      capsule: { name: "takos-office", environment: "production" },
+      options: {},
     });
     assertEquals(
-      sentRequests[6].url,
-      "https://installer.internal/control/api/v1/runs/run_plan_cap_takos-office/apply",
+      sentRequests[5].url,
+      "https://installer.internal/control/api/v1/runs/run_plan_takos-office/apply",
     );
-    assertEquals(await sentRequests[6].json(), {});
+    assertEquals(await sentRequests[5].json(), {});
+    assertEquals(
+      sentRequests.some((request) => new URL(request.url).pathname.endsWith("/approve")),
+      false,
+    );
   } finally {
     clearFeaturedAppCatalogCache();
     featuredAppCatalogDeps.getDb = originalGetDb;
@@ -1583,11 +1679,6 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
             ref: "main",
             refType: "branch",
             modulePath: ".",
-            variables: {
-              enable_cloudflare_resources: true,
-              project_name: "yurucommu",
-              worker_name: "yurucommu",
-            },
             preinstall: true,
           },
         ]),
@@ -1609,62 +1700,62 @@ test("preinstallFeaturedAppsForSpace applies explicitly opted-in apps through Ca
       installed.map((entry) => entry.name),
       ["takos-office", "takos-computer", "yurucommu"],
     );
-    assertEquals(fetchCalls.length, 21);
+    assertEquals(fetchCalls.length, 18);
     assertEquals(
       fetchCalls[0].url,
-      "https://installer.internal/control/api/v1/sources?workspaceId=ws_operator",
+      "https://installer.internal/control/api/v1/workspaces/ws_operator/install-plans",
     );
     assertEquals(
       fetchCalls.at(-1)?.url,
-      "https://installer.internal/control/api/v1/runs/run_plan_cap_yurucommu/apply",
+      "https://installer.internal/control/api/v1/runs/run_plan_yurucommu/apply",
     );
     assertEquals(
       fetchCalls.every((call) => call.authorization === "Bearer install-token"),
       true,
     );
-    const sourceCreates = fetchCalls.filter(
+    assertEquals(
+      fetchCalls.some((call) => new URL(call.url).pathname.endsWith("/approve")),
+      false,
+    );
+    const installPlanCreates = fetchCalls.filter(
       (call) =>
         call.method === "POST" &&
-        new URL(call.url).pathname.endsWith("/api/v1/sources"),
+        new URL(call.url).pathname.endsWith("/install-plans"),
     );
     assertEquals(
-      sourceCreates.map((call) => call.body?.url),
+      installPlanCreates.map((call) => call.body?.source),
       [
-        "https://github.com/tako0614/takos-office.git",
-        "https://github.com/tako0614/takos-computer.git",
-        "https://github.com/tako0614/yurucommu.git",
-      ],
-    );
-    assertEquals(
-      sourceCreates.map((call) => call.body?.defaultRef),
-      ["v0.1.0", "v2.1.2", "main"],
-    );
-    assertEquals(
-      sourceCreates.map((call) => call.body?.defaultPath ?? null),
-      [".", ".", "."],
-    );
-    const capsuleCreates = fetchCalls.filter(
-      (call) =>
-        call.method === "POST" &&
-        new URL(call.url).pathname.endsWith("/capsules"),
-    );
-    assertEquals(
-      capsuleCreates.map((call) => call.body?.vars ?? null),
-      [
-        null,
-        null,
         {
-          enable_cloudflare_resources: true,
-          project_name: "yurucommu",
-          worker_name: "yurucommu",
+          name: "takos-office-source",
+          url: "https://github.com/tako0614/takos-office.git",
+          ref: "v0.1.0",
+          path: ".",
+        },
+        {
+          name: "takos-computer-source",
+          url: "https://github.com/tako0614/takos-computer.git",
+          ref: "v2.1.2",
+          path: ".",
+        },
+        {
+          name: "yurucommu-source",
+          url: "https://github.com/tako0614/yurucommu.git",
+          ref: "main",
+          path: ".",
         },
       ],
     );
     assertEquals(
-      capsuleCreates.every(
-        (call) =>
-          call.body?.installConfigId === "cfg-default-opentofu-capsule" &&
-          call.body?.environment === "production",
+      installPlanCreates.map((call) => call.body?.capsule),
+      [
+        { name: "takos-office", environment: "production" },
+        { name: "takos-computer", environment: "production" },
+        { name: "yurucommu", environment: "production" },
+      ],
+    );
+    assertEquals(
+      installPlanCreates.every((call) =>
+        Object.keys(call.body?.options ?? {}).length === 0,
       ),
       true,
     );

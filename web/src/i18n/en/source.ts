@@ -139,9 +139,11 @@ export const source = {
   updateApp: "Update",
   updatingApp: "Updating...",
   uninstalledItem: "{name} uninstalled",
+  uninstallPlanCreated:
+    "Uninstall plan created for {name}. Review and approve it before resources are removed.",
   uninstallConfirmTitle: "Uninstall this app?",
   uninstallConfirmMessage:
-    'Uninstalling "{name}" tears down its running Capsule and worker. This cannot be undone.',
+    'This creates a destroy plan for "{name}". Nothing is removed until the reviewed plan is approved.',
   deleteStoreConfirmTitle: "Delete this store?",
   deleteStoreConfirmMessage: 'Deleting "{name}" cannot be undone.',
   removeFromStoreConfirmTitle: "Remove this item?",

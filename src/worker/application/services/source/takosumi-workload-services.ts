@@ -7,6 +7,7 @@ import {
 import {
   projectAuthorizedFileHandler,
   projectAuthorizedUiSurface,
+  getRuntimeInterfaceProtocolAdapter,
   safeRuntimeUrl,
 } from "../platform/runtime-interface-profiles.ts";
 import {
@@ -123,6 +124,14 @@ function projectMcpService(
   entry: AuthorizedRuntimeInterface,
 ): CapsuleWorkloadServiceSummary | null {
   const iface = entry.interface;
+  const protocolAdapter = getRuntimeInterfaceProtocolAdapter(iface.spec.type);
+  if (
+    protocolAdapter.mode !== "executable" ||
+    protocolAdapter.adapter !== "mcp" ||
+    protocolAdapter.version !== MCP_SERVER_INTERFACE_VERSION
+  ) {
+    return null;
+  }
   if (
     iface.spec.type !== MCP_SERVER_INTERFACE_TYPE ||
     iface.spec.version !== MCP_SERVER_INTERFACE_VERSION ||

@@ -401,8 +401,9 @@ function CapsuleCard(props: {
   const updatedLabel = () =>
     formatInstallDate(props.capsule.updatedAt, props.lang);
 
-  // DELETE /spaces/:spaceId/capsules/:capsuleId starts the canonical destroy
-  // Run; confirm destructively and refresh the Capsule listing.
+  // DELETE /spaces/:spaceId/capsules/:capsuleId only creates the canonical
+  // destroy-plan Run. The UI deliberately does not claim deletion or remove
+  // the Capsule until a reviewed plan has been approved in Takosumi.
   const handleUninstall = async () => {
     if (uninstalling()) return;
     const name = props.capsule.name;
@@ -426,8 +427,7 @@ function CapsuleCard(props: {
         },
       );
       await rpcJson(res);
-      showToast("success", props.t("uninstalledItem", { name }));
-      props.onRemoved();
+      showToast("info", props.t("uninstallPlanCreated", { name }));
     } catch (err) {
       showToast(
         "error",

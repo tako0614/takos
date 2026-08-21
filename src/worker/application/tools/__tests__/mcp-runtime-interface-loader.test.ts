@@ -167,7 +167,7 @@ function controlFetch(input: {
               ],
       });
     }
-    if (url.pathname.endsWith("/v1/interfaces")) {
+    if (url.pathname.endsWith("/api/v1/interfaces")) {
       return Response.json({
         interfaces: input.revoked?.() ? [] : input.interfaces,
       });

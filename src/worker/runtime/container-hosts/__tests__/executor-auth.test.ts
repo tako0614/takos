@@ -316,7 +316,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
         const request = new Request(input, init);
         requests.push(request);
         const url = new URL(request.url);
-        if (url.pathname === "/v1/interfaces") {
+        if (url.pathname === "/api/v1/interfaces") {
           return Response.json({
             interfaces: [
               {
@@ -358,7 +358,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
             ],
           });
         }
-        if (url.pathname === "/v1/interfaces/if_ai_gateway/bindings") {
+        if (url.pathname === "/api/v1/interfaces/if_ai_gateway/bindings") {
           return Response.json({
             bindings: [
               {
@@ -385,14 +385,18 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
             ],
           });
         }
-        return Response.json({
-          access_token: "runtime-interface-token",
-          token_type: "Bearer",
-          expires_in: 30,
-          expires_at: new Date(Date.now() + 30_000).toISOString(),
-          scope: "ai.chat",
-          resource: "https://app.takosumi.test/gateway/ai/v1",
-        });
+        if (url.pathname === "/api/v1/interfaces/if_ai_gateway/token") {
+          return Response.json({
+            access_token: "runtime-interface-token",
+            token_type: "Bearer",
+            expires_in: 30,
+            expires_at: new Date(Date.now() + 30_000).toISOString(),
+            scope: "ai.chat",
+            resource: "https://app.takosumi.test/gateway/ai/v1",
+          });
+        }
+        // The retired /v1/* paths are not compatibility aliases.
+        return new Response(null, { status: 404 });
       }) as typeof fetch,
     },
   );
@@ -404,11 +408,11 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
   assertEquals(requests.length, 3);
   assertEquals(
     requests[0]?.url,
-    "https://internal-app.takosumi.test/v1/interfaces?workspaceId=workspace_owner&type=takosumi.ai.gateway&phase=Resolved&permission=ai.chat",
+    "https://internal-app.takosumi.test/api/v1/interfaces?workspaceId=workspace_owner&type=takosumi.ai.gateway&phase=Resolved&permission=ai.chat",
   );
   assertEquals(
     requests[1]?.url,
-    "https://internal-app.takosumi.test/v1/interfaces/if_ai_gateway/bindings?permission=ai.chat",
+    "https://internal-app.takosumi.test/api/v1/interfaces/if_ai_gateway/bindings?permission=ai.chat",
   );
   assertEquals(
     requests[2]?.headers.get("authorization"),

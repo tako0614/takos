@@ -3,10 +3,69 @@ import {
   FILE_HANDLER_INTERFACE_TYPE,
   FILE_HANDLER_INTERFACE_VERSION,
   hasCredentialQueryParams,
+  MCP_SERVER_INTERFACE_TYPE,
+  MCP_SERVER_INTERFACE_VERSION,
   parseInterfaceDisplay,
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_INTERFACE_VERSION,
 } from "takosumi-contract";
+
+export type RuntimeInterfaceAdapterMode =
+  | "executable"
+  | "discovery-only"
+  | "metadata-only";
+
+export interface RuntimeInterfaceProtocolAdapter {
+  readonly type: string;
+  readonly mode: RuntimeInterfaceAdapterMode;
+  /** The concrete consumer adapter, when this Takos surface can execute it. */
+  readonly adapter: "mcp" | null;
+  readonly version?: string;
+}
+
+const RUNTIME_INTERFACE_PROTOCOL_ADAPTERS: readonly RuntimeInterfaceProtocolAdapter[] =
+  [
+    {
+      type: MCP_SERVER_INTERFACE_TYPE,
+      version: MCP_SERVER_INTERFACE_VERSION,
+      mode: "executable",
+      adapter: "mcp",
+    },
+    {
+      type: "http.openapi",
+      mode: "discovery-only",
+      adapter: null,
+    },
+    {
+      type: "storage.s3",
+      mode: "discovery-only",
+      adapter: null,
+    },
+  ];
+
+/**
+ * Return the explicit protocol adapter for an Interface type. Interface type
+ * namespaces are open: an unregistered type remains inspectable as metadata,
+ * but this consumer never invents an execution path for it.
+ */
+export function getRuntimeInterfaceProtocolAdapter(
+  type: unknown,
+): RuntimeInterfaceProtocolAdapter {
+  const normalized = typeof type === "string" ? type.trim() : "";
+  return (
+    RUNTIME_INTERFACE_PROTOCOL_ADAPTERS.find(
+      (adapter) => adapter.type === normalized,
+    ) ?? {
+      type: normalized || "unknown",
+      mode: "metadata-only",
+      adapter: null,
+    }
+  );
+}
+
+export function listRuntimeInterfaceProtocolAdapters(): readonly RuntimeInterfaceProtocolAdapter[] {
+  return RUNTIME_INTERFACE_PROTOCOL_ADAPTERS;
+}
 
 export type AuthorizedUiSurface = {
   readonly id: string;
