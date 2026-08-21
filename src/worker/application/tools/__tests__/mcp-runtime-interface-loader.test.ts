@@ -219,7 +219,7 @@ function toolContext(env: Env) {
 }
 
 test("operator control MCP service-side blueprint reaches the agent catalog", async () => {
-  stubMcp();
+  stubMcp("takosumi_install_plan_create");
   assertEquals(
     OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.bindings[0].permissions,
     ["mcp.invoke"],
@@ -260,7 +260,7 @@ test("operator control MCP service-side blueprint reaches the agent catalog", as
   assertEquals(result.tools.size, 1);
   assertEquals(
     Array.from(result.tools.values()).every((tool) =>
-      tool.definition.name.includes("capsule_plan"),
+      tool.definition.name.includes("takosumi_install_plan_create"),
     ),
     true,
   );

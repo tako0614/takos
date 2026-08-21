@@ -459,6 +459,19 @@ test("the same Run refreshes toolbox through a newly resolved MCP Interface", as
 
 test("production Run authority refreshes a newly resolved MCP Interface in the same Run", async () => {
   const state = { available: false, revision: 7 };
+  const installTool = {
+    name: "takosumi_install_plan_create",
+    description: "Create a durable Git install plan",
+    inputSchema: {
+      type: "object",
+      properties: {
+        idempotencyKey: { type: "string" },
+        source: { type: "object" },
+        capsule: { type: "object" },
+      },
+      required: ["idempotencyKey", "source", "capsule"],
+    },
+  };
   const authorizationUsers: string[] = [];
   const controlRequests: string[] = [];
   const mcpCalls: string[] = [];
@@ -501,12 +514,12 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   stubs.push(
     stub(McpClient.prototype as never, "listTools", async () => [
       {
-        sdkTool: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0],
+        sdkTool: installTool,
         definition: {
-          name: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].name,
-          description: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].description,
+          name: installTool.name,
+          description: installTool.description,
           category: "mcp",
-          parameters: OPERATOR_CONTROL_MCP_FIXTURE.toolsList[0].inputSchema,
+          parameters: installTool.inputSchema,
         },
       },
     ]),
@@ -561,7 +574,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
       toolCall: {
         id: "production-search",
         name: "toolbox",
-        arguments: { action: "search", query: "capsule_plan" },
+        arguments: { action: "search", query: installTool.name },
       },
     },
     env,
@@ -569,7 +582,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   );
   assertEquals(search.status, 200);
   const searchResult = await search.json() as { output: string };
-  assertStringIncludes(searchResult.output, "capsule_plan");
+  assertStringIncludes(searchResult.output, installTool.name);
 
   const call = await handleToolExecute(
     {
@@ -580,8 +593,15 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
         name: "toolbox",
         arguments: {
           action: "call",
-          tool_name: "capsule_plan",
-          arguments: {},
+          tool_name: installTool.name,
+          arguments: {
+            idempotencyKey: "run-production-interface-refresh:yurucommu",
+            source: {
+              name: "yurucommu-source",
+              url: "https://github.com/tako0614/yurucommu.git",
+            },
+            capsule: { name: "yurucommu", environment: "production" },
+          },
         },
       },
     },
@@ -590,7 +610,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   );
   assertEquals(call.status, 200);
   assertEquals((await call.json() as { output: string }).output, "production-interface-call-ok");
-  assertEquals(mcpCalls, ["capsule_plan"]);
+  assertEquals(mcpCalls, [installTool.name]);
   assertEquals(authorizationUsers, [userId, userId, userId]);
   assertEquals(controlRequests.includes("/api/v1/interfaces"), true);
   assertEquals(controlRequests.some((path) => path.endsWith("/token")), true);
@@ -605,8 +625,15 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
         name: "toolbox",
         arguments: {
           action: "call",
-          tool_name: "capsule_plan",
-          arguments: {},
+          tool_name: installTool.name,
+          arguments: {
+            idempotencyKey: "run-production-interface-refresh:yurucommu",
+            source: {
+              name: "yurucommu-source",
+              url: "https://github.com/tako0614/yurucommu.git",
+            },
+            capsule: { name: "yurucommu", environment: "production" },
+          },
         },
       },
     },
@@ -618,7 +645,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
     (await revoked.json() as { error?: string }).error ?? "",
     "not in the available tool catalog",
   );
-  assertEquals(mcpCalls, ["capsule_plan"]);
+  assertEquals(mcpCalls, [installTool.name]);
 });
 
 test("tool catalog attests which side effects take the durable operation fence", async () => {
