@@ -143,21 +143,29 @@ function interfacesUrl(
 function interfaceBindingsUrl(
   baseUrl: string,
   interfaceId: string,
+  workspaceId: string,
   permission: string,
 ): URL {
   const url = takosumiSessionApiUrl(
     baseUrl,
     takosumiInterfaceBindingsPath(interfaceId),
   );
+  url.searchParams.set("workspaceId", workspaceId);
   url.searchParams.set("permission", permission);
   return url;
 }
 
-function interfaceTokenUrl(baseUrl: string, interfaceId: string): URL {
-  return takosumiSessionApiUrl(
+function interfaceTokenUrl(
+  baseUrl: string,
+  interfaceId: string,
+  workspaceId: string,
+): URL {
+  const url = takosumiSessionApiUrl(
     baseUrl,
     takosumiInterfaceTokenPath(interfaceId),
   );
+  url.searchParams.set("workspaceId", workspaceId);
+  return url;
 }
 
 function workspaceUiSurfacesUrl(
@@ -268,6 +276,7 @@ async function authorizedRuntimeBinding(
       interfaceBindingsUrl(
         config.baseUrl,
         iface.metadata.id,
+        selector.workspaceId,
         selector.permission,
       ),
       { headers, redirect: "manual" },
@@ -461,6 +470,7 @@ export async function fetchAuthorizedUiSurfaceInterfaces(
 export async function issueRuntimeInterfaceAccessToken(
   config: RuntimeInterfaceRequestConfig,
   input: {
+    readonly workspaceId: string;
     readonly interfaceId: string;
     readonly permission: string;
     readonly resource: string;
@@ -468,6 +478,7 @@ export async function issueRuntimeInterfaceAccessToken(
   },
 ): Promise<string> {
   if (
+    !readString(input.workspaceId) ||
     !readString(input.interfaceId) ||
     !isValidInterfacePermissionToken(input.permission) ||
     !readString(input.resource)
@@ -475,7 +486,7 @@ export async function issueRuntimeInterfaceAccessToken(
     throw new Error(`${input.errorLabel} credential request is invalid`);
   }
   const response = await (config.fetch ?? fetch)(
-    interfaceTokenUrl(config.baseUrl, input.interfaceId),
+    interfaceTokenUrl(config.baseUrl, input.interfaceId, input.workspaceId),
     {
       method: "POST",
       headers: {

@@ -917,6 +917,7 @@ async function resolveRuntimeInterfaceMcpAccess(
   }
   if (authority.deliveryType === "none") return null;
   return await issueRuntimeInterfaceAccessToken(authority.config.request, {
+    workspaceId: authority.config.workspaceId,
     interfaceId: authority.interfaceId,
     permission: authority.permission,
     resource: server.url,

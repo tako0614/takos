@@ -35,10 +35,12 @@ test("convertMcpSchema preserves MCP behavior annotations", () => {
 test("MCP connection does not fall back to the retired SSE transport", async () => {
   const requestedUrls: string[] = [];
   const requestedHeaders: Headers[] = [];
+  const requestedMethods: Array<string | undefined> = [];
   const egress = {
     fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
       requestedUrls.push(String(input));
       requestedHeaders.push(new Headers(init?.headers));
+      requestedMethods.push(init?.method);
       return new Response("streamable transport unavailable", { status: 503 });
     },
   };
@@ -63,6 +65,7 @@ test("MCP connection does not fall back to the retired SSE transport", async () 
         headers.get("X-Takos-Egress-Mode") === "mcp-tool",
     ),
   ).toBeTrue();
+  expect(requestedMethods.every((method) => method === "POST")).toBeTrue();
 });
 
 test("MCP direct network fallback is disabled unless development opts in", async () => {

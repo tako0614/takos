@@ -335,6 +335,7 @@ export async function resolveRunOpenAiRuntimeCredential(
     throw new Error("AI Gateway Interface audience is invalid");
   }
   const token = await issueRuntimeInterfaceAccessToken(request, {
+    workspaceId: authorization.workspaceId,
     interfaceId: selected.interface.metadata.id,
     permission: AI_GATEWAY_CHAT_PERMISSION,
     resource: endpoint,

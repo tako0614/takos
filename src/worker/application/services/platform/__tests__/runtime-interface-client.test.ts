@@ -80,6 +80,8 @@ function readyBinding(overrides: Record<string, unknown> = {}) {
 
 test("runtime Interface discovery requires the exact Principal and revision", async () => {
   const requestedPaths: string[] = [];
+  let bindingWorkspaceId: string | null = null;
+  let bindingPermission: string | null = null;
   const config: RuntimeInterfaceRequestConfig = {
     baseUrl: "https://internal-app.takosumi.test",
     token: "delegated-accounts-token",
@@ -90,6 +92,8 @@ test("runtime Interface discovery requires the exact Principal and revision", as
       if (url.pathname === "/api/v1/interfaces") {
         return Response.json({ interfaces: [resolvedInterface()] });
       }
+      bindingWorkspaceId = url.searchParams.get("workspaceId");
+      bindingPermission = url.searchParams.get("permission");
       return Response.json({
         bindings: [
           readyBinding({
@@ -120,6 +124,8 @@ test("runtime Interface discovery requires the exact Principal and revision", as
     "/api/v1/interfaces",
     "/api/v1/interfaces/if_ai_gateway/bindings",
   ]);
+  assertEquals(bindingWorkspaceId, "workspace_owner");
+  assertEquals(bindingPermission, "ai.chat");
 });
 
 test("runtime Interface discovery rejects unsupported credential delivery", async () => {
@@ -196,14 +202,14 @@ test("runtime Interface discovery does not fall back to the retired public path"
 
 test("runtime Interface token response is invocation-only and non-reusable", async () => {
   const resource = "https://app.takosumi.test/gateway/ai/v1";
-  let requestedPath: string | undefined;
+  let requestedUrl: URL | undefined;
   const valid = await issueRuntimeInterfaceAccessToken(
     {
       baseUrl: "https://internal-app.takosumi.test",
       token: "delegated-accounts-token",
       subjectId: "pairwise-user",
       fetch: async (input) => {
-        requestedPath = new URL(input).pathname;
+        requestedUrl = new URL(input);
         return Response.json({
           access_token: "runtime-interface-token",
           token_type: "Bearer",
@@ -215,6 +221,7 @@ test("runtime Interface token response is invocation-only and non-reusable", asy
       },
     },
     {
+      workspaceId: "workspace_owner",
       interfaceId: "if_ai_gateway",
       permission: "ai.chat",
       resource,
@@ -222,7 +229,8 @@ test("runtime Interface token response is invocation-only and non-reusable", asy
     },
   );
   assertEquals(valid, "runtime-interface-token");
-  assertEquals(requestedPath, "/api/v1/interfaces/if_ai_gateway/token");
+  assertEquals(requestedUrl?.pathname, "/api/v1/interfaces/if_ai_gateway/token");
+  assertEquals(requestedUrl?.searchParams.get("workspaceId"), "workspace_owner");
 
   for (const invalidBody of [
     {
@@ -261,6 +269,7 @@ test("runtime Interface token response is invocation-only and non-reusable", asy
             fetch: async () => Response.json(invalidBody),
           },
           {
+            workspaceId: "workspace_owner",
             interfaceId: "if_ai_gateway",
             permission: "ai.chat",
             resource,

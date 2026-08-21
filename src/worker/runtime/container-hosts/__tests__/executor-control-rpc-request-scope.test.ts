@@ -1,6 +1,9 @@
 import { afterEach, test } from "bun:test";
 import { assertEquals, assertFalse, assertStringIncludes } from "@takos/test/assert";
 import { stub } from "@takos/test/mock";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import * as z from "zod/v4";
 import { McpClient } from "../../../application/tools/mcp-client.ts";
 import {
   buildPerRunCapabilityRegistry,
@@ -27,10 +30,72 @@ import {
 } from "../executor-control-rpc.ts";
 
 const stubs: Array<{ restore(): void }> = [];
+const liveServers: Array<{ stop(closeActiveConnections?: boolean): void }> = [];
 
 afterEach(() => {
   while (stubs.length > 0) stubs.pop()!.restore();
+  while (liveServers.length > 0) liveServers.pop()!.stop(true);
 });
+
+async function createLiveOperatorControlMcpServer() {
+  const calls: string[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      if (request.headers.get("authorization") !== "Bearer fresh-interface-token") {
+        return Response.json({ error: "unauthenticated" }, { status: 401 });
+      }
+      const transport = new WebStandardStreamableHTTPServerTransport();
+      const mcp = new McpServer({
+        name: "takosumi-operator-control-live-proof",
+        version: "1.0.0",
+      });
+      mcp.registerTool(
+        "takosumi_install_plan_create",
+        {
+          description: "Create a durable Git install plan",
+          inputSchema: {
+            idempotencyKey: z.string(),
+            source: z.object({
+              name: z.string(),
+              url: z.string(),
+            }),
+            capsule: z.object({
+              name: z.string(),
+              environment: z.string(),
+            }),
+          },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: true,
+          },
+        },
+        async () => {
+          calls.push("takosumi_install_plan_create");
+          return {
+            content: [{ type: "text", text: "production-interface-call-ok" }],
+          };
+        },
+      );
+      await mcp.connect(transport);
+      return await transport.handleRequest(request);
+    },
+  });
+  liveServers.push(server);
+  const directUrl = `http://${server.hostname}:${server.port}/mcp`;
+  return {
+    calls,
+    url: "https://operator-control.example.test/mcp",
+    egress: {
+      fetch(input: RequestInfo | URL, init?: RequestInit) {
+        const incoming = new Request(input, init);
+        return server.fetch(new Request(directUrl, incoming));
+      },
+    },
+  };
+}
 
 function envWithBrokenDb(): Record<string, unknown> {
   return {
@@ -110,7 +175,10 @@ function productionFactoryMcpDb(userId: string) {
   } as never;
 }
 
-function runtimeInterface(revision: number) {
+function runtimeInterface(
+  revision: number,
+  endpoint = OPERATOR_CONTROL_MCP_FIXTURE.output.value,
+) {
   const timestamp = "2026-07-19T00:00:00.000Z";
   const spec = OPERATOR_CONTROL_MCP_FIXTURE.interfaceBlueprint.spec;
   return {
@@ -143,7 +211,7 @@ function runtimeInterface(revision: number) {
       phase: "Resolved",
       observedGeneration: 1,
       resolvedRevision: revision,
-      resolvedInputs: { endpoint: OPERATOR_CONTROL_MCP_FIXTURE.output.value },
+      resolvedInputs: { endpoint },
       provenance: {},
       conditions: [],
     },
@@ -458,6 +526,7 @@ test("the same Run refreshes toolbox through a newly resolved MCP Interface", as
 });
 
 test("production Run authority refreshes a newly resolved MCP Interface in the same Run", async () => {
+  const liveMcp = await createLiveOperatorControlMcpServer();
   const state = { available: false, revision: 7 };
   const installTool = {
     name: "takosumi_install_plan_create",
@@ -474,7 +543,6 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   };
   const authorizationUsers: string[] = [];
   const controlRequests: string[] = [];
-  const mcpCalls: string[] = [];
   const userId = "user-production-bridge";
   const runId = "run-production-interface-refresh";
   const db = productionFactoryMcpDb(userId);
@@ -494,7 +562,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
         expires_in: 60,
         expires_at: new Date(Date.now() + 55_000).toISOString(),
         scope: "mcp.invoke",
-        resource: OPERATOR_CONTROL_MCP_FIXTURE.output.value,
+        resource: liveMcp.url,
       });
     }
     if (url.pathname.endsWith("/bindings")) {
@@ -504,33 +572,13 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
     }
     if (url.pathname.endsWith("/api/v1/interfaces")) {
       return Response.json({
-        interfaces: state.available ? [runtimeInterface(state.revision)] : [],
+        interfaces: state.available
+          ? [runtimeInterface(state.revision, liveMcp.url)]
+          : [],
       });
     }
     return new Response(null, { status: 404 });
   };
-
-  stubs.push(stub(McpClient.prototype as never, "connect", async () => {}));
-  stubs.push(
-    stub(McpClient.prototype as never, "listTools", async () => [
-      {
-        sdkTool: installTool,
-        definition: {
-          name: installTool.name,
-          description: installTool.description,
-          category: "mcp",
-          parameters: installTool.inputSchema,
-        },
-      },
-    ]),
-  );
-  stubs.push(
-    stub(McpClient.prototype as never, "callTool", async (name: string) => {
-      mcpCalls.push(name);
-      return "production-interface-call-ok";
-    }),
-  );
-  stubs.push(stub(McpClient.prototype as never, "close", async () => {}));
 
   const dependencies = createRemoteToolExecutorDependencies({
     getRunBootstrap: async (_env, requestedRunId) => {
@@ -561,6 +609,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
     OIDC_CLIENT_ID: "toc_takos",
     ENCRYPTION_KEY: "test-encryption-key",
     TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://internal-app.takosumi.test",
+    TAKOS_EGRESS: liveMcp.egress,
   } as unknown as Env;
 
   const initial = await handleToolCatalog({ runId }, env, dependencies);
@@ -610,7 +659,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   );
   assertEquals(call.status, 200);
   assertEquals((await call.json() as { output: string }).output, "production-interface-call-ok");
-  assertEquals(mcpCalls, [installTool.name]);
+  assertEquals(liveMcp.calls, [installTool.name]);
   assertEquals(authorizationUsers, [userId, userId, userId]);
   assertEquals(controlRequests.includes("/api/v1/interfaces"), true);
   assertEquals(controlRequests.some((path) => path.endsWith("/token")), true);
@@ -645,7 +694,7 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
     (await revoked.json() as { error?: string }).error ?? "",
     "not in the available tool catalog",
   );
-  assertEquals(mcpCalls, [installTool.name]);
+  assertEquals(liveMcp.calls, [installTool.name]);
 });
 
 test("tool catalog attests which side effects take the durable operation fence", async () => {

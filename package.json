@@ -25,6 +25,7 @@
     "local:logs": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -p \"${TAKOS_LOCAL_COMPOSE_PROJECT:-takos-local}\" -f compose.local.yml logs -f'",
     "local:smoke": "bun scripts/local-smoke.mjs",
     "local:e2e": "bun scripts/local-e2e.mjs",
+    "local:takosumi-mcp-agent-e2e": "bash scripts/local-takosumi-mcp-agent-e2e.sh",
     "docs:dev": "bunx vitepress dev docs",
     "docs:build": "bunx vitepress build docs",
     "lint:docs": "bun run docs:build",
