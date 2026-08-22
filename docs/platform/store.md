@@ -1,33 +1,45 @@
-# Git URL からアプリを install する
+# Capsule を発見して install する
 
-> このページでわかること: Takos の Source 画面は、中央の公式 app store でも catalog browse でもなく、Git URL の
-> OpenTofu Capsule を貼って追加するための install 入口であること(Takos は単一オーナーの個人 product で、app の
-> 公開・発見・連合 store network は持ちません)。
+> このページでわかること: Takos はcatalog authorityを持たず、TCS v2 Storeから
+> credential-freeなGit URLを発見し、Takosumiのreviewed install-planへ渡すこと。
 
 Takos では、install できる app は **OpenTofu Capsule** — Git URL から取れる plain な OpenTofu module — として扱います。
-専用の登録手続きや Takosumi 独自 manifest は要りません。Git URL、ref、module path が分かれば、fork や派生版も同じ流れで追加できます。
+公開候補の発見にはdecentralizedなTakosumi Capsule Store (TCS) v2を使えます。
+Store listingが返すのは表示情報とGit URLだけです。ref、module path、provider、
+InstallConfig、credential、Run actionはlistingに含まれません。選択後にTakosumiが
+SourceSnapshotを作り、repositoryの`.well-known/takosumi.json`とOpenTofu moduleを
+exact snapshotで検査します。
 
-## Source 画面は install 入口であって registry ではない
+## agent discovery と install authority は別
 
-Takos UI には Source 画面があります。これは「運営が認めた公式 app を一覧・検索する場所」ではなく、Git URL を貼って
-追加するための入口です(中央 catalog の browse / search / publisher 一覧や、store を公開・連合する仕組みは持ちません)。
+Takos agentの`store_search`は、operatorが設定した最大4件のTCS v2 originを
+read-onlyで問い合わせます。未設定時は`https://store.takosumi.com`を使い、
+`TAKOS_CAPSULE_STORE_URLS=[]`でremote discoveryを無効化できます。TCSのbadgeや
+publisher表示はserver-localなcurationであり、Takosはcertificationや実行権限へ
+昇格させません。
 
-Source 画面が行うこと:
+Takosが行うこと:
 
-- Git URL / ref / module path を入力して app を追加する
-- ローカル repository を新規作成する
-- 追加前に作られるものや注意点を確認できる install flow へ送る
+- TCS v2または手入力からcredential-freeなGit URLを得る
+- Takosumi operator-control MCPへidempotent install-planを要求する
+- reviewable Runを表示し、ユーザーの明示確認後だけapprove/applyする
 - install 済み app の状態を Apps launcher に反映する
 
 Source 画面が行わないこと:
 
 - deploy 実行主体になる
+- Git Source / SourceSnapshot / CapsuleをTakos内に新規作成する
 - provider credential や secret output を保持する
 - app を公式審査済みとして保証する
-- app を公開・発見・連合する(Takos は単一オーナー product で store network を持たない)
+- listingを発行・moderate・certifyする(それは各TCS serverの責務)
 - Takosumi の Source / Capsule / Run ledger を置き換える
 
-つまり product copy では「Store から追加」と言ってよいですが、architecture と policy の意味では「Git URL の Capsule を追加する」が正本です。
+したがって`store_search`の結果だけでは何もdeployされません。agentは候補を選んだ後も、
+Takosumiのinstall-plan/reconcileとRun reviewを通り、provider credentialを受け取りません。
+TCS候補には`takosumi.git-install-plan@v1`の`deployment_intent`も付けます。これは
+Git URL、既定ref/path、推奨Capsule名だけを持つ非権限データです。agentは固定の
+Takosumi tool一覧を持たず、`toolbox`で現在ReadyなOperator Control MCPを発見し、
+そのschemaに合わせてinstall-planを作ります。
 
 ## 関連 app も同じ仕組みに乗る
 

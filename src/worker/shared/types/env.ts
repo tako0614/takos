@@ -240,6 +240,8 @@ export interface Env
   K8S_NAMESPACE?: string;
   K8S_DEPLOYMENT_NAME?: string;
   K8S_IMAGE_REGISTRY?: string;
+  /** JSON array of TCS v2 origins queried for read-only Capsule discovery. */
+  TAKOS_CAPSULE_STORE_URLS?: string;
   /** Operator-replaceable featured app catalog JSON; wins over DB config. */
   TAKOS_FEATURED_APP_CATALOG_JSON?: string;
   /** Operator-replaceable featured app repository list JSON; wins over DB config. */

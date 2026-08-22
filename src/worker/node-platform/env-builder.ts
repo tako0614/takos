@@ -272,6 +272,9 @@ function buildBaseConfig(isLocal: boolean) {
       optionalEnv("SERVICE_INTERNAL_JWT_ISSUER") ?? "takos-node",
     ENVIRONMENT:
       optionalEnv("ENVIRONMENT") ?? (isLocal ? "development" : "production"),
+    TAKOS_CAPSULE_STORE_URLS: optionalJsonArrayEnv(
+      "TAKOS_CAPSULE_STORE_URLS",
+    ),
     TAKOS_FEATURED_APP_CATALOG_JSON: optionalJsonArrayEnv(
       "TAKOS_FEATURED_APP_CATALOG_JSON",
     ),
@@ -525,6 +528,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     TAKOS_AGENT_START_TOKEN: config.TAKOS_AGENT_START_TOKEN,
     SERVICE_INTERNAL_JWT_ISSUER: config.SERVICE_INTERNAL_JWT_ISSUER,
     ENVIRONMENT: config.ENVIRONMENT,
+    TAKOS_CAPSULE_STORE_URLS: config.TAKOS_CAPSULE_STORE_URLS,
     TAKOS_FEATURED_APP_CATALOG_JSON: config.TAKOS_FEATURED_APP_CATALOG_JSON,
     TAKOS_FEATURED_APP_REPOSITORIES_JSON:
       config.TAKOS_FEATURED_APP_REPOSITORIES_JSON,

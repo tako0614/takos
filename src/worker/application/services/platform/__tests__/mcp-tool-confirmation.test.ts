@@ -153,7 +153,7 @@ test("MCP confirmation reuses canonical arguments and decrypts only for its user
   }
 });
 
-test("one-time approval can be consumed by the next exact retry across runs", async () => {
+test("one-time approval follows the conversation across Runs but never another Thread", async () => {
   const { client, db } = await freshDb();
   try {
     const pending = await requireMcpToolInvocationConfirmation(
@@ -171,11 +171,19 @@ test("one-time approval can be consumed by the next exact retry across runs", as
       }),
     ).resolves.toBe("approved");
 
+    const anotherThread = await requireMcpToolInvocationConfirmation(
+      db,
+      env(),
+      request({ runId: "run_b", threadId: "thread_b" }),
+    );
+    expect(anotherThread.kind).toBe("pending");
+    expect(anotherThread.confirmationId).not.toBe(pending.confirmationId);
+
     await expect(
       requireMcpToolInvocationConfirmation(
         db,
         env(),
-        request({ runId: "run_b", threadId: "thread_b" }),
+        request({ runId: "run_b", threadId: "thread_a" }),
       ),
     ).resolves.toEqual({
       kind: "approved",
@@ -185,25 +193,30 @@ test("one-time approval can be consumed by the next exact retry across runs", as
     const nextInvocation = await requireMcpToolInvocationConfirmation(
       db,
       env(),
-      request({ runId: "run_b", threadId: "thread_b" }),
+      request({ runId: "run_b", threadId: "thread_a" }),
     );
     expect(nextInvocation.kind).toBe("pending");
     expect(nextInvocation.confirmationId).not.toBe(pending.confirmationId);
     const rows = await client.execute(
-      "SELECT requested_run_id, status, consumed_run_id FROM mcp_tool_confirmations ORDER BY requested_run_id",
+      "SELECT id, requested_thread_id, status, consumed_run_id FROM mcp_tool_confirmations",
     );
-    expect(rows.rows).toMatchObject([
-      {
-        requested_run_id: "run_a",
-        status: "consumed",
-        consumed_run_id: "run_b",
-      },
-      {
-        requested_run_id: "run_b",
+    expect(rows.rows.find((row) => row.id === pending.confirmationId)).toMatchObject({
+      requested_thread_id: "thread_a",
+      status: "consumed",
+      consumed_run_id: "run_b",
+    });
+    expect(rows.rows.find((row) => row.id === anotherThread.confirmationId)).toMatchObject({
+      requested_thread_id: "thread_b",
+      status: "pending",
+      consumed_run_id: null,
+    });
+    expect(rows.rows).toContainEqual(
+      expect.objectContaining({
+        requested_thread_id: "thread_a",
         status: "pending",
         consumed_run_id: null,
-      },
-    ]);
+      }),
+    );
   } finally {
     client.close();
   }

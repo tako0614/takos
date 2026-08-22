@@ -160,6 +160,10 @@ export async function requireMcpToolInvocationConfirmation(
         eq(mcpToolConfirmations.toolName, params.toolName),
         eq(mcpToolConfirmations.schemaHash, params.schemaHash),
         eq(mcpToolConfirmations.argumentsHash, identity.hash),
+        // A user may continue the same conversation in a fresh agent Run
+        // after approving the pending invocation. The decision must never
+        // authorize an identical call from another conversation.
+        eq(mcpToolConfirmations.requestedThreadId, params.threadId),
         gt(mcpToolConfirmations.expiresAt, now),
         inArray(mcpToolConfirmations.status, ["approved", "pending", "denied"]),
       ),

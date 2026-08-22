@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import * as z from "zod/v4";
 import { McpClient } from "../../../application/tools/mcp-client.ts";
+import { workspaceSourceToolDeps } from "../../../application/tools/custom/space-source.ts";
 import {
   buildPerRunCapabilityRegistry,
 } from "../../../application/tools/executor-utils.ts";
@@ -39,6 +40,7 @@ afterEach(() => {
 
 async function createLiveOperatorControlMcpServer() {
   const calls: string[] = [];
+  const installInputs: Array<Record<string, unknown>> = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -60,6 +62,8 @@ async function createLiveOperatorControlMcpServer() {
             source: z.object({
               name: z.string(),
               url: z.string(),
+              ref: z.string().optional(),
+              path: z.string().optional(),
             }),
             capsule: z.object({
               name: z.string(),
@@ -72,8 +76,9 @@ async function createLiveOperatorControlMcpServer() {
             idempotentHint: true,
           },
         },
-        async () => {
+        async (input) => {
           calls.push("takosumi_install_plan_create");
+          installInputs.push(input);
           return {
             content: [{ type: "text", text: "production-interface-call-ok" }],
           };
@@ -87,6 +92,7 @@ async function createLiveOperatorControlMcpServer() {
   const directUrl = `http://${server.hostname}:${server.port}/mcp`;
   return {
     calls,
+    installInputs,
     url: "https://operator-control.example.test/mcp",
     egress: {
       fetch(input: RequestInfo | URL, init?: RequestInit) {
@@ -546,6 +552,39 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   const userId = "user-production-bridge";
   const runId = "run-production-interface-refresh";
   const db = productionFactoryMcpDb(userId);
+  const originalCatalogList = workspaceSourceToolDeps.listCatalogItems;
+  const originalTcsList = workspaceSourceToolDeps.listTcsStoreListings;
+  workspaceSourceToolDeps.listCatalogItems = async () => ({
+    items: [],
+    total: 0,
+    has_more: false,
+  });
+  workspaceSourceToolDeps.listTcsStoreListings = async () => ({
+    warnings: [],
+    items: [
+      {
+        id: "listing-takos-git",
+        scope: "tako",
+        slug: "takos-git",
+        source: { git: "https://github.com/tako0614/takos-git" },
+        suggestedName: "git",
+        name: { ja: "Takos Git", en: "Takos Git" },
+        description: { ja: "Git hosting", en: "Git hosting" },
+        badge: { ja: "追加候補", en: "Installable" },
+        category: "developer",
+        tags: ["git", "source"],
+        createdAt: "2026-08-21T00:00:00.000Z",
+        updatedAt: "2026-08-21T00:00:00.000Z",
+        storeOrigin: "https://store.takosumi.com",
+      },
+    ],
+  });
+  stubs.push({
+    restore() {
+      workspaceSourceToolDeps.listCatalogItems = originalCatalogList;
+      workspaceSourceToolDeps.listTcsStoreListings = originalTcsList;
+    },
+  });
 
   const controlFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);
@@ -614,6 +653,29 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
 
   const initial = await handleToolCatalog({ runId }, env, dependencies);
   assertEquals(initial.status, 200);
+  const discovery = await handleToolExecute(
+    {
+      runId,
+      toolCall: {
+        id: "production-store-search",
+        name: "store_search",
+        arguments: { query: "takos git", type: "deployable-app" },
+      },
+    },
+    env,
+    dependencies,
+  );
+  assertEquals(discovery.status, 200);
+  const discoveryPayload = JSON.parse(
+    (await discovery.json() as { output: string }).output,
+  ) as {
+    items: Array<{
+      git_address: { url: string };
+      install_defaults: { ref: string; path: string; suggested_name: string };
+    }>;
+  };
+  const candidate = discoveryPayload.items[0]!;
+  assertEquals(candidate.git_address.url, "https://github.com/tako0614/takos-git");
   state.available = true;
 
   const search = await handleToolExecute(
@@ -644,12 +706,14 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
           action: "call",
           tool_name: installTool.name,
           arguments: {
-            idempotencyKey: "run-production-interface-refresh:yurucommu",
+            idempotencyKey: "run-production-interface-refresh:takos-git",
             source: {
-              name: "yurucommu-source",
-              url: "https://github.com/tako0614/yurucommu.git",
+              name: `${candidate.install_defaults.suggested_name}-source`,
+              url: candidate.git_address.url,
+              ref: candidate.install_defaults.ref,
+              path: candidate.install_defaults.path,
             },
-            capsule: { name: "yurucommu", environment: "production" },
+            capsule: { name: "takos-git", environment: "production" },
           },
         },
       },
@@ -660,7 +724,19 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
   assertEquals(call.status, 200);
   assertEquals((await call.json() as { output: string }).output, "production-interface-call-ok");
   assertEquals(liveMcp.calls, [installTool.name]);
-  assertEquals(authorizationUsers, [userId, userId, userId]);
+  assertEquals(liveMcp.installInputs, [
+    {
+      idempotencyKey: "run-production-interface-refresh:takos-git",
+      source: {
+        name: "git-source",
+        url: "https://github.com/tako0614/takos-git",
+        ref: "HEAD",
+        path: ".",
+      },
+      capsule: { name: "takos-git", environment: "production" },
+    },
+  ]);
+  assertEquals(authorizationUsers, [userId, userId, userId, userId]);
   assertEquals(controlRequests.includes("/api/v1/interfaces"), true);
   assertEquals(controlRequests.some((path) => path.endsWith("/token")), true);
 
@@ -676,12 +752,14 @@ test("production Run authority refreshes a newly resolved MCP Interface in the s
           action: "call",
           tool_name: installTool.name,
           arguments: {
-            idempotencyKey: "run-production-interface-refresh:yurucommu",
+            idempotencyKey: "run-production-interface-refresh:takos-git",
             source: {
-              name: "yurucommu-source",
-              url: "https://github.com/tako0614/yurucommu.git",
+              name: `${candidate.install_defaults.suggested_name}-source`,
+              url: candidate.git_address.url,
+              ref: candidate.install_defaults.ref,
+              path: candidate.install_defaults.path,
             },
-            capsule: { name: "yurucommu", environment: "production" },
+            capsule: { name: "takos-git", environment: "production" },
           },
         },
       },

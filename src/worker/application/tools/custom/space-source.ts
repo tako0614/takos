@@ -1,4 +1,9 @@
 import { listCatalogItems } from "../../services/source/explore.ts";
+import {
+  canonicalGitDiscoveryKey,
+  listTcsStoreListings,
+  type TcsStoreListing,
+} from "../../services/source/tcs-store-client.ts";
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
 import { defineTools } from "./define-tools.ts";
 
@@ -14,7 +19,7 @@ const STORE_TYPE_OPTIONS = ["all", "repo", "deployable-app"] as const;
 export const STORE_SEARCH: ToolDefinition = {
   name: "store_search",
   description:
-    "Search the Takos catalog for public Git sources and installable OpenTofu Capsules. This is discovery-only and never installs, forks, or deploys a result.",
+    "Search configured catalogs for public Git sources and installable OpenTofu Capsules. This is discovery-only and never installs, forks, or deploys a result.",
   category: "space",
   namespace: "catalog",
   family: "catalog.search",
@@ -60,6 +65,11 @@ export const STORE_SEARCH: ToolDefinition = {
   },
 };
 
+export const workspaceSourceToolDeps = {
+  listCatalogItems,
+  listTcsStoreListings,
+};
+
 function optionalString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   return value.trim() || undefined;
@@ -81,55 +91,125 @@ export const storeSearchHandler: ToolHandler = async (args, context) => {
   const limit = Number.isFinite(limitValue) && limitValue > 0
     ? Math.min(Math.floor(limitValue), 20)
     : 10;
-  const result = await listCatalogItems(context.db, {
-    sort: enumValue(args.sort, STORE_SORT_OPTIONS, "trending"),
-    limit,
-    offset: 0,
-    searchQuery: optionalString(args.query),
-    type: enumValue(args.type, STORE_TYPE_OPTIONS, "all"),
-    category: optionalString(args.category),
-    language: optionalString(args.language),
-    license: optionalString(args.license),
-    since: optionalString(args.since),
-    tagsRaw: optionalString(args.tags),
-    certifiedOnly: args.certified_only === true,
-    spaceId: context.spaceId,
-    userId: context.userId,
-    gitObjects: context.env.GIT_OBJECTS,
-    repositoryBaseUrl: context.env.ADMIN_DOMAIN,
-  });
+  const query = optionalString(args.query);
+  const type = enumValue(args.type, STORE_TYPE_OPTIONS, "all");
+  const category = optionalString(args.category);
+  const certifiedOnly = args.certified_only === true;
+  const [result, tcs] = await Promise.all([
+    workspaceSourceToolDeps.listCatalogItems(context.db, {
+      sort: enumValue(args.sort, STORE_SORT_OPTIONS, "trending"),
+      limit,
+      offset: 0,
+      searchQuery: query,
+      type,
+      category,
+      language: optionalString(args.language),
+      license: optionalString(args.license),
+      since: optionalString(args.since),
+      tagsRaw: optionalString(args.tags),
+      certifiedOnly,
+      spaceId: context.spaceId,
+      userId: context.userId,
+      gitObjects: context.env.GIT_OBJECTS,
+      repositoryBaseUrl: context.env.ADMIN_DOMAIN,
+    }),
+    workspaceSourceToolDeps.listTcsStoreListings(context.env, {
+      query,
+      category,
+      limit,
+      certifiedOnly,
+    }),
+  ]);
+
+  const localItems = result.items.map((item) => ({
+    repo_id: item.repo.id,
+    repo_name: item.repo.name,
+    owner: item.repo.owner.username,
+    description: item.repo.description,
+    stars: item.repo.stars,
+    language: item.repo.language,
+    license: item.repo.license,
+    capsule: item.package.available
+      ? {
+        app_id: item.package.app_id,
+        version: item.package.latest_version,
+        category: item.package.category,
+        tags: item.package.tags,
+        certified: item.package.certified,
+      }
+      : null,
+    git_address: item.source
+      ? {
+        url: item.source.repository_url,
+        ref: item.source.ref,
+        path: item.installable_app?.source_path ?? "",
+      }
+      : null,
+    installed_in_current_workspace: item.capsule !== undefined,
+  }));
+  const localSourceKeys = new Set(
+    result.items.flatMap((item) => {
+      const key = canonicalGitDiscoveryKey(item.source?.repository_url);
+      return key ? [key] : [];
+    }),
+  );
+  const uniqueTcsItems = tcs.items.filter(
+    (item) => !localSourceKeys.has(item.source.git),
+  );
+  const remaining = Math.max(0, limit - localItems.length);
+  const tcsItems = uniqueTcsItems.slice(0, remaining).map(mapTcsListing);
 
   return JSON.stringify({
-    total: result.total,
-    has_more: result.has_more,
-    items: result.items.map((item) => ({
-      repo_id: item.repo.id,
-      repo_name: item.repo.name,
-      owner: item.repo.owner.username,
-      description: item.repo.description,
-      stars: item.repo.stars,
-      language: item.repo.language,
-      license: item.repo.license,
-      capsule: item.package.available
-        ? {
-          app_id: item.package.app_id,
-          version: item.package.latest_version,
-          category: item.package.category,
-          tags: item.package.tags,
-          certified: item.package.certified,
-        }
-        : null,
-      git_address: item.source
-        ? {
-          url: item.source.repository_url,
-          ref: item.source.ref,
-          path: item.installable_app?.source_path ?? "",
-        }
-        : null,
-      installed_in_current_workspace: item.capsule !== undefined,
-    })),
+    total: result.total + uniqueTcsItems.length,
+    has_more: result.has_more || uniqueTcsItems.length > remaining,
+    items: [...localItems, ...tcsItems],
+    ...(tcs.warnings.length > 0 ? { catalog_warnings: tcs.warnings } : {}),
   }, null, 2);
 };
+
+function mapTcsListing(item: TcsStoreListing) {
+  return {
+    repo_id: `tcs:${item.storeOrigin}:${item.id}`,
+    repo_name: item.name.en,
+    owner: item.scope,
+    description: item.description.en,
+    stars: null,
+    language: null,
+    license: null,
+    capsule: {
+      app_id: `${item.scope}/${item.slug}`,
+      version: null,
+      category: item.category ?? null,
+      tags: [...(item.tags ?? [])],
+      // TCS badges are server-local presentation metadata, not portable trust.
+      certified: false,
+    },
+    git_address: { url: item.source.git },
+    install_defaults: {
+      // These are Takosumi API defaults, not TCS listing fields.
+      ref: "HEAD",
+      path: ".",
+      suggested_name: item.suggestedName,
+    },
+    deployment_intent: {
+      kind: "takosumi.git-install-plan@v1",
+      source: {
+        url: item.source.git,
+        ref: "HEAD",
+        path: ".",
+      },
+      capsule: { suggested_name: item.suggestedName },
+      lifecycle_authority: "takosumi-api",
+      review_required: true,
+    },
+    source_catalog: {
+      protocol: "tcs.v2",
+      origin: item.storeOrigin,
+      listing_id: item.id,
+    },
+    installed_in_current_workspace: null,
+  };
+}
 
 export const {
   tools: WORKSPACE_SOURCE_TOOLS,
