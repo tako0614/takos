@@ -11,17 +11,17 @@ test("frontend model catalog - keeps fallback options on OpenAI-compatible alias
   assertEquals(DEFAULT_MODEL_ID, "gpt-5.5");
   assertEquals(
     FALLBACK_MODELS.map((model) => model.id),
-    ["gpt-5.5", "takosumi/default", "deepseek/chat", "zai/glm", "gemini/chat"],
+    ["gpt-5.5", "takoserver-text", "deepseek/chat", "zai/glm", "gemini/chat"],
   );
 });
 test("frontend model catalog - lists all supported models", () => {
   assertEquals(
     MODEL_OPTIONS.map((m) => m.id),
-    ["gpt-5.5", "takosumi/default", "deepseek/chat", "zai/glm", "gemini/chat"],
+    ["gpt-5.5", "takoserver-text", "deepseek/chat", "zai/glm", "gemini/chat"],
   );
 });
 test("frontend model catalog - returns model labels", () => {
   assertEquals(getModelLabel("gpt-5.5"), "GPT-5.5");
-  assertEquals(getModelLabel("takosumi/default"), "Takosumi Default");
+  assertEquals(getModelLabel("takoserver-text"), "Takosumi Default");
   assertEquals(getModelLabel("unknown-model"), "unknown-model");
 });

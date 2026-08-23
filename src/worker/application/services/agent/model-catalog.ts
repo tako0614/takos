@@ -42,7 +42,7 @@ type ResolveModelCatalogOptions = {
 
 export const SUPPORTED_MODEL_IDS = [
   "gpt-5.5",
-  "takosumi/default",
+  "takoserver-text",
   "deepseek/chat",
   "zai/glm",
   "gemini/chat",
@@ -61,7 +61,7 @@ export const OPENAI_COMPATIBLE_MODELS: ReadonlyArray<ModelOption> = [
     description: "Default direct OpenAI-compatible model",
   },
   {
-    id: "takosumi/default",
+    id: "takoserver-text",
     name: "Takosumi Default",
     description: "Operator-selected model through Takosumi AI Gateway",
   },
@@ -84,7 +84,7 @@ export const OPENAI_COMPATIBLE_MODELS: ReadonlyArray<ModelOption> = [
 
 export const OPENAI_MODELS = OPENAI_COMPATIBLE_MODELS;
 
-export const TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID = "takosumi/default";
+export const TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID = "takoserver-text";
 
 export const AVAILABLE_MODELS_BY_BACKEND: AvailableModelsByBackend = {
   openai: OPENAI_COMPATIBLE_MODELS,
@@ -447,7 +447,7 @@ export function isModelSelectable(
 /** Max input token limits per model (used to dynamically size conversation history) */
 export const MODEL_TOKEN_LIMITS: Readonly<Record<string, number>> = {
   "gpt-5.5": 128_000,
-  "takosumi/default": 128_000,
+  "takoserver-text": 24_000,
   "deepseek/chat": 128_000,
   "zai/glm": 128_000,
   "gemini/chat": 128_000,

@@ -13,7 +13,7 @@ const OPENAI_COMPATIBLE_MODEL_OPTIONS: ReadonlyArray<ModelSelectOption> = [
     description: "Direct OpenAI-compatible default",
   },
   {
-    id: "takosumi/default",
+    id: "takoserver-text",
     label: "Takosumi Default",
     description: "Operator-selected gateway model",
   },

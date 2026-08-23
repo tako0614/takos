@@ -36,7 +36,7 @@ export interface AiEnv {
   VECTORIZE?: VectorIndexBinding;
   AI?: AiBinding;
   OPENAI_API_KEY?: string;
-  /** OpenAI-compatible base URL, e.g. Takosumi AI Gateway `/gateway/ai/v1`. */
+  /** OpenAI-compatible base URL, e.g. Takosumi AI Gateway `/api/v1/ai`. */
   OPENAI_BASE_URL?: string;
   /** Optional comma-separated or JSON array allowlist for selectable chat models. */
   TAKOS_ALLOWED_MODELS?: string;

@@ -3,7 +3,7 @@
  *
  * Three native backends are implemented here, but the default product surface
  * routes model aliases through the OpenAI-compatible contract. Hosted Takosumi
- * can set OPENAI_BASE_URL to `/gateway/ai/v1` and expose DeepSeek / GLM /
+ * can set OPENAI_BASE_URL to `/api/v1/ai` and expose DeepSeek / GLM /
  * Gemini aliases without adding provider-specific Takos model backends.
  */
 

@@ -130,7 +130,7 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     worker_artifact_url:
       `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
     worker_artifact_sha256:
-      "sha256:8fbd63a8919d8a57ab6ca1bbeb19ae60ec409e349e4d613e472e766d33a86def",
+      "sha256:dd22e2e9c7e1b5de608a4e3d018558512a3f809d5c3f5e9aabe4e9f768cf86c6",
   } as const;
   for (const [name, value] of Object.entries(portableDefaults)) {
     const input = portable.inputs.find((candidate) => candidate.name === name);

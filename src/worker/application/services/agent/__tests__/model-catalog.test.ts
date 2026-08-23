@@ -27,7 +27,7 @@ test("model catalog returns fallback when OpenAI credentials are not configured"
   assertStrictEquals(catalog.status, "unconfigured");
   assertEquals(
     catalog.availableModelsByBackend.openai.map((model) => model.id),
-    ["gpt-5.5", "takosumi/default", "deepseek/chat", "zai/glm", "gemini/chat"],
+    ["gpt-5.5", "takoserver-text", "deepseek/chat", "zai/glm", "gemini/chat"],
   );
 });
 
@@ -50,10 +50,10 @@ test("managed Takosumi Gateway exposes only its safe default without an operator
     })),
     [
       { id: "gpt-5.5", disabled: true },
-      { id: "takosumi/default", disabled: false },
+      { id: "takoserver-text", disabled: false },
     ],
   );
-  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takosumi/default");
+  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takoserver-text");
 });
 
 test("managed Takosumi Gateway accepts only aliases the operator explicitly allows", () => {
@@ -69,7 +69,7 @@ test("managed Takosumi Gateway accepts only aliases the operator explicitly allo
     resolveExecutionModel(env, "deepseek/chat"),
     "deepseek/chat",
   );
-  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takosumi/default");
+  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takoserver-text");
 });
 
 test("direct and custom OpenAI-compatible paths enforce the operator model allowlist", async () => {
@@ -154,15 +154,15 @@ test("model catalog trusts OpenAI-compatible gateway aliases and supports allowl
   const catalog = await resolveModelCatalog(
     {
       OPENAI_API_KEY: "gateway-key",
-      OPENAI_BASE_URL: "https://gateway.example.test/gateway/ai/v1",
-      TAKOS_ALLOWED_MODELS: "takosumi/default,deepseek/chat",
+      OPENAI_BASE_URL: "https://gateway.example.test/api/v1/ai",
+      TAKOS_ALLOWED_MODELS: "takoserver-text,deepseek/chat",
     },
     {
       fetchImpl: async (url) => {
         urls.push(String(url));
         return jsonResponse({
           data: [
-            { id: "takosumi/default" },
+            { id: "takoserver-text" },
             { id: "deepseek/chat" },
             { id: "not-allowed/chat" },
           ],
@@ -171,10 +171,10 @@ test("model catalog trusts OpenAI-compatible gateway aliases and supports allowl
     },
   );
 
-  assertEquals(urls, ["https://gateway.example.test/gateway/ai/v1/models"]);
+  assertEquals(urls, ["https://gateway.example.test/api/v1/ai/models"]);
   assertEquals(
     catalog.availableModelsByBackend.openai.map((model) => model.id),
-    ["takosumi/default", "deepseek/chat"],
+    ["takoserver-text", "deepseek/chat"],
   );
   assertStrictEquals(
     catalog.availableModelsByBackend.openai[0].source,

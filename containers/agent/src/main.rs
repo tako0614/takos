@@ -41,7 +41,7 @@ use crate::engine_support::{
     build_engine_config, build_engine_deps, build_session_request, derive_engine_session_id,
     durable_history_before_current, last_user_message,
 };
-use crate::model::TakosModelRunner;
+use crate::model::{ControlRpcOpenAiRuntimeCredentialProvider, TakosModelRunner};
 use crate::skills::{build_skill_catalog, render_available_skill_context};
 use crate::tool_bridge::CompositeToolExecutor;
 
@@ -750,7 +750,6 @@ async fn execute_run(
 
     let engine_config = build_engine_config(&run_config)?;
     let engine_session_id = derive_engine_session_id(&bootstrap.thread_id);
-    let api_keys = client.api_keys().await?;
     let usage_tracker = Arc::new(engine_support::UsageTracker::default());
     // The admission registry owns this token so a fresh lease for the same
     // run can cancel and replace an old in-container task. The heartbeat loop
@@ -760,13 +759,15 @@ async fn execute_run(
             .with_cancellation_token(cancellation_token.clone());
     let tool_execution_state = composite_tool_executor.clone();
     let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools());
-    let model_runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
+    let model_runner = TakosModelRunner::new_with_runtime_credential_provider(
         payload.resolved_model(),
         run_config.temperature,
-        collect_openai_api_keys(api_keys.openai, env::var("OPENAI_API_KEY").ok()),
+        Arc::new(ControlRpcOpenAiRuntimeCredentialProvider::new(
+            client.clone(),
+            env::var("OPENAI_API_KEY").ok(),
+        )),
         exposed_tools.clone(),
         usage_tracker.clone(),
-        api_keys.openai_endpoint,
     );
     let durable_checkpoint_repository = if payload.supports_durable_checkpoints() {
         Some(Arc::new(ControlRpcLoopStateRepository::new(
@@ -1186,6 +1187,7 @@ fn user_visible_failure_message(error: &str) -> String {
         .to_string()
 }
 
+#[cfg(test)]
 fn collect_openai_api_keys(
     control_key: Option<String>,
     container_key: Option<String>,

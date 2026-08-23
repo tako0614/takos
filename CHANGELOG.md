@@ -6,6 +6,15 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.4 — Live Takosumi tools and short-lived AI authority
+
+- Let the agent discover Takosumi-deployed MCP capabilities and invoke them
+  through the Workspace-scoped toolbox during an active run.
+- Refresh the short-lived Takosumi AI credential for every logical model
+  attempt while keeping its idempotency key stable across transport retries.
+- Use the canonical `/api/v1` Takosumi Interface and AI endpoints throughout
+  the Worker, agent runtime, tests, and product UI.
+
 ## 0.12.3 — On-demand executor capacity
 
 - Stop scheduled tier-1 executor prewarming unless the operator explicitly

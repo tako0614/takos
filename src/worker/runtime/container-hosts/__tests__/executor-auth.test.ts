@@ -338,7 +338,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
                   inputs: {
                     endpoint: {
                       source: "literal",
-                      value: "https://app.takosumi.test/gateway/ai/v1",
+                      value: "https://app.takosumi.test/api/v1/ai",
                     },
                   },
                   access: {
@@ -351,7 +351,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
                   observedGeneration: 1,
                   resolvedRevision: 3,
                   resolvedInputs: {
-                    endpoint: "https://app.takosumi.test/gateway/ai/v1",
+                    endpoint: "https://app.takosumi.test/api/v1/ai",
                   },
                 },
               },
@@ -392,7 +392,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
             expires_in: 30,
             expires_at: new Date(Date.now() + 30_000).toISOString(),
             scope: "ai.chat",
-            resource: "https://app.takosumi.test/gateway/ai/v1",
+            resource: "https://app.takosumi.test/api/v1/ai",
           });
         }
         // The retired /v1/* paths are not compatibility aliases.
@@ -403,7 +403,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
 
   assertEquals(credential, {
     apiKey: "runtime-interface-token",
-    endpoint: "https://app.takosumi.test/gateway/ai/v1/chat/completions",
+    endpoint: "https://app.takosumi.test/api/v1/ai/chat/completions",
   });
   assertEquals(requests.length, 3);
   assertEquals(
@@ -412,7 +412,7 @@ test("runtime AI credential uses the exact authorized InterfaceBinding", async (
   );
   assertEquals(
     requests[1]?.url,
-    "https://internal-app.takosumi.test/api/v1/interfaces/if_ai_gateway/bindings?permission=ai.chat",
+    "https://internal-app.takosumi.test/api/v1/interfaces/if_ai_gateway/bindings?workspaceId=workspace_owner&permission=ai.chat",
   );
   assertEquals(
     requests[2]?.headers.get("authorization"),

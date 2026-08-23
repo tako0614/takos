@@ -12,8 +12,9 @@ use takos_agent_engine::model::{
     ToolCallRequest,
 };
 use tokio::time::Instant;
+use uuid::Uuid;
 
-use crate::control_rpc::{ToolDefinition, UsagePayload};
+use crate::control_rpc::{ControlRpcClient, ToolDefinition, UsagePayload};
 use crate::engine_support::UsageTracker;
 use crate::AppResult;
 
@@ -131,10 +132,63 @@ pub struct TakosModelRunner {
     client: reqwest::Client,
     model: String,
     temperature: Option<f32>,
-    openai_api_keys: Arc<Vec<String>>,
+    credential_provider: Arc<dyn OpenAiRuntimeCredentialProvider>,
     tools: Arc<Vec<ToolDefinition>>,
     usage_tracker: Arc<UsageTracker>,
-    endpoint: Arc<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpenAiRuntimeCredentials {
+    pub api_keys: Vec<String>,
+    pub endpoint: String,
+}
+
+#[async_trait]
+pub trait OpenAiRuntimeCredentialProvider: Send + Sync {
+    async fn credentials(&self) -> AppResult<OpenAiRuntimeCredentials>;
+}
+
+#[derive(Clone)]
+struct StaticOpenAiRuntimeCredentialProvider {
+    credentials: OpenAiRuntimeCredentials,
+}
+
+#[async_trait]
+impl OpenAiRuntimeCredentialProvider for StaticOpenAiRuntimeCredentialProvider {
+    async fn credentials(&self) -> AppResult<OpenAiRuntimeCredentials> {
+        Ok(self.credentials.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct ControlRpcOpenAiRuntimeCredentialProvider {
+    client: ControlRpcClient,
+    container_fallback_key: Option<String>,
+}
+
+impl ControlRpcOpenAiRuntimeCredentialProvider {
+    pub fn new(client: ControlRpcClient, container_fallback_key: Option<String>) -> Self {
+        Self {
+            client,
+            container_fallback_key,
+        }
+    }
+}
+
+#[async_trait]
+impl OpenAiRuntimeCredentialProvider for ControlRpcOpenAiRuntimeCredentialProvider {
+    async fn credentials(&self) -> AppResult<OpenAiRuntimeCredentials> {
+        let current = self.client.api_keys().await?;
+        Ok(OpenAiRuntimeCredentials {
+            api_keys: sanitize_api_keys(
+                [current.openai, self.container_fallback_key.clone()]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            ),
+            endpoint: normalize_openai_endpoint(current.openai_endpoint),
+        })
+    }
 }
 
 impl TakosModelRunner {
@@ -164,19 +218,33 @@ impl TakosModelRunner {
         usage_tracker: Arc<UsageTracker>,
         endpoint: Option<String>,
     ) -> Self {
+        let credentials = OpenAiRuntimeCredentials {
+            api_keys: sanitize_api_keys(openai_api_keys),
+            endpoint: normalize_openai_endpoint(endpoint),
+        };
+        Self::new_with_runtime_credential_provider(
+            model,
+            temperature,
+            Arc::new(StaticOpenAiRuntimeCredentialProvider { credentials }),
+            tools,
+            usage_tracker,
+        )
+    }
+
+    pub fn new_with_runtime_credential_provider(
+        model: impl Into<String>,
+        temperature: Option<f32>,
+        credential_provider: Arc<dyn OpenAiRuntimeCredentialProvider>,
+        tools: Vec<ToolDefinition>,
+        usage_tracker: Arc<UsageTracker>,
+    ) -> Self {
         Self {
             client: build_model_http_client(),
             model: model.into(),
             temperature,
-            openai_api_keys: Arc::new(sanitize_api_keys(openai_api_keys)),
+            credential_provider,
             tools: Arc::new(tools),
             usage_tracker,
-            endpoint: Arc::new(
-                endpoint
-                    .map(|value| value.trim().to_string())
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or_else(|| DEFAULT_OPENAI_ENDPOINT.to_string()),
-            ),
         }
     }
 
@@ -194,15 +262,14 @@ impl TakosModelRunner {
         tools: Vec<ToolDefinition>,
         usage_tracker: Arc<UsageTracker>,
     ) -> Self {
-        Self {
-            client: build_model_http_client(),
-            model: model.into(),
+        Self::new_with_openai_api_keys_and_endpoint(
+            model,
             temperature,
-            openai_api_keys: Arc::new(sanitize_api_keys(openai_api_keys)),
-            tools: Arc::new(tools),
+            openai_api_keys,
+            tools,
             usage_tracker,
-            endpoint: Arc::new(endpoint.into()),
-        }
+            Some(endpoint.into()),
+        )
     }
 
     pub fn usage_payload(&self) -> UsagePayload {
@@ -289,41 +356,10 @@ impl TakosModelRunner {
     }
 
     async fn openai_response(&self, input: &ModelInput) -> AppResult<ModelOutput> {
-        if self.openai_api_keys.is_empty() {
-            return Err(io::Error::other("OpenAI-compatible API key is not configured").into());
-        }
-
-        let mut last_auth_error: Option<String> = None;
-        for (index, api_key) in self.openai_api_keys.iter().enumerate() {
-            match self.openai_response_with_key(input, api_key).await {
-                Ok(output) => return Ok(output),
-                Err(err) => {
-                    let message = err.to_string();
-                    if is_openai_auth_failure(&message) && index + 1 < self.openai_api_keys.len() {
-                        last_auth_error = Some(message);
-                        continue;
-                    }
-                    return Err(err);
-                }
-            }
-        }
-
-        Err(io::Error::other(
-            last_auth_error
-                .unwrap_or_else(|| "OpenAI-compatible API key is not configured".to_string()),
-        )
-        .into())
-    }
-
-    async fn openai_response_with_key(
-        &self,
-        input: &ModelInput,
-        api_key: &str,
-    ) -> AppResult<ModelOutput> {
         let repeated_tool_failure = has_repeated_tool_failure(input);
         if repeated_tool_failure {
             return self
-                .send_openai_request(input, api_key, Some(TOOL_RECOVERY_INSTRUCTION))
+                .send_openai_request(input, Some(TOOL_RECOVERY_INSTRUCTION))
                 .await;
         }
 
@@ -331,24 +367,26 @@ impl TakosModelRunner {
         // router call doubled latency/cost and shared the same node timeout,
         // while `tool_choice=auto` already lets the provider decide whether a
         // tool is needed.
-        let output = self.send_openai_request(input, api_key, None).await?;
+        let output = self.send_openai_request(input, None).await?;
         if !self.has_unavailable_tool_call(&output) {
             return Ok(output);
         }
 
-        self.send_openai_request(input, api_key, Some(UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION))
+        self.send_openai_request(input, Some(UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION))
             .await
     }
 
     async fn send_openai_request(
         &self,
         input: &ModelInput,
-        api_key: &str,
         recovery_instruction: Option<&str>,
     ) -> AppResult<ModelOutput> {
         let request = self.build_openai_request_with_recovery(input, recovery_instruction);
         let request_body = serde_json::to_vec(&request)
             .map_err(|err| io::Error::other(format!("failed to encode model request: {err}")))?;
+        // One model invocation owns one provider idempotency key. Transport
+        // retries reuse it; a later agent-loop invocation gets a different key.
+        let idempotency_key = format!("takos-agent-{}", Uuid::new_v4());
         let max_attempts = if is_safe_pre_tool_model_call(input) {
             MODEL_MAX_ATTEMPTS
         } else {
@@ -364,7 +402,7 @@ impl TakosModelRunner {
                 )));
             };
             let result = self
-                .send_openai_request_once(api_key, request_body.clone(), remaining)
+                .send_openai_request_attempt(&idempotency_key, request_body.clone(), remaining)
                 .await;
             match result {
                 Ok(output) => return Ok(output),
@@ -384,18 +422,68 @@ impl TakosModelRunner {
         }
     }
 
+    async fn send_openai_request_attempt(
+        &self,
+        idempotency_key: &str,
+        request_body: Vec<u8>,
+        timeout: Duration,
+    ) -> Result<ModelOutput, ProviderRequestError> {
+        let credentials = self
+            .credential_provider
+            .credentials()
+            .await
+            .map_err(|error| {
+                ProviderRequestError::permanent(format!(
+                    "OpenAI-compatible runtime credential refresh failed: {error}"
+                ))
+            })?;
+        if credentials.api_keys.is_empty() {
+            return Err(ProviderRequestError::permanent(
+                "OpenAI-compatible API key is not configured",
+            ));
+        }
+        let mut last_auth_error = None;
+        for (index, api_key) in credentials.api_keys.iter().enumerate() {
+            match self
+                .send_openai_request_once(
+                    &credentials.endpoint,
+                    api_key,
+                    idempotency_key,
+                    request_body.clone(),
+                    timeout,
+                )
+                .await
+            {
+                Ok(output) => return Ok(output),
+                Err(error)
+                    if is_openai_auth_failure(&error.message)
+                        && index + 1 < credentials.api_keys.len() =>
+                {
+                    last_auth_error = Some(error);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(last_auth_error.unwrap_or_else(|| {
+            ProviderRequestError::permanent("OpenAI-compatible API key is not configured")
+        }))
+    }
+
     async fn send_openai_request_once(
         &self,
+        endpoint: &str,
         api_key: &str,
+        idempotency_key: &str,
         request_body: Vec<u8>,
         timeout: Duration,
     ) -> Result<ModelOutput, ProviderRequestError> {
         let response = self
             .client
-            .post(self.endpoint.as_str())
+            .post(endpoint)
             .timeout(timeout)
             .bearer_auth(api_key)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header("idempotency-key", idempotency_key)
             .body(request_body)
             .send()
             .await
@@ -837,6 +925,13 @@ fn sanitize_api_keys(keys: Vec<String>) -> Vec<String> {
     sanitized
 }
 
+fn normalize_openai_endpoint(endpoint: Option<String>) -> String {
+    endpoint
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEFAULT_OPENAI_ENDPOINT.to_string())
+}
+
 fn is_openai_auth_failure(error: &str) -> bool {
     let normalized = error.to_ascii_lowercase();
     normalized.contains(StatusCode::UNAUTHORIZED.as_str())
@@ -1067,11 +1162,11 @@ mod tests {
 
     use super::{
         conversation_wire_budget, is_openai_auth_failure, model_output_wire_budget,
-        sanitize_api_keys, sanitize_provider_error_body, TakosModelRunner,
-        MODEL_MAX_ASSISTANT_CONTENT_BYTES, MODEL_MAX_COMPLETION_TOKENS,
-        MODEL_MAX_RESPONSE_BODY_BYTES, MODEL_MAX_TOOL_ARGUMENT_BYTES, MODEL_MAX_TOOL_CALLS,
-        MODEL_MAX_TOOL_CALL_ID_BYTES, MODEL_MAX_TOOL_NAME_BYTES, MODEL_MAX_TURN_TRANSCRIPT_BYTES,
-        TOOL_RECOVERY_INSTRUCTION, WORKER_MAX_TOOL_RESULT_BYTES,
+        sanitize_api_keys, sanitize_provider_error_body, OpenAiRuntimeCredentialProvider,
+        OpenAiRuntimeCredentials, TakosModelRunner, MODEL_MAX_ASSISTANT_CONTENT_BYTES,
+        MODEL_MAX_COMPLETION_TOKENS, MODEL_MAX_RESPONSE_BODY_BYTES, MODEL_MAX_TOOL_ARGUMENT_BYTES,
+        MODEL_MAX_TOOL_CALLS, MODEL_MAX_TOOL_CALL_ID_BYTES, MODEL_MAX_TOOL_NAME_BYTES,
+        MODEL_MAX_TURN_TRANSCRIPT_BYTES, TOOL_RECOVERY_INSTRUCTION, WORKER_MAX_TOOL_RESULT_BYTES,
     };
     use crate::control_rpc::ToolDefinition;
     use crate::engine_support::UsageTracker;
@@ -1125,8 +1220,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn run_scoped_endpoint_overrides_the_container_default() {
+    #[tokio::test]
+    async fn run_scoped_endpoint_overrides_the_container_default() {
         let runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
             "gateway-model",
             None,
@@ -1136,8 +1231,13 @@ mod tests {
             Some(" https://gateway.example.test/v1/chat/completions ".to_string()),
         );
 
+        let credentials = runner
+            .credential_provider
+            .credentials()
+            .await
+            .expect("static runtime credentials");
         assert_eq!(
-            runner.endpoint.as_str(),
+            credentials.endpoint,
             "https://gateway.example.test/v1/chat/completions"
         );
     }
@@ -1484,10 +1584,48 @@ mod tests {
     #[tokio::test]
     async fn safe_pre_tool_model_call_retries_rate_limits_and_5xx_with_retry_after() {
         #[derive(Clone)]
-        struct RetryState(Arc<AtomicUsize>);
+        struct RetryState {
+            attempts: Arc<AtomicUsize>,
+            idempotency_keys: Arc<tokio::sync::Mutex<Vec<String>>>,
+            authorizations: Arc<tokio::sync::Mutex<Vec<String>>>,
+        }
 
-        async fn handler(State(state): State<RetryState>) -> Response {
-            let attempt = state.0.fetch_add(1, Ordering::SeqCst);
+        #[derive(Clone)]
+        struct RotatingCredentialProvider {
+            endpoint: String,
+            issuances: Arc<AtomicUsize>,
+        }
+
+        #[async_trait::async_trait]
+        impl OpenAiRuntimeCredentialProvider for RotatingCredentialProvider {
+            async fn credentials(&self) -> crate::AppResult<OpenAiRuntimeCredentials> {
+                let issuance = self.issuances.fetch_add(1, Ordering::SeqCst) + 1;
+                Ok(OpenAiRuntimeCredentials {
+                    api_keys: vec![format!("runtime-token-{issuance}")],
+                    endpoint: self.endpoint.clone(),
+                })
+            }
+        }
+
+        async fn handler(
+            State(state): State<RetryState>,
+            headers: axum::http::HeaderMap,
+        ) -> Response {
+            state.idempotency_keys.lock().await.push(
+                headers
+                    .get("idempotency-key")
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            state.authorizations.lock().await.push(
+                headers
+                    .get(reqwest::header::AUTHORIZATION)
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            let attempt = state.attempts.fetch_add(1, Ordering::SeqCst);
             if attempt == 0 {
                 return (
                     axum::http::StatusCode::TOO_MANY_REQUESTS,
@@ -1510,9 +1648,15 @@ mod tests {
         }
 
         let attempts = Arc::new(AtomicUsize::new(0));
+        let idempotency_keys = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let authorizations = Arc::new(tokio::sync::Mutex::new(Vec::new()));
         let app = Router::new()
             .route("/v1/chat/completions", post(handler))
-            .with_state(RetryState(attempts.clone()));
+            .with_state(RetryState {
+                attempts: attempts.clone(),
+                idempotency_keys: idempotency_keys.clone(),
+                authorizations: authorizations.clone(),
+            });
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("listener");
@@ -1520,11 +1664,14 @@ mod tests {
         let server = tokio::spawn(async move {
             axum::serve(listener, app).await.expect("test server");
         });
-        let runner = TakosModelRunner::new_with_endpoint(
-            format!("http://{address}/v1/chat/completions"),
+        let credential_issuances = Arc::new(AtomicUsize::new(0));
+        let runner = TakosModelRunner::new_with_runtime_credential_provider(
             "gateway-model",
             None,
-            vec!["runtime-token".to_string()],
+            Arc::new(RotatingCredentialProvider {
+                endpoint: format!("http://{address}/v1/chat/completions"),
+                issuances: credential_issuances.clone(),
+            }),
             Vec::new(),
             Arc::new(UsageTracker::default()),
         );
@@ -1536,6 +1683,19 @@ mod tests {
 
         server.abort();
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        let keys = idempotency_keys.lock().await;
+        assert_eq!(keys.len(), 3);
+        assert!(!keys[0].is_empty());
+        assert!(keys.iter().all(|key| key == &keys[0]));
+        assert_eq!(credential_issuances.load(Ordering::SeqCst), 3);
+        assert_eq!(
+            *authorizations.lock().await,
+            vec![
+                "Bearer runtime-token-1",
+                "Bearer runtime-token-2",
+                "Bearer runtime-token-3",
+            ]
+        );
         assert_eq!(output.assistant_message.as_deref(), Some("done"));
     }
 

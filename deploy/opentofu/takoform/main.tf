@@ -23,7 +23,7 @@ variable "project_name" {
 variable "worker_release_tag" {
   description = "Takos GitHub release containing the immutable Worker archive."
   type        = string
-  default     = "v0.12.3"
+  default     = "v0.12.4"
 
   validation {
     condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
@@ -34,13 +34,13 @@ variable "worker_release_tag" {
 variable "worker_artifact_url" {
   description = "Immutable Takos Worker archive URL."
   type        = string
-  default     = "https://github.com/tako0614/takos/releases/download/v0.12.3/takos-worker-release.tar.gz"
+  default     = "https://github.com/tako0614/takos/releases/download/v0.12.4/takos-worker-release.tar.gz"
 }
 
 variable "worker_artifact_sha256" {
   description = "Expected SHA-256 of worker_artifact_url."
   type        = string
-  default     = "sha256:8fbd63a8919d8a57ab6ca1bbeb19ae60ec409e349e4d613e472e766d33a86def"
+  default     = "sha256:dd22e2e9c7e1b5de608a4e3d018558512a3f809d5c3f5e9aabe4e9f768cf86c6"
 
   validation {
     condition     = can(regex("^(?:sha256:)?[a-f0-9]{64}$", trimspace(var.worker_artifact_sha256)))
@@ -163,7 +163,7 @@ locals {
 resource "takoform_relational_database" "database" {
   name          = format("%s-db", local.prefix)
   engine        = "sqlite"
-  schema_url    = "https://raw.githubusercontent.com/tako0614/takos/v0.12.3/deploy/takoform/migrations/schema-bundle.json"
+  schema_url    = "https://raw.githubusercontent.com/tako0614/takos/v0.12.4/deploy/takoform/migrations/schema-bundle.json"
   schema_sha256 = "6a1037302bc18e38448c0d386d76f5226fe066618988a24c1efc54d1e358df29"
   schema_format = "takosumi.resource-migrations"
 }

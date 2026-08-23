@@ -34,7 +34,7 @@ function resolvedInterface() {
       inputs: {
         endpoint: {
           source: "literal",
-          value: "https://app.takosumi.test/gateway/ai/v1",
+          value: "https://app.takosumi.test/api/v1/ai",
         },
       },
       access: {
@@ -47,7 +47,7 @@ function resolvedInterface() {
       observedGeneration: 1,
       resolvedRevision: 3,
       resolvedInputs: {
-        endpoint: "https://app.takosumi.test/gateway/ai/v1",
+        endpoint: "https://app.takosumi.test/api/v1/ai",
       },
     },
   };
@@ -201,7 +201,7 @@ test("runtime Interface discovery does not fall back to the retired public path"
 });
 
 test("runtime Interface token response is invocation-only and non-reusable", async () => {
-  const resource = "https://app.takosumi.test/gateway/ai/v1";
+  const resource = "https://app.takosumi.test/api/v1/ai";
   let requestedUrl: URL | undefined;
   const valid = await issueRuntimeInterfaceAccessToken(
     {

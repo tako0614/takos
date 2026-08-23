@@ -268,7 +268,7 @@ test("run queue retries transient executor dispatch exceptions", async () => {
     runId: state.run.id,
     timestamp: Date.now(),
     retryCount: 0,
-    model: "takosumi/default",
+    model: "takoserver-text",
   });
   const env = createAgentProofEnv(state, []);
   env.EXECUTOR_HOST.fetch = async () => {
@@ -313,7 +313,7 @@ test("run queue re-enqueues executor capacity backpressure without consuming del
     timestamp: Date.now(),
     retryCount: 0,
     backpressureCount: 6,
-    model: "takosumi/default",
+    model: "takoserver-text",
   });
 
   await handleQueue(
@@ -338,7 +338,7 @@ test("run queue re-enqueues executor capacity backpressure without consuming del
     timestamp: message.body.timestamp,
     retryCount: 0,
     backpressureCount: 7,
-    model: "takosumi/default",
+    model: "takoserver-text",
   });
 });
 
