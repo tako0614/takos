@@ -1,18 +1,16 @@
 # Takos deployment lifecycle
 
 Takos owns a provider-neutral resource contract in `deploy/product-resources.json`.
-`deploy/opentofu/cloudflare` is its direct Cloudflare adapter and
-`deploy/opentofu/takoform` is its
-portable Form adapter. Takosumi runs the selected ordinary OpenTofu module and
+`deploy/opentofu/cloudflare` is its complete current adapter. Takosumi runs the ordinary OpenTofu module and
 records the run ledger as **Capsule** plus
 **`plan` type Run** -> **`apply` type Run** -> **StateVersion / Output** entries.
 
 ## Current Flow
 
-1. Select `deploy/opentofu/takoform` for a portable Form host or `deploy/opentofu/cloudflare` for a directly connected Cloudflare account.
+1. Select `deploy/opentofu/cloudflare` with a directly connected Cloudflare account. The former Provider 1.x Takoform projection is not a current install option.
 2. Register or update the Takos Capsule from the Git URL/ref and review the recorded **`plan` type Run** before apply.
 3. `apply` records StateVersion and Output and keeps policy/audit evidence.
-4. The selected adapter materializes the same product-owned runtime connections and immutable artifacts.
+4. The adapter materializes the product-owned runtime connections and immutable artifacts.
 
 ## Takos Boundary
 

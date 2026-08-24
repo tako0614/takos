@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "./accounts-oidc.ts";
@@ -15,26 +14,12 @@ const websiteCloudUrlSource = await readFile(
   new URL("website/src/lib/cloud-url.ts", root),
   "utf8",
 );
-const schemaBundleDigest = createHash("sha256")
-  .update(
-    await readFile(
-      new URL(
-        "deploy/opentofu/takoform/migrations/schema-bundle.json",
-        root,
-      ),
-    ),
-  )
-  .digest("hex");
 const options = JSON.parse(
   await readFile(new URL("install-options.json", root), "utf8"),
 ) as { options: Array<{ source: { path: string } }> };
 const modules = {
   "deploy/opentofu/cloudflare": await readFile(
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
-    "utf8",
-  ),
-  "deploy/opentofu/takoform": await readFile(
-    new URL("deploy/opentofu/takoform/main.tf", root),
     "utf8",
   ),
 };
@@ -48,9 +33,8 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(manifest.apiVersion).toBe("takosumi.com/v2.2");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
-  expect(manifest.install.defaultModule).toBe("deploy/opentofu/takoform");
+  expect(manifest.install.defaultModule).toBe("deploy/opentofu/cloudflare");
   expect(Object.keys(manifest.install.modules)).toEqual([
-    "deploy/opentofu/takoform",
     "deploy/opentofu/cloudflare",
   ]);
   const module = manifest.install.modules["deploy/opentofu/cloudflare"];
@@ -90,9 +74,9 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     },
   ]);
   expect(options.options.map((option) => option.source.path)).toEqual([
-    "deploy/opentofu/takoform",
     "deploy/opentofu/cloudflare",
   ]);
+  expect(options.options.map((option) => option.id)).toEqual(["cloudflare"]);
   expect(module.inputs.find((input) => input.name === "cloudflare")).toEqual({
     name: "cloudflare",
     source: { kind: "user" },
@@ -116,67 +100,11 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
 
-  const portable = manifest.install.modules["deploy/opentofu/takoform"];
-  expect(portable.inputs.some((input) => input.name === "runtime_image")).toBe(
-    false,
-  );
-  expect(
-    portable.inputs.find((input) => input.name === "agent_image"),
-  ).toMatchObject({ source: { kind: "module_default" } });
-  const portableDefaults = {
-    agent_image:
-      "ghcr.io/tako0614/takos-agent@sha256:09ca6ff29ed0cbbe35e0d0e76d17e7bb029bdbdfe3fb4c88b6cdbaf4d280cda2",
-    worker_release_tag: packageTag,
-    worker_artifact_url:
-      `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
-    worker_artifact_sha256:
-      "sha256:dd22e2e9c7e1b5de608a4e3d018558512a3f809d5c3f5e9aabe4e9f768cf86c6",
-  } as const;
-  for (const [name, value] of Object.entries(portableDefaults)) {
-    const input = portable.inputs.find((candidate) => candidate.name === name);
-    expect(input).toMatchObject({
-      source: { kind: "module_default" },
-    });
-    expect(input).not.toHaveProperty("required");
-    expect(variableBlock(modules["deploy/opentofu/takoform"], name)).toMatch(
-      new RegExp(`\\n\\s+default\\s+=\\s+"${escapeRegex(value)}"`),
-    );
-  }
-  expect(modules["deploy/opentofu/takoform"]).toContain(
-    'source  = "registry.opentofu.org/tako0614/takoform"',
-  );
+  expect(text).not.toContain("deploy/opentofu/takoform");
 });
 
-test("the selectable source and portable runtime use one exact Takos release", () => {
+test("the selectable source and website use one exact Takos release", () => {
   expect(packageJson.takosRelease.version).toBe(packageJson.version);
-  const portableSource = modules["deploy/opentofu/takoform"];
-
-  expect(variableDefault(portableSource, "worker_release_tag")).toBe(
-    packageTag,
-  );
-  expect(variableDefault(portableSource, "worker_artifact_url")).toBe(
-    `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
-  );
-  expect(portableSource).toContain(
-    `schema_url    = "https://raw.githubusercontent.com/tako0614/takos/${packageTag}/deploy/takoform/migrations/schema-bundle.json"`,
-  );
-  expect(portableSource).toContain(
-    `schema_sha256 = "${schemaBundleDigest}"`,
-  );
-  const portableManifest =
-    manifest.install.modules["deploy/opentofu/takoform"];
-  expect(
-    portableManifest.inputs.find(
-      (input) => input.name === "worker_release_tag",
-    )?.placeholder,
-  ).toBe(packageTag);
-  expect(
-    portableManifest.inputs.find(
-      (input) => input.name === "worker_artifact_url",
-    )?.placeholder,
-  ).toBe(
-    `https://github.com/tako0614/takos/releases/download/${packageTag}/takos-worker-release.tar.gz`,
-  );
   expect(websiteCloudUrlSource).toContain(
     `const DEFAULT_TAKOS_REF = "${packageTag}"`,
   );
@@ -191,7 +119,7 @@ test("the Repository manifest declares every OAuth scope requested by Takos", ()
   expect(oidcRequirement?.scopes).toEqual([...TAKOS_ACCOUNTS_OAUTH_SCOPES]);
 });
 
-test("the Repository manifest requests AI through the portable host Interface", () => {
+test("the Repository manifest requests AI through the Takosumi Interface", () => {
   const module = manifest.install.modules[manifest.install.defaultModule];
   const requirement = module.requires.find(
     (candidate) => candidate.kind === "interface.consume",
@@ -287,14 +215,6 @@ function variableBlock(source: string, name: string): string {
   const start = source.indexOf(`variable "${name}" {`);
   const next = source.indexOf("\nvariable ", start + 1);
   return source.slice(start, next < 0 ? undefined : next);
-}
-
-function variableDefault(source: string, name: string): string | undefined {
-  return variableBlock(source, name).match(/\n\s+default\s+=\s+"([^"]+)"/u)?.[1];
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function referencedVariables(module: RepositoryModule): Set<string> {

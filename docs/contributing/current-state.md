@@ -12,14 +12,14 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` and `deploy/opentofu/takoform` are peer adapters. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the complete current adapter. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
 
 ## Canonical Layout
 
 - `src/worker`: Takos Worker source owner and Hono route composition, including the migration-only worker-native Git Smart HTTP endpoint (read-only clone/fetch from the R2 object store). Push and collaborative hosting belong to an installed standalone `takos-git` Capsule.
 - `web`: browser UI.
 - `containers/agent`: agent execution container.
-- `deploy/cloudflare` and the peer adapters under `deploy/opentofu`: product deploy artifacts. Cloudflare-specific runtime materialization stays inside the direct Cloudflare adapter.
+- `deploy/cloudflare` and the current `deploy/opentofu/cloudflare` module: product deploy artifacts. Cloudflare-specific runtime materialization stays inside the Cloudflare adapter. The old Provider 1.x Takoform tree is not a current install surface.
 
 ## Takosumi Service Boundary
 
@@ -45,7 +45,7 @@ and Cloudflare distribution artifacts.
   "module": {
     "url": "https://github.com/example/app.git",
     "ref": "main",
-    "path": "deploy/opentofu/takoform"
+    "path": "deploy/opentofu/cloudflare"
   }
 }
 ```

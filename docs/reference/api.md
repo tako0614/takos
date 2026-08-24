@@ -1,14 +1,14 @@
 # API リファレンス
 
 **Premise: Takos は provider-neutral な resource contract を持つ OpenTofu-native AI workspace distribution です。**
-`deploy/opentofu/takoform` と `deploy/opentofu/cloudflare` は、その同じ contract をそれぞれ portable Form host と直接接続した Cloudflare account へ写す sibling adapter です。Takosumi は選択された module を通常の Capsule として扱い、
+`deploy/opentofu/cloudflare` は、その contract の完全なgraphを直接接続した Cloudflare account へ写すcurrent adapterです。Takosumi はmoduleを通常の Capsule として扱い、
 OpenTofu-native な deploy control plane として run ledger
 **Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
 ProviderBinding が provider (+ optional alias) ごとに explicit provider connection (an explicit ProviderConnection) を解決し、policy が provider allowlist / state backend / workload placement を解決します。
 
 ## Current Flow
 
-1. Takos の OpenTofu module (`deploy/opentofu/takoform` または `deploy/opentofu/cloudflare`) を指す
+1. Takos の OpenTofu module (`deploy/opentofu/cloudflare`) を指す
    **Capsule** を作る。module metadata は Git URL / commit / tag / module path と well-known OpenTofu outputs から解決する。
 2. `plan` を実行すると **`plan` type Run** が記録され、reviewed plan として diff / warning / policy decision を確認する。
 3. reviewed plan を `apply` すると **`apply` type Run** が記録され、成功した apply が StateVersion と Output を更新する。
