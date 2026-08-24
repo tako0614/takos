@@ -69,7 +69,9 @@ Takos 自体に独自のデプロイ制御やクラウド provider はありま�
 
 Takosumi が同じ Git commit から導入画面を組み立てる場合は、
 [`/.well-known/takosumi.json`](.well-known/takosumi.json) の既定
-`deploy/opentofu/takoform` 宣言を読みます。v2.2 の `interfaces` 宣言は、Takos の
+`deploy/opentofu/cloudflare` 宣言を読みます。これはTakosの完全なresource graphを
+表す現在のsupported adapterです。旧`deploy/opentofu/takoform` treeは現行Form群で
+全graphを表せないため、新規installの選択肢ではありません。v2.2 の `interfaces` 宣言は、Takos の
 `interface.ui.surface@1` launcher と `launch_url` Output の明示的な mapping を
 提案し、レビュー後に Takosumi が Interface へ compile します。これは provider
 credential、Cloudflare account、target、実行権限を含まない repository-owned

@@ -2,8 +2,8 @@
 
 Takos is a self-hostable product distribution. This repository owns the Takos
 Worker source, browser product, agent service, and provider-neutral resource
-contract. The ordinary OpenTofu adapters live side by side under
-`deploy/opentofu/takoform` and `deploy/opentofu/cloudflare`.
+contract. The complete current OpenTofu adapter is
+`deploy/opentofu/cloudflare`.
 
 Takos does not own a deployment control plane. It does not inject provider
 credentials, execute production plan/apply/destroy, publish Takosumi releases,
@@ -11,10 +11,11 @@ or maintain a second Resource/Run ledger.
 
 ## Installation
 
-An operator registers the Git source and selects one of the two adapter module
-paths as a Takosumi Capsule. `deploy/opentofu/takoform` is the portable default;
-`deploy/opentofu/cloudflare` is the advanced direct-Cloudflare option. The
-selected provider is bound through Takosumi. Takosumi owns the normal Capsule
+An operator registers the Git source and installs
+`deploy/opentofu/cloudflare` as a Takosumi Capsule. The Provider is bound through
+Takosumi. The former `deploy/opentofu/takoform` Provider 1.x projection is not a
+current install option because it cannot represent the complete product graph.
+Takosumi owns the normal Capsule
 plan/apply flow, including:
 
 - ProviderConnection, CredentialRecipe, and ProviderBinding resolution;

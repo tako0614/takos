@@ -1,9 +1,9 @@
-# Takoform deployment adapter
+# Retired Takoform Provider 1.x projection
 
-This OpenTofu module maps Takos's product-owned logical resources from
-deploy/product-resources.json to the published Takoform provider. It is an
-adapter, not a second Takos architecture and not a Takosumi-only execution
-path.
+This source tree preserves the former Provider 1.x projection for release
+history and migration analysis. It is not listed in the current Repository
+manifest or install options: current Forms do not represent Takos's complete
+product-owned graph, including StatefulEntity and its native runtime bindings.
 
 The Worker archive and relational schema bundle are pinned to immutable public
 Takos bytes. The only container is the bounded `takos-agent` execution service;
@@ -16,6 +16,7 @@ module must not embed a Cloudflare Container Registry address. A release or
 self-hoster supplies an image the destination can fetch through the normal
 OpenTofu variable path.
 
-The sibling `../cloudflare` module is the direct Cloudflare adapter. Both
-modules expose `launch_url`; Takosumi installs either as an ordinary repository
-module and obtains the app launcher from that output.
+The sibling `../cloudflare` module is the current supported adapter. It exposes
+`launch_url`; Takosumi installs it as an ordinary repository module and obtains
+the app launcher from that output. Do not use this retired tree for a new
+install or relabel it as Provider 3 compatibility.

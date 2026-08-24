@@ -1,12 +1,12 @@
 # Takos をセルフホストする
 
-Takos はTakoform対応hostまたは自分のCloudflareアカウントへ配置できます。このリポジトリの `deploy/opentofu/takoform` と `deploy/opentofu/cloudflare` が、同じproduct resource contractをそれぞれのproviderへ写します。
+Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractの完全なgraphを写します。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
 ## 何が配置されるか
 
-既定のTakoform adapterは、選択したTakoform対応hostへ次の論理リソースを要求します。直接Cloudflare adapterを選んだ場合は、それぞれをWorkers、D1、R2、KV、Queues、Vectorize、Containersへ写します。
+Cloudflare adapterは次の論理リソースをWorkers、D1、R2、KV、Queues、Vectorize、Containersへ写します。
 
 - Takos の Worker と静的 UI
 - relational database
@@ -27,7 +27,7 @@ Takosumi を使うと、Git ソース、確認済み plan、apply の結果、ou
 ## 必要なもの
 
 - OpenTofu 1.5 以降
-- 選択したTakoform hostへの接続、またはCloudflare direct用のアカウントと必要な権限
+- Cloudflareアカウントと必要な権限
 - Takosumi Accounts の URL、issuer、OIDC client
 - Takos の公開 URL
 - Worker artifact をアップロードする手順

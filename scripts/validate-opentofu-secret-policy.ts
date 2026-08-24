@@ -32,7 +32,6 @@ async function checkRequiredDocs(): Promise<void> {
   const requiredRunbookTerms = [
     'wrangler secret put',
     'TAKOSUMI_ACCOUNTS_TOKEN',
-    'deploy/opentofu/takoform',
     'deploy/opentofu/cloudflare',
     'deploy/cloudflare/wrangler.toml',
   ];

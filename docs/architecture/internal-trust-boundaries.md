@@ -4,7 +4,7 @@
 `apply` type Run -> StateVersion / Output), with a **ProviderConnection / ProviderBinding / policy** owning the provider
 credentials and state handling. The trust boundaries here are properties of that
 Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The contract
-is declared in `deploy/product-resources.json`; `deploy/opentofu/cloudflare` maps it to Cloudflare and `deploy/opentofu/takoform` maps it to portable Form resources.
+is declared in `deploy/product-resources.json`; the current `deploy/opentofu/cloudflare` adapter maps the complete graph to Cloudflare. The former Provider 1.x Takoform projection is not a current install surface.
 `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
 materialization of that same topology.
 

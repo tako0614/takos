@@ -1,13 +1,13 @@
 # Architecture Diagrams
 
-**Takos owns one provider-neutral resource contract with sibling deployment adapters.** Takosumi installs and applies either `deploy/opentofu/takoform` or `deploy/opentofu/cloudflare` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the selected provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
+**Takos owns one provider-neutral resource contract and one complete current adapter.** Takosumi installs and applies `deploy/opentofu/cloudflare` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
 
 ## Deploy flow (Takosumi run ledger)
 
 ```mermaid
 flowchart LR
   M["Takos product contract<br/>deploy/product-resources.json"]
-  DA["Selected adapter<br/>deploy/opentofu/takoform or deploy/opentofu/cloudflare"]
+  DA["Current adapter<br/>deploy/opentofu/cloudflare"]
   subgraph TS["Takosumi (deploy control plane)"]
     I["Capsule"]
     P["`plan` type Run<br/>(tofu plan)"]
@@ -22,7 +22,7 @@ flowchart LR
   RP -. owns execution & credentials .-> AP
 ```
 
-The direct Cloudflare adapter provisions D1 / KV / R2 / Queues and uses Wrangler for runtime-only wiring. The Takoform adapter asks the selected host to implement the same logical resources and connections. Neither adapter changes the product contract.
+The Cloudflare adapter provisions D1 / KV / R2 / Queues and uses Wrangler for runtime-only wiring. It does not change the product contract.
 
 ## Direct Cloudflare runtime profile (one Worker)
 

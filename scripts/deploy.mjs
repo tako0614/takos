@@ -20,7 +20,6 @@ const CONTRACT = {
       covers: [
         "deploy/cloudflare/wrangler.toml",
         "deploy/opentofu/cloudflare",
-        "deploy/opentofu/takoform",
         "package.json",
         "takosumi-composition-source.json",
         "scripts/build-worker-release-artifact.ts",
