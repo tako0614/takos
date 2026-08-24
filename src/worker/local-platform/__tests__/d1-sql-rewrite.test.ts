@@ -1,5 +1,6 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
+import { readFile } from "node:fs/promises";
 
 import {
   normalizePostgresMigrationSql,
@@ -107,6 +108,199 @@ test("normalizePostgresMigrationSql skips sqlite table-rebuild repair", () => {
   );
 });
 
+test("agent authority expand migration keeps both SQL lineages additive", async () => {
+  const source = await readFile(
+    new URL(
+      "../../../../db/migrations-control/migrations/0112_run_context_revisions.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(
+    "0112_run_context_revisions.sql",
+    source,
+  );
+
+  for (
+    const table of [
+      "run_grants",
+      "run_context_revisions",
+      "mcp_tool_confirmation_identities",
+      "mcp_confirmation_run_grants",
+    ]
+  ) {
+    assertEquals(
+      normalized.includes(`CREATE TABLE IF NOT EXISTS "${table}"`),
+      true,
+    );
+  }
+  assertEquals(normalized.includes("DROP TABLE"), false);
+  assertEquals(normalized.includes('ALTER TABLE "runs"'), false);
+  assertEquals(normalized.includes("json_valid"), false);
+});
+
+test("agent deletion authority migration stays additive across SQL lineages", async () => {
+  const source = await readFile(
+    new URL(
+      "../../../../db/migrations-control/migrations/0113_agent_resource_deletion_authority.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(
+    "0113_agent_resource_deletion_authority.sql",
+    source,
+  );
+
+  for (
+    const table of [
+      "agent_resource_tombstones",
+      "agent_resource_deletion_outbox",
+    ]
+  ) {
+    assertEquals(
+      normalized.includes(`CREATE TABLE IF NOT EXISTS "${table}"`),
+      true,
+    );
+  }
+  assertEquals(normalized.includes("DROP TABLE"), false);
+  assertEquals(normalized.includes("ALTER TABLE"), false);
+  assertEquals(normalized.includes("json_valid"), false);
+});
+
+test("progressive RunContext authority migration stays additive across SQL lineages", async () => {
+  const source = await readFile(
+    new URL(
+      "../../../../db/migrations-control/migrations/0114_run_context_resource_authority.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(
+    "0114_run_context_resource_authority.sql",
+    source,
+  );
+
+  assertEquals(
+    normalized.includes(
+      'CREATE TABLE IF NOT EXISTS "run_context_resource_refs"',
+    ),
+    true,
+  );
+  for (
+    const column of [
+      '"current_context_revision"',
+      '"terminal_reason"',
+      '"activation_event_key"',
+      '"identity_extension_version"',
+      '"active_context_revision"',
+      '"active_context_digest"',
+    ]
+  ) {
+    assertEquals(normalized.includes(column), true);
+  }
+  assertEquals(normalized.includes("DROP TABLE"), false);
+  assertEquals(normalized.includes("DROP COLUMN"), false);
+  assertEquals(normalized.includes("json_valid"), false);
+});
+
+test("model-call authority migration stays additive across SQL lineages", async () => {
+  const source = await readFile(
+    new URL(
+      "../../../../db/migrations-control/migrations/0115_run_model_call_authority.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(
+    "0115_run_model_call_authority.sql",
+    source,
+  );
+
+  assertEquals(
+    normalized.includes('CREATE TABLE IF NOT EXISTS "run_model_calls"'),
+    true,
+  );
+  assertEquals(
+    normalized.includes('FOREIGN KEY ("run_id", "context_revision")'),
+    true,
+  );
+  assertEquals(normalized.includes("DROP TABLE"), false);
+  assertEquals(normalized.includes("ALTER TABLE"), false);
+  assertEquals(normalized.includes("json_valid"), false);
+});
+
+test("immutable Skill and resource migrations stay additive across SQL lineages", async () => {
+  for (
+    const fileName of [
+      "0116_skill_revisions.sql",
+      "0117_skill_resource_revisions.sql",
+    ]
+  ) {
+    const source = await readFile(
+      new URL(
+        `../../../../db/migrations-control/migrations/${fileName}`,
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const normalized = normalizePostgresMigrationSql(fileName, source);
+    assertEquals(normalized.includes("DROP TABLE"), false);
+    assertEquals(normalized.includes("DROP COLUMN"), false);
+    assertEquals(normalized.includes("ALTER TABLE"), false);
+    assertEquals(normalized.includes("json_valid"), false);
+  }
+  const resourceSource = await readFile(
+    new URL(
+      "../../../../db/migrations-control/migrations/0117_skill_resource_revisions.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalizedResource = normalizePostgresMigrationSql(
+    "0117_skill_resource_revisions.sql",
+    resourceSource,
+  );
+  assertEquals(
+    normalizedResource.includes(
+      'CREATE TABLE IF NOT EXISTS "skill_resource_revisions"',
+    ),
+    true,
+  );
+  assertEquals(
+    normalizedResource.includes('REFERENCES "skill_revisions"'),
+    true,
+  );
+});
+
+test("ToolDescriptor revision migration stays additive across SQL lineages", async () => {
+  const fileName = "0118_tool_descriptor_revisions.sql";
+  const source = await readFile(
+    new URL(
+      `../../../../db/migrations-control/migrations/${fileName}`,
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(fileName, source);
+
+  for (
+    const table of [
+      "tool_descriptor_revisions",
+      "run_context_tool_descriptor_refs",
+    ]
+  ) {
+    assertEquals(
+      normalized.includes(`CREATE TABLE IF NOT EXISTS "${table}"`),
+      true,
+    );
+  }
+  assertEquals(normalized.includes("DROP TABLE"), false);
+  assertEquals(normalized.includes("DROP COLUMN"), false);
+  assertEquals(normalized.includes("ALTER TABLE"), false);
+  assertEquals(normalized.includes("json_valid"), false);
+});
+
 test("splitSqlStatements handles doubled-quote escapes (no backslash escape)", () => {
   // Standard SQL `''` escape inside a literal must NOT terminate the literal.
   assertEquals(
@@ -129,5 +323,25 @@ test("splitSqlStatements handles doubled double-quote in identifiers", () => {
   assertEquals(
     splitSqlStatements('SELECT "weird""col" FROM t; SELECT 3'),
     ['SELECT "weird""col" FROM t', "SELECT 3"],
+  );
+});
+
+test("normalizePostgresMigrationSql drops SQLite triggers that carry leading comments", async () => {
+  // 0111 は CREATE TRIGGER の直前に説明のコメントを置いている。コメントを
+  // 読み飛ばさずに判定していたころは、この文がそのまま Postgres へ渡り、
+  // IF NOT EXISTS を解釈できずに空のデータベースからの起動が止まっていた。
+  const fileName = "0111_workspace_deletion_receipts.sql";
+  const sql = await readFile(
+    new URL(
+      `../../../../db/migrations-control/migrations/${fileName}`,
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const normalized = normalizePostgresMigrationSql(fileName, sql);
+  assertEquals(/CREATE\s+TRIGGER/i.test(normalized), false);
+  assertEquals(
+    normalized.includes('CREATE TABLE IF NOT EXISTS "workspace_deletion_receipts"'),
+    true,
   );
 });

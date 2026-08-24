@@ -192,9 +192,13 @@ function terminateSqlStatement(statement: string): string {
 }
 
 function isSqliteCreateTriggerStatement(statement: string): boolean {
-  return /^CREATE\s+TRIGGER\s+IF\s+NOT\s+EXISTS\s+/i.test(statement) &&
-    /\bBEGIN\b/i.test(statement) &&
-    /\bEND;?\s*$/i.test(statement);
+  // 直前の行コメントは文に含まれたまま渡ってくるので、読み飛ばしてから判定する。
+  // 0111 のようにコメントを付けた CREATE TRIGGER は、これが無いと素通りして
+  // Postgres へ届き、IF NOT EXISTS を解釈できずに構文エラーで止まる。
+  const body = statement.replace(/^(?:\s*--[^\n]*\n)+/, "").trimStart();
+  return /^CREATE\s+TRIGGER\s+IF\s+NOT\s+EXISTS\s+/i.test(body) &&
+    /\bBEGIN\b/i.test(body) &&
+    /\bEND;?\s*$/i.test(body);
 }
 
 export function rewriteInsertOrIgnoreForPostgres(statement: string): string {
