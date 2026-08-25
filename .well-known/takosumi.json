@@ -91,7 +91,7 @@
             },
             "type": "string",
             "format": "url",
-            "required": true,
+            "required": false,
             "label": {
               "ja": "Takosumi Accounts URL",
               "en": "Takosumi Accounts URL"
@@ -110,7 +110,7 @@
             },
             "type": "string",
             "format": "url",
-            "required": true,
+            "required": false,
             "label": {
               "ja": "Takosumi Accounts発行者",
               "en": "Takosumi Accounts issuer"
@@ -128,7 +128,7 @@
               "kind": "user"
             },
             "type": "string",
-            "required": true,
+            "required": false,
             "label": {
               "ja": "Takosumi Accountsクライアント",
               "en": "Takosumi Accounts client"
@@ -147,7 +147,7 @@
             },
             "type": "string",
             "format": "url",
-            "required": true,
+            "required": false,
             "label": {
               "ja": "OIDCリダイレクトURL",
               "en": "OIDC redirect URL"

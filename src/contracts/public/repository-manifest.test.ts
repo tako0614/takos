@@ -130,28 +130,28 @@ test("the Repository manifest requires explicit operator-owned OIDC client metad
       source: { kind: "user" },
       type: "string",
       format: "url",
-      required: true,
+      required: false,
     },
     {
       name: "takosumi_accounts_issuer_url",
       source: { kind: "user" },
       type: "string",
       format: "url",
-      required: true,
+      required: false,
     },
     {
       name: "takosumi_accounts_client_id",
       source: { kind: "user" },
       type: "string",
       format: undefined,
-      required: true,
+      required: false,
     },
     {
       name: "takosumi_accounts_redirect_uri",
       source: { kind: "user" },
       type: "string",
       format: "url",
-      required: true,
+      required: false,
     },
   ]);
 });
