@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 const root = new URL("../../../", import.meta.url);
 const contract = JSON.parse(
@@ -54,4 +55,42 @@ test("the current agent service uses its declared container image", () => {
   expect(agentDockerfile).toContain("ENV PORT=8080");
   expect(agentDockerfile).toContain("EXPOSE 8080");
   expect(cloudflareRuntime).toContain('image = "../../containers/agent/Dockerfile"');
+});
+
+test("Takos source imports Takosumi only through contract modules", async () => {
+  const sourcePatterns = [
+    "src/**/*.{ts,tsx,js,mjs,cjs}",
+    "web/src/**/*.{ts,tsx,js,mjs,cjs}",
+    "scripts/**/*.{ts,tsx,js,mjs,cjs}",
+    "website/src/**/*.{ts,tsx,js,mjs,cjs}",
+  ] as const;
+  const importSpecifier =
+    /(?:\bfrom\s+|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"']+)["']/gu;
+  const forbidden: string[] = [];
+
+  for (const pattern of sourcePatterns) {
+    for await (
+      const path of new Bun.Glob(pattern).scan({
+        cwd: fileURLToPath(root),
+        onlyFiles: true,
+      })
+    ) {
+      const source = await readFile(new URL(path, root), "utf8");
+      for (const match of source.matchAll(importSpecifier)) {
+        const specifier = match[1] ?? "";
+        if (!/(?:^|\/)takosumi\//u.test(specifier)) continue;
+        if (
+          /(?:^|\/)takosumi\/(?:contract|accounts\/contract)(?:\/|$)/u.test(
+            specifier,
+          )
+        ) {
+          continue;
+        }
+        const line = source.slice(0, match.index).split("\n").length;
+        forbidden.push(`${path}:${line}:${specifier}`);
+      }
+    }
+  }
+
+  expect(forbidden.sort()).toEqual([]);
 });

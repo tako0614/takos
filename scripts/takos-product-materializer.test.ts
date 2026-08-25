@@ -30,6 +30,10 @@ const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
 const workspaceId = "workspace_takos_1";
+// Wrangler starts a real Node subprocess for config validation. Give that
+// boundary enough time on a loaded portable runner while retaining a bounded
+// failure instead of Bun's unrelated five-second default.
+const WRANGLER_DRY_RUN_TEST_TIMEOUT_MS = 30_000;
 const packageManifest = (await Bun.file(
   join(import.meta.dir, "..", "package.json"),
 ).json()) as { version: string };
@@ -470,7 +474,7 @@ describe("materializer input and topology", () => {
     if (exitCode !== 0) {
       throw new Error(`Wrangler dry-run failed:\n${stdout}\n${stderr}`);
     }
-  });
+  }, WRANGLER_DRY_RUN_TEST_TIMEOUT_MS);
 
   test("runs the locked Wrangler entrypoint with the supported Node runtime", async () => {
     const root = await mkdtemp(join(tmpdir(), "takos-materializer-node-"));

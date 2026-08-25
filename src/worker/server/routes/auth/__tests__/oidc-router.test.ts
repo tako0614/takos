@@ -1,5 +1,4 @@
 import { test } from "bun:test";
-import { RUN_INTEGRATION_TESTS } from "@takos/test/integration";
 import { Hono } from "hono";
 import * as jose from "jose";
 import { createClient } from "@libsql/client";
@@ -10,12 +9,10 @@ import {
   assertStringIncludes,
 } from "@takos/test/assert";
 import { mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { createEphemeralAccountsHandler } from "../../../../../../../takosumi/accounts/service/src/mod.ts";
 import * as schema from "../../../../infra/db/schema.ts";
 import { accounts, authIdentities } from "../../../../infra/db/schema.ts";
 import { generateCodeChallenge } from "../../../../application/services/identity/oidc-pkce.ts";
@@ -803,64 +800,6 @@ test("Accounts delegation retains the current refresh token when rotation is omi
   }
 });
 
-// Env-coupled: starts a real Takosumi Accounts server and performs a live
-// fetch against the issued authorize URL. Skipped in the default gate; run with
-// TAKOS_INTEGRATION=1.
-test.skipIf(!RUN_INTEGRATION_TESTS)(
-  "OIDC login reaches real Takosumi Accounts while default platform readiness gate stays closed",
-  async () => {
-    const accountsServer = await startAccountsServer({
-      clientId: "takos-client",
-      redirectUri: "https://takos.example.test/auth/oidc/callback",
-      subject: "tsub_oidc_owner",
-    });
-    const dir = await makeTempDir();
-    const authDb = await createAuthTestDb(`${dir}/real-accounts-oidc.sqlite`);
-    const states: StoredOidcState[] = [];
-    const createdSessions: CreatedSession[] = [];
-
-    try {
-      const env = createEnv({
-        states,
-        createdSessions,
-        sqlBinding: authDb.db,
-        oidcIssuerUrl: accountsServer.url,
-        oidcClientId: "takos-client",
-        oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-integration",
-      });
-      const app = createApp();
-
-      const loginResponse = await app.fetch(
-        new Request(
-          "https://takos.example.test/auth/oidc/login?return_to=%2Fapps",
-        ),
-        env,
-      );
-      assertEquals(loginResponse.status, 302);
-      assertEquals(states.length, 1);
-      const authorizeUrl = loginResponse.headers.get("location");
-      assertExists(authorizeUrl);
-
-      const authorizeResponse = await fetch(authorizeUrl, {
-        redirect: "manual",
-      });
-      assertEquals(authorizeResponse.status, 503);
-      const authorizeBody = (await authorizeResponse.json()) as {
-        error?: string;
-      };
-      assertEquals(authorizeBody.error, "launch_readiness_not_complete");
-      assertEquals(states.length, 1);
-      assertEquals(createdSessions.length, 0);
-    } finally {
-      authDb.client.close();
-      await removeTempDir(dir);
-      await accountsServer.stop();
-    }
-  },
-  15_000,
-);
-
 test("OIDC callback does NOT link a new subject to an existing account by verified email (account-takeover prevention)", async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
@@ -1028,90 +967,6 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     await removeTempDir(dir);
   }
 });
-
-type AccountsServer = {
-  url: string;
-  stop: () => Promise<void>;
-};
-
-async function startAccountsServer(input: {
-  clientId: string;
-  redirectUri: string;
-  subject: string;
-}): Promise<AccountsServer> {
-  const port = await freePort();
-  const url = `http://127.0.0.1:${port}`;
-  const handler = await createEphemeralAccountsHandler({
-    issuer: url,
-    subject: input.subject,
-    clients: [
-      {
-        clientId: input.clientId,
-        redirectUris: [input.redirectUri],
-      },
-    ],
-    platformAccess: { status: "closed" },
-  });
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port,
-    fetch: handler,
-  });
-
-  try {
-    await waitForAccounts(url);
-  } catch (error) {
-    server.stop(true);
-    throw new Error(
-      `Takosumi Accounts did not start: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-
-  return {
-    url,
-    stop: async () => {
-      server.stop(true);
-    },
-  };
-}
-
-async function waitForAccounts(accountsUrl: string): Promise<void> {
-  const deadline = Date.now() + 10_000;
-  let lastError = "";
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(
-        `${accountsUrl}/.well-known/openid-configuration`,
-      );
-      if (response.ok) {
-        await response.body?.cancel();
-        return;
-      }
-      lastError = `HTTP ${response.status}`;
-      await response.body?.cancel();
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(lastError);
-}
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
-  return port;
-}
 
 test("OIDC login route redirects to issuer authorization endpoint", async () => {
   const states: StoredOidcState[] = [];

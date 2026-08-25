@@ -7,6 +7,11 @@ import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
 import { readTakosumiCompositionSourceIdentity } from "./check-takosumi-composition-source.ts";
 import { smokeWorkerReleaseArchive } from "./smoke-worker-release-artifact.ts";
 
+// The smoke helper owns a 30-second workerd startup deadline followed by two
+// sequential fetches capped at 10 seconds each. Keep Bun's test timeout above
+// that exact bound so a loaded runner returns the product-owned diagnostic.
+const WRANGLER_SMOKE_TEST_TIMEOUT_MS = 60_000;
+
 test("boots exact release archive bytes and exercises Takos minimum HTTP contracts without an OIDC secret", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "takos-worker-smoke-test-"));
   const bundleDir = join(temporary, "bundle");
@@ -79,4 +84,4 @@ export default {
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
-});
+}, WRANGLER_SMOKE_TEST_TIMEOUT_MS);
