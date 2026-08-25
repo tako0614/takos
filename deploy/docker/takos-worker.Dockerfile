@@ -1,4 +1,4 @@
-FROM oven/bun:1.3
+FROM oven/bun:1.4
 
 WORKDIR /workspace/takos
 
