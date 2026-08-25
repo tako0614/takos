@@ -14,6 +14,10 @@ breaking changes bump the minor.
   attempt while keeping its idempotency key stable across transport retries.
 - Use the canonical `/api/v1` Takosumi Interface and AI endpoints throughout
   the Worker, agent runtime, tests, and product UI.
+- Make Takosumi Accounts integration an explicit operator-registered public
+  OIDC client while keeping self-host installs without Accounts valid.
+- Stop requiring a host-provided AI gateway Interface in the repository
+  install manifest; the product materializer owns the native runtime binding.
 
 ## 0.12.3 — On-demand executor capacity
 
