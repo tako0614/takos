@@ -35,9 +35,12 @@ snapshotとして扱い、identity ownership は `(issuer, sub)` だけで決め
 ## Capsule API delegation
 
 Takosumi Accounts の operator は Takos 用の public OIDC client を通常の account-plane 手順で明示登録し、
-`openid profile email offline_access capsules:read capsules:write` と正確な redirect URI を許可します。Takos は
-access/refresh token と UserInfo の親 Workspace binding を app-local DB に暗号化保存します。app launcher の
-server-to-server call はこのユーザー委任tokenを使い、Accounts側でも scope、subject、Workspaceを再検証します。
+`openid profile email offline_access capsules:read capsules:write` と正確な redirect URI を許可します。install context は
+対象の親 Workspace id を非 secret の `TAKOSUMI_WORKSPACE_ID` として Takos に渡します。Takos はその selector を
+authorize query と一回限りの OIDC state に保存し、callback で検証済み UserInfo の canonical Workspace claim と完全一致
+しない限り、user provisioning や Accounts delegation の保存まで進みません。一致した場合だけ access/refresh token と
+Workspace binding を app-local DB に暗号化保存します。app launcher の server-to-server call はこのユーザー委任tokenを使い、
+Accounts側でも scope、subject、Workspaceを再検証します。membership 配列が一つだけという理由で Workspace を推測しません。
 token や Workspace binding を OpenTofu state / Output に保存せず、Capsule install が OIDC client を自動生成することも
 ありません。
 
@@ -47,8 +50,9 @@ Workspaceを作るたびにTakosumi Workspaceを増やしません。
 ## オペレーターチェックリスト
 
 - Takosumi Accounts plane の issuer が `OIDC_ISSUER_URL` の `/.well-known/openid-configuration` で解決できること
-- `OIDC_ISSUER_URL` / public `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` が登録済み client と完全一致し、通常の install input
-  として明示されること
+- `OIDC_ISSUER_URL` / public `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` が登録済み client と完全一致すること
+- `TAKOSUMI_WORKSPACE_ID` が install context の対象 Workspace と完全一致し、secret store ではなく非 secret Worker var として
+  materialize されること
 - 登録済み client が `openid profile email offline_access capsules:read capsules:write` を許可し、UserInfo が単一の親
   Workspace binding を返すこと
 - `ENCRYPTION_KEY` が設定され、委任tokenの平文がlog、OpenTofu state、Outputに出ないこと

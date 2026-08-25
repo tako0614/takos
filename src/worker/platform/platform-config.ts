@@ -30,6 +30,8 @@ export type PlatformConfig = {
   oidcClientId?: string;
   oidcClientSecret?: string;
   oidcRedirectUri?: string;
+  /** Non-secret Takosumi Workspace selector supplied by install context. */
+  takosumiWorkspaceId?: string;
   platformPrivateKey?: string;
   platformPublicKey?: string;
   encryptionKey?: string;

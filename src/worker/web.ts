@@ -283,26 +283,11 @@ app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
   c.json(createTakosDistributionProductCapabilities(new URL(c.req.url).origin)),
 );
 
-app.get("/.well-known/takos", (c) => {
-  const result = createTakosProductWellKnown(new URL(c.req.url).origin, c.env);
-  if (!result.ok) {
-    // Fail closed: a document without the external issuer and this host's
-    // mobile client id is not a usable host advertisement, and shipping a
-    // partial one crashed the mobile shells at sign-in. `no-store` so a
-    // misconfigured window is not cached past the operator's fix.
-    return c.json(
-      {
-        error: "mobile_discovery_unconfigured",
-        message: `/.well-known/takos requires ${result.missing.join(", ")} to be set.`,
-      },
-      503,
-      { "Cache-Control": "no-store" },
-    );
-  }
-  return c.json(result.document, 200, {
+app.get("/.well-known/takos", (c) =>
+  c.json(createTakosProductWellKnown(new URL(c.req.url).origin), 200, {
     "Cache-Control": "public, max-age=300",
-  });
-});
+  }),
+);
 
 // ============================================================================
 // Unified container-host callbacks

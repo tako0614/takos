@@ -74,7 +74,6 @@ function takosDistributionDiscoveryOptions(
       external_oidc_login: false,
       workload_identity: false,
     },
-    resourceShapesEnabled: false,
   };
 }
 

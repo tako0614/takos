@@ -169,6 +169,7 @@ type Invocation = {
   sourceSnapshotId: string;
   sourceCommit: string;
   releaseRunId: string;
+  workspaceId: string;
   outputs: TakosOutputs;
   apiToken: string;
   descriptorUrl?: string;
@@ -632,6 +633,15 @@ export function parseInvocation(
   );
   invariant(context.kind === "takosumi.release-context@v1", "release context kind is invalid");
   invariant(context.releaseRunId === releaseRunId, "release context run id drifted");
+  const workspaceId = requiredEnv(env, "TAKOSUMI_WORKSPACE_ID");
+  const contextWorkspaceId = requiredString(
+    context.workspaceId,
+    "release context workspaceId",
+  );
+  invariant(
+    contextWorkspaceId === workspaceId,
+    "release context workspace id drifted from install context",
+  );
   invariant(
     stableJson(context.outputs) === stableJson(outputsValue),
     "release context outputs drifted from TAKOSUMI_OUTPUTS_JSON",
@@ -658,6 +668,7 @@ export function parseInvocation(
       sourceSnapshotId,
       sourceCommit,
       releaseRunId,
+      workspaceId,
       outputs,
       apiToken,
     };
@@ -676,6 +687,7 @@ export function parseInvocation(
     sourceSnapshotId,
     sourceCommit,
     releaseRunId,
+    workspaceId,
     outputs,
     apiToken,
     descriptorUrl,
@@ -1044,6 +1056,7 @@ function queueConsumers(outputs: TakosOutputs) {
 export function renderWranglerConfig(input: {
   outputs: TakosOutputs;
   descriptor: ReleaseDescriptor;
+  workspaceId: string;
   artifactRoot: string;
   sourceRoot: string;
 }): JsonRecord {
@@ -1051,6 +1064,21 @@ export function renderWranglerConfig(input: {
   const names = containerNames(outputs.workerName);
   const publicUrl = new URL(outputs.publicUrl);
   const usesWorkersDev = publicUrl.hostname.endsWith(".workers.dev");
+  if (
+    outputs.workerEnv.TAKOSUMI_WORKSPACE_ID !== undefined &&
+    outputs.workerEnv.TAKOSUMI_WORKSPACE_ID !== input.workspaceId
+  ) {
+    invariant(
+      false,
+      "worker_env.TAKOSUMI_WORKSPACE_ID conflicts with install context",
+    );
+  }
+  const workerEnv = {
+    ...outputs.workerEnv,
+    // This value comes from Takosumi's install invocation context, not from a
+    // repository-owned manifest or a secret file.
+    TAKOSUMI_WORKSPACE_ID: input.workspaceId,
+  };
   return {
     name: outputs.workerName,
     account_id: outputs.accountId,
@@ -1068,7 +1096,7 @@ export function renderWranglerConfig(input: {
       ? {}
       : { routes: [{ pattern: publicUrl.hostname, custom_domain: true }] }),
     observability: { enabled: true, logs: { head_sampling_rate: 0.1 } },
-    vars: outputs.workerEnv,
+    vars: workerEnv,
     triggers: { crons: ["3,18,33,48 * * * *", "5 * * * *"] },
     assets: {
       directory: join(input.artifactRoot, "assets"),
@@ -2924,6 +2952,7 @@ export async function materializePostApply(input: {
     const config = renderWranglerConfig({
       outputs: invocation.outputs,
       descriptor,
+      workspaceId: invocation.workspaceId,
       artifactRoot,
       sourceRoot,
     });

@@ -29,6 +29,7 @@ import { readTakosumiCompositionSourceIdentity } from "./check-takosumi-composit
 const accountId = "a".repeat(32);
 const sourceCommit = "b".repeat(40);
 const sourceSnapshotId = "snapshot_takos_1";
+const workspaceId = "workspace_takos_1";
 const packageManifest = (await Bun.file(
   join(import.meta.dir, "..", "package.json"),
 ).json()) as { version: string };
@@ -156,11 +157,13 @@ function invocationEnv(
     TAKOSUMI_SOURCE_SNAPSHOT_ID: sourceSnapshotId,
     TAKOSUMI_SOURCE_COMMIT: sourceCommit,
     TAKOSUMI_RELEASE_RUN_ID: "release_run_1",
+    TAKOSUMI_WORKSPACE_ID: workspaceId,
     TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
     TAKOSUMI_PROVIDER_CONFIGS_JSON: JSON.stringify(providerConfigurations),
     TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
       kind: "takosumi.release-context@v1",
       releaseRunId: "release_run_1",
+      workspaceId,
       outputs: rawOutputs,
     }),
     CLOUDFLARE_API_TOKEN: "cloudflare-provider-token",
@@ -242,6 +245,7 @@ describe("materializer input and topology", () => {
     const config = renderWranglerConfig({
       outputs,
       descriptor: descriptor(`sha256:${"f".repeat(64)}`),
+      workspaceId,
       artifactRoot: "/tmp/artifact",
       sourceRoot: "/source",
     });
@@ -249,6 +253,7 @@ describe("materializer input and topology", () => {
     expect(config.vars).toMatchObject({
       ADMIN_DOMAIN: "takos.example.test",
       CF_ACCOUNT_ID: accountId,
+      TAKOSUMI_WORKSPACE_ID: workspaceId,
     });
     expect((config.containers as unknown[]).length).toBe(3);
     expect((config.queues as { consumers: unknown[] }).consumers.length).toBe(
@@ -351,7 +356,10 @@ describe("materializer input and topology", () => {
 
   test("requires canonical host source identity and rejects duplicate credentials", () => {
     const env = invocationEnv("pre_destroy");
-    expect(parseInvocation("pre_destroy", env).sourceCommit).toBe(sourceCommit);
+    expect(parseInvocation("pre_destroy", env)).toMatchObject({
+      sourceCommit,
+      workspaceId,
+    });
     expect(() =>
       parseInvocation("pre_destroy", {
         ...env,
@@ -361,6 +369,23 @@ describe("materializer input and topology", () => {
     expect(() =>
       parseInvocation("pre_destroy", { ...env, CF_API_TOKEN: "ambiguous" }),
     ).toThrow(/not accepted/u);
+    expect(() =>
+      parseInvocation("pre_destroy", {
+        ...env,
+        TAKOSUMI_WORKSPACE_ID: undefined,
+      }),
+    ).toThrow(/TAKOSUMI_WORKSPACE_ID/u);
+    expect(() =>
+      parseInvocation("pre_destroy", {
+        ...env,
+        TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
+          kind: "takosumi.release-context@v1",
+          releaseRunId: "release_run_1",
+          workspaceId: "workspace-other",
+          outputs: rawOutputs,
+        }),
+      }),
+    ).toThrow(/workspace id drifted/u);
   });
 
   test("accepts the release archive and rejects link entries before extraction", async () => {
@@ -405,6 +430,7 @@ describe("materializer input and topology", () => {
         renderWranglerConfig({
           outputs: parseTakosOutputs(rawOutputs),
           descriptor: descriptor(`sha256:${"f".repeat(64)}`),
+          workspaceId,
           artifactRoot,
           sourceRoot,
         }),

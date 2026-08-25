@@ -164,6 +164,8 @@ export interface Env
   OIDC_CLIENT_ID?: string;
   OIDC_CLIENT_SECRET?: string;
   OIDC_REDIRECT_URI?: string;
+  /** Non-secret Takosumi Workspace selector supplied by install context. */
+  TAKOSUMI_WORKSPACE_ID?: string;
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;

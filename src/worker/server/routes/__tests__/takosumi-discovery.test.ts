@@ -13,7 +13,7 @@ test("Takos distribution discovery avoids Takosumi control-plane claims", () => 
   expect(discovery.features.oidc).toBe(false);
   expect(discovery.features.stacks).toBe(false);
   expect(discovery.features.opentofu_runner).toBe(false);
-  expect(discovery.features.resource_shapes).toBe(false);
+  expect(discovery.features).not.toHaveProperty("resource_shapes");
 
   const capabilities =
     createTakosDistributionProductCapabilities("https://takos.test");

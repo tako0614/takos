@@ -57,6 +57,7 @@ type PlatformConfigInput = {
   oidcClientId?: string;
   oidcClientSecret?: string;
   oidcRedirectUri?: string;
+  takosumiWorkspaceId?: string;
   platformPrivateKey?: string;
   platformPublicKey?: string;
   encryptionKey?: string;
@@ -97,6 +98,7 @@ export function createPlatformConfig(
     oidcClientId: input.oidcClientId,
     oidcClientSecret: input.oidcClientSecret,
     oidcRedirectUri: input.oidcRedirectUri,
+    takosumiWorkspaceId: input.takosumiWorkspaceId,
     platformPrivateKey: input.platformPrivateKey,
     platformPublicKey: input.platformPublicKey,
     encryptionKey: input.encryptionKey,
@@ -205,6 +207,7 @@ export function buildPlatformFromEnv<TBindings extends object>(
     oidcClientId: getString(bindings, "OIDC_CLIENT_ID"),
     oidcClientSecret: getString(bindings, "OIDC_CLIENT_SECRET"),
     oidcRedirectUri: getString(bindings, "OIDC_REDIRECT_URI"),
+    takosumiWorkspaceId: getString(bindings, "TAKOSUMI_WORKSPACE_ID"),
     platformPrivateKey: getString(bindings, "PLATFORM_PRIVATE_KEY"),
     platformPublicKey: getString(bindings, "PLATFORM_PUBLIC_KEY"),
     encryptionKey: getString(bindings, "ENCRYPTION_KEY"),

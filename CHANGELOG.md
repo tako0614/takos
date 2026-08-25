@@ -6,6 +6,15 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.6 — Workspace-bound Accounts login
+
+- Bind Takosumi Accounts authorization, UserInfo, and delegated credentials to
+  the exact Workspace selected by the Takosumi install context.
+- Publish the canonical Takos product discovery document at
+  `/.well-known/takos` instead of failing at runtime on a stale response shape.
+- Keep public PKCE clients secretless while rejecting ambiguous or drifted
+  Workspace claims before local identity or session writes.
+
 ## 0.12.5 — Public OIDC client materialization
 
 - Allow public PKCE OIDC clients to omit `OIDC_CLIENT_SECRET` from the runtime

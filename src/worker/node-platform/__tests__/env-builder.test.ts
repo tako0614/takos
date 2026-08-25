@@ -16,6 +16,7 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
         const env = await createNodeWebEnv();
         process.stdout.write(JSON.stringify({
           clientId: env.OIDC_CLIENT_ID,
+          workspaceId: env.TAKOSUMI_WORKSPACE_ID,
           hasSecret: Boolean(env.OIDC_CLIENT_SECRET),
         }));
       } finally {
@@ -30,6 +31,7 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
       ENVIRONMENT: "production",
       OIDC_ISSUER_URL: "https://accounts.example",
       OIDC_CLIENT_ID: "takos-public-client",
+      TAKOSUMI_WORKSPACE_ID: "workspace-public-client",
       PLATFORM_PRIVATE_KEY: "production-private-key",
       PLATFORM_PUBLIC_KEY: "production-public-key",
       ENCRYPTION_KEY: "production-encryption-key",
@@ -50,6 +52,7 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
     ).toBe(0);
     expect(JSON.parse(stdout)).toEqual({
       clientId: "takos-public-client",
+      workspaceId: "workspace-public-client",
       hasSecret: false,
     });
   } finally {
