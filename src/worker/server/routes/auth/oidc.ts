@@ -30,6 +30,7 @@ import { logError } from "../../../shared/utils/logger.ts";
 import type { OptionalAuthRouteEnv } from "../route-auth.ts";
 import { errorPage } from "./html.ts";
 import { provisionOidcUser, sanitizeReturnTo } from "./provisioning.ts";
+import { exchangeAuthorizationCode } from "./oidc-token-exchange.ts";
 import {
   storeAccountsDelegation,
   TAKOS_ACCOUNTS_OAUTH_SCOPES,
@@ -64,15 +65,6 @@ type OidcDiscoveryDocument = {
   token_endpoint: string;
   jwks_uri: string;
   userinfo_endpoint?: string;
-};
-
-type OidcTokenResponse = {
-  access_token?: string;
-  refresh_token?: string;
-  id_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  scope?: string;
 };
 
 type OidcUser = {
@@ -539,37 +531,6 @@ function serverOidcEndpoint(
   serverUrl.search = publicUrl.search;
   serverUrl.hash = "";
   return serverUrl.toString();
-}
-
-async function exchangeAuthorizationCode(input: {
-  tokenEndpoint: string;
-  code: string;
-  clientId: string;
-  clientSecret?: string;
-  redirectUri: string;
-  codeVerifier: string;
-}): Promise<OidcTokenResponse> {
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    code: input.code,
-    client_id: input.clientId,
-    redirect_uri: input.redirectUri,
-    code_verifier: input.codeVerifier,
-  });
-  if (input.clientSecret) body.set("client_secret", input.clientSecret);
-  const response = await fetch(input.tokenEndpoint, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body,
-    signal: AbortSignal.timeout(OIDC_FETCH_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`OIDC token endpoint returned ${response.status}`);
-  }
-  return await response.json() as OidcTokenResponse;
 }
 
 async function verifyIdToken(input: {

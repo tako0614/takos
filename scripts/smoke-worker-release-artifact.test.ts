@@ -7,7 +7,7 @@ import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
 import { readTakosumiCompositionSourceIdentity } from "./check-takosumi-composition-source.ts";
 import { smokeWorkerReleaseArchive } from "./smoke-worker-release-artifact.ts";
 
-test("boots exact release archive bytes and exercises Takos minimum HTTP contracts", async () => {
+test("boots exact release archive bytes and exercises Takos minimum HTTP contracts without an OIDC secret", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "takos-worker-smoke-test-"));
   const bundleDir = join(temporary, "bundle");
   const assetsDir = join(temporary, "assets");
@@ -74,6 +74,7 @@ export default {
         apiPath: "/api/v1",
       },
     });
+    expect(result.api.status).not.toBe(503);
     expect(result.archiveDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
   } finally {
     await rm(temporary, { recursive: true, force: true });

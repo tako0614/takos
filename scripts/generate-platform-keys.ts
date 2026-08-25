@@ -3,22 +3,25 @@
 /**
  * Generate the Takos product worker's deployment secrets for an environment.
  *
- * Takos is a self-hostable unified worker: you deploy it onto your own infra
- * and it runs its own embedded accounts plane (its origin is its own OIDC
- * issuer). These are that worker's signing / encryption / internal-RPC secrets.
+ * Takos is a self-hostable product worker and an OIDC client/resource server;
+ * it does not embed an Accounts issuer. These are its signing, encryption,
+ * optional confidential-client, and internal-RPC secrets.
  *
- * Produces six secret files under `.secrets/<env>/` relative to the current
+ * Produces five secret files under `.secrets/<env>/` relative to the current
  * working directory (override with `--output=<dir>`):
  *
  * - PLATFORM_PRIVATE_KEY   — RSA 2048 PKCS#8 PEM
  * - PLATFORM_PUBLIC_KEY    — RSA 2048 SPKI PEM
  * - ENCRYPTION_KEY         — 32 byte base64 (data encryption key)
- * - OIDC_CLIENT_SECRET     — 32 byte hex (confidential OIDC client)
  * - TAKOS_AGENT_START_TOKEN — 32 byte hex (executor-host -> agent /start)
  * - TAKOS_INTERNAL_API_SECRET — 32 byte hex (internal tenant API)
  *
+ * Public OIDC clients do not need a client secret. Pass `--confidential-oidc`
+ * only when the registered client is confidential; that opt-in adds the
+ * generated `OIDC_CLIENT_SECRET` file and runtime key.
+ *
  * With `--runtime-json`, also emits `takos-runtime-secrets.json` containing
- * exactly those six names for direct use as `TAKOS_RUNTIME_SECRETS_FILE`.
+ * exactly the generated names for direct use as `TAKOS_RUNTIME_SECRETS_FILE`.
  *
  * When `--per-cloud` is supplied, ALSO emits an independent per-cloud
  * encryption key for each cloud partition (cloudflare / aws / gcp / k8s /
@@ -33,8 +36,7 @@
  *   bun run generate:keys -- --env=local
  *   bun \
  *     scripts/generate-platform-keys.ts --env=local [--force] [--output=<dir>] \
- *     [--runtime-json] \
- *     [--per-cloud]
+ *     [--runtime-json] [--per-cloud] [--confidential-oidc]
  */
 
 import { resolve } from "node:path";
@@ -46,14 +48,23 @@ const SUPPORTED_ENVS = new Set<Env>(["staging", "production", "local"]);
 
 const DEFAULT_SECRETS_BASE = resolve(process.cwd(), ".secrets");
 
-const SECRET_FILES = [
+const BASE_SECRET_FILES = [
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
   "ENCRYPTION_KEY",
-  "OIDC_CLIENT_SECRET",
   "TAKOS_AGENT_START_TOKEN",
   "TAKOS_INTERNAL_API_SECRET",
 ] as const;
+const OIDC_CLIENT_SECRET_NAME = "OIDC_CLIENT_SECRET" as const;
+type SecretName =
+  | (typeof BASE_SECRET_FILES)[number]
+  | typeof OIDC_CLIENT_SECRET_NAME;
+
+function secretFiles(confidentialOidc: boolean): readonly SecretName[] {
+  return confidentialOidc
+    ? [...BASE_SECRET_FILES, OIDC_CLIENT_SECRET_NAME]
+    : BASE_SECRET_FILES;
+}
 
 const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
@@ -80,6 +91,7 @@ interface CliOptions {
   output: string;
   perCloud: boolean;
   runtimeJson: boolean;
+  confidentialOidc: boolean;
 }
 
 function fail(message: string): never {
@@ -93,11 +105,12 @@ function usage(): never {
       "Usage:",
       "  bun \\",
       "    scripts/generate-platform-keys.ts --env=staging|production|local \\",
-      "    [--force] [--output=<dir>] [--runtime-json] [--per-cloud]",
+      "    [--force] [--output=<dir>] [--runtime-json] [--per-cloud] [--confidential-oidc]",
       "",
-      "Generates 6 secret files used by the takos product worker.",
+      "Generates 5 secret files used by the takos product worker.",
+      "Pass --confidential-oidc for a registered confidential OIDC client.",
       "With --runtime-json, also emits takos-runtime-secrets.json containing",
-      "exactly those 6 names for TAKOS_RUNTIME_SECRETS_FILE.",
+      "exactly the generated names for TAKOS_RUNTIME_SECRETS_FILE.",
       "With --per-cloud, also emits ENCRYPTION_KEY_<CLOUD> for each of",
       "cloudflare / aws / gcp / k8s / selfhosted.",
       "Defaults --output to ./.secrets/<env>/ (relative to the current dir).",
@@ -112,6 +125,7 @@ function parseArgs(args: readonly string[]): CliOptions {
   let output: string | null = null;
   let perCloud = false;
   let runtimeJson = false;
+  let confidentialOidc = false;
 
   for (const raw of args) {
     if (raw === "--force") {
@@ -124,6 +138,10 @@ function parseArgs(args: readonly string[]): CliOptions {
     }
     if (raw === "--runtime-json") {
       runtimeJson = true;
+      continue;
+    }
+    if (raw === "--confidential-oidc") {
+      confidentialOidc = true;
       continue;
     }
     if (raw === "--help" || raw === "-h") {
@@ -169,6 +187,7 @@ function parseArgs(args: readonly string[]): CliOptions {
     output: output ?? resolve(DEFAULT_SECRETS_BASE, env),
     perCloud,
     runtimeJson,
+    confidentialOidc,
   };
 }
 
@@ -259,11 +278,12 @@ async function ensureDir(path: string): Promise<void> {
 async function checkConflicts(
   outputDir: string,
   force: boolean,
+  secretNames: readonly SecretName[],
   extraNames: readonly string[] = [],
 ): Promise<void> {
   if (force) return;
   const conflicts: string[] = [];
-  const names: readonly string[] = [...SECRET_FILES, ...extraNames];
+  const names: readonly string[] = [...secretNames, ...extraNames];
   for (const name of names) {
     const target = resolve(outputDir, name);
     if (await pathExists(target)) {
@@ -281,6 +301,32 @@ async function checkConflicts(
     );
     process.exit(1);
   }
+}
+
+/**
+ * Public-client output must have an exact secret-file closure. A previous
+ * confidential run may have left OIDC_CLIENT_SECRET beside the five public
+ * files; silently keeping that stale credential makes the selected client
+ * mode ambiguous, even when the runtime JSON is public-only. Refuse both
+ * normal and --force runs until the operator removes it explicitly or opts
+ * back into confidential generation.
+ */
+async function assertPublicOutputClosure(
+  outputDir: string,
+  confidentialOidc: boolean,
+): Promise<void> {
+  if (confidentialOidc) return;
+  const stalePath = resolve(outputDir, OIDC_CLIENT_SECRET_NAME);
+  if (!(await pathExists(stalePath))) return;
+  console.error(
+    [
+      "Refusing public-client generation with a stale OIDC_CLIENT_SECRET file:",
+      `  - ${stalePath}`,
+      "",
+      "Remove that stale file explicitly, or re-run with --confidential-oidc.",
+    ].join("\n"),
+  );
+  process.exit(1);
 }
 
 async function writeSecret(
@@ -307,6 +353,7 @@ async function writeSecret(
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+  const secretNames = secretFiles(options.confidentialOidc);
 
   const extraNames = [
     ...(options.perCloud ? perCloudSecretFiles() : []),
@@ -314,25 +361,27 @@ async function main(): Promise<void> {
   ];
 
   await ensureDir(options.output);
-  await checkConflicts(options.output, options.force, extraNames);
+  await assertPublicOutputClosure(options.output, options.confidentialOidc);
+  await checkConflicts(options.output, options.force, secretNames, extraNames);
 
   const { privatePem, publicPem } = await generateRsaKeyPair();
   const encryptionKey = generateBase64Secret(32);
-  const oidcClientSecret = generateHexSecret(32);
   const agentStartToken = generateHexSecret(32);
   const internalApiSecret = generateHexSecret(32);
 
-  const generatedSecrets: Record<(typeof SECRET_FILES)[number], string> = {
+  const generatedSecrets: Record<string, string> = {
     PLATFORM_PRIVATE_KEY: privatePem,
     PLATFORM_PUBLIC_KEY: publicPem,
     ENCRYPTION_KEY: encryptionKey,
-    OIDC_CLIENT_SECRET: oidcClientSecret,
     TAKOS_AGENT_START_TOKEN: agentStartToken,
     TAKOS_INTERNAL_API_SECRET: internalApiSecret,
   };
+  if (options.confidentialOidc) {
+    generatedSecrets[OIDC_CLIENT_SECRET_NAME] = generateHexSecret(32);
+  }
 
   const written: string[] = [];
-  for (const name of SECRET_FILES) {
+  for (const name of secretNames) {
     written.push(
       await writeSecret(options.output, name, generatedSecrets[name]),
     );

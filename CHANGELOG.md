@@ -6,6 +6,13 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.5 — Public OIDC client materialization
+
+- Allow public PKCE OIDC clients to omit `OIDC_CLIENT_SECRET` from the runtime
+  secret bundle while preserving the confidential-client exchange path.
+- Make generated runtime secrets public-client safe by requiring an explicit
+  `--confidential-oidc` opt-in before generating a client secret.
+
 ## 0.12.4 — Live Takosumi tools and short-lived AI authority
 
 - Let the agent discover Takosumi-deployed MCP capabilities and invoke them

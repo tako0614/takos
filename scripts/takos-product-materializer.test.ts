@@ -337,6 +337,18 @@ describe("materializer input and topology", () => {
     ).toThrow(/not in the Takos secret contract/u);
   });
 
+  test("accepts a public OIDC runtime bundle without a client secret", () => {
+    const publicSecrets = { ...secrets } as Record<string, string>;
+    delete publicSecrets.OIDC_CLIENT_SECRET;
+
+    expect(validateRuntimeSecrets(publicSecrets)).not.toHaveProperty(
+      "OIDC_CLIENT_SECRET",
+    );
+    expect(validateRuntimeSecrets(secrets).OIDC_CLIENT_SECRET).toBe(
+      "oidc-client-secret-value",
+    );
+  });
+
   test("requires canonical host source identity and rejects duplicate credentials", () => {
     const env = invocationEnv("pre_destroy");
     expect(parseInvocation("pre_destroy", env).sourceCommit).toBe(sourceCommit);

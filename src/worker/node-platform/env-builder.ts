@@ -247,7 +247,9 @@ function buildBaseConfig(isLocal: boolean) {
       (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID : ""),
     OIDC_CLIENT_SECRET:
       optionalEnv("OIDC_CLIENT_SECRET") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET : ""),
+      (isLocal && optionalEnv("ENVIRONMENT") !== "production"
+        ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET
+        : undefined),
     OIDC_REDIRECT_URI: optionalEnv("OIDC_REDIRECT_URI"),
     PLATFORM_PRIVATE_KEY:
       optionalEnv("PLATFORM_PRIVATE_KEY") ??
@@ -349,11 +351,6 @@ function assertSelfHostedProductionConfig(config: BaseConfig): void {
     "OIDC_CLIENT_ID",
     config.OIDC_CLIENT_ID,
     LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID,
-  );
-  requireExplicit(
-    "OIDC_CLIENT_SECRET",
-    config.OIDC_CLIENT_SECRET,
-    LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET,
   );
   requireExplicit(
     "PLATFORM_PRIVATE_KEY",

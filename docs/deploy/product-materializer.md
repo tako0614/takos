@@ -34,7 +34,7 @@ descriptor の URL と digest は例であり、選択した Takos release の c
       workingDirectory: ".",
       env: {
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL:
-          "https://github.com/tako0614/takos/releases/download/v0.12.4/takosumi-artifact.json",
+          "https://github.com/tako0614/takos/releases/download/v0.12.5/takosumi-artifact.json",
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256: "sha256:<64 lowercase hex>",
       },
       timeoutSeconds: 3600,
@@ -131,11 +131,12 @@ Takos runtime secret JSON を、明示した env/file として同じ run にだ
 hard-link count、mode、size と JSON key set を mutation 前に検査します。runtime secret
 は stdout、evidence、argv、OpenTofu variable/output へ出しません。
 
-runtime secret JSON の必須 key は次の 6 個です。
+runtime secret JSON の必須 key は次の 5 個です。Public OIDC client では
+`OIDC_CLIENT_SECRET` を含めません。confidential client を明示的に登録した場合だけ
+任意 key として追加します。
 
 ```text
 ENCRYPTION_KEY
-OIDC_CLIENT_SECRET
 PLATFORM_PRIVATE_KEY
 PLATFORM_PUBLIC_KEY
 TAKOS_AGENT_START_TOKEN
@@ -143,9 +144,12 @@ TAKOS_INTERNAL_API_SECRET
 ```
 
 operator がこの JSON を手作業で組み立てずに用意する場合は、Takos repo の generator
-で private output directory に opt-in 生成できます。通常の 6 個の個別ファイルも同時に
+で private output directory に opt-in 生成できます。通常の 5 個の個別ファイルも同時に
 生成され、JSON は `takos-runtime-secrets.json` という正確な key set で mode `0600` に
-なります。既存ファイルは `--force` なしでは上書きされません。
+なります。confidential OIDC client 用の secret が必要な場合だけ
+`--confidential-oidc` を追加します。既存ファイルは `--force` なしでは上書きされません。
+Public mode で過去の confidential 生成物に残った `OIDC_CLIENT_SECRET` は、`--force`
+でも暗黙に残さず、明示的な削除または `--confidential-oidc` を要求します。
 
 ```sh
 bun run generate:keys -- \

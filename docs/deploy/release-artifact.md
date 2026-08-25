@@ -37,6 +37,18 @@ not recorded in evidence.
 - Require the portable Takoform defaults in that source tree to name the same
   tag, GitHub archive URL, and archive SHA-256. Prepare fails before its first
   registry push when those values do not close over the built archive bytes.
+
+When these defaults move to a new version, close the archive digest in two
+commits. First make the prepin commit: bump the package version and all
+same-repository non-digest release refs, including `worker_release_tag` and
+`worker_artifact_url`, but leave `worker_artifact_sha256` at its previous value.
+Build the canonical Worker archive from that commit with the commands used by
+prepare and record its SHA-256. Then make the pin commit that changes only the
+Takoform archive digest to that recorded value. The archive contains the
+Worker bundle and assets, not `deploy/opentofu/takoform/main.tf`, so the bytes
+remain fixed across the digest-only pin commit. Run the full gate on the pin
+commit before prepare; invoking prepare on the prepin commit intentionally
+fails the exact-candidate check before registry mutation.
 - Keep the Wrangler config, Cloudflare account-id file, API-token file,
   output directory, and evidence files outside the repository. Make operator
   directories `0700` and account/token files `0600`.
@@ -46,7 +58,7 @@ not recorded in evidence.
 Set up a private work area, for example:
 
 ```sh
-private=/var/lib/takos/release-artifacts/v0.12.4
+private=/var/lib/takos/release-artifacts/v0.12.5
 mkdir -p "$private"
 chmod 700 "$private"
 chmod 600 /var/lib/takos/operator/cloudflare-account-id
@@ -61,7 +73,7 @@ writing the output/evidence paths.
 
 ```sh
 bun run deploy -- takos-release-artifact prepare \
-  --tag v0.12.4 \
+  --tag v0.12.5 \
   --config /absolute/path/to/deploy/cloudflare/wrangler.toml \
   --account-id-file /var/lib/takos/operator/cloudflare-account-id \
   --cloudflare-api-token-file /var/lib/takos/operator/cloudflare-api-token \
@@ -113,7 +125,7 @@ path for every attempt because evidence is never overwritten.
 
 ```sh
 bun run deploy -- takos-release-artifact publish \
-  --tag v0.12.4 \
+  --tag v0.12.5 \
   --prepare-evidence "$private/prepare.json" \
   --evidence "$private/publish.json"
 ```

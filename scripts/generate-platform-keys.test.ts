@@ -17,10 +17,10 @@ const GENERATOR = resolve(import.meta.dir, "generate-platform-keys.ts");
 const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
 // Keep this list aligned with scripts/takos-product-materializer.ts. The
-// generator must produce every required runtime name, not just its key pair.
+// default public-client bundle must produce every required runtime name, not
+// just its key pair.
 const MATERIALIZER_REQUIRED_SECRET_NAMES = [
   "ENCRYPTION_KEY",
-  "OIDC_CLIENT_SECRET",
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
   "TAKOS_AGENT_START_TOKEN",
@@ -70,7 +70,7 @@ function digest(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("generates every materializer-required secret independently without leaking values", async () => {
+test("generates every public-client materializer secret independently without leaking values", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-platform-keys-"));
   const outputDir = join(root, "secrets");
   try {
@@ -95,7 +95,7 @@ test("generates every materializer-required secret independently without leaking
     expect(new Set(Object.values(values)).size).toBe(
       MATERIALIZER_REQUIRED_SECRET_NAMES.length,
     );
-    expect(/^[0-9a-f]{64}$/u.test(values.OIDC_CLIENT_SECRET)).toBe(true);
+    expect(entries.includes("OIDC_CLIENT_SECRET")).toBe(false);
 
     const output = `${result.stdout}\n${result.stderr}`;
     expect(
@@ -106,7 +106,7 @@ test("generates every materializer-required secret independently without leaking
   }
 });
 
-test("opt-in runtime JSON contains exactly the six materializer names and stays private", async () => {
+test("opt-in runtime JSON contains exactly the five public-client materializer names and stays private", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-platform-runtime-json-"));
   const outputDir = join(root, "secrets");
   try {
@@ -163,19 +163,61 @@ test("opt-in runtime JSON contains exactly the six materializer names and stays 
   }
 });
 
-test("preserves no-overwrite behavior for the new OIDC file and runtime JSON", async () => {
+test("opt-in confidential OIDC generation adds a client secret to the runtime bundle", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-platform-confidential-oidc-"));
+  const outputDir = join(root, "secrets");
+  try {
+    const result = await runGenerator(outputDir, "--confidential-oidc", "--runtime-json");
+    expect(result.exitCode).toBe(0);
+
+    const entries = await readdir(outputDir);
+    expect(entries.sort()).toEqual(
+      [
+        ...MATERIALIZER_REQUIRED_SECRET_NAMES,
+        "OIDC_CLIENT_SECRET",
+        RUNTIME_SECRETS_FILENAME,
+      ].sort(),
+    );
+    const oidcSecret = (await readFile(join(outputDir, "OIDC_CLIENT_SECRET"), "utf8"))
+      .trim();
+    expect(/^[0-9a-f]{64}$/u.test(oidcSecret)).toBe(true);
+    const runtimeJson = JSON.parse(
+      await readFile(join(outputDir, RUNTIME_SECRETS_FILENAME), "utf8"),
+    ) as Record<string, unknown>;
+    expect(validateRuntimeSecrets(runtimeJson).OIDC_CLIENT_SECRET).toBe(oidcSecret);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("public generation rejects a stale confidential OIDC file even with --force", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-platform-stale-oidc-"));
+  const outputDir = join(root, "secrets");
+  try {
+    expect((await runGenerator(outputDir, "--confidential-oidc")).exitCode).toBe(0);
+    const oidcPath = join(outputDir, "OIDC_CLIENT_SECRET");
+    const oidcDigest = digest(await readFile(oidcPath, "utf8"));
+
+    const result = await runGenerator(outputDir, "--force");
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("stale OIDC_CLIENT_SECRET");
+    expect(digest(await readFile(oidcPath, "utf8"))).toBe(oidcDigest);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preserves no-overwrite behavior for confidential OIDC and runtime JSON", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-platform-no-overwrite-"));
   const outputDir = join(root, "secrets");
   try {
-    expect((await runGenerator(outputDir)).exitCode).toBe(0);
+    expect((await runGenerator(outputDir, "--confidential-oidc")).exitCode).toBe(0);
     const oidcPath = join(outputDir, "OIDC_CLIENT_SECRET");
     const oidcDigest = digest(await readFile(oidcPath, "utf8"));
     for (const name of MATERIALIZER_REQUIRED_SECRET_NAMES) {
-      if (name !== "OIDC_CLIENT_SECRET") {
-        await rm(join(outputDir, name));
-      }
+      await rm(join(outputDir, name));
     }
-    const oidcConflict = await runGenerator(outputDir);
+    const oidcConflict = await runGenerator(outputDir, "--confidential-oidc");
     expect(oidcConflict.exitCode).not.toBe(0);
     expect(oidcConflict.stderr.includes("Refusing to overwrite existing secret files")).toBe(
       true,
@@ -183,13 +225,21 @@ test("preserves no-overwrite behavior for the new OIDC file and runtime JSON", a
     expect(digest(await readFile(oidcPath, "utf8"))).toBe(oidcDigest);
 
     await rm(oidcPath);
-    expect((await runGenerator(outputDir, "--runtime-json")).exitCode).toBe(0);
+    expect(
+      (await runGenerator(outputDir, "--confidential-oidc", "--runtime-json"))
+        .exitCode,
+    ).toBe(0);
     const runtimePath = join(outputDir, RUNTIME_SECRETS_FILENAME);
     const runtimeDigest = digest(await readFile(runtimePath, "utf8"));
     for (const name of MATERIALIZER_REQUIRED_SECRET_NAMES) {
       await rm(join(outputDir, name));
     }
-    const runtimeConflict = await runGenerator(outputDir, "--runtime-json");
+    await rm(oidcPath);
+    const runtimeConflict = await runGenerator(
+      outputDir,
+      "--confidential-oidc",
+      "--runtime-json",
+    );
     expect(runtimeConflict.exitCode).not.toBe(0);
     expect(runtimeConflict.stderr.includes("Refusing to overwrite existing secret files")).toBe(
       true,

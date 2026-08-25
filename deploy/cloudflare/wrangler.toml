@@ -85,7 +85,8 @@ CF_ZONE_ID = "replace-with-zone-id"
 crons = ["3,18,33,48 * * * *", "5 * * * *"]
 
 # IMPORTANT: The following sensitive values must be set via `wrangler secret put`:
-# - OIDC_CLIENT_SECRET: Takosumi Accounts OIDC client secret (required)
+# - OIDC_CLIENT_SECRET: optional Takosumi Accounts OIDC client secret for a
+#   confidential OIDC client; public PKCE clients omit it
 # - TAKOSUMI_ACCOUNTS_TOKEN: optional server-to-server Capsule API token
 # Static assets (routed through Worker for hostname-based routing)
 [assets]
@@ -231,7 +232,8 @@ bucket_name = "takos-offload"
 
 # Secrets (set via wrangler secret put):
 # Authentication:
-# - OIDC_CLIENT_SECRET: Takosumi Accounts OIDC client secret
+# - OIDC_CLIENT_SECRET: optional Takosumi Accounts OIDC client secret for a
+#   confidential OIDC client; public PKCE clients omit it
 #
 # Platform keys:
 # - PLATFORM_PRIVATE_KEY: Private key for signing platform tokens
