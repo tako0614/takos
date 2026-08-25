@@ -1,7 +1,7 @@
 /**
  * OAuth scopes required by the Takos runtime when it delegates Capsule access
- * to Takosumi Accounts. The repository manifest and runtime request must stay
- * identical so a host can issue a usable client before Takos starts.
+ * to Takosumi Accounts. The Accounts operator registers the public OIDC client
+ * explicitly; Takos never asks the Capsule host to mint one during install.
  */
 export const TAKOS_ACCOUNTS_OAUTH_SCOPES = [
   "openid",

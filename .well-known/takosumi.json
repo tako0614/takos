@@ -87,52 +87,76 @@
           {
             "name": "takosumi_accounts_url",
             "source": {
-              "kind": "module_default"
+              "kind": "user"
             },
             "type": "string",
             "format": "url",
+            "required": true,
             "label": {
               "ja": "Takosumi Accounts URL",
               "en": "Takosumi Accounts URL"
             },
+            "helper": {
+              "ja": "運用者が管理する Takosumi Accounts の公開 URL を指定します。Takos は OIDC client を自動登録しません。",
+              "en": "Provide the operator-managed Takosumi Accounts public URL. Takos does not auto-register an OIDC client."
+            },
+            "placeholder": "https://app.takosumi.com",
             "advanced": true
           },
           {
             "name": "takosumi_accounts_issuer_url",
             "source": {
-              "kind": "module_default"
+              "kind": "user"
             },
             "type": "string",
             "format": "url",
+            "required": true,
             "label": {
               "ja": "Takosumi Accounts発行者",
               "en": "Takosumi Accounts issuer"
             },
+            "helper": {
+              "ja": "OIDC client を登録した Accounts issuer の URL を指定します。",
+              "en": "Provide the Accounts issuer URL where the OIDC client is registered."
+            },
+            "placeholder": "https://app.takosumi.com",
             "advanced": true
           },
           {
             "name": "takosumi_accounts_client_id",
             "source": {
-              "kind": "module_default"
+              "kind": "user"
             },
             "type": "string",
+            "required": true,
             "label": {
               "ja": "Takosumi Accountsクライアント",
               "en": "Takosumi Accounts client"
             },
+            "helper": {
+              "ja": "Takosumi Accounts に通常の手順で登録済みの公開 OIDC client id を指定します。",
+              "en": "Provide a public OIDC client id already registered through the normal Takosumi Accounts procedure."
+            },
+            "placeholder": "takos",
             "advanced": true
           },
           {
             "name": "takosumi_accounts_redirect_uri",
             "source": {
-              "kind": "module_default"
+              "kind": "user"
             },
             "type": "string",
             "format": "url",
+            "required": true,
             "label": {
               "ja": "OIDCリダイレクトURL",
               "en": "OIDC redirect URL"
             },
+            "helper": {
+              "ja": "登録済み client の redirect URI と同じ、Takos 公開 URL の /auth/oidc/callback を指定します。",
+              "en": "Provide the registered client redirect URI at /auth/oidc/callback on the public Takos URL."
+            },
+            "placeholder": "https://takos.example.com/auth/oidc/callback",
             "advanced": true
           }
         ],
@@ -143,26 +167,6 @@
               "variables": {
                 "url": "public_url",
                 "subdomain": "public_subdomain"
-              }
-            }
-          },
-          {
-            "kind": "identity.oidc",
-            "callbackPath": "/auth/oidc/callback",
-            "scopes": [
-              "openid",
-              "profile",
-              "email",
-              "offline_access",
-              "capsules:read",
-              "capsules:write"
-            ],
-            "deliver": {
-              "variables": {
-                "accountsUrl": "takosumi_accounts_url",
-                "issuerUrl": "takosumi_accounts_issuer_url",
-                "clientId": "takosumi_accounts_client_id",
-                "redirectUri": "takosumi_accounts_redirect_uri"
               }
             }
           },

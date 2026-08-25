@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
-import { TAKOS_ACCOUNTS_OAUTH_SCOPES } from "./accounts-oidc.ts";
-
 const root = new URL("../../../", import.meta.url);
 const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
 const manifest = JSON.parse(text) as RepositoryManifest;
@@ -110,13 +108,52 @@ test("the selectable source and website use one exact Takos release", () => {
   );
 });
 
-test("the Repository manifest declares every OAuth scope requested by Takos", () => {
+test("the Repository manifest requires explicit operator-owned OIDC client metadata", () => {
   const module = manifest.install.modules[manifest.install.defaultModule];
-  const oidcRequirement = module.requires.find(
-    (requirement) => requirement.kind === "identity.oidc",
+  expect(module.requires.some((requirement) => requirement.kind === "identity.oidc")).toBe(
+    false,
   );
 
-  expect(oidcRequirement?.scopes).toEqual([...TAKOS_ACCOUNTS_OAUTH_SCOPES]);
+  expect(
+    module.inputs
+      .filter((input) => input.name.startsWith("takosumi_accounts_"))
+      .map((input) => ({
+        name: input.name,
+        source: input.source,
+        type: input.type,
+        format: input.format,
+        required: input.required,
+      })),
+  ).toEqual([
+    {
+      name: "takosumi_accounts_url",
+      source: { kind: "user" },
+      type: "string",
+      format: "url",
+      required: true,
+    },
+    {
+      name: "takosumi_accounts_issuer_url",
+      source: { kind: "user" },
+      type: "string",
+      format: "url",
+      required: true,
+    },
+    {
+      name: "takosumi_accounts_client_id",
+      source: { kind: "user" },
+      type: "string",
+      format: undefined,
+      required: true,
+    },
+    {
+      name: "takosumi_accounts_redirect_uri",
+      source: { kind: "user" },
+      type: "string",
+      format: "url",
+      required: true,
+    },
+  ]);
 });
 
 test("the Repository manifest requests AI through the Takosumi Interface", () => {
@@ -242,6 +279,7 @@ interface RepositoryModule {
     name: string;
     source: { kind: string };
     type?: string;
+    format?: string;
     required?: boolean;
     label: { ja: string; en: string };
     helper?: { ja: string; en: string };
