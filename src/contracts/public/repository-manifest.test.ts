@@ -156,19 +156,12 @@ test("the Repository manifest requires explicit operator-owned OIDC client metad
   ]);
 });
 
-test("the Repository manifest requests AI through the Takosumi Interface", () => {
+test("the Repository manifest does not require a Takosumi AI gateway to install", () => {
   const module = manifest.install.modules[manifest.install.defaultModule];
-  const requirement = module.requires.find(
-    (candidate) => candidate.kind === "interface.consume",
+  expect(module.requires.some((candidate) => candidate.kind === "interface.consume")).toBe(
+    false,
   );
-
-  expect(requirement).toEqual({
-    kind: "interface.consume",
-    key: "ai",
-    interface: { type: "takosumi.ai.gateway", version: "1" },
-    permissions: ["ai.chat"],
-    delivery: { type: "oauth2" },
-  });
+  expect(text).not.toContain('"takosumi.ai.gateway"');
   expect(text).not.toContain('"interfaceId"');
   expect(text).not.toContain('"endpoint"');
   expect(text).not.toContain('"credentialRef"');

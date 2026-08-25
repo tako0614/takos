@@ -169,20 +169,6 @@
                 "subdomain": "public_subdomain"
               }
             }
-          },
-          {
-            "kind": "interface.consume",
-            "key": "ai",
-            "interface": {
-              "type": "takosumi.ai.gateway",
-              "version": "1"
-            },
-            "permissions": [
-              "ai.chat"
-            ],
-            "delivery": {
-              "type": "oauth2"
-            }
           }
         ],
         "interfaces": [
