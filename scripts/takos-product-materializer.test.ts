@@ -1,3 +1,4 @@
+// takos-secret-scan: synthetic — provider credential values in this file are inert parser and refusal fixtures.
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
