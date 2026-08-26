@@ -34,7 +34,7 @@ descriptor の URL と digest は例であり、選択した Takos release の c
       workingDirectory: ".",
       env: {
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL:
-          "https://github.com/tako0614/takos/releases/download/v0.12.6/takosumi-artifact.json",
+          "https://github.com/tako0614/takos/releases/download/v0.12.7/takosumi-artifact.json",
         TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256: "sha256:<64 lowercase hex>",
       },
       timeoutSeconds: 3600,

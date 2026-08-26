@@ -23,7 +23,7 @@ variable "project_name" {
 variable "worker_release_tag" {
   description = "Takos GitHub release containing the immutable Worker archive."
   type        = string
-  default     = "v0.12.6"
+  default     = "v0.12.7"
 
   validation {
     condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
@@ -34,7 +34,7 @@ variable "worker_release_tag" {
 variable "worker_artifact_url" {
   description = "Immutable Takos Worker archive URL."
   type        = string
-  default     = "https://github.com/tako0614/takos/releases/download/v0.12.6/takos-worker-release.tar.gz"
+  default     = "https://github.com/tako0614/takos/releases/download/v0.12.7/takos-worker-release.tar.gz"
 }
 
 variable "worker_artifact_sha256" {

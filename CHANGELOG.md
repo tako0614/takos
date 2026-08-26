@@ -6,6 +6,13 @@ Takosumi accounts plane, deploy-control seam, dashboard, and OpenTofu runner at
 the self-hoster's own origin. Versions follow per-product semver; pre-1.0
 breaking changes bump the minor.
 
+## 0.12.7 — Stable materializer diagnostics
+
+- Emit stable, value-free failure evidence with bounded failure-point and
+  mutation-state markers.
+- Classify malformed resource readbacks as readback failures instead of input
+  failures while preserving fail-closed behavior before mutation.
+
 ## 0.12.6 — Workspace-bound Accounts login
 
 - Bind Takosumi Accounts authorization, UserInfo, and delegated credentials to

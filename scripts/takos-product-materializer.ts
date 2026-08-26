@@ -103,6 +103,44 @@ const RESERVED_BINDING_NAMES = new Set([
 type JsonRecord = Record<string, unknown>;
 type Phase = "post_apply" | "pre_destroy";
 
+export const FAILURE_POINTS = [
+  "invocation",
+  "invocation_source_identity",
+  "invocation_release_context",
+  "invocation_outputs",
+  "invocation_provider",
+  "invocation_credential",
+  "invocation_ambient_authority",
+  "invocation_descriptor_reference",
+  "invocation_runtime_secret_path",
+  "node_runtime",
+  "wrangler_runtime",
+  "composition_source",
+  "descriptor",
+  "archive",
+  "runtime_secret_file",
+  "config_render",
+  "wrangler_dry_run",
+  "deployment_readback",
+  "worker_presence_readback",
+  "worker_version_readback",
+  "secret_readback",
+  "container_readback",
+  "queue_readback",
+  "vector_readback",
+  "vector_mutation",
+  "d1_migration",
+  "worker_deployment",
+  "secret_mutation",
+  "queue_mutation",
+  "health_readback",
+  "worker_cleanup",
+  "r2_cleanup",
+  "materialization",
+] as const;
+
+export type FailurePoint = (typeof FAILURE_POINTS)[number];
+
 export type ExecutorCapacity = {
   tier1_max_instances: number;
   tier1_max_concurrent_runs: number;
@@ -192,6 +230,8 @@ export type MaterializerDependencies = {
   deleteR2Object(bucketName: string, objectKey: string): Promise<void>;
   fetchBytes(url: string, maxBytes: number): Promise<Uint8Array>;
   fetchHealth(url: string): Promise<{ status: number; bytes: Uint8Array }>;
+  writePrivateJson(path: string, value: unknown): Promise<void>;
+  removeTempRoot(path: string): Promise<void>;
   sleep(milliseconds: number): Promise<void>;
   now(): string;
 };
@@ -202,6 +242,7 @@ export class MaterializerError extends Error {
   readonly mutationStarted: boolean;
   readonly completedStages: readonly string[];
   readonly diagnosticDigest?: string;
+  readonly failurePoint: FailurePoint;
 
   constructor(input: {
     code: string;
@@ -210,6 +251,7 @@ export class MaterializerError extends Error {
     mutationStarted?: boolean;
     completedStages?: readonly string[];
     diagnosticDigest?: string;
+    failurePoint: FailurePoint;
   }) {
     super(input.message);
     this.name = "MaterializerError";
@@ -218,6 +260,101 @@ export class MaterializerError extends Error {
     this.mutationStarted = input.mutationStarted ?? false;
     this.completedStages = input.completedStages ?? [];
     this.diagnosticDigest = input.diagnosticDigest;
+    this.failurePoint = input.failurePoint;
+  }
+}
+
+async function removeTempRootWithPrimary(input: {
+  dependencies: MaterializerDependencies;
+  tempRoot: string;
+  failurePoint: "config_render" | "runtime_secret_file";
+  completedStages: readonly string[];
+  mutationStarted: boolean;
+  primaryError?: MaterializerError;
+}): Promise<void> {
+  try {
+    await input.dependencies.removeTempRoot(input.tempRoot);
+  } catch (error) {
+    const cleanupFailure = new MaterializerError({
+      code: "temp_cleanup_failed",
+      stage: "materialization",
+      message:
+        "temporary materializer files could not be removed; details remain runner-private",
+      mutationStarted: input.mutationStarted,
+      completedStages: [...input.completedStages],
+      failurePoint: input.failurePoint,
+    });
+    Object.defineProperty(cleanupFailure, "cause", {
+      configurable: true,
+      value: error,
+    });
+    if (!input.primaryError) throw cleanupFailure;
+    const existingCause = input.primaryError.cause;
+    Object.defineProperty(input.primaryError, "cause", {
+      configurable: true,
+      value: existingCause === undefined
+        ? cleanupFailure
+        : new AggregateError(
+            [existingCause, cleanupFailure],
+            "multiple runner-private materializer failures",
+          ),
+    });
+  }
+}
+
+function classifyBoundaryFailure(
+  error: unknown,
+  failurePoint: FailurePoint,
+  options: { readbackShape?: boolean; mutationStarted?: boolean } = {},
+): MaterializerError {
+  if (error instanceof MaterializerError) {
+    const invalidReadbackShape =
+      options.readbackShape === true &&
+      (error.code === "invalid_input" || error.code === "invalid_json");
+    const concreteFailurePoint =
+      error.failurePoint && error.failurePoint !== "materialization"
+        ? error.failurePoint
+        : failurePoint;
+    return new MaterializerError({
+      code: invalidReadbackShape ? "invalid_readback" : error.code,
+      stage: invalidReadbackShape ? "readback" : error.stage,
+      message: error.message,
+      mutationStarted: error.mutationStarted || options.mutationStarted === true,
+      completedStages: error.completedStages,
+      diagnosticDigest: error.diagnosticDigest,
+      failurePoint: concreteFailurePoint,
+    });
+  }
+  return new MaterializerError({
+    code: options.readbackShape ? "invalid_readback" : "unexpected_failure",
+    stage: options.readbackShape ? "readback" : "materialization",
+    message: "bounded materializer boundary failed; details remain runner-private",
+    mutationStarted: options.mutationStarted,
+    failurePoint,
+  });
+}
+
+async function atFailurePoint<T>(
+  failurePoint: FailurePoint,
+  operation: () => Promise<T>,
+  options: { readbackShape?: boolean; mutationStarted?: boolean } = {},
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw classifyBoundaryFailure(error, failurePoint, options);
+  }
+}
+
+function atFailurePointSync<T>(
+  failurePoint: FailurePoint,
+  operation: () => T,
+  options: { readbackShape?: boolean; mutationStarted?: boolean } = {},
+): T {
+  try {
+    return operation();
+  } catch (error) {
+    throw classifyBoundaryFailure(error, failurePoint, options);
   }
 }
 
@@ -225,6 +362,7 @@ function invariant(
   condition: unknown,
   message: string,
   code = "invalid_input",
+  failurePoint: FailurePoint = "materialization",
 ): asserts condition {
   if (!condition) {
     const stage =
@@ -240,7 +378,7 @@ function invariant(
           : code === "health_check_failed"
             ? "post_conditions"
             : "preflight";
-    throw new MaterializerError({ code, stage, message });
+    throw new MaterializerError({ code, stage, message, failurePoint });
   }
 }
 
@@ -284,6 +422,7 @@ function jsonFromEnv(env: NodeJS.ProcessEnv, name: string): unknown {
       code: "invalid_json",
       stage: "preflight",
       message: `${name} must contain valid JSON`,
+      failurePoint: "materialization",
     });
   }
 }
@@ -398,6 +537,7 @@ function parsePublicOrigin(value: unknown, label: string): URL {
       code: "invalid_input",
       stage: "preflight",
       message: `${label} must be an absolute URL`,
+      failurePoint: "invocation_outputs",
     });
   }
   invariant(url.protocol === "https:", `${label} must use https`);
@@ -408,7 +548,7 @@ function parsePublicOrigin(value: unknown, label: string): URL {
   return url;
 }
 
-export function parseTakosOutputs(value: unknown): TakosOutputs {
+function parseTakosOutputsValue(value: unknown): TakosOutputs {
   const outputs = record(value, "TAKOSUMI_OUTPUTS_JSON");
   invariant(outputs.target === "cloudflare", "target must be cloudflare");
   const accountId = requiredString(
@@ -567,6 +707,12 @@ export function parseTakosOutputs(value: unknown): TakosOutputs {
   };
 }
 
+export function parseTakosOutputs(value: unknown): TakosOutputs {
+  return atFailurePointSync("invocation_outputs", () =>
+    parseTakosOutputsValue(value),
+  );
+}
+
 function canonicalProvider(value: string): string {
   const trimmed = value.trim().replace(/^registry\.terraform\.io\//u, "");
   if (trimmed === "cloudflare/cloudflare") {
@@ -575,7 +721,7 @@ function canonicalProvider(value: string): string {
   return trimmed;
 }
 
-export function validateProviderConfigurations(
+function validateProviderConfigurationsValue(
   value: unknown,
   accountId: string,
 ): void {
@@ -616,51 +762,83 @@ export function validateProviderConfigurations(
   }
 }
 
+export function validateProviderConfigurations(
+  value: unknown,
+  accountId: string,
+): void {
+  atFailurePointSync("invocation_provider", () =>
+    validateProviderConfigurationsValue(value, accountId),
+  );
+}
+
 export function parseInvocation(
   phase: Phase,
   env: NodeJS.ProcessEnv = process.env,
 ): Invocation {
-  const sourceSnapshotId = requiredEnv(env, "TAKOSUMI_SOURCE_SNAPSHOT_ID");
-  invariant(IDENTITY.test(sourceSnapshotId), "TAKOSUMI_SOURCE_SNAPSHOT_ID is invalid");
-  const sourceCommit = requiredEnv(env, "TAKOSUMI_SOURCE_COMMIT");
-  invariant(COMMIT.test(sourceCommit), "TAKOSUMI_SOURCE_COMMIT must be a lowercase full commit");
-  const releaseRunId = requiredEnv(env, "TAKOSUMI_RELEASE_RUN_ID");
-  invariant(IDENTITY.test(releaseRunId), "TAKOSUMI_RELEASE_RUN_ID is invalid");
-  const outputsValue = jsonFromEnv(env, "TAKOSUMI_OUTPUTS_JSON");
-  const context = record(
-    jsonFromEnv(env, "TAKOSUMI_RELEASE_CONTEXT_JSON"),
-    "TAKOSUMI_RELEASE_CONTEXT_JSON",
+  const { sourceSnapshotId, sourceCommit, releaseRunId } = atFailurePointSync(
+    "invocation_source_identity",
+    () => {
+      const sourceSnapshotId = requiredEnv(env, "TAKOSUMI_SOURCE_SNAPSHOT_ID");
+      invariant(IDENTITY.test(sourceSnapshotId), "TAKOSUMI_SOURCE_SNAPSHOT_ID is invalid");
+      const sourceCommit = requiredEnv(env, "TAKOSUMI_SOURCE_COMMIT");
+      invariant(COMMIT.test(sourceCommit), "TAKOSUMI_SOURCE_COMMIT must be a lowercase full commit");
+      const releaseRunId = requiredEnv(env, "TAKOSUMI_RELEASE_RUN_ID");
+      invariant(IDENTITY.test(releaseRunId), "TAKOSUMI_RELEASE_RUN_ID is invalid");
+      return { sourceSnapshotId, sourceCommit, releaseRunId };
+    },
   );
-  invariant(context.kind === "takosumi.release-context@v1", "release context kind is invalid");
-  invariant(context.releaseRunId === releaseRunId, "release context run id drifted");
-  const workspaceId = requiredEnv(env, "TAKOSUMI_WORKSPACE_ID");
-  const contextWorkspaceId = requiredString(
-    context.workspaceId,
-    "release context workspaceId",
+  const outputsValue = atFailurePointSync("invocation_outputs", () =>
+    jsonFromEnv(env, "TAKOSUMI_OUTPUTS_JSON"),
   );
-  invariant(
-    contextWorkspaceId === workspaceId,
-    "release context workspace id drifted from install context",
+  const workspaceId = atFailurePointSync(
+    "invocation_release_context",
+    () => {
+      const context = record(
+        jsonFromEnv(env, "TAKOSUMI_RELEASE_CONTEXT_JSON"),
+        "TAKOSUMI_RELEASE_CONTEXT_JSON",
+      );
+      invariant(context.kind === "takosumi.release-context@v1", "release context kind is invalid");
+      invariant(context.releaseRunId === releaseRunId, "release context run id drifted");
+      const workspaceId = requiredEnv(env, "TAKOSUMI_WORKSPACE_ID");
+      const contextWorkspaceId = requiredString(
+        context.workspaceId,
+        "release context workspaceId",
+      );
+      invariant(
+        contextWorkspaceId === workspaceId,
+        "release context workspace id drifted from install context",
+      );
+      invariant(
+        stableJson(context.outputs) === stableJson(outputsValue),
+        "release context outputs drifted from TAKOSUMI_OUTPUTS_JSON",
+      );
+      return workspaceId;
+    },
   );
-  invariant(
-    stableJson(context.outputs) === stableJson(outputsValue),
-    "release context outputs drifted from TAKOSUMI_OUTPUTS_JSON",
+  const outputs = atFailurePointSync("invocation_outputs", () =>
+    parseTakosOutputs(outputsValue),
   );
-  const outputs = parseTakosOutputs(outputsValue);
-  validateProviderConfigurations(
-    jsonFromEnv(env, "TAKOSUMI_PROVIDER_CONFIGS_JSON"),
-    outputs.accountId,
+  atFailurePointSync("invocation_provider", () =>
+    validateProviderConfigurations(
+      jsonFromEnv(env, "TAKOSUMI_PROVIDER_CONFIGS_JSON"),
+      outputs.accountId,
+    ),
   );
-  const apiToken = requiredEnv(env, "CLOUDFLARE_API_TOKEN");
-  invariant(apiToken.length <= 16_384, "CLOUDFLARE_API_TOKEN is too large");
-  for (const ambiguous of [
-    "CF_API_TOKEN",
-    "CLOUDFLARE_API_KEY",
-    "CLOUDFLARE_EMAIL",
-    "CLOUDFLARE_API_USER_SERVICE_KEY",
-  ]) {
-    invariant(!env[ambiguous], `${ambiguous} is not accepted as materializer authority`);
-  }
+  const apiToken = atFailurePointSync("invocation_credential", () => {
+    const apiToken = requiredEnv(env, "CLOUDFLARE_API_TOKEN");
+    invariant(apiToken.length <= 16_384, "CLOUDFLARE_API_TOKEN is too large");
+    return apiToken;
+  });
+  atFailurePointSync("invocation_ambient_authority", () => {
+    for (const ambiguous of [
+      "CF_API_TOKEN",
+      "CLOUDFLARE_API_KEY",
+      "CLOUDFLARE_EMAIL",
+      "CLOUDFLARE_API_USER_SERVICE_KEY",
+    ]) {
+      invariant(!env[ambiguous], `${ambiguous} is not accepted as materializer authority`);
+    }
+  });
 
   if (phase === "pre_destroy") {
     return {
@@ -673,15 +851,27 @@ export function parseInvocation(
       apiToken,
     };
   }
-  const descriptorUrl = requiredEnv(env, "TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL");
-  assertReleaseUrl(descriptorUrl, undefined, "takosumi-artifact.json");
-  const descriptorDigest = requiredEnv(
-    env,
-    "TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256",
+  const { descriptorUrl, descriptorDigest } = atFailurePointSync(
+    "invocation_descriptor_reference",
+    () => {
+      const descriptorUrl = requiredEnv(env, "TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_URL");
+      assertReleaseUrl(descriptorUrl, undefined, "takosumi-artifact.json");
+      const descriptorDigest = requiredEnv(
+        env,
+        "TAKOS_RELEASE_ARTIFACT_DESCRIPTOR_SHA256",
+      );
+      invariant(SHA256.test(descriptorDigest), "artifact descriptor digest must be sha256:<hex>");
+      return { descriptorUrl, descriptorDigest };
+    },
   );
-  invariant(SHA256.test(descriptorDigest), "artifact descriptor digest must be sha256:<hex>");
-  const runtimeSecretsFile = requiredEnv(env, "TAKOS_RUNTIME_SECRETS_FILE");
-  invariant(isAbsolute(runtimeSecretsFile), "TAKOS_RUNTIME_SECRETS_FILE must be absolute");
+  const runtimeSecretsFile = atFailurePointSync(
+    "invocation_runtime_secret_path",
+    () => {
+      const runtimeSecretsFile = requiredEnv(env, "TAKOS_RUNTIME_SECRETS_FILE");
+      invariant(isAbsolute(runtimeSecretsFile), "TAKOS_RUNTIME_SECRETS_FILE must be absolute");
+      return runtimeSecretsFile;
+    },
+  );
   return {
     phase,
     sourceSnapshotId,
@@ -718,6 +908,7 @@ function parsePublicOriginLike(value: string, label: string): URL {
       code: "invalid_input",
       stage: "preflight",
       message: `${label} must be an absolute URL`,
+      failurePoint: "materialization",
     });
   }
   invariant(url.protocol === "https:", `${label} must use https`);
@@ -731,7 +922,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-export function validateReleaseDescriptor(
+function validateReleaseDescriptorValue(
   value: unknown,
   input: {
     sourceCommit: string;
@@ -854,7 +1045,22 @@ export function validateReleaseDescriptor(
   };
 }
 
-export function validateRuntimeSecrets(value: unknown): Record<string, string> {
+export function validateReleaseDescriptor(
+  value: unknown,
+  input: {
+    sourceCommit: string;
+    packageVersion: string;
+    accountId: string;
+    descriptorUrl: string;
+    takosumiCompositionSource: TakosumiCompositionSourceIdentity;
+  },
+): ReleaseDescriptor {
+  return atFailurePointSync("descriptor", () =>
+    validateReleaseDescriptorValue(value, input),
+  );
+}
+
+function validateRuntimeSecretsValue(value: unknown): Record<string, string> {
   const input = record(value, "runtime secret file");
   const output: Record<string, string> = {};
   for (const [key, raw] of Object.entries(input)) {
@@ -869,7 +1075,13 @@ export function validateRuntimeSecrets(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(output).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export async function loadRuntimeSecretsFile(path: string): Promise<Record<string, string>> {
+export function validateRuntimeSecrets(value: unknown): Record<string, string> {
+  return atFailurePointSync("runtime_secret_file", () =>
+    validateRuntimeSecretsValue(value),
+  );
+}
+
+async function loadRuntimeSecretsFileValue(path: string): Promise<Record<string, string>> {
   const absolute = resolve(path);
   invariant(isAbsolute(path) && path === absolute, "runtime secret file path must be canonical absolute");
   invariant((await realpath(absolute)) === absolute, "runtime secret file path must not traverse symlinks");
@@ -897,11 +1109,18 @@ export async function loadRuntimeSecretsFile(path: string): Promise<Record<strin
         code: "invalid_secret_file",
         stage: "preflight",
         message: "runtime secret file must contain valid JSON",
+        failurePoint: "runtime_secret_file",
       });
     }
   } finally {
     await handle.close();
   }
+}
+
+export async function loadRuntimeSecretsFile(path: string): Promise<Record<string, string>> {
+  return atFailurePoint("runtime_secret_file", () =>
+    loadRuntimeSecretsFileValue(path),
+  );
 }
 
 type TarEntry = { path: string; type: "file" | "directory"; bytes?: Uint8Array };
@@ -932,7 +1151,7 @@ function safeArchivePath(raw: string): string | undefined {
   return value.replace(/\/$/u, "");
 }
 
-export async function parseWorkerArchive(compressed: Uint8Array): Promise<readonly TarEntry[]> {
+async function parseWorkerArchiveValue(compressed: Uint8Array): Promise<readonly TarEntry[]> {
   invariant(compressed.byteLength > 0 && compressed.byteLength <= MAX_ARCHIVE_BYTES, "Worker archive size is invalid", "invalid_archive");
   let expanded: Uint8Array;
   try {
@@ -951,6 +1170,7 @@ export async function parseWorkerArchive(compressed: Uint8Array): Promise<readon
       code: "invalid_archive",
       stage: "artifact",
       message: "Worker archive is not valid gzip",
+      failurePoint: "archive",
     });
   }
   const entries: TarEntry[] = [];
@@ -1005,6 +1225,7 @@ export async function parseWorkerArchive(compressed: Uint8Array): Promise<readon
       code: "invalid_archive",
       stage: "artifact",
       message: "asset-manifest.json is invalid",
+      failurePoint: "archive",
     });
   }
   const assetManifest = record(manifest, "asset-manifest.json");
@@ -1017,6 +1238,12 @@ export async function parseWorkerArchive(compressed: Uint8Array): Promise<readon
     invariant(typeof entry.hash === "string" && /^[0-9a-f]{32}$/u.test(entry.hash), `asset manifest hash is invalid for ${key}`, "invalid_archive");
   }
   return entries;
+}
+
+export async function parseWorkerArchive(
+  compressed: Uint8Array,
+): Promise<readonly TarEntry[]> {
+  return atFailurePoint("archive", () => parseWorkerArchiveValue(compressed));
 }
 
 export async function extractWorkerArchive(
@@ -1053,7 +1280,7 @@ function queueConsumers(outputs: TakosOutputs) {
   ] as const;
 }
 
-export function renderWranglerConfig(input: {
+function renderWranglerConfigValue(input: {
   outputs: TakosOutputs;
   descriptor: ReleaseDescriptor;
   workspaceId: string;
@@ -1193,6 +1420,14 @@ export function renderWranglerConfig(input: {
   };
 }
 
+export function renderWranglerConfig(
+  input: Parameters<typeof renderWranglerConfigValue>[0],
+): ReturnType<typeof renderWranglerConfigValue> {
+  return atFailurePointSync("config_render", () =>
+    renderWranglerConfigValue(input),
+  );
+}
+
 function parseJsonOutput(result: CommandResult, label: string): unknown {
   invariant(result.exitCode === 0, `${label} failed`, "readback_failed");
   try {
@@ -1214,6 +1449,7 @@ function parseJsonOutput(result: CommandResult, label: string): unknown {
     stage: "readback",
     message: `${label} returned invalid JSON`,
     diagnosticDigest: digest(`${label}\n${result.stdout}\n${result.stderr}`),
+    failurePoint: "materialization",
   });
 }
 
@@ -1225,6 +1461,42 @@ function isNotFound(result: CommandResult): boolean {
   // underscore-delimited provider error as an absence.
   if (/\bvectorize\.index\.not_found\b/u.test(output)) return true;
   return /(?:\b404\b|not[ -]?found|does not exist|no deployments)/iu.test(output);
+}
+
+function commandFailurePoint(stage: string): FailurePoint {
+  switch (stage) {
+    case "wrangler_dry_run":
+      return "wrangler_dry_run";
+    case "deployment_readback":
+      return "deployment_readback";
+    case "version_readback":
+      return "worker_version_readback";
+    case "secret_readback":
+      return "secret_readback";
+    case "container_list":
+    case "container_info":
+    case "container_ownership_readback":
+      return "container_readback";
+    case "queue_consumer_readback":
+      return "queue_readback";
+    case "vector_create":
+      return "vector_mutation";
+    case "d1_migrations":
+      return "d1_migration";
+    case "worker_deploy":
+      return "worker_deployment";
+    case "stale_secret_prune":
+      return "secret_mutation";
+    case "queue_consumer_remove":
+    case "queue_consumer_add":
+      return "queue_mutation";
+    case "queue_consumer_delete":
+    case "container_delete":
+    case "vector_delete":
+      return "worker_cleanup";
+    default:
+      return "materialization";
+  }
 }
 
 function commandFailure(
@@ -1240,6 +1512,7 @@ function commandFailure(
     mutationStarted: mutationAttempted || completedStages.length > 0,
     completedStages,
     diagnosticDigest: digest(`${result.exitCode}\n${result.stdout}\n${result.stderr}`),
+    failurePoint: commandFailurePoint(stage),
   });
 }
 
@@ -1250,9 +1523,14 @@ async function requireCommand(
   completedStages: readonly string[],
   timeoutMs?: number,
 ): Promise<CommandResult> {
-  const result = await dependencies.runWrangler(args, timeoutMs);
-  if (result.exitCode !== 0) throw commandFailure(stage, result, completedStages);
-  return result;
+  const failurePoint = commandFailurePoint(stage);
+  return atFailurePoint(failurePoint, async () => {
+    const result = await dependencies.runWrangler(args, timeoutMs);
+    if (result.exitCode !== 0) {
+      throw commandFailure(stage, result, completedStages);
+    }
+    return result;
+  });
 }
 
 function isAlreadyAbsent(result: CommandResult): boolean {
@@ -1271,14 +1549,21 @@ async function requireMutationCommand(
   completedStages: readonly string[],
   options: { timeoutMs?: number; allowAlreadyAbsent?: boolean } = {},
 ): Promise<CommandResult> {
-  const result = await dependencies.runWrangler(args, options.timeoutMs);
-  if (
-    result.exitCode !== 0 &&
-    !(options.allowAlreadyAbsent && isAlreadyAbsent(result))
-  ) {
-    throw commandFailure(stage, result, completedStages, true);
-  }
-  return result;
+  const failurePoint = commandFailurePoint(stage);
+  return atFailurePoint(
+    failurePoint,
+    async () => {
+      const result = await dependencies.runWrangler(args, options.timeoutMs);
+      if (
+        result.exitCode !== 0 &&
+        !(options.allowAlreadyAbsent && isAlreadyAbsent(result))
+      ) {
+        throw commandFailure(stage, result, completedStages, true);
+      }
+      return result;
+    },
+    { mutationStarted: true },
+  );
 }
 
 type DeploymentReadback = { deploymentId: string; versionId: string };
@@ -1306,6 +1591,7 @@ async function confirmBlankDeploymentAbsent(
     stage: "readback",
     message: "Worker exists while deployment status is blank",
     diagnosticDigest: digest("Worker presence readback\npresent"),
+    failurePoint: "worker_presence_readback",
   });
 }
 
@@ -1314,27 +1600,35 @@ async function deploymentReadback(
   configPath: string,
   workerName: string,
 ): Promise<DeploymentReadback | undefined> {
-  const result = await dependencies.runWrangler([
-    "deployments",
-    "status",
-    "--name",
-    workerName,
-    "--json",
-    "--config",
-    configPath,
-  ]);
-  // Wrangler 4.107 (when invoked through Bun in CI) reports an absent Worker
-  // with a successful, completely blank JSON readback. This is the locked CLI
-  // contract. Confirm absence through the authoritative Worker settings
-  // endpoint before accepting it; any other blank or malformed response
-  // remains fail-closed.
-  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
-    await confirmBlankDeploymentAbsent(dependencies, workerName);
-    return undefined;
-  }
-  if (isNotFound(result)) return undefined;
-  if (result.exitCode !== 0) throw commandFailure("deployment_readback", result, []);
-  return parseDeployment(parseJsonOutput(result, "deployment readback"));
+  return atFailurePoint(
+    "deployment_readback",
+    async () => {
+      const result = await dependencies.runWrangler([
+        "deployments",
+        "status",
+        "--name",
+        workerName,
+        "--json",
+        "--config",
+        configPath,
+      ]);
+      // Wrangler 4.107 (when invoked through Bun in CI) reports an absent Worker
+      // with a successful, completely blank JSON readback. This is the locked CLI
+      // contract. Confirm absence through the authoritative Worker settings
+      // endpoint before accepting it; any other blank or malformed response
+      // remains fail-closed.
+      if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
+        await confirmBlankDeploymentAbsent(dependencies, workerName);
+        return undefined;
+      }
+      if (isNotFound(result)) return undefined;
+      if (result.exitCode !== 0) {
+        throw commandFailure("deployment_readback", result, []);
+      }
+      return parseDeployment(parseJsonOutput(result, "deployment readback"));
+    },
+    { readbackShape: true },
+  );
 }
 
 async function waitForActivatedDeployment(
@@ -1368,15 +1662,13 @@ async function waitForActivatedDeployment(
     }
     if (attempt < 11) await dependencies.sleep(2_000);
   }
+  if (lastError instanceof MaterializerError) throw lastError;
   throw new MaterializerError({
     code: "invalid_readback",
     stage: "readback",
     message: "the exact Worker deployment did not become readable",
     mutationStarted: true,
-    diagnosticDigest:
-      lastError instanceof MaterializerError
-        ? lastError.diagnosticDigest
-        : digest(lastError instanceof Error ? lastError.message : String(lastError)),
+    failurePoint: "deployment_readback",
   });
 }
 
@@ -1395,32 +1687,41 @@ async function secretNames(
   configPath: string,
   workerName: string,
 ): Promise<string[]> {
-  const result = await dependencies.runWrangler([
-    "secret",
-    "list",
-    "--name",
-    workerName,
-    "--format",
-    "json",
-    "--config",
-    configPath,
-  ]);
-  // Wrangler 4.107 can represent an absent Worker as a successful, completely
-  // blank secret-list response in the runner. Accept that only after the
-  // authoritative Worker settings endpoint independently proves absence.
-  if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
-    const present = await dependencies.readWorkerPresence(workerName);
-    if (!present) return [];
-    throw new MaterializerError({
-      code: "invalid_readback",
-      stage: "readback",
-      message: "Worker secret list is blank while the Worker exists",
-      diagnosticDigest: digest("Worker secret presence readback\npresent"),
-    });
-  }
-  if (isNotFound(result)) return [];
-  if (result.exitCode !== 0) throw commandFailure("secret_readback", result, []);
-  return parseSecretNames(parseJsonOutput(result, "secret list"));
+  return atFailurePoint(
+    "secret_readback",
+    async () => {
+      const result = await dependencies.runWrangler([
+        "secret",
+        "list",
+        "--name",
+        workerName,
+        "--format",
+        "json",
+        "--config",
+        configPath,
+      ]);
+      // Wrangler 4.107 can represent an absent Worker as a successful, completely
+      // blank secret-list response in the runner. Accept that only after the
+      // authoritative Worker settings endpoint independently proves absence.
+      if (result.exitCode === 0 && result.stdout === "" && result.stderr === "") {
+        const present = await dependencies.readWorkerPresence(workerName);
+        if (!present) return [];
+        throw new MaterializerError({
+          code: "invalid_readback",
+          stage: "readback",
+          message: "Worker secret list is blank while the Worker exists",
+          diagnosticDigest: digest("Worker secret presence readback\npresent"),
+          failurePoint: "secret_readback",
+        });
+      }
+      if (isNotFound(result)) return [];
+      if (result.exitCode !== 0) {
+        throw commandFailure("secret_readback", result, []);
+      }
+      return parseSecretNames(parseJsonOutput(result, "secret list"));
+    },
+    { readbackShape: true },
+  );
 }
 
 async function waitForSecretNames(
@@ -1430,20 +1731,27 @@ async function waitForSecretNames(
   expected: readonly string[],
 ): Promise<void> {
   const wanted = stableJson([...expected].sort());
+  let lastError: unknown;
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const observed = await secretNames(
-      dependencies,
-      configPath,
-      workerName,
-    );
-    if (stableJson(observed) === wanted) return;
+    try {
+      const observed = await secretNames(
+        dependencies,
+        configPath,
+        workerName,
+      );
+      if (stableJson(observed) === wanted) return;
+    } catch (error) {
+      lastError = error;
+    }
     await dependencies.sleep(2_000);
   }
+  if (lastError instanceof MaterializerError) throw lastError;
   throw new MaterializerError({
     code: "invalid_readback",
     stage: "readback",
     message: "runtime secret names did not converge",
     mutationStarted: true,
+    failurePoint: "secret_readback",
   });
 }
 
@@ -1471,34 +1779,47 @@ async function vectorReadback(
   dependencies: MaterializerDependencies,
   expected: TakosOutputs["vector"],
 ): Promise<VectorReadback | undefined> {
-  // Wrangler 4.107 can return a successful blank body for both absent and
-  // existing indexes in the runner. Read the authoritative provider API so
-  // absence and the complete dimensions/metric shape are proved together.
-  const value = await dependencies.readVector(expected.name);
-  if (value === undefined) return undefined;
-  const observed = parseVector(value);
-  invariant(
-    stableJson(observed) === stableJson(expected),
-    "existing Vectorize index shape conflicts with the OpenTofu output",
-    "resource_conflict",
+  return atFailurePoint(
+    "vector_readback",
+    async () => {
+      // Wrangler 4.107 can return a successful blank body for both absent and
+      // existing indexes in the runner. Read the authoritative provider API so
+      // absence and the complete dimensions/metric shape are proved together.
+      const value = await dependencies.readVector(expected.name);
+      if (value === undefined) return undefined;
+      const observed = parseVector(value);
+      invariant(
+        stableJson(observed) === stableJson(expected),
+        "existing Vectorize index shape conflicts with the OpenTofu output",
+        "resource_conflict",
+      );
+      return observed;
+    },
+    { readbackShape: true },
   );
-  return observed;
 }
 
 async function waitForVector(
   dependencies: MaterializerDependencies,
   expected: TakosOutputs["vector"],
 ): Promise<VectorReadback> {
+  let lastError: unknown;
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const observed = await vectorReadback(dependencies, expected);
-    if (observed) return observed;
+    try {
+      const observed = await vectorReadback(dependencies, expected);
+      if (observed) return observed;
+    } catch (error) {
+      lastError = error;
+    }
     await dependencies.sleep(2_000);
   }
+  if (lastError instanceof MaterializerError) throw lastError;
   throw new MaterializerError({
     code: "invalid_readback",
     stage: "readback",
     message: "Vectorize index did not become readable",
     mutationStarted: true,
+    failurePoint: "vector_readback",
   });
 }
 
@@ -1538,13 +1859,19 @@ async function containerList(
   dependencies: MaterializerDependencies,
   configPath: string,
 ): Promise<ContainerListEntry[]> {
-  const result = await requireCommand(
-    dependencies,
-    ["containers", "list", "--json", "--per-page", "100", "--config", configPath],
-    "container_list",
-    [],
+  return atFailurePoint(
+    "container_readback",
+    async () => {
+      const result = await requireCommand(
+        dependencies,
+        ["containers", "list", "--json", "--per-page", "100", "--config", configPath],
+        "container_list",
+        [],
+      );
+      return parseContainerList(parseJsonOutput(result, "container list"));
+    },
+    { readbackShape: true },
   );
-  return parseContainerList(parseJsonOutput(result, "container list"));
 }
 
 function expectedContainerShape(
@@ -1651,7 +1978,7 @@ function containerCapacityReadback(configuration: JsonRecord): ContainerCapacity
   );
 }
 
-async function verifyContainers(
+async function verifyContainersValue(
   dependencies: MaterializerDependencies,
   configPath: string,
   outputs: TakosOutputs,
@@ -1698,6 +2025,19 @@ async function verifyContainers(
   }
 }
 
+async function verifyContainers(
+  dependencies: MaterializerDependencies,
+  configPath: string,
+  outputs: TakosOutputs,
+  descriptor: ReleaseDescriptor,
+): Promise<void> {
+  await atFailurePoint(
+    "container_readback",
+    () => verifyContainersValue(dependencies, configPath, outputs, descriptor),
+    { readbackShape: true },
+  );
+}
+
 async function verifyContainersEventually(
   dependencies: MaterializerDependencies,
   configPath: string,
@@ -1725,6 +2065,7 @@ async function verifyContainersEventually(
     stage: "readback",
     message: "container applications did not converge",
     mutationStarted: true,
+    failurePoint: "container_readback",
   });
 }
 
@@ -1746,32 +2087,38 @@ async function queueReadbacks(
   outputs: TakosOutputs,
   options: { readonly allowAbsent?: boolean } = {},
 ): Promise<Map<string, JsonRecord[]>> {
-  const result = new Map<string, JsonRecord[]>();
-  for (const queue of Object.values(outputs.queues)) {
-    const command = await dependencies.runWrangler(
-      ["queues", "consumer", "list", queue, "--json", "--config", configPath],
-    );
-    if (command.exitCode !== 0) {
-      if (options.allowAbsent && isNotFound(command)) {
-        result.set(queue, []);
-        continue;
+  return atFailurePoint(
+    "queue_readback",
+    async () => {
+      const result = new Map<string, JsonRecord[]>();
+      for (const queue of Object.values(outputs.queues)) {
+        const command = await dependencies.runWrangler(
+          ["queues", "consumer", "list", queue, "--json", "--config", configPath],
+        );
+        if (command.exitCode !== 0) {
+          if (options.allowAbsent && isNotFound(command)) {
+            result.set(queue, []);
+            continue;
+          }
+          throw commandFailure("queue_consumer_readback", command, []);
+        }
+        const parsed =
+          command.exitCode === 0 && command.stdout.trim() === ""
+            ? []
+            : parseJsonOutput(command, `queue ${queue} consumer list`);
+        invariant(Array.isArray(parsed), `queue ${queue} consumer list must be an array`, "invalid_readback");
+        result.set(
+          queue,
+          parsed.map((entry, index) => record(entry, `queue ${queue} consumer[${index}]`)),
+        );
       }
-      throw commandFailure("queue_consumer_readback", command, []);
-    }
-    const parsed =
-      command.exitCode === 0 && command.stdout.trim() === ""
-        ? []
-        : parseJsonOutput(command, `queue ${queue} consumer list`);
-    invariant(Array.isArray(parsed), `queue ${queue} consumer list must be an array`, "invalid_readback");
-    result.set(
-      queue,
-      parsed.map((entry, index) => record(entry, `queue ${queue} consumer[${index}]`)),
-    );
-  }
-  return result;
+      return result;
+    },
+    { readbackShape: true },
+  );
 }
 
-function validateQueueOwnership(
+function validateQueueOwnershipValue(
   readbacks: Map<string, JsonRecord[]>,
   outputs: TakosOutputs,
   requireTakosConsumer: boolean,
@@ -1785,9 +2132,36 @@ function validateQueueOwnership(
     invariant(owned.length <= 1, `queue ${expected.queue} has duplicate Takos consumers`, "resource_conflict");
     if (!requireTakosConsumer && owned.length === 0) continue;
     invariant(owned.length === 1, `queue ${expected.queue} is missing its Takos consumer`, "invalid_readback");
-    if (!verifySettings) continue;
     const consumer = owned[0]!;
     const settings = record(consumer.settings, `queue ${expected.queue} settings`);
+    const numericReadback = (value: unknown): boolean =>
+      (typeof value === "number" && Number.isFinite(value)) ||
+      (typeof value === "string" &&
+        value.trim() !== "" &&
+        Number.isFinite(Number(value)));
+    for (const field of [
+      "batch_size",
+      "max_wait_time_ms",
+      "max_retries",
+      "retry_delay",
+    ] as const) {
+      const value = settings[field];
+      invariant(
+        numericReadback(value),
+        `queue ${expected.queue} ${field} readback is malformed`,
+      );
+    }
+    invariant(
+      settings.max_concurrency === null ||
+        numericReadback(settings.max_concurrency),
+      `queue ${expected.queue} max_concurrency readback is malformed`,
+    );
+    invariant(
+      consumer.dead_letter_queue === null ||
+        typeof consumer.dead_letter_queue === "string",
+      `queue ${expected.queue} dead letter queue readback is malformed`,
+    );
+    if (!verifySettings) continue;
     const pairs: [string, unknown, unknown][] = [
       ["batch size", settings.batch_size, expected.max_batch_size],
       ["batch timeout", settings.max_wait_time_ms, expected.max_batch_timeout * 1000],
@@ -1804,6 +2178,25 @@ function validateQueueOwnership(
       invariant(normalizedActual === wanted || (wanted === undefined && actual == null), `queue ${expected.queue} ${label} drifted`, "invalid_readback");
     }
   }
+}
+
+function validateQueueOwnership(
+  readbacks: Map<string, JsonRecord[]>,
+  outputs: TakosOutputs,
+  requireTakosConsumer: boolean,
+  verifySettings = true,
+): void {
+  atFailurePointSync(
+    "queue_readback",
+    () =>
+      validateQueueOwnershipValue(
+        readbacks,
+        outputs,
+        requireTakosConsumer,
+        verifySettings,
+      ),
+    { readbackShape: true },
+  );
 }
 
 function queueSettingsMatch(
@@ -1924,6 +2317,7 @@ async function verifyQueueConsumersEventually(
     stage: "readback",
     message: "queue consumers did not converge",
     mutationStarted: true,
+    failurePoint: "queue_readback",
   });
 }
 
@@ -1935,15 +2329,21 @@ async function verifyVersion(
   message: string,
   releaseTag: string,
 ): Promise<void> {
-  const version = await workerVersionReadback(
-    dependencies,
-    configPath,
-    workerName,
-    versionId,
+  await atFailurePoint(
+    "worker_version_readback",
+    async () => {
+      const version = await workerVersionReadback(
+        dependencies,
+        configPath,
+        workerName,
+        versionId,
+      );
+      const annotations = record(version.annotations, "Worker version annotations");
+      invariant(annotations["workers/message"] === message, "Worker version provenance message drifted", "invalid_readback");
+      invariant(annotations["workers/tag"] === releaseTag, "Worker version release tag drifted", "invalid_readback");
+    },
+    { readbackShape: true },
   );
-  const annotations = record(version.annotations, "Worker version annotations");
-  invariant(annotations["workers/message"] === message, "Worker version provenance message drifted", "invalid_readback");
-  invariant(annotations["workers/tag"] === releaseTag, "Worker version release tag drifted", "invalid_readback");
 }
 
 async function workerVersionReadback(
@@ -1952,15 +2352,21 @@ async function workerVersionReadback(
   workerName: string,
   versionId: string,
 ): Promise<JsonRecord> {
-  const result = await requireCommand(
-    dependencies,
-    ["versions", "view", versionId, "--name", workerName, "--json", "--config", configPath],
-    "version_readback",
-    [],
+  return atFailurePoint(
+    "worker_version_readback",
+    async () => {
+      const result = await requireCommand(
+        dependencies,
+        ["versions", "view", versionId, "--name", workerName, "--json", "--config", configPath],
+        "version_readback",
+        [],
+      );
+      const version = record(parseJsonOutput(result, "Worker version readback"), "Worker version readback");
+      invariant(version.id === versionId, "Worker version identity drifted", "invalid_readback");
+      return version;
+    },
+    { readbackShape: true },
   );
-  const version = record(parseJsonOutput(result, "Worker version readback"), "Worker version readback");
-  invariant(version.id === versionId, "Worker version identity drifted", "invalid_readback");
-  return version;
 }
 
 function legacyWorkerBindingsMatch(
@@ -2040,29 +2446,35 @@ async function verifyExistingWorkerOwnership(
   outputs: TakosOutputs,
   deployment: DeploymentReadback,
 ): Promise<JsonRecord> {
-  const version = await workerVersionReadback(
-    dependencies,
-    configPath,
-    outputs.workerName,
-    deployment.versionId,
+  return atFailurePoint(
+    "worker_version_readback",
+    async () => {
+      const version = await workerVersionReadback(
+        dependencies,
+        configPath,
+        outputs.workerName,
+        deployment.versionId,
+      );
+      const annotations =
+        version.annotations !== null &&
+          typeof version.annotations === "object" &&
+          !Array.isArray(version.annotations)
+          ? (version.annotations as JsonRecord)
+          : {};
+      const message = annotations["workers/message"];
+      const marked =
+        typeof message === "string" &&
+        (MATERIALIZER_PROVENANCE_MESSAGE.test(message) ||
+          LEGACY_MATERIALIZER_PROVENANCE_MESSAGE.test(message));
+      invariant(
+        marked || legacyWorkerBindingsMatch(version, outputs),
+        "existing Worker ownership cannot be proved from materializer provenance or exact Takos bindings",
+        "resource_conflict",
+      );
+      return version;
+    },
+    { readbackShape: true },
   );
-  const annotations =
-    version.annotations !== null &&
-    typeof version.annotations === "object" &&
-    !Array.isArray(version.annotations)
-      ? (version.annotations as JsonRecord)
-      : {};
-  const message = annotations["workers/message"];
-  const marked =
-    typeof message === "string" &&
-    (MATERIALIZER_PROVENANCE_MESSAGE.test(message) ||
-      LEGACY_MATERIALIZER_PROVENANCE_MESSAGE.test(message));
-  invariant(
-    marked || legacyWorkerBindingsMatch(version, outputs),
-    "existing Worker ownership cannot be proved from materializer provenance or exact Takos bindings",
-    "resource_conflict",
-  );
-  return version;
 }
 
 function expectedContainerNamespaces(
@@ -2111,39 +2523,51 @@ function expectedContainerNamespaces(
 function verifyQueueAndVectorOwnership(
   version: JsonRecord,
   outputs: TakosOutputs,
+  provider: "queue" | "vector",
 ): void {
-  const resources = record(version.resources, "existing Worker resources");
-  invariant(
-    Array.isArray(resources.bindings),
-    "existing Worker bindings must be an array",
-    "resource_conflict",
+  const failurePoint: FailurePoint = provider === "vector"
+    ? "vector_readback"
+    : "queue_readback";
+  atFailurePointSync(
+    failurePoint,
+    () => {
+      const resources = record(version.resources, "existing Worker resources");
+      invariant(
+        Array.isArray(resources.bindings),
+        "existing Worker bindings must be an array",
+        "resource_conflict",
+      );
+      const bindings = resources.bindings.map((raw, index) =>
+        record(raw, `existing Worker binding[${index}]`)
+      );
+      const expected = provider === "vector"
+        ? [["VECTORIZE", "vectorize", "index_name", outputs.vector.name]] as const
+        : [
+            ["RUN_QUEUE", "queue", "queue_name", outputs.queues.runs],
+            ["INDEX_QUEUE", "queue", "queue_name", outputs.queues.index_jobs],
+            [
+              "TAKOS_NOTIFICATION_PUSH_QUEUE",
+              "queue",
+              "queue_name",
+              outputs.queues.notification_push,
+            ],
+          ] as const;
+      for (const [name, type, field, value] of expected) {
+        const matches = bindings.filter((binding) => binding.name === name);
+        invariant(
+          matches.length === 1 &&
+            matches[0]!.type === type &&
+            matches[0]![field] === value,
+          `existing Worker ${name} binding does not prove child-resource ownership`,
+          "resource_conflict",
+        );
+      }
+    },
+    { readbackShape: true },
   );
-  const bindings = resources.bindings.map((raw, index) =>
-    record(raw, `existing Worker binding[${index}]`),
-  );
-  for (const [name, type, field, value] of [
-    ["VECTORIZE", "vectorize", "index_name", outputs.vector.name],
-    ["RUN_QUEUE", "queue", "queue_name", outputs.queues.runs],
-    ["INDEX_QUEUE", "queue", "queue_name", outputs.queues.index_jobs],
-    [
-      "TAKOS_NOTIFICATION_PUSH_QUEUE",
-      "queue",
-      "queue_name",
-      outputs.queues.notification_push,
-    ],
-  ] as const) {
-    const matches = bindings.filter((binding) => binding.name === name);
-    invariant(
-      matches.length === 1 &&
-        matches[0]!.type === type &&
-        matches[0]![field] === value,
-      `existing Worker ${name} binding does not prove child-resource ownership`,
-      "resource_conflict",
-    );
-  }
 }
 
-async function verifyContainerOwnership(input: {
+async function verifyContainerOwnershipValue(input: {
   dependencies: MaterializerDependencies;
   configPath: string;
   outputs: TakosOutputs;
@@ -2198,7 +2622,17 @@ async function verifyContainerOwnership(input: {
   }
 }
 
-async function verifyHealth(
+async function verifyContainerOwnership(
+  input: Parameters<typeof verifyContainerOwnershipValue>[0],
+): Promise<void> {
+  await atFailurePoint(
+    "container_readback",
+    () => verifyContainerOwnershipValue(input),
+    { readbackShape: true },
+  );
+}
+
+async function verifyHealthValue(
   dependencies: MaterializerDependencies,
   publicUrl: string,
 ): Promise<{ status: number; bodyDigest: string }> {
@@ -2220,7 +2654,17 @@ async function verifyHealth(
     stage: "post_conditions",
     message: `Takos health readback did not converge (last status ${lastStatus || "unreachable"})`,
     mutationStarted: true,
+    failurePoint: "health_readback",
   });
+}
+
+async function verifyHealth(
+  dependencies: MaterializerDependencies,
+  publicUrl: string,
+): Promise<{ status: number; bodyDigest: string }> {
+  return atFailurePoint("health_readback", () =>
+    verifyHealthValue(dependencies, publicUrl),
+  );
 }
 
 function materializerEvidence(input: {
@@ -2287,6 +2731,7 @@ async function readPackageVersion(sourceRoot: string): Promise<string> {
       code: "source_identity_invalid",
       stage: "preflight",
       message: "package.json is missing or invalid in the SourceSnapshot",
+      failurePoint: "composition_source",
     });
   }
   const packageJson = record(value, "package.json");
@@ -2309,6 +2754,7 @@ async function ensureLockedWrangler(sourceRoot: string): Promise<string> {
       stage: "preflight",
       message:
         "locked Wrangler is unavailable; InstallConfig.sourceBuild must run bun install --frozen-lockfile",
+      failurePoint: "wrangler_runtime",
     });
   }
   invariant(record(packageValue, "Wrangler package").version === WRANGLER_VERSION, `locked Wrangler must be ${WRANGLER_VERSION}`, "wrangler_runtime_unavailable");
@@ -2318,7 +2764,7 @@ async function ensureLockedWrangler(sourceRoot: string): Promise<string> {
   return binPath;
 }
 
-export function validateNodeRuntimeVersion(output: string): string {
+function validateNodeRuntimeVersionValue(output: string): string {
   const version = output.trim();
   const match = /^v(\d+)\.(\d+)\.(\d+)$/u.exec(version);
   invariant(
@@ -2327,6 +2773,12 @@ export function validateNodeRuntimeVersion(output: string): string {
     "wrangler_runtime_unavailable",
   );
   return version;
+}
+
+export function validateNodeRuntimeVersion(output: string): string {
+  return atFailurePointSync("node_runtime", () =>
+    validateNodeRuntimeVersionValue(output),
+  );
 }
 
 async function ensureCompatibleNodeRuntime(
@@ -2344,9 +2796,19 @@ async function ensureCompatibleNodeRuntime(
       code: "wrangler_runtime_unavailable",
       stage: "preflight",
       message: `Node runtime is unavailable at ${nodeExecutable}`,
+      failurePoint: "node_runtime",
     });
   }
   const timer = setTimeout(() => processHandle.kill(), 5_000);
+  const stdoutStream = processHandle.stdout;
+  const stderrStream = processHandle.stderr;
+  invariant(
+    stdoutStream instanceof ReadableStream &&
+      stderrStream instanceof ReadableStream,
+    "Node runtime version probe streams are unavailable",
+    "wrangler_runtime_unavailable",
+    "node_runtime",
+  );
   let exitCode: number;
   let stdoutBytes: Uint8Array;
   let stderrBytes: Uint8Array;
@@ -2354,13 +2816,13 @@ async function ensureCompatibleNodeRuntime(
     [exitCode, stdoutBytes, stderrBytes] = await Promise.all([
       processHandle.exited,
       readStreamBounded(
-        processHandle.stdout,
+        stdoutStream,
         4 * 1024,
         "Node version stdout",
         "wrangler_runtime_unavailable",
       ),
       readStreamBounded(
-        processHandle.stderr,
+        stderrStream,
         4 * 1024,
         "Node version stderr",
         "wrangler_runtime_unavailable",
@@ -2379,21 +2841,28 @@ async function ensureCompatibleNodeRuntime(
   validateNodeRuntimeVersion(stdout);
 }
 
+type FetchImpl = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
 async function listCloudflareContainers(input: {
   apiToken: string;
   accountId: string;
+  fetchImpl: FetchImpl;
 }): Promise<CommandResult> {
   const applications: unknown[] = [];
   const seenPageTokens = new Set<string>();
   let pageToken: string | undefined;
-  try {
-    for (let page = 0; page < 100; page += 1) {
-      const url = new URL(
-        `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/containers/dash/applications`,
-      );
-      url.searchParams.set("per_page", "100");
-      if (pageToken) url.searchParams.set("page_token", pageToken);
-      const response = await fetch(url, {
+  for (let page = 0; page < 100; page += 1) {
+    const url = new URL(
+      `https://api.cloudflare.com/client/v4/accounts/${input.accountId}/containers/dash/applications`,
+    );
+    url.searchParams.set("per_page", "100");
+    if (pageToken) url.searchParams.set("page_token", pageToken);
+    let response: Response;
+    try {
+      response = await input.fetchImpl(url, {
         headers: {
           authorization: `Bearer ${input.apiToken}`,
           accept: "application/json",
@@ -2401,86 +2870,155 @@ async function listCloudflareContainers(input: {
         redirect: "error",
         signal: AbortSignal.timeout(30_000),
       });
-      if (!response.ok || !response.body) {
-        return {
-          exitCode: 1,
-          stdout: "",
-          stderr: `container list API returned HTTP ${response.status}`,
-        };
-      }
-      const bytes = await readStreamBounded(
+    } catch {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "container list API request failed",
+      };
+    }
+    if (!response.ok || !response.body) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: `container list API returned HTTP ${response.status}`,
+      };
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = await readStreamBounded(
         response.body,
         MAX_COMMAND_OUTPUT_BYTES,
         "container list response",
         "readback_failed",
       );
-      const envelope = record(
-        JSON.parse(new TextDecoder().decode(bytes)) as unknown,
-        "container list response",
-      );
-      invariant(envelope.success !== false, "container list API rejected the request", "readback_failed");
-      invariant(Array.isArray(envelope.result), "container list API result must be an array", "invalid_readback");
-      for (const raw of envelope.result) {
-        const item = record(raw, "container list application");
-        const health =
-          item.health !== null && typeof item.health === "object" && !Array.isArray(item.health)
-            ? (item.health as JsonRecord)
-            : {};
-        const instances =
-          health.instances !== null &&
-          typeof health.instances === "object" &&
-          !Array.isArray(health.instances)
-            ? (health.instances as JsonRecord)
-            : {};
-        const state =
-          typeof instances.failed === "number" && instances.failed > 0
-            ? "degraded"
-            : (typeof instances.starting === "number" && instances.starting > 0) ||
-                (typeof instances.scheduling === "number" && instances.scheduling > 0)
-              ? "provisioning"
-              : typeof instances.active === "number" && instances.active > 0
-                ? "active"
-                : "ready";
-        applications.push({
-          id: item.id,
-          name: item.name,
-          image: item.image,
-          state,
-        });
-      }
-      const resultInfo =
-        envelope.result_info !== null &&
-        typeof envelope.result_info === "object" &&
-        !Array.isArray(envelope.result_info)
-          ? (envelope.result_info as JsonRecord)
-          : {};
-      const next = resultInfo.next_page_token;
-      if (next === null || next === undefined || next === "") break;
-      pageToken = requiredString(next, "container list next page token");
-      invariant(pageToken.length <= 4_096, "container list next page token is too large", "invalid_readback");
-      invariant(!seenPageTokens.has(pageToken), "container list pagination repeated a token", "invalid_readback");
-      seenPageTokens.add(pageToken);
-      invariant(page < 99, "container list pagination exceeded its bound", "invalid_readback");
+    } catch {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "container list API response could not be read",
+      };
     }
-    const stdout = JSON.stringify(applications);
-    invariant(Buffer.byteLength(stdout) <= MAX_COMMAND_OUTPUT_BYTES, "container list is too large", "invalid_readback");
-    return { exitCode: 0, stdout, stderr: "" };
-  } catch (error) {
+    const parsedPage = atFailurePointSync(
+      "container_readback",
+      () => {
+        const envelope = record(
+          JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+          "container list response",
+        );
+        invariant(
+          typeof envelope.success === "boolean",
+          "container list API success field must be a boolean",
+          "invalid_readback",
+        );
+        if (!envelope.success) return { rejected: true } as const;
+        invariant(
+          Array.isArray(envelope.result),
+          "container list API result must be an array",
+          "invalid_readback",
+        );
+        for (const raw of envelope.result) {
+          const item = record(raw, "container list application");
+          const health = record(
+            item.health,
+            "container list application health",
+          );
+          const instances = record(
+            health.instances,
+            "container list application instances",
+          );
+          for (const field of [
+            "active",
+            "healthy",
+            "failed",
+            "starting",
+            "scheduling",
+          ]) {
+            invariant(
+              typeof instances[field] === "number" &&
+                Number.isFinite(instances[field]) &&
+                Number.isInteger(instances[field]) &&
+                instances[field] >= 0,
+              `container list application instances.${field} is invalid`,
+              "invalid_readback",
+            );
+          }
+          const state =
+            typeof instances.failed === "number" && instances.failed > 0
+              ? "degraded"
+              : (typeof instances.starting === "number" &&
+                    instances.starting > 0) ||
+                  (typeof instances.scheduling === "number" &&
+                    instances.scheduling > 0)
+                ? "provisioning"
+                : typeof instances.active === "number" &&
+                    instances.active > 0
+                  ? "active"
+                  : "ready";
+          applications.push({
+            id: item.id,
+            name: item.name,
+            image: item.image,
+            state,
+          });
+        }
+        invariant(
+          envelope.result_info === undefined ||
+            (envelope.result_info !== null &&
+              typeof envelope.result_info === "object" &&
+              !Array.isArray(envelope.result_info)),
+          "container list result_info must be an object",
+          "invalid_readback",
+        );
+        const resultInfo = (envelope.result_info ?? {}) as JsonRecord;
+        const next = resultInfo.next_page_token;
+        if (next === null || next === undefined || next === "") {
+          return { rejected: false, nextPageToken: undefined } as const;
+        }
+        const nextPageToken = requiredString(
+          next,
+          "container list next page token",
+        );
+        invariant(
+          nextPageToken.length <= 4_096,
+          "container list next page token is too large",
+          "invalid_readback",
+        );
+        invariant(
+          !seenPageTokens.has(nextPageToken),
+          "container list pagination repeated a token",
+          "invalid_readback",
+        );
+        invariant(
+          page < 99,
+          "container list pagination exceeded its bound",
+          "invalid_readback",
+        );
+        return { rejected: false, nextPageToken } as const;
+      },
+      { readbackShape: true },
+    );
+    if (parsedPage.rejected) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: "container list API rejected the request",
+      };
+    }
+    pageToken = parsedPage.nextPageToken;
+    if (!pageToken) break;
+    seenPageTokens.add(pageToken);
+  }
+  const stdout = JSON.stringify(applications);
+  if (Buffer.byteLength(stdout) > MAX_COMMAND_OUTPUT_BYTES) {
     return {
       exitCode: 1,
       stdout: "",
-      stderr:
-        error instanceof MaterializerError
-          ? `${error.code}:${error.stage}`
-          : "container list API request failed",
+      stderr: "container list response exceeded its bound",
     };
   }
+  return { exitCode: 0, stdout, stderr: "" };
 }
-
-type FetchImpl = (
-  input: string | URL | Request,
-  init?: RequestInit,
-) => Promise<Response>;
 
 function artifactDownloadStatusIsRetryable(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
@@ -2492,6 +3030,9 @@ function artifactDownloadFailure(reason: string): MaterializerError {
     stage: "artifact",
     message: "immutable release artifact download failed",
     diagnosticDigest: digest(`artifact_download\n${reason}`),
+    // fetchBytes is shared by descriptor and archive retrieval. Its caller's
+    // boundary replaces this generic point with the concrete artifact point.
+    failurePoint: "materialization",
   });
 }
 
@@ -2517,7 +3058,11 @@ export function createDependencies(input: {
       // first account page. Use the same fixed Cloudflare Containers endpoint
       // with explicit bounded pagination so absence checks are authoritative.
       if (args[0] === "containers" && args[1] === "list") {
-        return listCloudflareContainers(input);
+        return listCloudflareContainers({
+          apiToken: input.apiToken,
+          accountId: input.accountId,
+          fetchImpl: providerFetch,
+        });
       }
       const processHandle = Bun.spawn([input.nodeBin, input.wranglerBin, ...args], {
         cwd: input.sourceRoot,
@@ -2581,6 +3126,7 @@ export function createDependencies(input: {
           stage: "readback",
           message: "Worker presence readback failed",
           diagnosticDigest: digest(`${label}\ntransport`),
+          failurePoint: "worker_presence_readback",
         });
       }
       if (response.status === 200) return true;
@@ -2590,6 +3136,7 @@ export function createDependencies(input: {
         stage: "readback",
         message: "Worker presence readback was ambiguous",
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+        failurePoint: "worker_presence_readback",
       });
     },
     async deleteWorker(workerName) {
@@ -2616,6 +3163,7 @@ export function createDependencies(input: {
           message: "Worker delete failed; provider diagnostics were withheld from lifecycle evidence",
           mutationStarted: true,
           diagnosticDigest: digest(`${label}\ntransport`),
+          failurePoint: "worker_cleanup",
         });
       }
       if (response.ok || response.status === 404) return;
@@ -2625,6 +3173,7 @@ export function createDependencies(input: {
         message: "Worker delete failed; provider diagnostics were withheld from lifecycle evidence",
         mutationStarted: true,
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+        failurePoint: "worker_cleanup",
       });
     },
     async readVector(indexName) {
@@ -2648,6 +3197,7 @@ export function createDependencies(input: {
           stage: "readback",
           message: "Vectorize presence readback failed",
           diagnosticDigest: digest(`${label}\ntransport`),
+          failurePoint: "vector_readback",
         });
       }
       // Vectorize returns 410 after an index deletion has completed. Treat the
@@ -2661,6 +3211,7 @@ export function createDependencies(input: {
           stage: "readback",
           message: "Vectorize readback was ambiguous",
           diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+          failurePoint: "vector_readback",
         });
       }
       const bytes = await readStreamBounded(
@@ -2678,6 +3229,7 @@ export function createDependencies(input: {
           stage: "readback",
           message: "Vectorize readback returned invalid JSON",
           diagnosticDigest: digest(`${label}\ninvalid-json`),
+          failurePoint: "vector_readback",
         });
       }
       invariant(
@@ -2687,9 +3239,24 @@ export function createDependencies(input: {
       );
       const envelope = value as JsonRecord;
       invariant(
-        envelope.success !== false,
+        typeof envelope.success === "boolean",
+        "Vectorize readback success field must be a boolean",
+        "invalid_readback",
+        "vector_readback",
+      );
+      invariant(
+        envelope.success,
         "Vectorize readback API rejected the request",
         "readback_failed",
+        "vector_readback",
+      );
+      invariant(
+        envelope.result !== null &&
+          typeof envelope.result === "object" &&
+          !Array.isArray(envelope.result),
+        "Vectorize readback result must be an object",
+        "invalid_readback",
+        "vector_readback",
       );
       return envelope.result;
     },
@@ -2715,6 +3282,7 @@ export function createDependencies(input: {
           stage: "r2_object_readback",
           message: "R2 object list readback failed",
           diagnosticDigest: digest(`${label}\ntransport`),
+          failurePoint: "r2_cleanup",
         });
       }
       if (response.status === 404) return [];
@@ -2724,6 +3292,7 @@ export function createDependencies(input: {
           stage: "r2_object_readback",
           message: "R2 object list readback was ambiguous",
           diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+          failurePoint: "r2_cleanup",
         });
       }
       const bytes = await readStreamBounded(
@@ -2741,13 +3310,31 @@ export function createDependencies(input: {
           stage: "r2_object_readback",
           message: "R2 object list returned invalid JSON",
           diagnosticDigest: digest(`${label}\ninvalid-json`),
+          failurePoint: "r2_cleanup",
         });
       }
-      const envelope = record(value, "R2 object list envelope");
+      const envelope = atFailurePointSync(
+        "r2_cleanup",
+        () => record(value, "R2 object list envelope"),
+        { readbackShape: true },
+      );
       invariant(
-        envelope.success !== false && Array.isArray(envelope.result),
+        typeof envelope.success === "boolean",
+        "R2 object list success field must be a boolean",
+        "invalid_readback",
+        "r2_cleanup",
+      );
+      invariant(
+        envelope.success,
         "R2 object list API rejected the request",
         "readback_failed",
+        "r2_cleanup",
+      );
+      invariant(
+        Array.isArray(envelope.result),
+        "R2 object list result must be an array",
+        "invalid_readback",
+        "r2_cleanup",
       );
       invariant(
         envelope.result.length <= 1000,
@@ -2755,9 +3342,14 @@ export function createDependencies(input: {
         "invalid_readback",
       );
       const keys = envelope.result.map((entry, index) =>
-        requiredString(
-          record(entry, `R2 object[${index}]`).key,
-          `R2 object[${index}].key`,
+        atFailurePointSync(
+          "r2_cleanup",
+          () =>
+            requiredString(
+              record(entry, `R2 object[${index}]`).key,
+              `R2 object[${index}].key`,
+            ),
+          { readbackShape: true },
         ),
       );
       invariant(
@@ -2791,6 +3383,7 @@ export function createDependencies(input: {
             "R2 object delete failed; provider diagnostics were withheld from lifecycle evidence",
           mutationStarted: true,
           diagnosticDigest: digest(`${label}\ntransport`),
+          failurePoint: "r2_cleanup",
         });
       }
       if (response.ok || response.status === 404) {
@@ -2805,6 +3398,7 @@ export function createDependencies(input: {
           "R2 object delete failed; provider diagnostics were withheld from lifecycle evidence",
         mutationStarted: true,
         diagnosticDigest: digest(`${label}\nstatus=${response.status}`),
+        failurePoint: "r2_cleanup",
       });
     },
     async fetchBytes(url, maxBytes) {
@@ -2895,6 +3489,8 @@ export function createDependencies(input: {
       );
       return { status: response.status, bytes };
     },
+    writePrivateJson,
+    removeTempRoot: (path) => rm(path, { recursive: true, force: true }),
     sleep: (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)),
     now: () => new Date().toISOString(),
   };
@@ -2912,32 +3508,72 @@ export async function materializePostApply(input: {
 }): Promise<ReturnType<typeof materializerEvidence>> {
   const { invocation, sourceRoot, dependencies } = input;
   invariant(invocation.phase === "post_apply", "post_apply invocation is required");
-  const takosumiCompositionSource =
-    await readTakosumiCompositionSourceIdentity(sourceRoot);
-  const descriptorBytes = await dependencies.fetchBytes(invocation.descriptorUrl!, MAX_DESCRIPTOR_BYTES);
-  invariant(digest(descriptorBytes) === invocation.descriptorDigest, "release artifact descriptor digest mismatch", "artifact_digest_mismatch");
-  let descriptorValue: unknown;
-  try {
-    descriptorValue = JSON.parse(new TextDecoder().decode(descriptorBytes)) as unknown;
-  } catch {
-    throw new MaterializerError({
-      code: "invalid_artifact_descriptor",
-      stage: "artifact",
-      message: "release artifact descriptor is invalid JSON",
+  const takosumiCompositionSource = await atFailurePoint(
+    "composition_source",
+    () => readTakosumiCompositionSourceIdentity(sourceRoot),
+  );
+  const packageVersion = await atFailurePoint(
+    "composition_source",
+    () => readPackageVersion(sourceRoot),
+  );
+  const descriptor = await atFailurePoint("descriptor", async () => {
+    const descriptorBytes = await dependencies.fetchBytes(
+      invocation.descriptorUrl!,
+      MAX_DESCRIPTOR_BYTES,
+    );
+    invariant(
+      digest(descriptorBytes) === invocation.descriptorDigest,
+      "release artifact descriptor digest mismatch",
+      "artifact_digest_mismatch",
+    );
+    let descriptorValue: unknown;
+    try {
+      descriptorValue = JSON.parse(
+        new TextDecoder().decode(descriptorBytes),
+      ) as unknown;
+    } catch {
+      throw new MaterializerError({
+        code: "invalid_artifact_descriptor",
+        stage: "artifact",
+        message: "release artifact descriptor is invalid JSON",
+        failurePoint: "descriptor",
+      });
+    }
+    return validateReleaseDescriptor(descriptorValue, {
+      sourceCommit: invocation.sourceCommit,
+      packageVersion,
+      accountId: invocation.outputs.accountId,
+      descriptorUrl: invocation.descriptorUrl!,
+      takosumiCompositionSource,
     });
-  }
-  const descriptor = validateReleaseDescriptor(descriptorValue, {
-    sourceCommit: invocation.sourceCommit,
-    packageVersion: await readPackageVersion(sourceRoot),
-    accountId: invocation.outputs.accountId,
-    descriptorUrl: invocation.descriptorUrl!,
-    takosumiCompositionSource,
   });
-  const archiveBytes = await dependencies.fetchBytes(descriptor.artifact.url, MAX_ARCHIVE_BYTES);
-  invariant(archiveBytes.byteLength === descriptor.artifact.size, "Worker archive size mismatch", "artifact_digest_mismatch");
-  invariant(digest(archiveBytes) === descriptor.artifact.sha256Prefixed, "Worker archive digest mismatch", "artifact_digest_mismatch");
-  const archiveEntries = await parseWorkerArchive(archiveBytes);
-  const secrets = await loadRuntimeSecretsFile(invocation.runtimeSecretsFile!);
+  const { archiveBytes, archiveEntries } = await atFailurePoint(
+    "archive",
+    async () => {
+      const archiveBytes = await dependencies.fetchBytes(
+        descriptor.artifact.url,
+        MAX_ARCHIVE_BYTES,
+      );
+      invariant(
+        archiveBytes.byteLength === descriptor.artifact.size,
+        "Worker archive size mismatch",
+        "artifact_digest_mismatch",
+      );
+      invariant(
+        digest(archiveBytes) === descriptor.artifact.sha256Prefixed,
+        "Worker archive digest mismatch",
+        "artifact_digest_mismatch",
+      );
+      return {
+        archiveBytes,
+        archiveEntries: await parseWorkerArchive(archiveBytes),
+      };
+    },
+  );
+  const secrets = await atFailurePoint(
+    "runtime_secret_file",
+    () => loadRuntimeSecretsFile(invocation.runtimeSecretsFile!),
+  );
 
   const tempRoot = await mkdtemp(join(tmpdir(), "takos-product-materializer-"));
   const artifactRoot = join(tempRoot, "artifact");
@@ -2946,35 +3582,43 @@ export async function materializePostApply(input: {
   const reconcileSecretsPath = join(tempRoot, "reconcile-secrets.json");
   const dryRunOut = join(tempRoot, "dry-run");
   const completedStages: string[] = [];
+  let primaryError: MaterializerError | undefined;
   try {
-    await mkdir(artifactRoot, { mode: 0o700 });
-    await extractWorkerArchive(archiveEntries, artifactRoot);
-    const config = renderWranglerConfig({
-      outputs: invocation.outputs,
-      descriptor,
-      workspaceId: invocation.workspaceId,
-      artifactRoot,
-      sourceRoot,
+    await atFailurePoint("archive", async () => {
+      await mkdir(artifactRoot, { mode: 0o700 });
+      await extractWorkerArchive(archiveEntries, artifactRoot);
     });
-    const configDigest = digestJson(config);
-    await writePrivateJson(configPath, config);
-    await writePrivateJson(deploySecretsPath, secrets);
+    const configDigest = await atFailurePoint("config_render", async () => {
+      const config = renderWranglerConfig({
+        outputs: invocation.outputs,
+        descriptor,
+        workspaceId: invocation.workspaceId,
+        artifactRoot,
+        sourceRoot,
+      });
+      const configDigest = digestJson(config);
+      await dependencies.writePrivateJson(configPath, config);
+      await dependencies.writePrivateJson(deploySecretsPath, secrets);
+      return configDigest;
+    });
 
-    await requireCommand(
-      dependencies,
-      [
-        "deploy",
-        "--dry-run",
-        "--no-bundle",
-        "--containers-rollout",
-        "none",
-        "--outdir",
-        dryRunOut,
-        "--config",
-        configPath,
-      ],
-      "wrangler_dry_run",
-      completedStages,
+    await atFailurePoint("wrangler_dry_run", () =>
+      requireCommand(
+        dependencies,
+        [
+          "deploy",
+          "--dry-run",
+          "--no-bundle",
+          "--containers-rollout",
+          "none",
+          "--outdir",
+          dryRunOut,
+          "--config",
+          configPath,
+        ],
+        "wrangler_dry_run",
+        completedStages,
+      ),
     );
     const previous = await deploymentReadback(
       dependencies,
@@ -2996,7 +3640,12 @@ export async function materializePostApply(input: {
       invocation.outputs.workerName,
     );
     const existingContainers = await containerList(dependencies, configPath);
-    assertNoRetiredRuntimeContainer(existingContainers, invocation.outputs.workerName);
+    atFailurePointSync("container_readback", () =>
+      assertNoRetiredRuntimeContainer(
+        existingContainers,
+        invocation.outputs.workerName,
+      )
+    );
     const expectedNames = new Set(Object.keys(expectedContainerShape(invocation.outputs, descriptor)));
     const existingOwnedContainers = existingContainers.filter((item) =>
       expectedNames.has(item.name),
@@ -3006,6 +3655,7 @@ export async function materializePostApply(input: {
         previousVersion,
         "container application ownership cannot be proved without the owned Worker",
         "resource_conflict",
+        "container_readback",
       );
       await verifyContainerOwnership({
         dependencies,
@@ -3029,21 +3679,43 @@ export async function materializePostApply(input: {
         ).length,
       0,
     );
-    if (existingVector || existingQueueConsumerCount > 0) {
+    if (existingVector) {
       invariant(
         previousVersion,
-        "queue or Vectorize ownership cannot be proved without the owned Worker",
+        "Vectorize ownership cannot be proved without the owned Worker",
         "resource_conflict",
+        "vector_readback",
       );
-      verifyQueueAndVectorOwnership(previousVersion, invocation.outputs);
+      verifyQueueAndVectorOwnership(
+        previousVersion,
+        invocation.outputs,
+        "vector",
+      );
+    }
+    if (existingQueueConsumerCount > 0) {
+      invariant(
+        previousVersion,
+        "queue ownership cannot be proved without the owned Worker",
+        "resource_conflict",
+        "queue_readback",
+      );
+      verifyQueueAndVectorOwnership(
+        previousVersion,
+        invocation.outputs,
+        "queue",
+      );
     }
 
     const desiredNames = new Set(Object.keys(secrets));
     const staleSecrets = existingSecrets.filter((name) => !desiredNames.has(name));
     if (staleSecrets.length > 0) {
-      await writePrivateJson(
-        reconcileSecretsPath,
-        Object.fromEntries(staleSecrets.map((name) => [name, null])),
+      await atFailurePoint(
+        "runtime_secret_file",
+        () =>
+          dependencies.writePrivateJson(
+            reconcileSecretsPath,
+            Object.fromEntries(staleSecrets.map((name) => [name, null])),
+          ),
       );
     }
 
@@ -3172,27 +3844,39 @@ export async function materializePostApply(input: {
     });
   } catch (error) {
     if (error instanceof MaterializerError) {
-      throw new MaterializerError({
+      primaryError = new MaterializerError({
         code: error.code,
         stage: error.stage,
         message: error.message,
         mutationStarted: error.mutationStarted || completedStages.length > 0,
         completedStages: completedStages.length ? completedStages : error.completedStages,
         diagnosticDigest: error.diagnosticDigest,
+        failurePoint: error.failurePoint,
+      });
+    } else {
+      primaryError = new MaterializerError({
+        code: "unexpected_failure",
+        stage: "materialization",
+        message: "unexpected materializer failure; details remain runner-private",
+        mutationStarted: completedStages.length > 0,
+        completedStages,
+        diagnosticDigest: digest(
+          error instanceof Error ? error.message : String(error),
+        ),
+        failurePoint: "materialization",
       });
     }
-    throw new MaterializerError({
-      code: "unexpected_failure",
-      stage: "materialization",
-      message: "unexpected materializer failure; details remain runner-private",
-      mutationStarted: completedStages.length > 0,
-      completedStages,
-      diagnosticDigest: digest(
-        error instanceof Error ? error.message : String(error),
-      ),
-    });
+    throw primaryError;
   } finally {
-    await rm(tempRoot, { recursive: true, force: true });
+    await removeTempRootWithPrimary({
+      dependencies,
+      tempRoot,
+      failurePoint: "runtime_secret_file",
+      completedStages,
+      mutationStarted:
+        primaryError?.mutationStarted === true || completedStages.length > 0,
+      primaryError,
+    });
   }
 }
 
@@ -3208,12 +3892,26 @@ async function waitForChildCleanupAbsence(input: {
     configPath,
     outputs,
     ownedContainerNames,
-    mutationStarted,
   } = input;
-  let lastError: unknown;
+  let queueError: MaterializerError | undefined;
+  let containerError: MaterializerError | undefined;
+  let vectorError: MaterializerError | undefined;
+  const observe = async (
+    failurePoint: FailurePoint,
+    operation: () => Promise<void>,
+  ): Promise<MaterializerError | undefined> => {
+    try {
+      await atFailurePoint(failurePoint, operation, { readbackShape: true });
+      return undefined;
+    } catch (error) {
+      return classifyBoundaryFailure(error, failurePoint, {
+        readbackShape: true,
+      });
+    }
+  };
   const maxAttempts = 100;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    try {
+    queueError = await observe("queue_readback", async () => {
       const queues = await queueReadbacks(dependencies, configPath, outputs, {
         allowAbsent: true,
       });
@@ -3226,6 +3924,8 @@ async function waitForChildCleanupAbsence(input: {
           "invalid_readback",
         );
       }
+    });
+    containerError = await observe("container_readback", async () => {
       const containers = await containerList(dependencies, configPath);
       assertNoRetiredRuntimeContainer(containers, outputs.workerName);
       invariant(
@@ -3233,26 +3933,27 @@ async function waitForChildCleanupAbsence(input: {
         "Takos container application still exists after pre_destroy cleanup",
         "invalid_readback",
       );
+    });
+    vectorError = await observe("vector_readback", async () => {
       invariant(
         !(await vectorReadback(dependencies, outputs.vector)),
         "Vectorize index still exists after pre_destroy cleanup",
         "invalid_readback",
       );
+    });
+    if (!queueError && !containerError && !vectorError) {
       return;
-    } catch (error) {
-      lastError = error;
-      if (attempt + 1 < maxAttempts) await dependencies.sleep(3_000);
     }
+    if (attempt + 1 < maxAttempts) await dependencies.sleep(3_000);
   }
+  const lastError = queueError ?? containerError ?? vectorError;
   throw new MaterializerError({
-    code: "invalid_readback",
-    stage: "readback",
+    code: lastError?.code ?? "invalid_readback",
+    stage: lastError?.stage ?? "readback",
     message: "Takos-owned child resources did not converge to absent",
-    mutationStarted,
-    diagnosticDigest:
-      lastError instanceof MaterializerError
-        ? lastError.diagnosticDigest
-        : digest(lastError instanceof Error ? lastError.message : String(lastError)),
+    mutationStarted: input.mutationStarted,
+    diagnosticDigest: lastError?.diagnosticDigest,
+    failurePoint: lastError?.failurePoint ?? "worker_cleanup",
   });
 }
 
@@ -3271,21 +3972,33 @@ async function waitForWorkerAbsence(
         stage: "readback",
         message: "Worker still exists after pre_destroy cleanup",
         mutationStarted: true,
+        failurePoint: "worker_presence_readback",
       });
     } catch (error) {
       lastError = error;
     }
     if (attempt < 11) await dependencies.sleep(3_000);
   }
+  if (lastError instanceof MaterializerError) {
+    throw new MaterializerError({
+      code: lastError.code,
+      stage: lastError.stage,
+      message: lastError.message,
+      mutationStarted: true,
+      completedStages: lastError.completedStages,
+      diagnosticDigest: lastError.diagnosticDigest,
+      failurePoint: lastError.failurePoint,
+    });
+  }
   throw new MaterializerError({
     code: "invalid_readback",
     stage: "readback",
     message: "Worker did not converge to absent",
     mutationStarted: true,
-    diagnosticDigest:
-      lastError instanceof MaterializerError
-        ? lastError.diagnosticDigest
-        : digest(lastError instanceof Error ? lastError.message : String(lastError)),
+    diagnosticDigest: digest(
+      lastError instanceof Error ? lastError.message : String(lastError),
+    ),
+    failurePoint: "worker_presence_readback",
   });
 }
 
@@ -3296,27 +4009,50 @@ async function purgeR2BackingObjects(input: {
   readonly outputs: TakosOutputs;
   readonly completedStages: string[];
 }): Promise<number> {
-  let removed = 0;
-  for (const bucketName of Object.values(input.outputs.buckets)) {
-    for (;;) {
-      const keys = await input.dependencies.listR2Objects(bucketName);
-      if (keys.length === 0) break;
-      for (
-        let offset = 0;
-        offset < keys.length;
-        offset += R2_OBJECT_DELETE_CONCURRENCY
-      ) {
-        await Promise.all(
-          keys
-            .slice(offset, offset + R2_OBJECT_DELETE_CONCURRENCY)
-            .map((key) => input.dependencies.deleteR2Object(bucketName, key)),
-        );
+  return atFailurePoint(
+    "r2_cleanup",
+    async () => {
+      let removed = 0;
+      let mutationRecorded = input.completedStages.includes(
+        "r2_objects_deleted",
+      );
+      for (const bucketName of Object.values(input.outputs.buckets)) {
+        for (;;) {
+          const keys = await input.dependencies.listR2Objects(bucketName);
+          if (keys.length === 0) break;
+          for (
+            let offset = 0;
+            offset < keys.length;
+            offset += R2_OBJECT_DELETE_CONCURRENCY
+          ) {
+            const batch = keys.slice(
+              offset,
+              offset + R2_OBJECT_DELETE_CONCURRENCY,
+            );
+            const results = await Promise.allSettled(
+              batch.map(async (key) => {
+                await input.dependencies.deleteR2Object(bucketName, key);
+                removed += 1;
+                if (!mutationRecorded) {
+                  input.completedStages.push("r2_objects_deleted");
+                  mutationRecorded = true;
+                }
+              }),
+            );
+            const failed = results.find(
+              (result): result is PromiseRejectedResult =>
+                result.status === "rejected",
+            );
+            if (failed) {
+              throw failed.reason;
+            }
+          }
+        }
       }
-      removed += keys.length;
-    }
-  }
-  if (removed > 0) input.completedStages.push("r2_objects_deleted");
-  return removed;
+      return removed;
+    },
+    { readbackShape: true },
+  );
 }
 
 export async function materializePreDestroy(input: {
@@ -3329,6 +4065,7 @@ export async function materializePreDestroy(input: {
   const tempRoot = await mkdtemp(join(tmpdir(), "takos-product-pre-destroy-"));
   const configPath = join(tempRoot, "wrangler.json");
   const completedStages: string[] = [];
+  let primaryError: MaterializerError | undefined;
   try {
     const minimalConfig = {
       name: invocation.outputs.workerName,
@@ -3341,7 +4078,9 @@ export async function materializePreDestroy(input: {
         },
       ],
     };
-    await writePrivateJson(configPath, minimalConfig);
+    await atFailurePoint("config_render", () =>
+      dependencies.writePrivateJson(configPath, minimalConfig)
+    );
     const previous = await deploymentReadback(
       dependencies,
       configPath,
@@ -3364,7 +4103,12 @@ export async function materializePreDestroy(input: {
     );
     validateQueueOwnership(queues, invocation.outputs, false, false);
     const containers = await containerList(dependencies, configPath);
-    assertNoRetiredRuntimeContainer(containers, invocation.outputs.workerName);
+    atFailurePointSync("container_readback", () =>
+      assertNoRetiredRuntimeContainer(
+        containers,
+        invocation.outputs.workerName,
+      )
+    );
     const ownedNames = new Set<string>(
       Object.values(containerNames(invocation.outputs.workerName)),
     );
@@ -3385,16 +4129,25 @@ export async function materializePreDestroy(input: {
       ownedQueueConsumerCount > 0 ||
       ownedContainers.length > 0 ||
       Boolean(vector);
-    invariant(
-      previous || !hasOwnedChildren,
-      "child resource ownership cannot be proved without the owned Worker",
-      "resource_conflict",
-    );
+    if (!previous && hasOwnedChildren) {
+      const failurePoint: FailurePoint = ownedContainers.length > 0
+        ? "container_readback"
+        : vector
+          ? "vector_readback"
+          : "queue_readback";
+      invariant(
+        false,
+        "child resource ownership cannot be proved without the owned Worker",
+        "resource_conflict",
+        failurePoint,
+      );
+    }
     if (ownedContainers.length > 0) {
       invariant(
         previousVersion,
         "container application ownership cannot be proved without the owned Worker version",
         "resource_conflict",
+        "container_readback",
       );
       await verifyContainerOwnership({
         dependencies,
@@ -3404,17 +4157,37 @@ export async function materializePreDestroy(input: {
         workerVersion: previousVersion,
       });
     }
-    if (vector || ownedQueueConsumerCount > 0) {
+    if (vector) {
       invariant(
         previousVersion,
-        "queue or Vectorize ownership cannot be proved without the owned Worker version",
+        "Vectorize ownership cannot be proved without the owned Worker version",
         "resource_conflict",
+        "vector_readback",
       );
-      verifyQueueAndVectorOwnership(previousVersion, invocation.outputs);
+      verifyQueueAndVectorOwnership(
+        previousVersion,
+        invocation.outputs,
+        "vector",
+      );
+    }
+    if (ownedQueueConsumerCount > 0) {
+      invariant(
+        previousVersion,
+        "queue ownership cannot be proved without the owned Worker version",
+        "resource_conflict",
+        "queue_readback",
+      );
+      verifyQueueAndVectorOwnership(
+        previousVersion,
+        invocation.outputs,
+        "queue",
+      );
     }
 
+    let childCleanupMutationAttempted = false;
     for (const [queue, consumers] of queues) {
       if (!consumers.some((consumer) => isWorkerConsumer(consumer, invocation.outputs.workerName))) continue;
+      childCleanupMutationAttempted = true;
       await requireMutationCommand(
         dependencies,
         [
@@ -3436,6 +4209,7 @@ export async function materializePreDestroy(input: {
     }
 
     for (const container of ownedContainers) {
+      childCleanupMutationAttempted = true;
       await requireMutationCommand(
         dependencies,
         ["containers", "delete", container.id, "--config", configPath],
@@ -3449,6 +4223,7 @@ export async function materializePreDestroy(input: {
     // Keep the Worker provenance marker available as the ownership anchor until
     // every other materializer-owned child has been removed.
     if (vector) {
+      childCleanupMutationAttempted = true;
       await requireMutationCommand(
         dependencies,
         ["vectorize", "delete", invocation.outputs.vector.name, "-y", "--config", configPath],
@@ -3464,11 +4239,17 @@ export async function materializePreDestroy(input: {
       configPath,
       outputs: invocation.outputs,
       ownedContainerNames: ownedNames,
-      mutationStarted: hasOwnedChildren,
+      mutationStarted:
+        completedStages.length > 0 ||
+        (hasOwnedChildren && childCleanupMutationAttempted),
     });
 
     if (previous) {
-      await dependencies.deleteWorker(invocation.outputs.workerName);
+      await atFailurePoint(
+        "worker_cleanup",
+        () => dependencies.deleteWorker(invocation.outputs.workerName),
+        { mutationStarted: true },
+      );
       completedStages.push("worker_deleted");
       await waitForWorkerAbsence(dependencies, invocation.outputs.workerName);
     }
@@ -3504,41 +4285,67 @@ export async function materializePreDestroy(input: {
     };
   } catch (error) {
     if (error instanceof MaterializerError) {
-      throw new MaterializerError({
+      primaryError = new MaterializerError({
         code: error.code,
         stage: error.stage,
         message: error.message,
         mutationStarted: error.mutationStarted || completedStages.length > 0,
         completedStages: completedStages.length ? completedStages : error.completedStages,
         diagnosticDigest: error.diagnosticDigest,
+        failurePoint: error.failurePoint,
+      });
+    } else {
+      primaryError = new MaterializerError({
+        code: "unexpected_failure",
+        stage: "materialization",
+        message: "unexpected pre_destroy failure; details remain runner-private",
+        mutationStarted: completedStages.length > 0,
+        completedStages,
+        diagnosticDigest: digest(
+          error instanceof Error ? error.message : String(error),
+        ),
+        failurePoint: "materialization",
       });
     }
-    throw new MaterializerError({
-      code: "unexpected_failure",
-      stage: "materialization",
-      message: "unexpected pre_destroy failure; details remain runner-private",
-      mutationStarted: completedStages.length > 0,
-      completedStages,
-      diagnosticDigest: digest(
-        error instanceof Error ? error.message : String(error),
-      ),
-    });
+    throw primaryError;
   } finally {
-    await rm(tempRoot, { recursive: true, force: true });
+    await removeTempRootWithPrimary({
+      dependencies,
+      tempRoot,
+      failurePoint: "config_render",
+      completedStages,
+      mutationStarted:
+        primaryError?.mutationStarted === true || completedStages.length > 0,
+      primaryError,
+    });
   }
+}
+
+function failureDiagnosticDigest(
+  code: string,
+  stage: string,
+  failurePoint: FailurePoint,
+): string {
+  return digest(
+    `takos.product-materializer.failure-diagnostic.v1\0${code}\0${stage}\0${failurePoint}`,
+  );
 }
 
 export function failureEvidence(error: unknown, phase: Phase): JsonRecord {
   if (error instanceof MaterializerError) {
+    const failurePoint = error.failurePoint ?? "materialization";
     return {
       kind: "takos.product-materialization@v1",
       status: "failed",
       phase,
       code: error.code,
       stage: error.stage,
+      failurePoint,
       mutationStarted: error.mutationStarted,
       completedStages: error.completedStages,
-      ...(error.diagnosticDigest ? { diagnosticDigest: error.diagnosticDigest } : {}),
+      diagnosticDigest:
+        error.diagnosticDigest ??
+        failureDiagnosticDigest(error.code, error.stage, failurePoint),
       recovery: error.mutationStarted
         ? "Do not retry from stale action input. Read authoritative Cloudflare state and create a fresh Takosumi plan; prefer forward repair after D1 migration."
         : "Correct the Plan-pinned inputs or credential manifest, then create a fresh Takosumi plan.",
@@ -3550,7 +4357,13 @@ export function failureEvidence(error: unknown, phase: Phase): JsonRecord {
     phase,
     code: "unexpected_failure",
     stage: "unknown",
+    failurePoint: "materialization",
     mutationStarted: false,
+    diagnosticDigest: failureDiagnosticDigest(
+      "unexpected_failure",
+      "unknown",
+      "materialization",
+    ),
     recovery: "Inspect runner-private diagnostics and create a fresh Takosumi plan before retrying.",
   };
 }
@@ -3564,11 +4377,13 @@ function parsePhase(args: readonly string[]): Phase {
 export async function main(args = Bun.argv.slice(2), env = process.env): Promise<number> {
   let phase: Phase = "post_apply";
   try {
-    phase = parsePhase(args);
+    phase = atFailurePointSync("invocation", () => parsePhase(args));
     const invocation = parseInvocation(phase, env);
     const sourceRoot = resolve(import.meta.dir, "..");
-    await ensureCompatibleNodeRuntime();
-    const wranglerBin = await ensureLockedWrangler(sourceRoot);
+    await atFailurePoint("node_runtime", () => ensureCompatibleNodeRuntime());
+    const wranglerBin = await atFailurePoint("wrangler_runtime", () =>
+      ensureLockedWrangler(sourceRoot),
+    );
     const dependencies = createDependencies({
       nodeBin: NODE_EXECUTABLE,
       wranglerBin,
@@ -3576,12 +4391,14 @@ export async function main(args = Bun.argv.slice(2), env = process.env): Promise
       apiToken: invocation.apiToken,
       accountId: invocation.outputs.accountId,
     });
-    const version = await dependencies.runWrangler(["--version"]);
-    invariant(
-      version.exitCode === 0 && version.stdout.trim().includes(WRANGLER_VERSION),
-      `Wrangler runtime must report ${WRANGLER_VERSION}`,
-      "wrangler_runtime_unavailable",
-    );
+    await atFailurePoint("wrangler_runtime", async () => {
+      const version = await dependencies.runWrangler(["--version"]);
+      invariant(
+        version.exitCode === 0 && version.stdout.trim().includes(WRANGLER_VERSION),
+        `Wrangler runtime must report ${WRANGLER_VERSION}`,
+        "wrangler_runtime_unavailable",
+      );
+    });
     const evidence =
       phase === "post_apply"
         ? await materializePostApply({ invocation, sourceRoot, dependencies })
