@@ -78,6 +78,75 @@ test("Worker archive identity is independent of the source commit timestamp", as
   }
 });
 
+test("reuses identical archive bytes while retaining release tag and commit identities", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-worker-release-identity-test-"));
+  const bundleDir = join(root, "bundle");
+  const assetsDir = join(root, "assets");
+  const imageDigestDir = join(root, "images");
+  const firstOutput = join(root, "first");
+  const secondOutput = join(root, "second");
+  const previousGithubSha = process.env.GITHUB_SHA;
+  const previousGithubRefName = process.env.GITHUB_REF_NAME;
+  const releases = [
+    {
+      releaseTag: "v1.2.3",
+      commit: "a".repeat(40),
+    },
+    {
+      releaseTag: "v1.2.4",
+      commit: "b".repeat(40),
+    },
+  ] as const;
+
+  try {
+    await Promise.all([
+      mkdir(bundleDir),
+      mkdir(assetsDir),
+      mkdir(imageDigestDir),
+    ]);
+    await writeFile(join(bundleDir, "index.js"), "export default { fetch() {} };\n");
+    await writeFile(join(assetsDir, "index.html"), "<!doctype html><title>Takos</title>\n");
+
+    const manifests = [];
+    for (const [index, release] of releases.entries()) {
+      process.env.GITHUB_SHA = release.commit;
+      process.env.GITHUB_REF_NAME = release.releaseTag;
+      manifests.push(
+        await buildWorkerReleaseArtifact({
+          bundleDir,
+          assetsDir,
+          imageDigestDir,
+          outputDir: index === 0 ? firstOutput : secondOutput,
+          releaseTag: release.releaseTag,
+          requireCloudflareContainerImages: false,
+          takosumiCompositionSource: compositionSource,
+        }),
+      );
+    }
+
+    const [firstArchive, secondArchive] = await Promise.all([
+      readFile(join(firstOutput, "takos-worker-release.tar.gz")),
+      readFile(join(secondOutput, "takos-worker-release.tar.gz")),
+    ]);
+    expect(secondArchive).toEqual(firstArchive);
+    expect(manifests.map(({ releaseTag }) => releaseTag)).toEqual(
+      releases.map(({ releaseTag }) => releaseTag),
+    );
+    expect(manifests.map(({ commit }) => commit)).toEqual(
+      releases.map(({ commit }) => commit),
+    );
+    expect(manifests.map(({ ref }) => ref)).toEqual(
+      releases.map(({ releaseTag }) => releaseTag),
+    );
+  } finally {
+    if (previousGithubSha === undefined) delete process.env.GITHUB_SHA;
+    else process.env.GITHUB_SHA = previousGithubSha;
+    if (previousGithubRefName === undefined) delete process.env.GITHUB_REF_NAME;
+    else process.env.GITHUB_REF_NAME = previousGithubRefName;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Worker archive bytes and entry modes are canonical across process umasks", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-worker-umask-test-"));
   const bundleDir = join(root, "bundle");

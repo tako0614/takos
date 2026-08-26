@@ -32,23 +32,37 @@ not recorded in evidence.
   `skip-worktree` index entry, then compares each pinned-tree entry's physical
   file type, executable mode, raw Git object hash, or symlink target against
   the pinned commit independently of index cleanliness flags.
-- Use the package version as the tag (`v<package version>`); do not choose a
-  second tag for the same bytes.
+- Use the package version as the full release identity and tag
+  (`v<package version>`). Do not mint an alias or second tag for the same
+  release, retarget an existing tag, or reuse an existing package-version tag.
+  Worker archive bytes are independently content-addressed and may be
+  byte-identical for a later package version; that does not make the release
+  tags interchangeable.
 - Require the portable Takoform defaults in that source tree to name the same
   tag, GitHub archive URL, and archive SHA-256. Prepare fails before its first
   registry push when those values do not close over the built archive bytes.
 
-When these defaults move to a new version, close the archive digest in two
-commits. First make the prepin commit: bump the package version and all
-same-repository non-digest release refs, including `worker_release_tag` and
-`worker_artifact_url`, but leave `worker_artifact_sha256` at its previous value.
-Build the canonical Worker archive from that commit with the commands used by
-prepare and record its SHA-256. Then make the pin commit that changes only the
-Takoform archive digest to that recorded value. The archive contains the
-Worker bundle and assets, not `deploy/opentofu/takoform/main.tf`, so the bytes
-remain fixed across the digest-only pin commit. Run the full gate on the pin
-commit before prepare; invoking prepare on the prepin commit intentionally
-fails the exact-candidate check before registry mutation.
+When these defaults move to a new version, keep the package-version tag and
+descriptor as the new release identity even when the Worker archive bytes are
+reusable. Build the canonical Worker archive from the reviewed candidate with
+the commands used by prepare and compare its SHA-256 with the already checked
+`worker_artifact_sha256`:
+
+- If the computed archive digest differs, close the digest in two commits.
+  First make the prepin commit: bump the package version and all
+  same-repository non-digest release refs, including `worker_release_tag` and
+  `worker_artifact_url`, but leave `worker_artifact_sha256` at its previous
+  value. Then make the pin commit that changes only the Takoform archive digest
+  to the recorded value. The archive contains the Worker bundle and assets,
+  not `deploy/opentofu/takoform/main.tf`, so the bytes remain fixed across the
+  digest-only pin commit. Run the full gate on the pin commit before prepare;
+  invoking prepare on the prepin commit intentionally fails the exact-candidate
+  check before registry mutation.
+- If the computed digest exactly equals the already checked
+  `worker_artifact_sha256`, the candidate is already digest-closed. Do not
+  create an empty pin commit. Run the full gate on that reviewed candidate
+  before prepare. Archive equality never authorizes an alias tag; prepare still
+  uses the package-version release tag.
 - Keep the Wrangler config, Cloudflare account-id file, API-token file,
   output directory, and evidence files outside the repository. Make operator
   directories `0700` and account/token files `0600`.
