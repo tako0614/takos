@@ -12,9 +12,9 @@
 
 ## Ownership
 
-- Owns: Takos distribution Worker and user-facing workspace experience / Web UI and Takos agent service and container wrapper / Provider-neutral resource contract plus the complete direct Cloudflare deployment adapter
+- Owns: Takos distribution Worker and user-facing workspace experience / Web UI and Takos agent service and container wrapper / Provider-neutral resource contract plus direct Cloudflare and portable Takoform adapters
 - Does not own: Takosumi Accounts, control plane, runner, or Run ledger / Writable collaborative Git hosting owned by takos-git / Reusable Rust agent engine owned by takos-agent-engine
-- Hazards: The Takos Worker is an OIDC client and resource server, never an issuer. / Worker-native Git is read-only migration compatibility. / The complete Cloudflare adapter is the only current install surface; the retained Takoform Provider 1.x projection is not selectable and does not prove current Forms cover Takos. / Operator configuration and secrets stay outside the repository.
+- Hazards: The Takos Worker is an OIDC client and resource server, never an issuer. / Worker-native Git is read-only migration compatibility. / Cloudflare and Takoform are sibling deployment adapters; neither is the product resource authority. / Operator configuration and secrets stay outside the repository.
 
 ## Required workflow
 
