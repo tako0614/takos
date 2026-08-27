@@ -40,6 +40,22 @@ test("CLI failures expose only bounded Cloudflare surface diagnostics", () => {
     "POST:containers.applications:400:DURABLE_OBJECT_NOT_CONTAINER_ENABLED",
   );
   expect(
+    cloudflareApiFailureDetail(
+      "POST",
+      "/accounts/sensitive-account/containers/applications",
+      400,
+      {
+        success: false,
+        errors: [{
+          code: 1607,
+          message: "Container validation: DURABLE_OBJECT_NOT_CONTAINER_ENABLED",
+        }],
+      },
+    ),
+  ).toBe(
+    "POST:containers.applications:400:DURABLE_OBJECT_NOT_CONTAINER_ENABLED",
+  );
+  expect(
     bridgeFailurePayload(
       "cloudflare_api_error",
       "POST:containers.applications:400:CF1602",
