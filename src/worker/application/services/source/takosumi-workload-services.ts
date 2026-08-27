@@ -19,7 +19,7 @@ import {
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_INTERFACE_VERSION,
   UI_SURFACE_OPEN_PERMISSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
 
 /**
  * Takos launcher/service presentation derived from authorized Takosumi
@@ -99,19 +99,13 @@ export function projectCapsuleUiSurfaceServices(
     if (
       !iface ||
       iface.spec.version !== UI_SURFACE_INTERFACE_VERSION ||
-      (iface.metadata.ownerRef.kind !== "Capsule" &&
-        iface.metadata.ownerRef.kind !== "Resource")
+      iface.metadata.ownerRef.kind !== "Capsule"
     ) {
       return [];
     }
     const surface = projectAuthorizedUiSurface({ interface: iface });
     if (!surface) return [];
-    const record = readRecord(value);
-    const launcherOwner = readRecord(record?.launcherOwner);
-    const capsuleId =
-      iface.metadata.ownerRef.kind === "Capsule"
-        ? iface.metadata.ownerRef.id
-        : readString(launcherOwner?.capsuleId);
+    const capsuleId = iface.metadata.ownerRef.id;
     if (!capsuleId) return [];
     return [{
       capsuleId,
@@ -134,8 +128,7 @@ function projectMcpService(
   }
   if (
     iface.spec.type !== MCP_SERVER_INTERFACE_TYPE ||
-    iface.spec.version !== MCP_SERVER_INTERFACE_VERSION ||
-    !iface.spec.inputs?.endpoint
+    iface.spec.version !== MCP_SERVER_INTERFACE_VERSION
   ) {
     return null;
   }

@@ -4,7 +4,15 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 5.0"
+      version = "= 5.19.1"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "= 3.9.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "= 4.3.0"
     }
   }
 }
@@ -14,6 +22,8 @@ module "platform" {
 
   providers = {
     cloudflare = cloudflare
+    random     = random
+    tls        = tls
   }
 
   account_id        = var.cloudflare.account_id
@@ -24,6 +34,11 @@ module "platform" {
   executor_capacity = var.executor_capacity
   plan_mode         = var.opentofu_plan_mode
   workers_subdomain = try(var.cloudflare.workers_subdomain, null)
+  zone_id           = try(var.cloudflare.zone_id, null)
+  zone_name         = try(var.cloudflare.zone_name, null)
+
+  enable_imperative_staging_bridge = var.enable_imperative_staging_bridge
+  container_image                  = var.container_image
 
   takosumi_accounts_url          = var.takosumi_accounts_url
   takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url

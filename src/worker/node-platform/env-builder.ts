@@ -251,7 +251,6 @@ function buildBaseConfig(isLocal: boolean) {
         ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET
         : undefined),
     OIDC_REDIRECT_URI: optionalEnv("OIDC_REDIRECT_URI"),
-    TAKOSUMI_WORKSPACE_ID: optionalEnv("TAKOSUMI_WORKSPACE_ID"),
     PLATFORM_PRIVATE_KEY:
       optionalEnv("PLATFORM_PRIVATE_KEY") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PRIVATE_KEY : ""),
@@ -353,7 +352,6 @@ function assertSelfHostedProductionConfig(config: BaseConfig): void {
     config.OIDC_CLIENT_ID,
     LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID,
   );
-  requireExplicit("TAKOSUMI_WORKSPACE_ID", config.TAKOSUMI_WORKSPACE_ID);
   requireExplicit(
     "PLATFORM_PRIVATE_KEY",
     config.PLATFORM_PRIVATE_KEY,
@@ -474,7 +472,6 @@ export async function createNodeWebEnv(): Promise<Env> {
     OIDC_CLIENT_ID: config.OIDC_CLIENT_ID,
     OIDC_CLIENT_SECRET: config.OIDC_CLIENT_SECRET,
     OIDC_REDIRECT_URI: config.OIDC_REDIRECT_URI,
-    TAKOSUMI_WORKSPACE_ID: config.TAKOSUMI_WORKSPACE_ID,
     ADMIN_DOMAIN: config.ADMIN_DOMAIN,
     AUTH_PUBLIC_BASE_URL: config.AUTH_PUBLIC_BASE_URL,
     TAKOS_MCP_OAUTH_PREREGISTRATIONS_JSON:

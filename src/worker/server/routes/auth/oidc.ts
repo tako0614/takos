@@ -100,14 +100,13 @@ authOidcRouter.get("/oidc/login", async (c) => {
   const discoveryBaseUrl = normalizeConfiguredUrl(config.oidcDiscoveryUrl) ??
     issuer;
   const clientId = nonEmptyString(config.oidcClientId);
-  const workspaceId = nonEmptyString(config.takosumiWorkspaceId);
   const redirectUri = normalizeConfiguredUrl(
     config.oidcRedirectUri ?? defaultOidcRedirectUri(config.adminDomain),
   );
 
   if (
     !sessionStore || !issuer || !discoveryBaseUrl || !clientId ||
-    !workspaceId || !redirectUri
+    !redirectUri
   ) {
     return c.html(
       errorPage(
@@ -147,7 +146,6 @@ authOidcRouter.get("/oidc/login", async (c) => {
     state,
     nonce,
     code_verifier: codeVerifier,
-    workspace_id: workspaceId,
     return_to: returnTo,
     expires_at: Date.now() + OIDC_STATE_TTL_MS,
   });
@@ -162,7 +160,6 @@ authOidcRouter.get("/oidc/login", async (c) => {
   );
   authorizationUrl.searchParams.set("state", state);
   authorizationUrl.searchParams.set("nonce", nonce);
-  authorizationUrl.searchParams.set("workspace_id", workspaceId);
   authorizationUrl.searchParams.set("code_challenge", codeChallenge);
   authorizationUrl.searchParams.set("code_challenge_method", "S256");
 
@@ -196,7 +193,6 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     issuer;
   const clientId = nonEmptyString(config.oidcClientId);
   const clientSecret = nonEmptyString(config.oidcClientSecret);
-  const workspaceId = nonEmptyString(config.takosumiWorkspaceId);
   const redirectUri = normalizeConfiguredUrl(
     config.oidcRedirectUri ?? defaultOidcRedirectUri(config.adminDomain),
   );
@@ -224,7 +220,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   }
   if (
     !dbBinding || !sessionStore || !issuer || !discoveryBaseUrl || !clientId ||
-    !workspaceId || !redirectUri
+    !redirectUri
   ) {
     return oidcErrorResponse(
       "OIDC Error",
@@ -239,12 +235,6 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     return oidcErrorResponse("OIDC Error", "Invalid OIDC state.", 400);
   }
   await deleteOIDCState(sessionStore, state);
-  if (oidcState.workspace_id !== workspaceId) {
-    await auditLog("oidc_workspace_context_drift", {
-      stateWorkspaceMatchesCurrent: false,
-    });
-    return oidcErrorResponse("OIDC Error", "Invalid OIDC state.", 400);
-  }
 
   let discovery;
   try {
@@ -310,9 +300,10 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const userInfo = tokens.access_token && serverUserinfoEndpoint
     ? await fetchUserInfo(serverUserinfoEndpoint, tokens.access_token)
     : {};
+  let workspaceId: string;
   try {
     assertUserInfoSubject(userInfo, subject);
-    assertUserInfoWorkspace(userInfo, oidcState.workspace_id);
+    workspaceId = assertUserInfoWorkspace(userInfo);
   } catch (error) {
     logError("OIDC userinfo validation failed", error, {
       module: "routes/auth/oidc",
@@ -410,7 +401,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
       identityId,
       tokens,
       fallbackScope: TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
-      workspaceId: oidcState.workspace_id,
+      workspaceId,
     });
   } catch (error) {
     logError("OIDC delegated token storage failed", error, {
@@ -639,6 +630,12 @@ function profileString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function workspaceClaimString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function assertUserInfoSubject(
   userInfo: Record<string, unknown>,
   subject: string,
@@ -651,24 +648,23 @@ function assertUserInfoSubject(
 
 function assertUserInfoWorkspace(
   userInfo: Record<string, unknown>,
-  expectedWorkspaceId: string,
-): void {
+): string {
   const takosumi = userInfo.takosumi &&
       typeof userInfo.takosumi === "object" &&
       !Array.isArray(userInfo.takosumi)
     ? (userInfo.takosumi as Record<string, unknown>)
     : undefined;
-  const userInfoWorkspaceId = profileString(takosumi?.workspace_id);
+  const userInfoWorkspaceId = workspaceClaimString(takosumi?.workspace_id);
   const memberships = userInfo.workspace_memberships;
   if (
     !userInfoWorkspaceId ||
-    userInfoWorkspaceId !== expectedWorkspaceId ||
     !Array.isArray(memberships) ||
     memberships.length !== 1 ||
-    profileString(memberships[0]) !== expectedWorkspaceId
+    workspaceClaimString(memberships[0]) !== userInfoWorkspaceId
   ) {
     throw new Error("OIDC UserInfo Workspace binding mismatch");
   }
+  return userInfoWorkspaceId;
 }
 
 function resolveOidcProfile(

@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import {
   parseNotificationPusherDeleteRequest,
   parseNotificationPusherSetRequest,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/notification-pushers";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   AppError,

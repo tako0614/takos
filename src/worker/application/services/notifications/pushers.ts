@@ -3,7 +3,7 @@ import type { SQL } from "drizzle-orm";
 import type {
   NotificationPusher,
   NotificationPusherRegistration,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/notification-pushers";
 
 import { getDb, notificationPushers } from "../../../infra/db/index.ts";
 import type { SqlDatabaseLike } from "../../../infra/db/client.ts";

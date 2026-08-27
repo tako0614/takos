@@ -10,16 +10,15 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { validateRuntimeSecrets } from "./takos-product-materializer.ts";
+import { validateRuntimeSecrets } from "../src/worker/shared/config/runtime-secrets.ts";
 
 const SOURCE_ROOT = resolve(import.meta.dir, "..");
 const GENERATOR = resolve(import.meta.dir, "generate-platform-keys.ts");
 const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
-// Keep this list aligned with scripts/takos-product-materializer.ts. The
-// default public-client bundle must produce every required runtime name, not
-// just its key pair.
-const MATERIALIZER_REQUIRED_SECRET_NAMES = [
+// The default public-client bundle must produce every required runtime name,
+// not just its key pair.
+const REQUIRED_RUNTIME_SECRET_NAMES = [
   "ENCRYPTION_KEY",
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
@@ -27,8 +26,7 @@ const MATERIALIZER_REQUIRED_SECRET_NAMES = [
   "TAKOS_INTERNAL_API_SECRET",
 ] as const;
 
-type MaterializerSecretName =
-  (typeof MATERIALIZER_REQUIRED_SECRET_NAMES)[number];
+type RuntimeSecretName = (typeof REQUIRED_RUNTIME_SECRET_NAMES)[number];
 
 async function runGenerator(
   outputDir: string,
@@ -58,9 +56,9 @@ async function runGenerator(
 
 async function readGeneratedSecretFiles(
   outputDir: string,
-): Promise<Record<MaterializerSecretName, string>> {
-  const values = {} as Record<MaterializerSecretName, string>;
-  for (const name of MATERIALIZER_REQUIRED_SECRET_NAMES) {
+): Promise<Record<RuntimeSecretName, string>> {
+  const values = {} as Record<RuntimeSecretName, string>;
+  for (const name of REQUIRED_RUNTIME_SECRET_NAMES) {
     values[name] = (await readFile(join(outputDir, name), "utf8")).trimEnd();
   }
   return values;
@@ -70,7 +68,7 @@ function digest(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("generates every public-client materializer secret independently without leaking values", async () => {
+test("generates every public-client runtime secret independently without leaking values", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-platform-keys-"));
   const outputDir = join(root, "secrets");
   try {
@@ -79,21 +77,21 @@ test("generates every public-client materializer secret independently without le
 
     const entries = await readdir(outputDir);
     expect(entries.sort()).toEqual(
-      [...MATERIALIZER_REQUIRED_SECRET_NAMES].sort(),
+      [...REQUIRED_RUNTIME_SECRET_NAMES].sort(),
     );
 
     const values = await readGeneratedSecretFiles(outputDir);
     expect(
-      MATERIALIZER_REQUIRED_SECRET_NAMES.every((name) => values[name].length > 0),
+      REQUIRED_RUNTIME_SECRET_NAMES.every((name) => values[name].length > 0),
     ).toBe(true);
     const modes = await Promise.all(
-      MATERIALIZER_REQUIRED_SECRET_NAMES.map(async (name) =>
+      REQUIRED_RUNTIME_SECRET_NAMES.map(async (name) =>
         (await stat(join(outputDir, name))).mode & 0o777,
       ),
     );
     expect(modes.every((mode) => mode === 0o600)).toBe(true);
     expect(new Set(Object.values(values)).size).toBe(
-      MATERIALIZER_REQUIRED_SECRET_NAMES.length,
+      REQUIRED_RUNTIME_SECRET_NAMES.length,
     );
     expect(entries.includes("OIDC_CLIENT_SECRET")).toBe(false);
 
@@ -106,7 +104,7 @@ test("generates every public-client materializer secret independently without le
   }
 });
 
-test("opt-in runtime JSON contains exactly the five public-client materializer names and stays private", async () => {
+test("opt-in runtime JSON contains exactly the five public-client names and stays private", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-platform-runtime-json-"));
   const outputDir = join(root, "secrets");
   try {
@@ -115,7 +113,7 @@ test("opt-in runtime JSON contains exactly the five public-client materializer n
 
     const entries = await readdir(outputDir);
     expect(entries.sort()).toEqual(
-      [...MATERIALIZER_REQUIRED_SECRET_NAMES, RUNTIME_SECRETS_FILENAME].sort(),
+      [...REQUIRED_RUNTIME_SECRET_NAMES, RUNTIME_SECRETS_FILENAME].sort(),
     );
 
     const values = await readGeneratedSecretFiles(outputDir);
@@ -126,18 +124,18 @@ test("opt-in runtime JSON contains exactly the five public-client materializer n
     const runtimeJson = JSON.parse(runtimeContents) as Record<string, unknown>;
     expect(() => validateRuntimeSecrets(runtimeJson)).not.toThrow();
     expect(Object.keys(runtimeJson).sort()).toEqual(
-      [...MATERIALIZER_REQUIRED_SECRET_NAMES].sort(),
+      [...REQUIRED_RUNTIME_SECRET_NAMES].sort(),
     );
     const rawFileValues = Object.fromEntries(
       await Promise.all(
-        MATERIALIZER_REQUIRED_SECRET_NAMES.map(async (name) => [
+        REQUIRED_RUNTIME_SECRET_NAMES.map(async (name) => [
           name,
           await readFile(join(outputDir, name), "utf8"),
         ] as const),
       ),
     );
     expect(
-      MATERIALIZER_REQUIRED_SECRET_NAMES.every(
+      REQUIRED_RUNTIME_SECRET_NAMES.every(
         (name) =>
           typeof runtimeJson[name] === "string" &&
           (runtimeJson[name] === rawFileValues[name] ||
@@ -173,7 +171,7 @@ test("opt-in confidential OIDC generation adds a client secret to the runtime bu
     const entries = await readdir(outputDir);
     expect(entries.sort()).toEqual(
       [
-        ...MATERIALIZER_REQUIRED_SECRET_NAMES,
+        ...REQUIRED_RUNTIME_SECRET_NAMES,
         "OIDC_CLIENT_SECRET",
         RUNTIME_SECRETS_FILENAME,
       ].sort(),
@@ -214,7 +212,7 @@ test("preserves no-overwrite behavior for confidential OIDC and runtime JSON", a
     expect((await runGenerator(outputDir, "--confidential-oidc")).exitCode).toBe(0);
     const oidcPath = join(outputDir, "OIDC_CLIENT_SECRET");
     const oidcDigest = digest(await readFile(oidcPath, "utf8"));
-    for (const name of MATERIALIZER_REQUIRED_SECRET_NAMES) {
+    for (const name of REQUIRED_RUNTIME_SECRET_NAMES) {
       await rm(join(outputDir, name));
     }
     const oidcConflict = await runGenerator(outputDir, "--confidential-oidc");
@@ -231,7 +229,7 @@ test("preserves no-overwrite behavior for confidential OIDC and runtime JSON", a
     ).toBe(0);
     const runtimePath = join(outputDir, RUNTIME_SECRETS_FILENAME);
     const runtimeDigest = digest(await readFile(runtimePath, "utf8"));
-    for (const name of MATERIALIZER_REQUIRED_SECRET_NAMES) {
+    for (const name of REQUIRED_RUNTIME_SECRET_NAMES) {
       await rm(join(outputDir, name));
     }
     await rm(oidcPath);

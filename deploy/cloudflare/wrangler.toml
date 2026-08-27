@@ -73,9 +73,6 @@ EXECUTOR_TIER1_WARM_POOL_SIZE = "1"
 EXECUTOR_TIER1_MAX_CONCURRENT_RUNS = "4"
 EXECUTOR_TIER3_POOL_SIZE = "1"
 EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = "1"
-# Optional subject used by Takos featured-app Capsule installation jobs when the
-# operator chooses to run them from this worker.
-TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
 # OCI deployment adapter for image-backed services / containers.
 OCI_ORCHESTRATOR_URL = ""
 CF_ACCOUNT_ID = "replace-with-account-id"
@@ -352,8 +349,6 @@ EXECUTOR_TIER1_WARM_POOL_SIZE = "1"
 EXECUTOR_TIER1_MAX_CONCURRENT_RUNS = "4"
 EXECUTOR_TIER3_POOL_SIZE = "1"
 EXECUTOR_TIER3_MAX_CONCURRENT_RUNS = "1"
-# Optional subject used by featured-app Capsule installation jobs.
-TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
 

@@ -25,19 +25,10 @@ plan/apply flow, including:
 
 Both modules receive ordinary OpenTofu variables. Secret values remain
 operator-owned inputs and are materialized only inside the selected Takosumi
-runner. The narrow `product:activate` lifecycle command reads the declared
-0600 runtime-secret file and passes it to the pinned local Wrangler process
-when the direct Cloudflare adapter is selected; it never generates, stores,
-logs, or returns those values. Cloudflare-specific runtime secrets are
-documented in `deploy/cloudflare/wrangler.toml` and are supplied with
-`wrangler secret put`, never through OpenTofu state or outputs. A
-`TAKOSUMI_ACCOUNTS_TOKEN` is optional and only needed for server-to-server
-Capsule calls.
-
-After apply, Takosumi may invoke the Takos-owned artifact materializer described
-in [`docs/deploy/product-materializer.md`](../docs/deploy/product-materializer.md).
-It consumes the Plan-pinned SourceSnapshot identity and non-sensitive outputs,
-but creates no Takos ledger and has no plan/apply/destroy authority.
+runner. Cloudflare-specific runtime secrets are documented in
+`deploy/cloudflare/wrangler.toml` and are supplied with `wrangler secret put`,
+never through OpenTofu state or outputs. A `TAKOSUMI_ACCOUNTS_TOKEN` is
+optional and only needed for server-to-server Capsule calls.
 
 ## Optional Service Form projection
 
@@ -72,5 +63,5 @@ bun run check
 Production and incident procedures belong to the operator and Takosumi
 documentation. This repository intentionally has no `scripts/control`,
 release-gate, admin CLI, secret writer, or Takosumi deployment command. The
-single product materializer is an opaque lifecycle command executed by the
-Takosumi runner, not a restored product-local control plane.
+release artifact publisher only emits immutable distribution bytes; it does not
+perform infrastructure lifecycle operations.

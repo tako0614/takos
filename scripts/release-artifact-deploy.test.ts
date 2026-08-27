@@ -29,6 +29,22 @@ import {
   runReleaseArtifact,
 } from "./release-artifact-deploy.ts";
 
+test("release publication is Takos-owned and has no legacy product input", async () => {
+  const source = await readFile(
+    join(import.meta.dir, "release-artifact-deploy.ts"),
+    "utf8",
+  );
+  expect(source).toContain('filename: "takos-artifact.json"');
+  expect(source).toContain('kind: "takos.worker-artifact@v3"');
+});
+
+test("deploy exposes only the Takos release-artifact publication surface", async () => {
+  const source = await readFile(join(import.meta.dir, "deploy.mjs"), "utf8");
+  expect(source).not.toContain("takos-product-materialization");
+  expect(source).not.toContain("product:activate");
+  expect(source).not.toContain("product:pre-destroy");
+});
+
 const commit = "a".repeat(40);
 const accountId = "b".repeat(32);
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -36,14 +52,7 @@ const imageContent = {
   configDigest: digest("f"),
   layerDigests: [digest("1"), digest("2")],
 } as const;
-const takosumiCompositionSource = {
-  kind: "takos.takosumi-composition-source@v1",
-  repository: "tako0614/takosumi",
-  commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
-  pinDigest: `sha256:${"c".repeat(64)}`,
-} as const;
-const compositionRuntime = {
-  verifyTakosumiCompositionSource: async () => takosumiCompositionSource,
+const releaseRuntime = {
   verifyPortableWorkerSourceIdentity: async (
     _root: string,
     _tag: string,
@@ -286,9 +295,6 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
     "release-worker-artifact:build",
   ]);
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.covers).toContain(
-    "takosumi-composition-source.json",
-  );
-  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.covers).toContain(
     "scripts/check-physical-git-tree.ts",
   );
   for (const obligation of [
@@ -322,9 +328,6 @@ test("publishes a contract that requires provenance, readback, and no-overwrite"
   );
   expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["post-conditions"]).toContain(
     "product discovery",
-  );
-  expect(TAKOS_RELEASE_ARTIFACT_SURFACE.obligations.provenance).toContain(
-    "Takosumi composition",
   );
   expect(
     TAKOS_RELEASE_ARTIFACT_SURFACE.obligations["pre-mutation-proof"],
@@ -575,7 +578,6 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
         evidence,
         execute: false,
       },
-      compositionRuntime,
     );
 
     expect(result).toMatchObject({
@@ -583,50 +585,10 @@ test("prepare dry-run performs identity reads only and leaves evidence/output ab
       status: "planned",
       commit,
       accountId,
-      takosumiCompositionSource,
     });
     expect(JSON.stringify(result)).not.toContain(root);
     await expect(stat(evidence)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(outputDir)).rejects.toMatchObject({ code: "ENOENT" });
-    expectNoMutationCommands(stub.calls);
-  } finally {
-    stub.restore();
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("prepare dry-run rejects a mismatched Takosumi composition before provider work", async () => {
-  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
-  const stub = installReadOnlyCommandStub(commit);
-  try {
-    const config = join(root, "wrangler.toml");
-    const accountFile = join(root, "account-id");
-    const tokenFile = join(root, "cloudflare-api-token");
-    await privateFile(config, "name = \"takos-test\"\n");
-    await privateFile(accountFile, `${accountId}\n`);
-    await privateFile(tokenFile, `${"token".repeat(8)}\n`);
-
-    await expect(
-      runReleaseArtifact(
-        {
-          phase: "prepare",
-          tag: `v${await packageVersion()}`,
-          config,
-          accountIdFile: accountFile,
-          tokenFile,
-          outputDir: join(root, "output"),
-          evidence: join(root, "prepare.json"),
-          execute: false,
-        },
-        {
-          verifyTakosumiCompositionSource: async () => {
-            throw new Error(
-              "Takosumi composition source HEAD 95e7048b4d2a2277ed2024a4d41a37c5e482640f does not match pinned commit d348acf853eb692f7be5df8115c1ab4490f845c6",
-            );
-          },
-        },
-      ),
-    ).rejects.toThrow("does not match pinned commit");
     expectNoMutationCommands(stub.calls);
   } finally {
     stub.restore();
@@ -650,7 +612,7 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
         evidence: publishEvidence,
         execute: false,
       },
-      compositionRuntime,
+      releaseRuntime,
     );
 
     expect(result).toMatchObject({
@@ -658,7 +620,7 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
       status: "planned",
       commit,
       descriptor: {
-        filename: "takosumi-artifact.json",
+        filename: "takos-artifact.json",
         digest: fixture.prepared.descriptor.digest,
         size: fixture.prepared.descriptor.size,
         url: fixture.prepared.descriptor.url,
@@ -697,7 +659,6 @@ test("prepare and publish public JSON exclude every operator-private path marker
       status: "published" as const,
       tag: fixture.prepared.tag,
       commit: fixture.prepared.commit,
-      takosumiCompositionSource,
       releaseUrl: `https://github.com/tako0614/takos/releases/tag/${fixture.prepared.tag}`,
       descriptor: fixture.prepared.descriptor,
       assetDigests: Object.fromEntries(
@@ -731,7 +692,7 @@ test("prepare and publish public JSON exclude every operator-private path marker
       expect(serialized).not.toContain(root);
       expect(result).toMatchObject({
         descriptor: {
-          filename: "takosumi-artifact.json",
+          filename: "takos-artifact.json",
           digest: fixture.prepared.descriptor.digest,
           size: fixture.prepared.descriptor.size,
           url: fixture.prepared.descriptor.url,
@@ -764,20 +725,6 @@ test("publish rejects literal descriptor bytes before any release provider call"
 });
 
 for (const invalid of [
-  {
-    label: "a stale Takosumi composition commit",
-    expected: "composition source",
-    mutate: (descriptor: Record<string, any>) => {
-      descriptor.takosumiCompositionSource.commit = "9".repeat(40);
-    },
-  },
-  {
-    label: "a stale Takosumi composition pin digest",
-    expected: "composition source",
-    mutate: (descriptor: Record<string, any>) => {
-      descriptor.takosumiCompositionSource.pinDigest = digest("9");
-    },
-  },
   {
     label: "the wrong archive digest",
     expected: "archive identity",
@@ -812,7 +759,7 @@ for (const invalid of [
     label: "the wrong descriptor kind",
     expected: "schema",
     mutate: (descriptor: Record<string, any>) => {
-      descriptor.kind = "takosumi.worker-artifact@v1";
+      descriptor.kind = "takos.worker-artifact@v1";
     },
   },
   {
@@ -938,7 +885,7 @@ test("publish rejects portable source input drift before any release provider ca
           execute: true,
         },
         {
-          ...compositionRuntime,
+          ...releaseRuntime,
           verifyPortableWorkerSourceIdentity: async () => {
             throw new Error("portable source release input drifted");
           },
@@ -958,7 +905,7 @@ async function publishFixture(root: string, version: string) {
   const outputDir = join(root, "output");
   const assetPath = join(outputDir, "takos-worker-release.tar.gz");
   const checksumPath = join(outputDir, "takos-worker-release.tar.gz.sha256");
-  const descriptorPath = join(outputDir, "takosumi-artifact.json");
+  const descriptorPath = join(outputDir, "takos-artifact.json");
   const prepareEvidence = join(root, "prepare.json");
   const assetContents = "prepared worker bytes\n";
   const assetDigest = `sha256:${createHash("sha256")
@@ -970,17 +917,16 @@ async function publishFixture(root: string, version: string) {
     .digest("hex")}`;
   const tag = `v${version}`;
   const descriptorUrl =
-    `https://github.com/tako0614/takos/releases/download/${tag}/takosumi-artifact.json`;
+    `https://github.com/tako0614/takos/releases/download/${tag}/takos-artifact.json`;
   const archiveUrl =
     `https://github.com/tako0614/takos/releases/download/${tag}/takos-worker-release.tar.gz`;
   const descriptor: Record<string, any> = {
-    kind: "takosumi.worker-artifact@v2",
+    kind: "takos.worker-artifact@v3",
     app: "takos",
     commit,
     ref: tag,
     workflowRun: null,
     releaseTag: tag,
-    takosumiCompositionSource,
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -1004,7 +950,6 @@ async function publishFixture(root: string, version: string) {
     commit,
     version,
     repository: "tako0614/takos",
-    takosumiCompositionSource,
     accountId,
     portableCheck: { command: "bun run check", status: "passed" },
     outputDir,
@@ -1028,7 +973,7 @@ async function publishFixture(root: string, version: string) {
         size: Buffer.byteLength(checksumContents),
       },
       {
-        name: "takosumi-artifact.json",
+        name: "takos-artifact.json",
         path: descriptorPath,
         digest: "",
         size: 0,
@@ -1081,7 +1026,7 @@ async function publishFixture(root: string, version: string) {
     prepared.descriptor.size = Buffer.byteLength(contents);
     const descriptorAsset = prepared.assets.find(
       (asset: Record<string, unknown>) =>
-        asset.name === "takosumi-artifact.json",
+        asset.name === "takos-artifact.json",
     );
     descriptorAsset.digest = descriptorDigest;
     descriptorAsset.size = Buffer.byteLength(contents);
@@ -1115,7 +1060,7 @@ async function expectPublishDescriptorRejection(
         evidence: join(dirname(fixture.prepareEvidence), "publish.json"),
         execute: true,
       },
-      compositionRuntime,
+      releaseRuntime,
     ),
   ).rejects.toThrow(expected);
 }

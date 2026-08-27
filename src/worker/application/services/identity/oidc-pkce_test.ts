@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../../shared/utils/constant-time.ts";
 import {
   generateCodeChallenge,
   generateCodeVerifier,

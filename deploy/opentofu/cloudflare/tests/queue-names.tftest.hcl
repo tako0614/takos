@@ -3,6 +3,7 @@ run "short_project_names_keep_readable_queue_names" {
 
   variables {
     project_name       = "takos-staging"
+    public_url         = "https://takos-staging.example.com"
     opentofu_plan_mode = true
     cloudflare = {
       account_id = "00000000000000000000000000000000"
@@ -22,6 +23,7 @@ run "maximum_length_capsule_name_keeps_all_queues_provider_safe" {
     # Exercise the module's raw input boundary beyond Takosumi's ordinary
     # 48-character Capsule-derived name so direct OpenTofu callers are safe too.
     project_name       = "staging-takos-e2e-capsule-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    public_url         = "https://takos-staging.example.com"
     opentofu_plan_mode = true
     cloudflare = {
       account_id = "00000000000000000000000000000000"
@@ -50,4 +52,34 @@ run "maximum_length_capsule_name_keeps_all_queues_provider_safe" {
     condition     = length(distinct(values(output.queues))) == 6
     error_message = "bounded queue names must remain unique across all logical queues"
   }
+}
+
+run "public_url_rejects_trailing_slash" {
+  command = plan
+
+  variables {
+    project_name       = "takos-staging"
+    public_url         = "https://takos-staging.example.com/"
+    opentofu_plan_mode = true
+    cloudflare = {
+      account_id = "00000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.public_url]
+}
+
+run "public_url_rejects_uppercase_host" {
+  command = plan
+
+  variables {
+    project_name       = "takos-staging"
+    public_url         = "https://Takos-staging.example.com"
+    opentofu_plan_mode = true
+    cloudflare = {
+      account_id = "00000000000000000000000000000000"
+    }
+  }
+
+  expect_failures = [var.public_url]
 }

@@ -16,12 +16,12 @@ output "service_runtime_name" {
 
 output "launch_url" {
   description = "Canonical public Takos URL when public_url or workers_subdomain is supplied."
-  value       = local.public_url != null ? local.public_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.service_runtime_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
+  value       = local.launch_url
 }
 
 output "public_url" {
   description = "Alias of launch_url for app-surface projection."
-  value       = local.public_url != null ? local.public_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.service_runtime_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
+  value       = local.launch_url
 }
 
 output "workers_subdomain" {
@@ -115,4 +115,49 @@ output "vector_indexes" {
       metric     = local.vectorize.metric
     }
   }
+}
+
+output "worker_id" {
+  description = "Cloudflare Worker identity ID."
+  value       = cloudflare_worker.app.id
+}
+
+output "worker_version_id" {
+  description = "Deployed Worker version ID."
+  value       = cloudflare_worker_version.app.id
+}
+
+output "worker_deployment_id" {
+  description = "Cloudflare Worker deployment ID."
+  value       = cloudflare_workers_deployment.app.id
+}
+
+output "worker_artifact_digest" {
+  description = "Stable digest of the Worker module and assets used by the optional provider-gap bridge."
+  value       = local.worker_artifact_digest
+}
+
+output "vector_desired_config_digest" {
+  description = "Stable digest of the Vectorize index desired configuration."
+  value       = local.vector_desired_config_digest
+}
+
+output "container_desired_config_digest" {
+  description = "Stable digest of the Container desired configuration used by the optional provider-gap bridge."
+  value       = local.container_desired_config_digest
+}
+
+output "migration_set_digest" {
+  description = "Stable digest of the D1 migration set used by the optional provider-gap bridge."
+  value       = local.migration_set_digest
+}
+
+output "bridge_helper_digest" {
+  description = "Stable digest of the optional provider-gap bridge executable."
+  value       = local.bridge_helper_digest
+}
+
+output "imperative_staging_bridge_enabled" {
+  description = "Whether provider-gap staging bridges are enabled."
+  value       = var.enable_imperative_staging_bridge
 }

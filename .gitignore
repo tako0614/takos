@@ -17,6 +17,7 @@ website/.vinxi.*/
 **/.terraform/
 .opentofu/
 **/.opentofu/
+**/.takos-build/
 .opentofu-plan/
 *.tfplan
 deploy/opentofu/environments/**/opentofu.tfvars

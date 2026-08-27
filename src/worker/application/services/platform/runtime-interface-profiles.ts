@@ -2,13 +2,15 @@ import type { AuthorizedRuntimeInterface } from "./runtime-interface-client.ts";
 import {
   FILE_HANDLER_INTERFACE_TYPE,
   FILE_HANDLER_INTERFACE_VERSION,
-  hasCredentialQueryParams,
   MCP_SERVER_INTERFACE_TYPE,
   MCP_SERVER_INTERFACE_VERSION,
-  parseInterfaceDisplay,
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_INTERFACE_VERSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
+import {
+  hasCredentialQueryParams,
+  parseInterfaceDisplay,
+} from "./interface-display.ts";
 
 export type RuntimeInterfaceAdapterMode =
   | "executable"
@@ -76,7 +78,7 @@ export type AuthorizedUiSurface = {
   readonly url: string;
   readonly category: string | null;
   readonly sortOrder: number | null;
-  readonly ownerKind: "Workspace" | "Capsule" | "Resource";
+  readonly ownerKind: "Workspace" | "Capsule";
   readonly ownerId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -149,7 +151,7 @@ export function projectAuthorizedUiSurface(
     return null;
   }
   const document = readRecord(iface.spec.document);
-  if (document?.launcher !== true || !iface.spec.inputs?.url) return null;
+  if (document?.launcher !== true) return null;
   const url = safeRuntimeUrl(iface.status.resolvedInputs?.url);
   if (!url) return null;
   const display = parseInterfaceDisplay(document.display, { surfaceUrl: url });
@@ -186,7 +188,7 @@ export function projectAuthorizedFileHandler(
     return null;
   }
   const document = readRecord(iface.spec.document);
-  if (!document || !iface.spec.inputs?.openUrl) return null;
+  if (!document) return null;
   const openUrl = safeRuntimeUrl(iface.status.resolvedInputs?.openUrl);
   if (!openUrl) return null;
   let path: string;

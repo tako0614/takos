@@ -8,7 +8,7 @@ import { projectAuthorizedUiSurface } from "./runtime-interface-profiles.ts";
 import {
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_OPEN_PERMISSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
 
 type UISidebarItem = {
   label: string;

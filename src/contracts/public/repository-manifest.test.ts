@@ -20,6 +20,10 @@ const modules = {
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
     "utf8",
   ),
+  "deploy/opentofu/takoform": await readFile(
+    new URL("deploy/opentofu/takoform/main.tf", root),
+    "utf8",
+  ),
 };
 
 test("Takos publishes the closed Repository manifest for its selectable module", () => {
@@ -28,18 +32,31 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v2.2");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2.3");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
   expect(manifest.install.defaultModule).toBe("deploy/opentofu/cloudflare");
   expect(Object.keys(manifest.install.modules)).toEqual([
     "deploy/opentofu/cloudflare",
+    "deploy/opentofu/takoform",
   ]);
   const module = manifest.install.modules["deploy/opentofu/cloudflare"];
   expect(Object.keys(module).sort()).toEqual([
     "inputs",
     "interfaces",
     "requires",
+    "sourceBuild",
+  ]);
+  expect(module.sourceBuild?.commands).toEqual([
+    { argv: ["bun", "run", "build:opentofu-worker-artifact"] },
+  ]);
+  expect(module.sourceBuild?.outputs).toEqual([
+    "deploy/opentofu/cloudflare/.takos-build/worker/index.js",
+    "deploy/opentofu/cloudflare/.takos-build/assets",
+    "deploy/opentofu/cloudflare/.takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
+    "deploy/opentofu/cloudflare/.takos-build/migrations",
+    "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
+    "deploy/opentofu/cloudflare/.takos-build/manifest.json",
   ]);
   expect(module.interfaces).toEqual([
     {
@@ -91,6 +108,17 @@ test("Takos publishes the closed Repository manifest for its selectable module",
     placeholder: '{"account_id":"...","workers_subdomain":"..."}',
     advanced: true,
   });
+  expect(module.inputs.find((input) => input.name === "container_image")).toMatchObject({
+    name: "container_image",
+    source: { kind: "user" },
+    type: "string",
+    required: false,
+    advanced: true,
+  });
+  expect(module.inputs.find((input) => input.name === "container_image")?.helper?.en).toContain(
+    "GHCR is unsupported",
+  );
+  expect(module.inputs.find((input) => input.name === "public_url")?.required).toBe(true);
   const cloudflareVariable = variableBlock(
     modules["deploy/opentofu/cloudflare"],
     "cloudflare",
@@ -98,7 +126,7 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
 
-  expect(text).not.toContain("deploy/opentofu/takoform");
+  expect(manifest.install.modules["deploy/opentofu/takoform"]).toBeDefined();
 });
 
 test("the selectable source and website use one exact Takos release", () => {
@@ -109,51 +137,35 @@ test("the selectable source and website use one exact Takos release", () => {
 });
 
 test("the Repository manifest requires explicit operator-owned OIDC client metadata", () => {
-  const module = manifest.install.modules[manifest.install.defaultModule];
-  expect(module.requires.some((requirement) => requirement.kind === "identity.oidc")).toBe(
-    false,
-  );
-
-  expect(
-    module.inputs
-      .filter((input) => input.name.startsWith("takosumi_accounts_"))
-      .map((input) => ({
-        name: input.name,
-        source: input.source,
-        type: input.type,
-        format: input.format,
-        required: input.required,
-      })),
-  ).toEqual([
-    {
-      name: "takosumi_accounts_url",
-      source: { kind: "user" },
-      type: "string",
-      format: "url",
-      required: false,
+  const expected = {
+    kind: "identity.oidc",
+    callbackPath: "/auth/oidc/callback",
+    scopes: [
+      "openid",
+      "profile",
+      "email",
+      "offline_access",
+      "capsules:read",
+      "capsules:write",
+    ],
+    deliver: {
+      variables: {
+        accountsUrl: "takosumi_accounts_url",
+        issuerUrl: "takosumi_accounts_issuer_url",
+        clientId: "takosumi_accounts_client_id",
+        redirectUri: "takosumi_accounts_redirect_uri",
+      },
     },
-    {
-      name: "takosumi_accounts_issuer_url",
-      source: { kind: "user" },
-      type: "string",
-      format: "url",
-      required: false,
-    },
-    {
-      name: "takosumi_accounts_client_id",
-      source: { kind: "user" },
-      type: "string",
-      format: undefined,
-      required: false,
-    },
-    {
-      name: "takosumi_accounts_redirect_uri",
-      source: { kind: "user" },
-      type: "string",
-      format: "url",
-      required: false,
-    },
-  ]);
+  };
+  for (const module of Object.values(manifest.install.modules)) {
+    expect(
+      module.inputs.some((input) => input.name.startsWith("takosumi_accounts_")),
+    ).toBe(false);
+    expect(
+      module.requires.find((requirement) => requirement.kind === "identity.oidc"),
+    ).toEqual(expected);
+    expect(module.inputs.find((input) => input.name === "public_url")?.required).toBe(true);
+  }
 });
 
 test("the Repository manifest does not require a Takosumi AI gateway to install", () => {
@@ -288,11 +300,12 @@ interface RepositoryModule {
   };
   requires: Array<{
     kind: string;
+    callbackPath?: string;
     scopes?: string[];
     key?: string;
     interface?: { type: string; version: string };
     permissions?: string[];
-    delivery?: { type: string };
+    delivery?: { type?: string; variables?: Record<string, string> };
   }>;
   interfaces: Array<{
     key: string;
@@ -311,4 +324,8 @@ interface RepositoryModule {
       delivery: { type: string };
     }>;
   }>;
+  sourceBuild?: {
+    commands: Array<{ argv: string[]; workingDirectory?: string }>;
+    outputs: string[];
+  };
 }

@@ -1,5 +1,5 @@
 {
-  "apiVersion": "takosumi.com/v2.2",
+  "apiVersion": "takosumi.com/v2.3",
   "kind": "Repository",
   "install": {
     "defaultModule": "deploy/opentofu/cloudflare",
@@ -8,16 +8,11 @@
         "inputs": [
           {
             "name": "project_name",
-            "source": {
-              "kind": "capsule_name"
-            },
+            "source": { "kind": "capsule_name" },
             "role": "service_name",
             "type": "string",
             "format": "subdomain",
-            "label": {
-              "ja": "ワークスペース名",
-              "en": "Workspace name"
-            },
+            "label": { "ja": "ワークスペース名", "en": "Workspace name" },
             "helper": {
               "ja": "Takosのサービスとクラウドリソースに使う名前です。",
               "en": "The name used for the Takos service and its cloud resources."
@@ -25,58 +20,38 @@
           },
           {
             "name": "public_subdomain",
-            "source": {
-              "kind": "module_default"
-            },
+            "source": { "kind": "module_default" },
             "type": "string",
             "format": "subdomain",
-            "label": {
-              "ja": "公開サブドメイン",
-              "en": "Public subdomain"
-            },
+            "label": { "ja": "公開サブドメイン", "en": "Public subdomain" },
             "advanced": true
           },
           {
             "name": "public_url",
-            "source": {
-              "kind": "user"
-            },
+            "source": { "kind": "user" },
             "type": "string",
             "format": "url",
-            "required": false,
-            "label": {
-              "ja": "公開URL",
-              "en": "Public URL"
-            },
+            "required": true,
+            "label": { "ja": "公開URL", "en": "Public URL" },
             "helper": {
-              "ja": "空欄の場合は利用可能な公開URLを使います。",
-              "en": "Uses an available public URL when omitted."
+              "ja": "Worker の正規 HTTPS 公開URLです。",
+              "en": "The canonical HTTPS origin for this Worker."
             },
             "placeholder": "https://takos.example.com"
           },
           {
             "name": "environment",
-            "source": {
-              "kind": "module_default"
-            },
+            "source": { "kind": "module_default" },
             "type": "string",
-            "label": {
-              "ja": "実行環境",
-              "en": "Environment"
-            },
+            "label": { "ja": "実行環境", "en": "Environment" },
             "advanced": true
           },
           {
             "name": "cloudflare",
-            "source": {
-              "kind": "user"
-            },
+            "source": { "kind": "user" },
             "type": "json",
             "required": true,
-            "label": {
-              "ja": "Cloudflare デプロイ設定",
-              "en": "Cloudflare deployment settings"
-            },
+            "label": { "ja": "Cloudflare デプロイ設定", "en": "Cloudflare deployment settings" },
             "helper": {
               "ja": "Cloudflare の account_id と、必要なら workers_subdomain を JSON で指定します。認証情報は Provider Connection から別に渡されます。",
               "en": "Provide the Cloudflare account_id and optional workers_subdomain as JSON. Credentials are delivered separately through a Provider Connection."
@@ -85,78 +60,27 @@
             "advanced": true
           },
           {
-            "name": "takosumi_accounts_url",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "format": "url",
-            "required": false,
-            "label": {
-              "ja": "Takosumi Accounts URL",
-              "en": "Takosumi Accounts URL"
-            },
+            "name": "enable_imperative_staging_bridge",
+            "source": { "kind": "module_default" },
+            "type": "boolean",
+            "label": { "ja": "Cloudflare staging bridge", "en": "Cloudflare staging bridge" },
             "helper": {
-              "ja": "運用者が管理する Takosumi Accounts の公開 URL を指定します。Takos は OIDC client を自動登録しません。",
-              "en": "Provide the operator-managed Takosumi Accounts public URL. Takos does not auto-register an OIDC client."
+              "ja": "Vectorize、Container、D1 の provider gap だけを補う staging 用 bridge です。",
+              "en": "Staging-only bridge for the remaining Vectorize, Container, and D1 provider gaps."
             },
-            "placeholder": "https://app.takosumi.com",
             "advanced": true
           },
           {
-            "name": "takosumi_accounts_issuer_url",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "format": "url",
-            "required": false,
-            "label": {
-              "ja": "Takosumi Accounts発行者",
-              "en": "Takosumi Accounts issuer"
-            },
-            "helper": {
-              "ja": "OIDC client を登録した Accounts issuer の URL を指定します。",
-              "en": "Provide the Accounts issuer URL where the OIDC client is registered."
-            },
-            "placeholder": "https://app.takosumi.com",
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_client_id",
-            "source": {
-              "kind": "user"
-            },
+            "name": "container_image",
+            "source": { "kind": "user" },
             "type": "string",
             "required": false,
-            "label": {
-              "ja": "Takosumi Accountsクライアント",
-              "en": "Takosumi Accounts client"
-            },
+            "label": { "ja": "Container イメージ", "en": "Container image" },
             "helper": {
-              "ja": "Takosumi Accounts に通常の手順で登録済みの公開 OIDC client id を指定します。",
-              "en": "Provide a public OIDC client id already registered through the normal Takosumi Accounts procedure."
+              "ja": "staging bridge を使う場合だけ、Docker Hub または同一 Cloudflare account の immutable digest を指定します。GHCR はサポート対象外です。",
+              "en": "For the staging bridge only, provide an immutable Docker Hub digest or same-account Cloudflare registry digest. GHCR is unsupported."
             },
-            "placeholder": "takos",
-            "advanced": true
-          },
-          {
-            "name": "takosumi_accounts_redirect_uri",
-            "source": {
-              "kind": "user"
-            },
-            "type": "string",
-            "format": "url",
-            "required": false,
-            "label": {
-              "ja": "OIDCリダイレクトURL",
-              "en": "OIDC redirect URL"
-            },
-            "helper": {
-              "ja": "登録済み client の redirect URI と同じ、Takos 公開 URL の /auth/oidc/callback を指定します。",
-              "en": "Provide the registered client redirect URI at /auth/oidc/callback on the public Takos URL."
-            },
-            "placeholder": "https://takos.example.com/auth/oidc/callback",
+            "placeholder": "docker.io/example/agent@sha256:<64 hex>",
             "advanced": true
           }
         ],
@@ -167,6 +91,26 @@
               "variables": {
                 "url": "public_url",
                 "subdomain": "public_subdomain"
+              }
+            }
+          },
+          {
+            "kind": "identity.oidc",
+            "callbackPath": "/auth/oidc/callback",
+            "scopes": [
+              "openid",
+              "profile",
+              "email",
+              "offline_access",
+              "capsules:read",
+              "capsules:write"
+            ],
+            "deliver": {
+              "variables": {
+                "accountsUrl": "takosumi_accounts_url",
+                "issuerUrl": "takosumi_accounts_issuer_url",
+                "clientId": "takosumi_accounts_client_id",
+                "redirectUri": "takosumi_accounts_redirect_uri"
               }
             }
           }
@@ -180,34 +124,101 @@
               "version": "1",
               "document": {
                 "launcher": true,
-                "display": {
-                  "title": "Takos",
-                  "icon": "/logo.png"
-                }
+                "display": { "title": "Takos", "icon": "/logo.png" }
               },
               "inputs": {
-                "url": {
-                  "source": "output",
-                  "outputName": "launch_url",
-                  "outputType": "url"
-                }
+                "url": { "source": "output", "outputName": "launch_url", "outputType": "url" }
               },
-              "access": {
-                "visibility": "workspace"
-              }
+              "access": { "visibility": "workspace" }
             },
             "bindingRequests": [
               {
                 "key": "installer",
-                "subject": {
-                  "source": "installing_principal"
-                },
-                "permissions": [
-                  "ui.open"
-                ],
-                "delivery": {
-                  "type": "none"
-                }
+                "subject": { "source": "installing_principal" },
+                "permissions": ["ui.open"],
+                "delivery": { "type": "none" }
+              }
+            ]
+          }
+        ],
+        "sourceBuild": {
+          "commands": [
+            { "argv": ["bun", "run", "build:opentofu-worker-artifact"] }
+          ],
+          "outputs": [
+            "deploy/opentofu/cloudflare/.takos-build/worker/index.js",
+            "deploy/opentofu/cloudflare/.takos-build/assets",
+            "deploy/opentofu/cloudflare/.takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
+            "deploy/opentofu/cloudflare/.takos-build/migrations",
+            "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
+            "deploy/opentofu/cloudflare/.takos-build/manifest.json"
+          ]
+        }
+      },
+      "deploy/opentofu/takoform": {
+        "inputs": [
+          {
+            "name": "project_name",
+            "source": { "kind": "capsule_name" },
+            "role": "service_name",
+            "type": "string",
+            "format": "subdomain",
+            "label": { "ja": "ワークスペース名", "en": "Workspace name" }
+          },
+          { "name": "worker_release_tag", "source": { "kind": "module_default" }, "type": "string", "label": { "ja": "Worker リリース", "en": "Worker release" }, "advanced": true },
+          { "name": "worker_artifact_url", "source": { "kind": "module_default" }, "type": "string", "format": "url", "label": { "ja": "Worker アーティファクト", "en": "Worker artifact" }, "advanced": true },
+          { "name": "worker_artifact_sha256", "source": { "kind": "module_default" }, "type": "string", "label": { "ja": "Worker SHA-256", "en": "Worker SHA-256" }, "advanced": true },
+          { "name": "agent_image", "source": { "kind": "module_default" }, "type": "string", "label": { "ja": "Agent イメージ", "en": "Agent image" }, "advanced": true },
+          { "name": "public_url", "source": { "kind": "user" }, "type": "string", "format": "url", "required": true, "label": { "ja": "公開URL", "en": "Public URL" }, "helper": { "ja": "Worker の正規 HTTPS 公開URLです。", "en": "The canonical HTTPS origin for this Worker." }, "advanced": true }
+        ],
+        "requires": [
+          {
+            "kind": "http.endpoint",
+            "deliver": { "variables": { "url": "public_url" } }
+          },
+          {
+            "kind": "identity.oidc",
+            "callbackPath": "/auth/oidc/callback",
+            "scopes": [
+              "openid",
+              "profile",
+              "email",
+              "offline_access",
+              "capsules:read",
+              "capsules:write"
+            ],
+            "deliver": {
+              "variables": {
+                "accountsUrl": "takosumi_accounts_url",
+                "issuerUrl": "takosumi_accounts_issuer_url",
+                "clientId": "takosumi_accounts_client_id",
+                "redirectUri": "takosumi_accounts_redirect_uri"
+              }
+            }
+          }
+        ],
+        "interfaces": [
+          {
+            "key": "launcher",
+            "name": "takos.launcher",
+            "spec": {
+              "type": "interface.ui.surface",
+              "version": "1",
+              "document": {
+                "launcher": true,
+                "display": { "title": "Takos", "icon": "/logo.png" }
+              },
+              "inputs": {
+                "url": { "source": "output", "outputName": "launch_url", "outputType": "url" }
+              },
+              "access": { "visibility": "workspace" }
+            },
+            "bindingRequests": [
+              {
+                "key": "installer",
+                "subject": { "source": "installing_principal" },
+                "permissions": ["ui.open"],
+                "delivery": { "type": "none" }
               }
             ]
           }

@@ -1,14 +1,16 @@
 import type {
   Interface as TakosumiInterface,
   InterfaceBinding,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/runtime-interfaces";
 import {
   isValidInterfaceName,
   isValidInterfacePermissionToken,
-  TAKOSUMI_API_VERSION,
+} from "@takosjp/takosumi-contract/runtime-interfaces";
+import { TAKOSUMI_API_VERSION } from "@takosjp/takosumi-contract/discovery";
+import {
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_OPEN_PERMISSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
 import {
   takosumiInterfaceBindingsPath,
   takosumiInterfaceTokenPath,
@@ -34,7 +36,7 @@ export interface RuntimeInterfaceSelector {
   readonly type: string;
   readonly permission: string;
   readonly deliveryTypes: readonly string[];
-  readonly ownerKind?: "Workspace" | "Capsule" | "Resource";
+  readonly ownerKind?: "Workspace" | "Capsule";
   readonly ownerId?: string;
 }
 
@@ -204,9 +206,7 @@ export function parseResolvedRuntimeInterface(
     name !== null &&
     isValidInterfaceName(name) &&
     ownerRef !== null &&
-    (ownerRef.kind === "Workspace" ||
-      ownerRef.kind === "Capsule" ||
-      ownerRef.kind === "Resource") &&
+    (ownerRef.kind === "Workspace" || ownerRef.kind === "Capsule") &&
     readString(ownerRef.id) !== null &&
     (selector.ownerKind === undefined ||
       ownerRef.kind === selector.ownerKind) &&
@@ -321,8 +321,7 @@ export async function fetchAuthorizedRuntimeInterfaces(
     hasOwnerKind !== hasOwnerId ||
     (hasOwnerKind &&
       selector.ownerKind !== "Workspace" &&
-      selector.ownerKind !== "Capsule" &&
-      selector.ownerKind !== "Resource")
+      selector.ownerKind !== "Capsule")
   ) {
     return [];
   }
@@ -433,17 +432,11 @@ export async function fetchAuthorizedUiSurfaceInterfaces(
         });
         if (
           !iface ||
-          (iface.metadata.ownerRef.kind !== "Capsule" &&
-            iface.metadata.ownerRef.kind !== "Resource")
+          iface.metadata.ownerRef.kind !== "Capsule"
         ) {
           continue;
         }
-        const record = readRecord(value);
-        const launcherOwner = readRecord(record?.launcherOwner);
-        const capsuleId =
-          iface.metadata.ownerRef.kind === "Capsule"
-            ? iface.metadata.ownerRef.id
-            : readString(launcherOwner?.capsuleId);
+        const capsuleId = iface.metadata.ownerRef.id;
         if (capsuleId) authorized.push({ interface: iface, capsuleId });
       }
 

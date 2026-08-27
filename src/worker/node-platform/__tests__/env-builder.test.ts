@@ -16,7 +16,7 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
         const env = await createNodeWebEnv();
         process.stdout.write(JSON.stringify({
           clientId: env.OIDC_CLIENT_ID,
-          workspaceId: env.TAKOSUMI_WORKSPACE_ID,
+          hasWorkspaceSelector: Object.prototype.hasOwnProperty.call(env, "TAKOSUMI_WORKSPACE_ID"),
           hasSecret: Boolean(env.OIDC_CLIENT_SECRET),
         }));
       } finally {
@@ -52,7 +52,7 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
     ).toBe(0);
     expect(JSON.parse(stdout)).toEqual({
       clientId: "takos-public-client",
-      workspaceId: "workspace-public-client",
+      hasWorkspaceSelector: false,
       hasSecret: false,
     });
   } finally {

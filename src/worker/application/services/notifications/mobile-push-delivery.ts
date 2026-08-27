@@ -3,7 +3,7 @@ import {
   createNotificationPushGatewayRequest,
   type NotificationPusher,
   type NotificationPushGatewayResponse,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/notification-pushers";
 
 import { getDb, notificationPushers } from "../../../infra/db/index.ts";
 import type { Env } from "../../../shared/types/index.ts";

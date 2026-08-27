@@ -1,9 +1,10 @@
 import {
-  NOTIFICATION_PUSHER_REGISTRATION_PATH,
   createTakosumiProductCapabilities,
   createTakosumiWellKnownDocument,
   type CreateTakosumiDiscoveryOptions,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/discovery";
+import { NOTIFICATION_PUSHER_REGISTRATION_PATH } from
+  "@takosjp/takosumi-contract/notification-pushers";
 
 export function createTakosDistributionWellKnown(origin: string) {
   return createTakosumiWellKnownDocument(

@@ -28,7 +28,7 @@ import {
 import { fetchPublishStatuses } from "./explore-stats.ts";
 import { sourceServiceDeps } from "./deps.ts";
 import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
-import { hasCredentialQueryParams } from "takosumi-contract";
+import { hasCredentialQueryParams } from "../platform/interface-display.ts";
 import {
   type CatalogCapsuleRecord,
   type CatalogTakosumiCapsulesReadConfig,
