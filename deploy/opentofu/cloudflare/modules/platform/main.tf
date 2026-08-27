@@ -104,6 +104,28 @@ locals {
     metric     = "cosine"
   }
 
+  # This is the single lifecycle description consumed by both the ordinary
+  # provider path and the staging-only legacy script-upload bridge. Keeping
+  # the tags beside their steps lets the bridge resume from an existing tag
+  # without replaying an already-applied migration.
+  durable_object_lifecycle = {
+    tags = ["v1", "v2", "v3", "v4", "v5", "v6", "v7"]
+    steps = [
+      { new_classes = ["SessionDO"] },
+      { new_classes = ["RunNotifierDO"] },
+      { new_classes = ["RateLimiterDO"] },
+      { new_classes = ["NotificationNotifierDO"] },
+      { new_classes = ["RoutingDO"] },
+      { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
+      { deleted_classes = ["TakosRuntimeContainer"] },
+    ]
+    container_bindings = [
+      { name = "EXECUTOR_CONTAINER", class_name = "ExecutorContainerTier1" },
+      { name = "EXECUTOR_CONTAINER_TIER2", class_name = "ExecutorContainerTier2" },
+      { name = "EXECUTOR_CONTAINER_TIER3", class_name = "ExecutorContainerTier3" },
+    ]
+  }
+
   # The release builder owns these files at the app module root. This child
   # module has a fixed `modules/platform` layout, so every file and provisioner
   # path stays relative to the restored module instead of capturing a runner
@@ -120,6 +142,8 @@ locals {
   container_desired_config_file_path = "${local.app_module_root}/${local.container_desired_config_path}"
   bridge_helper_path                 = var.plan_mode ? "fixtures/takos-cloudflare-opentofu-bridge.ts" : ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts"
   bridge_helper_file_path            = "${local.app_module_root}/${local.bridge_helper_path}"
+  durable_object_bootstrap_path      = "modules/platform/durable-object-migration-bootstrap.js"
+  durable_object_bootstrap_file_path = "${local.app_module_root}/${local.durable_object_bootstrap_path}"
   container_image                    = var.container_image
   container_image_is_registry        = can(regex("^registry\\.cloudflare\\.com/([0-9a-f]{32})/", var.container_image))
   container_image_registry_account   = local.container_image_is_registry ? regex("^registry\\.cloudflare\\.com/([0-9a-f]{32})/", var.container_image)[0] : ""
@@ -263,10 +287,14 @@ locals {
   ])) : "bridge-disabled"
   container_desired_config_digest = var.enable_imperative_staging_bridge ? filesha256(local.container_desired_config_file_path) : "bridge-disabled"
   bridge_helper_digest            = var.enable_imperative_staging_bridge ? filesha256(local.bridge_helper_file_path) : "bridge-disabled"
+  durable_object_bootstrap_digest = var.enable_imperative_staging_bridge ? filesha256(local.durable_object_bootstrap_file_path) : "bridge-disabled"
+  durable_object_migration_digest = var.enable_imperative_staging_bridge ? sha256(jsonencode(local.durable_object_lifecycle)) : "bridge-disabled"
   vector_desired_config_digest    = sha256(jsonencode(local.vectorize))
   product_resource_digest         = sha256(jsonencode(local.product_resource_names))
   bridge_triggers = {
     helper                   = local.bridge_helper_digest
+    durable_object_bootstrap = local.durable_object_bootstrap_digest
+    durable_object_lifecycle = local.durable_object_migration_digest
     worker_artifact          = local.worker_artifact_digest
     container_desired_config = local.container_desired_config_digest
     vector_desired_config    = local.vector_desired_config_digest
@@ -285,6 +313,8 @@ locals {
     TAKOS_CLOUDFLARE_MIGRATION_SET_PATH            = local.migration_set_path
     TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH = local.container_desired_config_path
     TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH          = local.worker_module_path
+    TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH = local.durable_object_bootstrap_path
+    TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE      = jsonencode(local.durable_object_lifecycle)
     TAKOS_CONTAINER_IMAGE                          = local.container_image
     TAKOS_EXECUTOR_TIER1_MAX_INSTANCES             = tostring(var.executor_capacity.tier1_max_instances)
     TAKOS_EXECUTOR_TIER2_MAX_INSTANCES             = tostring(var.executor_capacity.tier2_max_instances)
@@ -344,6 +374,7 @@ resource "terraform_data" "provider_gap_pre" {
   count = var.enable_imperative_staging_bridge ? 1 : 0
 
   triggers_replace = local.bridge_triggers
+  depends_on       = [cloudflare_worker.app]
 
   lifecycle {
     precondition {
@@ -376,12 +407,14 @@ resource "cloudflare_worker" "app" {
   }
 }
 
-# Cloudflare applies Durable Object migrations only when a Worker Version is
-# deployed, but rejects a Version that both creates a class and binds to it.
-# Model Cloudflare's required two-step lifecycle explicitly: deploy one stable,
-# non-serving migration Version without DO bindings, then upload/deploy the real
-# application Version after those namespaces exist.
+# The ordinary provider path models migration and binding as two Versions
+# because Cloudflare rejects a Version that both creates a class and binds it.
+# The staging bridge skips this resource: the Workers Versions endpoint accepts
+# Container metadata but does not currently make the namespace container-ready,
+# so pre-worker performs the same migration through the legacy script endpoint.
 resource "cloudflare_worker_version" "durable_object_migrations" {
+  count = var.enable_imperative_staging_bridge ? 0 : 1
+
   account_id = var.account_id
   worker_id  = cloudflare_worker.app.id
 
@@ -394,40 +427,31 @@ resource "cloudflare_worker_version" "durable_object_migrations" {
     content_type = "application/javascript+module"
   }]
 
-  # Cloudflare creates a container-enabled Durable Object namespace only when
-  # the same deployed Version declares both the SQLite migration and the
-  # Container attachment metadata. This is metadata, not a namespace binding,
-  # so it remains valid in the migration-only first deployment.
-  containers = [
-    { class_name = "ExecutorContainerTier1" },
-    { class_name = "ExecutorContainerTier2" },
-    { class_name = "ExecutorContainerTier3" },
-  ]
+  # Keep the Container attachment metadata beside the SQLite migration for the
+  # ordinary provider lane. It is metadata, not a namespace binding, so the
+  # migration-only Version remains non-serving.
+  containers = [for binding in local.durable_object_lifecycle.container_bindings : {
+    class_name = binding.class_name
+  }]
 
   migrations = {
-    new_tag = "v7"
-    steps = [
-      { new_classes = ["SessionDO"] },
-      { new_classes = ["RunNotifierDO"] },
-      { new_classes = ["RateLimiterDO"] },
-      { new_classes = ["NotificationNotifierDO"] },
-      { new_classes = ["RoutingDO"] },
-      { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
-      { deleted_classes = ["TakosRuntimeContainer"] },
-    ]
+    new_tag = local.durable_object_lifecycle.tags[length(local.durable_object_lifecycle.tags) - 1]
+    steps   = local.durable_object_lifecycle.steps
   }
 
   depends_on = [terraform_data.provider_gap_pre]
 }
 
 resource "cloudflare_workers_deployment" "durable_object_migrations" {
+  count = var.enable_imperative_staging_bridge ? 0 : 1
+
   account_id  = var.account_id
   script_name = cloudflare_worker.app.name
   strategy    = "percentage"
 
   versions = [{
     percentage = 100
-    version_id = cloudflare_worker_version.durable_object_migrations.id
+    version_id = cloudflare_worker_version.durable_object_migrations[0].id
   }]
 }
 
@@ -476,22 +500,25 @@ resource "cloudflare_worker_version" "app" {
       { name = "NOTIFICATION_NOTIFIER", type = "durable_object_namespace", class_name = "NotificationNotifierDO" },
       { name = "RATE_LIMITER_DO", type = "durable_object_namespace", class_name = "RateLimiterDO" },
       { name = "ROUTING_DO", type = "durable_object_namespace", class_name = "RoutingDO" },
-      { name = "EXECUTOR_CONTAINER", type = "durable_object_namespace", class_name = "ExecutorContainerTier1" },
-      { name = "EXECUTOR_CONTAINER_TIER2", type = "durable_object_namespace", class_name = "ExecutorContainerTier2" },
-      { name = "EXECUTOR_CONTAINER_TIER3", type = "durable_object_namespace", class_name = "ExecutorContainerTier3" },
       { name = "TAKOS_EGRESS", type = "service", service = local.service_runtime_name, entrypoint = "TakosEgressEntrypoint" },
     ],
+    [for binding in local.durable_object_lifecycle.container_bindings : {
+      name       = binding.name
+      type       = "durable_object_namespace"
+      class_name = binding.class_name
+    }],
     local.secret_text_bindings,
     local.plain_text_bindings,
   )
 
-  containers = [
-    { class_name = "ExecutorContainerTier1" },
-    { class_name = "ExecutorContainerTier2" },
-    { class_name = "ExecutorContainerTier3" },
-  ]
+  containers = [for binding in local.durable_object_lifecycle.container_bindings : {
+    class_name = binding.class_name
+  }]
 
-  depends_on = [cloudflare_workers_deployment.durable_object_migrations]
+  depends_on = [
+    cloudflare_workers_deployment.durable_object_migrations,
+    terraform_data.provider_gap_pre,
+  ]
 }
 
 resource "cloudflare_workers_deployment" "app" {

@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 
 /**
- * Staging-only reconciler for the three Cloudflare provider gaps that cannot
+ * Staging-only reconciler for the Cloudflare provider gaps that cannot
  * be represented by the ordinary OpenTofu provider yet:
  *
  *   - Vectorize index creation/readback;
+ *   - legacy Workers-script upload for container-enabled Durable Object
+ *     migrations (the Versions endpoint does not currently enable them);
  *   - Container application image/capacity and Durable Object ownership;
  *   - D1 migrations.
  *
@@ -51,6 +53,7 @@ export interface BridgeFetchOptions {
 
 export interface BridgeDigests {
   readonly desiredDigest: string;
+  readonly durableObjectBootstrapDigest?: string;
   readonly helperDigest: string;
   readonly migrationDigest: string;
   readonly workerArtifactDigest: string;
@@ -61,6 +64,10 @@ export interface BridgeEvidence {
   readonly phase: BridgePhase;
   readonly digests: BridgeDigests;
   readonly changed: boolean;
+  readonly durableObjects: {
+    readonly status: "present" | "migrated" | "not-checked";
+    readonly tag?: string;
+  };
   readonly vector: { readonly status: "present" | "created" | "deleted" };
   readonly d1: { readonly applied: readonly string[]; readonly pending: readonly string[] };
   readonly containers: {
@@ -278,11 +285,159 @@ interface BridgeConfig {
   readonly vectorDimensions: number;
   readonly vectorMetric: "cosine" | "euclidean" | "dot-product";
   readonly migrationSetPath: string;
+  readonly durableObjectBootstrapPath?: string;
+  readonly durableObjectLifecycle?: DurableObjectLifecycle;
   readonly containerDesiredConfigPath?: string;
   readonly workerArtifactPath: string;
   readonly containerImage?: string;
   readonly importPollDelayMs: number;
   readonly importPollLimit: number;
+}
+
+interface DurableObjectMigrationStep {
+  readonly new_classes?: readonly string[];
+  readonly new_sqlite_classes?: readonly string[];
+  readonly deleted_classes?: readonly string[];
+}
+
+interface DurableObjectContainerBinding {
+  readonly name: string;
+  readonly className: string;
+}
+
+interface DurableObjectLifecycle {
+  readonly tags: readonly string[];
+  readonly steps: readonly DurableObjectMigrationStep[];
+  readonly containerBindings: readonly DurableObjectContainerBinding[];
+}
+
+function stringArray(
+  value: unknown,
+  label: string,
+  pattern: RegExp,
+): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 128) {
+    fail(`${label}_invalid`);
+  }
+  const output = value.map((entry) => {
+    const text = stringValue(entry, label);
+    if (!pattern.test(text)) fail(`${label}_invalid`);
+    return text;
+  });
+  if (new Set(output).size !== output.length) fail(`${label}_duplicates`);
+  return output;
+}
+
+function durableObjectLifecycle(value: string): DurableObjectLifecycle {
+  if (new TextEncoder().encode(value).byteLength > MAXIMUM_RESPONSE_BYTES) {
+    fail("durable_object_lifecycle_too_large");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    fail("durable_object_lifecycle_invalid");
+  }
+  if (!plainObject(parsed)) fail("durable_object_lifecycle_invalid");
+  const allowedRootKeys = new Set(["tags", "steps", "container_bindings"]);
+  if (Object.keys(parsed).some((key) => !allowedRootKeys.has(key))) {
+    fail("durable_object_lifecycle_invalid");
+  }
+  const tags = stringArray(
+    parsed.tags,
+    "durable_object_migration_tags",
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u,
+  );
+  if (!Array.isArray(parsed.steps) || parsed.steps.length !== tags.length) {
+    fail("durable_object_migration_steps_invalid");
+  }
+  const classPattern = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u;
+  const stepKeys = new Set([
+    "new_classes",
+    "new_sqlite_classes",
+    "deleted_classes",
+  ]);
+  const steps = parsed.steps.map((entry, index): DurableObjectMigrationStep => {
+    if (!plainObject(entry)) fail(`durable_object_migration_step_${index}_invalid`);
+    const keys = Object.keys(entry);
+    if (
+      keys.length === 0 ||
+      keys.some((key) => !stepKeys.has(key))
+    ) {
+      fail(`durable_object_migration_step_${index}_invalid`);
+    }
+    return {
+      ...(entry.new_classes === undefined
+        ? {}
+        : {
+            new_classes: stringArray(
+              entry.new_classes,
+              `durable_object_migration_step_${index}_new_classes`,
+              classPattern,
+            ),
+          }),
+      ...(entry.new_sqlite_classes === undefined
+        ? {}
+        : {
+            new_sqlite_classes: stringArray(
+              entry.new_sqlite_classes,
+              `durable_object_migration_step_${index}_new_sqlite_classes`,
+              classPattern,
+            ),
+          }),
+      ...(entry.deleted_classes === undefined
+        ? {}
+        : {
+            deleted_classes: stringArray(
+              entry.deleted_classes,
+              `durable_object_migration_step_${index}_deleted_classes`,
+              classPattern,
+            ),
+          }),
+    };
+  });
+  if (
+    !Array.isArray(parsed.container_bindings) ||
+    parsed.container_bindings.length === 0 ||
+    parsed.container_bindings.length > 32
+  ) {
+    fail("durable_object_container_bindings_invalid");
+  }
+  const containerBindings = parsed.container_bindings.map(
+    (entry, index): DurableObjectContainerBinding => {
+      if (
+        !plainObject(entry) ||
+        Object.keys(entry).some((key) => key !== "name" && key !== "class_name")
+      ) {
+        fail(`durable_object_container_binding_${index}_invalid`);
+      }
+      const name = stringValue(
+        entry.name,
+        `durable_object_container_binding_${index}_name`,
+      );
+      const className = stringValue(
+        entry.class_name,
+        `durable_object_container_binding_${index}_class_name`,
+      );
+      if (!/^[A-Z][A-Z0-9_]{0,127}$/u.test(name) || !classPattern.test(className)) {
+        fail(`durable_object_container_binding_${index}_invalid`);
+      }
+      return { name, className };
+    },
+  );
+  if (
+    new Set(containerBindings.map(({ name }) => name)).size !== containerBindings.length ||
+    new Set(containerBindings.map(({ className }) => className)).size !== containerBindings.length
+  ) {
+    fail("durable_object_container_bindings_duplicates");
+  }
+  const sqliteClasses = new Set(
+    steps.flatMap(({ new_sqlite_classes: classes = [] }) => classes),
+  );
+  if (containerBindings.some(({ className }) => !sqliteClasses.has(className))) {
+    fail("durable_object_container_binding_not_sqlite_class");
+  }
+  return { tags, steps, containerBindings };
 }
 
 async function readBounded(path: string, maximum: number): Promise<Uint8Array> {
@@ -416,6 +571,26 @@ export async function parseBridgeConfig(
     "worker_artifact_path",
     true,
   )!;
+  const needsDurableObjectBootstrap = phase === "pre-worker";
+  const durableObjectBootstrapPath = pathInput(
+    cwd,
+    envValue(
+      env,
+      ["TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH"],
+      needsDurableObjectBootstrap,
+    ),
+    "durable_object_bootstrap_path",
+    needsDurableObjectBootstrap,
+  );
+  const durableObjectLifecycleValue = envValue(
+    env,
+    ["TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE"],
+    needsDurableObjectBootstrap,
+  );
+  const parsedDurableObjectLifecycle =
+    durableObjectLifecycleValue === undefined
+      ? undefined
+      : durableObjectLifecycle(durableObjectLifecycleValue);
   const needsContainers =
     phase === "post-worker" || phase === "verify" || phase === "recovery-cleanup";
   const containerDesiredConfigPath = pathInput(
@@ -463,6 +638,12 @@ export async function parseBridgeConfig(
     vectorDimensions,
     vectorMetric: metric,
     migrationSetPath,
+    ...(durableObjectBootstrapPath === undefined
+      ? {}
+      : { durableObjectBootstrapPath }),
+    ...(parsedDurableObjectLifecycle === undefined
+      ? {}
+      : { durableObjectLifecycle: parsedDurableObjectLifecycle }),
     containerDesiredConfigPath,
     workerArtifactPath,
     ...(containerImage === undefined ? {} : { containerImage }),
@@ -751,6 +932,34 @@ class CloudflareApi {
       fail(
         "cloudflare_api_error",
         cloudflareApiFailureDetail(method, path, response.status, parsed),
+      );
+    }
+    return parsed.result ?? null;
+  }
+
+  async requestMultipart(path: string, body: FormData): Promise<unknown | null> {
+    let response: Response;
+    try {
+      response = await this.#fetch(`${CLOUDFLARE_API}${path}`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${this.#token}` },
+        body,
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      fail("cloudflare_request_failed");
+    }
+    let parsed: unknown;
+    try {
+      parsed = await jsonResponse(response);
+    } catch (error) {
+      if (error instanceof BridgeFailure) throw error;
+      fail("cloudflare_response_invalid");
+    }
+    if (!response.ok || !plainObject(parsed) || parsed.success !== true) {
+      fail(
+        "cloudflare_api_error",
+        cloudflareApiFailureDetail("PUT", path, response.status, parsed),
       );
     }
     return parsed.result ?? null;
@@ -1315,6 +1524,91 @@ async function helperDigest(path: string): Promise<string> {
   return `sha256:${sha256(await readBounded(path, MAXIMUM_RESPONSE_BYTES))}`;
 }
 
+export function pendingDurableObjectMigration(
+  currentTag: string | undefined,
+  lifecycle: DurableObjectLifecycle,
+): JsonObject | null {
+  const targetTag = lifecycle.tags.at(-1)!;
+  if (currentTag === targetTag) return null;
+  let firstStep = 0;
+  if (currentTag !== undefined) {
+    const currentIndex = lifecycle.tags.indexOf(currentTag);
+    if (currentIndex < 0) fail("durable_object_migration_tag_unknown");
+    firstStep = currentIndex + 1;
+  }
+  const steps = lifecycle.steps.slice(firstStep);
+  if (steps.length === 0) return null;
+  return {
+    ...(currentTag === undefined ? {} : { old_tag: currentTag }),
+    new_tag: targetTag,
+    steps: steps.map((step) => jsonValue(step, "durable_object_migration_step")),
+  };
+}
+
+async function reconcileDurableObjectMigration(
+  api: CloudflareApi,
+  config: BridgeConfig,
+): Promise<{ readonly changed: boolean; readonly tag: string }> {
+  const lifecycle = config.durableObjectLifecycle;
+  const bootstrapPath = config.durableObjectBootstrapPath;
+  if (lifecycle === undefined || bootstrapPath === undefined) {
+    fail("durable_object_bootstrap_config_missing");
+  }
+  const scriptsPath =
+    `/accounts/${pathSegment(config.accountId, "account_id")}/workers/scripts`;
+  const scripts = await api.request("GET", scriptsPath);
+  if (!Array.isArray(scripts)) fail("worker_script_inventory_invalid");
+  const matches = scripts.filter(
+    (entry) => plainObject(entry) && entry.id === config.workerName,
+  );
+  if (matches.length > 1) fail("worker_script_inventory_ambiguous");
+  const migrationTagValue = plainObject(matches[0])
+    ? matches[0].migration_tag
+    : undefined;
+  if (
+    migrationTagValue !== undefined &&
+    migrationTagValue !== null &&
+    typeof migrationTagValue !== "string"
+  ) {
+    fail("durable_object_migration_tag_invalid");
+  }
+  const currentTag =
+    typeof migrationTagValue === "string" && migrationTagValue.trim() !== ""
+      ? migrationTagValue.trim()
+      : undefined;
+  const migrations = pendingDurableObjectMigration(currentTag, lifecycle);
+  const targetTag = lifecycle.tags.at(-1)!;
+  if (migrations === null) return { changed: false, tag: targetTag };
+
+  const bootstrap = await readBounded(bootstrapPath, MAXIMUM_MIGRATION_BYTES);
+  const moduleName = "durable-object-migration-bootstrap.js";
+  const metadata: JsonObject = {
+    main_module: moduleName,
+    compatibility_date: "2026-04-01",
+    bindings: lifecycle.containerBindings.map(({ name, className }) => ({
+      name,
+      type: "durable_object_namespace",
+      class_name: className,
+    })),
+    containers: lifecycle.containerBindings.map(({ className }) => ({
+      class_name: className,
+    })),
+    migrations,
+  };
+  const form = new FormData();
+  form.set("metadata", JSON.stringify(metadata));
+  form.set(
+    moduleName,
+    new Blob([bootstrap], { type: "application/javascript+module" }),
+    moduleName,
+  );
+  const uploadPath =
+    `/accounts/${pathSegment(config.accountId, "account_id")}/workers/scripts/${pathSegment(config.workerName, "worker_name")}` +
+    "?excludeScript=true&bindings_inherit=strict";
+  await api.requestMultipart(uploadPath, form);
+  return { changed: true, tag: targetTag };
+}
+
 export async function runBridge(
   phase: BridgePhase | string,
   options: BridgeFetchOptions = {},
@@ -1324,10 +1618,14 @@ export async function runBridge(
   const env = options.env ?? process.env;
   const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const [migrationSet, workerArtifactDigest, bridgeDigest] = await Promise.all([
+  const [migrationSet, workerArtifactDigest, bridgeDigest, bootstrapDigest] = await Promise.all([
     migrationFiles(config.migrationSetPath),
     readBounded(config.workerArtifactPath, MAXIMUM_MIGRATION_BYTES).then(sha256),
     helperDigest(options.helperPath ?? fileURLToPath(import.meta.url)),
+    config.durableObjectBootstrapPath === undefined
+      ? Promise.resolve(undefined)
+      : readBounded(config.durableObjectBootstrapPath, MAXIMUM_MIGRATION_BYTES)
+          .then((bytes) => `sha256:${sha256(bytes)}`),
   ]);
   const containerDesired =
     config.containerDesiredConfigPath === undefined
@@ -1344,15 +1642,23 @@ export async function runBridge(
       metric: config.vectorMetric,
     },
     containers: containerDesired,
+    durableObjects: config.durableObjectLifecycle,
   });
   const digests: BridgeDigests = {
     desiredDigest,
+    ...(bootstrapDigest === undefined
+      ? {}
+      : { durableObjectBootstrapDigest: bootstrapDigest }),
     helperDigest: bridgeDigest,
     migrationDigest,
     workerArtifactDigest: `sha256:${workerArtifactDigest}`,
   };
   const api = new CloudflareApi(config.accountId, token, fetchImpl);
   let vector: "present" | "created" | "deleted" = "present";
+  let durableObjects: {
+    status: "present" | "migrated" | "not-checked";
+    tag?: string;
+  } = { status: "not-checked" };
   let d1: { applied: readonly string[]; pending: readonly string[] } = {
     applied: [],
     pending: [],
@@ -1362,10 +1668,18 @@ export async function runBridge(
   let workerVersion: string | undefined;
   let changed = false;
   if (selectedPhase === "pre-worker") {
+    const durableObjectResult = await reconcileDurableObjectMigration(api, config);
+    durableObjects = {
+      status: durableObjectResult.changed ? "migrated" : "present",
+      tag: durableObjectResult.tag,
+    };
     vector = await reconcileVector(api, config);
     const migrationResult = await reconcileMigrations(api, config, migrationSet);
     d1 = { applied: migrationResult.applied, pending: migrationResult.pending };
-    changed = vector === "created" || migrationResult.newlyApplied.length > 0;
+    changed =
+      durableObjectResult.changed ||
+      vector === "created" ||
+      migrationResult.newlyApplied.length > 0;
   } else {
     const worker = await workerEvidence(api, config);
     workerVersion = worker.versionId;
@@ -1408,6 +1722,7 @@ export async function runBridge(
     phase: selectedPhase,
     digests,
     changed,
+    durableObjects,
     vector: { status: vector },
     d1,
     containers: { reconciled, deleted },
