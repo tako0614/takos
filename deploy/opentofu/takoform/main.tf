@@ -51,7 +51,7 @@ variable "worker_artifact_sha256" {
 variable "agent_image" {
   description = "Digest-pinned OCI image for the bounded Takos agent execution service."
   type        = string
-  default     = "ghcr.io/tako0614/takos-agent@sha256:09ca6ff29ed0cbbe35e0d0e76d17e7bb029bdbdfe3fb4c88b6cdbaf4d280cda2"
+  default     = "ghcr.io/tako0614/takos-agent@sha256:d737076cdab331b3065410606d0754fbb58b9ec25a8f0c0108c8e63991d38e7b"
 
   validation {
     condition     = can(regex("^[^[:space:]@]+@sha256:[a-f0-9]{64}$", trimspace(var.agent_image)))
@@ -60,9 +60,16 @@ variable "agent_image" {
 }
 
 variable "public_url" {
-  description = "Optional canonical public URL."
+  description = "Canonical HTTPS origin for the Takos worker. This value is required so the Worker endpoint and OIDC callback are plan-known."
   type        = string
-  default     = ""
+
+  validation {
+    condition = can(regex(
+      "^https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$",
+      var.public_url,
+    ))
+    error_message = "public_url must be an HTTPS origin without credentials, a port, path, query, or fragment."
+  }
 }
 
 variable "takosumi_accounts_url" {
@@ -115,6 +122,7 @@ locals {
   prefix          = var.project_name
   artifact_url    = trimspace(var.worker_artifact_url)
   artifact_sha256 = startswith(trimspace(var.worker_artifact_sha256), "sha256:") ? trimspace(var.worker_artifact_sha256) : format("sha256:%s", trimspace(var.worker_artifact_sha256))
+  public_origin   = trimsuffix(trimspace(var.public_url), "/")
   buckets = {
     worker_bundles = "worker-bundles"
     tenant_builds  = "tenant-builds"
@@ -139,12 +147,12 @@ locals {
   }
   configuration = merge(
     { for name, value in var.env : name => value if trimspace(value) != "" },
-    trimspace(var.public_url) != "" ? {
-      ADMIN_DOMAIN         = replace(trimspace(var.public_url), "https://", "")
-      TENANT_BASE_DOMAIN   = replace(trimspace(var.public_url), "https://", "")
-      AUTH_PUBLIC_BASE_URL = trimspace(var.public_url)
-      PROXY_BASE_URL       = trimspace(var.public_url)
-    } : {},
+    {
+      ADMIN_DOMAIN         = trimprefix(local.public_origin, "https://")
+      TENANT_BASE_DOMAIN   = trimprefix(local.public_origin, "https://")
+      AUTH_PUBLIC_BASE_URL = local.public_origin
+      PROXY_BASE_URL       = local.public_origin
+    },
     trimspace(var.takosumi_accounts_url) != "" ? {
       TAKOSUMI_ACCOUNTS_URL = trimspace(var.takosumi_accounts_url)
     } : {},

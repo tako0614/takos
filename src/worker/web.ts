@@ -15,7 +15,7 @@ import gitSmartHttp from "./server/routes/git-smart-http.ts";
 import {
   TAKOSUMI_PRODUCT_CAPABILITIES_PATH,
   TAKOSUMI_WELL_KNOWN_PATH,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/discovery";
 import {
   createTakosDistributionProductCapabilities,
   createTakosDistributionWellKnown,

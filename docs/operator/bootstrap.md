@@ -15,7 +15,8 @@ Takosumi Accounts plane の upstream IdP / credential policy として扱い、T
 - Takos OpenTofu module が product backing resources (D1 / KV / R2 / Queues) を provision 済み
 - worker artifact が同じ origin に deploy 済み
 - `BASE_URL` が Takos worker origin、`TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` が Takosumi Accounts origin を指す
-- install context が対象の Takosumi Workspace を `TAKOSUMI_WORKSPACE_ID` として渡している
+- `identity.oidc` capability が `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
+  `OIDC_REDIRECT_URI` の4つの公開値を届けている (confidential client の `OIDC_CLIENT_SECRET` は operator が別途 secret store から設定する)
 - `DB` / `SESSION_DO` などの Takos product bindings が production または staging profile にある
 - trusted edge / internal service secret は public internet へ露出していない
 
@@ -30,9 +31,8 @@ Takosumi operations runbook で管理してください。
 | `TAKOSUMI_ACCOUNTS_URL`    | no      | Accounts plane        | external Takosumi Accounts API / issuer origin     |
 | `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | Takosumi Accounts issuer                           |
 | `OIDC_CLIENT_ID`           | no      | Accounts projection   | Takosumi Accounts plane が発行した client id       |
-| `OIDC_CLIENT_SECRET`       | optional | Accounts projection  | confidential client の場合だけ使う secret          |
+| `OIDC_CLIENT_SECRET`       | optional | operator secret store | confidential client の場合だけ使う secret          |
 | `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
-| `TAKOSUMI_WORKSPACE_ID`    | no      | install context       | OIDC login と delegation に固定する親 Workspace id |
 | `ENCRYPTION_KEY`           | yes     | Takos product DB      | app-local secret と委任OAuth tokenの暗号化         |
 | `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | legacy-named app-local Capsule/profile id          |
 | `DB`                       | binding | Takos product         | app-local persistence                              |
@@ -53,11 +53,12 @@ https://<BASE_URL>/
 plane 側の policy で扱います。
 
 Takos の dynamic client は public PKCE client を標準とし、`openid profile email offline_access capsules:read
-capsules:write` を要求します。login は install context の `TAKOSUMI_WORKSPACE_ID` を authorize query と一回限りの
-state に固定します。callback は UserInfo の canonical な親 Workspace binding がその selector と完全一致した場合だけ、
-access/refresh token と Workspace binding を `ENCRYPTION_KEY` で暗号化して app-local DB に保存します。Takos 内の Workspace
-は product data boundary であり、membership 配列から Workspace を推測したり、候補が一つだけという理由で fallback したり
-しません。app launcher の plan/apply/list/delete は、ログイン時に発行された親 Workspace binding に対して行います。
+capsules:write` を要求します。login は Workspace selector を authorize query や一回限りの state に入れません。Accounts が
+Capsule/client と現在の membership から Workspace を解決し、callback は UserInfo の nonempty な
+`takosumi.workspace_id` と一意で一致する `workspace_memberships` を検証した場合だけ、access/refresh token と検証済み
+Workspace binding を `ENCRYPTION_KEY` で暗号化して app-local DB に保存します。Takos 内の Workspace は product data boundary
+であり、membership 配列から Workspace を推測したり、claim のない応答を受け入れたりしません。app launcher の
+plan/apply/list/delete は、ログイン時に発行された親 Workspace binding に対して行います。
 
 ## 2. 初回 setup を完了する
 

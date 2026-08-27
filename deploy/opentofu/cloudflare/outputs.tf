@@ -16,7 +16,7 @@ output "service_runtime_name" {
 }
 
 output "url" {
-  description = "Public URL for smoke checks when public_url or cloudflare.workers_subdomain is supplied."
+  description = "Canonical public URL supplied through the required public_url input."
   value       = module.platform.launch_url
 }
 
@@ -26,7 +26,7 @@ output "launch_url" {
 }
 
 output "public_url" {
-  description = "Canonical public Takos URL projected from public_url or the derived workers.dev URL."
+  description = "Canonical public Takos URL supplied through the required public_url input."
   value       = module.platform.public_url
 }
 
@@ -103,4 +103,49 @@ output "object_buckets" {
 output "queues" {
   description = "Provider-neutral queue names keyed by logical binding."
   value       = module.platform.queues
+}
+
+output "cloudflare_worker_id" {
+  description = "Cloudflare Worker identity ID."
+  value       = module.platform.worker_id
+}
+
+output "cloudflare_worker_version_id" {
+  description = "Deployed Worker version ID."
+  value       = module.platform.worker_version_id
+}
+
+output "cloudflare_worker_deployment_id" {
+  description = "Cloudflare Worker deployment ID."
+  value       = module.platform.worker_deployment_id
+}
+
+output "worker_artifact_digest" {
+  description = "Stable digest of the Worker module and assets."
+  value       = module.platform.worker_artifact_digest
+}
+
+output "vector_desired_config_digest" {
+  description = "Stable digest of the Vectorize desired configuration."
+  value       = module.platform.vector_desired_config_digest
+}
+
+output "container_desired_config_digest" {
+  description = "Stable digest of the Container desired configuration."
+  value       = module.platform.container_desired_config_digest
+}
+
+output "migration_set_digest" {
+  description = "Stable digest of the D1 migration set."
+  value       = module.platform.migration_set_digest
+}
+
+output "bridge_helper_digest" {
+  description = "Stable digest of the optional provider-gap bridge executable."
+  value       = module.platform.bridge_helper_digest
+}
+
+output "imperative_staging_bridge_enabled" {
+  description = "Whether provider-gap staging bridges are enabled."
+  value       = module.platform.imperative_staging_bridge_enabled
 }

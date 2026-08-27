@@ -27,7 +27,6 @@ type StoredOidcState = {
   state: string;
   nonce: string;
   code_verifier: string;
-  workspace_id: string;
   return_to: string;
   expires_at: number;
 };
@@ -88,7 +87,6 @@ function createEnv(
     oidcClientId?: string;
     oidcClientSecret?: string;
     oidcRedirectUri?: string;
-    takosumiWorkspaceId?: string;
     includeSessionStore?: boolean;
     sqlBinding?: unknown;
     createdSessions?: CreatedSession[];
@@ -109,7 +107,6 @@ function createEnv(
         oidcClientId: input.oidcClientId,
         oidcClientSecret: input.oidcClientSecret,
         oidcRedirectUri: input.oidcRedirectUri,
-        takosumiWorkspaceId: input.takosumiWorkspaceId,
       },
       services: {
         sql: input.sqlBinding ? { binding: input.sqlBinding } : undefined,
@@ -204,24 +201,6 @@ test("OIDC login route rejects missing config", async () => {
     await response.text(),
     "Takosumi Accounts OIDC is not configured.",
   );
-
-  const states: StoredOidcState[] = [];
-  const missingWorkspaceResponse = await createApp().fetch(
-    new Request("https://takos.example.test/auth/oidc/login"),
-    createEnv({
-      states,
-      oidcIssuerUrl: "https://accounts.example.test",
-      oidcDiscoveryUrl: "http://accounts.internal:8787",
-      oidcClientId: "takos-client",
-      oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-    }),
-  );
-  assertEquals(missingWorkspaceResponse.status, 500);
-  assertStringIncludes(
-    await missingWorkspaceResponse.text(),
-    "Takosumi Accounts OIDC is not configured.",
-  );
-  assertEquals(states.length, 0);
 });
 
 test("OIDC callback rejects when the state cookie is missing or mismatched", async () => {
@@ -231,7 +210,6 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
     oidcClientId: "takos-client",
     oidcClientSecret: "client-secret",
     oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-    takosumiWorkspaceId: "workspace-parent-1",
   };
 
   // No state cookie at all: a callback this browser never initiated.
@@ -240,7 +218,6 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
       state: "state-csrf",
       nonce: "nonce-csrf",
       code_verifier: "verifier-csrf",
-      workspace_id: "workspace-parent-csrf",
       return_to: "/",
       expires_at: Date.now() + 60_000,
     },
@@ -269,7 +246,6 @@ test("OIDC callback rejects when the state cookie is missing or mismatched", asy
       state: "state-victim",
       nonce: "nonce-victim",
       code_verifier: "verifier-victim",
-      workspace_id: "workspace-parent-victim",
       return_to: "/",
       expires_at: Date.now() + 60_000,
     },
@@ -301,7 +277,6 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       state: "state-1",
       nonce: "nonce-1",
       code_verifier: "verifier-1",
-      workspace_id: "workspace-parent-1",
       return_to: "/space-settings",
       expires_at: Date.now() + 60_000,
     },
@@ -379,42 +354,12 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
   try {
     states.unshift({
       ...states[0]!,
-      state: "state-config-drift",
-      workspace_id: "workspace-previous",
-    });
-    tokenRequests.length = 0;
-    const configDriftResponse = await createApp().fetch(
-      new Request(
-        "https://takos.example.test/auth/oidc/callback?code=auth-code-config-drift&state=state-config-drift",
-        { headers: { Cookie: "__Host-tp_oidc_state=state-config-drift" } },
-      ),
-      createEnv({
-        states,
-        createdSessions,
-        sqlBinding: authDb.db,
-        oidcIssuerUrl: "https://accounts.example.test/",
-        oidcDiscoveryUrl: "http://accounts.internal:8787",
-        oidcClientId: "takos-client",
-        oidcClientSecret: "client-secret",
-        oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-1",
-      }),
-    );
-    assertEquals(configDriftResponse.status, 400);
-    assertStringIncludes(await configDriftResponse.text(), "Invalid OIDC state.");
-    assertEquals(tokenRequests.length, 0);
-    assertEquals(createdSessions.length, 0);
-    assertEquals(states.length, 1);
-
-    states.unshift({
-      ...states[0]!,
       state: "state-workspace-mismatch",
-      workspace_id: "workspace-parent-1",
     });
     userInfo = {
       ...userInfo,
       takosumi: { workspace_id: "workspace-other" },
-      workspace_memberships: ["workspace-other"],
+      workspace_memberships: ["workspace-parent-1"],
     };
     const mismatchResponse = await createApp().fetch(
       new Request(
@@ -430,7 +375,6 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
         oidcClientId: "takos-client",
         oidcClientSecret: "client-secret",
         oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-1",
       }),
     );
     assertEquals(mismatchResponse.status, 400);
@@ -446,7 +390,6 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       states.unshift({
         ...states[0]!,
         state: rejectedState,
-        workspace_id: "workspace-parent-1",
       });
       userInfo = rejectedUserInfo;
       const rejectedResponse = await createApp().fetch(
@@ -463,7 +406,6 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
           oidcClientId: "takos-client",
           oidcClientSecret: "client-secret",
           oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-          takosumiWorkspaceId: "workspace-parent-1",
         }),
       );
       assertEquals(rejectedResponse.status, 400);
@@ -526,7 +468,6 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
         oidcClientId: "takos-client",
         oidcClientSecret: "client-secret",
         oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-1",
       }),
     );
 
@@ -822,7 +763,6 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
       state: "state-legacy",
       nonce: "nonce-legacy",
       code_verifier: "verifier-legacy",
-      workspace_id: "workspace-parent-legacy",
       return_to: "/spaces",
       expires_at: Date.now() + 60_000,
     },
@@ -904,7 +844,6 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
         oidcClientId: "takos-client",
         oidcClientSecret: "client-secret",
         oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-legacy",
       }),
     );
 
@@ -999,7 +938,6 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
         oidcDiscoveryUrl: "http://accounts.internal:8787",
         oidcClientId: "takos-client",
         oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
-        takosumiWorkspaceId: "workspace-parent-login",
       }),
     );
 
@@ -1035,10 +973,7 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
     assertStringIncludes(stateCookie, "SameSite=Lax");
     assertEquals(redirect.searchParams.get("response_type"), "code");
     assertEquals(redirect.searchParams.get("client_id"), "takos-client");
-    assertEquals(
-      redirect.searchParams.get("workspace_id"),
-      "workspace-parent-login",
-    );
+    assertEquals(redirect.searchParams.get("workspace_id"), null);
     assertEquals(
       redirect.searchParams.get("redirect_uri"),
       "https://takos.example.test/auth/oidc/callback",
@@ -1053,7 +988,7 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
     assertEquals(stored.state, redirect.searchParams.get("state"));
     assertEquals(stored.nonce, redirect.searchParams.get("nonce"));
     assertEquals(stored.return_to, "/space-settings");
-    assertEquals(stored.workspace_id, "workspace-parent-login");
+    assertEquals("workspace_id" in stored, false);
     assertEquals(stored.code_verifier.length >= 43, true);
     assertEquals(stored.expires_at > Date.now(), true);
     assertEquals(

@@ -15,10 +15,10 @@ import {
   resolveInstallableAppInstallConfig,
 } from "../installable-app-install.ts";
 import {
-  TAKOSUMI_API_VERSION,
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_INTERFACE_VERSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
+import { TAKOSUMI_API_VERSION } from "@takosjp/takosumi-contract/discovery";
 
 type SeenRequest = {
   method: string;

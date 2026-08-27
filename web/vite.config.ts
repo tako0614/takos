@@ -49,10 +49,6 @@ export default defineConfig(({ mode }) => {
     root: resolve(__dirname),
     resolve: {
       alias: {
-        '@takosjp/takosumi-accounts-contract': resolve(
-          __dirname,
-          '../../takosumi/accounts/contract/src/mod.ts',
-        ),
         'takos-api-contract/shared/types': resolve(
           __dirname,
           '../src/contracts/public/shared/types/index.ts',

@@ -1,0 +1,58 @@
+# Generated-root harness for the source-build runner contract. The harness is
+# intentionally a separate OpenTofu root: it consumes the Cloudflare adapter as
+# a child module, just as Takosumi's generated root does.
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "= 5.19.1"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "= 3.9.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "= 4.3.0"
+    }
+  }
+}
+
+provider "cloudflare" {}
+provider "random" {}
+provider "tls" {}
+
+module "app" {
+  source = "../.."
+
+  providers = {
+    cloudflare = cloudflare
+    random     = random
+    tls        = tls
+  }
+
+  project_name                     = "takos-generated-root"
+  public_url                       = "https://takos-generated-root.example.com"
+  opentofu_plan_mode               = true
+  enable_imperative_staging_bridge = true
+  container_image                  = "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  cloudflare = {
+    account_id = "00000000000000000000000000000000"
+  }
+}
+
+output "bridge_path_digests" {
+  description = "Content-bound digests prove child-module paths resolve to the app module root."
+  value = {
+    worker_artifact          = module.app.worker_artifact_digest
+    migration_set            = module.app.migration_set_digest
+    container_desired_config = module.app.container_desired_config_digest
+    bridge_helper            = module.app.bridge_helper_digest
+  }
+}
+
+output "public_url" {
+  value = module.app.public_url
+}

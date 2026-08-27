@@ -43,7 +43,7 @@ for (const hidden of [
     try {
       const paths = [
         "package.json",
-        "takosumi-composition-source.json",
+        "release-input.json",
         "deploy/opentofu/takoform/main.tf",
       ];
       await gitCommand(fixture.root, ["update-index", hidden.option, "--", ...paths]);
@@ -53,12 +53,8 @@ for (const hidden of [
           '{"version":"9.9.9","takosRelease":{"version":"9.9.9"}}\n',
         ),
         writeFile(
-          join(fixture.root, "takosumi-composition-source.json"),
-          `${JSON.stringify({
-            kind: "takos.takosumi-composition-source@v1",
-            repository: "tako0614/takosumi",
-            commit: "9".repeat(40),
-          })}\n`,
+          join(fixture.root, "release-input.json"),
+          `${JSON.stringify({ kind: "takos.release-input@v1", commit: "9".repeat(40) })}\n`,
         ),
         writeFile(
           join(fixture.root, "deploy/opentofu/takoform/main.tf"),
@@ -105,7 +101,7 @@ for (const drift of [
     expected: "type does not match",
     mutate: async (fixture: PhysicalTreeFixture) => {
       await rm(join(fixture.root, "package.json"));
-      await symlink("takosumi-composition-source.json", join(fixture.root, "package.json"));
+      await symlink("release-input.json", join(fixture.root, "package.json"));
     },
   },
   {
@@ -147,19 +143,15 @@ async function physicalTreeFixture() {
         '{"version":"0.12.2","takosRelease":{"version":"0.12.2"}}\n',
       ),
       writeFile(
-        join(root, "takosumi-composition-source.json"),
-        `${JSON.stringify({
-          kind: "takos.takosumi-composition-source@v1",
-          repository: "tako0614/takosumi",
-          commit: "3".repeat(40),
-        })}\n`,
+        join(root, "release-input.json"),
+        `${JSON.stringify({ kind: "takos.release-input@v1", commit: "3".repeat(40) })}\n`,
       ),
       writeFile(
         join(root, "deploy/opentofu/takoform/main.tf"),
         'variable "worker_release_tag" { default = "v0.12.2" }\n',
       ),
     ]);
-    await symlink("takosumi-composition-source.json", join(root, "release-source.json"));
+    await symlink("release-input.json", join(root, "release-source.json"));
     await gitCommand(root, ["init", "--quiet", "--initial-branch=main"]);
     await gitCommand(root, ["config", "user.email", "tests@takos.jp"]);
     await gitCommand(root, ["config", "user.name", "Takos tests"]);

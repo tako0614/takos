@@ -12,9 +12,7 @@ import {
   projectAuthorizedUiSurface,
   type AuthorizedUiSurface,
 } from "../../../application/services/platform/runtime-interface-profiles.ts";
-import {
-  resolveDisplayIcon,
-} from "takosumi-contract";
+import { resolveDisplayIcon } from "../../../application/services/platform/interface-display.ts";
 
 type Variables = {
   user?: User;

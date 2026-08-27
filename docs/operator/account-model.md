@@ -35,14 +35,18 @@ snapshotとして扱い、identity ownership は `(issuer, sub)` だけで決め
 ## Capsule API delegation
 
 Takosumi Accounts の operator は Takos 用の public OIDC client を通常の account-plane 手順で明示登録し、
-`openid profile email offline_access capsules:read capsules:write` と正確な redirect URI を許可します。install context は
-対象の親 Workspace id を非 secret の `TAKOSUMI_WORKSPACE_ID` として Takos に渡します。Takos はその selector を
-authorize query と一回限りの OIDC state に保存し、callback で検証済み UserInfo の canonical Workspace claim と完全一致
-しない限り、user provisioning や Accounts delegation の保存まで進みません。一致した場合だけ access/refresh token と
-Workspace binding を app-local DB に暗号化保存します。app launcher の server-to-server call はこのユーザー委任tokenを使い、
-Accounts側でも scope、subject、Workspaceを再検証します。membership 配列が一つだけという理由で Workspace を推測しません。
-token や Workspace binding を OpenTofu state / Output に保存せず、Capsule install が OIDC client を自動生成することも
-ありません。
+`openid profile email offline_access capsules:read capsules:write` と正確な redirect URI を許可します。
+`identity.oidc` capability は `TAKOSUMI_ACCOUNTS_URL`、`OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、
+`OIDC_REDIRECT_URI` の4つの公開 Accounts 値だけを Takos に届けます。confidential client を使う場合の
+`OIDC_CLIENT_SECRET` は capability では届けず、operator が別途 secret store から設定します。direct/self-host OIDC も同じ4つの値を受け取り、Workspace id をアプリ設定として受け取りません。
+
+Accounts は authorize 時の Capsule/client と現在の membership から Workspace を解決し、UserInfo の
+`takosumi.workspace_id` と `workspace_memberships` に返します。callback はその claim が空でなく、membership が一つだけで
+claim と一致しない限り user provisioning や Accounts delegation の保存まで進みません。一致した場合だけ access/refresh token と
+検証済み Workspace binding を app-local DB に暗号化保存します。app launcher の server-to-server call はこのユーザー委任tokenを使い、
+Accounts側でも scope、subject、Workspaceを再検証します。membership 配列だけから Workspace を推測しません。
+token や Workspace binding を OpenTofu state / Output に保存しません。`identity.oidc` capability の Capsule-bound client 登録は
+Apply 中だけ行い、Plan では行いません。Capsule が terminal destroy になったときは、その client も revoke します。
 
 Takos内のWorkspaceはTakos productのデータ境界です。親Takosumi Workspaceと同じIDであるとは仮定せず、ローカル
 Workspaceを作るたびにTakosumi Workspaceを増やしません。
@@ -50,11 +54,9 @@ Workspaceを作るたびにTakosumi Workspaceを増やしません。
 ## オペレーターチェックリスト
 
 - Takosumi Accounts plane の issuer が `OIDC_ISSUER_URL` の `/.well-known/openid-configuration` で解決できること
-- `OIDC_ISSUER_URL` / public `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` が登録済み client と完全一致すること
-- `TAKOSUMI_WORKSPACE_ID` が install context の対象 Workspace と完全一致し、secret store ではなく非 secret Worker var として
-  materialize されること
+- `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` / public `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` が capability と登録済み client に一致すること
 - 登録済み client が `openid profile email offline_access capsules:read capsules:write` を許可し、UserInfo が単一の親
-  Workspace binding を返すこと
+  Workspace claim (`takosumi.workspace_id`) と、それに一致する一意な `workspace_memberships` を返すこと
 - `ENCRYPTION_KEY` が設定され、委任tokenの平文がlog、OpenTofu state、Outputに出ないこと
 
 automation credential は Takosumi Accounts が発行する bearer / PAT を使います。発行 / 失効 / rotation は Takosumi

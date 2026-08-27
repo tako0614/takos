@@ -23,12 +23,6 @@ import {
   smokeWorkerReleaseArchive,
   type WorkerReleaseSmokeResult,
 } from "./smoke-worker-release-artifact.ts";
-import {
-  assertTakosumiCompositionSourceIdentityMatch,
-  parseTakosumiCompositionSourceIdentity,
-  verifyTakosumiCompositionSource,
-  type TakosumiCompositionSourceIdentity,
-} from "./check-takosumi-composition-source.ts";
 import { assertPhysicalGitTreeMatchesCommit } from "./check-physical-git-tree.ts";
 
 const REPOSITORY = "tako0614/takos";
@@ -53,10 +47,8 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   covers: [
     "deploy/cloudflare/wrangler.toml",
     "containers/agent",
-    "takosumi-composition-source.json",
     "tsconfig.json",
     "scripts/check-physical-git-tree.ts",
-    "scripts/check-takosumi-composition-source.ts",
     "scripts/build-worker-release-artifact.ts",
     "scripts/smoke-worker-release-artifact.ts",
   ],
@@ -66,7 +58,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
   triggers: ["published-identity", "authority", "irreversible"],
   obligations: {
     provenance:
-      "prepare binds clean pushed Takos main, package version, the Takos-owned exact Takosumi composition pin and clean physical sibling source, pinned agent-engine commit, target Cloudflare account, digest-pinned Cloudflare images, the same agent bytes in public GHCR, exact Worker archive bytes and size, and a canonical descriptor digest in operator-private evidence; publish independently re-derives that closure from current immutable sources and physical prepared bytes",
+      "prepare binds clean pushed Takos main, package version, pinned agent-engine commit, target Cloudflare account, digest-pinned Cloudflare images, the same agent bytes in public GHCR, exact Worker archive bytes and size, and a canonical descriptor digest in operator-private evidence; publish independently re-derives that closure from current immutable sources and physical prepared bytes",
     "post-conditions":
       "publish anonymously re-reads the prepared public GHCR agent identity, verifies the create-only remote tag resolves to the prepared commit, downloads every GitHub release asset to recheck its exact SHA-256, then boots the exact downloaded Worker archive in Wrangler local workerd and exercises Takos health, auth-boundary API, and product discovery responses",
     reversal:
@@ -76,7 +68,7 @@ export const TAKOS_RELEASE_ARTIFACT_SURFACE = {
     "no-overwrite":
       "prepare uses non-authoritative nonce upload tags in both registries and rejects existing output/evidence paths; publish requires absent tag and Release identities, then immediately before its one create-only GitHub Release operation re-reads the bounded private operator-owned descriptor without following links and requires its exact canonical schema, proves the exact physical Takos HEAD tree, re-reads final tag and Release absence, and mints a per-attempt readback marker; there is no update, upload, edit, delete, force, or retry path",
     "pre-mutation-proof":
-      "prepare reruns the portable complete gate, proves clean pushed Takos main with no hidden index flags plus an independent physical HEAD-tree byte/type/mode/symlink proof and unused version tag/release identities, verifies the exact non-symlink ../takosumi checkout against the composition pin with the same physical-tree protections, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
+      "prepare reruns the portable complete gate, proves clean pushed Takos main with no hidden index flags plus an independent physical HEAD-tree byte/type/mode/symlink proof and unused version tag/release identities, synchronized local/live origin/main, and canonical ancestry before and after compilation, verifies the registry config account against the operator account file, fetches the pinned agent engine commit from its canonical remote, and completes both local image and Worker builds before the first remote push",
     "independent-review":
       "the release publisher implementation and its dry-run/mutation boundary receive an independent review before execute; no task, branch, green check, or source repository authorizes publication by itself",
   },
@@ -97,9 +89,6 @@ export type ReleaseArtifactOptions = Readonly<{
 }>;
 
 export type ReleaseArtifactRuntime = Readonly<{
-  verifyTakosumiCompositionSource?: (
-    takosRoot: string,
-  ) => Promise<TakosumiCompositionSourceIdentity>;
   verifyPortableWorkerSourceIdentity?: (
     takosRoot: string,
     tag: string,
@@ -189,7 +178,6 @@ type PreparedRecord = Readonly<{
   commit: string;
   version: string;
   repository: typeof REPOSITORY;
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   accountId: string;
   portableCheck: { command: "bun run check"; status: "passed" };
   outputDir: string;
@@ -215,7 +203,6 @@ type PublishedRecord = Readonly<{
   status: "published";
   tag: string;
   commit: string;
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   releaseUrl: string;
   descriptor: PreparedRecord["descriptor"];
   assetDigests: Readonly<Record<string, string>>;
@@ -230,20 +217,19 @@ type PublishedRecord = Readonly<{
 }>;
 
 type PublicDescriptorIdentity = Readonly<{
-  filename: "takosumi-artifact.json";
+  filename: "takos-artifact.json";
   digest: string;
   size: number;
   url: string;
 }>;
 
 type WorkerArtifactDescriptor = Readonly<{
-  kind: "takosumi.worker-artifact@v2";
+  kind: "takos.worker-artifact@v3";
   app: "takos";
   commit: string;
   ref: string;
   workflowRun: null;
   releaseTag: string;
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
   artifact: Readonly<{
     filename: "takos-worker-release.tar.gz";
     url: string;
@@ -349,31 +335,18 @@ export async function runReleaseArtifact(
   assertCanonicalAuthorityEnvironment();
   const root = await realpath(resolve(import.meta.dir, ".."));
   const identity = await repositoryIdentity(root, options.execute);
-  const verifyComposition = async () =>
-    await (runtime.verifyTakosumiCompositionSource
-      ? runtime.verifyTakosumiCompositionSource(root)
-      : verifyTakosumiCompositionSource({ takosRoot: root }));
-  const takosumiCompositionSource = await verifyComposition();
   const version = await packageVersion(root);
   if (options.tag !== `v${version}`) {
     throw new Error(`release tag must equal package version v${version}`);
   }
   await assertPrivatePath(options.evidence, root, false);
   if (options.phase === "prepare") {
-    return await prepareRelease(
-      root,
-      identity.commit,
-      version,
-      takosumiCompositionSource,
-      verifyComposition,
-      options,
-    );
+    return await prepareRelease(root, identity.commit, version, options);
   }
   return await publishRelease(
     root,
     identity.commit,
     version,
-    takosumiCompositionSource,
     async (tag, archiveDigest) =>
       await (runtime.verifyPortableWorkerSourceIdentity
         ? runtime.verifyPortableWorkerSourceIdentity(root, tag, archiveDigest)
@@ -386,8 +359,6 @@ async function prepareRelease(
   root: string,
   commit: string,
   version: string,
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
-  verifyComposition: () => Promise<TakosumiCompositionSourceIdentity>,
   options: ReleaseArtifactOptions,
 ): Promise<unknown> {
   const config = await physicalFile(options.config!, "config", false);
@@ -411,7 +382,6 @@ async function prepareRelease(
     commit,
     version,
     repository: REPOSITORY,
-    takosumiCompositionSource,
     accountId,
     observedAt: new Date().toISOString(),
   } as const;
@@ -419,10 +389,6 @@ async function prepareRelease(
   await ensurePathAbsent(options.evidence);
   await ensurePathAbsent(outputDir);
   await checked(root, "bun", ["run", "check"]);
-  assertTakosumiCompositionSourceIdentityMatch(
-    takosumiCompositionSource,
-    await verifyComposition(),
-  );
   await mkdir(outputDir, { recursive: false, mode: 0o700 });
   await chmod(outputDir, 0o700);
 
@@ -461,10 +427,6 @@ async function prepareRelease(
       agentLocal,
       agentContext,
     ]);
-    assertTakosumiCompositionSourceIdentityMatch(
-      takosumiCompositionSource,
-      await verifyComposition(),
-    );
     await checked(root, "bun", ["run", "web:build"]);
     const bundleDir = join(temporary, "worker-bundle");
     await mkdir(bundleDir, { mode: 0o700 });
@@ -508,17 +470,12 @@ async function prepareRelease(
       commit,
       preflightArchiveDigest,
       preflightArchiveSize,
-      takosumiCompositionSource,
-      join(preflightOutputDir, "takosumi-artifact.json"),
+      join(preflightOutputDir, "takos-artifact.json"),
     );
     const workerSmoke = await smokeWorkerReleaseArchive(root, preflightArchive);
     if (workerSmoke.archiveDigest !== preflightArchiveDigest) {
       throw new Error("Worker smoke did not exercise the preflight archive bytes");
     }
-    assertTakosumiCompositionSourceIdentityMatch(
-      takosumiCompositionSource,
-      await verifyComposition(),
-    );
     await assertTakosRepositoryIdentityUnchanged(root, commit);
     const cloudflareAgent = await pushImage(
       root,
@@ -570,14 +527,13 @@ async function prepareRelease(
       commit,
       preflightArchiveDigest,
       (await stat(join(outputDir, "takos-worker-release.tar.gz"))).size,
-      takosumiCompositionSource,
-      join(outputDir, "takosumi-artifact.json"),
+      join(outputDir, "takos-artifact.json"),
     );
     await chmod(outputDir, 0o700);
     const assetNames = [
       "takos-worker-release.tar.gz",
       "takos-worker-release.tar.gz.sha256",
-      "takosumi-artifact.json",
+      "takos-artifact.json",
     ] as const;
     await Promise.all(
       assetNames.map((name) => chmod(join(outputDir, name), 0o600)),
@@ -594,7 +550,7 @@ async function prepareRelease(
       }),
     );
     const descriptor = assets.find(
-      (asset) => asset.name === "takosumi-artifact.json",
+      (asset) => asset.name === "takos-artifact.json",
     )!;
     const workerArchive = assets.find(
       (asset) => asset.name === "takos-worker-release.tar.gz",
@@ -609,7 +565,6 @@ async function prepareRelease(
       commit,
       version,
       repository: REPOSITORY,
-      takosumiCompositionSource,
       accountId,
       portableCheck: { command: "bun run check", status: "passed" },
       outputDir,
@@ -617,7 +572,7 @@ async function prepareRelease(
         path: descriptor.path,
         digest: descriptor.digest,
         size: descriptor.size,
-        url: `https://github.com/${REPOSITORY}/releases/download/${options.tag}/takosumi-artifact.json`,
+        url: `https://github.com/${REPOSITORY}/releases/download/${options.tag}/takos-artifact.json`,
       },
       assets,
       images,
@@ -681,7 +636,6 @@ async function publishRelease(
   root: string,
   commit: string,
   version: string,
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
   verifyPortableWorkerSourceIdentity: (
     tag: string,
     archiveDigest: string,
@@ -703,10 +657,6 @@ async function publishRelease(
   ) {
     throw new Error("prepare evidence does not match current release identity");
   }
-  assertTakosumiCompositionSourceIdentityMatch(
-    takosumiCompositionSource,
-    prepared.takosumiCompositionSource,
-  );
   await assertPrivatePath(prepared.outputDir, root, true);
   await physicalDirectory(prepared.outputDir, "prepared output directory");
   for (const asset of prepared.assets) {
@@ -727,7 +677,6 @@ async function publishRelease(
     commit,
     version,
     options.tag,
-    takosumiCompositionSource,
     prepared,
     verifyPortableWorkerSourceIdentity,
   );
@@ -737,7 +686,6 @@ async function publishRelease(
     status: "planned",
     tag: options.tag,
     commit,
-    takosumiCompositionSource,
     descriptor: publicDescriptorIdentity(prepared.descriptor),
     observedAt: new Date().toISOString(),
   } as const;
@@ -759,7 +707,6 @@ async function publishRelease(
     commit,
     version,
     options.tag,
-    takosumiCompositionSource,
     prepared,
     verifyPortableWorkerSourceIdentity,
   );
@@ -792,7 +739,6 @@ async function publishRelease(
     status: "published",
     tag: options.tag,
     commit,
-    takosumiCompositionSource,
     releaseUrl: verified.release.url,
     descriptor: prepared.descriptor,
     assetDigests: Object.fromEntries(
@@ -904,7 +850,6 @@ async function assertPreparedReleaseDescriptor(
   commit: string,
   version: string,
   tag: string,
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
   prepared: PreparedRecord,
   verifyPortableWorkerSourceIdentity: (
     tag: string,
@@ -918,7 +863,7 @@ async function assertPreparedReleaseDescriptor(
     (asset) => asset.name === "takos-worker-release.tar.gz.sha256",
   )!;
   const descriptorAsset = prepared.assets.find(
-    (asset) => asset.name === "takosumi-artifact.json",
+    (asset) => asset.name === "takos-artifact.json",
   )!;
   const [archive, checksum, descriptorFile] = await Promise.all([
     readPhysicalPrivateFile(
@@ -963,16 +908,6 @@ async function assertPreparedReleaseDescriptor(
       "Worker artifact descriptor does not match the current release identity",
     );
   }
-  try {
-    assertTakosumiCompositionSourceIdentityMatch(
-      takosumiCompositionSource,
-      descriptor.takosumiCompositionSource,
-    );
-  } catch {
-    throw new Error(
-      "Worker artifact descriptor composition source does not match the current pin",
-    );
-  }
   const archiveUrl =
     `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-worker-release.tar.gz`;
   if (
@@ -986,7 +921,7 @@ async function assertPreparedReleaseDescriptor(
     );
   }
   const descriptorUrl =
-    `https://github.com/${REPOSITORY}/releases/download/${tag}/takosumi-artifact.json`;
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-artifact.json`;
   if (
     descriptor.manifestUrl !== descriptorUrl ||
     prepared.descriptor.url !== descriptorUrl
@@ -1005,13 +940,12 @@ async function assertPreparedReleaseDescriptor(
   }
 
   const expectedDescriptor: WorkerArtifactDescriptor = {
-    kind: "takosumi.worker-artifact@v2",
+    kind: "takos.worker-artifact@v3",
     app: "takos",
     commit,
     ref: tag,
     workflowRun: null,
     releaseTag: tag,
-    takosumiCompositionSource,
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: archiveUrl,
@@ -1065,7 +999,6 @@ function parseCanonicalWorkerArtifactDescriptor(
     "manifestUrl",
     "ref",
     "releaseTag",
-    "takosumiCompositionSource",
     "workflowRun",
   ]);
   const artifact = exactRecord(input.artifact, [
@@ -1081,16 +1014,8 @@ function parseCanonicalWorkerArtifactDescriptor(
   if (imageKeys !== "" && imageKeys !== "executor\0publicAgent") {
     throw new Error("Worker artifact descriptor schema is invalid");
   }
-  let composition: TakosumiCompositionSourceIdentity;
-  try {
-    composition = parseTakosumiCompositionSourceIdentity(
-      input.takosumiCompositionSource,
-    );
-  } catch {
-    throw new Error("Worker artifact descriptor schema is invalid");
-  }
   if (
-    input.kind !== "takosumi.worker-artifact@v2" ||
+    input.kind !== "takos.worker-artifact@v3" ||
     input.app !== "takos" ||
     typeof input.commit !== "string" ||
     !COMMIT.test(input.commit) ||
@@ -1125,13 +1050,12 @@ function parseCanonicalWorkerArtifactDescriptor(
     throw new Error("Worker artifact descriptor JSON is not canonical");
   }
   return {
-    kind: "takosumi.worker-artifact@v2",
+    kind: "takos.worker-artifact@v3",
     app: "takos",
     commit: input.commit,
     ref: input.ref,
     workflowRun: null,
     releaseTag: input.releaseTag,
-    takosumiCompositionSource: composition,
     artifact: {
       filename: "takos-worker-release.tar.gz",
       url: artifact.url,
@@ -1209,7 +1133,6 @@ async function assertSourceWorkerIdentity(
   commit: string,
   archiveDigest: string,
   archiveSize: number,
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity,
   descriptorPath: string,
 ): Promise<void> {
   await assertPortableWorkerSourceIdentity(root, tag, archiveDigest);
@@ -1219,7 +1142,7 @@ async function assertSourceWorkerIdentity(
   const expectedArchiveUrl =
     `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-worker-release.tar.gz`;
   const expectedDescriptorUrl =
-    `https://github.com/${REPOSITORY}/releases/download/${tag}/takosumi-artifact.json`;
+    `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-artifact.json`;
   if (
     descriptor.commit !== commit ||
     descriptor.ref !== tag ||
@@ -1233,10 +1156,6 @@ async function assertSourceWorkerIdentity(
   ) {
     throw new Error("Worker artifact descriptor source identity is invalid");
   }
-  assertTakosumiCompositionSourceIdentityMatch(
-    takosumiCompositionSource,
-    descriptor.takosumiCompositionSource,
-  );
 }
 
 async function prepareAgentBuildContext(
@@ -1800,8 +1719,6 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     typeof input.commit !== "string" ||
     typeof input.version !== "string" ||
     input.repository !== REPOSITORY ||
-    !input.takosumiCompositionSource ||
-    typeof input.takosumiCompositionSource !== "object" ||
     typeof input.accountId !== "string" ||
     !input.portableCheck ||
     typeof input.portableCheck !== "object" ||
@@ -1821,9 +1738,6 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     throw new Error("prepare evidence is invalid");
   }
   const descriptor = input.descriptor as Record<string, unknown>;
-  const takosumiCompositionSource = parseTakosumiCompositionSourceIdentity(
-    input.takosumiCompositionSource,
-  );
   const portableCheck = input.portableCheck as Record<string, unknown>;
   const assets = input.assets.map((asset) => {
     if (!asset || typeof asset !== "object" || Array.isArray(asset)) {
@@ -1905,7 +1819,7 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
   const expectedAssetNames = [
     "takos-worker-release.tar.gz",
     "takos-worker-release.tar.gz.sha256",
-    "takosumi-artifact.json",
+    "takos-artifact.json",
   ] as const;
   if (
     assets.length !== expectedAssetNames.length ||
@@ -1922,14 +1836,14 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     throw new Error("prepare evidence asset closure is invalid");
   }
   const descriptorAsset = assets.find(
-    (asset) => asset.name === "takosumi-artifact.json",
+    (asset) => asset.name === "takos-artifact.json",
   )!;
   if (
     descriptor.path !== descriptorAsset.path ||
     descriptor.digest !== descriptorAsset.digest ||
     descriptor.size !== descriptorAsset.size ||
     descriptor.url !==
-      `https://github.com/${REPOSITORY}/releases/download/${input.tag}/takosumi-artifact.json` ||
+      `https://github.com/${REPOSITORY}/releases/download/${input.tag}/takos-artifact.json` ||
     IMAGE_NAMES.some(
       (name) => (images[name].match(DIGEST_REF)?.[1] ?? "") !== input.accountId,
     ) ||
@@ -1952,7 +1866,6 @@ function parsePreparedRecord(value: unknown): PreparedRecord {
     commit: input.commit,
     version: input.version,
     repository: REPOSITORY,
-    takosumiCompositionSource,
     accountId: input.accountId,
     portableCheck: { command: "bun run check", status: "passed" },
     outputDir: input.outputDir,
@@ -1975,7 +1888,7 @@ function publicDescriptorIdentity(
   descriptor: PreparedRecord["descriptor"],
 ): PublicDescriptorIdentity {
   return {
-    filename: "takosumi-artifact.json",
+    filename: "takos-artifact.json",
     digest: descriptor.digest,
     size: descriptor.size,
     url: descriptor.url,
@@ -1988,7 +1901,6 @@ export function publicPrepareResult(record: PreparedRecord): unknown {
     status: record.status,
     tag: record.tag,
     commit: record.commit,
-    takosumiCompositionSource: record.takosumiCompositionSource,
     descriptor: publicDescriptorIdentity(record.descriptor),
     portableCheck: record.portableCheck,
     images: record.images,
@@ -2005,7 +1917,6 @@ export function publicPublishResult(record: PublishedRecord): unknown {
     status: record.status,
     tag: record.tag,
     commit: record.commit,
-    takosumiCompositionSource: record.takosumiCompositionSource,
     releaseUrl: record.releaseUrl,
     descriptor: publicDescriptorIdentity(record.descriptor),
     assetDigests: record.assetDigests,
@@ -2167,7 +2078,7 @@ function maximumPreparedAssetBytes(name: string): number {
   if (name === "takos-worker-release.tar.gz.sha256") {
     return MAX_CHECKSUM_BYTES;
   }
-  if (name === "takosumi-artifact.json") return MAX_DESCRIPTOR_BYTES;
+  if (name === "takos-artifact.json") return MAX_DESCRIPTOR_BYTES;
   throw new Error(`prepared asset name is invalid: ${name}`);
 }
 

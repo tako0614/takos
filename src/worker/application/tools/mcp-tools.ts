@@ -33,8 +33,8 @@ import {
   MCP_SERVER_INTERFACE_TYPE,
   MCP_SERVER_INTERFACE_VERSION,
   MCP_SERVER_INVOKE_PERMISSION,
-  parseInterfaceDisplay,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
+import { parseInterfaceDisplay } from "../services/platform/interface-display.ts";
 
 export interface McpLoadResult {
   tools: Map<string, RegisteredTool>;

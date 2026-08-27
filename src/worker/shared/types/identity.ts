@@ -46,8 +46,6 @@ export interface OIDCState {
   state: string;
   nonce: string;
   code_verifier: string;
-  /** Exact Takosumi Workspace selector bound to this authorization request. */
-  workspace_id: string;
   return_to: string;
   expires_at: number;
   cli_callback?: string;

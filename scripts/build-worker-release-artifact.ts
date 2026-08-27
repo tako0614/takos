@@ -16,12 +16,6 @@ import { tmpdir } from "node:os";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { hash as blake3 } from "blake3-wasm";
 
-import {
-  parseTakosumiCompositionSourceIdentity,
-  readTakosumiCompositionSourceIdentity,
-  type TakosumiCompositionSourceIdentity,
-} from "./check-takosumi-composition-source.ts";
-
 type Options = {
   bundleDir: string;
   assetsDir: string;
@@ -29,7 +23,6 @@ type Options = {
   outputDir: string;
   releaseTag: string;
   requireCloudflareContainerImages: boolean;
-  takosumiCompositionSource: TakosumiCompositionSourceIdentity;
 };
 
 type ImageDigestRecord = {
@@ -46,18 +39,11 @@ type ImageDigestRecord = {
 const CANONICAL_WORKER_ARCHIVE_EPOCH = "0";
 
 if (import.meta.main) {
-  const options = {
-    ...parseArgs(Bun.argv.slice(2)),
-    takosumiCompositionSource: await readTakosumiCompositionSourceIdentity(
-      resolve(import.meta.dir, ".."),
-    ),
-  };
-  await buildWorkerReleaseArtifact(options);
+  await buildWorkerReleaseArtifact(parseArgs(Bun.argv.slice(2)));
 }
 
 export async function buildWorkerReleaseArtifact(options: Options) {
   assertReleaseTag(options.releaseTag);
-  parseTakosumiCompositionSourceIdentity(options.takosumiCompositionSource);
   const bundleDir = resolve(options.bundleDir);
   const assetsDir = resolve(options.assetsDir);
   const outputDir = resolve(options.outputDir);
@@ -104,13 +90,13 @@ export async function buildWorkerReleaseArtifact(options: Options) {
 
     const repository = Bun.env.GITHUB_REPOSITORY?.trim() || "tako0614/takos";
     const artifactUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/${archiveName}`;
-    const manifestUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/takosumi-artifact.json`;
+    const manifestUrl = `https://github.com/${repository}/releases/download/${options.releaseTag}/takos-artifact.json`;
     const containerImages = await readContainerImages(
       options.imageDigestDir,
       options.requireCloudflareContainerImages,
     );
     const manifest = {
-      kind: "takosumi.worker-artifact@v2",
+      kind: "takos.worker-artifact@v3",
       app: "takos",
       commit: Bun.env.GITHUB_SHA?.trim() || null,
       ref: Bun.env.GITHUB_REF_NAME?.trim() || options.releaseTag,
@@ -121,7 +107,6 @@ export async function buildWorkerReleaseArtifact(options: Options) {
           ? `${Bun.env.GITHUB_SERVER_URL}/${Bun.env.GITHUB_REPOSITORY}/actions/runs/${Bun.env.GITHUB_RUN_ID}`
           : null,
       releaseTag: options.releaseTag,
-      takosumiCompositionSource: options.takosumiCompositionSource,
       artifact: {
         filename: archiveName,
         url: artifactUrl,
@@ -135,7 +120,7 @@ export async function buildWorkerReleaseArtifact(options: Options) {
       manifestUrl,
     };
     await writeFile(
-      join(outputDir, "takosumi-artifact.json"),
+      join(outputDir, "takos-artifact.json"),
       `${JSON.stringify(manifest, null, 2)}\n`,
     );
     return manifest;
@@ -259,9 +244,7 @@ function run(command: string, args: string[]) {
   }
 }
 
-function parseArgs(
-  args: string[],
-): Omit<Options, "takosumiCompositionSource"> {
+function parseArgs(args: string[]): Options {
   const values = new Map<string, string>();
   let requireCloudflareContainerImages = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -280,7 +263,7 @@ function parseArgs(
     bundleDir: values.get("--bundle-dir") ?? "/tmp/takos-worker-bundle",
     assetsDir: values.get("--assets-dir") ?? "dist",
     imageDigestDir: values.get("--image-digest-dir") ?? "dist/image-digests",
-    outputDir: values.get("--output-dir") ?? "dist/takosumi-artifact",
+    outputDir: values.get("--output-dir") ?? "dist/takos-artifact",
     releaseTag,
     requireCloudflareContainerImages,
   };

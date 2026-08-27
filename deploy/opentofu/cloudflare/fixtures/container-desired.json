@@ -1,0 +1,33 @@
+{
+  "format": "takos-cloudflare-opentofu-container-desired/v1",
+  "applications": [
+    {
+      "name": "${TAKOS_CLOUDFLARE_WORKER_NAME}-executor-tier1",
+      "durable_object_class": "ExecutorContainerTier1",
+      "image": "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "instance_type": "lite",
+      "max_instances": "${TAKOS_EXECUTOR_TIER1_MAX_INSTANCES:-1}",
+      "rollout_active_grace_period": 900
+    },
+    {
+      "name": "${TAKOS_CLOUDFLARE_WORKER_NAME}-executor-tier2",
+      "durable_object_class": "ExecutorContainerTier2",
+      "image": "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "instance_type": "basic",
+      "max_instances": "${TAKOS_EXECUTOR_TIER2_MAX_INSTANCES:-1}",
+      "rollout_active_grace_period": 900
+    },
+    {
+      "name": "${TAKOS_CLOUDFLARE_WORKER_NAME}-executor-tier3",
+      "durable_object_class": "ExecutorContainerTier3",
+      "image": "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "instance_type": {
+        "vcpu": 1,
+        "memory_mib": 12288,
+        "disk_mb": 4000
+      },
+      "max_instances": "${TAKOS_EXECUTOR_TIER3_MAX_INSTANCES:-1}",
+      "rollout_active_grace_period": 900
+    }
+  ]
+}

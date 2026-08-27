@@ -5,7 +5,8 @@
 // the configured issuer's UserInfo endpoint, then resolves the returned subject
 // to the local app user via `authIdentities` keyed by `${issuer}#${sub}`.
 import { and, eq } from "drizzle-orm";
-import { TAKOSUMI_ACCOUNTS_USERINFO_PATH } from "@takosjp/takosumi-accounts-contract";
+import { TAKOSUMI_ACCOUNTS_USERINFO_PATH } from
+  "@takosjp/takosumi-contract/identity-oidc";
 import type { Env, User } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { accounts, authIdentities, getDb } from "../../../infra/db/index.ts";

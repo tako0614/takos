@@ -14,12 +14,16 @@ import { pathToFileURL } from "node:url";
 
 import { buildWorkerReleaseArtifact } from "./build-worker-release-artifact.ts";
 
-const compositionSource = {
-  kind: "takos.takosumi-composition-source@v1",
-  repository: "tako0614/takosumi",
-  commit: "d348acf853eb692f7be5df8115c1ab4490f845c6",
-  pinDigest: `sha256:${"c".repeat(64)}`,
-} as const;
+test("future Worker release descriptors are Takos-owned and composition-free", async () => {
+  const source = await readFile(
+    join(import.meta.dir, "build-worker-release-artifact.ts"),
+    "utf8",
+  );
+  expect(source).not.toContain("takosumiCompositionSource");
+  expect(source).not.toContain("check-takosumi-composition-source");
+  expect(source).toContain('kind: "takos.worker-artifact@v3"');
+  expect(source).toContain('takos-artifact.json');
+});
 
 test("Worker archive identity is independent of the source commit timestamp", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-worker-fixed-point-test-"));
@@ -47,9 +51,7 @@ test("Worker archive identity is independent of the source commit timestamp", as
       outputDir: firstOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
-    expect(manifest.takosumiCompositionSource).toEqual(compositionSource);
 
     process.env.SOURCE_DATE_EPOCH = "1720000000";
     await buildWorkerReleaseArtifact({
@@ -59,7 +61,6 @@ test("Worker archive identity is independent of the source commit timestamp", as
       outputDir: secondOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
 
     const [first, second] = await Promise.all([
@@ -119,7 +120,6 @@ test("reuses identical archive bytes while retaining release tag and commit iden
           outputDir: index === 0 ? firstOutput : secondOutput,
           releaseTag: release.releaseTag,
           requireCloudflareContainerImages: false,
-          takosumiCompositionSource: compositionSource,
         }),
       );
     }
@@ -187,7 +187,6 @@ await buildWorkerReleaseArtifact(JSON.parse(optionsJson));
       outputDir: firstOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
     runBuildUnderUmask(runner, "077", {
       bundleDir,
@@ -196,7 +195,6 @@ await buildWorkerReleaseArtifact(JSON.parse(optionsJson));
       outputDir: secondOutput,
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
 
     const firstArchive = join(firstOutput, "takos-worker-release.tar.gz");
@@ -257,7 +255,6 @@ test("Worker archive bytes are independent of absolute checkout paths", async ()
       outputDir: join(firstRoot, "output"),
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
     process.env.SOURCE_DATE_EPOCH = "1800000000";
     await buildWorkerReleaseArtifact({
@@ -267,7 +264,6 @@ test("Worker archive bytes are independent of absolute checkout paths", async ()
       outputDir: join(secondRoot, "output"),
       releaseTag: "v1.2.3",
       requireCloudflareContainerImages: false,
-      takosumiCompositionSource: compositionSource,
     });
 
     expect(

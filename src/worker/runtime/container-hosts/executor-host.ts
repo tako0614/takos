@@ -39,7 +39,7 @@ import {
   buildAgentExecutorProxyConfig,
 } from "./executor-proxy-config.ts";
 
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../shared/utils/constant-time.ts";
 import { logError } from "../../shared/utils/logger.ts";
 import {
   errorJsonResponse,

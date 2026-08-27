@@ -33,7 +33,7 @@ import {
 import {
   FILE_HANDLER_INTERFACE_TYPE,
   FILE_HANDLER_OPEN_PERMISSION,
-} from "takosumi-contract";
+} from "@takosjp/takosumi-contract/interface-types";
 
 export const storageManagementRouteDeps = {
   listStorageFiles,

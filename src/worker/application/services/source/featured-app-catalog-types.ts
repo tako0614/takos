@@ -75,7 +75,6 @@ export type FeaturedAppCatalogEnv = Pick<
   | "TAKOSUMI_ACCOUNTS_INTERNAL_URL"
   | "TAKOSUMI_ACCOUNTS_URL"
   | "TAKOSUMI_ACCOUNTS_TOKEN"
-  | "TAKOSUMI_ACCOUNTS_SUBJECT"
 >;
 
 export type FeaturedAppCatalogDefaults = {

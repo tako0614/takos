@@ -18,7 +18,7 @@
 // - validateInternalApiAccess: gate for /internal/* endpoints (loopback or
 //   cluster-internal hostname + X-Takos-Internal-Secret header)
 import type { Env } from "../../shared/types/index.ts";
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../shared/utils/constant-time.ts";
 
 /**
  * Shared secret check: the request must present `headerName` matching the

@@ -35,20 +35,6 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Resolve the Takos-owned Takosumi composition pin
-        id: takosumi-source
-        working-directory: takos
-        run: echo "commit=$(bun scripts/check-takosumi-composition-source.ts --print-commit)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout Takosumi source dependency
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
-        with:
-          repository: tako0614/takosumi
-          ref: ${{ steps.takosumi-source.outputs.commit }}
-          fetch-depth: 0
-          path: takosumi
-          persist-credentials: false
-
       - name: Checkout agent engine source dependency
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:

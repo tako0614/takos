@@ -78,10 +78,6 @@ export default defineConfig({
           { text: "環境と変数", link: "/deploy/environment" },
           { text: "デプロイ手順", link: "/deploy/deploy" },
           {
-            text: "Artifact materializer",
-            link: "/deploy/product-materializer",
-          },
-          {
             text: "Release artifact publication",
             link: "/deploy/release-artifact",
           },

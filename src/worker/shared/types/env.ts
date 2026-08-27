@@ -164,13 +164,9 @@ export interface Env
   OIDC_CLIENT_ID?: string;
   OIDC_CLIENT_SECRET?: string;
   OIDC_REDIRECT_URI?: string;
-  /** Non-secret Takosumi Workspace selector supplied by install context. */
-  TAKOSUMI_WORKSPACE_ID?: string;
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
-  /** Optional Takosumi subject used by featured-app Capsule install jobs. */
-  TAKOSUMI_ACCOUNTS_SUBJECT?: string;
   /** Exact gateway URL used only to scope the optional bearer credential. */
   TAKOS_NOTIFICATION_PUSH_GATEWAY_URL?: string;
   TAKOS_NOTIFICATION_PUSH_GATEWAY_TOKEN?: string;

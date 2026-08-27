@@ -1,4 +1,4 @@
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../../shared/utils/constant-time.ts";
 import { base64UrlEncode, bytesToHex } from "../../../shared/utils/index.ts";
 
 type CodeChallengeMethod = "S256";

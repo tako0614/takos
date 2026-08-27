@@ -42,7 +42,7 @@ secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しない�
 3. `tofu init` と `tofu plan` を実行する
 4. 作成・変更・削除と料金を確認する
 5. 確認した plan を apply する
-6. 同じ commit の Worker artifact を app-owned materializer で反映する
+6. 同じ commit の Worker artifact を operator-owned deployment で反映する
 7. 公開 URL、ログイン、Chat、エージェント実行を確認する
 
 Cloudflareへ直接配置する例:
@@ -55,8 +55,7 @@ tofu apply
 ```
 
 実際の入力名は [環境と変数](/deploy/environment) を参照してください。Worker の公開は [デプロイ手順](/deploy/deploy) に分けています。
-Takosumi lifecycle action との正確な境界は
-[Worker artifact materializer](/deploy/product-materializer) を参照してください。
+Worker artifact の作成と公開は [release artifact runbook](/deploy/release-artifact) を参照してください。
 
 ## アプリとの連携
 
@@ -84,5 +83,5 @@ Workspace に追加するアプリも、Git リポジトリにある OpenTofu �
 - [デプロイ手順](/deploy/deploy)
 - [ルートとドメイン](/deploy/routes)
 - [ロールバック](/deploy/rollback)
-- [Worker artifact materializer](/deploy/product-materializer)
+- [Release artifact runbook](/deploy/release-artifact)
 - [トラブルシューティング](/deploy/troubleshooting)

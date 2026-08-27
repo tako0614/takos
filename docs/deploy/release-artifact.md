@@ -1,10 +1,12 @@
 # Takos release artifact runbook
 
 This runbook is for the Takos-owned release artifact: the Worker archive,
-`takosumi-artifact.json`, and the digest-pinned `takos-agent` image published
+`takos-artifact.json`, and the digest-pinned `takos-agent` image published
 to both the target Cloudflare registry and public GHCR. Takosumi may consume these outputs, but it does not own
 their publication. This publishes distribution bytes only; Takosumi remains
 the sole authority for Capsule plan/apply/destroy lifecycle operations.
+The already-published v0.12.7 descriptor remains immutable; releases after this
+cutover use the Takos-owned `takos-artifact.json` v3 descriptor below.
 
 The entrypoint is `bun run deploy -- takos-release-artifact`. Both phases are
 read-only unless `--execute` is present. Provider output and secret values are
@@ -19,19 +21,10 @@ not recorded in evidence.
   blob bytes, and symlink target to the exact `HEAD` tree before reading release
   inputs, and repeats that proof immediately before the first prepare push or
   the publish create operation.
-- Treat `takosumi-composition-source.json` as the Takos-owned authority for the
-  Takosumi contract source compiled into this release. The checkout must use
-  the physical sibling layout `takos/` plus `takosumi/`; the sibling may not be
-  missing, symlinked, substituted by another Git root, or dirty. Its `HEAD`
-  must equal the pinned full commit. Local `origin/main` must equal live
-  canonical GitHub `main`, and that exact main commit must contain the pin in
-  its Git history. This gives the pin a live canonical ancestry proof without
-  making a later main advance change the release composition. A standalone
-  Takos clone without that sibling fails the portable gate and release prepare
-  before compilation. The verifier rejects every `assume-unchanged` or
-  `skip-worktree` index entry, then compares each pinned-tree entry's physical
-  file type, executable mode, raw Git object hash, or symlink target against
-  the pinned commit independently of index cleanliness flags.
+- Build from the clean Takos checkout only. The portable gate and release
+  prepare do not require a Takosumi checkout, composition pin, or sibling
+  source tree; Takosumi consumes the published bytes through its generic
+  release-artifact contract.
 - Use the package version as the full release identity and tag
   (`v<package version>`). Do not mint an alias or second tag for the same
   release, retarget an existing tag, or reuse an existing package-version tag.
@@ -104,12 +97,10 @@ mode `0600`. Only the digest references are release identities; upload tags are
 never placed in the descriptor.
 
 Before its first remote push, prepare reruns the complete portable gate and
-rechecks the composition sibling before compilation and after the exact
-archive smoke. It also repeats the Takos physical `HEAD`-tree proof after all
-build/smoke work and immediately before the registry mutation. The Worker
-descriptor and private prepare evidence both bind
-the Takosumi composition kind, repository, commit, and composition-pin digest;
-publish rejects evidence from another composition.
+repeats the Takos physical `HEAD`-tree proof after all build/smoke work and
+immediately before the registry mutation. The Worker descriptor and private
+prepare evidence bind only the Takos release commit, archive, and image
+identities.
 
 Prepare builds the Worker archive with canonical
 archive metadata: owner/group `0`, timestamp `0`, directories `0755`, and
@@ -171,8 +162,8 @@ commit, package/tag, account id, paths, asset digests, image references, and the
 public publication-attempt identity, but never a token or provider command
 output.
 
-The prepare record is the source for the Takos and Takosumi composition source
-closure, the three asset digests, the Cloudflare
+The prepare record is the source for the Takos release closure, the three asset
+digests, the Cloudflare
 registry reference, the public GHCR reference, and the two registry content
 identities. The identity contains only `configDigest` and ordered
 `layerDigests`, all in `sha256:<64 hex>` form; it never contains credentials or
@@ -189,8 +180,8 @@ following a symlink. It hashes and sizes the archive bytes, checks the canonical
 checksum, and strictly parses the canonical descriptor with no missing,
 unknown, or extra fields. The descriptor must independently close over the
 current Takos commit, package version/tag, portable module release inputs,
-exact Takosumi composition identity, physical archive digest/size, release
-URLs, and prepared image identities. Its recomputed canonical digest and size
+physical archive digest/size, release URLs, and prepared image identities. Its
+recomputed canonical digest and size
 must then match both the descriptor record and asset record in prepare
 evidence.
 
