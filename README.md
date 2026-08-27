@@ -67,22 +67,21 @@ Takos は利用者が触る AI ワークスペースを提供します。Takosum
 
 Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用の構成は通常の OpenTofu モジュールであり、Takosumi から実行することも、運用者が自分の手順で実行することもできます。
 
-Takosumi が同じ Git commit から導入画面を組み立てる場合は、
-[`/.well-known/takosumi.json`](.well-known/takosumi.json) の既定
-`deploy/opentofu/cloudflare` 宣言を読みます。これはTakosの完全なresource graphを
-表す現在のsupported adapterです。旧`deploy/opentofu/takoform` treeは現行Form群で
-全graphを表せないため、新規installの選択肢ではありません。v2.2 の `interfaces` 宣言は、Takos の
-`interface.ui.surface@1` launcher と `launch_url` Output の明示的な mapping を
-提案し、レビュー後に Takosumi が Interface へ compile します。これは provider
-credential、Cloudflare account、target、実行権限を含まない repository-owned
-metadata です。同じ manifest の `interface.consume` は、Takos が
-`takosumi.ai.gateway@1` の `ai.chat` を必要とすることだけを宣言します。Takosumi は
-install 後に Workspace の exact Interface と Capsule OIDC pairwise principal を解決し、
-短期 credential を発行します。Interface ID、endpoint、provider、credential は
+Takosumi の install は、Git repository URL、ref（tag または commit）、module path
+（repository 内の OpenTofu サブディレクトリ）を指定して開始します。Takosumi は指定した
+commit の OpenTofu tree を走査し、通常の module と
+[`/.well-known/takosumi.json`](.well-known/takosumi.json) の repository-owned
+hints / service 宣言を導入画面に反映します。Takos の現在の supported adapter は
+`deploy/opentofu/cloudflare` で、Takos の完全な resource graph を表します。旧
+`deploy/opentofu/takoform` tree は現行 Form 群で全 graph を表せないため、新規 install
+には使いません。takos.jp の直接 CTA も、この Git URL install 導線を使います。
+
+v2.3 の `interfaces` 宣言は、Takos の `interface.ui.surface@1` launcher と
+`launch_url` Output の明示的な mapping を提案し、レビュー後に Takosumi が Interface へ
+compile します。これは provider credential、Cloudflare account、target、実行権限を
+含まない repository-owned metadata です。Interface ID、endpoint、provider、credential は
 repository に書きません。`launch_url` Output だけで launcher を推測する fallback はありません。
-導入先を選ぶ [`install-options.json`](install-options.json) とも別の contract です。
-最終的な InstallConfig、Plan、Apply、InterfaceBinding の authority は Takosumi 側に
-残ります。
+最終的な InstallConfig、Plan、Apply、InterfaceBinding の authority は Takosumi 側に残ります。
 
 ## リポジトリ構成
 
