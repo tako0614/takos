@@ -227,7 +227,15 @@ test("the Cloudflare adapter deploys Durable Object migrations before binding th
   expect(migrationVersion.body).not.toContain(
     'type = "durable_object_namespace"',
   );
-  expect(migrationVersion.body).not.toMatch(/\bcontainers\s*=/u);
+  expect(migrationVersion.body).toMatch(/\bcontainers\s*=/u);
+  for (const className of [
+    "ExecutorContainerTier1",
+    "ExecutorContainerTier2",
+    "ExecutorContainerTier3",
+  ]) {
+    expect(migrationVersion.body).toContain(className);
+    expect(applicationVersion.body).toContain(className);
+  }
   expect(migrationDeployment.body).toContain(
     "cloudflare_worker_version.durable_object_migrations.id",
   );
