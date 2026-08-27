@@ -41,7 +41,7 @@
           },
           {
             "name": "environment",
-            "source": { "kind": "module_default" },
+            "source": { "kind": "user" },
             "type": "string",
             "label": { "ja": "実行環境", "en": "Environment" },
             "advanced": true
@@ -61,7 +61,7 @@
           },
           {
             "name": "enable_imperative_staging_bridge",
-            "source": { "kind": "module_default" },
+            "source": { "kind": "user" },
             "type": "boolean",
             "label": { "ja": "Cloudflare staging bridge", "en": "Cloudflare staging bridge" },
             "helper": {

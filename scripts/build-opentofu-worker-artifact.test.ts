@@ -36,6 +36,25 @@ test("the Worker artifact contract is module-local and source-build stays creden
   expect(PINNED_WORKER_ARCHIVE_SHA256).toMatch(/^[a-f0-9]{64}$/u);
 });
 
+test("the Cloudflare module declares every operator-reviewed staging value as a user input", async () => {
+  const manifest = JSON.parse(
+    await readFile(new URL(".well-known/takosumi.json", root), "utf8"),
+  ) as {
+    install: {
+      modules: Record<
+        string,
+        { inputs?: Array<{ name: string; source: { kind: string } }> }
+      >;
+    };
+  };
+  const inputs = manifest.install.modules["deploy/opentofu/cloudflare"]?.inputs;
+  const sourceKind = (name: string) =>
+    inputs?.find((input) => input.name === name)?.source.kind;
+
+  expect(sourceKind("environment")).toBe("user");
+  expect(sourceKind("enable_imperative_staging_bridge")).toBe("user");
+});
+
 test("canonical migration collection retains independently named duplicate versions", async () => {
   const files = await collectMigrationFiles(
     new URL("../db/migrations-control/migrations", import.meta.url).pathname,
