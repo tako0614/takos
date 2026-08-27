@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-test("self-hosted production accepts a public OIDC client without a secret", async () => {
+test("self-hosted production fails closed without a durable SessionDO backend", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "takos-node-env-builder-test-"));
   try {
     const moduleUrl = pathToFileURL(
@@ -46,15 +46,10 @@ test("self-hosted production accepts a public OIDC client without a secret", asy
     });
     const stdout = result.stdout.toString();
     const stderr = result.stderr.toString();
-    expect(
-      result.exitCode,
-      `${stdout}${stderr}`,
-    ).toBe(0);
-    expect(JSON.parse(stdout)).toEqual({
-      clientId: "takos-public-client",
-      hasWorkspaceSelector: false,
-      hasSecret: false,
-    });
+    expect(result.exitCode, `${stdout}${stderr}`).not.toBe(0);
+    expect(`${stdout}${stderr}`).toContain(
+      "Node SessionDO requires a durable backend in production; process-memory state is development-only",
+    );
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

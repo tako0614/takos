@@ -29,9 +29,14 @@
  *                   TAKOS_LOCAL_DATA_DIR          -> persistent kv store
  *                   else                          -> in-memory kv store
  *
- *   Durable Objs:   REDIS_URL                    -> Redis-backed
- *                   TAKOS_LOCAL_DATA_DIR          -> persistent
- *                   else                          -> in-memory
+ *   Durable Objs:   REDIS_URL                    -> Redis-backed (except SessionDO)
+ *                   TAKOS_LOCAL_DATA_DIR          -> persistent (except SessionDO)
+ *                   else                          -> in-memory (except SessionDO)
+ *
+ *   SessionDO is a deliberate exception to the generic Durable Object
+ *   cascade: Node development/local mode uses a real process-memory SessionDO
+ *   with an alarm scheduler, while production-shaped mode fails closed until
+ *   a durable SessionDO backend is supported.
  *
  *   Routing Store:  REDIS_URL                    -> Redis
  *                   TAKOS_LOCAL_DATA_DIR          -> persistent
@@ -421,6 +426,14 @@ export async function disposeNodePlatformState(
     ? await pendingState.catch(() => null /* dispose: init may have failed */)
     : null;
   if (state) {
+    // The Node SessionDO adapter is process-local and owns unref'd alarm
+    // timers. Tear it down with the shared platform state so a test/HMR
+    // restart cannot leave callbacks targeting a discarded namespace.
+    (
+      state.sessionDo as typeof state.sessionDo & {
+        dispose?: () => void;
+      }
+    ).dispose?.();
     await Promise.resolve(
       (
         state.db as typeof state.db & { close?: () => Promise<void> | void }
