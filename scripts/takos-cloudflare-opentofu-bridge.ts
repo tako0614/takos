@@ -251,6 +251,15 @@ type ContainerCapacity =
     readonly disk_mb: number;
   };
 
+const NAMED_CONTAINER_CAPACITIES = {
+  lite: { vcpu: 0.0625, memory_mib: 256, disk_mb: 2000 },
+  basic: { vcpu: 0.25, memory_mib: 1024, disk_mb: 4000 },
+} as const satisfies Record<Extract<ContainerCapacity, string>, {
+  readonly vcpu: number;
+  readonly memory_mib: number;
+  readonly disk_mb: number;
+}>;
+
 function instanceType(value: unknown, label: string): ContainerCapacity {
   if (value === "lite" || value === "basic") return value;
   if (!plainObject(value)) fail(`${label}_invalid`);
@@ -1298,8 +1307,15 @@ function containerMatches(value: JsonObject, desired: DesiredContainer, namespac
   const configuration = plainObject(value.configuration) ? value.configuration : {};
   const durableObjects = plainObject(value.durable_objects) ? value.durable_objects : {};
   const disk = plainObject(configuration.disk) ? configuration.disk : {};
-  const capacityMatches = typeof desired.instanceType === "string"
-    ? configuration.instance_type === desired.instanceType
+  const namedCapacity = typeof desired.instanceType === "string"
+    ? NAMED_CONTAINER_CAPACITIES[desired.instanceType]
+    : null;
+  const capacityMatches = namedCapacity !== null
+    ? configuration.instance_type === desired.instanceType ||
+      configuration.instance_type === undefined &&
+        Number(configuration.vcpu) === namedCapacity.vcpu &&
+        Number(configuration.memory_mib) === namedCapacity.memory_mib &&
+        Number(disk.size_mb) === namedCapacity.disk_mb
     : configuration.instance_type === undefined &&
       Number(configuration.vcpu) === desired.instanceType.vcpu &&
       Number(configuration.memory_mib) === desired.instanceType.memory_mib &&

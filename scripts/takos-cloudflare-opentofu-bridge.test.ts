@@ -456,6 +456,23 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     };
     const details = new Map<string, Record<string, unknown>>();
     const names = ["tier1", "tier2", "tier3"];
+    const normalizeNamedCapacity = (
+      value: Record<string, unknown>,
+    ): Record<string, unknown> => {
+      const configuration = value.configuration;
+      if (!configuration || typeof configuration !== "object" || Array.isArray(configuration)) {
+        return value;
+      }
+      const row = configuration as Record<string, unknown>;
+      const normalized = row.instance_type === "lite"
+        ? { vcpu: 0.0625, memory_mib: 256, disk: { size: "2GB", size_mb: 2000 } }
+        : row.instance_type === "basic"
+          ? { vcpu: 0.25, memory_mib: 1024, disk: { size: "4GB", size_mb: 4000 } }
+          : null;
+      if (normalized === null) return value;
+      const { instance_type: _instanceType, ...rest } = row;
+      return { ...value, configuration: { ...rest, ...normalized } };
+    };
     names.slice(1).forEach((tier, offset) => {
       const index = offset + 1;
       details.set(`app-${tier}`, {
@@ -518,7 +535,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       const detailMatch = url.match(/\/containers\/applications\/([^/]+)$/u);
       if (method === "POST" && url.endsWith("/containers/applications")) {
         if (!body || typeof body !== "object") return envelope({ error: "invalid" }, 400);
-        const created = { id: "app-tier1", ...(body as Record<string, unknown>) };
+        const created = normalizeNamedCapacity({ id: "app-tier1", ...(body as Record<string, unknown>) });
         details.set("app-tier1", created);
         return envelope(created);
       }
@@ -532,7 +549,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
           const current = details.get(id);
           if (current === undefined || !body || typeof body !== "object") return envelope({ error: "missing" }, 404);
           const update = body as Record<string, unknown>;
-          details.set(id, { ...current, ...update });
+          details.set(id, normalizeNamedCapacity({ ...current, ...update }));
           return envelope(details.get(id));
         }
       }
