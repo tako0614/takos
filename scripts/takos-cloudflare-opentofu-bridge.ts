@@ -621,6 +621,21 @@ function cloudflareApiSurface(path: string): string {
   return "cloudflare.api";
 }
 
+const CONTAINER_APPLICATION_ERROR_CODES = [
+  "IMAGE_REGISTRY_RETURNED_ERROR",
+  "IMAGE_REGISTRY_DOESNT_CONTAIN_IMAGE",
+  "VALIDATE_INPUT",
+  "SURPASSED_BASE_LIMITS",
+  "SURPASSED_TOTAL_LIMITS",
+  "LOCATION_NOT_ALLOWED",
+  "LOCATION_SURPASSED_BASE_LIMITS",
+  "IMAGE_REGISTRY_NOT_CONFIGURED",
+  "JOB_CREATE_NOT_ALLOWED",
+  "DURABLE_OBJECT_NOT_FOUND",
+  "DURABLE_OBJECT_NOT_CONTAINER_ENABLED",
+  "DURABLE_OBJECT_ALREADY_HAS_APPLICATION",
+] as const;
+
 function boundedCloudflareErrorCode(
   value: unknown,
   depth = 0,
@@ -628,6 +643,12 @@ function boundedCloudflareErrorCode(
   if (depth > 4) return undefined;
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
     return `CF${value}`;
+  }
+  if (typeof value === "string") {
+    const containerCode = CONTAINER_APPLICATION_ERROR_CODES.find((code) =>
+      value.includes(code)
+    );
+    if (containerCode) return containerCode;
   }
   if (
     typeof value === "string" &&
@@ -643,7 +664,7 @@ function boundedCloudflareErrorCode(
     return undefined;
   }
   if (!plainObject(value)) return undefined;
-  for (const key of ["error", "code", "error_code", "errors", "result"]) {
+  for (const key of ["error", "message", "details", "errors", "error_code", "result", "code"]) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
     const found = boundedCloudflareErrorCode(value[key], depth + 1);
     if (found) return found;
