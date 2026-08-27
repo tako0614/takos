@@ -105,23 +105,11 @@ locals {
   }
 
   # The release builder owns these files at the app module root. This child
-  # module has a fixed `modules/platform` layout, so resolve the root once and
-  # keep all provider file reads independent of the caller's path.root.
-  app_module_root          = abspath("${path.module}/../..")
-  path_root_absolute       = abspath(path.root)
-  path_root_segments       = split("/", trim(local.path_root_absolute, "/"))
-  app_module_root_segments = split("/", trim(local.app_module_root, "/"))
-  app_module_common_prefix_length = length([
-    for index in range(min(length(local.path_root_segments), length(local.app_module_root_segments))) : index
-    if alltrue([
-      for prefix_index in range(index + 1) : local.path_root_segments[prefix_index] == local.app_module_root_segments[prefix_index]
-    ])
-  ])
-  app_module_relative_segments = concat(
-    [for _ in range(length(local.path_root_segments) - local.app_module_common_prefix_length) : ".."],
-    slice(local.app_module_root_segments, local.app_module_common_prefix_length, length(local.app_module_root_segments)),
-  )
-  app_module_working_dir             = length(local.app_module_relative_segments) == 0 ? "." : join("/", local.app_module_relative_segments)
+  # module has a fixed `modules/platform` layout, so every file and provisioner
+  # path stays relative to the restored module instead of capturing a runner
+  # host path in state.
+  app_module_root                    = "${path.module}/../.."
+  app_module_working_dir             = local.app_module_root
   worker_module_path                 = var.plan_mode ? "fixtures/worker/index.js" : ".takos-build/worker/index.js"
   worker_module_file_path            = "${local.app_module_root}/${local.worker_module_path}"
   worker_assets_directory            = var.plan_mode ? "fixtures/assets" : ".takos-build/assets"

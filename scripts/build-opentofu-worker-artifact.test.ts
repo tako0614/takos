@@ -55,6 +55,17 @@ test("the Cloudflare module declares every operator-reviewed staging value as a 
   expect(sourceKind("enable_imperative_staging_bridge")).toBe("user");
 });
 
+test("the nested Cloudflare module keeps artifact paths module-local", async () => {
+  const moduleSource = await readFile(
+    new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
+    "utf8",
+  );
+
+  expect(moduleSource).toContain('${path.module}/../..');
+  expect(moduleSource).not.toContain("abspath(");
+  expect(moduleSource).not.toContain("path.root");
+});
+
 test("canonical migration collection retains independently named duplicate versions", async () => {
   const files = await collectMigrationFiles(
     new URL("../db/migrations-control/migrations", import.meta.url).pathname,
