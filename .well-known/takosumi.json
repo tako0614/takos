@@ -2,7 +2,6 @@
   "apiVersion": "takosumi.com/v2.3",
   "kind": "Repository",
   "install": {
-    "defaultModule": "deploy/opentofu/cloudflare",
     "modules": {
       "deploy/opentofu/cloudflare": {
         "inputs": [

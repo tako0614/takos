@@ -74,7 +74,10 @@ commit の OpenTofu tree を走査し、通常の module と
 hints / service 宣言を導入画面に反映します。Takos の現在の supported adapter は
 `deploy/opentofu/cloudflare` で、Takos の完全な resource graph を表します。旧
 `deploy/opentofu/takoform` tree は現行 Form 群で全 graph を表せないため、新規 install
-には使いません。takos.jp の直接 CTA も、この Git URL install 導線を使います。
+には使いません。`install.modules` のキーは、Git/OpenTofu tree で実在を確認した module
+path に紐づく補助 metadata であり、候補の作成・順序付け・既定値の決定はしません。候補の
+選択は Git URL、ref、module path と tree scan が担います。takos.jp の直接 CTA も、この
+Git URL install 導線を使います。
 
 v2.3 の `interfaces` 宣言は、Takos の `interface.ui.surface@1` launcher と
 `launch_url` Output の明示的な mapping を提案し、レビュー後に Takosumi が Interface へ
