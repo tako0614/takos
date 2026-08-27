@@ -1271,10 +1271,7 @@ async function listContainers(
   });
 }
 
-function containerBody(
-  desired: DesiredContainer,
-  namespaceId: string,
-): JsonObject {
+function containerConfiguration(desired: DesiredContainer): JsonObject {
   const capacity: Record<string, JsonValue> = typeof desired.instanceType === "string"
     ? { instance_type: desired.instanceType }
     : {
@@ -1282,7 +1279,7 @@ function containerBody(
       memory_mib: desired.instanceType.memory_mib,
       disk: { size_mb: desired.instanceType.disk_mb },
     };
-  const configuration: Record<string, JsonValue> = {
+  return {
     image: desired.image,
     ...capacity,
     ...(desired.observability === undefined ? {} : { observability: desired.observability }),
@@ -1290,15 +1287,32 @@ function containerBody(
     ...(desired.authorizedKeys === undefined ? {} : { authorized_keys: desired.authorizedKeys }),
     ...(desired.trustedUserCaKeys === undefined ? {} : { trusted_user_ca_keys: desired.trustedUserCaKeys }),
   };
+}
+
+function containerBody(
+  desired: DesiredContainer,
+  namespaceId: string,
+): JsonObject {
   return {
     name: desired.name,
     scheduling_policy: desired.schedulingPolicy ?? "default",
-    configuration,
+    configuration: containerConfiguration(desired),
     instances: 0,
     max_instances: desired.maxInstances,
     ...(desired.constraints === undefined ? {} : { constraints: desired.constraints }),
     ...(desired.affinities === undefined ? {} : { affinities: desired.affinities }),
     durable_objects: { namespace_id: namespaceId },
+    rollout_active_grace_period: desired.rolloutActiveGracePeriod,
+  };
+}
+
+function containerPatchBody(desired: DesiredContainer): JsonObject {
+  return {
+    configuration: containerConfiguration(desired),
+    max_instances: desired.maxInstances,
+    ...(desired.constraints === undefined ? {} : { constraints: desired.constraints }),
+    ...(desired.affinities === undefined ? {} : { affinities: desired.affinities }),
+    scheduling_policy: desired.schedulingPolicy ?? "default",
     rollout_active_grace_period: desired.rolloutActiveGracePeriod,
   };
 }
@@ -1357,7 +1371,7 @@ async function reconcileContainers(
         await api.requestContainers(
           "PATCH",
           `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(application.id, "container_id")}`,
-          containerBody(row, namespaceId),
+          containerPatchBody(row),
         );
         changed = true;
       }
