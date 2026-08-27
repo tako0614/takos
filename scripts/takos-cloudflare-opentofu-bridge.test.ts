@@ -592,6 +592,9 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     expect(customTierPatch?.body).not.toMatchObject({
       configuration: { instance_type: expect.anything() },
     });
+    expect(customTierPatch?.body).not.toHaveProperty("name");
+    expect(customTierPatch?.body).not.toHaveProperty("instances");
+    expect(customTierPatch?.body).not.toHaveProperty("durable_objects");
     expect(calls.some(({ method }) => method === "PUT")).toBe(false);
     const listCalls = calls.filter(({ url }) => url.includes("/containers/applications?name="));
     expect(listCalls.map(({ url }) => new URL(url).searchParams.get("name"))).toEqual([
