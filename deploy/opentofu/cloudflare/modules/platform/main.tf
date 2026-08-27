@@ -394,6 +394,16 @@ resource "cloudflare_worker_version" "durable_object_migrations" {
     content_type = "application/javascript+module"
   }]
 
+  # Cloudflare creates a container-enabled Durable Object namespace only when
+  # the same deployed Version declares both the SQLite migration and the
+  # Container attachment metadata. This is metadata, not a namespace binding,
+  # so it remains valid in the migration-only first deployment.
+  containers = [
+    { class_name = "ExecutorContainerTier1" },
+    { class_name = "ExecutorContainerTier2" },
+    { class_name = "ExecutorContainerTier3" },
+  ]
+
   migrations = {
     new_tag = "v7"
     steps = [
