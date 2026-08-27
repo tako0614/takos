@@ -349,7 +349,7 @@ const ja: Strings = {
       {
         kind: "self",
         title: "自分のサーバーで動かす",
-        body: "自分のインフラで動かしたい人向け。同じ Git の取得元を、自前の Takosumi に CLI から入れられます。クラウドの種類などは自分で選べます。",
+        body: "自分のインフラで動かしたい人向け。Git の release tag を固定して、依存パッケージを入れ、OpenTofu の plan を確認してから apply します。クラウドの種類などは自分で選べます。",
       },
     ],
   },
@@ -597,7 +597,7 @@ const en: Strings = {
       {
         kind: "self",
         title: "Run it on your own server",
-        body: "For people who want to run it on their own infrastructure. Install the same Git source onto your own Takosumi from the CLI. You choose the cloud and the rest yourself.",
+        body: "For people who want to run it on their own infrastructure. Pin the Git release tag, install dependencies, review an OpenTofu plan, and then apply it. You choose the cloud and the rest yourself.",
       },
     ],
   },

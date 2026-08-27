@@ -7,9 +7,12 @@ const manifest = JSON.parse(text) as RepositoryManifest;
 const packageJson = JSON.parse(
   await readFile(new URL("package.json", root), "utf8"),
 ) as { version: string; takosRelease: { version: string } };
-const packageTag = `v${packageJson.version}`;
 const websiteCloudUrlSource = await readFile(
   new URL("website/src/lib/cloud-url.ts", root),
+  "utf8",
+);
+const installCtaSource = await readFile(
+  new URL("website/src/components/InstallCTA.tsx", root),
   "utf8",
 );
 const modules = {
@@ -44,6 +47,7 @@ test("Takos publishes repository install hints and service declarations", () => 
     "sourceBuild",
   ]);
   expect(module.sourceBuild?.commands).toEqual([
+    { argv: ["bun", "install", "--frozen-lockfile"] },
     { argv: ["bun", "run", "build:opentofu-worker-artifact"] },
   ]);
   expect(module.sourceBuild?.outputs).toEqual([
@@ -122,6 +126,7 @@ test("Takos publishes repository install hints and service declarations", () => 
 });
 
 test("the repository source and website CTA use one exact Takos release", () => {
+  const candidateTag = "v0.12.8";
   expect(packageJson.takosRelease.version).toBe(packageJson.version);
   expect(websiteCloudUrlSource).toContain(
     'const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git"',
@@ -130,8 +135,39 @@ test("the repository source and website CTA use one exact Takos release", () => 
     'url.searchParams.set("git", takosInstallGitUrl());',
   );
   expect(websiteCloudUrlSource).toContain(
-    `const DEFAULT_TAKOS_REF = "${packageTag}"`,
+    `const DEFAULT_TAKOS_REF = "${candidateTag}"`,
   );
+  expect(websiteCloudUrlSource).toContain(
+    'const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/cloudflare"',
+  );
+  expect(websiteCloudUrlSource).toContain(
+    'url.searchParams.set("name", "takos");',
+  );
+  expect(websiteCloudUrlSource).not.toContain("var.");
+
+  const selfHostSequence = [
+    "git clone https://github.com/tako0614/takos.git",
+    "git fetch --tags origin",
+    "git checkout --detach v0.12.8",
+    "git rev-parse --verify v0.12.8",
+    "bun install --frozen-lockfile",
+    "bun run build:opentofu-worker-artifact",
+    'install -d -m 700 "$HOME/.config/takos"',
+    'cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$HOME/.config/takos/takos.tfvars"',
+    'chmod 600 "$HOME/.config/takos/takos.tfvars"',
+    "tofu -chdir=deploy/opentofu/cloudflare init -input=false",
+    'tofu -chdir=deploy/opentofu/cloudflare plan -input=false -var-file="$HOME/.config/takos/takos.tfvars" -out="$HOME/.config/takos/takos.tfplan"',
+    'tofu show "$HOME/.config/takos/takos.tfplan"',
+    'tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"',
+  ];
+  let previousCommandOffset = -1;
+  for (const command of selfHostSequence) {
+    const commandOffset = installCtaSource.indexOf(command);
+    expect(commandOffset).toBeGreaterThan(previousCommandOffset);
+    previousCommandOffset = commandOffset;
+  }
+  expect(installCtaSource).toContain("# edit external tfvars before planning");
+  expect(installCtaSource).not.toContain("enable_imperative_staging_bridge");
 });
 
 test("the Repository manifest requires explicit operator-owned OIDC client metadata", () => {
