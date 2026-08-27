@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   cp,
-  lstat,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
@@ -24,13 +24,6 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-
-export const PINNED_WORKER_ARCHIVE_URL =
-  "https://github.com/tako0614/takos/releases/download/v0.12.7/takos-worker-release.tar.gz";
-export const PINNED_WORKER_ARCHIVE_SHA256 =
-  "e8c1a39c4d36c23dd04b27dabf356a0826214551b057e4577ff955ccc0707687";
-/** A fixed upper bound keeps sourceBuild memory-bounded if the pin is rotated. */
-export const MAXIMUM_WORKER_ARCHIVE_BYTES = 64 * 1024 * 1024;
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(SCRIPT_DIRECTORY, "..");
@@ -46,15 +39,14 @@ const MANIFEST_OUTPUT = ".takos-build/manifest.json";
 export interface BuildWorkerArtifactOptions {
   /** Repository root. Defaults to the directory containing this script. */
   readonly rootDirectory?: string;
-  /** The source must be the repository-pinned immutable Worker archive. */
-  readonly source?: "archive";
-  readonly fetchImpl?: typeof fetch;
+  /** Test seam; normal callers always build the resolved repository source. */
+  readonly sourceBuilder?: RepositorySourceBuilder;
 }
 
 export interface BuildWorkerArtifactResult {
   readonly rootDirectory: string;
   readonly moduleDirectory: string;
-  readonly source: "pinned-archive";
+  readonly source: "repository-source";
   readonly workerPath: string;
   readonly assetsPath: string;
   readonly bridgePath: string;
@@ -71,6 +63,16 @@ type FileEntry = {
   readonly sha256: string;
   readonly bytes: number;
 };
+
+type RepositorySource = {
+  readonly worker: string;
+  readonly assets: string;
+  readonly temporaryDirectory?: string;
+};
+
+export type RepositorySourceBuilder = (
+  rootDirectory: string,
+) => Promise<RepositorySource>;
 
 function hashBytes(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -108,19 +110,6 @@ async function listFiles(directory: string): Promise<FileEntry[]> {
   return entries;
 }
 
-async function assertNoSymlinks(directory: string): Promise<void> {
-  async function visit(current: string): Promise<void> {
-    const currentStat = await lstat(current);
-    if (currentStat.isSymbolicLink()) {
-      throw new Error(`artifact archive contains a symlink: ${current}`);
-    }
-    if (!currentStat.isDirectory()) return;
-    const children = await readdir(current);
-    for (const child of children) await visit(join(current, child));
-  }
-  await visit(directory);
-}
-
 async function exists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -131,125 +120,95 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function downloadPinnedArchive(
-  fetchImpl: typeof fetch,
-  temporaryDirectory: string,
-): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetchImpl(PINNED_WORKER_ARCHIVE_URL, {
-      redirect: "follow",
-    });
-  } catch {
-    throw new Error("pinned Worker archive download failed");
+const SOURCE_ENTRYPOINT = "src/worker/cloudflare-entrypoint.ts";
+
+function credentialFreeBuildEnvironment(): NodeJS.ProcessEnv {
+  const allowed = [
+    "BUN_INSTALL",
+    "CI",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "NODE_OPTIONS",
+    "PATH",
+    "SHELL",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "USER",
+    "XDG_CACHE_HOME",
+  ];
+  const environment: NodeJS.ProcessEnv = {};
+  for (const name of allowed) {
+    if (process.env[name] !== undefined) environment[name] = process.env[name];
   }
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => {});
-    throw new Error("pinned Worker archive download returned a non-success status");
-  }
-  const contentLength = response.headers.get("content-length");
-  if (contentLength !== null) {
-    const declaredLength = Number(contentLength);
-    if (
-      !Number.isSafeInteger(declaredLength) ||
-      declaredLength < 0 ||
-      declaredLength > MAXIMUM_WORKER_ARCHIVE_BYTES
-    ) {
-      await response.body?.cancel().catch(() => {});
-      throw new Error("pinned Worker archive is larger than the source-build bound");
-    }
-  }
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  if (response.body === null) {
-    chunks.push(new Uint8Array(await response.arrayBuffer()));
-    totalBytes = chunks[0]!.byteLength;
-  } else {
-    const reader = response.body.getReader();
-    try {
-      while (true) {
-        const next = await reader.read();
-        if (next.done) break;
-        totalBytes += next.value.byteLength;
-        if (totalBytes > MAXIMUM_WORKER_ARCHIVE_BYTES) {
-          await reader.cancel().catch(() => {});
-          throw new Error("pinned Worker archive is larger than the source-build bound");
-        }
-        chunks.push(next.value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  }
-  if (totalBytes > MAXIMUM_WORKER_ARCHIVE_BYTES) {
-    throw new Error("pinned Worker archive is larger than the source-build bound");
-  }
-  const bytes = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  if (hashBytes(bytes) !== PINNED_WORKER_ARCHIVE_SHA256) {
-    throw new Error("pinned Worker archive SHA-256 does not match the repository pin");
-  }
-  const archivePath = join(temporaryDirectory, "takos-worker-release.tar.gz");
-  await writeFile(archivePath, bytes);
-  return archivePath;
+  environment.CI = "1";
+  environment.WRANGLER_SEND_METRICS = "false";
+  return environment;
 }
 
-async function extractPinnedArchive(
-  fetchImpl: typeof fetch,
-): Promise<{ worker: string; assets: string; temporaryDirectory: string }> {
-  const temporaryDirectory = await mkdtemp(
-    join(tmpdir(), "takos-opentofu-worker-archive-"),
-  );
-  try {
-    const archivePath = await downloadPinnedArchive(fetchImpl, temporaryDirectory);
-    const extracted = join(temporaryDirectory, "extracted");
-    await import("node:fs/promises").then(({ mkdir }) => mkdir(extracted));
-    const listing = spawnSync("tar", ["-tzf", archivePath], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (listing.error || listing.status !== 0 || typeof listing.stdout !== "string") {
-      throw new Error("pinned Worker archive listing failed");
-    }
-    for (const listed of listing.stdout.split("\n")) {
-      const entry = listed.replace(/^\.\//u, "").replace(/\/+$/u, "");
-      if (!entry) continue;
-      if (
-        entry.startsWith("/") ||
-        entry.includes("\\") ||
-        entry.split("/").some((segment) => segment === ".." || segment === "")
-      ) {
-        throw new Error("pinned Worker archive contains an unsafe path");
-      }
-    }
-    const result = spawnSync(
-      "tar",
-      [
-        "-xzf",
-        archivePath,
-        "--no-same-owner",
-        "--no-same-permissions",
-        "-C",
-        extracted,
-      ],
-      { stdio: "pipe" },
+function runSourceBuild(
+  rootDirectory: string,
+  command: string,
+  args: readonly string[],
+): void {
+  const result = spawnSync(command, [...args], {
+    cwd: rootDirectory,
+    env: credentialFreeBuildEnvironment(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 600_000,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = `${result.stderr ?? ""}\n${result.stdout ?? ""}`.trim();
+    throw new Error(
+      `repository Worker source build failed (${command} ${args.join(" ")}): ${
+        detail.slice(0, 16_384) || result.error?.message || "unknown failure"
+      }`,
     );
-    if (result.error || result.status !== 0) {
-      throw new Error("pinned Worker archive extraction failed");
-    }
-    // A pinned archive is still treated as untrusted input at the filesystem
-    // boundary. Reject symlinks before any bytes are copied into the module;
-    // this also prevents a future archive rotation from escaping the output
-    // tree through a link.
-    await assertNoSymlinks(extracted);
-    const worker = join(extracted, "worker/index.js");
-    const assets = join(extracted, "assets");
-    if (!(await exists(worker)) || !(await exists(assets))) {
-      throw new Error("pinned Worker archive lacks worker/index.js or assets");
+  }
+}
+
+async function oneWorkerBundle(directory: string): Promise<string> {
+  const candidates = (await readdir(directory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && /\.(?:c|m)?js$/u.test(entry.name))
+    .map((entry) => join(directory, entry.name))
+    .sort();
+  if (candidates.length !== 1) {
+    throw new Error(
+      `Wrangler source build must emit exactly one JavaScript entrypoint; found ${candidates.length}`,
+    );
+  }
+  return candidates[0]!;
+}
+
+async function buildRepositorySource(
+  rootDirectory: string,
+): Promise<RepositorySource> {
+  const temporaryDirectory = await mkdtemp(
+    join(tmpdir(), "takos-opentofu-worker-source-"),
+  );
+  const bundleDirectory = join(temporaryDirectory, "worker");
+  try {
+    await mkdir(bundleDirectory, { recursive: true });
+    runSourceBuild(rootDirectory, "bun", ["run", "web:build"]);
+    runSourceBuild(rootDirectory, "bunx", [
+      "wrangler",
+      "deploy",
+      "--config",
+      "deploy/cloudflare/wrangler.toml",
+      "--env=",
+      "--dry-run",
+      "--containers-rollout",
+      "none",
+      "--outdir",
+      bundleDirectory,
+    ]);
+    const worker = await oneWorkerBundle(bundleDirectory);
+    const assets = resolve(rootDirectory, "dist");
+    if (!(await exists(assets))) {
+      throw new Error("repository web build did not emit dist assets");
     }
     return { worker, assets, temporaryDirectory };
   } catch (error) {
@@ -371,8 +330,7 @@ export async function buildOpentofuWorkerArtifact(
   const migrationsOutput = resolve(moduleDirectory, MIGRATIONS_OUTPUT);
   const containerConfigOutput = resolve(moduleDirectory, CONTAINER_CONFIG_OUTPUT);
   const manifestOutput = resolve(moduleDirectory, MANIFEST_OUTPUT);
-  const sourcePreference = options.source ?? "archive";
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const sourceBuilder = options.sourceBuilder ?? buildRepositorySource;
 
   await rm(outputDirectory, { force: true, recursive: true });
   await import("node:fs/promises").then(({ mkdir }) =>
@@ -391,18 +349,11 @@ export async function buildOpentofuWorkerArtifact(
     mkdir(dirname(containerConfigOutput), { recursive: true }),
   );
 
-  let source: "pinned-archive";
-  let workerSource: string;
-  let assetsSource: string;
-  let temporaryDirectory: string | undefined;
-  if (sourcePreference !== "archive") {
-    throw new Error("only the repository-pinned Worker archive is supported");
-  }
-  const archive = await extractPinnedArchive(fetchImpl);
-  source = "pinned-archive";
-  workerSource = archive.worker;
-  assetsSource = archive.assets;
-  temporaryDirectory = archive.temporaryDirectory;
+  const source = "repository-source" as const;
+  const builtSource = await sourceBuilder(rootDirectory);
+  const workerSource = builtSource.worker;
+  const assetsSource = builtSource.assets;
+  const temporaryDirectory = builtSource.temporaryDirectory;
 
   try {
     await cp(workerSource, workerOutput, { force: true });
@@ -423,14 +374,7 @@ export async function buildOpentofuWorkerArtifact(
     const manifest = {
       format: "takos-opentofu-worker-artifact/v1",
       source,
-      ...(source === "pinned-archive"
-        ? {
-            archive: {
-              url: PINNED_WORKER_ARCHIVE_URL,
-              sha256: PINNED_WORKER_ARCHIVE_SHA256,
-            },
-          }
-        : {}),
+      entrypoint: SOURCE_ENTRYPOINT,
       worker: {
         path: "worker/index.js",
         sha256: workerDigest.sha256,

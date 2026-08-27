@@ -1,18 +1,15 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
-  MAXIMUM_WORKER_ARCHIVE_BYTES,
-  PINNED_WORKER_ARCHIVE_SHA256,
-  PINNED_WORKER_ARCHIVE_URL,
   buildOpentofuWorkerArtifact,
   collectMigrationFiles,
 } from "./build-opentofu-worker-artifact.ts";
 
 const root = new URL("../", import.meta.url);
 
-test("the Worker artifact contract is module-local and source-build stays credential-free", async () => {
+test("the Worker artifact contract is module-local and builds the resolved repository source", async () => {
   const manifest = JSON.parse(
     await readFile(new URL(".well-known/takosumi.json", root), "utf8"),
   ) as {
@@ -32,8 +29,13 @@ test("the Worker artifact contract is module-local and source-build stays creden
     "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
     "deploy/opentofu/cloudflare/.takos-build/manifest.json",
   ]);
-  expect(PINNED_WORKER_ARCHIVE_URL).toContain("releases/download/v0.12.7");
-  expect(PINNED_WORKER_ARCHIVE_SHA256).toMatch(/^[a-f0-9]{64}$/u);
+  const builder = await readFile(
+    new URL("scripts/build-opentofu-worker-artifact.ts", root),
+    "utf8",
+  );
+  expect(builder).not.toContain("PINNED_WORKER_ARCHIVE_URL");
+  expect(builder).not.toContain("PINNED_WORKER_ARCHIVE_SHA256");
+  expect(builder).toContain("src/worker/cloudflare-entrypoint.ts");
 });
 
 test("the Cloudflare module declares every operator-reviewed staging value as a user input", async () => {
@@ -80,40 +82,37 @@ test("canonical migration collection retains independently named duplicate versi
   expect(files).toEqual([...files].sort((a, b) => a.path.localeCompare(b.path)));
 });
 
-test("archive materialization rejects bytes that do not match the repository pin", async () => {
+test("source materialization copies the exact current Worker and assets", async () => {
   const temporaryRoot = await mkdtemp("takos-opentofu-artifact-test-");
   try {
-    await writeFile(join(temporaryRoot, "scripts-placeholder"), "unused");
-    await expect(
-      buildOpentofuWorkerArtifact({
-        rootDirectory: temporaryRoot,
-        fetchImpl: async () =>
-          new Response(new Uint8Array([1, 2, 3]), {
-            status: 200,
-            headers: { "content-type": "application/gzip" },
-          }),
+    const fixture = join(temporaryRoot, "fixture");
+    await Bun.write(join(fixture, "worker", "index.js"), "export default { fetch() {} };\n");
+    await Bun.write(join(fixture, "assets", "index.html"), "current source\n");
+    await Bun.write(
+      join(temporaryRoot, "scripts", "takos-cloudflare-opentofu-bridge.ts"),
+      "export {};\n",
+    );
+    await Bun.write(
+      join(temporaryRoot, "db", "migrations-control", "migrations", "0001_initial.sql"),
+      "CREATE TABLE fixture (id TEXT PRIMARY KEY);\n",
+    );
+    const result = await buildOpentofuWorkerArtifact({
+      rootDirectory: temporaryRoot,
+      sourceBuilder: async () => ({
+        worker: join(fixture, "worker", "index.js"),
+        assets: join(fixture, "assets"),
       }),
-    ).rejects.toThrow("SHA-256");
-  } finally {
-    await rm(temporaryRoot, { force: true, recursive: true });
-  }
-});
+    });
 
-test("archive materialization rejects an oversized response before buffering it", async () => {
-  const temporaryRoot = await mkdtemp("takos-opentofu-artifact-test-");
-  try {
-    await expect(
-      buildOpentofuWorkerArtifact({
-        rootDirectory: temporaryRoot,
-        fetchImpl: async () =>
-          new Response("bounded-test", {
-            status: 200,
-            headers: {
-              "content-length": String(MAXIMUM_WORKER_ARCHIVE_BYTES + 1),
-            },
-          }),
-      }),
-    ).rejects.toThrow("source-build bound");
+    expect(await readFile(result.workerPath, "utf8")).toBe(
+      "export default { fetch() {} };\n",
+    );
+    expect(await readFile(join(result.assetsPath, "index.html"), "utf8")).toBe(
+      "current source\n",
+    );
+    const manifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
+    expect(manifest.source).toBe("repository-source");
+    expect(manifest).not.toHaveProperty("archive");
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
