@@ -110,6 +110,15 @@ function hasResourceSurfaceToken(token: string): boolean {
   return new RegExp(`\\b${token}\\b`, "u").test(cloudflareResourceSurface);
 }
 
+function hasContainerLifecycleSurfaceToken(token: string): boolean {
+  return (
+    new RegExp(`\\b${token}\\b`, "u").test(cloudflareHclWithoutComments) &&
+    cloudflareResourceSurface.includes(
+      "local.durable_object_lifecycle.container_bindings",
+    )
+  );
+}
+
 function hasLogicalResourceToken(name: string): boolean {
   return [name, name.replaceAll("-", "_")].some((token) => {
     const escaped = token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -144,7 +153,10 @@ test("the current Cloudflare adapter declares the complete product graph", () =>
 
   for (const connection of contract.runtimeConnections) {
     expect(cloudflareHclWithoutComments).toContain(connection.name);
-    expect(hasResourceSurfaceToken(connection.name)).toBe(true);
+    expect(
+      hasResourceSurfaceToken(connection.name) ||
+        hasContainerLifecycleSurfaceToken(connection.name),
+    ).toBe(true);
   }
 
   for (const [label, type] of [
@@ -194,7 +206,7 @@ test("the current Cloudflare adapter declares the complete product graph", () =>
   );
   expect(containerConnections).toHaveLength(3);
   for (const connection of containerConnections) {
-    expect(hasResourceSurfaceToken(connection.name)).toBe(true);
+    expect(hasContainerLifecycleSurfaceToken(connection.name)).toBe(true);
   }
 
   const forbiddenTakosumiMutationPlumbing =
@@ -204,7 +216,7 @@ test("the current Cloudflare adapter declares the complete product graph", () =>
   );
 });
 
-test("the Cloudflare adapter deploys Durable Object migrations before binding them", () => {
+test("the Cloudflare adapter establishes Durable Object migrations before binding them", () => {
   const resource = (type: string, name: string): ResourceBlock => {
     const match = cloudflareResourceBlocks.find(
       (candidate) => candidate.type === type && candidate.name === name,
@@ -222,26 +234,43 @@ test("the Cloudflare adapter deploys Durable Object migrations before binding th
     "durable_object_migrations",
   );
   const applicationVersion = resource("cloudflare_worker_version", "app");
+  const providerGapPre = resource("terraform_data", "provider_gap_pre");
 
   expect(migrationVersion.body).toMatch(/\bmigrations\s*=/u);
+  expect(migrationVersion.body).toContain(
+    "count = var.enable_imperative_staging_bridge ? 0 : 1",
+  );
   expect(migrationVersion.body).not.toContain(
     'type = "durable_object_namespace"',
   );
   expect(migrationVersion.body).toMatch(/\bcontainers\s*=/u);
+  expect(migrationVersion.body).toContain(
+    "local.durable_object_lifecycle.container_bindings",
+  );
+  expect(applicationVersion.body).toContain(
+    "local.durable_object_lifecycle.container_bindings",
+  );
   for (const className of [
     "ExecutorContainerTier1",
     "ExecutorContainerTier2",
     "ExecutorContainerTier3",
   ]) {
-    expect(migrationVersion.body).toContain(className);
-    expect(applicationVersion.body).toContain(className);
+    expect(cloudflareHclWithoutComments).toContain(className);
   }
   expect(migrationDeployment.body).toContain(
-    "cloudflare_worker_version.durable_object_migrations.id",
+    "count = var.enable_imperative_staging_bridge ? 0 : 1",
+  );
+  expect(migrationDeployment.body).toContain(
+    "cloudflare_worker_version.durable_object_migrations[0].id",
   );
   expect(applicationVersion.body).not.toMatch(/\bmigrations\s*=/u);
   expect(applicationVersion.body).toContain(
     "cloudflare_workers_deployment.durable_object_migrations",
+  );
+  expect(applicationVersion.body).toContain("terraform_data.provider_gap_pre");
+  expect(providerGapPre.body).toContain("cloudflare_worker.app");
+  expect(cloudflareHclWithoutComments).toContain(
+    "TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE",
   );
 
   for (const [type, name] of [

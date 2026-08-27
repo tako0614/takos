@@ -62,7 +62,7 @@ variable "zone_name" {
 }
 
 variable "enable_imperative_staging_bridge" {
-  description = "Opt in to app-owned staging bridges for Cloudflare provider gaps (Vectorize, D1 migrations, and Container applications)."
+  description = "Opt in to app-owned staging bridges for Cloudflare provider gaps (Vectorize, D1 migrations, container-enabled Durable Object migration, and Container applications)."
   type        = bool
   default     = false
 }
