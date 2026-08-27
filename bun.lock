@@ -21,6 +21,7 @@
         "@modelcontextprotocol/sdk": "^1.0.0",
         "@solid-primitives/storage": "^4.3.4",
         "@solidjs/router": "^0.16.1",
+        "@takosjp/takosumi-contract": "2.1.0",
         "blake3-wasm": "^2.1.5",
         "drizzle-orm": "^0.45.1",
         "fflate": "^0.8.2",
@@ -627,6 +628,8 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.3.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Mvrf2kXW/yeW/OTezZlCGOirXRcUuLIBx/5Y12BaPM7wJoryG6dfS/NJL8aBPqtTEx/Vm4T4vKzFUcKDT+TKUA=="],
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.0", "", { "dependencies": { "@tailwindcss/node": "4.3.0", "@tailwindcss/oxide": "4.3.0", "tailwindcss": "4.3.0" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-t6J3OrB5Fc0ExuhohouH0fWUGMYL6PTLhW+E7zIk/pdbnJARZDCwjBznFnkh5ynRnIRSI4YjtTH0t6USjJISrw=="],
+
+    "@takosjp/takosumi-contract": ["@takosjp/takosumi-contract@2.1.0", "", {}, "sha512-lJ+WCjtA4oBJhfPGkpnumK3EvH28GydcE5uVi880WZJWOGqtlPir3P4eP80B5Zs0PmhAw1hq6n6MQmdmA29UhA=="],
 
     "@tauri-apps/api": ["@tauri-apps/api@2.11.1", "", {}, "sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA=="],
 
