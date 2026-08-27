@@ -204,6 +204,49 @@ test("the current Cloudflare adapter declares the complete product graph", () =>
   );
 });
 
+test("the Cloudflare adapter deploys Durable Object migrations before binding them", () => {
+  const resource = (type: string, name: string): ResourceBlock => {
+    const match = cloudflareResourceBlocks.find(
+      (candidate) => candidate.type === type && candidate.name === name,
+    );
+    expect(match, `resource ${type}.${name} is missing`).toBeDefined();
+    return match!;
+  };
+
+  const migrationVersion = resource(
+    "cloudflare_worker_version",
+    "durable_object_migrations",
+  );
+  const migrationDeployment = resource(
+    "cloudflare_workers_deployment",
+    "durable_object_migrations",
+  );
+  const applicationVersion = resource("cloudflare_worker_version", "app");
+
+  expect(migrationVersion.body).toMatch(/\bmigrations\s*=/u);
+  expect(migrationVersion.body).not.toContain(
+    'type = "durable_object_namespace"',
+  );
+  expect(migrationVersion.body).not.toMatch(/\bcontainers\s*=/u);
+  expect(migrationDeployment.body).toContain(
+    "cloudflare_worker_version.durable_object_migrations.id",
+  );
+  expect(applicationVersion.body).not.toMatch(/\bmigrations\s*=/u);
+  expect(applicationVersion.body).toContain(
+    "cloudflare_workers_deployment.durable_object_migrations",
+  );
+
+  for (const [type, name] of [
+    ["cloudflare_queue_consumer", "this"],
+    ["cloudflare_workers_cron_trigger", "this"],
+    ["cloudflare_workers_route", "public"],
+  ] as const) {
+    expect(resource(type, name).body).toContain(
+      "cloudflare_workers_deployment.app",
+    );
+  }
+});
+
 test("the portable agent service declares its HTTP port", () => {
   expect(agentDockerfile).toContain("ENV PORT=8080");
   expect(agentDockerfile).toContain("EXPOSE 8080");

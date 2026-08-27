@@ -376,6 +376,51 @@ resource "cloudflare_worker" "app" {
   }
 }
 
+# Cloudflare applies Durable Object migrations only when a Worker Version is
+# deployed, but rejects a Version that both creates a class and binds to it.
+# Model Cloudflare's required two-step lifecycle explicitly: deploy one stable,
+# non-serving migration Version without DO bindings, then upload/deploy the real
+# application Version after those namespaces exist.
+resource "cloudflare_worker_version" "durable_object_migrations" {
+  account_id = var.account_id
+  worker_id  = cloudflare_worker.app.id
+
+  compatibility_date = "2026-04-01"
+  main_module        = "durable-object-migration-bootstrap.js"
+
+  modules = [{
+    name         = "durable-object-migration-bootstrap.js"
+    content_file = "${path.module}/durable-object-migration-bootstrap.js"
+    content_type = "application/javascript+module"
+  }]
+
+  migrations = {
+    new_tag = "v7"
+    steps = [
+      { new_classes = ["SessionDO"] },
+      { new_classes = ["RunNotifierDO"] },
+      { new_classes = ["RateLimiterDO"] },
+      { new_classes = ["NotificationNotifierDO"] },
+      { new_classes = ["RoutingDO"] },
+      { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
+      { deleted_classes = ["TakosRuntimeContainer"] },
+    ]
+  }
+
+  depends_on = [terraform_data.provider_gap_pre]
+}
+
+resource "cloudflare_workers_deployment" "durable_object_migrations" {
+  account_id  = var.account_id
+  script_name = cloudflare_worker.app.name
+  strategy    = "percentage"
+
+  versions = [{
+    percentage = 100
+    version_id = cloudflare_worker_version.durable_object_migrations.id
+  }]
+}
+
 resource "cloudflare_worker_version" "app" {
   account_id = var.account_id
   worker_id  = cloudflare_worker.app.id
@@ -436,20 +481,7 @@ resource "cloudflare_worker_version" "app" {
     { class_name = "ExecutorContainerTier3" },
   ]
 
-  migrations = {
-    new_tag = "v7"
-    steps = [
-      { new_classes = ["SessionDO"] },
-      { new_classes = ["RunNotifierDO"] },
-      { new_classes = ["RateLimiterDO"] },
-      { new_classes = ["NotificationNotifierDO"] },
-      { new_classes = ["RoutingDO"] },
-      { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
-      { deleted_classes = ["TakosRuntimeContainer"] },
-    ]
-  }
-
-  depends_on = [terraform_data.provider_gap_pre]
+  depends_on = [cloudflare_workers_deployment.durable_object_migrations]
 }
 
 resource "cloudflare_workers_deployment" "app" {
@@ -478,6 +510,8 @@ resource "cloudflare_queue_consumer" "this" {
     max_concurrency  = each.value.max_concurrency
     retry_delay      = each.value.retry_delay
   }
+
+  depends_on = [cloudflare_workers_deployment.app]
 }
 
 resource "cloudflare_workers_cron_trigger" "this" {
@@ -490,6 +524,8 @@ resource "cloudflare_workers_cron_trigger" "this" {
   schedules = [{
     cron = each.value.cron
   }]
+
+  depends_on = [cloudflare_workers_deployment.app]
 }
 
 resource "cloudflare_workers_route" "public" {
@@ -497,6 +533,8 @@ resource "cloudflare_workers_route" "public" {
   zone_id = var.zone_id
   pattern = "${local.public_hostname}/*"
   script  = cloudflare_worker.app.name
+
+  depends_on = [cloudflare_workers_deployment.app]
 }
 
 resource "terraform_data" "provider_gap_post" {
