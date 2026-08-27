@@ -51,7 +51,7 @@ export async function createToolExecutor(
   const resolver = await createToolResolver(db, spaceId, env, {
     ...options,
     mcpExposureContext: {
-      role: ctx.role,
+      toolPolicyTier: ctx.toolPolicyTier,
       capabilities: Array.from(allowed),
     },
   });
@@ -61,7 +61,7 @@ export async function createToolExecutor(
     threadId,
     runId,
     userId,
-    role: ctx.role,
+    toolPolicyTier: ctx.toolPolicyTier,
     capabilities: Array.from(allowed),
     env,
     db,

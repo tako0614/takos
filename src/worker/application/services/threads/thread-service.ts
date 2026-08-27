@@ -5,7 +5,6 @@ import type {
   MessageRole,
   Run,
   RunStatus,
-  SpaceRole,
   Thread,
   ThreadStatus,
 } from "../../../shared/types/index.ts";
@@ -29,7 +28,6 @@ import { reserveThreadMessageSequence } from "./message-sequence.ts";
 
 export interface ThreadAccess {
   thread: Thread;
-  role: SpaceRole;
 }
 
 type MessageRow = {
@@ -114,7 +112,6 @@ export async function checkThreadAccess(
   dbBinding: SqlDatabaseLike,
   threadId: string,
   userId: string,
-  requiredRole?: SpaceRole[],
 ): Promise<ThreadAccess | null> {
   if (!isValidOpaqueId(threadId) || !isValidOpaqueId(userId)) {
     return null;
@@ -133,17 +130,12 @@ export async function checkThreadAccess(
 
   const thread = toThread(row);
 
-  const access = await checkSpaceAccess(
-    dbBinding,
-    thread.space_id,
-    userId,
-    requiredRole,
-  );
+  const access = await checkSpaceAccess(dbBinding, thread.space_id, userId);
   if (!access) {
     return null;
   }
 
-  return { thread, role: access.membership.role };
+  return { thread };
 }
 
 export async function listThreads(

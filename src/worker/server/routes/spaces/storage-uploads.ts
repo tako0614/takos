@@ -44,8 +44,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       if (!c.env.GIT_OBJECTS) {
@@ -91,8 +90,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       const body = c.req.valid("json");
@@ -157,8 +155,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       if (!c.env.GIT_OBJECTS) {
@@ -219,8 +216,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       const body = c.req.valid("json");

@@ -221,7 +221,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       c.env,
       repoId,
       user?.id,
-      undefined,
       { allowPublicRead: true },
     );
     if (!repoAccess) {

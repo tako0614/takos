@@ -68,7 +68,6 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       c,
       repo.space_id,
       user.id,
-      ["owner", "admin", "editor"],
       "Permission denied",
       403,
     );
@@ -247,7 +246,6 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
         c,
         repo.space_id,
         user.id,
-        ["owner", "admin", "editor"],
         "Permission denied",
         403,
       );

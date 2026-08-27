@@ -49,11 +49,6 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
           c.env.DB,
           threadId,
           user.id,
-          [
-            "owner",
-            "admin",
-            "editor",
-          ],
         ),
       );
       const shareInput = resolveThreadShareInput(body);
@@ -120,11 +115,6 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
         c.env.DB,
         threadId,
         user.id,
-        [
-          "owner",
-          "admin",
-          "editor",
-        ],
       ),
     );
 

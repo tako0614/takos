@@ -1,4 +1,4 @@
-import type { SpaceRole } from "../../shared/types/index.ts";
+import type { LegacyToolPolicyTier } from "./legacy-tool-policy-tier.ts";
 
 export type CapabilityKind = "tool" | "skill";
 
@@ -42,7 +42,8 @@ export interface CapabilityDescriptor {
   family?: string;
   risk_level: RiskLevel;
   side_effects: boolean;
-  required_roles?: SpaceRole[];
+  /** Historical tool-policy metadata; never Workspace membership authority. */
+  required_tool_policy_tiers?: LegacyToolPolicyTier[];
   required_capabilities?: string[];
   source: "custom" | "mcp" | "managed_skill" | "custom_skill";
   discoverable: boolean;

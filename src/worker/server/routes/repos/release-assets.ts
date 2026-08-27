@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { generateId } from "../../../shared/utils/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { requireRepoRead } from "./git-shared.ts";
-import { generateExploreInvalidationUrls, hasWriteRole } from "./routes.ts";
+import { generateExploreInvalidationUrls } from "./routes.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { repoReleaseAssets, repoReleases } from "../../../infra/db/schema.ts";
 import { and, asc, eq } from "drizzle-orm";
@@ -127,7 +127,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
 
       const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-      if (!hasWriteRole(repoAccess.role)) {
+      if (repoAccess.access !== "owner") {
         throw new AuthorizationError();
       }
 
@@ -274,7 +274,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
     }
 
     if (releaseData.isDraft) {
-      const canSeeDrafts = hasWriteRole(repoAccess.role);
+      const canSeeDrafts = repoAccess.access === "owner";
       if (!canSeeDrafts) {
         throw new NotFoundError("Release");
       }
@@ -330,7 +330,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
 
       const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-      if (!hasWriteRole(repoAccess.role)) {
+      if (repoAccess.access !== "owner") {
         throw new AuthorizationError();
       }
 
@@ -387,7 +387,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
     }
 
     if (releaseData.isDraft) {
-      const canSeeDrafts = hasWriteRole(repoAccess.role);
+      const canSeeDrafts = repoAccess.access === "owner";
       if (!canSeeDrafts) {
         throw new NotFoundError("Release");
       }

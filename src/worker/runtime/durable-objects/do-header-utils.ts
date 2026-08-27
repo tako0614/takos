@@ -134,6 +134,7 @@ const INTERNAL_ONLY_HEADERS = [
   "X-Takos-Internal-Marker",
   "X-WS-Auth-Validated",
   "X-WS-User-Id",
+  "X-WS-Run-Id",
 ] as const;
 
 /**

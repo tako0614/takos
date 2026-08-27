@@ -20,6 +20,7 @@ import type {
 import type { Env } from "../../../shared/types/index.ts";
 import { OPERATOR_CONTROL_MCP_FIXTURE } from "../../../application/tools/__tests__/fixtures/operator-control-mcp.ts";
 import {
+  accountMemberships,
   accounts,
 } from "../../../infra/db/index.ts";
 import {
@@ -123,17 +124,25 @@ function envWithBrokenDb(): Record<string, unknown> {
   };
 }
 
-function rowTable(rows: readonly Record<string, unknown>[]) {
-  return {
-    where: () => ({
-      orderBy: () => ({ all: async () => rows }),
-      all: async () => rows,
-      get: async () => rows[0] ?? null,
-    }),
-    orderBy: () => ({ all: async () => rows }),
+type RowTable = {
+  where(): RowTable;
+  innerJoin(): RowTable;
+  limit(): RowTable;
+  orderBy(): RowTable;
+  all(): Promise<readonly Record<string, unknown>[]>;
+  get(): Promise<Record<string, unknown> | null>;
+};
+
+function rowTable(rows: readonly Record<string, unknown>[]): RowTable {
+  const table: RowTable = {
+    where: () => table,
+    innerJoin: () => table,
+    limit: () => table,
+    orderBy: () => table,
     all: async () => rows,
     get: async () => rows[0] ?? null,
   };
+  return table;
 }
 
 function readOnlyMcpDb() {
@@ -158,13 +167,21 @@ function productionFactoryMcpDb(userId: string) {
   const account = rowTable([
     {
       id: userId,
+      type: "user",
+      status: "active",
+      name: "Production owner",
+      slug: userId,
+      description: null,
       ownerAccountId: userId,
       securityPosture: "standard",
+      createdAt: "2026-08-27T00:00:00.000Z",
+      updatedAt: "2026-08-27T00:00:00.000Z",
     },
   ]);
   return {
     select: () => ({
-      from: (table: unknown) => table === accounts ? account : empty,
+      from: (table: unknown) =>
+        table === accounts || table === accountMemberships ? account : empty,
     }),
     insert: () => {
       throw new Error("production MCP discovery must not insert domain rows");
@@ -411,7 +428,7 @@ test("the same Run refreshes toolbox through a newly resolved MCP Interface", as
         threadId: "thread-1",
         runId: _runId,
         userId: "user-1",
-        role: "owner",
+        toolPolicyTier: "owner",
         capabilities: [],
         env: workerEnv,
         db,

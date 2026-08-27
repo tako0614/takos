@@ -15,7 +15,7 @@ type RunState = {
   id: string;
   threadId: string;
   accountId: string;
-  requesterAccountId: string;
+  requesterAccountId: string | null;
   sessionId: string | null;
   agentType: string;
   status: string;
@@ -92,7 +92,7 @@ type IndexJobState = {
 
 type AgentProofState = {
   run: RunState;
-  requesterHasAccess?: boolean;
+  requesterOwnsWorkspace?: boolean;
   messages: MessageState[];
   runEvents: RunEventState[];
   memoryClaims: MemoryClaimState[];
@@ -376,12 +376,39 @@ test("run queue retains the original delivery when capacity requeue fails", asyn
   assertEquals(state.run.error, null);
 });
 
-test("run queue terminalizes a queued Run after requester membership revocation", async () => {
+test("run queue terminalizes a queued Run after Principal owner proof revocation", async () => {
   const state = createQueuedAgentProofState(
     "run_membership_revoked",
     "must not dispatch",
   );
-  state.requesterHasAccess = false;
+  state.requesterOwnsWorkspace = false;
+  const dispatches: Array<Record<string, unknown>> = [];
+  const env = createAgentProofEnv(state, dispatches);
+  const message = createQueueMessage({
+    version: RUN_QUEUE_MESSAGE_VERSION,
+    runId: state.run.id,
+    timestamp: Date.now(),
+    model: "gpt-5.5",
+  });
+
+  await handleQueue({ queue: "takos-runs", messages: [message] }, env as never);
+
+  assertEquals(message.acks, 1);
+  assertEquals(message.retries, 0);
+  assertEquals(dispatches.length, 0);
+  assertEquals(state.run.status, "failed");
+  assertEquals(
+    state.run.error,
+    "Run requester no longer has access to this Workspace",
+  );
+});
+
+test("run queue terminalizes a legacy Run without an explicit requester before dispatch", async () => {
+  const state = createQueuedAgentProofState(
+    "run_missing_requester",
+    "must fail closed",
+  );
+  state.run.requesterAccountId = null;
   const dispatches: Array<Record<string, unknown>> = [];
   const env = createAgentProofEnv(state, dispatches);
   const message = createQueueMessage({
@@ -559,13 +586,27 @@ function createAgentProofDb(state: AgentProofState) {
       return {
         from(table: unknown) {
           const name = tableName(table);
+          const terminal = {
+            get: async () => selectFirst(state, name, fields),
+            all: async () => selectAll(state, name),
+          };
+          const filtered = {
+            ...terminal,
+            limit() {
+              return terminal;
+            },
+            orderBy() {
+              return terminal;
+            },
+          };
           return {
             where() {
+              return filtered;
+            },
+            innerJoin() {
               return {
-                get: async () => selectFirst(state, name, fields),
-                all: async () => selectAll(state, name),
-                limit() {
-                  return { all: async () => selectAll(state, name) };
+                where() {
+                  return filtered;
                 },
               };
             },
@@ -638,18 +679,38 @@ function selectFirst(
   }
   if (table === "accounts") {
     const idOnly = fields && Object.keys(fields).length === 1 && "id" in fields;
+    if (!state.run.requesterAccountId) return null;
     return {
       id: state.run.requesterAccountId,
       ...(idOnly
         ? {}
         : {
             ownerAccountId:
-              state.requesterHasAccess === false
+              state.requesterOwnsWorkspace === false
                 ? "another-owner"
                 : state.run.requesterAccountId,
           }),
       type: "user",
+      status: "active",
       securityPosture: "standard",
+    };
+  }
+  if (table === "account_memberships") {
+    if (
+      !state.run.requesterAccountId ||
+      state.requesterOwnsWorkspace === false
+    ) {
+      return null;
+    }
+    return {
+      id: state.run.accountId,
+      type: "team",
+      name: "Agent proof Workspace",
+      slug: state.run.accountId,
+      description: null,
+      securityPosture: "standard",
+      createdAt: state.run.createdAt,
+      updatedAt: state.run.createdAt,
     };
   }
   if (table === "threads") {

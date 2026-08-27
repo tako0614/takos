@@ -1,170 +1,31 @@
 import { and, eq } from "drizzle-orm";
+
+import {
+  createWorkerWorkspaceCore,
+  updateSqlWorkspaceModelSettings,
+} from "../../../adapters/workspaces/index.ts";
 import {
   accountMemberships,
   accounts,
   getDb,
+  type SqlDatabaseLike,
 } from "../../../infra/db/index.ts";
-import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import type {
-  Env,
-  SecurityPosture,
-  Space,
-} from "../../../shared/types/index.ts";
-import { generateId, slugifyName } from "../../../shared/utils/index.ts";
-import { ConflictError } from "@takos/worker-platform-utils/errors";
-import {
-  accountToWorkspace,
-  spaceCrudDeps,
-  type SpaceListItem,
-  toPersonalWorkspaceListItem,
-} from "./space-crud-shared.ts";
-import { loadSpaceById } from "./space-crud-read.ts";
+import type { Env, SecurityPosture, Space } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 import {
   enqueueFeaturedAppPreinstallJob,
   processFeaturedAppPreinstallJobs,
 } from "../source/featured-app-catalog.ts";
-import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  coreWorkspaceToSpace,
+  type SpaceListItem,
+} from "./space-crud-shared.ts";
 
 export const spaceCrudWriteDeps = {
   enqueueFeaturedAppPreinstallJob,
   processFeaturedAppPreinstallJobs,
 };
-
-async function generateUniqueSlug(
-  db: SqlDatabaseBinding,
-  baseSlug: string,
-  fallbackSuffix: string,
-): Promise<string> {
-  const drizzle = getDb(db);
-  let slug = baseSlug;
-  let suffix = 1;
-
-  while (true) {
-    const existing = await drizzle
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.slug, slug))
-      .limit(1)
-      .get();
-
-    if (!existing) {
-      return slug;
-    }
-
-    slug = `${baseSlug}-${suffix}`.slice(0, 32);
-    suffix += 1;
-    if (suffix > 100) {
-      return `${baseSlug}-${fallbackSuffix}`.slice(0, 32);
-    }
-  }
-}
-
-async function loadOwnerPrincipalId(
-  db: SqlDatabaseBinding,
-  ownerUserId: string,
-): Promise<string> {
-  const principalId = await spaceCrudDeps.resolveUserPrincipalId(
-    db,
-    ownerUserId,
-  );
-  if (!principalId) {
-    throw new Error(`Owner principal not found for user ${ownerUserId}`);
-  }
-  return principalId;
-}
-
-async function createSpaceBundle(
-  env: Env,
-  params: {
-    spaceId: string;
-    kind: "user" | "team";
-    name: string;
-    slug: string;
-    ownerUserId: string;
-    ownerPrincipalId: string;
-    description?: string | null;
-    timestamp: string;
-  },
-): Promise<void> {
-  const {
-    spaceId,
-    kind,
-    name,
-    slug,
-    ownerUserId,
-    ownerPrincipalId,
-    description,
-    timestamp,
-  } = params;
-
-  const drizzle = getDb(env.DB);
-
-  // The two workspace rows (account + owner membership) are
-  // a static write group with no intra-group reads, so we persist them with a
-  // single drizzle `batch([...])`. On real Cloudflare D1 this maps to the
-  // platform `batch()` API, which executes the statements atomically on the
-  // leader — unlike sequential `BEGIN/COMMIT` prepared statements, which do NOT
-  // compose against D1 (each is a stateless round-trip). On the local stateful
-  // SQLite adapter the batch shim runs them sequentially within one client.
-  await drizzle.batch([
-    drizzle.insert(accounts).values({
-      id: spaceId,
-      type: kind,
-      status: "active",
-      name,
-      slug,
-      description: description || null,
-      ownerAccountId: ownerUserId,
-      aiModel: "gpt-5.5",
-      modelBackend: "openai",
-      securityPosture: "standard",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }),
-    drizzle.insert(accountMemberships).values({
-      id: generateId(),
-      accountId: spaceId,
-      memberId: ownerPrincipalId,
-      role: "owner",
-      status: "active",
-      updatedAt: timestamp,
-      createdAt: timestamp,
-    }),
-  ]);
-}
-
-async function ensureSelfMembership(
-  db: SqlDatabaseBinding,
-  userId: string,
-): Promise<void> {
-  const principalId = await spaceCrudDeps.resolveUserPrincipalId(db, userId);
-  if (!principalId) return;
-
-  const drizzle = getDb(db);
-  const existing = await drizzle
-    .select({ id: accountMemberships.id })
-    .from(accountMemberships)
-    .where(
-      and(
-        eq(accountMemberships.accountId, userId),
-        eq(accountMemberships.memberId, principalId),
-      ),
-    )
-    .limit(1)
-    .get();
-  if (!existing) {
-    const timestamp = new Date().toISOString();
-    await drizzle.insert(accountMemberships).values({
-      id: generateId(),
-      accountId: userId,
-      memberId: principalId,
-      role: "owner",
-      status: "active",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-  }
-}
 
 async function processFeaturedAppsAfterCommit(
   env: Env,
@@ -177,7 +38,7 @@ async function processFeaturedAppsAfterCommit(
     });
   } catch (error) {
     logWarn("Featured app preinstall immediate processing failed", {
-      module: "spaces",
+      module: "workspaces",
       spaceId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -186,183 +47,163 @@ async function processFeaturedAppsAfterCommit(
 
 export async function createWorkspace(
   env: Env,
-  userId: string,
+  principalId: string,
   name: string,
   options?: {
     id?: string;
-    skipIdCheck?: boolean;
-    kind?: "team";
     description?: string;
     installFeaturedApps?: boolean;
   },
 ): Promise<Space> {
-  const spaceId = options?.id || generateId();
-  const timestamp = new Date().toISOString();
-  const kind = options?.kind || "team";
-  const trimmedName = name.trim();
-  const slug = await generateUniqueSlug(
-    env.DB,
-    slugifyName(trimmedName),
-    spaceId.slice(0, 6),
+  const workspace = await createWorkerWorkspaceCore(env.DB).create(
+    principalId,
+    {
+      id: options?.id,
+      name,
+      description: options?.description,
+    },
   );
-  const ownerPrincipalId = await loadOwnerPrincipalId(env.DB, userId);
-
-  if (!options?.skipIdCheck) {
-    const drizzle = getDb(env.DB);
-    const existing = await drizzle
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.id, spaceId))
-      .limit(1)
-      .get();
-    if (existing) {
-      throw new ConflictError("Space ID already exists");
-    }
-  }
 
   let preinstallJobId: string | null = null;
-  const shouldInstallFeaturedApps = options?.installFeaturedApps ?? false;
-
-  // Persist the workspace atomically (single D1 batch; see createSpaceBundle).
-  // The featured-app preinstall job is intentionally a SEPARATE step rather than
-  // part of the bundle write: it is enqueued with a deterministic id +
-  // onConflictDoNothing, so it acts as idempotent service-layer compensation —
-  // a failure here cannot corrupt the already-committed space, and a retry of
-  // the whole call will not double-enqueue. This is the honest mitigation for
-  // D1 (atomic batch for the static group, compensation for the follow-on job)
-  // instead of a non-composing BEGIN/COMMIT that fakes atomicity.
-  await createSpaceBundle(env, {
-    spaceId,
-    kind,
-    name: trimmedName,
-    slug,
-    ownerUserId: userId,
-    ownerPrincipalId,
-    description: options?.description ?? null,
-    timestamp,
-  });
-
-  if (shouldInstallFeaturedApps) {
+  if (options?.installFeaturedApps ?? false) {
     try {
       preinstallJobId = await spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob(
         env,
         {
-          spaceId,
-          createdByAccountId: userId,
-          timestamp,
+          spaceId: workspace.id,
+          createdByAccountId: principalId,
+          timestamp: workspace.createdAt,
         },
       );
     } catch (error) {
-      // The space bundle is already durably committed; a failed preinstall
-      // enqueue is recoverable (idempotent re-enqueue on next access), so log
-      // and continue rather than tearing down a valid space.
       logWarn("Failed to enqueue featured app preinstall job", {
-        module: "spaces",
-        spaceId,
+        module: "workspaces",
+        spaceId: workspace.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
   if (preinstallJobId) {
-    await processFeaturedAppsAfterCommit(env, spaceId);
+    await processFeaturedAppsAfterCommit(env, workspace.id);
   }
-
-  const space = await loadSpaceById(env.DB, spaceId);
-  if (!space) {
-    throw new Error(
-      `Failed to load created space ${spaceId} (preinstallJobId=${
-        preinstallJobId ?? "none"
-      }): row not visible after commit; likely read-after-write replication delay`,
-    );
-  }
-
-  return accountToWorkspace(space);
+  return coreWorkspaceToSpace(workspace);
 }
 
 export async function updateWorkspace(
-  db: SqlDatabaseBinding,
-  spaceId: string,
+  db: SqlDatabaseLike,
+  principalId: string,
+  spaceIdOrSlug: string,
   updates: {
     name?: string;
+    description?: string | null;
     ai_model?: string;
     model_backend?: string;
     security_posture?: SecurityPosture;
   },
 ): Promise<Space | null> {
-  const current = await loadSpaceById(db, spaceId);
-  if (!current) return null;
+  const workspaces = createWorkerWorkspaceCore(db);
+  let workspace = await workspaces.update(principalId, spaceIdOrSlug, {
+    name: updates.name,
+    description: updates.description,
+    securityPosture: updates.security_posture,
+  });
+  if (!workspace) return null;
 
-  const nextName = updates.name ?? current.name;
-  const nextModel = updates.ai_model ?? current.aiModel;
-  const nextModelBackend = updates.model_backend ?? current.modelBackend;
-  const nextSecurityPosture =
-    updates.security_posture ??
-    (current.securityPosture === "restricted_egress"
-      ? "restricted_egress"
-      : "standard");
-  const timestamp = new Date().toISOString();
+  if (updates.ai_model !== undefined || updates.model_backend !== undefined) {
+    const updated = await updateSqlWorkspaceModelSettings(
+      db,
+      principalId,
+      workspace.id,
+      {
+        model: updates.ai_model,
+        backend: updates.model_backend,
+        updatedAt: workspace.updatedAt,
+      },
+    );
+    if (!updated) return null;
+    workspace = await workspaces.resolve(principalId, workspace.id);
+    if (!workspace) return null;
+  }
 
-  const drizzle = getDb(db);
-  await drizzle
-    .update(accounts)
-    .set({
-      name: nextName,
-      aiModel: nextModel,
-      modelBackend: nextModelBackend,
-      securityPosture: nextSecurityPosture,
-      updatedAt: timestamp,
-    })
-    .where(eq(accounts.id, spaceId));
-
-  const updated = await loadSpaceById(db, spaceId);
-  return updated ? accountToWorkspace(updated) : null;
+  return coreWorkspaceToSpace(workspace);
 }
 
 export async function deleteWorkspace(
   env: Env,
-  spaceId: string,
+  principalId: string,
+  spaceIdOrSlug: string,
+): Promise<boolean> {
+  return await createWorkerWorkspaceCore(env.DB).delete(
+    principalId,
+    spaceIdOrSlug,
+  );
+}
+
+async function ensureDefaultOwnershipWitness(
+  db: SqlDatabaseLike,
+  principalId: string,
 ): Promise<void> {
-  const drizzle = getDb(env.DB);
-  await drizzle.delete(accounts).where(eq(accounts.id, spaceId));
+  const drizzle = getDb(db);
+  const principal = await drizzle.select({ id: accounts.id }).from(accounts)
+    .where(and(
+      eq(accounts.id, principalId),
+      eq(accounts.type, "user"),
+      eq(accounts.status, "active"),
+    )).limit(1).get();
+  if (!principal) return;
+
+  const existing = await drizzle.select({ id: accountMemberships.id })
+    .from(accountMemberships).where(and(
+      eq(accountMemberships.accountId, principalId),
+      eq(accountMemberships.memberId, principalId),
+      eq(accountMemberships.role, "owner"),
+      eq(accountMemberships.status, "active"),
+    )).limit(1).get();
+  if (existing) return;
+
+  const timestamp = new Date().toISOString();
+  await drizzle.insert(accountMemberships).values({
+    id: generateId(),
+    accountId: principalId,
+    memberId: principalId,
+    role: "owner",
+    status: "active",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).onConflictDoNothing();
 }
 
 export async function getPersonalWorkspace(
   env: Env,
-  userId: string,
+  principalId: string,
 ): Promise<SpaceListItem | null> {
-  const drizzle = getDb(env.DB);
-  const userAccount = await drizzle
-    .select()
-    .from(accounts)
-    .where(and(eq(accounts.id, userId), eq(accounts.type, "user")))
-    .limit(1)
-    .get();
-  if (!userAccount) return null;
-
-  await ensureSelfMembership(env.DB, userId);
-
-  return toPersonalWorkspaceListItem(userAccount);
+  await ensureDefaultOwnershipWitness(env.DB, principalId);
+  const workspace = await createWorkerWorkspaceCore(env.DB).resolve(
+    principalId,
+    "me",
+  );
+  return workspace ? coreWorkspaceToSpace(workspace) : null;
 }
 
 async function enqueuePersonalWorkspaceFeaturedApps(
   env: Env,
-  userId: string,
+  principalId: string,
 ): Promise<void> {
   try {
     const preinstallJobId =
       await spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob(env, {
-        spaceId: userId,
-        createdByAccountId: userId,
+        spaceId: principalId,
+        createdByAccountId: principalId,
         timestamp: new Date().toISOString(),
       });
     if (preinstallJobId) {
-      await processFeaturedAppsAfterCommit(env, userId);
+      await processFeaturedAppsAfterCommit(env, principalId);
     }
   } catch (error) {
     logWarn("Failed to enqueue personal featured app preinstall job", {
-      module: "spaces",
-      spaceId: userId,
+      module: "workspaces",
+      spaceId: principalId,
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -370,19 +211,19 @@ async function enqueuePersonalWorkspaceFeaturedApps(
 
 export async function getOrCreatePersonalWorkspace(
   env: Env,
-  userId: string,
+  principalId: string,
 ): Promise<SpaceListItem | null> {
-  const workspace = await getPersonalWorkspace(env, userId);
-  if (workspace) {
-    await enqueuePersonalWorkspaceFeaturedApps(env, userId);
-  }
+  const workspace = await getPersonalWorkspace(env, principalId);
+  if (workspace) await enqueuePersonalWorkspaceFeaturedApps(env, principalId);
   return workspace;
 }
 
 export async function ensurePersonalWorkspace(
   env: Env,
-  userId: string,
+  principalId: string,
 ): Promise<boolean> {
-  await ensureSelfMembership(env.DB, userId);
-  return true;
+  await ensureDefaultOwnershipWitness(env.DB, principalId);
+  return Boolean(
+    await createWorkerWorkspaceCore(env.DB).resolve(principalId, "me"),
+  );
 }

@@ -1,85 +1,38 @@
-import { desc, eq, or } from "drizzle-orm";
-import { accountMemberships, accounts } from "../../../infra/db/index.ts";
-import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { createWorkerWorkspaceCore } from "../../../adapters/workspaces/index.ts";
+import type { SqlDatabaseLike } from "../../../infra/db/index.ts";
 import type { Env, Space } from "../../../shared/types/index.ts";
+import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import {
-  accountToWorkspace,
-  spaceCrudDeps,
+  coreWorkspaceToSpace,
   type SpaceListItem,
-  toSpaceListItem,
 } from "./space-crud-shared.ts";
-
-export async function loadSpaceById(db: SqlDatabaseBinding, spaceId: string) {
-  const drizzle = spaceCrudDeps.getDb(db);
-  return drizzle
-    .select()
-    .from(accounts)
-    .where(eq(accounts.id, spaceId))
-    .limit(1)
-    .get();
-}
-
-async function loadCanonicalSpaceByIdOrSlug(
-  db: SqlDatabaseBinding,
-  idOrSlug: string,
-) {
-  const drizzle = spaceCrudDeps.getDb(db);
-  return drizzle
-    .select()
-    .from(accounts)
-    .where(or(eq(accounts.id, idOrSlug), eq(accounts.slug, idOrSlug)))
-    .limit(1)
-    .get();
-}
 
 export async function listWorkspacesForUser(
   env: Env,
-  userId: string,
+  principalId: string,
 ): Promise<SpaceListItem[]> {
-  if (!spaceCrudDeps.isValidOpaqueId(userId)) {
-    return [];
-  }
-
-  const principalId = await spaceCrudDeps.resolveUserPrincipalId(
-    env.DB,
-    userId,
-  );
-  if (!principalId) {
-    return [];
-  }
-
-  const drizzle = spaceCrudDeps.getDb(env.DB);
-
-  const memberships = await drizzle
-    .select({
-      memberRole: accountMemberships.role,
-      spaceId: accounts.id,
-      spaceType: accounts.type,
-      spaceName: accounts.name,
-      spaceSlug: accounts.slug,
-      spaceOwnerAccountId: accounts.ownerAccountId,
-      spaceHeadSnapshotId: accounts.headSnapshotId,
-      spaceSecurityPosture: accounts.securityPosture,
-      spaceCreatedAt: accounts.createdAt,
-      spaceUpdatedAt: accounts.updatedAt,
-    })
-    .from(accountMemberships)
-    .innerJoin(accounts, eq(accounts.id, accountMemberships.accountId))
-    .where(eq(accountMemberships.memberId, principalId))
-    .orderBy(desc(accounts.updatedAt))
-    .all();
-
-  if (memberships.length === 0) {
-    return [];
-  }
-
-  return memberships.map((membership) => toSpaceListItem(membership));
+  if (!isValidOpaqueId(principalId)) return [];
+  const rows = await createWorkerWorkspaceCore(env.DB).list(principalId);
+  return rows.map(coreWorkspaceToSpace);
 }
 
 export async function getWorkspaceByIdOrSlug(
-  db: SqlDatabaseBinding,
+  db: SqlDatabaseLike,
+  principalId: string,
   idOrSlug: string,
 ): Promise<Space | null> {
-  const row = await loadCanonicalSpaceByIdOrSlug(db, idOrSlug);
-  return row ? accountToWorkspace(row) : null;
+  if (!isValidOpaqueId(principalId) || !isValidOpaqueId(idOrSlug)) return null;
+  const row = await createWorkerWorkspaceCore(db).resolve(
+    principalId,
+    idOrSlug,
+  );
+  return row ? coreWorkspaceToSpace(row) : null;
+}
+
+export async function loadSpaceById(
+  db: SqlDatabaseLike,
+  principalId: string,
+  spaceId: string,
+): Promise<Space | null> {
+  return await getWorkspaceByIdOrSlug(db, principalId, spaceId);
 }

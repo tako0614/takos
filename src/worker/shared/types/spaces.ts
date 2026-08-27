@@ -1,29 +1,20 @@
-export type SpaceRole = "owner" | "admin" | "editor" | "viewer";
-export type SpaceKind = "user" | "team" | "system";
 export type SecurityPosture = "standard" | "restricted_egress";
 
+export {
+  MAX_WORKSPACE_DESCRIPTION_CHARACTERS,
+  MAX_WORKSPACE_ID_CHARACTERS,
+  MAX_WORKSPACE_NAME_CHARACTERS,
+  MAX_WORKSPACE_SLUG_CHARACTERS,
+} from "../../../core/workspaces/index.ts";
+
+/** Public Takos Workspace record. */
 export interface Space {
   id: string;
-  kind: SpaceKind;
   name: string;
-  slug: string | null;
-  description?: string | null;
-  principal_id?: string;
-  owner_user_id?: string;
-  owner_principal_id: string;
-  automation_principal_id?: string | null;
-  head_snapshot_id?: string | null;
-  ai_model?: string | null;
-  model_backend?: string | null;
-  security_posture?: SecurityPosture;
+  slug: string;
+  description: string | null;
+  is_default: boolean;
+  security_posture: SecurityPosture;
   created_at: string;
   updated_at: string;
-}
-
-export interface SpaceMembership {
-  id: string;
-  space_id: string;
-  principal_id: string;
-  role: SpaceRole;
-  created_at: string;
 }

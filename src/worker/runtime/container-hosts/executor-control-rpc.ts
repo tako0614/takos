@@ -252,13 +252,10 @@ async function createRemoteToolExecutor(
     dependencies,
   );
 
-  // The agent acts on behalf of the run's triggering user and must never hold
-  // MORE authority than that user. Resolving capabilities with NO role floor
-  // makes `assertToolPermission` evaluate the user's REAL space role, so an
-  // editor-initiated run cannot invoke owner/admin-only operations (service /
-  // skill delete, frontend deploy) that the user could not perform directly.
-  // (A previous `minimumRole: "admin"` floor raised every agent run to admin,
-  // erasing that boundary.)
+  // The agent acts only for the Workspace Principal. Tool setup revalidates
+  // the active Principal, matching owner row, and active legacy owner witness;
+  // queued Runs created under stale or forged memberships therefore fail
+  // closed before any capability reaches the executor.
   return createToolExecutor(
     env,
     env.DB,
@@ -365,7 +362,7 @@ function waitForLeasePoll(
 
 /**
  * Cross-isolate cancellation fence for long-running MCP/web tools. Poll the
- * authoritative DB lease and requester membership at a bounded <=5s cadence
+ * authoritative DB lease and requester Principal owner proof at a bounded <=5s cadence
  * for the lifetime of one execute request, then abort that request's local
  * executor when its authority changes.
  */

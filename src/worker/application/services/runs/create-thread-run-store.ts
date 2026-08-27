@@ -7,7 +7,17 @@ import {
   getDb,
   runs,
 } from "../../../infra/db/index.ts";
-import { and, count, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { resolveActorPrincipalId } from "../identity/principals.ts";
 import { isInvalidArrayBufferError } from "../../../shared/utils/db-guards.ts";
 import {
@@ -59,6 +69,69 @@ export type RunRateLimitResult = {
 
 type RunRateLimitKind = "top_level" | "child";
 
+// `account_memberships` remains a legacy integrity witness only. Every
+// condition below is required together; no witness role or status can grant
+// quota scope without an active Principal and matching Workspace owner row.
+const CANONICAL_OWNED_WORKSPACE_SUBQUERY = `
+  SELECT workspace.id
+  FROM accounts AS principal
+  INNER JOIN account_memberships AS owner_witness
+    ON owner_witness.member_id = principal.id
+  INNER JOIN accounts AS workspace
+    ON workspace.id = owner_witness.account_id
+  WHERE principal.id = ?
+    AND principal.type = 'user'
+    AND principal.status = 'active'
+    AND owner_witness.role = 'owner'
+    AND owner_witness.status = 'active'
+    AND workspace.status = 'active'
+    AND (
+      (workspace.type = 'team' AND workspace.owner_account_id = principal.id)
+      OR (workspace.type = 'user' AND workspace.id = principal.id)
+    )
+`;
+
+const quotaPrincipal = alias(accounts, "quota_principal");
+const quotaWorkspace = alias(accounts, "quota_workspace");
+const quotaOwnerWitness = alias(
+  accountMemberships,
+  "quota_owner_witness",
+);
+
+function canonicalOwnedWorkspaceIds(
+  db: ReturnType<typeof getDb>,
+  principalId: string,
+) {
+  return db.select({ id: quotaWorkspace.id })
+    .from(quotaPrincipal)
+    .innerJoin(
+      quotaOwnerWitness,
+      eq(quotaOwnerWitness.memberId, quotaPrincipal.id),
+    )
+    .innerJoin(
+      quotaWorkspace,
+      eq(quotaWorkspace.id, quotaOwnerWitness.accountId),
+    )
+    .where(and(
+      eq(quotaPrincipal.id, principalId),
+      eq(quotaPrincipal.type, "user"),
+      eq(quotaPrincipal.status, "active"),
+      eq(quotaOwnerWitness.role, "owner"),
+      eq(quotaOwnerWitness.status, "active"),
+      eq(quotaWorkspace.status, "active"),
+      or(
+        and(
+          eq(quotaWorkspace.type, "team"),
+          eq(quotaWorkspace.ownerAccountId, quotaPrincipal.id),
+        ),
+        and(
+          eq(quotaWorkspace.type, "user"),
+          eq(quotaWorkspace.id, quotaPrincipal.id),
+        ),
+      ),
+    ));
+}
+
 async function withDrizzleInvalidArrayBufferFallback<T>(
   description: string,
   drizzleOp: () => Promise<T>,
@@ -105,9 +178,7 @@ async function checkRunRateLimitsFallback(
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
-        SELECT account_id
-        FROM account_memberships
-        WHERE member_id = ?
+        ${CANONICAL_OWNED_WORKSPACE_SUBQUERY}
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
@@ -128,9 +199,7 @@ async function checkRunRateLimitsFallback(
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
-        SELECT account_id
-        FROM account_memberships
-        WHERE member_id = ?
+        ${CANONICAL_OWNED_WORKSPACE_SUBQUERY}
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
@@ -484,34 +553,15 @@ export async function checkRunRateLimits(
   const oneMinuteAgo = new Date(nowMs - 60 * 1000).toISOString();
   const oneHourAgo = new Date(nowMs - 60 * 60 * 1000).toISOString();
   try {
-    let userSpaces = await db.select({
-      accountId: accountMemberships.accountId,
-    })
-      .from(accountMemberships)
-      .where(eq(accountMemberships.memberId, actorId))
-      .all();
-
-    if (userSpaces.length === 0) {
-      const principalId = await resolveActorPrincipalId(dbBinding, actorId);
-      if (principalId && principalId !== actorId) {
-        userSpaces = await db.select({
-          accountId: accountMemberships.accountId,
-        })
-          .from(accountMemberships)
-          .where(eq(accountMemberships.memberId, principalId))
-          .all();
-      }
-    }
-
-    const userSpaceIds = userSpaces.map((workspace) => workspace.accountId);
-
-    if (userSpaceIds.length === 0) {
+    const principalId = await resolveActorPrincipalId(dbBinding, actorId);
+    if (!principalId) {
       return { allowed: true };
     }
+    const ownedWorkspaceIds = canonicalOwnedWorkspaceIds(db, principalId);
 
     const minuteResult = await db.select({ count: count() }).from(runs)
       .where(and(
-        inArray(runs.accountId, userSpaceIds),
+        inArray(runs.accountId, ownedWorkspaceIds),
         parentCondition,
         gt(runs.createdAt, oneMinuteAgo),
       ))
@@ -529,7 +579,7 @@ export async function checkRunRateLimits(
 
     const hourResult = await db.select({ count: count() }).from(runs)
       .where(and(
-        inArray(runs.accountId, userSpaceIds),
+        inArray(runs.accountId, ownedWorkspaceIds),
         parentCondition,
         gt(runs.createdAt, oneHourAgo),
       ))

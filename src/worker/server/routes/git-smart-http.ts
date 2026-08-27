@@ -146,7 +146,7 @@ async function authenticateRead(
     }
   }
 
-  const access = await checkRepoAccess(c.env, repo.id, userId, undefined, {
+  const access = await checkRepoAccess(c.env, repo.id, userId, {
     allowPublicRead: true,
   });
   if (access) return { ok: true, userId };

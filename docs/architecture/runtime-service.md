@@ -118,7 +118,7 @@ container側へ移さず、同じstructured transcriptとatomic completion contr
 - model network adapterはOpenAI-compatible Chat Completionsのみです。provider-neutralなのはdurable transcriptとengine interfaceで、
   Anthropic等のnative wire adapterを実装済みという意味ではありません。
 - Worker isolate内のMCP/tool resolver cacheはlatency optimizationです。isolateを跨ぐcatalog/executeは再構築され、実行直前の
-  DB policy・schema fingerprint・lease・membership revalidationがauthorityです。
+  DB policy・schema fingerprint・lease・Takos Principal owner proofの再検証がauthorityです。
 - `wait_agent`はchild Run ledgerをbounded pollingします。Run Notifierを使うdurable wake-up protocolではありません。
 - productionでは短命なAI Gateway credentialがdefaultです。deployment-global `OPENAI_API_KEY`をagent containerへ渡す経路は
   defaultで拒否され、self-host operatorが`TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY=true`を明示した場合だけsecurity downgrade

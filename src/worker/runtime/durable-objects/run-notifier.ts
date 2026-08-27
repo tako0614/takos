@@ -4,8 +4,9 @@ import type {
   SqlDatabaseBinding,
 } from "../../shared/types/bindings.ts";
 import type { Env } from "../../shared/types/index.ts";
-import { accountMemberships, getDb, runs } from "../../infra/db/index.ts";
-import { and, eq } from "drizzle-orm";
+import { getDb, runs } from "../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { resolveWorkspaceAuthority } from "../../application/services/platform/capabilities.ts";
 import type { PersistedRunEvent } from "../../application/services/offload/run-events.ts";
 import { RUN_TERMINAL_EVENT_TYPES } from "../../application/services/run-notifier/index.ts";
 import type { RunTerminalEventType } from "../../application/services/run-notifier/run-events-contract.ts";
@@ -29,6 +30,14 @@ import {
   type WebSocketLike,
 } from "./notifier-base.ts";
 import { MAX_CONNECTIONS } from "./do-header-utils.ts";
+
+const MAX_RUN_ID_LENGTH = 64;
+const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function isValidRunId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 &&
+    value.length <= MAX_RUN_ID_LENGTH && RUN_ID_PATTERN.test(value);
+}
 
 export class RunNotifierDO extends NotifierBase {
   protected readonly moduleName = "runnotifierdo";
@@ -120,7 +129,9 @@ export class RunNotifierDO extends NotifierBase {
     request: Request,
     _url: URL,
   ): Promise<{ reject?: Response; tags?: string[] }> {
-    // Defense-in-depth: verify the connecting user owns the run's space.
+    // Defense-in-depth: verify the connecting Principal owns the run's
+    // Workspace. Legacy membership rows are integrity witnesses only and must
+    // never independently authorize this connection.
     // The route layer already checks access before forwarding, but we verify
     // here in case the DO is somehow reached without the route gatekeeper.
     const userId = request.headers.get("X-WS-User-Id");
@@ -128,27 +139,42 @@ export class RunNotifierDO extends NotifierBase {
       return { reject: new Response("Unauthorized", { status: 401 }) };
     }
 
-    if (this.runId) {
-      const db = getDb(this.db);
-      const run = await db.select({ accountId: runs.accountId })
-        .from(runs)
-        .where(eq(runs.id, this.runId))
-        .get();
-      if (!run) {
-        return { reject: new Response("Not Found", { status: 404 }) };
-      }
-      const membership = await db.select({ id: accountMemberships.id })
-        .from(accountMemberships)
-        .where(
-          and(
-            eq(accountMemberships.accountId, run.accountId),
-            eq(accountMemberships.memberId, userId),
-          ),
-        )
-        .get();
-      if (!membership) {
-        return { reject: new Response("Forbidden", { status: 403 }) };
-      }
+    const requestedRunId = request.headers.get("X-WS-Run-Id");
+    if (!isValidRunId(requestedRunId)) {
+      return { reject: new Response("Invalid run identity", { status: 400 }) };
+    }
+
+    if (this.runId && requestedRunId !== this.runId) {
+      return { reject: new Response("Forbidden", { status: 403 }) };
+    }
+
+    const db = getDb(this.db);
+    const run = await db.select({ accountId: runs.accountId })
+      .from(runs)
+      .where(eq(runs.id, requestedRunId))
+      .get();
+    if (!run) {
+      return { reject: new Response("Not Found", { status: 404 }) };
+    }
+    const authority = await resolveWorkspaceAuthority(
+      this.db,
+      run.accountId,
+      userId,
+    );
+    if (!authority) {
+      return { reject: new Response("Forbidden", { status: 403 }) };
+    }
+
+    // A cold object has no persisted run identity yet. Bind it only after the
+    // exact run and canonical Workspace owner have both been proven. Recheck
+    // after the awaited SQL proof so concurrent cold handshakes cannot bind
+    // the same object to two different runs.
+    if (this.runId && requestedRunId !== this.runId) {
+      return { reject: new Response("Forbidden", { status: 403 }) };
+    }
+    if (!this.runId) {
+      this.runId = requestedRunId;
+      await this.persistState();
     }
 
     return {};
@@ -220,11 +246,11 @@ export class RunNotifierDO extends NotifierBase {
     },
   ): Promise<Response | null> {
     if (input.runId !== undefined) {
-      if (
-        typeof input.runId !== "string" || input.runId.length > 64 ||
-        !/^[a-zA-Z0-9_-]+$/.test(input.runId)
-      ) {
+      if (!isValidRunId(input.runId)) {
         return jsonResponse({ success: false, error: "Invalid runId" }, 400);
+      }
+      if (this.runId && input.runId !== this.runId) {
+        return jsonResponse({ success: false, error: "runId mismatch" }, 409);
       }
     }
     this.cleanupEmitDedupKeys(Date.now());

@@ -5,29 +5,22 @@ import type { User } from "../../../shared/types/index.ts";
 // ---------------------------------------------------------------------------
 
 export function toWorkspaceResponse(ws: {
-  id?: string;
-  kind?: string;
+  id: string;
   name: string;
-  slug: string | null;
-  description?: string | null;
-  owner_principal_id?: string;
-  automation_principal_id?: string | null;
-  head_snapshot_id?: string | null;
-  security_posture?: "standard" | "restricted_egress";
+  slug: string;
+  description: string | null;
+  is_default: boolean;
+  security_posture: "standard" | "restricted_egress";
   created_at: string;
   updated_at: string;
-  member_role?: string;
 }) {
-  const slug = ws.slug || ws.id || "unknown";
   return {
     id: ws.id,
-    slug,
+    slug: ws.slug,
     name: ws.name,
-    description: ws.description ?? null,
-    kind: ws.kind || "team",
-    owner_principal_id: ws.owner_principal_id || null,
-    automation_principal_id: ws.automation_principal_id ?? null,
-    security_posture: ws.security_posture ?? "standard",
+    description: ws.description,
+    is_default: ws.is_default,
+    security_posture: ws.security_posture,
     created_at: ws.created_at,
     updated_at: ws.updated_at,
   };

@@ -31,7 +31,6 @@ import {
   BadRequestError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { ok } from "../response-utils.ts";
 import registrySourceRoutes from "./registry-sources.ts";
 import mcpToolPolicyRoutes from "./tool-policies.ts";
@@ -54,14 +53,6 @@ const MCP_OAUTH_STATE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 const MCP_OAUTH_BROWSER_NONCE_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 const MCP_OAUTH_COOKIE_PATH = "/api/mcp/oauth";
 const MCP_OAUTH_PENDING_TTL_SECONDS = 10 * 60;
-
-const MCP_LIST_ROLES = getSpaceOperationPolicy("mcp_server.list").allowed_roles;
-const MCP_CREATE_ROLES =
-  getSpaceOperationPolicy("mcp_server.create").allowed_roles;
-const MCP_UPDATE_ROLES =
-  getSpaceOperationPolicy("mcp_server.update").allowed_roles;
-const MCP_DELETE_ROLES =
-  getSpaceOperationPolicy("mcp_server.delete").allowed_roles;
 
 mcpRoutes.route("/", registrySourceRoutes);
 mcpRoutes.route("/", mcpToolPolicyRoutes);
@@ -253,7 +244,7 @@ mcpRoutes.get("/oauth/callback", async (c) => {
 
 mcpRoutes.post(
   "/servers",
-  spaceAccess({ roles: MCP_CREATE_ROLES }),
+  spaceAccess(),
   zValidator("json", createServerSchema),
   async (c) => {
     const spaceId = c.get("spaceId");
@@ -282,7 +273,7 @@ mcpRoutes.post(
 
 mcpRoutes.post(
   "/servers/:id/reauthorize",
-  spaceAccess({ roles: MCP_CREATE_ROLES }),
+  spaceAccess(),
   async (c) => {
     const result = await reauthorizeExternalMcpServer(c.env.DB, c.env, {
       spaceId: c.get("spaceId"),
@@ -301,14 +292,14 @@ mcpRoutes.post(
   },
 );
 
-mcpRoutes.get("/servers", spaceAccess({ roles: MCP_LIST_ROLES }), async (c) => {
+mcpRoutes.get("/servers", spaceAccess(), async (c) => {
   const servers = await listMcpServers(c.env.DB, c.get("spaceId"));
   return c.json({ data: servers.map(serializeMcpServer) });
 });
 
 mcpRoutes.delete(
   "/servers/:id",
-  spaceAccess({ roles: MCP_DELETE_ROLES }),
+  spaceAccess(),
   async (c) => {
     const deleted = await deleteMcpServer(
       c.env.DB,
@@ -322,7 +313,7 @@ mcpRoutes.delete(
 
 mcpRoutes.patch(
   "/servers/:id",
-  spaceAccess({ roles: MCP_UPDATE_ROLES }),
+  spaceAccess(),
   zValidator("json", updateServerSchema),
   async (c) => {
     const body = c.req.valid("json");

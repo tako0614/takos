@@ -62,11 +62,9 @@ export function ForkModal(props: ForkModalProps) {
       if (!auth.spacesLoaded || auth.spaces.length === 0 || targetSpaceId()) {
         return;
       }
-      const personal = auth.spaces.find((w) => w.kind === "user");
+      const personal = auth.spaces.find((w) => w.is_default);
       if (personal) {
-        setTargetSpaceId(
-          personal.kind === "user" ? "me" : (personal.slug ?? ""),
-        );
+        setTargetSpaceId("me");
       } else {
         setTargetSpaceId(auth.spaces[0].slug ?? "");
       }
@@ -75,7 +73,7 @@ export function ForkModal(props: ForkModalProps) {
 
   const selectedSpace = () =>
     auth.spaces.find((w) =>
-      targetSpaceId() === "me" ? w.kind === "user" : w.slug === targetSpaceId()
+      targetSpaceId() === "me" ? w.is_default : w.slug === targetSpaceId()
     );
 
   const effectiveName = () => customName().trim() || props.repo.name;
@@ -189,11 +187,11 @@ export function ForkModal(props: ForkModalProps) {
                   >
                     {(space) => (
                       <>
-                        {space().is_personal
+                        {space().is_default
                           ? <Icons.User class="w-4 h-4" />
                           : <Icons.Users class="w-4 h-4" />}
                         <span>{space().name}</span>
-                        <Show when={space().is_personal}>
+                        <Show when={space().is_default}>
                           <span class="text-xs text-[var(--color-text-tertiary)]">
                             ({t("personal")})
                           </span>
@@ -209,7 +207,7 @@ export function ForkModal(props: ForkModalProps) {
                 <div class="absolute left-0 right-0 top-full mt-1 bg-[var(--color-surface-primary)] border border-[var(--color-border-primary)] rounded-[var(--radius-md)] shadow-lg z-20 max-h-60 overflow-y-auto">
                   <For each={auth.spaces}>
                     {(space) => {
-                      const wsIdentifier = space.is_personal
+                      const wsIdentifier = space.is_default
                         ? "me"
                         : (space.slug ?? "");
                       const isSelected = () => targetSpaceId() === wsIdentifier;
@@ -227,11 +225,11 @@ export function ForkModal(props: ForkModalProps) {
                             setError(null);
                           }}
                         >
-                          {space.is_personal
+                          {space.is_default
                             ? <Icons.User class="w-4 h-4" />
                             : <Icons.Users class="w-4 h-4" />}
                           <span>{space.name}</span>
-                          <Show when={space.is_personal}>
+                          <Show when={space.is_default}>
                             <span class="text-xs text-[var(--color-text-tertiary)]">
                               ({t("personal")})
                             </span>

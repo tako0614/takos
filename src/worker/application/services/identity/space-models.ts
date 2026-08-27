@@ -1,6 +1,7 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { SecurityPosture } from "../../../shared/types/index.ts";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
+import { updateSqlWorkspaceModelSettings } from "../../../adapters/workspaces/index.ts";
 
 import { accounts, getDb } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
@@ -49,17 +50,14 @@ export async function getWorkspaceModelSettings(
 
 export async function updateWorkspaceModel(
   db: SqlDatabaseBinding,
+  principalId: string,
   spaceId: string,
   model: string,
   modelBackend: string,
-): Promise<void> {
-  const drizzle = getDb(db);
-  await drizzle
-    .update(accounts)
-    .set({
-      aiModel: model,
-      modelBackend: modelBackend,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(accounts.id, spaceId));
+): Promise<boolean> {
+  return await updateSqlWorkspaceModelSettings(db, principalId, spaceId, {
+    model,
+    backend: modelBackend,
+    updatedAt: new Date().toISOString(),
+  });
 }

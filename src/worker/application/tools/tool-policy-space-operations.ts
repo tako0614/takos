@@ -3,10 +3,10 @@ import type {
   SpaceOperationPolicy,
 } from "./tool-policy-types.ts";
 import {
-  ADMIN_ROLES,
-  ALL_ROLES as ALL_SPACE_ROLES,
-  EDITOR_PLUS_ROLES,
-} from "../../shared/constants/roles.ts";
+  ALL_LEGACY_TOOL_POLICY_TIERS,
+  LEGACY_ADMIN_TOOL_POLICY_TIERS,
+  LEGACY_MUTATING_TOOL_POLICY_TIERS,
+} from "./legacy-tool-policy-tier.ts";
 
 export const SPACE_OPERATION_POLICIES: Record<
   SpaceOperationId,
@@ -15,126 +15,126 @@ export const SPACE_OPERATION_POLICIES: Record<
   "space_storage.list": {
     id: "space_storage.list",
     user_surface: "GET /api/spaces/:spaceId/storage",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.read": {
     id: "space_storage.read",
     user_surface: "GET /api/spaces/:spaceId/storage/:fileId/content",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.write": {
     id: "space_storage.write",
     user_surface: "PUT /api/spaces/:spaceId/storage/:fileId/content",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.create": {
     id: "space_storage.create",
     user_surface: "POST /api/spaces/:spaceId/storage/files|folders",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.delete": {
     id: "space_storage.delete",
     user_surface: "DELETE /api/spaces/:spaceId/storage/:fileId",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.rename": {
     id: "space_storage.rename",
     user_surface: "PATCH /api/spaces/:spaceId/storage/:fileId/rename",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "space_storage.move": {
     id: "space_storage.move",
     user_surface: "PATCH /api/spaces/:spaceId/storage/:fileId/move",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.list": {
     id: "skill.list",
     user_surface: "GET /api/spaces/:spaceId/skills",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.get": {
     id: "skill.get",
     user_surface:
       "GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.create": {
     id: "skill.create",
     user_surface: "POST /api/spaces/:spaceId/skills",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.update": {
     id: "skill.update",
     user_surface:
       "PUT /api/spaces/:spaceId/skills/id/:skillId | PUT /api/spaces/:spaceId/skills/:skillName",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.toggle": {
     id: "skill.toggle",
     user_surface:
       "PATCH /api/spaces/:spaceId/skills/id/:skillId | PATCH /api/spaces/:spaceId/skills/:skillName",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.delete": {
     id: "skill.delete",
     user_surface:
       "DELETE /api/spaces/:spaceId/skills/id/:skillId | DELETE /api/spaces/:spaceId/skills/:skillName",
-    allowed_roles: ADMIN_ROLES,
+    allowed_tool_policy_tiers: LEGACY_ADMIN_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.context": {
     id: "skill.context",
     user_surface: "GET /api/spaces/:spaceId/skills-context",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.catalog": {
     id: "skill.catalog",
     user_surface: "GET /api/spaces/:spaceId/skills-context",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "skill.describe": {
     id: "skill.describe",
     user_surface:
       "GET /api/spaces/:spaceId/managed-skills/:skillId | GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "mcp_server.list": {
     id: "mcp_server.list",
     user_surface: "GET /api/mcp/servers?spaceId=...",
-    allowed_roles: ALL_SPACE_ROLES,
+    allowed_tool_policy_tiers: ALL_LEGACY_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "mcp_server.create": {
     id: "mcp_server.create",
     user_surface: "Takos-managed mcp_add_server + OAuth callback",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "mcp_server.update": {
     id: "mcp_server.update",
     user_surface: "PATCH /api/mcp/servers/:id?spaceId=...",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
   "mcp_server.delete": {
     id: "mcp_server.delete",
     user_surface: "DELETE /api/mcp/servers/:id?spaceId=...",
-    allowed_roles: EDITOR_PLUS_ROLES,
+    allowed_tool_policy_tiers: LEGACY_MUTATING_TOOL_POLICY_TIERS,
     sensitive_read_policy: "none",
   },
 };

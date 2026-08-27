@@ -38,7 +38,6 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
 
     return c.json({
       thread: access.thread,
-      role: access.role,
     });
   });
 
@@ -49,11 +48,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
       const user = c.get("user");
       const threadId = c.req.param("id");
       requireThreadAccess(
-        await checkThreadAccess(c.env.DB, threadId, user.id, [
-          "owner",
-          "admin",
-          "editor",
-        ]),
+        await checkThreadAccess(c.env.DB, threadId, user.id),
       );
 
       const thread = await updateThread(
@@ -70,10 +65,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
     await deleteThread(c.env, c.env.DB, threadId);
@@ -84,11 +76,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
     await updateThreadStatus(c.env.DB, threadId, "archived");
@@ -99,11 +87,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
     await updateThreadStatus(c.env.DB, threadId, "active");
@@ -128,7 +112,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
         renderPdf: getPlatformServices(c).documents.renderPdf,
         threadId,
         includeInternal,
-        includeInternalRolesAllowed: ["owner", "admin"].includes(access.role),
+        includeInternalRolesAllowed: true,
         format,
       });
       if (!response) {
