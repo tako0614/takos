@@ -19,6 +19,7 @@ test("the Worker artifact contract is module-local and builds the resolved repos
   };
   const sourceBuild = manifest.install.modules["deploy/opentofu/cloudflare"]?.sourceBuild;
   expect(sourceBuild?.commands).toEqual([
+    { argv: ["bun", "install", "--frozen-lockfile"] },
     { argv: ["bun", "run", "build:opentofu-worker-artifact"] },
   ]);
   expect(sourceBuild?.outputs).toEqual([

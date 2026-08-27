@@ -17,31 +17,87 @@ npm run build
 The primary CTA resolves to the Takosumi platform worker install prefill route:
 
 ```txt
-https://app.takosumi.com/install?git=<takos-git-url>&ref=<ref>&path=<module-path>
+https://app.takosumi.com/install?git=<takos-git-url>&ref=<immutable-release>&path=<module-path>&name=takos
 ```
 
-Defaults are production-safe once the named GitHub release is immutable because
-the source fallback is an immutable release tag or full commit. Release builds
-must pin the ref to the release tag or commit they are publishing, and the tag
-must exist before this website is deployed:
+The fallback currently targets the next immutable Takos release, `v0.12.8`.
+Before publishing a website build, verify that the GitHub tag exists, points to
+the reviewed release commit, and contains the Cloudflare module plus the
+credential-free source build below. Never publish this CTA while the tag is
+missing or movable:
 
 ```sh
 VITE_TAKOS_INSTALL_GIT_URL=https://github.com/tako0614/takos.git
-VITE_TAKOS_INSTALL_REF=v1.0.0
-VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu/takoform
+VITE_TAKOS_INSTALL_REF=v0.12.8
+VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu/cloudflare
 ```
 
-The default public link also includes `name=takos` and
-`var.project_name=takos`. It contains no provider-specific input. Takosumi
-resolves the selected Takoform host and its connection through the ordinary
-ProviderBinding flow. A direct Cloudflare install is a separate module choice
-and receives Cloudflare inputs from that module's install form.
+The default public link includes `name=takos` and contains no provider-specific
+input. Takosumi resolves the selected Cloudflare adapter and its connection
+through the ordinary ProviderBinding flow, then receives Cloudflare inputs from
+that module's install form.
 
 `VITE_CLOUD_HOME_URL`, `VITE_CLOUD_USE_TAKOS_URL`, and
 `VITE_CLOUD_INSTALL_URL` can override the full Takosumi URLs when an operator
 needs a staging platform worker. Keep production public links on the bare
 platform origin `https://app.takosumi.com`; do not use retired accounts or
 deploy-control subdomains.
+
+## Manual Cloudflare deployment
+
+The CTA opens a Takosumi browser install prefill. Direct self-hosting is an
+operator-run OpenTofu flow: use the same immutable release as the CTA, build the
+Worker artifact from that checkout, and keep the variable and plan files outside
+the Git tree:
+
+```sh
+set -eu
+release=v0.12.8
+git clone https://github.com/tako0614/takos.git takos
+cd takos
+git fetch --tags origin
+git checkout --detach "$release"
+git rev-parse --verify "$release^{commit}"
+
+bun install --frozen-lockfile
+bun run build:opentofu-worker-artifact
+
+operator_dir="$HOME/.config/takos"
+install -d -m 700 "$operator_dir"
+cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$operator_dir/takos.tfvars"
+chmod 600 "$operator_dir/takos.tfvars"
+# Edit "$operator_dir/takos.tfvars" with the operator-owned public_url and
+# Cloudflare account settings. Keep secrets out of Git, state, and output.
+
+cd deploy/opentofu/cloudflare
+tofu init -input=false
+tofu plan -input=false \
+  -var-file="$operator_dir/takos.tfvars" \
+  -out="$operator_dir/takos.tfplan"
+tofu show "$operator_dir/takos.tfplan"
+chmod 600 "$operator_dir/takos.tfplan"
+tofu apply -input=false "$operator_dir/takos.tfplan"
+```
+
+`bun run build:opentofu-worker-artifact` must run before the plan. It produces
+the Worker, assets, bridge helper, migration set, container desired config, and
+artifact manifest under `deploy/opentofu/cloudflare/.takos-build/`; the module
+consumes those exact paths. The plan is reviewed before the apply, and both
+files remain operator-owned outside the checkout.
+
+The normal Cloudflare provider lane leaves
+`enable_imperative_staging_bridge` disabled. That optional bridge is a
+staging-only escape hatch for remaining Vectorize, D1 migration, and
+container-enabled Durable Object/provider gaps. If an operator deliberately
+enables it, `container_image` must be an immutable Docker Hub digest or a
+same-account Cloudflare registry digest; GHCR references are rejected. The
+source build does not publish that image, so image publication and any bridge
+execution require the operator-owned release/deployment workflow. Do not treat
+the bridge flag or a successful local build as production-readiness evidence.
+
+For artifact publication, worker/container image provenance, secrets, and live
+health/readback, follow the Takos release-artifact and deployment runbooks in
+the main repository.
 
 ## Deploy
 
