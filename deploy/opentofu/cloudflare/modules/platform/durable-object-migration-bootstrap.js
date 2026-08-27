@@ -1,8 +1,6 @@
-class MigrationBootstrapDurableObject {
-  constructor(state, env) {
-    this.state = state;
-    this.env = env;
-  }
+import { DurableObject } from "cloudflare:workers";
+
+class MigrationBootstrapDurableObject extends DurableObject {
 
   async fetch() {
     return new Response("Takos Durable Object migration bootstrap", {
