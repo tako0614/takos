@@ -4,9 +4,9 @@
  */
 
 import { getDb } from "../../infra/db/index.ts";
-import { accounts, messages, runs, threads } from "../../infra/db/schema.ts";
+import { messages, runs, threads } from "../../infra/db/schema.ts";
 import { and, desc, eq } from "drizzle-orm";
-import { logError, logWarn } from "../../shared/utils/logger.ts";
+import { logError } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import type { SelectOf } from "../../shared/types/drizzle-utils.ts";
 import type { Env } from "../../shared/types/index.ts";
@@ -20,7 +20,7 @@ import {
   ok,
   readRunServiceId,
 } from "./executor-utils.ts";
-import { resolveSpaceRole } from "../../application/services/platform/capabilities.ts";
+import { resolveWorkspaceAuthority } from "../../application/services/platform/capabilities.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -140,50 +140,24 @@ export async function resolveExecutionUserIdForRun(
     throw new NotFoundError(`Run ${runId} while resolving execution user`);
   }
 
-  if (runRow.requesterAccountId) {
-    return runRow.requesterAccountId;
-  }
-
-  const workspace = await db
-    .select({
-      type: accounts.type,
-      ownerAccountId: accounts.ownerAccountId,
-    })
-    .from(accounts)
-    .where(eq(accounts.id, runRow.accountId))
-    .get();
-
-  if (workspace?.ownerAccountId) {
-    logWarn(
-      `Run ${runId} missing requester_account_id; falling back to workspace owner`,
-      { module: "executor-host" },
+  if (!runRow.requesterAccountId) {
+    throw new AuthorizationError(
+      `Run ${runId} has no explicit requester_account_id`,
     );
-    return workspace.ownerAccountId;
   }
 
-  if (workspace?.type === "user") {
-    return runRow.accountId;
-  }
-
-  logWarn(
-    `Run ${runId} missing requester_account_id; falling back to workspace account id`,
-    { module: "executor-host" },
-  );
-  return runRow.accountId;
+  return runRow.requesterAccountId;
 }
 
 /**
- * Revalidate the requester represented by a durable Run against current
- * Workspace membership. Queued runs and long-lived containers must not retain
- * the viewer fallback after the requester is removed or suspended.
+ * Revalidate the requester represented by a durable Run against the current
+ * Workspace Principal owner proof. Queued runs and long-lived containers must
+ * not retain authority after the owner witness or Principal is suspended.
  */
 export async function assertRunExecutionAccess(
   env: Pick<Env, "DB">,
   runId: string,
-): Promise<{
-  userId: string;
-  role: NonNullable<Awaited<ReturnType<typeof resolveSpaceRole>>>;
-}> {
+): Promise<{ userId: string }> {
   const db = getDb(env.DB);
   const run = await db
     .select({ accountId: runs.accountId })
@@ -192,13 +166,17 @@ export async function assertRunExecutionAccess(
     .get();
   if (!run) throw new NotFoundError(`Run ${runId}`);
   const userId = await resolveExecutionUserIdForRun(env, runId);
-  const role = await resolveSpaceRole(env.DB, run.accountId, userId);
-  if (!role) {
+  const authority = await resolveWorkspaceAuthority(
+    env.DB,
+    run.accountId,
+    userId,
+  );
+  if (!authority) {
     throw new AuthorizationError(
       `Run requester ${userId} no longer has access to account ${run.accountId}`,
     );
   }
-  return { userId, role };
+  return { userId };
 }
 
 export async function getRunBootstrap(

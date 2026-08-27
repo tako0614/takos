@@ -1,12 +1,15 @@
 /**
  * Permission checks for tool execution.
  *
- * Centralises role-based access control and capability gating that was
- * previously inlined in ToolExecutor.
+ * Centralises capability gating and compatibility filtering for historical
+ * tool-policy tiers. Tiers do not represent Workspace membership authority.
  */
 
 import type { ToolContext, ToolDefinition } from "./tool-definitions.ts";
-import { canRoleAccessTool, filterToolsForRole } from "./tool-policy.ts";
+import {
+  canLegacyToolPolicyTierAccessTool,
+  filterToolsForLegacyPolicyTier,
+} from "./tool-policy.ts";
 import { ErrorCodes, ToolError } from "./tool-error-classifier.ts";
 
 // ---------------------------------------------------------------------------
@@ -20,18 +23,21 @@ export function getAllRequiredCapabilities(tool: {
   return Array.from(new Set(tool.required_capabilities || []));
 }
 
-/** Check whether the caller's role satisfies the tool's `required_roles` list. */
-export function canRoleAccessExposedTool(
-  role: ToolContext["role"],
-  tool: { required_roles?: string[] },
+/** Apply a historical tool definition's compatibility-tier filter. */
+export function canLegacyToolPolicyTierAccessExposedTool(
+  policyTier: ToolContext["toolPolicyTier"],
+  tool: { required_tool_policy_tiers?: string[] },
 ): boolean {
-  if (!tool.required_roles || tool.required_roles.length === 0) {
+  if (
+    !tool.required_tool_policy_tiers ||
+    tool.required_tool_policy_tiers.length === 0
+  ) {
     return true;
   }
-  if (!role) {
+  if (!policyTier) {
     return false;
   }
-  return tool.required_roles.includes(role);
+  return tool.required_tool_policy_tiers.includes(policyTier);
 }
 
 /** Check whether the granted capabilities cover all that the tool requires. */
@@ -56,18 +62,29 @@ export function canUseToolCapabilities(
 export function assertToolPermission(
   toolName: string,
   toolDefinition: ToolDefinition,
-  context: Pick<ToolContext, "role" | "capabilities">,
+  context: Pick<ToolContext, "toolPolicyTier" | "capabilities">,
 ): void {
-  if (context.role && !canRoleAccessTool(context.role, toolDefinition)) {
+  if (
+    context.toolPolicyTier &&
+    !canLegacyToolPolicyTierAccessTool(
+      context.toolPolicyTier,
+      toolDefinition,
+    )
+  ) {
     throw new ToolError(
-      `Permission denied for tool "${toolName}": space role "${context.role}" cannot use this space operation`,
+      `Permission denied for tool "${toolName}": legacy tool-policy tier "${context.toolPolicyTier}" cannot use this operation`,
       ErrorCodes.PERMISSION_DENIED,
     );
   }
 
-  if (!canRoleAccessExposedTool(context.role, toolDefinition)) {
+  if (
+    !canLegacyToolPolicyTierAccessExposedTool(
+      context.toolPolicyTier,
+      toolDefinition,
+    )
+  ) {
     throw new ToolError(
-      `Permission denied for tool "${toolName}": space role "${context.role}" is not allowed`,
+      `Permission denied for tool "${toolName}": legacy tool-policy tier "${context.toolPolicyTier}" is not allowed`,
       ErrorCodes.PERMISSION_DENIED,
     );
   }
@@ -91,13 +108,15 @@ export function assertToolPermission(
 // Filtering for getAvailableTools
 // ---------------------------------------------------------------------------
 
-/** Return only the tools accessible to the given role and capabilities. */
+/** Filter tools by compatibility-tier metadata and granted capabilities. */
 export function filterAccessibleTools(
   tools: ToolDefinition[],
-  role: ToolContext["role"],
+  policyTier: ToolContext["toolPolicyTier"],
   capabilities: readonly string[],
 ): ToolDefinition[] {
-  return filterToolsForRole(tools, role)
-    .filter((tool) => canRoleAccessExposedTool(role, tool))
+  return filterToolsForLegacyPolicyTier(tools, policyTier)
+    .filter((tool) =>
+      canLegacyToolPolicyTierAccessExposedTool(policyTier, tool)
+    )
     .filter((tool) => canUseToolCapabilities(capabilities, tool));
 }

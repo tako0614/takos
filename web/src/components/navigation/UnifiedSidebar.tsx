@@ -44,7 +44,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
   const isWsSettingsActive = () => props.activeView === "space-settings";
   const isChatActive = () => props.activeView === "chat";
 
-  const projectSpaces = () => props.spaces.filter((ws) => !ws.is_personal);
+  const projectSpaces = () => props.spaces.filter((ws) => !ws.is_default);
   const toggleSpaceAccordion = (spaceIdentifier: string) => {
     setExpandedSpaceIds((prev) => ({
       ...prev,

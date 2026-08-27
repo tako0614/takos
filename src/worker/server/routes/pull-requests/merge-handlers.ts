@@ -61,10 +61,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         ? body.commit_message.trim()
         : "";
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-        "owner",
-        "admin",
-      ]);
+      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
       if (!repoAccess) {
         throw new NotFoundError("Repository");
       }
@@ -118,7 +115,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       c.env,
       repoId,
       user?.id,
-      undefined,
       { allowPublicRead: true },
     );
     if (!repoAccess) {
@@ -177,10 +173,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError("resolutions array is required");
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-    ]);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
       throw new NotFoundError("Repository");
     }

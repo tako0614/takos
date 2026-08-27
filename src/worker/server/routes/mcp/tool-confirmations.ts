@@ -4,7 +4,6 @@ import {
   decideMcpToolConfirmation,
   listPendingMcpToolConfirmations,
 } from "../../../application/services/platform/mcp/tool-confirmation.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 
@@ -14,17 +13,14 @@ const decisionSchema = z
   })
   .strict();
 
-// A confirmation authorizes only this user's exact pending invocation; it
-// does not mutate the Workspace connection or tool policy. Any role that may
-// read/use the Workspace MCP catalog can decide its own confirmation.
-const MCP_INVOKE_ROLES =
-  getSpaceOperationPolicy("mcp_server.list").allowed_roles;
+// A confirmation authorizes only this Principal's exact pending invocation;
+// it does not mutate the Workspace connection or tool policy.
 
 const routes = new Hono<SpaceAccessRouteEnv>();
 
 routes.get(
   "/tool-confirmations",
-  spaceAccess({ roles: MCP_INVOKE_ROLES }),
+  spaceAccess(),
   async (c) => {
     const records = await listPendingMcpToolConfirmations(c.env.DB, c.env, {
       accountId: c.get("spaceId"),
@@ -50,7 +46,7 @@ routes.get(
 
 routes.post(
   "/tool-confirmations/:id/decision",
-  spaceAccess({ roles: MCP_INVOKE_ROLES }),
+  spaceAccess(),
   zValidator("json", decisionSchema),
   async (c) => {
     const status = await decideMcpToolConfirmation(c.env.DB, {

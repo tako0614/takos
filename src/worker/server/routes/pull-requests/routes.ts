@@ -53,11 +53,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError("Invalid JSON body");
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
       throw new NotFoundError("Repository");
     }
@@ -136,7 +132,6 @@ export default new Hono<AuthenticatedRouteEnv>()
         c.env,
         repoId,
         user?.id,
-        undefined,
         { allowPublicRead: true },
       );
       if (!repoAccess) {
@@ -163,7 +158,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       c.env,
       repoId,
       user?.id,
-      undefined,
       { allowPublicRead: true },
     );
     if (!repoAccess) {
@@ -200,7 +194,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       c.env,
       repoId,
       user?.id,
-      undefined,
       { allowPublicRead: true },
     );
     if (!repoAccess) {
@@ -240,11 +233,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const prNumber = parseInt(c.req.param("prNumber"));
       const body = c.req.valid("json");
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
+      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
       if (!repoAccess) {
         throw new NotFoundError("Repository");
       }
@@ -298,11 +287,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const prNumber = parseInt(c.req.param("prNumber"));
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
       throw new NotFoundError("Repository");
     }

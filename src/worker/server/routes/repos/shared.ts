@@ -4,7 +4,6 @@
 import type { Context } from "hono";
 import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type { ResolveReadableCommitResult } from "../../../application/services/takos-git/index.ts";
-import { WRITE_ROLES } from "./git-shared.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports
@@ -60,7 +59,7 @@ export function generateExploreInvalidationUrls(c: Context): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Encoding / role helpers
+// Encoding helpers
 // ---------------------------------------------------------------------------
 
 export function encodeBase64(data: Uint8Array): string {
@@ -71,9 +70,6 @@ export function encodeBase64(data: Uint8Array): string {
   return btoa(binary);
 }
 
-export function hasWriteRole(role: string | null | undefined): boolean {
-  return role != null && (WRITE_ROLES as readonly string[]).includes(role);
-}
 
 // ---------------------------------------------------------------------------
 // Tree flatten limit detection

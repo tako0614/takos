@@ -1,26 +1,4 @@
-// Re-export types from backend shared models to avoid duplication.
-import type {
-  Space as BackendSpace,
-  SpaceKind,
-} from "takos-api-contract/shared/types";
+import type { Space as BackendSpace } from "takos-api-contract/shared/types";
 
-/**
- * Frontend Space: picks the fields needed by the UI and adds `is_personal`.
- * `id` is optional because it may be absent in create-flow payloads.
- */
-export interface Space extends
-  Pick<
-    BackendSpace,
-    | "slug"
-    | "name"
-    | "description"
-    | "owner_principal_id"
-    | "automation_principal_id"
-    | "security_posture"
-    | "created_at"
-    | "updated_at"
-  > {
-  id?: string;
-  kind: SpaceKind;
-  is_personal?: boolean;
-}
+/** Public private-Workspace record consumed by the SPA. */
+export interface Space extends BackendSpace {}

@@ -39,7 +39,7 @@ function createApp() {
 
 function authorize(spaceId = "space-local") {
   routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: spaceId }, membership: { role: "editor" } }) as never;
+    ({ space: { id: spaceId } }) as never;
 }
 
 const operatorEnv = {

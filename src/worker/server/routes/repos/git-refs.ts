@@ -218,8 +218,8 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-    if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
-      throw new AuthorizationError("Admin access required");
+    if (repoAccess.access !== "owner") {
+      throw new AuthorizationError("Workspace owner access required");
     }
     if (!gitStore.isValidRefName(branchName)) {
       throw new BadRequestError("Invalid branch name");
@@ -244,8 +244,8 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
 
     const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-    if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
-      throw new AuthorizationError("Admin access required");
+    if (repoAccess.access !== "owner") {
+      throw new AuthorizationError("Workspace owner access required");
     }
     if (!gitStore.isValidRefName(branchName)) {
       throw new BadRequestError("Invalid branch name");

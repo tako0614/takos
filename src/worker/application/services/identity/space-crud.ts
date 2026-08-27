@@ -1,4 +1,4 @@
-export { spaceCrudDeps, type SpaceListItem } from "./space-crud-shared.ts";
+export { type SpaceListItem } from "./space-crud-shared.ts";
 export {
   getWorkspaceByIdOrSlug,
   listWorkspacesForUser,

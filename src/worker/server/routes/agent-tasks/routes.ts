@@ -15,6 +15,7 @@ import {
 import { zValidator } from "../zod-validator.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
+import { getWorkspaceModelSettings } from "../../../application/services/identity/spaces.ts";
 import { createThread } from "../../../application/services/threads/thread-service.ts";
 import { analyzeTask } from "../../../application/services/agent/task-analysis.ts";
 import {
@@ -127,11 +128,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const spaceId = c.req.param("spaceId");
       const body = c.req.valid("json");
 
-      const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
+      const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
       if (!access) {
         throw new NotFoundError("Workspace");
       }
@@ -255,11 +252,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         throw new NotFoundError("Task");
       }
 
-      const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
+      const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
       if (!access) {
         throw new NotFoundError("Task");
       }
@@ -389,10 +382,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
-      "owner",
-      "admin",
-    ]);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
     if (!access) {
       throw new NotFoundError("Task");
     }
@@ -411,18 +401,18 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
     if (!access) {
       throw new NotFoundError("Task");
     }
 
+    const workspaceModel = await getWorkspaceModelSettings(
+      c.env.DB,
+      access.space.id,
+    );
     const model =
       normalizeModelId(task.model) ||
-      normalizeModelId(access.space.ai_model) ||
+      normalizeModelId(workspaceModel?.ai_model) ||
       DEFAULT_MODEL_ID;
     const backend = getBackendFromModel(model);
 

@@ -3,7 +3,6 @@ import { generateId } from "../../../shared/utils/index.ts";
 import type {
   Env,
   RunQueueMessage,
-  SpaceRole,
 } from "../../../shared/types/index.ts";
 import { RUN_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
 import { checkThreadAccess } from "../threads/thread-service.ts";
@@ -56,11 +55,7 @@ export async function createThreadRun(
   input: CreateThreadRunInput,
   clock: Clock = systemClock,
 ): Promise<CreateThreadRunResult> {
-  const access = await checkThreadAccess(env.DB, input.threadId, input.userId, [
-    "owner",
-    "admin",
-    "editor",
-  ] satisfies SpaceRole[]);
+  const access = await checkThreadAccess(env.DB, input.threadId, input.userId);
   if (!access) {
     return {
       ok: false,

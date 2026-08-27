@@ -129,7 +129,6 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
 
     return c.json({
       run: access.run,
-      role: access.role,
     });
   });
 
@@ -137,11 +136,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await checkRunAccess(c.env.DB, runId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
@@ -296,6 +291,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const headers = buildSanitizedDOHeaders(c.req.raw.headers, {
       "X-WS-Auth-Validated": "true",
       "X-WS-User-Id": user.id,
+      "X-WS-Run-Id": runId,
     });
 
     const request = new Request(c.req.raw.url, {
@@ -381,11 +377,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         metadata?: Record<string, unknown>;
       };
 
-      const access = await checkRunAccess(c.env.DB, runId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
+      const access = await checkRunAccess(c.env.DB, runId, user.id);
       if (!access) {
         throw new NotFoundError("Run");
       }

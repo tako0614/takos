@@ -3,7 +3,7 @@ import type {
   SqlDatabaseBinding,
 } from "../../shared/types/bindings.ts";
 import type { Env } from "../../shared/types/index.ts";
-import type { SpaceRole } from "../../shared/types/index.ts";
+import type { LegacyToolPolicyTier } from "./legacy-tool-policy-tier.ts";
 import type {
   SensitiveReadPolicy,
   SpaceOperationId,
@@ -17,7 +17,11 @@ export interface ToolContext {
   threadId: string;
   runId: string;
   userId: string;
-  role?: SpaceRole;
+  /**
+   * Historical tool-policy tier. This is never a Workspace membership role;
+   * production sets `owner` only after Principal owner proof succeeds.
+   */
+  toolPolicyTier?: LegacyToolPolicyTier;
   // Capability set granted to this run (SSOT policy is in services/platform/capabilities.ts)
   capabilities: string[];
   // Environment bindings
@@ -38,7 +42,8 @@ export interface ToolDefinition {
   operation_id?: SpaceOperationId;
   composed_operations?: SpaceOperationId[];
   sensitive_read_policy?: SensitiveReadPolicy;
-  required_roles?: SpaceRole[];
+  /** Legacy tool metadata; not a Workspace access-control list. */
+  required_tool_policy_tiers?: LegacyToolPolicyTier[];
   required_capabilities?: string[];
   canonical_name?: string;
   namespace?: CapabilityNamespace;

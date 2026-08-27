@@ -84,7 +84,7 @@ function toolContext(input: {
     threadId: input.threadId,
     runId: "run-1",
     userId: "user-1",
-    role: "editor",
+    toolPolicyTier: "editor",
     capabilities: [],
     env: input.env,
     db: input.db,

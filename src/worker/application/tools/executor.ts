@@ -493,7 +493,7 @@ export class ToolExecutor implements ToolExecutorLike {
   getAvailableTools() {
     return filterAccessibleTools(
       this.resolver.getAvailableTools(),
-      this.context.role,
+      this.context.toolPolicyTier,
       this.context.capabilities || [],
     );
   }

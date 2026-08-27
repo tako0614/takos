@@ -175,7 +175,7 @@ test("unknown / non-control paths require no scope and are unauthorized", () => 
     getRequiredProxyCapability("/api/internal/v1/agent-control/unknown"),
     null,
   );
-  // Membership check fails closed for an unmapped path regardless of scopes.
+  // Capability-scope checks fail closed for an unmapped path regardless of scopes.
   assertEquals(
     isProxyRequestAuthorized(
       "/api/internal/v1/agent-control/unknown",

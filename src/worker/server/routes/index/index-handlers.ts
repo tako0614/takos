@@ -105,10 +105,7 @@ export async function handleVectorizeIndex(
   const user = c.get("user");
   const spaceId = c.req.param("spaceId");
   if (!spaceId) throw new BadRequestError("Missing spaceId");
-  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, [
-    "owner",
-    "admin",
-  ]);
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
     throw new NotFoundError("Workspace");
   }
@@ -173,10 +170,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
   const user = c.get("user");
   const spaceId = c.req.param("spaceId");
   if (!spaceId) throw new BadRequestError("Missing spaceId");
-  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, [
-    "owner",
-    "admin",
-  ]);
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
     throw new NotFoundError("Workspace");
   }
@@ -255,11 +249,7 @@ export async function handleIndexFile(
   const user = c.get("user");
   const spaceId = c.req.param("spaceId");
   if (!spaceId) throw new BadRequestError("Missing spaceId");
-  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, [
-    "owner",
-    "admin",
-    "editor",
-  ]);
+  const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
     throw new NotFoundError("Workspace");
   }

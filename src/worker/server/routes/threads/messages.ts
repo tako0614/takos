@@ -162,11 +162,6 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
           c.env.DB,
           threadId,
           user.id,
-          [
-            "owner",
-            "admin",
-            "editor",
-          ],
         ),
       );
       const content = typeof body.content === "string" ? body.content : "";

@@ -14,7 +14,7 @@ import {
 } from "../../../application/services/source/external-import.ts";
 import { buildAuthHeader } from "../../../application/services/source/external-import-utils.ts";
 import { toGitBucket } from "../../../application/services/takos-git/index.ts";
-import { requireBucket, requireRepoWrite, WRITE_ROLES } from "./git-shared.ts";
+import { requireBucket, requireRepoWrite } from "./git-shared.ts";
 import { getDb, repositories } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -79,8 +79,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       c,
       space_id,
       user.id,
-      [...WRITE_ROLES],
-      "Workspace not found or insufficient permissions",
+      "Workspace not found",
     );
     const spaceId = access.space.id;
 
@@ -142,7 +141,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     // Authorize the caller against the repository's space before triggering a
     // remote fetch (closes the IDOR where any authenticated caller could
     // re-fetch / overwrite refs on an arbitrary repo). Returns 404 for both
-    // missing repos and non-members, avoiding an existence leak.
+    // missing repos and non-owners, avoiding an existence leak.
     await requireRepoWrite(c.env, repoId, user.id);
 
     // The access-shaped Repository does not expose remote_clone_url, so keep

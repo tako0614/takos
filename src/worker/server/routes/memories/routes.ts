@@ -228,7 +228,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         c.env.DB,
         memory.space_id,
         user.id,
-        ["owner", "admin", "editor"],
       );
       if (!access) {
         throw new AuthorizationError();
@@ -262,7 +261,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.env.DB,
       memory.space_id,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();
@@ -405,7 +403,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         c.env.DB,
         reminder.space_id,
         user.id,
-        ["owner", "admin", "editor"],
       );
       if (!access) {
         throw new AuthorizationError();
@@ -445,7 +442,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.env.DB,
       reminder.space_id,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();
@@ -472,7 +468,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.env.DB,
       reminder.space_id,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();

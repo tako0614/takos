@@ -7,7 +7,6 @@ import {
 } from "../middleware/body-size.ts";
 import { validateApiOpaqueRouteParams } from "../middleware/param-validation.ts";
 import spacesBase from "./spaces/routes.ts";
-import spacesMembers from "./spaces/members.ts";
 import spacesStorage from "./spaces/storage.ts";
 import spacesTools from "./spaces/tools.ts";
 import threads from "./threads.ts";
@@ -316,7 +315,6 @@ export function createApiRouter({
   apiRouter.route("/setup", setup);
   apiRouter.route("/me", me);
   apiRouter.route("/spaces", spacesBase);
-  apiRouter.route("/spaces", spacesMembers);
   apiRouter.route("/spaces", spacesStorage);
   apiRouter.route("/spaces", spacesTools);
   apiRouter.route("/shortcuts", shortcuts);

@@ -43,10 +43,10 @@ export function getRequiredProxyCapability(path: string): ProxyScope | null {
 }
 
 /**
- * Membership check used by the executor host: a request to `path` is authorized
- * iff the path maps to a known scope AND the token's scope set expanded from
- * its stored capability contains that scope. Fail-closed for unknown paths /
- * empty scope sets.
+ * Capability-scope check used by the executor host: a request to `path` is
+ * authorized iff the path maps to a known scope AND the token's scope set
+ * expanded from its stored capability contains that scope. This does not model
+ * Workspace membership. Fail closed for unknown paths / empty scope sets.
  */
 export function isProxyRequestAuthorized(
   path: string,

@@ -84,7 +84,7 @@ const addGroupItemSchema = z.object({
 type ShortcutContext = Context<{ Bindings: Env; Variables: { user: User } }>;
 
 
-// Helper to resolve space context. Header-based space selection must pass membership checks.
+// Header-based space selection must resolve through the Principal owner gate.
 async function getSpaceId(c: ShortcutContext): Promise<string> {
   const spaceIdentifier = getRequestedSpaceIdentifier(c);
   if (spaceIdentifier) {
@@ -255,7 +255,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -312,7 +311,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -346,7 +344,6 @@ export const shortcutGroupRoutes = new Hono<
       c,
       spaceId,
       user.id,
-      ["owner", "admin"],
     );
 
     const deleted = await deleteShortcutGroup(
@@ -375,7 +372,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -411,7 +407,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const removed = await removeItemFromGroup(

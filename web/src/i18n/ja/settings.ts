@@ -8,24 +8,6 @@ export const settings = {
   // Workspace Settings
   workspaceSlug: "スペーススラッグ",
 
-  // Members
-  members: "メンバー",
-  noMembers: "メンバーはまだいません",
-  inviteMember: "メンバーを招待",
-  memberInvited: "メンバーを招待しました",
-  failedToInvite: "メンバーの招待に失敗しました",
-  removeMember: "メンバーを削除",
-  removeMemberWarning: "このメンバーをスペースから削除してもよろしいですか？",
-  memberRemoved: "メンバーを削除しました",
-  failedToRemove: "削除に失敗しました",
-  memberUpdated: "メンバーの役割を更新しました",
-  failedToUpdate: "更新に失敗しました",
-  invite: "招待",
-  emailPlaceholder: "email@example.com",
-  roleOwner: "オーナー",
-  roleAdmin: "管理者",
-  roleMember: "メンバー",
-
   // Space aliases
   spaceSettings: "スペース設定",
   spaceInfo: "スペース情報",
@@ -48,7 +30,7 @@ export const settings = {
   deleteSpaceHint: "このスペースとすべてのデータを完全に削除",
   spaceDeleted: "スペースを削除しました",
   createSpace: "スペースを作成",
-  createSpaceHint: "チームで作業するにはチームスペースを作成してください",
+  createSpaceHint: "作業を分けるための非公開スペースを作成します",
   installFeaturedAppsOnCreate: "おすすめアプリをインストールする",
   installFeaturedAppsOnCreateHint:
     "接続済みのアプリカタログから、運営者が選んだアプリを追加します。",

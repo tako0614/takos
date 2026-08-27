@@ -59,7 +59,7 @@ export function McpServersSection(props: McpServersSectionProps) {
         </div>
         <div class="flex items-center gap-2">
           <select
-            value={props.selectedSpaceId}
+            value={props.selectedSpaceId ?? ""}
             onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
             aria-label={t("connectionsSelectWorkspace")}
             class="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"

@@ -211,7 +211,7 @@ function toolContext(env: Env) {
     threadId: "thread-1",
     runId: "run-1",
     userId: "user-1",
-    role: "owner" as const,
+    toolPolicyTier: "owner" as const,
     capabilities: [],
     env,
     db: env.DB,
@@ -244,7 +244,7 @@ test("operator control MCP service-side blueprint reaches the agent catalog", as
     "local-space",
     env,
     new Set(),
-    { role: "owner", capabilities: [] },
+    { toolPolicyTier: "owner", capabilities: [] },
     {
       workspaceId: "workspace-1",
       request: {
@@ -295,7 +295,7 @@ test("Interface revocation after tools/list fails closed before tools/call", asy
     "local-space",
     env,
     new Set(),
-    { role: "owner", capabilities: [] },
+    { toolPolicyTier: "owner", capabilities: [] },
     {
       workspaceId: "workspace-1",
       request: {
@@ -346,7 +346,7 @@ test("Interface revision change after tools/list fails closed with a current Rea
     "local-space",
     env,
     new Set(),
-    { role: "owner", capabilities: [] },
+    { toolPolicyTier: "owner", capabilities: [] },
     {
       workspaceId: "workspace-1",
       request: {

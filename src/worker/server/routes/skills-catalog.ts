@@ -2,10 +2,6 @@ import type { Hono } from "hono";
 import type { SpaceAccessRouteEnv } from "./route-auth.ts";
 import { spaceAccess } from "./route-auth.ts";
 import {
-  SKILL_CONTEXT_ROLES,
-  SKILL_DESCRIBE_ROLES,
-} from "./skills-deps.ts";
-import {
   getManagedSkillCatalogEntry,
   listManagedSkillsCatalog,
   listSkillContext,
@@ -63,17 +59,17 @@ export function registerSkillCatalogRoutes(skills: SkillsRouter) {
   skills
     .get(
       "/spaces/:spaceId/managed-skills",
-      spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
+      spaceAccess(),
       listManagedSkillsHandler,
     )
     .get(
       "/spaces/:spaceId/managed-skills/:skillId",
-      spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
+      spaceAccess(),
       getManagedSkillHandler,
     )
     .get(
       "/spaces/:spaceId/skills-context",
-      spaceAccess({ roles: SKILL_CONTEXT_ROLES }),
+      spaceAccess(),
       skillContextHandler,
     );
 }

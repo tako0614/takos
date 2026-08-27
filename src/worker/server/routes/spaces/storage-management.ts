@@ -199,7 +199,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/folders",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({ name: z.string(), parent_path: z.string().optional() }),
@@ -255,7 +255,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .delete(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     async (c) => {
       const fileId = c.req.param("fileId");
 
@@ -293,7 +293,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .patch(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({
@@ -355,7 +355,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-delete",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator("json", z.object({ file_ids: z.array(z.string()) })),
     async (c) => {
       const access = c.get("access");
@@ -404,7 +404,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-move",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({ file_ids: z.array(z.string()), parent_path: z.string() }),
@@ -457,7 +457,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-rename",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({

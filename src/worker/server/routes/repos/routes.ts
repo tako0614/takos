@@ -18,7 +18,7 @@ import {
   listRepositoriesBySpace,
   RepositoryCreationError,
 } from "../../../application/services/source/repos.ts";
-import { requireRepoAdmin, requireRepoRead } from "./git-shared.ts";
+import { requireRepoOwner, requireRepoRead } from "./git-shared.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
   accounts,
@@ -39,7 +39,6 @@ export {
   generateExploreInvalidationUrls,
   getTreeFlattenLimitError,
   type GitBucket,
-  hasWriteRole,
   readableCommitErrorResponse,
   type RepoBucketBinding,
   sanitizeRepoName,
@@ -81,8 +80,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         c,
         spaceIdentifier,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
       const spaceId = access.space.id;
 
@@ -204,8 +202,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       "Repository",
     );
 
-    const userRole = user?.id ? repoAccess.role : null;
-
     let branchCount = 0;
     try {
       const branchesList = await gitStore.listBranches(c.env.DB, repoId);
@@ -238,7 +234,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       repository,
       branch_count: branchCount,
       starred: false,
-      user_role: userRole,
       workspace: workspaceData ? { name: workspaceData.name } : null,
       owner: workspaceData
         ? {
@@ -266,7 +261,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const body = c.req.valid("json");
 
-      await requireRepoAdmin(c.env, repoId, user.id);
+      await requireRepoOwner(c.env, repoId, user.id);
 
       const db = getDb(c.env.DB);
       const data: Record<string, string | number> = {};
@@ -329,7 +324,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await requireRepoAdmin(c.env, repoId, user.id);
+      const repoAccess = await requireRepoOwner(c.env, repoId, user.id);
 
       const repoObjectCandidates = c.env.GIT_OBJECTS
         ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)
