@@ -28,9 +28,12 @@ export type {
   ToolExecution,
 } from "../../../../worker/shared/types/runs.ts";
 
-export type {
-  Space,
-  SpaceKind,
+export type { Space } from "../../../../worker/shared/types/spaces.ts";
+export {
+  MAX_WORKSPACE_DESCRIPTION_CHARACTERS,
+  MAX_WORKSPACE_ID_CHARACTERS,
+  MAX_WORKSPACE_NAME_CHARACTERS,
+  MAX_WORKSPACE_SLUG_CHARACTERS,
 } from "../../../../worker/shared/types/spaces.ts";
 
 export type {

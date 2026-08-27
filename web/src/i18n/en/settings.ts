@@ -8,25 +8,6 @@ export const settings = {
   // Workspace Settings
   workspaceSlug: "Space Slug",
 
-  // Members
-  members: "Members",
-  noMembers: "No members yet",
-  inviteMember: "Invite Member",
-  memberInvited: "Member invited",
-  failedToInvite: "Failed to invite member",
-  removeMember: "Remove Member",
-  removeMemberWarning:
-    "Are you sure you want to remove this member from the space?",
-  memberRemoved: "Member removed",
-  failedToRemove: "Failed to remove member",
-  memberUpdated: "Member role updated",
-  failedToUpdate: "Failed to update",
-  invite: "Invite",
-  emailPlaceholder: "email@example.com",
-  roleOwner: "Owner",
-  roleAdmin: "Admin",
-  roleMember: "Member",
-
   // Space aliases (code uses "space" prefix, while established keys use "workspace")
   spaceSettings: "Space Settings",
   spaceInfo: "Space Information",
@@ -50,7 +31,7 @@ export const settings = {
   deleteSpaceHint: "Permanently delete this space and all its data",
   spaceDeleted: "Space deleted",
   createSpace: "Create Space",
-  createSpaceHint: "Create a team space to collaborate with others",
+  createSpaceHint: "Create another private space to separate your work",
   installFeaturedAppsOnCreate: "Install featured apps",
   installFeaturedAppsOnCreateHint:
     "Add operator-selected apps from the connected app catalog.",

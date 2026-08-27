@@ -1,5 +1,6 @@
 import type { RegisteredTool, ToolDefinition } from "./tool-definitions.ts";
-import type { Env, SpaceRole } from "../../shared/types/index.ts";
+import type { Env } from "../../shared/types/index.ts";
+import type { LegacyToolPolicyTier } from "./legacy-tool-policy-tier.ts";
 import { getDb, mcpServers, mcpToolPolicies } from "../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { McpClient } from "./mcp-client.ts";
@@ -171,20 +172,27 @@ export function requiresMcpToolInvocationConfirmation(input: {
   );
 }
 
-const DYNAMIC_MCP_ALLOWED_ROLES: ReadonlySet<SpaceRole> = new Set<SpaceRole>([
-  "owner",
-  "admin",
-  "editor",
-]);
+/**
+ * Historical MCP catalog tiers. They filter old tool metadata only and never
+ * create Workspace authority; production supplies `owner` after owner proof.
+ */
+const DYNAMIC_MCP_ALLOWED_POLICY_TIERS: ReadonlySet<LegacyToolPolicyTier> =
+  new Set<LegacyToolPolicyTier>(["owner", "admin", "editor"]);
 
 function assertDynamicMcpExecutionAllowed(
   server: McpServerLoadRecord,
-  context: { role?: SpaceRole; capabilities?: string[] },
+  context: {
+    toolPolicyTier?: LegacyToolPolicyTier;
+    capabilities?: string[];
+  },
 ): void {
-  const role = context.role;
-  if (role && !DYNAMIC_MCP_ALLOWED_ROLES.has(role)) {
+  const policyTier = context.toolPolicyTier;
+  if (
+    policyTier &&
+    !DYNAMIC_MCP_ALLOWED_POLICY_TIERS.has(policyTier)
+  ) {
     throw new Error(
-      `Permission denied for MCP tool execution on server "${server.name}": role "${role}" is not allowed`,
+      `Permission denied for MCP tool execution on server "${server.name}": legacy tool-policy tier "${policyTier}" is not allowed`,
     );
   }
 
@@ -302,7 +310,10 @@ export async function loadMcpTools(
   spaceId: string,
   env: Env,
   existingNames: Set<string>,
-  exposureContext?: { role?: SpaceRole; capabilities?: string[] },
+  exposureContext?: {
+    toolPolicyTier?: LegacyToolPolicyTier;
+    capabilities?: string[];
+  },
   runtimeInterfaceConfig?: RuntimeMcpInterfaceConfig,
 ): Promise<McpLoadResult> {
   const tools = new Map<string, RegisteredTool>();
@@ -390,8 +401,10 @@ export async function loadMcpTools(
 
   const serverIsEligible = (server: McpServerLoadRecord): boolean => {
     if (
-      exposureContext?.role &&
-      !DYNAMIC_MCP_ALLOWED_ROLES.has(exposureContext.role)
+      exposureContext?.toolPolicyTier &&
+      !DYNAMIC_MCP_ALLOWED_POLICY_TIERS.has(
+        exposureContext.toolPolicyTier,
+      )
     ) {
       return false;
     }
@@ -523,7 +536,9 @@ export async function loadMcpTools(
           ...executionPolicy,
           name: exposedName,
         };
-        namespacedDef.required_roles = Array.from(DYNAMIC_MCP_ALLOWED_ROLES);
+        namespacedDef.required_tool_policy_tiers = Array.from(
+          DYNAMIC_MCP_ALLOWED_POLICY_TIERS,
+        );
         if (server.sourceType === "external") {
           namespacedDef.required_capabilities = ["egress.http"];
         }

@@ -6,13 +6,11 @@ import type { Env } from "../../../shared/types/index.ts";
 import type { ApiVariables } from "../api.ts";
 
 import spacesBase from "./routes.ts";
-import spacesMembers from "./members.ts";
 import spacesStorage from "./storage.ts";
 
 const spaces = new Hono<{ Bindings: Env; Variables: ApiVariables }>();
 
 spaces.route("/", spacesBase);
-spaces.route("/", spacesMembers);
 spaces.route("/", spacesStorage);
 
 export default spaces;

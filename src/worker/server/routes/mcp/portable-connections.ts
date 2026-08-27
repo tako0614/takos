@@ -3,14 +3,12 @@ import {
   exportMcpConnections,
   importMcpConnections,
 } from "../../../application/services/platform/mcp/portable-connections.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
-const roles = getSpaceOperationPolicy("mcp_server.update").allowed_roles;
 const routes = new Hono<SpaceAccessRouteEnv>();
 
-routes.get("/connections/export", spaceAccess({ roles }), async (c) => {
+routes.get("/connections/export", spaceAccess(), async (c) => {
   const document = await exportMcpConnections(c.env.DB, c.get("spaceId"));
   c.header(
     "Content-Disposition",
@@ -20,7 +18,7 @@ routes.get("/connections/export", spaceAccess({ roles }), async (c) => {
   return c.json({ data: document });
 });
 
-routes.post("/connections/import", spaceAccess({ roles }), async (c) => {
+routes.post("/connections/import", spaceAccess(), async (c) => {
   let document: unknown;
   try {
     document = await c.req.json();

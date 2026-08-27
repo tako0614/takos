@@ -1,6 +1,10 @@
 import { useI18n } from "../../../store/i18n.ts";
 import { useCreateSpaceForm } from "../../../hooks/useCreateSpaceForm.ts";
 import { Icons } from "../../../lib/Icons.tsx";
+import {
+  MAX_WORKSPACE_DESCRIPTION_CHARACTERS,
+  MAX_WORKSPACE_NAME_CHARACTERS,
+} from "takos-api-contract/shared/types";
 
 interface CreateSpaceModalProps {
   onClose: () => void;
@@ -84,6 +88,7 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
                 }}
                 autofocus
                 required
+                maxLength={MAX_WORKSPACE_NAME_CHARACTERS}
                 aria-required="true"
                 aria-invalid={error() && !name().trim() ? "true" : "false"}
               />
@@ -105,6 +110,7 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
                 value={description()}
                 onInput={(e) => setDescription(e.currentTarget.value)}
                 rows={3}
+                maxLength={MAX_WORKSPACE_DESCRIPTION_CHARACTERS}
               />
             </div>
             <label class="flex gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 cursor-pointer">

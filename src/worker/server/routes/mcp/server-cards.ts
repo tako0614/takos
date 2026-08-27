@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { discoverMcpServerCards } from "../../../application/services/platform/mcp/server-cards.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 
@@ -13,12 +12,11 @@ const querySchema = z.object({
   domain: z.string().min(1).max(253),
 });
 
-const roles = getSpaceOperationPolicy("mcp_server.list").allowed_roles;
 const routes = new Hono<SpaceAccessRouteEnv>();
 
 routes.get(
   "/discover",
-  spaceAccess({ roles }),
+  spaceAccess(),
   zValidator("query", querySchema),
   async (c) => {
     const result = await discoverMcpServerCards(c.env, {

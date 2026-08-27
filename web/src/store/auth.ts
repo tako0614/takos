@@ -76,9 +76,8 @@ function buildVirtualPersonalSpace(currentUser: User): Space {
     name: currentUser.name || currentUser.username,
     slug: currentUser.username,
     description: null,
-    kind: "user",
-    is_personal: true,
-    owner_principal_id: currentUser.username,
+    is_default: true,
+    security_posture: "standard",
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -105,7 +104,7 @@ export async function fetchSpaces(
     const data = await rpcJson<{ spaces: Space[] }>(res);
     let allSpaces = normalizeSpaces(data.spaces || []);
 
-    const hasPersonal = allSpaces.some((space) => space.kind === "user");
+    const hasPersonal = allSpaces.some((space) => space.is_default);
     if (!hasPersonal && currentUser) {
       allSpaces = [buildVirtualPersonalSpace(currentUser), ...allSpaces];
     }

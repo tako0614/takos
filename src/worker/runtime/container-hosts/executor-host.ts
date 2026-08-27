@@ -1069,16 +1069,17 @@ export default {
       if (!claimsMatchRequestBody(claims, body)) {
         return unauthorized();
       }
-      // Membership check: the endpoint's required scope must be present in the
+      // Capability-scope check: the endpoint's required scope must be present in the
       // token's scope set. A workflow token therefore cannot reach conversation
       // / memory / skill endpoints it was not granted.
       if (!isProxyRequestAuthorized(path, tokenInfo.capability)) {
         return unauthorized();
       }
 
-      // Membership is mutable authority. Revalidate it for every control RPC
-      // so a queued or already-running container loses history, provider-key,
-      // and tool access as soon as its requester is removed from the Workspace.
+      // Principal ownership is mutable authority. Revalidate it for every
+      // control RPC so a queued or already-running container loses history,
+      // provider-key, and tool access as soon as its requester is no longer the
+      // active Workspace owner.
       try {
         await assertRunExecutionAccess(env, tokenInfo.runId);
       } catch {

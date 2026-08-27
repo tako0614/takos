@@ -18,7 +18,6 @@ import {
   deriveMcpToolExecutionPolicy,
   parseTrustedLocalMcpReadonlyServerIds,
 } from "../../../application/tools/mcp-tools.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
@@ -39,10 +38,6 @@ const updateToolPolicySchema = z
     invocation_policy: z.enum(["automatic", "confirm_each_time"]),
   })
   .strict();
-
-const MCP_LIST_ROLES = getSpaceOperationPolicy("mcp_server.list").allowed_roles;
-const MCP_UPDATE_ROLES =
-  getSpaceOperationPolicy("mcp_server.update").allowed_roles;
 
 type McpServerWithTokens = NonNullable<
   Awaited<ReturnType<typeof getMcpServerWithTokens>>
@@ -173,7 +168,7 @@ const mcpToolPolicyRoutes = new Hono<SpaceAccessRouteEnv>();
 
 mcpToolPolicyRoutes.get(
   "/servers/:id/tools",
-  spaceAccess({ roles: MCP_LIST_ROLES }),
+  spaceAccess(),
   async (c) => {
     const spaceId = c.get("spaceId");
     const { server, tools } = await listCurrentServerTools(
@@ -211,7 +206,7 @@ mcpToolPolicyRoutes.get(
 
 mcpToolPolicyRoutes.patch(
   "/servers/:id/tools/:toolName",
-  spaceAccess({ roles: MCP_UPDATE_ROLES }),
+  spaceAccess(),
   zValidator("json", updateToolPolicySchema),
   async (c) => {
     const spaceId = c.get("spaceId");

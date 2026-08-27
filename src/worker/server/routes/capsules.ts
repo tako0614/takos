@@ -422,7 +422,7 @@ function callerInstallConfig(
 /**
  * Capsule HTTP is an interactive user surface. A deployment-wide operator
  * token is deliberately not an alternative here: it has no per-request
- * Workspace authority and would let any editor drive another Workspace's
+ * Workspace authority and would let one Principal drive another Workspace's
  * Capsule. Static-token automation stays in the background preinstall seam.
  */
 async function requireAccountsCaller(
@@ -627,7 +627,7 @@ const capsulesRouter = new Hono<SpaceAccessRouteEnv>();
 
 capsulesRouter.get(
   "/spaces/:spaceId/capsules",
-  spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const upstream = await listInstallableAppCapsulesWithServicesForRoute(
@@ -640,7 +640,7 @@ capsulesRouter.get(
 
 capsulesRouter.get(
   "/spaces/:spaceId/capsules/:capsuleId/services",
-  spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const capsuleId = readString(c.req.param("capsuleId"));
@@ -659,7 +659,7 @@ capsulesRouter.get(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/plan",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -699,7 +699,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -736,7 +736,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/revision/plan",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -783,7 +783,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/revision/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -823,7 +823,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -870,7 +870,7 @@ capsulesRouter.post(
 
 capsulesRouter.delete(
   "/spaces/:spaceId/capsules/:capsuleId",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const capsuleId = readString(c.req.param("capsuleId"));

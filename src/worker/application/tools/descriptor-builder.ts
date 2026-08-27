@@ -40,7 +40,7 @@ export function buildToolDescriptor(
     family,
     risk_level,
     side_effects,
-    required_roles: tool.required_roles,
+    required_tool_policy_tiers: tool.required_tool_policy_tiers,
     required_capabilities: tool.required_capabilities,
     source: "custom",
     discoverable: true,

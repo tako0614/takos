@@ -1,4 +1,4 @@
-import type { SpaceRole } from "../../shared/types/index.ts";
+import type { LegacyToolPolicyTier } from "./legacy-tool-policy-tier.ts";
 import type { ToolDefinition } from "./tool-definitions.ts";
 import type {
   SpaceOperationId,
@@ -52,39 +52,46 @@ export function applyCustomToolPolicyMetadata(
   return tools.map(applyToolPolicyMetadata);
 }
 
-export function canRoleAccessOperation(
-  role: SpaceRole,
+export function canLegacyToolPolicyTierAccessOperation(
+  policyTier: LegacyToolPolicyTier,
   operationId: SpaceOperationId,
 ): boolean {
-  return getSpaceOperationPolicy(operationId).allowed_roles.includes(role);
+  return getSpaceOperationPolicy(operationId).allowed_tool_policy_tiers.includes(
+    policyTier,
+  );
 }
 
-export function canRoleAccessTool(
-  role: SpaceRole,
+export function canLegacyToolPolicyTierAccessTool(
+  policyTier: LegacyToolPolicyTier,
   tool: ToolDefinition,
 ): boolean {
   const metadata = getToolPolicyMetadata(tool);
 
   if (metadata.tool_class === "space_mapped") {
     if (!metadata.operation_id) return false;
-    return canRoleAccessOperation(role, metadata.operation_id);
+    return canLegacyToolPolicyTierAccessOperation(
+      policyTier,
+      metadata.operation_id,
+    );
   }
 
   if (metadata.tool_class === "composite") {
     return (metadata.composed_operations || []).every((operationId) =>
-      canRoleAccessOperation(role, operationId)
+      canLegacyToolPolicyTierAccessOperation(policyTier, operationId)
     );
   }
 
   return true;
 }
 
-export function filterToolsForRole(
+export function filterToolsForLegacyPolicyTier(
   tools: ToolDefinition[],
-  role?: SpaceRole,
+  policyTier?: LegacyToolPolicyTier,
 ): ToolDefinition[] {
-  if (!role) return tools;
-  return tools.filter((tool) => canRoleAccessTool(role, tool));
+  if (!policyTier) return tools;
+  return tools.filter((tool) =>
+    canLegacyToolPolicyTierAccessTool(policyTier, tool)
+  );
 }
 
 export function isToolAllowedForAgent(toolName: string): boolean {

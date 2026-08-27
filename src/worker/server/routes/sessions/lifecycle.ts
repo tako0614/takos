@@ -57,8 +57,7 @@ export async function startSession(
     c,
     spaceId,
     user.id,
-    ["owner", "admin", "editor"],
-    "Workspace not found or insufficient permissions",
+    "Workspace not found",
   );
 
   const repoId = body.repo_id;
@@ -157,8 +156,7 @@ export async function stopSession(
     c,
     session.space_id,
     user.id,
-    ["owner", "admin"],
-    "Permission denied - only space owners and admins can stop sessions",
+    "Workspace not found",
     403,
   );
 
@@ -246,8 +244,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     c,
     sessionRow.accountId,
     user.id,
-    ["owner", "admin"],
-    "Permission denied - only space owners and admins can resume sessions",
+    "Workspace not found",
     403,
   );
 
@@ -287,11 +284,10 @@ export async function discardSession(c: SessionContext): Promise<Response> {
     dbBinding,
     sessionRow.accountId,
     user.id,
-    ["owner", "admin"],
   );
   if (!access) {
     throw new AuthorizationError(
-      "Permission denied - only space owners and admins can discard sessions",
+      "Workspace not found",
     );
   }
 

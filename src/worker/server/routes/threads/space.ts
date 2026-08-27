@@ -92,7 +92,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
   );
 
   // SECURITY: No per-route rate limit on thread creation. An authenticated
-  // owner/admin/editor can create unbounded threads, each consuming DB row
+  // Workspace Principal can create unbounded threads, each consuming DB row
   // writes and downstream space-quota state. Mitigation relies on the
   // operator-tier limiter (CDN / WAF) plus the per-space quota enforced
   // deeper in createThread. See SECURITY.md "Per-route rate limiting".
@@ -108,8 +108,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       const thread = await createThread(

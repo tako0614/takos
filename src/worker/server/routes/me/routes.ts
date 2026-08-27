@@ -11,30 +11,12 @@ import {
   formatUserSettingsResponse,
   updateUserSettings,
 } from "../../../application/services/identity/user-settings.ts";
-import { toUserResponse } from "../../../application/services/identity/response-formatters.ts";
+import {
+  toUserResponse,
+  toWorkspaceResponse,
+} from "../../../application/services/identity/response-formatters.ts";
 import { getOrCreatePersonalWorkspace } from "../../../application/services/identity/spaces.ts";
 import privacy from "./privacy.ts";
-
-
-function toPersonalSpaceResponse(space: {
-  id: string;
-  name: string;
-  slug: string | null;
-  owner_principal_id: string;
-  kind: string;
-  created_at: string;
-  updated_at: string;
-}) {
-  return {
-    id: space.id,
-    slug: space.slug || space.id,
-    name: space.name,
-    owner_principal_id: space.owner_principal_id,
-    kind: space.kind,
-    created_at: space.created_at,
-    updated_at: space.updated_at,
-  };
-}
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .use("*", async (c, next) => {
@@ -61,7 +43,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Personal space");
     }
 
-    return c.json({ space: toPersonalSpaceResponse(personalSpace) });
+    return c.json({ space: toWorkspaceResponse(personalSpace) });
   })
   // Get user settings (including setup state)
   .get("/settings", async (c) => {

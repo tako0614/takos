@@ -8,13 +8,11 @@ import { getErrorMessage } from "../../lib/errors.ts";
 import { findSpaceByIdentifier, splitSpaces } from "../../lib/spaces.ts";
 import type { Space } from "../../types/index.ts";
 import { Button } from "../../components/ui/Button.tsx";
+import { CreateSpaceModal } from "../shared/spaces/CreateSpaceModal.tsx";
 import {
-  CreateSpaceModal,
   DangerZoneCard,
-  MembersCard,
   PersonalSpaceNote,
   SpaceInfoCard,
-  type SpaceMember,
 } from "./SpaceSettingsCards.tsx";
 
 interface SpaceSettingsSectionProps {
@@ -32,78 +30,32 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
   const selectedSpaceId = () => props.selectedSpaceId;
 
   const [spaceName, setSpaceName] = createSignal("");
+  const [spaceDescription, setSpaceDescription] = createSignal("");
   const [isPersonal, setIsPersonal] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
 
-  const [members, setMembers] = createSignal<SpaceMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = createSignal(false);
-  const [membersError, setMembersError] = createSignal<string | null>(null);
-
-  const [inviteEmail, setInviteEmail] = createSignal("");
-  const [inviteRole, setInviteRole] = createSignal<"admin" | "member">(
-    "member",
-  );
-  const [inviting, setInviting] = createSignal(false);
-
   const [showCreateSpace, setShowCreateSpace] = createSignal(false);
-  const [creatingSpace, setCreatingSpace] = createSignal(false);
 
-  const groupedSpaces = createMemo(() =>
-    splitSpaces(props.spaces || [], t("personal"))
-  );
+  const groupedSpaces = createMemo(() => splitSpaces(props.spaces || []));
   const personalSpace = createMemo(() => groupedSpaces().personalSpace);
   const otherSpaces = createMemo(() => groupedSpaces().otherSpaces);
   const selectedSpace = createMemo(() => {
     const id = selectedSpaceId();
     return id
-      ? findSpaceByIdentifier(props.spaces || [], id, t("personal"))
+      ? findSpaceByIdentifier(props.spaces || [], id)
       : null;
   });
 
   createEffect(() => {
     const space = selectedSpace();
     if (space) {
-      setSpaceName(space.name as string);
-      setIsPersonal(space.is_personal as boolean);
+      setSpaceName(space.name);
+      setSpaceDescription(space.description ?? "");
+      setIsPersonal(space.is_default);
     } else {
       setSpaceName("");
+      setSpaceDescription("");
       setIsPersonal(false);
-    }
-  });
-
-  const fetchMembers = async () => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId) return;
-    try {
-      setLoadingMembers(true);
-      setMembersError(null);
-      const res = await rpc.spaces[":spaceId"].members.$get({
-        param: { spaceId: targetSpaceId },
-      });
-      const data = await rpcJson<{ members: SpaceMember[] }>(res);
-      if (targetSpaceId !== selectedSpaceId()) return;
-      setMembers(data.members || []);
-    } catch (err) {
-      if (targetSpaceId !== selectedSpaceId()) return;
-      // Surface the failure (with retry) instead of rendering an empty member
-      // list, which would read as "this space has no members".
-      setMembers([]);
-      setMembersError(
-        err instanceof Error && err.message
-          ? err.message
-          : t("failedToLoad"),
-      );
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  createEffect(() => {
-    if (selectedSpaceId() && !selectedSpace()?.is_personal) {
-      void fetchMembers();
-    } else {
-      setMembers([]);
-      setMembersError(null);
     }
   });
 
@@ -114,7 +66,10 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
       setSaving(true);
       const res = await rpc.spaces[":spaceId"].$patch({
         param: { spaceId: targetSpaceId },
-        json: { name: spaceName().trim() },
+        json: {
+          name: spaceName().trim(),
+          description: spaceDescription().trim() || null,
+        },
       });
       await rpcJson(res);
       showToast("success", t("saved"));
@@ -123,77 +78,6 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
       showToast("error", t("failedToSave"));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleInviteMember = async () => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || !inviteEmail().trim()) return;
-    try {
-      setInviting(true);
-      const res = await rpc.spaces[":spaceId"].members.$post({
-        param: { spaceId: targetSpaceId },
-        json: { email: inviteEmail().trim(), role: inviteRole() },
-      });
-      await rpcJson(res);
-      showToast("success", t("memberInvited"));
-      setInviteEmail("");
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToInvite")),
-      );
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const handleRemoveMember = async (member: SpaceMember) => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId) return;
-    const confirmed = await confirm({
-      title: t("removeMember"),
-      message: t("removeMemberWarning"),
-      confirmText: t("remove"),
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    try {
-      const res = await rpc.spaces[":spaceId"].members[":username"].$delete({
-        param: { spaceId: targetSpaceId, username: member.username },
-      });
-      await rpcJson(res);
-      showToast("success", t("memberRemoved"));
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToRemove")),
-      );
-    }
-  };
-
-  const handleChangeMemberRole = async (
-    member: SpaceMember,
-    newRole: "admin" | "member",
-  ) => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || member.role === newRole) return;
-    try {
-      const res = await rpc.spaces[":spaceId"].members[":username"].$patch({
-        param: { spaceId: targetSpaceId, username: member.username },
-        json: { role: newRole },
-      });
-      await rpcJson(res);
-      showToast("success", t("memberUpdated"));
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToUpdate")),
-      );
     }
   };
 
@@ -222,13 +106,17 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
 
   const handleCreateSpace = async (
     name: string,
+    description: string,
     installFeaturedApps: boolean,
   ) => {
     if (!name) return;
     try {
-      setCreatingSpace(true);
       const res = await rpc.spaces.$post({
-        json: { name, installFeaturedApps },
+        json: {
+          name,
+          description: description.trim() || undefined,
+          installFeaturedApps,
+        },
       });
       const data = await rpcJson<{ space: { slug: string } }>(res);
       showToast("success", t("spaceCreated"));
@@ -236,9 +124,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
       props.onSpaceUpdated?.();
       props.setSelectedSpaceId(data.space.slug);
     } catch (err: unknown) {
-      showToast("error", getErrorMessage(err, t("failedToCreate")));
-    } finally {
-      setCreatingSpace(false);
+      throw new Error(getErrorMessage(err, t("failedToCreate")));
     }
   };
 
@@ -291,7 +177,6 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           <CreateSpaceModal
             onClose={() => setShowCreateSpace(false)}
             onCreate={handleCreateSpace}
-            creating={creatingSpace()}
           />
         )}
       </div>
@@ -310,27 +195,12 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
               selectedSpace={space()}
               spaceName={spaceName()}
               setSpaceName={setSpaceName}
+              spaceDescription={spaceDescription()}
+              setSpaceDescription={setSpaceDescription}
               isPersonal={isPersonal()}
               saving={saving()}
               onSave={handleSaveSpace}
             />
-
-            {!isPersonal() && (
-              <MembersCard
-                members={members()}
-                loadingMembers={loadingMembers()}
-                membersError={membersError()}
-                onRetryMembers={() => void fetchMembers()}
-                inviteEmail={inviteEmail()}
-                setInviteEmail={setInviteEmail}
-                inviteRole={inviteRole()}
-                setInviteRole={setInviteRole}
-                inviting={inviting()}
-                onInvite={handleInviteMember}
-                onRemove={handleRemoveMember}
-                onChangeRole={handleChangeMemberRole}
-              />
-            )}
 
             {!isPersonal() && <DangerZoneCard onDelete={handleDeleteSpace} />}
 

@@ -22,9 +22,9 @@ export interface ToolPolicyMetadata {
   sensitive_read_policy?: SensitiveReadPolicy;
 }
 
-// Every tool in the static Takos catalog is agent-safe after role/capability
-// policy is applied. Storage, computer, Git, and deploy tools are owned by
-// installed Capsules or Takosumi and therefore never enter this deny-list.
+// Every tool in the static Takos catalog is agent-safe after legacy tool-tier
+// metadata and capability policy are applied. A tier never grants Workspace
+// authority; the owner proof happens before this catalog is constructed.
 export const AGENT_DISABLED_CUSTOM_TOOLS = [] as const;
 
 export const AGENT_DISABLED_TOOL_SET = new Set<string>(
@@ -37,10 +37,10 @@ export { SPACE_OPERATION_POLICIES } from "./tool-policy-space-operations.ts";
 export {
   applyCustomToolPolicyMetadata,
   applyToolPolicyMetadata,
-  canRoleAccessOperation,
-  canRoleAccessTool,
+  canLegacyToolPolicyTierAccessOperation,
+  canLegacyToolPolicyTierAccessTool,
   filterAgentAllowedToolNames,
-  filterToolsForRole,
+  filterToolsForLegacyPolicyTier,
   getSpaceOperationPolicy,
   getToolPolicyMetadata,
   isToolAllowedForAgent,

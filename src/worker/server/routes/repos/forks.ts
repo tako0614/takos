@@ -56,7 +56,6 @@ export default new Hono<AuthenticatedRouteEnv>()
           c,
           sourceRepoData.accountId,
           user.id,
-          undefined,
           "Repository not found",
         );
       }
@@ -69,8 +68,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           c,
           targetSpaceId,
           user.id,
-          ["owner", "admin", "editor"],
-          "Target workspace not found or insufficient permissions",
+          "Target workspace not found",
         );
         resolvedTargetSpaceId = targetAccess.space.id;
       } else {

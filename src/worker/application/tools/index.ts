@@ -32,7 +32,7 @@ export {
 export type { ErrorCode, ErrorSeverity } from "./tool-error-classifier.ts";
 export {
   assertToolPermission,
-  canRoleAccessExposedTool,
+  canLegacyToolPolicyTierAccessExposedTool,
   canUseToolCapabilities,
   filterAccessibleTools,
   getAllRequiredCapabilities,
@@ -48,10 +48,10 @@ export {
   AGENT_DISABLED_CUSTOM_TOOLS,
   applyCustomToolPolicyMetadata,
   applyToolPolicyMetadata,
-  canRoleAccessOperation,
-  canRoleAccessTool,
+  canLegacyToolPolicyTierAccessOperation,
+  canLegacyToolPolicyTierAccessTool,
   filterAgentAllowedToolNames,
-  filterToolsForRole,
+  filterToolsForLegacyPolicyTier,
   getSpaceOperationPolicy,
   getToolPolicyMetadata,
   isToolAllowedForAgent,

@@ -36,6 +36,11 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  MAX_WORKSPACE_DESCRIPTION_CHARACTERS,
+  MAX_WORKSPACE_ID_CHARACTERS,
+  MAX_WORKSPACE_NAME_CHARACTERS,
+} from "../../../../core/workspaces/index.ts";
 
 const VALID_SECURITY_POSTURES = ["standard", "restricted_egress"] as const;
 const VALID_MODEL_BACKENDS = ["openai", "anthropic", "google"] as const;
@@ -61,13 +66,13 @@ function resolveModelBackendAlias(
 }
 
 async function buildModelSettingsResponse(
-  c: Context<AuthenticatedRouteEnv>,
+  env: AuthenticatedRouteEnv["Bindings"],
   model: string,
 ) {
-  const catalog = await resolveModelCatalog(c.env, { currentModel: model });
+  const catalog = await resolveModelCatalog(env, { currentModel: model });
   const effectiveModel = isModelSelectable(catalog, model)
     ? model
-    : resolveExecutionModel(c.env, model);
+    : resolveExecutionModel(env, model);
   const modelBackend = getModelBackendForModel(effectiveModel);
   return {
     ai_model: effectiveModel,
@@ -77,20 +82,20 @@ async function buildModelSettingsResponse(
     catalog_status: catalog.status,
     token_limit: resolveHistoryTokenBudget(
       effectiveModel,
-      c.env.MODEL_CONTEXT_WINDOWS,
+      env.MODEL_CONTEXT_WINDOWS,
     ),
   };
 }
 
 async function validateSelectableModel(
-  c: Context<AuthenticatedRouteEnv>,
+  env: AuthenticatedRouteEnv["Bindings"],
   requestedModel: string,
 ) {
   const model = normalizeModelId(requestedModel);
   if (!model) {
     throw new BadRequestError("Invalid model");
   }
-  const catalog = await resolveModelCatalog(c.env);
+  const catalog = await resolveModelCatalog(env);
   if (!isModelSelectable(catalog, model)) {
     throw new BadRequestError("Model is not available");
   }
@@ -145,9 +150,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator(
       "json",
       z.object({
-        name: z.string(),
-        id: z.string().optional(),
-        description: z.string().optional(),
+        name: z.string().trim().min(1).max(MAX_WORKSPACE_NAME_CHARACTERS),
+        id: z.string().trim().min(1).max(MAX_WORKSPACE_ID_CHARACTERS).regex(
+          /^[A-Za-z0-9_-]+$/,
+        ).optional(),
+        description: z.string().max(MAX_WORKSPACE_DESCRIPTION_CHARACTERS)
+          .optional(),
         installFeaturedApps: z.boolean().optional(),
       }),
     ),
@@ -190,15 +198,13 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     return c.json({
       space: toWorkspaceResponse(access.space),
-      role: access.membership.role,
     });
   })
   .get("/:spaceId", spaceAccess(), async (c) => {
-    const { space, membership } = c.get("access");
+    const { space } = c.get("access");
 
     return c.json({
       space: toWorkspaceResponse(space),
-      role: membership.role,
     });
   })
   .get("/:spaceId/export", spaceAccess(), async (c) => {
@@ -241,15 +247,15 @@ export default new Hono<AuthenticatedRouteEnv>()
   })
   .patch(
     "/:spaceId",
-    spaceAccess({
-      roles: ["owner", "admin"],
-      message: "Space not found or insufficient permissions",
-    }),
+    spaceAccess(),
     zValidator(
       "json",
       z
         .object({
-          name: z.string().optional(),
+          name: z.string().trim().min(1).max(MAX_WORKSPACE_NAME_CHARACTERS)
+            .optional(),
+          description: z.string().max(MAX_WORKSPACE_DESCRIPTION_CHARACTERS)
+            .nullable().optional(),
           ai_model: z.string().optional(),
           ai_provider: z.string().optional(),
           model_backend: z.string().optional(),
@@ -259,6 +265,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     ),
     async (c) => {
       const { space } = c.get("access");
+      const user = c.get("user");
       const body = c.req.valid("json");
       const modelBackend = resolveModelBackendAlias(
         body.model_backend,
@@ -267,6 +274,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       const updates: {
         name?: string;
+        description?: string | null;
         ai_model?: string;
         model_backend?: string;
         security_posture?: "standard" | "restricted_egress";
@@ -275,10 +283,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       if (body.name && body.name.trim().length > 0) {
         updates.name = body.name.trim();
       }
+      if (body.description !== undefined) {
+        updates.description = body.description;
+      }
 
       if (body.ai_model) {
         const { model: normalizedModel } = await validateSelectableModel(
-          c,
+          c.env,
           body.ai_model,
         );
         updates.ai_model = normalizedModel;
@@ -303,8 +314,12 @@ export default new Hono<AuthenticatedRouteEnv>()
           throw new BadRequestError("Invalid model backend");
         }
         if (!body.ai_model) {
+          const currentSettings = await getWorkspaceModelSettings(
+            c.env.DB,
+            space.id,
+          );
           const existingModel =
-            normalizeModelId(space.ai_model) || DEFAULT_MODEL_ID;
+            normalizeModelId(currentSettings?.ai_model) || DEFAULT_MODEL_ID;
           const inferredModelBackend = getModelBackendForModel(existingModel);
           if (normalizedModelBackend !== inferredModelBackend) {
             throw new BadRequestError("Model backend does not match model");
@@ -321,7 +336,12 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("No valid updates provided");
       }
 
-      const workspace = await updateWorkspace(c.env.DB, space.id, updates);
+      const workspace = await updateWorkspace(
+        c.env.DB,
+        user.id,
+        space.id,
+        updates,
+      );
       if (!workspace) {
         throw new BadRequestError("No valid updates provided");
       }
@@ -335,14 +355,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     const workspace = await getWorkspaceModelSettings(c.env.DB, space.id);
 
     const model = normalizeModelId(workspace?.ai_model) || DEFAULT_MODEL_ID;
-    return c.json(await buildModelSettingsResponse(c, model));
+    return c.json(await buildModelSettingsResponse(c.env, model));
   })
   .patch(
     "/:spaceId/model",
-    spaceAccess({
-      roles: ["owner", "admin"],
-      message: "Space not found or insufficient permissions",
-    }),
+    spaceAccess(),
     zValidator(
       "json",
       z
@@ -369,7 +386,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       const { model, catalog } = await validateSelectableModel(
-        c,
+        c.env,
         requestedModel,
       );
 
@@ -385,7 +402,17 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("Model backend does not match model");
       }
 
-      await updateWorkspaceModel(c.env.DB, space.id, model, modelBackend);
+      if (
+        !(await updateWorkspaceModel(
+          c.env.DB,
+          c.get("user").id,
+          space.id,
+          model,
+          modelBackend,
+        ))
+      ) {
+        throw new NotFoundError("Workspace");
+      }
 
       return c.json({
         ai_model: model,
@@ -402,14 +429,14 @@ export default new Hono<AuthenticatedRouteEnv>()
   )
   .delete(
     "/:spaceId",
-    spaceAccess({
-      roles: ["owner"],
-      message: "Space not found or insufficient permissions",
-    }),
+    spaceAccess(),
     async (c) => {
       const { space } = c.get("access");
+      const user = c.get("user");
 
-      await deleteWorkspace(c.env, space.id);
+      if (!(await deleteWorkspace(c.env, user.id, space.id))) {
+        throw new NotFoundError("Workspace");
+      }
 
       return c.json({ success: true });
     },
