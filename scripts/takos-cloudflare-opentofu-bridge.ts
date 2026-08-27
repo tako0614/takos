@@ -602,6 +602,79 @@ function pathSegment(value: string, label: string): string {
   return encodeURIComponent(value);
 }
 
+type CloudflareMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+
+function cloudflareApiSurface(path: string): string {
+  if (path.includes("/containers/applications")) return "containers.applications";
+  if (path.includes("/vectorize/")) return "vectorize.indexes";
+  if (path.includes("/d1/database")) return "d1.database";
+  if (path.includes("/workers/scripts/")) return "workers.scripts";
+  return "cloudflare.api";
+}
+
+function boundedCloudflareErrorCode(
+  value: unknown,
+  depth = 0,
+): string | undefined {
+  if (depth > 4) return undefined;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return `CF${value}`;
+  }
+  if (
+    typeof value === "string" &&
+    /^[A-Z][A-Z0-9_]{1,127}$/u.test(value)
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = boundedCloudflareErrorCode(entry, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!plainObject(value)) return undefined;
+  for (const key of ["error", "code", "error_code", "errors", "result"]) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const found = boundedCloudflareErrorCode(value[key], depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function cloudflareApiFailureDetail(
+  method: CloudflareMethod,
+  path: string,
+  status: number,
+  parsed?: unknown,
+): string {
+  const code = boundedCloudflareErrorCode(parsed);
+  return [method, cloudflareApiSurface(path), String(status), code]
+    .filter((value): value is string => value !== undefined)
+    .join(":");
+}
+
+export function bridgeFailurePayload(
+  code: string,
+  detail?: string,
+): { readonly ok: false; readonly error: string; readonly detail?: string } {
+  const safeCode = /^[a-z][a-z0-9_]{0,127}$/u.test(code)
+    ? code
+    : "bridge_failed";
+  const safeDetail =
+    safeCode === "cloudflare_api_error" &&
+    /^(?:GET|POST|PATCH|PUT|DELETE):(?:containers\.applications|vectorize\.indexes|d1\.database|workers\.scripts|cloudflare\.api):[1-5][0-9]{2}(?::(?:CF[0-9]{1,12}|[A-Z][A-Z0-9_]{1,127}))?$/u.test(
+      detail ?? "",
+    )
+      ? detail
+      : undefined;
+  return {
+    ok: false,
+    error: safeCode,
+    ...(safeDetail === undefined ? {} : { detail: safeDetail }),
+  };
+}
+
 class CloudflareApi {
   readonly #accountId: string;
   readonly #token: string;
@@ -614,7 +687,7 @@ class CloudflareApi {
   }
 
   async request(
-    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+    method: CloudflareMethod,
     path: string,
     body?: JsonValue,
     allowStatuses: readonly number[] = [],
@@ -645,7 +718,10 @@ class CloudflareApi {
       fail("cloudflare_response_invalid");
     }
     if (!response.ok || !plainObject(parsed) || parsed.success !== true) {
-      fail("cloudflare_api_error", `${method}:${path}:${response.status}`);
+      fail(
+        "cloudflare_api_error",
+        cloudflareApiFailureDetail(method, path, response.status, parsed),
+      );
     }
     return parsed.result ?? null;
   }
@@ -684,7 +760,12 @@ class CloudflareApi {
     }
     if (response.status === 204) {
       await response.body?.cancel().catch(() => {});
-      if (!response.ok) fail("cloudflare_api_error", `${method}:${path}:${response.status}`);
+      if (!response.ok) {
+        fail(
+          "cloudflare_api_error",
+          cloudflareApiFailureDetail(method, path, response.status),
+        );
+      }
       return null;
     }
     let parsed: unknown;
@@ -694,10 +775,18 @@ class CloudflareApi {
       if (error instanceof BridgeFailure) throw error;
       fail("cloudflare_response_invalid");
     }
-    if (!response.ok) fail("cloudflare_api_error", `${method}:${path}:${response.status}`);
+    if (!response.ok) {
+      fail(
+        "cloudflare_api_error",
+        cloudflareApiFailureDetail(method, path, response.status, parsed),
+      );
+    }
     if (plainObject(parsed) && Object.prototype.hasOwnProperty.call(parsed, "success")) {
       if (parsed.success !== true || !Object.prototype.hasOwnProperty.call(parsed, "result")) {
-        fail("cloudflare_api_error", `${method}:${path}:${response.status}`);
+        fail(
+          "cloudflare_api_error",
+          cloudflareApiFailureDetail(method, path, response.status, parsed),
+        );
       }
       return parsed.result ?? null;
     }
@@ -1297,10 +1386,11 @@ if (isMainModule()) {
       process.stdout.write(`${JSON.stringify(evidence)}\n`);
     } catch (error) {
       const code = error instanceof BridgeFailure ? error.code : "bridge_failed";
+      const detail = error instanceof BridgeFailure ? error.detail : undefined;
       // Never include Error.message here: API failures may contain provider
       // response text, and a malformed operator environment must not echo a
       // token accidentally supplied through a shell wrapper.
-      process.stderr.write(`${JSON.stringify({ ok: false, error: code })}\n`);
+      process.stderr.write(`${JSON.stringify(bridgeFailurePayload(code, detail))}\n`);
       process.exitCode = 1;
     }
   }

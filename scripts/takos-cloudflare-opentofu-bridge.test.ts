@@ -3,6 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
+  bridgeFailurePayload,
+  cloudflareApiFailureDetail,
   containerRows,
   migrationFiles,
   runBridge,
@@ -17,6 +19,46 @@ function envelope(result: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+test("CLI failures expose only bounded Cloudflare surface diagnostics", () => {
+  expect(
+    cloudflareApiFailureDetail(
+      "POST",
+      "/accounts/sensitive-account/containers/applications",
+      400,
+      { success: false, errors: [{ code: 1602, message: "unsafe detail" }] },
+    ),
+  ).toBe("POST:containers.applications:400:CF1602");
+  expect(
+    cloudflareApiFailureDetail(
+      "POST",
+      "/accounts/sensitive-account/containers/applications",
+      400,
+      { error: "DURABLE_OBJECT_NOT_CONTAINER_ENABLED" },
+    ),
+  ).toBe(
+    "POST:containers.applications:400:DURABLE_OBJECT_NOT_CONTAINER_ENABLED",
+  );
+  expect(
+    bridgeFailurePayload(
+      "cloudflare_api_error",
+      "POST:containers.applications:400:CF1602",
+    ),
+  ).toEqual({
+    ok: false,
+    error: "cloudflare_api_error",
+    detail: "POST:containers.applications:400:CF1602",
+  });
+  expect(
+    bridgeFailurePayload(
+      "cloudflare_api_error",
+      "POST:/accounts/secret-token/containers/applications:400",
+    ),
+  ).toEqual({ ok: false, error: "cloudflare_api_error" });
+  expect(
+    bridgeFailurePayload("bridge_input_missing", "CLOUDFLARE_API_TOKEN"),
+  ).toEqual({ ok: false, error: "bridge_input_missing" });
+});
 
 test("container desired template expands explicit worker/image/capacity values", async () => {
   const directory = await mkdtemp("takos-cloudflare-bridge-test-");
