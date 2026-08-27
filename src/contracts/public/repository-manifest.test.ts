@@ -12,9 +12,6 @@ const websiteCloudUrlSource = await readFile(
   new URL("website/src/lib/cloud-url.ts", root),
   "utf8",
 );
-const options = JSON.parse(
-  await readFile(new URL("install-options.json", root), "utf8"),
-) as { options: Array<{ source: { path: string } }> };
 const modules = {
   "deploy/opentofu/cloudflare": await readFile(
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
@@ -26,7 +23,7 @@ const modules = {
   ),
 };
 
-test("Takos publishes the closed Repository manifest for its selectable module", () => {
+test("Takos publishes repository install hints and service declarations", () => {
   expect(Object.keys(manifest).sort()).toEqual([
     "apiVersion",
     "install",
@@ -88,10 +85,6 @@ test("Takos publishes the closed Repository manifest for its selectable module",
       ],
     },
   ]);
-  expect(options.options.map((option) => option.source.path)).toEqual([
-    "deploy/opentofu/cloudflare",
-  ]);
-  expect(options.options.map((option) => option.id)).toEqual(["cloudflare"]);
   expect(module.inputs.find((input) => input.name === "cloudflare")).toEqual({
     name: "cloudflare",
     source: { kind: "user" },
@@ -129,8 +122,14 @@ test("Takos publishes the closed Repository manifest for its selectable module",
   expect(manifest.install.modules["deploy/opentofu/takoform"]).toBeDefined();
 });
 
-test("the selectable source and website use one exact Takos release", () => {
+test("the repository source and website CTA use one exact Takos release", () => {
   expect(packageJson.takosRelease.version).toBe(packageJson.version);
+  expect(websiteCloudUrlSource).toContain(
+    'const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git"',
+  );
+  expect(websiteCloudUrlSource).toContain(
+    'url.searchParams.set("git", takosInstallGitUrl());',
+  );
   expect(websiteCloudUrlSource).toContain(
     `const DEFAULT_TAKOS_REF = "${packageTag}"`,
   );
