@@ -235,7 +235,16 @@ function imageReference(value: unknown, accountId?: string): string {
   fail("container_image_must_be_supported_immutable_digest");
 }
 
-function instanceType(value: unknown, label: string): JsonValue {
+type ContainerCapacity =
+  | "lite"
+  | "basic"
+  | {
+    readonly vcpu: number;
+    readonly memory_mib: number;
+    readonly disk_mb: number;
+  };
+
+function instanceType(value: unknown, label: string): ContainerCapacity {
   if (value === "lite" || value === "basic") return value;
   if (!plainObject(value)) fail(`${label}_invalid`);
   const vcpu = integerValue(value.vcpu, `${label}_vcpu`);
@@ -248,7 +257,7 @@ interface DesiredContainer {
   readonly name: string;
   readonly durableObjectClass: string;
   readonly image: string;
-  readonly instanceType: JsonValue;
+  readonly instanceType: ContainerCapacity;
   readonly maxInstances: number;
   readonly rolloutActiveGracePeriod: number;
   readonly schedulingPolicy?: string;
@@ -1027,9 +1036,16 @@ function containerBody(
   desired: DesiredContainer,
   namespaceId: string,
 ): JsonObject {
+  const capacity: Record<string, JsonValue> = typeof desired.instanceType === "string"
+    ? { instance_type: desired.instanceType }
+    : {
+      vcpu: desired.instanceType.vcpu,
+      memory_mib: desired.instanceType.memory_mib,
+      disk: { size_mb: desired.instanceType.disk_mb },
+    };
   const configuration: Record<string, JsonValue> = {
     image: desired.image,
-    instance_type: desired.instanceType,
+    ...capacity,
     ...(desired.observability === undefined ? {} : { observability: desired.observability }),
     ...(desired.wranglerSsh === undefined ? {} : { wrangler_ssh: desired.wranglerSsh }),
     ...(desired.authorizedKeys === undefined ? {} : { authorized_keys: desired.authorizedKeys }),
@@ -1037,7 +1053,7 @@ function containerBody(
   };
   return {
     name: desired.name,
-    ...(desired.schedulingPolicy === undefined ? {} : { scheduling_policy: desired.schedulingPolicy }),
+    scheduling_policy: desired.schedulingPolicy ?? "default",
     configuration,
     instances: 0,
     max_instances: desired.maxInstances,
@@ -1051,10 +1067,18 @@ function containerBody(
 function containerMatches(value: JsonObject, desired: DesiredContainer, namespaceId: string): boolean {
   const configuration = plainObject(value.configuration) ? value.configuration : {};
   const durableObjects = plainObject(value.durable_objects) ? value.durable_objects : {};
+  const disk = plainObject(configuration.disk) ? configuration.disk : {};
+  const capacityMatches = typeof desired.instanceType === "string"
+    ? configuration.instance_type === desired.instanceType
+    : configuration.instance_type === undefined &&
+      Number(configuration.vcpu) === desired.instanceType.vcpu &&
+      Number(configuration.memory_mib) === desired.instanceType.memory_mib &&
+      Number(disk.size_mb) === desired.instanceType.disk_mb;
   return (
     value.name === desired.name &&
     configuration.image === desired.image &&
-    stableJson(configuration.instance_type) === stableJson(desired.instanceType) &&
+    capacityMatches &&
+    value.scheduling_policy === (desired.schedulingPolicy ?? "default") &&
     Number(value.max_instances) === desired.maxInstances &&
     Number(value.rollout_active_grace_period) === desired.rolloutActiveGracePeriod &&
     durableObjects.namespace_id === namespaceId

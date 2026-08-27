@@ -322,7 +322,8 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     };
     const details = new Map<string, Record<string, unknown>>();
     const names = ["tier1", "tier2", "tier3"];
-    names.forEach((tier, index) => {
+    names.slice(1).forEach((tier, offset) => {
+      const index = offset + 1;
       details.set(`app-${tier}`, {
         id: `app-${tier}`,
         name: `takos-executor-${tier}`,
@@ -381,6 +382,12 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         );
       }
       const detailMatch = url.match(/\/containers\/applications\/([^/]+)$/u);
+      if (method === "POST" && url.endsWith("/containers/applications")) {
+        if (!body || typeof body !== "object") return envelope({ error: "invalid" }, 400);
+        const created = { id: "app-tier1", ...(body as Record<string, unknown>) };
+        details.set("app-tier1", created);
+        return envelope(created);
+      }
       if (detailMatch) {
         const id = decodeURIComponent(detailMatch[1]!);
         if (method === "GET") {
@@ -404,7 +411,36 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       "takos-executor-tier3",
     ]);
     expect(evidence.changed).toBe(true);
-    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(3);
+    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(2);
+    const createCall = calls.find(
+      ({ method, url }) => method === "POST" && url.endsWith("/containers/applications"),
+    );
+    expect(createCall?.body).toMatchObject({
+      name: "takos-executor-tier1",
+      scheduling_policy: "default",
+      configuration: {
+        image: DOCKER_IMAGE,
+        instance_type: "lite",
+      },
+      instances: 0,
+      max_instances: 2,
+      durable_objects: { namespace_id: "ns-1" },
+    });
+    const customTierPatch = calls.find(
+      ({ method, url }) => method === "PATCH" && url.endsWith("/app-tier3"),
+    );
+    expect(customTierPatch?.body).toMatchObject({
+      scheduling_policy: "default",
+      configuration: {
+        image: DOCKER_IMAGE,
+        vcpu: 1,
+        memory_mib: 12288,
+        disk: { size_mb: 4000 },
+      },
+    });
+    expect(customTierPatch?.body).not.toMatchObject({
+      configuration: { instance_type: expect.anything() },
+    });
     expect(calls.some(({ method }) => method === "PUT")).toBe(false);
     const listCalls = calls.filter(({ url }) => url.includes("/containers/applications?name="));
     expect(listCalls.map(({ url }) => new URL(url).searchParams.get("name"))).toEqual([
@@ -416,7 +452,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
 
     const second = await runBridge("post-worker", { env, cwd: directory, fetchImpl });
     expect(second.changed).toBe(false);
-    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(3);
+    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(2);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
