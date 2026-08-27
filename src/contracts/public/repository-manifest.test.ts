@@ -31,12 +31,11 @@ test("Takos publishes repository install hints and service declarations", () => 
   ]);
   expect(manifest.apiVersion).toBe("takosumi.com/v2.3");
   expect(manifest.kind).toBe("Repository");
-  expect(Object.keys(manifest.install)).toEqual(["defaultModule", "modules"]);
-  expect(manifest.install.defaultModule).toBe("deploy/opentofu/cloudflare");
-  expect(Object.keys(manifest.install.modules)).toEqual([
+  expect(Object.keys(manifest.install)).toEqual(["modules"]);
+  expect(Object.keys(manifest.install.modules).sort()).toEqual([
     "deploy/opentofu/cloudflare",
     "deploy/opentofu/takoform",
-  ]);
+  ].sort());
   const module = manifest.install.modules["deploy/opentofu/cloudflare"];
   expect(Object.keys(module).sort()).toEqual([
     "inputs",
@@ -168,7 +167,7 @@ test("the Repository manifest requires explicit operator-owned OIDC client metad
 });
 
 test("the Repository manifest does not require a Takosumi AI gateway to install", () => {
-  const module = manifest.install.modules[manifest.install.defaultModule];
+  const module = manifest.install.modules["deploy/opentofu/cloudflare"];
   expect(module.requires.some((candidate) => candidate.kind === "interface.consume")).toBe(
     false,
   );
@@ -273,7 +272,6 @@ interface RepositoryManifest {
   apiVersion: string;
   kind: string;
   install: {
-    defaultModule: string;
     modules: Record<string, RepositoryModule>;
   };
 }
