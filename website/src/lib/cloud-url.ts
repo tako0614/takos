@@ -3,20 +3,20 @@
 // app.takosumi.com in production, app.takosumi.test in local-substrate. Takos
 // product surfaces stay on the Takos worker or the self-hoster's own origin.
 // There is no separate "accounts." subdomain. The add flow reads only the
-// well-known OpenTofu deep-link params git / ref / path / var*.
+// well-known OpenTofu deep-link params git / ref / path / name.
 const PLATFORM_HOST = "app.takosumi.com";
 const LOCAL_PLATFORM_HOST = "app.takosumi.test";
 
 const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
-// Takos ships peer OpenTofu adapters under deploy/opentofu; the deep link
-// points the install wizard at that module path inside the repo so the Capsule
-// resolves to the module root rather than the repo root.
+// Takos ships its complete current OpenTofu adapter under deploy/opentofu;
+// the deep link points the install wizard at that module path inside the repo
+// so the Capsule resolves to the module root rather than the repo root.
 // Fallback must resolve to an immutable release because takos.jp can be built
 // without operator env overrides. Publish and verify the GitHub immutable
 // release before deploying a website build that names its tag; never use a
 // moving branch ref.
-const DEFAULT_TAKOS_REF = "v0.12.7";
-const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/takoform";
+const DEFAULT_TAKOS_REF = "v0.12.8";
+const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/cloudflare";
 
 function installUrl(host: string): string {
   const url = new URL(`https://${host}/install`);
@@ -24,7 +24,6 @@ function installUrl(host: string): string {
   url.searchParams.set("ref", takosInstallRef());
   url.searchParams.set("path", takosInstallModulePath());
   url.searchParams.set("name", "takos");
-  url.searchParams.set("var.project_name", "takos");
   return url.toString();
 }
 
@@ -34,7 +33,7 @@ const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
  * Git/install links land on the Takosumi add flow:
- * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>
+ * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>&name=takos
  * pre-fills `/new` with the repo coordinates. The visitor reviews the Capsule
  * compatibility result and explicitly creates/plans there.
  */

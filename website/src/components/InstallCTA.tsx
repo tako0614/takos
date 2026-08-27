@@ -37,8 +37,19 @@ export default function InstallCTA() {
                   <CodeBlock terminal>
                     <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
                     <span class='k'>$</span> cd takos{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/takoform init{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/takoform apply
+                    <span class='k'>$</span> git fetch --tags origin{'\n'}
+                    <span class='k'>$</span> git checkout --detach v0.12.8{'\n'}
+                    <span class='k'>$</span> git rev-parse --verify v0.12.8{'\n'}
+                    <span class='k'>$</span> bun install --frozen-lockfile{'\n'}
+                    <span class='k'>$</span> bun run build:opentofu-worker-artifact{'\n'}
+                    <span class='k'>$</span> install -d -m 700 "$HOME/.config/takos"{'\n'}
+                    <span class='k'>$</span> cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$HOME/.config/takos/takos.tfvars"{'\n'}
+                    <span class='k'>$</span> chmod 600 "$HOME/.config/takos/takos.tfvars"{'\n'}
+                    <span class='k'>$</span> <span class='c'># edit external tfvars before planning</span>{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare init -input=false{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false -var-file="$HOME/.config/takos/takos.tfvars" -out="$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu show "$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"
                   </CodeBlock>
                 }
               >
