@@ -147,6 +147,11 @@ output "container_desired_config_digest" {
   value       = local.container_desired_config_digest
 }
 
+output "container_rendered_input_digest" {
+  description = "Stable digest of the Container desired template and all values used to render it for the optional provider-gap bridge."
+  value       = local.container_rendered_input_digest
+}
+
 output "migration_set_digest" {
   description = "Stable digest of the D1 migration set used by the optional provider-gap bridge."
   value       = local.migration_set_digest
@@ -157,7 +162,7 @@ output "bridge_helper_digest" {
   value       = local.bridge_helper_digest
 }
 
-output "imperative_staging_bridge_enabled" {
-  description = "Whether provider-gap staging bridges are enabled."
-  value       = var.enable_imperative_staging_bridge
+output "cloudflare_provider_gap_bridge_mode" {
+  description = "Explicit Cloudflare provider-gap bridge mode: off, staging, or disposable-production."
+  value       = var.cloudflare_provider_gap_bridge_mode
 }

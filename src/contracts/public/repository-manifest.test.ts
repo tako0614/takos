@@ -114,6 +114,24 @@ test("Takos publishes repository install hints and service declarations", () => 
   expect(module.inputs.find((input) => input.name === "container_image")?.helper?.en).toContain(
     "GHCR is unsupported",
   );
+  expect(module.inputs.find((input) => input.name === "cloudflare_provider_gap_bridge_mode")).toMatchObject({
+    name: "cloudflare_provider_gap_bridge_mode",
+    source: { kind: "user" },
+    type: "string",
+    advanced: true,
+  });
+  expect(module.inputs.find((input) => input.name === "cloudflare_provider_gap_bridge_mode")?.helper?.en).toContain(
+    "disposable-production",
+  );
+  expect(module.inputs.find((input) => input.name === "cloudflare_provider_gap_bridge_acknowledgement")).toMatchObject({
+    name: "cloudflare_provider_gap_bridge_acknowledgement",
+    source: { kind: "user" },
+    type: "string",
+    advanced: true,
+  });
+  expect(module.inputs.find((input) => input.name === "cloudflare_provider_gap_bridge_acknowledgement")?.helper?.en).toContain(
+    "DISPOSABLE_PRODUCTION_ONE_SHOT",
+  );
   expect(module.inputs.find((input) => input.name === "public_url")?.required).toBe(true);
   const cloudflareVariable = variableBlock(
     modules["deploy/opentofu/cloudflare"],
@@ -167,7 +185,7 @@ test("the repository source and website CTA use one exact Takos release", () => 
     previousCommandOffset = commandOffset;
   }
   expect(installCtaSource).toContain("# edit external tfvars before planning");
-  expect(installCtaSource).not.toContain("enable_imperative_staging_bridge");
+  expect(installCtaSource).not.toContain("cloudflare_provider_gap_bridge_mode");
 });
 
 test("the Repository manifest requires explicit operator-owned OIDC client metadata", () => {

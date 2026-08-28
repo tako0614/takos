@@ -4,7 +4,7 @@
 `apply` type Run -> StateVersion / Output), with a **ProviderConnection / ProviderBinding / policy** owning the provider
 credentials and state handling. The trust boundaries here are properties of that
 Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The contract
-is declared in `deploy/product-resources.json`; the current `deploy/opentofu/cloudflare` adapter maps the complete graph to Cloudflare. The former Provider 1.x Takoform projection is not a current install surface.
+is declared in `deploy/product-resources.json`; the current `deploy/opentofu/cloudflare` adapter maps the product graph to Cloudflare. Its provider-gap bridge is off by default, so ordinary production provider applies leave unsupported gaps unresolved; disposable E2E runs must select a reviewed bridge mode explicitly. The former Provider 1.x Takoform projection is not a current install surface.
 `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
 materialization of that same topology.
 

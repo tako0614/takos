@@ -8,7 +8,7 @@ const PLATFORM_HOST = "app.takosumi.com";
 const LOCAL_PLATFORM_HOST = "app.takosumi.test";
 
 const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
-// Takos ships its complete current OpenTofu adapter under deploy/opentofu;
+// Takos ships its current product-graph OpenTofu adapter under deploy/opentofu;
 // the deep link points the install wizard at that module path inside the repo
 // so the Capsule resolves to the module root rather than the repo root.
 // Fallback must resolve to an immutable release because takos.jp can be built

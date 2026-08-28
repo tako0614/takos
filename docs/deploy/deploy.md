@@ -1,7 +1,8 @@
 # Takos deployment lifecycle
 
 Takos owns a provider-neutral resource contract in `deploy/product-resources.json`.
-`deploy/opentofu/cloudflare` is its complete current adapter. Takosumi runs the ordinary OpenTofu module and
+`deploy/opentofu/cloudflare` is its current product-graph adapter. Cloudflare provider gaps remain explicit until the
+reviewed bridge is selected for a disposable E2E. Takosumi runs the ordinary OpenTofu module and
 records the run ledger as **Capsule** plus
 **`plan` type Run** -> **`apply` type Run** -> **StateVersion / Output** entries.
 
@@ -11,6 +12,17 @@ records the run ledger as **Capsule** plus
 2. Register or update the Takos Capsule from the Git URL/ref and review the recorded **`plan` type Run** before apply.
 3. `apply` records StateVersion and Output and keeps policy/audit evidence.
 4. The adapter materializes the product-owned runtime connections and immutable artifacts.
+
+## Cloudflare provider-gap bridge
+
+The direct Cloudflare adapter declares the product graph, but its provider-gap bridge is disabled by default, so
+ordinary production provider applies do not silently fill unsupported gaps. Set
+`cloudflare_provider_gap_bridge_mode = "staging"` with `environment = "staging"` only for disposable staging smoke inputs. A disposable production E2E must
+select `"disposable-production"` with `environment = "production"` and set
+`cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"`; any other acknowledgement fails closed.
+The bridge is app-owned and covers only Vectorize, D1 migrations, container-enabled Durable Object migration, and Container
+application reconciliation. Destroy invokes ownership-proven cleanup for bridge-created Container applications and the Vectorize
+index; it does not roll back D1 data.
 
 ## Takos Boundary
 
