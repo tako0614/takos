@@ -37,8 +37,9 @@ module "platform" {
   zone_id           = try(var.cloudflare.zone_id, null)
   zone_name         = try(var.cloudflare.zone_name, null)
 
-  enable_imperative_staging_bridge = var.enable_imperative_staging_bridge
-  container_image                  = var.container_image
+  cloudflare_provider_gap_bridge_mode            = var.cloudflare_provider_gap_bridge_mode
+  cloudflare_provider_gap_bridge_acknowledgement = var.cloudflare_provider_gap_bridge_acknowledgement
+  container_image                                = var.container_image
 
   takosumi_accounts_url          = var.takosumi_accounts_url
   takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url

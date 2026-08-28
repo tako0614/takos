@@ -33,11 +33,12 @@ module "app" {
     tls        = tls
   }
 
-  project_name                     = "takos-generated-root"
-  public_url                       = "https://takos-generated-root.example.com"
-  opentofu_plan_mode               = true
-  enable_imperative_staging_bridge = true
-  container_image                  = "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  project_name                       = "takos-generated-root"
+  public_url                         = "https://takos-generated-root.example.com"
+  environment                        = "staging"
+  opentofu_plan_mode                 = true
+  cloudflare_provider_gap_bridge_mode = "staging"
+  container_image                     = "docker.io/library/alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000"
   cloudflare = {
     account_id = "00000000000000000000000000000000"
   }

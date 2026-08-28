@@ -1,14 +1,17 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 
 import {
+  CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
   bridgeFailurePayload,
   cloudflareApiFailureDetail,
   containerRows,
   migrationFiles,
   pendingDurableObjectMigration,
   runBridge,
+  validateCloudflareProviderGapBridgeActivation,
 } from "./takos-cloudflare-opentofu-bridge.ts";
 
 const DOCKER_IMAGE =
@@ -38,6 +41,60 @@ const DURABLE_OBJECT_LIFECYCLE = {
     { name: "EXECUTOR_CONTAINER_TIER3", class_name: "ExecutorContainerTier3" },
   ],
 };
+
+test("provider-gap bridge activation is default-off and fail-closed for production", () => {
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation(undefined, undefined)
+  ).toThrow("bridge_mode_missing");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation(" staging ", undefined, "staging")
+  ).toThrow("bridge_mode_invalid");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("off", CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT)
+  ).toThrow("bridge_acknowledgement_unexpected");
+  expect(
+    validateCloudflareProviderGapBridgeActivation("off", undefined, "production"),
+  ).toMatchObject({ mode: "off" });
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("staging", undefined, "production")
+  ).toThrow("bridge_environment_mismatch");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("staging", undefined)
+  ).toThrow("bridge_environment_missing");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("disposable-production", undefined, "production")
+  ).toThrow("bridge_acknowledgement_required");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("disposable-production", "reviewed", "production")
+  ).toThrow("bridge_acknowledgement_invalid");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation(
+      "disposable-production",
+      CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
+      "staging",
+    )
+  ).toThrow("bridge_environment_mismatch");
+  expect(() =>
+    validateCloudflareProviderGapBridgeActivation("staging", CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT, "staging")
+  ).toThrow("bridge_acknowledgement_unexpected");
+  expect(
+    validateCloudflareProviderGapBridgeActivation(
+      "disposable-production",
+      CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
+      "production",
+    ),
+  ).toMatchObject({ mode: "disposable-production" });
+});
+
+test("disabled bridge mode refuses helper execution before reading Cloudflare inputs", async () => {
+  await expect(
+    runBridge("verify", {
+      env: {
+        TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "off",
+      },
+    }),
+  ).rejects.toThrow("bridge_disabled");
+});
 
 function envelope(result: unknown, status = 200): Response {
   return new Response(JSON.stringify({ success: status >= 200 && status < 300, result }), {
@@ -246,18 +303,27 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
   try {
     const absoluteDirectory = resolve(directory);
     const migrationDirectory = join(absoluteDirectory, "migrations");
+    const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
-    await (await import("node:fs/promises")).mkdir(migrationDirectory);
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(migrationDirectory);
+    await mkdir(assetsDirectory);
+    await mkdir(join(assetsDirectory, "a"));
     await writeFile(join(migrationDirectory, "0043_ap_followers.sql"), "CREATE TABLE ap_followers (id TEXT);\n");
     await writeFile(join(migrationDirectory, "0043_store_network_inventory_metadata.sql"), "CREATE TABLE store_network (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
+    await writeFile(join(assetsDirectory, "a", "child.js"), "export const nested = true;\n");
+    await writeFile(join(assetsDirectory, "a.txt"), "root asset\n");
+    await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
     await writeFile(
       bootstrapPath,
       "export class ExecutorContainerTier1 {}; export default {};\n",
     );
     const migrationSet = await migrationFiles(migrationDirectory);
     const env: Record<string, string> = {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
       TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
@@ -266,6 +332,7 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
       TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+      TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: bootstrapPath,
       TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE: JSON.stringify(
         DURABLE_OBJECT_LIFECYCLE,
@@ -274,6 +341,7 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     };
     let vectorExists = false;
     let durableObjectMigrationTag: string | undefined;
+    let workerVersionBindings: readonly Record<string, unknown>[] = [];
     const ledger = new Map<string, string>();
     let imports = 0;
     const calls: string[] = [];
@@ -295,8 +363,16 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
                   id: "takos-staging",
                   migration_tag: durableObjectMigrationTag,
                 },
-              ],
+          ],
         );
+      }
+      if (url.endsWith("/workers/scripts/takos-staging/deployments")) {
+        return envelope({
+          versions: [{ version_id: "bootstrap-version", percentage: 100 }],
+        });
+      }
+      if (url.endsWith("/workers/scripts/takos-staging/versions/bootstrap-version")) {
+        return envelope({ resources: { bindings: workerVersionBindings } });
       }
       if (
         url.includes("/workers/scripts/takos-staging?") &&
@@ -312,9 +388,17 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
           throw new Error("invalid worker bootstrap multipart body");
         }
         const metadata = JSON.parse(metadataValue) as Record<string, unknown>;
-        durableObjectMigrationTag = (
-          metadata.migrations as { new_tag?: string }
-        ).new_tag;
+        const migrations = metadata.migrations;
+        if (migrations && typeof migrations === "object" && !Array.isArray(migrations)) {
+          const newTag = (migrations as { new_tag?: unknown }).new_tag;
+          if (typeof newTag === "string") durableObjectMigrationTag = newTag;
+        }
+        workerVersionBindings = Array.isArray(metadata.bindings)
+          ? metadata.bindings.filter(
+              (binding): binding is Record<string, unknown> =>
+                typeof binding === "object" && binding !== null && !Array.isArray(binding),
+            )
+          : [];
         durableObjectUploads.push({
           metadata,
           bootstrap: await bootstrapValue.text(),
@@ -363,7 +447,17 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     expect(first.digests.desiredDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(first.digests.helperDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(first.digests.migrationDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
-    expect(durableObjectUploads).toHaveLength(1);
+    const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+    const expectedWorkerArtifactDigest = hash([
+      `worker/index.js:${hash("export default {};\n")}`,
+      `assets/a.txt:${hash("root asset\n")}`,
+      `assets/a/child.js:${hash("export const nested = true;\n")}`,
+      `assets/index.js:${hash("export const asset = true;\n")}`,
+    ].join("|"));
+    expect(first.digests.workerArtifactDigest).toBe(
+      `sha256:${expectedWorkerArtifactDigest}`,
+    );
+    expect(durableObjectUploads).toHaveLength(2);
     expect(durableObjectUploads[0]?.url).toEndWith(
       "/workers/scripts/takos-staging?excludeScript=true&bindings_inherit=strict",
     );
@@ -382,6 +476,24 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
         steps: DURABLE_OBJECT_LIFECYCLE.steps,
       },
     });
+    expect(durableObjectUploads[1]?.metadata).toEqual({
+      main_module: "durable-object-migration-bootstrap.js",
+      compatibility_date: "2026-04-01",
+      bindings: [
+        ...DURABLE_OBJECT_LIFECYCLE.container_bindings.map((binding) => ({
+          ...binding,
+          type: "durable_object_namespace",
+        })),
+        {
+          name: "VECTORIZE",
+          type: "vectorize",
+          index_name: "takos-staging-embeddings",
+        },
+      ],
+      containers: DURABLE_OBJECT_LIFECYCLE.container_bindings.map(
+        ({ class_name }) => ({ class_name }),
+      ),
+    });
     expect(durableObjectUploads[0]?.bootstrap).toContain(
       "ExecutorContainerTier1",
     );
@@ -391,8 +503,13 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     expect(second.durableObjects.status).toBe("present");
     expect(second.changed).toBe(false);
     expect(imports).toBe(2);
-    expect(durableObjectUploads).toHaveLength(1);
+    expect(durableObjectUploads).toHaveLength(2);
     expect(calls.every((call) => !call.includes(env.CLOUDFLARE_API_TOKEN))).toBe(true);
+    await writeFile(join(assetsDirectory, "asset-only.js"), "export const changed = true;\n");
+    const assetChanged = await runBridge("pre-worker", { env, cwd: directory, fetchImpl });
+    expect(assetChanged.digests.workerArtifactDigest).not.toBe(
+      first.digests.workerArtifactDigest,
+    );
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
@@ -403,11 +520,15 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
   try {
     const absoluteDirectory = resolve(directory);
     const migrationDirectory = join(absoluteDirectory, "migrations");
+    const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const configPath = join(absoluteDirectory, "containers.json");
-    await (await import("node:fs/promises")).mkdir(migrationDirectory);
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(migrationDirectory);
+    await mkdir(assetsDirectory);
     await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
+    await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
     const migrationSet = await migrationFiles(migrationDirectory);
     await writeFile(
       configPath,
@@ -416,32 +537,35 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
           {
             name: "takos-executor-tier1",
             durable_object_class: "ExecutorContainerTier1",
-            image: DOCKER_IMAGE,
+            image: "${TAKOS_CONTAINER_IMAGE}",
             instance_type: "lite",
-            max_instances: 2,
+            max_instances: "${TAKOS_EXECUTOR_TIER1_MAX_INSTANCES:-1}",
             rollout_active_grace_period: 900,
           },
           {
             name: "takos-executor-tier2",
             durable_object_class: "ExecutorContainerTier2",
-            image: DOCKER_IMAGE,
+            image: "${TAKOS_CONTAINER_IMAGE}",
             instance_type: "basic",
-            max_instances: 2,
+            max_instances: "${TAKOS_EXECUTOR_TIER2_MAX_INSTANCES:-1}",
             rollout_active_grace_period: 900,
           },
           {
             name: "takos-executor-tier3",
             durable_object_class: "ExecutorContainerTier3",
-            image: DOCKER_IMAGE,
+            image: "${TAKOS_CONTAINER_IMAGE}",
             instance_type: { vcpu: 1, memory_mib: 12288, disk_mb: 4000 },
-            max_instances: 2,
+            max_instances: "${TAKOS_EXECUTOR_TIER3_MAX_INSTANCES:-1}",
             rollout_active_grace_period: 900,
           },
         ],
       }),
     );
+    const originalConfigContent = await readFile(configPath, "utf8");
     const accountId = "a".repeat(32);
     const env: Record<string, string> = {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: accountId,
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos",
       TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
@@ -450,8 +574,12 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
       TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+      TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: configPath,
       TAKOS_CONTAINER_IMAGE: DOCKER_IMAGE,
+      TAKOS_EXECUTOR_TIER1_MAX_INSTANCES: "2",
+      TAKOS_EXECUTOR_TIER2_MAX_INSTANCES: "2",
+      TAKOS_EXECUTOR_TIER3_MAX_INSTANCES: "2",
       CLOUDFLARE_API_TOKEN: "container-test-token",
     };
     const details = new Map<string, Record<string, unknown>>();
@@ -487,6 +615,8 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         rollout_active_grace_period: 600,
       });
     });
+    let vectorExists = true;
+    let d1LedgerExists = true;
     const calls: Array<{ method: string; url: string; body?: unknown }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = String(input);
@@ -503,16 +633,27 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
               type: "durable_object_namespace",
               class_name: `ExecutorContainerTier${index + 1}`,
               namespace_id: `ns-${index + 1}`,
-            })),
+            })).concat([
+              { type: "vectorize", index_name: "takos-embeddings" },
+            ]),
           },
         });
       }
       if (url.endsWith("/vectorize/v2/indexes/takos-embeddings")) {
-        return envelope({ name: "takos-embeddings", config: { dimensions: 768, metric: "cosine" } });
+        if (method === "DELETE") {
+          vectorExists = false;
+          return envelope(null);
+        }
+        return vectorExists
+          ? envelope({ name: "takos-embeddings", config: { dimensions: 768, metric: "cosine" } })
+          : envelope({ error: "missing" }, 404);
       }
       if (url.endsWith("/d1/database/d1-1/query")) {
         const sql = (body as { sql?: string } | undefined)?.sql ?? "";
         if (sql.startsWith("SELECT name")) {
+          if (!d1LedgerExists) {
+            return envelope({ success: false, errors: [{ code: 9000, message: "no such table" }] });
+          }
           return envelope([{ success: true, results: [{ name: "0001_schema.sql", checksum: `sha256:${migrationSet[0]!.sha256}` }] }]);
         }
         return envelope([{ success: true, results: [] }]);
@@ -551,6 +692,10 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
           const update = body as Record<string, unknown>;
           details.set(id, normalizeNamedCapacity({ ...current, ...update }));
           return envelope(details.get(id));
+        }
+        if (method === "DELETE") {
+          details.delete(id);
+          return envelope(null);
         }
       }
       return envelope({ error: `unexpected ${method} ${url}` }, 500);
@@ -607,6 +752,298 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     const second = await runBridge("post-worker", { env, cwd: directory, fetchImpl });
     expect(second.changed).toBe(false);
     expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(2);
+
+    const productionEnv = {
+      ...env,
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "disposable-production",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "production",
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT:
+        CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
+    };
+    const production = await runBridge("post-worker", {
+      env: productionEnv,
+      cwd: directory,
+      fetchImpl,
+    });
+    expect(production.bridgeMode).toBe("disposable-production");
+    expect(production.digests.bridgeActivationDigest).not.toBe(
+      second.digests.bridgeActivationDigest,
+    );
+
+    const changedInputEnv = {
+      ...productionEnv,
+      TAKOS_CONTAINER_IMAGE:
+        "docker.io/library/alpine@sha256:" + "c".repeat(64),
+      TAKOS_EXECUTOR_TIER1_MAX_INSTANCES: "3",
+    };
+    const changedInputs = await runBridge("post-worker", {
+      env: changedInputEnv,
+      cwd: directory,
+      fetchImpl,
+    });
+    expect(changedInputs.digests.desiredDigest).not.toBe(
+      production.digests.desiredDigest,
+    );
+
+    // Simulate a trigger replacement where the working-tree template has
+    // already been replaced by a new image. Destroy must use the old
+    // content captured in state, not reread this mutable path.
+    const replacementImage =
+      "docker.io/library/alpine@sha256:" + "b".repeat(64);
+    const replacementConfig = JSON.parse(originalConfigContent) as {
+      applications: Array<Record<string, unknown>>;
+    };
+    for (const row of replacementConfig.applications) row.image = replacementImage;
+    await writeFile(configPath, JSON.stringify(replacementConfig));
+
+    // A partial pre-worker run may have created provider-gap resources before
+    // the D1 ledger table existed. Recovery must still reach ownership-proven
+    // cleanup and must not issue the bare ledger SELECT first.
+    d1LedgerExists = false;
+    const d1QueryCallsBeforeCleanup = calls.filter(({ url }) =>
+      url.includes("/d1/database/d1-1/query"),
+    ).length;
+    const cleanup = await runBridge("recovery-cleanup", {
+      env: {
+        ...changedInputEnv,
+        // The old state points at a template path that was renamed away; the
+        // immutable content snapshot is the only valid cleanup input.
+        TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH:
+          "renamed-container-desired.json",
+        TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: originalConfigContent,
+      },
+      cwd: directory,
+      fetchImpl,
+    });
+    expect(cleanup.vector.status).toBe("deleted");
+    expect(cleanup.containers.deleted).toEqual([
+      "takos-executor-tier1",
+      "takos-executor-tier2",
+      "takos-executor-tier3",
+    ]);
+    expect(cleanup.changed).toBe(true);
+    expect(
+      calls.filter(({ url }) => url.includes("/d1/database/d1-1/query")),
+    ).toHaveLength(d1QueryCallsBeforeCleanup);
+    const cleanupAgain = await runBridge("recovery-cleanup", {
+      env: changedInputEnv,
+      cwd: directory,
+      fetchImpl,
+    });
+    expect(cleanupAgain.vector.status).toBe("present");
+    expect(cleanupAgain.containers.deleted).toEqual([]);
+    expect(cleanupAgain.changed).toBe(false);
+
+    const legacyInput = Object.fromEntries(
+      Object.entries(changedInputEnv).filter(
+        ([name]) =>
+          ![
+            "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE",
+            "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT",
+            "TAKOS_CLOUDFLARE_ENVIRONMENT",
+            "TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH",
+          ].includes(name),
+      ),
+    );
+    const normalizedLegacyInput = {
+      ...legacyInput,
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT: "",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+    };
+    const legacyCleanup = await runBridge("recovery-cleanup", {
+      env: normalizedLegacyInput,
+      cwd: directory,
+      fetchImpl,
+    });
+    expect(legacyCleanup.changed).toBe(false);
+    expect(legacyCleanup.digests.workerArtifactDigest).toBe(
+      `sha256:${createHash("sha256").update(await readFile(artifactPath)).digest("hex")}`,
+    );
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("pre-worker proves Vectorize ownership on the bootstrap version before a D1 ledger failure", async () => {
+  const directory = await mkdtemp("takos-cloudflare-bridge-test-");
+  try {
+    const absoluteDirectory = resolve(directory);
+    const migrationDirectory = join(absoluteDirectory, "migrations");
+    const assetsDirectory = join(absoluteDirectory, "assets");
+    const artifactPath = join(absoluteDirectory, "worker.js");
+    const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
+    const containerPath = join(absoluteDirectory, "containers.json");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(migrationDirectory);
+    await mkdir(assetsDirectory);
+    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
+    await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
+    await writeFile(artifactPath, "export default {};\n");
+    await writeFile(bootstrapPath, "export class ExecutorContainerTier1 {}; export default {};\n");
+    await writeFile(
+      containerPath,
+      JSON.stringify({
+        applications: [
+          {
+            name: "takos-executor-tier1",
+            durable_object_class: "ExecutorContainerTier1",
+            image: DOCKER_IMAGE,
+            instance_type: "lite",
+            max_instances: 1,
+            rollout_active_grace_period: 900,
+          },
+          {
+            name: "takos-executor-tier2",
+            durable_object_class: "ExecutorContainerTier2",
+            image: DOCKER_IMAGE,
+            instance_type: "basic",
+            max_instances: 1,
+            rollout_active_grace_period: 900,
+          },
+          {
+            name: "takos-executor-tier3",
+            durable_object_class: "ExecutorContainerTier3",
+            image: DOCKER_IMAGE,
+            instance_type: { vcpu: 1, memory_mib: 12288, disk_mb: 4000 },
+            max_instances: 1,
+            rollout_active_grace_period: 900,
+          },
+        ],
+      }),
+    );
+    const env: Record<string, string> = {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+      TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+      TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
+      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-staging-embeddings",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
+      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
+      TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+      TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
+      TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: containerPath,
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: bootstrapPath,
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE: JSON.stringify(DURABLE_OBJECT_LIFECYCLE),
+      CLOUDFLARE_API_TOKEN: "bootstrap-proof-token",
+    };
+    const namespaceIds = new Map([
+      ["ExecutorContainerTier1", "ns-1"],
+      ["ExecutorContainerTier2", "ns-2"],
+      ["ExecutorContainerTier3", "ns-3"],
+    ]);
+    let vectorExists = false;
+    let migrationTag: string | undefined;
+    let activeVersion = "bootstrap-do-only";
+    let activeBindings: readonly Record<string, unknown>[] = [];
+    const uploads: Array<Record<string, unknown>> = [];
+    const calls: Array<{ method: string; url: string; body?: unknown }> = [];
+    const uploadCallIndexes: number[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET");
+      const body = init?.body === undefined ? undefined : String(init.body);
+      calls.push({
+        method,
+        url,
+        ...(body === undefined ? {} : { body: body.startsWith("{") ? JSON.parse(body) : body }),
+      });
+      if (url.endsWith("/workers/scripts") && method === "GET") {
+        return envelope(
+          migrationTag === undefined
+            ? []
+            : [{ id: "takos-staging", migration_tag: migrationTag }],
+        );
+      }
+      if (url.endsWith("/workers/scripts/takos-staging/deployments")) {
+        return envelope({ versions: [{ version_id: activeVersion, percentage: 100 }] });
+      }
+      if (url.endsWith(`/workers/scripts/takos-staging/versions/${activeVersion}`)) {
+        return envelope({ resources: { bindings: activeBindings } });
+      }
+      if (url.includes("/workers/scripts/takos-staging?") && method === "PUT") {
+        uploadCallIndexes.push(calls.length - 1);
+        const form = await new Request(url, init).formData();
+        const metadataValue = form.get("metadata");
+        if (typeof metadataValue !== "string") throw new Error("missing bootstrap metadata");
+        const metadata = JSON.parse(metadataValue) as Record<string, unknown>;
+        uploads.push(metadata);
+        const migrations = metadata.migrations;
+        if (migrations && typeof migrations === "object" && !Array.isArray(migrations)) {
+          const newTag = (migrations as { new_tag?: unknown }).new_tag;
+          if (typeof newTag === "string") migrationTag = newTag;
+        }
+        activeVersion = uploads.length === 1 ? "bootstrap-do-only" : "bootstrap-vector-proof";
+        activeBindings = Array.isArray(metadata.bindings)
+          ? metadata.bindings.flatMap((binding) => {
+              if (typeof binding !== "object" || binding === null || Array.isArray(binding)) return [];
+              const row = binding as Record<string, unknown>;
+              const namespaceId = typeof row.class_name === "string"
+                ? namespaceIds.get(row.class_name)
+                : undefined;
+              return namespaceId === undefined ? [row] : [{ ...row, namespace_id: namespaceId }];
+            })
+          : [];
+        return envelope({ deployment_id: activeVersion });
+      }
+      if (url.endsWith("/vectorize/v2/indexes/takos-staging-embeddings")) {
+        if (method === "DELETE") {
+          vectorExists = false;
+          return envelope(null);
+        }
+        return vectorExists
+          ? envelope({ name: "takos-staging-embeddings", config: { dimensions: 768, metric: "cosine" } })
+          : envelope({ error: "missing" }, 404);
+      }
+      if (url.endsWith("/vectorize/v2/indexes") && method === "POST") {
+        vectorExists = true;
+        return envelope({});
+      }
+      if (url.endsWith("/d1/database/d1-1/query")) {
+        const sql = ((calls.at(-1)?.body ?? {}) as { sql?: string }).sql ?? "";
+        if (sql.startsWith("CREATE TABLE")) {
+          return envelope({ success: false, errors: [{ code: 9000, message: "ledger create failed" }] });
+        }
+        throw new Error(`unexpected D1 query: ${sql}`);
+      }
+      if (url.includes("/containers/applications?name=") && method === "GET") {
+        return envelope([]);
+      }
+      return envelope({ error: `unexpected ${method} ${url}` }, 500);
+    };
+
+    await expect(runBridge("pre-worker", { env, cwd: directory, fetchImpl })).rejects.toThrow(
+      "cloudflare_d1_query_failed",
+    );
+    expect(vectorExists).toBe(true);
+    expect(uploads).toHaveLength(2);
+    expect(
+      (uploads[0]?.bindings as Array<Record<string, unknown>>).some(
+        (binding) => binding.name === "VECTORIZE",
+      ),
+    ).toBe(false);
+    expect(
+      (uploads[1]?.bindings as Array<Record<string, unknown>>).find(
+        (binding) => binding.name === "VECTORIZE",
+      ),
+    ).toEqual({ name: "VECTORIZE", type: "vectorize", index_name: "takos-staging-embeddings" });
+    const firstUpload = uploadCallIndexes[0] ?? -1;
+    const vectorCreate = calls.findIndex(({ method, url }) => method === "POST" && url.endsWith("/vectorize/v2/indexes"));
+    const proofUpload = uploadCallIndexes[1] ?? -1;
+    const d1Create = calls.findIndex(({ method, url, body }) => method === "POST" && url.endsWith("/d1/database/d1-1/query") && typeof body === "object" && body !== null && "sql" in body && String((body as { sql: string }).sql).startsWith("CREATE TABLE"));
+    expect(firstUpload).toBeGreaterThanOrEqual(0);
+    expect(vectorCreate).toBeGreaterThan(firstUpload);
+    expect(proofUpload).toBeGreaterThan(vectorCreate);
+    expect(d1Create).toBeGreaterThan(proofUpload);
+
+    const d1CallsBeforeCleanup = calls.filter(({ url }) => url.includes("/d1/database/d1-1/query")).length;
+    const cleanup = await runBridge("recovery-cleanup", { env, cwd: directory, fetchImpl });
+    expect(cleanup.vector.status).toBe("deleted");
+    expect(cleanup.containers.deleted).toEqual([]);
+    expect(calls.filter(({ url }) => url.includes("/d1/database/d1-1/query"))).toHaveLength(d1CallsBeforeCleanup);
+    expect(calls.some(({ method, url }) => method === "DELETE" && url.endsWith("/vectorize/v2/indexes/takos-staging-embeddings"))).toBe(true);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

@@ -71,8 +71,10 @@ Takosumi の install は、Git repository URL、ref（tag または commit）、
 （repository 内の OpenTofu サブディレクトリ）を指定して開始します。Takosumi は指定した
 commit の OpenTofu tree を走査し、通常の module と
 [`/.well-known/takosumi.json`](.well-known/takosumi.json) の repository-owned
-hints / service 宣言を導入画面に反映します。Takos の現在の supported adapter は
-`deploy/opentofu/cloudflare` で、Takos の完全な resource graph を表します。旧
+ hints / service 宣言を導入画面に反映します。Takos の現在の supported adapter は
+`deploy/opentofu/cloudflare` で、Takos の product resource graph を宣言します。Cloudflare provider がまだ表現できない
+gap は通常の production provider apply では解決されず、source graph の完全な反映が必要な disposable E2E だけ
+明示的に provider-gap bridge を有効にします。旧
 `deploy/opentofu/takoform` tree は現行 Form 群で全 graph を表せないため、新規 install
 には使いません。`install.modules` のキーは、Git/OpenTofu tree で実在を確認した module
 path に紐づく補助 metadata であり、候補の作成・順序付け・既定値の決定はしません。候補の

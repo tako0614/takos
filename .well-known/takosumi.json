@@ -43,6 +43,10 @@
             "source": { "kind": "user" },
             "type": "string",
             "label": { "ja": "実行環境", "en": "Environment" },
+            "helper": {
+              "ja": "production または staging を指定します。Cloudflare provider-gap bridge を使う場合、mode と完全一致する環境を選びます。",
+              "en": "Use production or staging. When the Cloudflare provider-gap bridge is enabled, the environment must exactly match its mode."
+            },
             "advanced": true
           },
           {
@@ -59,14 +63,27 @@
             "advanced": true
           },
           {
-            "name": "enable_imperative_staging_bridge",
+            "name": "cloudflare_provider_gap_bridge_mode",
             "source": { "kind": "user" },
-            "type": "boolean",
-            "label": { "ja": "Cloudflare staging bridge", "en": "Cloudflare staging bridge" },
+            "type": "string",
+            "label": { "ja": "Cloudflare provider-gap bridge のモード", "en": "Cloudflare provider-gap bridge mode" },
             "helper": {
-              "ja": "Vectorize、Container、D1 の provider gap だけを補う staging 用 bridge です。",
-              "en": "Staging-only bridge for the remaining Vectorize, Container, and D1 provider gaps."
+              "ja": "既定値は off です。staging は environment=staging の smoke 用、disposable-production は environment=production と明示的な確認文字列を伴う一回限りの本番相当 E2E 用です。off の通常 production では provider gap は補われず、bridge は Vectorize、Container、D1、container-enabled Durable Object の gap だけを補います。",
+              "en": "The default is off. Use staging only with environment=staging for smoke inputs, or disposable-production only with environment=production and the explicit acknowledgement below for a one-shot production-equivalent E2E. With off, ordinary production leaves provider gaps unresolved; the bridge covers only the Vectorize, Container, D1, and container-enabled Durable Object gaps."
             },
+            "placeholder": "off | staging | disposable-production",
+            "advanced": true
+          },
+          {
+            "name": "cloudflare_provider_gap_bridge_acknowledgement",
+            "source": { "kind": "user" },
+            "type": "string",
+            "label": { "ja": "disposable-production の確認", "en": "Disposable-production acknowledgement" },
+            "helper": {
+              "ja": "environment=production の disposable-production を選ぶときだけ DISPOSABLE_PRODUCTION_ONE_SHOT を完全一致で入力します。off と staging では空欄にします。",
+              "en": "When disposable-production with environment=production is selected, enter DISPOSABLE_PRODUCTION_ONE_SHOT exactly. Keep this empty for off and staging."
+            },
+            "placeholder": "DISPOSABLE_PRODUCTION_ONE_SHOT",
             "advanced": true
           },
           {
@@ -76,8 +93,8 @@
             "required": false,
             "label": { "ja": "Container イメージ", "en": "Container image" },
             "helper": {
-              "ja": "staging bridge を使う場合だけ、Docker Hub または同一 Cloudflare account の immutable digest を指定します。GHCR はサポート対象外です。",
-              "en": "For the staging bridge only, provide an immutable Docker Hub digest or same-account Cloudflare registry digest. GHCR is unsupported."
+              "ja": "provider-gap bridge を使う場合だけ、Docker Hub または同一 Cloudflare account の immutable digest を指定します。GHCR はサポート対象外です。",
+              "en": "When the provider-gap bridge is enabled, provide an immutable Docker Hub digest or same-account Cloudflare registry digest. GHCR is unsupported."
             },
             "placeholder": "docker.io/example/agent@sha256:<64 hex>",
             "advanced": true
