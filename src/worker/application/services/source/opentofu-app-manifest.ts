@@ -9,8 +9,6 @@ export function selectInstallableSourcePathFromRepo(
     "opentofu/outputs.tf",
     "infra/main.tf",
     "infra/outputs.tf",
-    "deploy/opentofu/takoform/main.tf",
-    "deploy/opentofu/takoform/outputs.tf",
     "deploy/opentofu/cloudflare/main.tf",
     "deploy/opentofu/cloudflare/outputs.tf",
   ]) {

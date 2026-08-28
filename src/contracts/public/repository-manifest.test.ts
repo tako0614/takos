@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const root = new URL("../../../", import.meta.url);
 const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
@@ -20,11 +20,10 @@ const modules = {
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
     "utf8",
   ),
-  "deploy/opentofu/takoform": await readFile(
-    new URL("deploy/opentofu/takoform/main.tf", root),
-    "utf8",
-  ),
 };
+const retiredTakoformEntries = await readdir(
+  new URL("deploy/opentofu/takoform/", root),
+);
 
 test("Takos publishes repository install hints and service declarations", () => {
   expect(Object.keys(manifest).sort()).toEqual([
@@ -35,10 +34,9 @@ test("Takos publishes repository install hints and service declarations", () => 
   expect(manifest.apiVersion).toBe("takosumi.com/v2.3");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["modules"]);
-  expect(Object.keys(manifest.install.modules).sort()).toEqual([
+  expect(Object.keys(manifest.install.modules)).toEqual([
     "deploy/opentofu/cloudflare",
-    "deploy/opentofu/takoform",
-  ].sort());
+  ]);
   const module = manifest.install.modules["deploy/opentofu/cloudflare"];
   expect(Object.keys(module).sort()).toEqual([
     "inputs",
@@ -140,7 +138,11 @@ test("Takos publishes repository install hints and service declarations", () => 
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
 
-  expect(manifest.install.modules["deploy/opentofu/takoform"]).toBeDefined();
+  expect(retiredTakoformEntries.filter((name) => /\.(?:tf|tofu)(?:\.json)?$/u.test(name))).toEqual([]);
+  expect(retiredTakoformEntries).toEqual(expect.arrayContaining([
+    "main.tf.history",
+    "outputs.tf.history",
+  ]));
 });
 
 test("the repository source and website CTA use one exact Takos release", () => {

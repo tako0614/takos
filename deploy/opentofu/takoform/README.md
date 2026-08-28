@@ -1,9 +1,12 @@
-# Retired Takoform Provider 1.x projection
+# Historical Takoform Provider 1.x projection
 
-This source tree preserves the former Provider 1.x projection for release
-history and migration analysis. It is not listed in the current Repository
-manifest or install options: current Forms do not represent Takos's complete
-product-owned graph, including StatefulEntity and its native runtime bindings.
+This directory preserves the former Provider 1.x projection only for release
+history and migration analysis. Its HCL is named `main.tf.history`, so neither
+OpenTofu nor Takosumi source discovery can select it as an installable module.
+It is not listed in the current Repository manifest. Current Forms do not
+represent Takos's complete product-owned graph: Provider 3 has no Worker
+binding for the required vector index or container services, and ActorNamespace
+does not express the current Durable Object migration chain.
 
 The Worker archive and relational schema bundle are pinned to immutable public
 Takos bytes. The only container is the bounded `takos-agent` execution service;
@@ -18,5 +21,5 @@ OpenTofu variable path.
 
 The sibling `../cloudflare` module is the current supported adapter. It exposes
 `launch_url`; Takosumi installs it as an ordinary repository module and obtains
-the app launcher from that output. Do not use this retired tree for a new
-install or relabel it as Provider 3 compatibility.
+the app launcher from that output. Do not plan/apply this historical tree or
+relabel it as Provider 3 compatibility.

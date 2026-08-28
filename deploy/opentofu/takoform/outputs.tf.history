@@ -1,3 +1,5 @@
+# Historical Provider 1.x migration reference. This is intentionally not a
+# .tf file and must not be discovered or selected as an installable module.
 output "launch_url" {
   description = "Canonical Takos URL allocated by the selected Takoform host."
   value       = data.takoform_interface.app_http.resource_uri

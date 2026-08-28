@@ -1105,7 +1105,7 @@ async function assertPortableWorkerSourceIdentity(
   archiveDigest: string,
 ): Promise<void> {
   const source = await readFile(
-    join(root, "deploy/opentofu/takoform/main.tf"),
+    join(root, "deploy/opentofu/takoform/main.tf.history"),
     "utf8",
   );
   const moduleDefault = (name: string): string | undefined => {
@@ -1122,7 +1122,7 @@ async function assertPortableWorkerSourceIdentity(
     moduleDefault("worker_artifact_sha256") !== archiveDigest
   ) {
     throw new Error(
-      "portable Takoform defaults do not select the exact prepared Worker release",
+      "historical Takoform migration reference does not select the exact prepared Worker release",
     );
   }
 }
