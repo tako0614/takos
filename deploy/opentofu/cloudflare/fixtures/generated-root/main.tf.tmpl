@@ -1,6 +1,6 @@
-# Generated-root harness for the source-build runner contract. The harness is
-# intentionally a separate OpenTofu root: it consumes the Cloudflare adapter as
-# a child module, just as Takosumi's generated root does.
+# Generated-root harness template for the source-build runner contract. The
+# test materializes this as an untracked temporary root so Git source module
+# discovery does not expose the test harness as an installable application.
 terraform {
   required_version = ">= 1.5"
 
@@ -25,7 +25,7 @@ provider "random" {}
 provider "tls" {}
 
 module "app" {
-  source = "../.."
+  source = "./.."
 
   providers = {
     cloudflare = cloudflare
