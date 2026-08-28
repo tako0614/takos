@@ -23,10 +23,9 @@ resource "takoform_module_worker" "app" {
 }
 
 resource "takoform_worker_bundle" "app" {
-  name           = "${var.project_name}-bundle"
-  revision_owner = takoform_module_worker.app.name
-  space          = var.space
-  main_module    = "worker.mjs"
+  name        = "${var.project_name}-bundle"
+  space       = var.space
+  main_module = "worker.mjs"
 
   modules = [
     {
@@ -42,13 +41,12 @@ resource "takoform_worker_bundle" "app" {
 }
 
 resource "takoform_worker_version" "app" {
-  name           = "${var.project_name}-version"
-  revision_owner = takoform_module_worker.app.name
-  space          = var.space
-  worker         = takoform_module_worker.app.name
-  bundle         = takoform_worker_bundle.app.name
-  handlers       = ["fetch"]
-  vars_json      = jsonencode({ TAKOS_FETCH_TRACER_CONFIG = var.config_value })
+  name      = "${var.project_name}-version"
+  space     = var.space
+  worker    = takoform_module_worker.app.name
+  bundle    = takoform_worker_bundle.app.name
+  handlers  = ["fetch"]
+  vars_json = jsonencode({ TAKOS_FETCH_TRACER_CONFIG = var.config_value })
 
   required_sensitive_vars = []
 

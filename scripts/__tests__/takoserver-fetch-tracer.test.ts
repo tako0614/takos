@@ -9,7 +9,7 @@ import {
   assertExactIdentitySet,
   assertExactProbeBody,
   assertProviderVersion,
-  assertReadbackEnvelope,
+  assertReadbackResource,
   assertAuthoritativeAbsence,
   buildTofuEnvironment,
   canonicalDigest,
@@ -230,19 +230,19 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(resourceURL(discovery.apiRoot, endpoint).searchParams.get("schemaDigest")).toBe(endpoint.form_schema_digest);
   });
 
-  test("requires exact readback and exact absence envelopes", () => {
-    const current = identity("worker_endpoint");
+  test("requires exact readback resources and exact absence envelopes", () => {
+    const current = { ...identity("worker_endpoint"), revision: "2" };
     const wire = {
-      resource: {
-        apiVersion: current.form_api_version,
-        kind: current.form_kind,
-        form: { formRef: { apiVersion: current.form_api_version, kind: current.form_kind, definitionVersion: current.form_definition_version, schemaDigest: current.form_schema_digest } },
-        metadata: { name: current.name, space: current.space, uid: current.uid, generation: current.generation, revision: current.revision },
-        spec: {},
-        status: { observedGeneration: "1", conditions: [{ type: "Ready", status: "True", reason: "Available", lastTransitionTime: "2026-01-01T00:00:00Z" }], outputs: { hostname: current.hostname, url: current.url } },
-      },
+      apiVersion: current.form_api_version,
+      kind: current.form_kind,
+      form: { formRef: { apiVersion: current.form_api_version, kind: current.form_kind, definitionVersion: current.form_definition_version, schemaDigest: current.form_schema_digest } },
+      metadata: { name: current.name, space: current.space, uid: current.uid, generation: current.generation, revision: "3" },
+      spec: {},
+      status: { observedGeneration: "1", conditions: [{ type: "Ready", status: "True", reason: "Available", lastTransitionTime: "2026-01-01T00:00:00Z" }], outputs: { hostname: current.hostname, url: current.url } },
     };
-    expect(() => assertReadbackEnvelope(wire, current)).not.toThrow();
+    const authoritative = assertReadbackResource(wire, current);
+    expect(authoritative).toMatchObject({ ready: true, revision: "3", uid: current.uid });
+    expect(() => assertReadbackResource({ ...wire, metadata: { ...wire.metadata, revision: "1" } }, current)).toThrow(/regressed/u);
     const absent = { error: { code: "resource_not_found", message: "gone", requestId: "request-1", retryable: false } };
     expect(() => assertExactAbsence(404, absent)).not.toThrow();
     expect(() => assertExactAbsence(404, { error: { ...absent.error, code: "permission_denied" } })).toThrow();
@@ -301,6 +301,30 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(checked.configValue).toBe("safe-config");
   });
 
+  test("allows initial not-ready identities but requires Ready on Host readback", () => {
+    const initialIdentities = Object.fromEntries(
+      Object.entries(identities()).map(([key, value]) => [key, { ...value, ready: false }]),
+    );
+    const parsed = parseTofuOutputs({
+      resource_identities: { sensitive: false, type: ["map", "object"], value: initialIdentities },
+      config_value: { sensitive: false, type: "string", value: "safe-config" },
+      endpoint_url: { sensitive: false, type: "string", value: initialIdentities.worker_endpoint.url },
+      endpoint_hostname: { sensitive: false, type: "string", value: initialIdentities.worker_endpoint.hostname },
+    }, "space-a");
+    expect(Object.values(parsed.identities).every((resource) => resource.ready === false)).toBe(true);
+
+    const current = parsed.identities.module_worker;
+    const readback = {
+      apiVersion: current.form_api_version,
+      kind: current.form_kind,
+      form: { formRef: { apiVersion: current.form_api_version, kind: current.form_kind, definitionVersion: current.form_definition_version, schemaDigest: current.form_schema_digest } },
+      metadata: { name: current.name, space: current.space, uid: current.uid, generation: current.generation, revision: current.revision },
+      spec: {},
+      status: { observedGeneration: current.generation, conditions: [{ type: "Ready", status: "False", reason: "Reconciling", lastTransitionTime: "2026-01-01T00:00:00Z" }] },
+    };
+    expect(() => assertReadbackResource(readback, current)).toThrow(/Ready=True/u);
+  });
+
   test("cleans temporary state and exposes a recovery path on cleanup failure", async () => {
     const root = await mkdtemp(join(tmpdir(), "fetch-tracer-test-"));
     const cleaned = await cleanupRunRoot(root);
@@ -342,6 +366,21 @@ describe("takoserver fetch tracer pure contracts", () => {
     const config = createProviderOverrideConfig("/tmp/provider-override");
     expect(config).toContain("registry.terraform.io/tako0614/takoform");
     expect(config).not.toContain(token);
+  });
+
+  test("does not pin Provider 4 revision owners alongside names", async () => {
+    const configuration = await readFile(
+      join(import.meta.dir, "../../deploy/opentofu/takoserver-fetch-tracer/main.tf"),
+      "utf8",
+    );
+    for (const resourceType of ["takoform_worker_bundle", "takoform_worker_version"]) {
+      const start = configuration.indexOf(`resource "${resourceType}" "app" {`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const next = configuration.indexOf("\nresource ", start + 1);
+      const block = configuration.slice(start, next === -1 ? configuration.length : next);
+      expect(block).toMatch(/^\s+name\s*=/mu);
+      expect(block).not.toMatch(/^\s+revision_owner\s*=/mu);
+    }
   });
 
   test("parses porcelain status flags without treating untracked paths as staged", () => {

@@ -144,7 +144,7 @@ export type ResourceIdentity = {
   readonly uid: string;
   readonly generation: string;
   readonly revision: string;
-  readonly ready: true;
+  readonly ready: boolean;
   readonly form_api_version: string;
   readonly form_kind: string;
   readonly form_definition_version: string;
@@ -877,6 +877,9 @@ export function assertExactResourceIdentity(
   key: ResourceKey,
   expectedSpace: string,
   expectedProjectName = DEFAULT_PROJECT_NAME,
+  // OpenTofu may expose the resource identity before the Host observes the
+  // deployment. The authoritative readback path keeps the strict default.
+  requireReady = true,
 ): ResourceIdentity {
   const identity = requireRecord(value, `${key} identity`);
   const expectedKeys = [
@@ -912,7 +915,8 @@ export function assertExactResourceIdentity(
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(uid)) throw new TracerError(`${key} has an invalid uid`);
   assertCanonicalNumber(identity.generation, `${key}.generation`);
   assertCanonicalNumber(identity.revision, `${key}.revision`);
-  if (identity.ready !== true) throw new TracerError(`${key} is not Ready`);
+  if (typeof identity.ready !== "boolean") throw new TracerError(`${key}.ready must be boolean`);
+  if (requireReady && identity.ready !== true) throw new TracerError(`${key} is not Ready`);
   if (key === "worker_endpoint") {
     if (typeof identity.hostname !== "string" || identity.hostname.length === 0) {
       throw new TracerError("WorkerEndpoint identity is missing hostname");
@@ -924,7 +928,12 @@ export function assertExactResourceIdentity(
   return identity as ResourceIdentity;
 }
 
-export function assertExactIdentitySet(value: unknown, expectedSpace: string, expectedProjectName = DEFAULT_PROJECT_NAME): Record<ResourceKey, ResourceIdentity> {
+export function assertExactIdentitySet(
+  value: unknown,
+  expectedSpace: string,
+  expectedProjectName = DEFAULT_PROJECT_NAME,
+  requireReady = true,
+): Record<ResourceKey, ResourceIdentity> {
   const identities = requireRecord(value, "resource_identities");
   if (ownKeys(identities).join(",") !== [...RESOURCE_KEYS].sort().join(",")) {
     throw new TracerError("resource_identities must contain exactly the five Worker resources");
@@ -932,7 +941,7 @@ export function assertExactIdentitySet(value: unknown, expectedSpace: string, ex
   const result = {} as Record<ResourceKey, ResourceIdentity>;
   const uids = new Set<string>();
   for (const key of RESOURCE_KEYS) {
-    const identity = assertExactResourceIdentity(identities[key], key, expectedSpace, expectedProjectName);
+    const identity = assertExactResourceIdentity(identities[key], key, expectedSpace, expectedProjectName, requireReady);
     if (uids.has(identity.uid)) throw new TracerError("resource identities must have distinct UIDs");
     uids.add(identity.uid);
     result[key] = identity;
@@ -982,7 +991,9 @@ export function parseTofuOutputs(value: unknown, expectedSpace: string, expected
 } {
   const outputs = requireRecord(value, "tofu output");
   assertClosedKeys(outputs, ["resource_identities", "config_value", "endpoint_url", "endpoint_hostname"], [], "tofu output");
-  const identities = assertExactIdentitySet(unwrapTofuOutput(outputs.resource_identities, "resource_identities"), expectedSpace, expectedProjectName);
+  // Apply output is an exact identity snapshot, but status can still be
+  // Reconciling. The Host readback below is the readiness authority.
+  const identities = assertExactIdentitySet(unwrapTofuOutput(outputs.resource_identities, "resource_identities"), expectedSpace, expectedProjectName, false);
   const configValue = unwrapTofuOutput(outputs.config_value, "config_value");
   const endpointURL = unwrapTofuOutput(outputs.endpoint_url, "endpoint_url");
   const endpointHostname = unwrapTofuOutput(outputs.endpoint_hostname, "endpoint_hostname");
@@ -1060,10 +1071,8 @@ export function resourceURL(apiRoot: string, identity: ResourceAddress): URL {
   return url;
 }
 
-export function assertReadbackEnvelope(value: unknown, identity: ResourceIdentity): void {
-  const envelope = requireRecord(value, "resource readback");
-  if (ownKeys(envelope).join(",") !== "resource") throw new TracerError("resource readback has an unexpected envelope");
-  const resource = requireRecord(envelope.resource, "resource readback resource");
+export function assertReadbackResource(value: unknown, identity: ResourceIdentity): ResourceIdentity {
+  const resource = requireRecord(value, "resource readback");
   assertClosedKeys(resource, ["apiVersion", "kind", "form", "metadata", "spec", "status"], [], "resource readback resource");
   if (resource.apiVersion !== identity.form_api_version || resource.kind !== identity.form_kind) {
     throw new TracerError("resource readback Form identity does not match state");
@@ -1080,13 +1089,18 @@ export function assertReadbackEnvelope(value: unknown, identity: ResourceIdentit
   ) {
     throw new TracerError("resource readback exact FormRef does not match state");
   }
+  requireRecord(resource.spec, "resource readback spec");
   const metadata = requireRecord(resource.metadata, "resource readback metadata");
   assertClosedKeys(metadata, ["name", "space", "uid", "generation", "revision"], [], "resource readback metadata");
   if (metadata.name !== identity.name || metadata.space !== identity.space || metadata.uid !== identity.uid) {
     throw new TracerError("resource readback metadata does not match state");
   }
-  if (metadata.generation !== identity.generation || metadata.revision !== identity.revision) {
-    throw new TracerError("resource readback generation/revision does not match state");
+  if (metadata.generation !== identity.generation) {
+    throw new TracerError("resource readback generation does not match state");
+  }
+  assertCanonicalNumber(metadata.revision, "resource readback metadata.revision");
+  if (BigInt(metadata.revision) < BigInt(identity.revision)) {
+    throw new TracerError("resource readback revision regressed from state");
   }
   const status = requireRecord(resource.status, "resource readback status");
   assertClosedKeys(status, ["observedGeneration", "conditions"], ["outputs"], "resource readback status");
@@ -1094,17 +1108,45 @@ export function assertReadbackEnvelope(value: unknown, identity: ResourceIdentit
     throw new TracerError("resource readback observedGeneration does not match state");
   }
   const conditions = status.conditions;
-  if (!Array.isArray(conditions) || !conditions.some((condition) => isRecord(condition) && condition.type === "Ready" && condition.status === "True")) {
+  if (!Array.isArray(conditions)) {
+    throw new TracerError("resource readback conditions must be an array");
+  }
+  for (const condition of conditions) {
+    const conditionRecord = requireRecord(condition, "resource readback condition");
+    assertClosedKeys(
+      conditionRecord,
+      ["type", "status", "reason", "lastTransitionTime"],
+      ["hostReason", "message"],
+      "resource readback condition",
+    );
+  }
+  if (!conditions.some((condition) => isRecord(condition) && condition.type === "Ready" && condition.status === "True")) {
     throw new TracerError("resource readback does not carry Ready=True");
   }
+  let endpointOutputs: { readonly hostname: string; readonly url: string } | undefined;
   if (identity.form_kind === "WorkerEndpoint") {
     const outputs = requireRecord(status.outputs, "WorkerEndpoint readback outputs");
     assertClosedKeys(outputs, ["hostname", "url"], [], "WorkerEndpoint readback outputs");
-    if (outputs.hostname !== identity.hostname || outputs.url !== identity.url) {
+    const hostname = requireString(outputs.hostname, "WorkerEndpoint readback hostname");
+    const url = requireString(outputs.url, "WorkerEndpoint readback url");
+    if (hostname !== identity.hostname || url !== identity.url) {
       throw new TracerError("WorkerEndpoint readback outputs do not match state");
     }
+    endpointOutputs = { hostname, url };
+  } else if ("outputs" in status) {
+    requireRecord(status.outputs, "resource readback outputs");
   }
+  const authoritative: ResourceIdentity = {
+    ...identity,
+    revision: metadata.revision,
+    ready: true,
+    ...(endpointOutputs ?? {}),
+  };
+  return authoritative;
 }
+
+/** @deprecated Use assertReadbackResource for the stable bare Resource shape. */
+export const assertReadbackEnvelope = assertReadbackResource;
 
 export async function readHostResource(input: {
   readonly apiRoot: string;
@@ -1112,7 +1154,7 @@ export async function readHostResource(input: {
   readonly token: string;
   readonly timeoutMs: number;
   readonly fetchImpl?: FetchFunction;
-}): Promise<{ readonly status: number; readonly body: unknown; readonly rawBody: string }> {
+}): Promise<{ readonly status: number; readonly body: unknown; readonly rawBody: string; readonly identity?: ResourceIdentity }> {
   const result = await readHostAddress({
     apiRoot: input.apiRoot,
     address: input.identity,
@@ -1120,8 +1162,8 @@ export async function readHostResource(input: {
     timeoutMs: input.timeoutMs,
     fetchImpl: input.fetchImpl,
   });
-  if (result.status === 200) assertReadbackEnvelope(result.body, input.identity);
-  return result;
+  if (result.status !== 200) return result;
+  return { ...result, identity: assertReadbackResource(result.body, input.identity) };
 }
 
 export async function readHostAddress(input: {
@@ -1698,12 +1740,14 @@ export async function runTracer(config: CliConfig, options: {
     await runTofu({ config, workDir: rootState.workDir, environment: rootState.environment, args: ["apply", "-auto-approve", "-input=false", "-no-color"], spawn: options.spawn });
     const outputsResult = await runTofu({ config, workDir: rootState.workDir, environment: rootState.environment, args: ["output", "-json", "-no-color"], spawn: options.spawn });
     const parsedOutputs = parseTofuOutputs(boundedJson(outputsResult.stdout, "tofu output"), config.space, rootState.projectName);
-    const identities = parsedOutputs.identities;
     if (parsedOutputs.configValue !== config.configValue) throw new TracerError("tofu output config_value does not match the requested non-secret value");
+    const identities = {} as Record<ResourceKey, ResourceIdentity>;
     for (const key of RESOURCE_KEYS) {
-      const readback = await readHostResource({ apiRoot: discovery.apiRoot, identity: identities[key], token: config.token, timeoutMs: config.timeoutMs, fetchImpl: options.fetchImpl });
+      const identity = parsedOutputs.identities[key];
+      const readback = await readHostResource({ apiRoot: discovery.apiRoot, identity, token: config.token, timeoutMs: config.timeoutMs, fetchImpl: options.fetchImpl });
       if (readback.status !== 200) throw new TracerError(`${key} readback returned HTTP ${readback.status}`);
-      assertReadbackEnvelope(readback.body, identities[key]);
+      if (!readback.identity) throw new TracerError(`${key} readback did not return an authoritative identity`);
+      identities[key] = readback.identity;
     }
     const runtime = await probeRuntime({ endpoint: identities.worker_endpoint, workerPath: join(rootState.workDir, "worker.mjs"), configValue: config.configValue, timeoutMs: config.timeoutMs, fetchImpl: options.fetchImpl });
     const provenance = await collectProvenance({
