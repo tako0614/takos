@@ -86,14 +86,19 @@ consumes those exact paths. The plan is reviewed before the apply, and both
 files remain operator-owned outside the checkout.
 
 The normal Cloudflare provider lane leaves
-`enable_imperative_staging_bridge` disabled. That optional bridge is a
-staging-only escape hatch for remaining Vectorize, D1 migration, and
-container-enabled Durable Object/provider gaps. If an operator deliberately
-enables it, `container_image` must be an immutable Docker Hub digest or a
-same-account Cloudflare registry digest; GHCR references are rejected. The
-source build does not publish that image, so image publication and any bridge
-execution require the operator-owned release/deployment workflow. Do not treat
-the bridge flag or a successful local build as production-readiness evidence.
+`cloudflare_provider_gap_bridge_mode = "off"`. The optional app-owned bridge
+covers remaining Vectorize, D1 migration, container-enabled Durable Object, and
+Container application provider gaps; with `off`, ordinary production provider
+applies leave those unsupported gaps unresolved. Use `"staging"` only with
+`environment = "staging"` for disposable smoke inputs. A one-shot disposable production E2E must select
+`"disposable-production"` and set
+`environment = "production"` plus
+`cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"`
+exactly; any other value fails closed. When enabled,
+`container_image` must be an immutable Docker Hub digest or a same-account
+Cloudflare registry digest; GHCR references are rejected. The source build does
+not publish that image, so image publication and bridge execution require the
+operator-owned release/deployment workflow.
 
 For artifact publication, worker/container image provenance, secrets, and live
 health/readback, follow the Takos release-artifact and deployment runbooks in

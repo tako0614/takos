@@ -6,3 +6,11 @@ public_url = "https://takos.example.com"
 cloudflare = {
   account_id = "replace-with-cloudflare-account-id"
 }
+
+# The app-owned Cloudflare provider-gap bridge is disabled by default. Leave
+# this as "off" for ordinary installs. Use environment = "staging" with
+# "staging" only for disposable smoke inputs, or environment = "production"
+# with "disposable-production" for a one-shot production-equivalent E2E after
+# review. The latter additionally requires the exact acknowledgement:
+# cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"
+cloudflare_provider_gap_bridge_mode = "off"

@@ -10,9 +10,19 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 4. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection, and policy resolves provider allowlists, state backend, and Cloudflare Container execution for each run.
 5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
 
+## Cloudflare provider-gap bridge
+
+The direct Cloudflare adapter declares the product graph, while the provider-gap bridge remains disabled by default. Keep
+`cloudflare_provider_gap_bridge_mode = "off"` for ordinary installs. A disposable staging smoke run must set both
+`environment = "staging"` and `cloudflare_provider_gap_bridge_mode = "staging"`; a one-shot production-equivalent E2E must set
+`environment = "production"`, `cloudflare_provider_gap_bridge_mode = "disposable-production"`, and the exact
+`cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"`. Any other mode/environment or acknowledgement
+combination fails closed. The bridge only reconciles its owned Vectorize, Container, container-enabled Durable Object, and D1
+provider gaps; it never rolls back D1 data.
+
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the complete current adapter. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Cloudflare provider gaps remain explicit unless the reviewed bridge is selected for a disposable E2E. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
 
 ## API Shape
 

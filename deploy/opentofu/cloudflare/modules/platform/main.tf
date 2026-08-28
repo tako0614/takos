@@ -105,7 +105,7 @@ locals {
   }
 
   # This is the single lifecycle description consumed by both the ordinary
-  # provider path and the staging-only legacy script-upload bridge. Keeping
+  # provider path and the app-owned Cloudflare provider-gap bridge. Keeping
   # the tags beside their steps lets the bridge resume from an existing tag
   # without replaying an already-applied migration.
   durable_object_lifecycle = {
@@ -276,50 +276,81 @@ locals {
     }
   ]
 
+  provider_gap_bridge_enabled   = var.cloudflare_provider_gap_bridge_mode != "off"
+  bridge_acknowledgement_digest = sha256(var.cloudflare_provider_gap_bridge_acknowledgement)
+
   # Evaluating file digests only when the bridge is opted in keeps ordinary
   # plan mode portable while making every imperative operation content-bound.
-  worker_artifact_digest = var.enable_imperative_staging_bridge ? sha256(join("|", concat(
+  worker_artifact_digest = local.provider_gap_bridge_enabled ? sha256(join("|", concat(
     ["worker/index.js:${filesha256(local.worker_module_file_path)}"],
     [for file in sort(tolist(fileset(local.worker_assets_directory_path, "**"))) : "assets/${file}:${filesha256("${local.worker_assets_directory_path}/${file}")}"]
   ))) : "bridge-disabled"
-  migration_set_digest = var.enable_imperative_staging_bridge ? sha256(join("|", [
+  migration_set_digest = local.provider_gap_bridge_enabled ? sha256(join("|", [
     for file in sort(tolist(fileset(local.migration_set_directory_path, "**/*.sql"))) : "${file}:${filesha256("${local.migration_set_directory_path}/${file}")}"
   ])) : "bridge-disabled"
-  container_desired_config_digest = var.enable_imperative_staging_bridge ? filesha256(local.container_desired_config_file_path) : "bridge-disabled"
-  bridge_helper_digest            = var.enable_imperative_staging_bridge ? filesha256(local.bridge_helper_file_path) : "bridge-disabled"
-  durable_object_bootstrap_digest = var.enable_imperative_staging_bridge ? filesha256(local.durable_object_bootstrap_file_path) : "bridge-disabled"
-  durable_object_migration_digest = var.enable_imperative_staging_bridge ? sha256(jsonencode(local.durable_object_lifecycle)) : "bridge-disabled"
+  container_desired_config_digest = local.provider_gap_bridge_enabled ? filesha256(local.container_desired_config_file_path) : "bridge-disabled"
+  container_rendered_input_digest = local.provider_gap_bridge_enabled ? sha256(jsonencode({
+    template_digest = local.container_desired_config_digest
+    worker_name     = local.service_runtime_name
+    image           = local.container_image
+    executor_capacity = {
+      tier1_max_instances = var.executor_capacity.tier1_max_instances
+      tier2_max_instances = var.executor_capacity.tier2_max_instances
+      tier3_max_instances = var.executor_capacity.tier3_max_instances
+    }
+  })) : "bridge-disabled"
+  bridge_helper_digest            = local.provider_gap_bridge_enabled ? filesha256(local.bridge_helper_file_path) : "bridge-disabled"
+  durable_object_bootstrap_digest = local.provider_gap_bridge_enabled ? filesha256(local.durable_object_bootstrap_file_path) : "bridge-disabled"
+  durable_object_migration_digest = local.provider_gap_bridge_enabled ? sha256(jsonencode(local.durable_object_lifecycle)) : "bridge-disabled"
   vector_desired_config_digest    = sha256(jsonencode(local.vectorize))
   product_resource_digest         = sha256(jsonencode(local.product_resource_names))
   bridge_triggers = {
+    account_id               = var.account_id
+    d1_database_id           = cloudflare_d1_database.this["db"].id
+    provider_gap_bridge_mode = var.cloudflare_provider_gap_bridge_mode
+    bridge_acknowledgement   = local.bridge_acknowledgement_digest
     helper                   = local.bridge_helper_digest
     durable_object_bootstrap = local.durable_object_bootstrap_digest
     durable_object_lifecycle = local.durable_object_migration_digest
     worker_artifact          = local.worker_artifact_digest
     container_desired_config = local.container_desired_config_digest
+    container_rendered_input = local.container_rendered_input_digest
     vector_desired_config    = local.vector_desired_config_digest
     migration_set            = local.migration_set_digest
     product_resources        = local.product_resource_digest
   }
-  bridge_environment = {
-    TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR        = local.app_module_working_dir
-    TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH            = local.bridge_helper_path
-    TAKOS_CLOUDFLARE_ACCOUNT_ID                    = var.account_id
-    TAKOS_CLOUDFLARE_WORKER_NAME                   = local.service_runtime_name
-    TAKOS_CLOUDFLARE_D1_DATABASE_ID                = cloudflare_d1_database.this["db"].id
-    TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME             = local.vectorize.index_name
-    TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS       = tostring(local.vectorize.dimensions)
-    TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC           = local.vectorize.metric
-    TAKOS_CLOUDFLARE_MIGRATION_SET_PATH            = local.migration_set_path
-    TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH = local.container_desired_config_path
-    TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH          = local.worker_module_path
-    TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH = local.durable_object_bootstrap_path
-    TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE      = jsonencode(local.durable_object_lifecycle)
-    TAKOS_CONTAINER_IMAGE                          = local.container_image
-    TAKOS_EXECUTOR_TIER1_MAX_INSTANCES             = tostring(var.executor_capacity.tier1_max_instances)
-    TAKOS_EXECUTOR_TIER2_MAX_INSTANCES             = tostring(var.executor_capacity.tier2_max_instances)
-    TAKOS_EXECUTOR_TIER3_MAX_INSTANCES             = tostring(var.executor_capacity.tier3_max_instances)
-  }
+  bridge_environment = merge(
+    {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = var.cloudflare_provider_gap_bridge_mode
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = var.cloudflare_provider_gap_bridge_acknowledgement
+      TAKOS_CLOUDFLARE_ENVIRONMENT                         = var.environment
+      TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR              = local.app_module_working_dir
+      TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH                  = local.bridge_helper_path
+      TAKOS_CLOUDFLARE_ACCOUNT_ID                          = var.account_id
+      TAKOS_CLOUDFLARE_WORKER_NAME                         = local.service_runtime_name
+      TAKOS_CLOUDFLARE_D1_DATABASE_ID                      = cloudflare_d1_database.this["db"].id
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME                   = local.vectorize.index_name
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS             = tostring(local.vectorize.dimensions)
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC                 = local.vectorize.metric
+      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH                  = local.migration_set_path
+      TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH                  = local.worker_assets_directory
+      TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH       = local.container_desired_config_path
+      TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH                = local.worker_module_path
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH       = local.durable_object_bootstrap_path
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE            = jsonencode(local.durable_object_lifecycle)
+      TAKOS_CONTAINER_IMAGE                                = local.container_image
+      TAKOS_EXECUTOR_TIER1_MAX_INSTANCES                   = tostring(var.executor_capacity.tier1_max_instances)
+      TAKOS_EXECUTOR_TIER2_MAX_INSTANCES                   = tostring(var.executor_capacity.tier2_max_instances)
+      TAKOS_EXECUTOR_TIER3_MAX_INSTANCES                   = tostring(var.executor_capacity.tier3_max_instances)
+    },
+    local.provider_gap_bridge_enabled ? {
+      # Keep the rendered template content in state so a trigger replacement
+      # destroys the old ownership projection instead of rereading a mutable
+      # path that now contains the next build. This branch remains lazy while
+      # the bridge is off, so ordinary plans do not need source-build output.
+      TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT = file(local.container_desired_config_file_path)
+    } : {},
+  )
 }
 
 resource "random_password" "encryption" {
@@ -370,16 +401,71 @@ resource "cloudflare_queue" "this" {
   queue_name = each.value
 }
 
-resource "terraform_data" "provider_gap_pre" {
-  count = var.enable_imperative_staging_bridge ? 1 : 0
-
-  triggers_replace = local.bridge_triggers
-  depends_on       = [cloudflare_worker.app]
+resource "terraform_data" "provider_gap_contract" {
+  input = {
+    mode                   = var.cloudflare_provider_gap_bridge_mode
+    acknowledgement_digest = local.bridge_acknowledgement_digest
+    environment            = var.environment
+  }
 
   lifecycle {
     precondition {
-      condition     = !var.enable_imperative_staging_bridge || (local.container_image_shape_valid && local.container_image_account_valid)
-      error_message = "container_image must be a non-empty immutable Cloudflare-account or public Docker Hub digest when the staging bridge is enabled; a Cloudflare registry account must equal account_id."
+      condition     = var.cloudflare_provider_gap_bridge_mode != "staging" || var.environment == "staging"
+      error_message = "staging Cloudflare provider-gap bridge mode requires environment to be exactly staging."
+    }
+
+    precondition {
+      condition     = var.cloudflare_provider_gap_bridge_mode != "disposable-production" || var.environment == "production"
+      error_message = "disposable-production Cloudflare provider-gap bridge mode requires environment to be exactly production."
+    }
+
+    precondition {
+      condition     = var.cloudflare_provider_gap_bridge_mode != "disposable-production" || var.cloudflare_provider_gap_bridge_acknowledgement == "DISPOSABLE_PRODUCTION_ONE_SHOT"
+      error_message = "disposable-production Cloudflare provider-gap bridge mode requires the exact DISPOSABLE_PRODUCTION_ONE_SHOT acknowledgement."
+    }
+
+    precondition {
+      condition     = var.cloudflare_provider_gap_bridge_mode == "disposable-production" || var.cloudflare_provider_gap_bridge_acknowledgement == ""
+      error_message = "cloudflare_provider_gap_bridge_acknowledgement must be empty unless disposable-production bridge mode is selected."
+    }
+  }
+}
+
+resource "terraform_data" "provider_gap_cleanup" {
+  count = local.provider_gap_bridge_enabled ? 1 : 0
+
+  input            = local.bridge_environment
+  triggers_replace = local.bridge_triggers
+  # This anchor is intentionally created before either imperative phase. It
+  # has no create provisioner, so a tainted pre/post phase cannot suppress its
+  # destroy-time cleanup. Keeping the Worker identity as an upstream
+  # dependency also leaves the namespace/binding authority available while
+  # recovery-cleanup performs its ownership readback.
+  depends_on = [cloudflare_worker.app]
+
+  provisioner "local-exec" {
+    when        = destroy
+    working_dir = self.input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR
+    command     = "bun ${self.input.TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH} recovery-cleanup"
+    quiet       = true
+    environment = merge(self.input, {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT", "")
+      TAKOS_CLOUDFLARE_ENVIRONMENT                         = lookup(self.input, "TAKOS_CLOUDFLARE_ENVIRONMENT", "staging")
+    })
+  }
+}
+
+resource "terraform_data" "provider_gap_pre" {
+  count = local.provider_gap_bridge_enabled ? 1 : 0
+
+  triggers_replace = local.bridge_triggers
+  depends_on       = [cloudflare_worker.app, terraform_data.provider_gap_contract, terraform_data.provider_gap_cleanup]
+
+  lifecycle {
+    precondition {
+      condition     = local.container_image_shape_valid && local.container_image_account_valid
+      error_message = "container_image must be a non-empty immutable Cloudflare-account or public Docker Hub digest when the Cloudflare provider-gap bridge is enabled; a Cloudflare registry account must equal account_id."
     }
   }
 
@@ -409,11 +495,12 @@ resource "cloudflare_worker" "app" {
 
 # The ordinary provider path models migration and binding as two Versions
 # because Cloudflare rejects a Version that both creates a class and binds it.
-# The staging bridge skips this resource: the Workers Versions endpoint accepts
-# Container metadata but does not currently make the namespace container-ready,
-# so pre-worker performs the same migration through the legacy script endpoint.
+# The provider-gap bridge skips this resource: the Workers Versions endpoint
+# accepts Container metadata but does not currently make the namespace
+# container-ready, so pre-worker performs the same migration through the
+# legacy script endpoint.
 resource "cloudflare_worker_version" "durable_object_migrations" {
-  count = var.enable_imperative_staging_bridge ? 0 : 1
+  count = local.provider_gap_bridge_enabled ? 0 : 1
 
   account_id = var.account_id
   worker_id  = cloudflare_worker.app.id
@@ -443,7 +530,7 @@ resource "cloudflare_worker_version" "durable_object_migrations" {
 }
 
 resource "cloudflare_workers_deployment" "durable_object_migrations" {
-  count = var.enable_imperative_staging_bridge ? 0 : 1
+  count = local.provider_gap_bridge_enabled ? 0 : 1
 
   account_id  = var.account_id
   script_name = cloudflare_worker.app.name
@@ -575,11 +662,11 @@ resource "cloudflare_workers_route" "public" {
 }
 
 resource "terraform_data" "provider_gap_post" {
-  count = var.enable_imperative_staging_bridge ? 1 : 0
+  count = local.provider_gap_bridge_enabled ? 1 : 0
 
   input            = local.bridge_environment
   triggers_replace = local.bridge_triggers
-  depends_on       = [cloudflare_workers_deployment.app]
+  depends_on       = [cloudflare_workers_deployment.app, terraform_data.provider_gap_cleanup]
 
   provisioner "local-exec" {
     working_dir = local.app_module_root
@@ -595,6 +682,12 @@ resource "terraform_data" "provider_gap_post" {
     working_dir = self.input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR
     command     = "bun ${self.input.TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH} recovery-cleanup"
     quiet       = true
-    environment = self.input
+    environment = merge(self.input, {
+      # The pre-rename bridge was staging-only, so state written before the
+      # mode/ack inputs existed must remain runnable during destroy.
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT", "")
+      TAKOS_CLOUDFLARE_ENVIRONMENT                         = lookup(self.input, "TAKOS_CLOUDFLARE_ENVIRONMENT", "staging")
+    })
   }
 }

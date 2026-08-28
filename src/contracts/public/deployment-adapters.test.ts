@@ -15,6 +15,19 @@ const agentDockerfile = await readFile(
   new URL("containers/agent/Dockerfile", root),
   "utf8",
 );
+const bridgeHelper = await readFile(
+  new URL("scripts/takos-cloudflare-opentofu-bridge.ts", root),
+  "utf8",
+);
+const legacyProviderGapStateInput = JSON.parse(
+  await readFile(
+    new URL(
+      "deploy/opentofu/cloudflare/fixtures/provider-gap-legacy-state-input.json",
+      root,
+    ),
+    "utf8",
+  ),
+) as Record<string, string>;
 
 const cloudflareHclPaths: string[] = [];
 for await (
@@ -235,10 +248,12 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
   );
   const applicationVersion = resource("cloudflare_worker_version", "app");
   const providerGapPre = resource("terraform_data", "provider_gap_pre");
+  const providerGapCleanup = resource("terraform_data", "provider_gap_cleanup");
+  const providerGapPost = resource("terraform_data", "provider_gap_post");
 
   expect(migrationVersion.body).toMatch(/\bmigrations\s*=/u);
   expect(migrationVersion.body).toContain(
-    "count = var.enable_imperative_staging_bridge ? 0 : 1",
+    'count = local.provider_gap_bridge_enabled ? 0 : 1',
   );
   expect(migrationVersion.body).not.toContain(
     'type = "durable_object_namespace"',
@@ -258,7 +273,7 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
     expect(cloudflareHclWithoutComments).toContain(className);
   }
   expect(migrationDeployment.body).toContain(
-    "count = var.enable_imperative_staging_bridge ? 0 : 1",
+    'count = local.provider_gap_bridge_enabled ? 0 : 1',
   );
   expect(migrationDeployment.body).toContain(
     "cloudflare_worker_version.durable_object_migrations[0].id",
@@ -269,9 +284,65 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
   );
   expect(applicationVersion.body).toContain("terraform_data.provider_gap_pre");
   expect(providerGapPre.body).toContain("cloudflare_worker.app");
+  expect(providerGapPre.body).toContain("terraform_data.provider_gap_cleanup");
+  expect(cloudflareHclWithoutComments).toContain(
+    "container_rendered_input_digest",
+  );
+  expect(cloudflareHclWithoutComments).toContain(
+    "container_rendered_input = local.container_rendered_input_digest",
+  );
+  expect(cloudflareHclWithoutComments).toContain(
+    "account_id               = var.account_id",
+  );
+  expect(cloudflareHclWithoutComments).toContain(
+    'd1_database_id           = cloudflare_d1_database.this["db"].id',
+  );
+  for (const resourceBody of [
+    providerGapPre.body,
+    providerGapCleanup.body,
+    providerGapPost.body,
+  ]) {
+    expect(resourceBody).toContain("triggers_replace = local.bridge_triggers");
+  }
+  expect(cloudflareHclWithoutComments).toContain(
+    "TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH",
+  );
+  expect(cloudflareHclWithoutComments).toContain(
+    'fileset(local.worker_assets_directory_path, "**")',
+  );
+  expect(providerGapCleanup.body).toContain("when        = destroy");
+  expect(providerGapCleanup.body).toContain("cloudflare_worker.app");
+  expect(providerGapCleanup.body).not.toContain("post-worker");
+  expect(providerGapCleanup.body).toContain("environment = merge(self.input");
+  expect(providerGapCleanup.body).not.toContain(
+    "environment = local.bridge_environment",
+  );
+  expect(providerGapCleanup.body).toContain(
+    'lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")',
+  );
+  expect(providerGapCleanup.body).toContain(
+    'lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT", "")',
+  );
+  expect(cloudflareHclWithoutComments).toContain(
+    "TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT",
+  );
+  expect(providerGapPost.body).toContain("terraform_data.provider_gap_cleanup");
+  expect(providerGapPost.body).toContain("recovery-cleanup");
+  expect(providerGapPost.body).toContain("environment = merge(self.input");
+  expect(providerGapPost.body).toContain(
+    'lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")',
+  );
+  expect(Object.hasOwn(legacyProviderGapStateInput, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE")).toBe(false);
+  expect(Object.hasOwn(legacyProviderGapStateInput, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT")).toBe(false);
+  expect(Object.hasOwn(legacyProviderGapStateInput, "TAKOS_CLOUDFLARE_ENVIRONMENT")).toBe(false);
+  expect(providerGapPost.body).toContain(
+    'lookup(self.input, "TAKOS_CLOUDFLARE_ENVIRONMENT", "staging")',
+  );
   expect(cloudflareHclWithoutComments).toContain(
     "TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE",
   );
+  expect(bridgeHelper).toContain("establishVectorOwnershipProof");
+  expect(bridgeHelper).toContain("worker_vector_binding_readback_missing");
 
   for (const [type, name] of [
     ["cloudflare_queue_consumer", "this"],
@@ -281,6 +352,25 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
     expect(resource(type, name).body).toContain(
       "cloudflare_workers_deployment.app",
     );
+  }
+});
+
+test("Cloudflare provider-gap phases bind account and realized D1 ownership into replacement triggers", () => {
+  const triggerStart = cloudflareHclWithoutComments.indexOf("bridge_triggers = {");
+  expect(triggerStart).toBeGreaterThanOrEqual(0);
+  const triggerEnd = cloudflareHclWithoutComments.indexOf("\n  }", triggerStart);
+  expect(triggerEnd).toBeGreaterThan(triggerStart);
+  const triggerBody = cloudflareHclWithoutComments.slice(triggerStart, triggerEnd);
+  expect(triggerBody).toContain("account_id               = var.account_id");
+  expect(triggerBody).toContain(
+    'd1_database_id           = cloudflare_d1_database.this["db"].id',
+  );
+  for (const name of ["provider_gap_pre", "provider_gap_cleanup", "provider_gap_post"]) {
+    const resource = cloudflareResourceBlocks.find(
+      (candidate) => candidate.type === "terraform_data" && candidate.name === name,
+    );
+    expect(resource, `${name} bridge phase is missing`).toBeDefined();
+    expect(resource!.body).toContain("triggers_replace = local.bridge_triggers");
   }
 });
 

@@ -1,7 +1,7 @@
 # API リファレンス
 
 **Premise: Takos は provider-neutral な resource contract を持つ OpenTofu-native AI workspace distribution です。**
-`deploy/opentofu/cloudflare` は、その contract の完全なgraphを直接接続した Cloudflare account へ写すcurrent adapterです。Takosumi はmoduleを通常の Capsule として扱い、
+`deploy/opentofu/cloudflare` は、その contract の product graph を直接接続した Cloudflare account へ写すcurrent adapterです。Cloudflare provider がまだ表現できない gap は通常の production provider path では解決されず、bridge は既定で off です。source graph の gap まで反映する disposable E2E では、`environment` と一致する reviewed bridge mode を明示します。Takosumi はmoduleを通常の Capsule として扱い、
 OpenTofu-native な deploy control plane として run ledger
 **Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
 ProviderBinding が provider (+ optional alias) ごとに explicit provider connection (an explicit ProviderConnection) を解決し、policy が provider allowlist / state backend / workload placement を解決します。

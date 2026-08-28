@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * Staging-only reconciler for the Cloudflare provider gaps that cannot
+ * Product-owned reconciler for the Cloudflare provider gaps that cannot
  * be represented by the ordinary OpenTofu provider yet:
  *
  *   - Vectorize index creation/readback;
@@ -9,6 +9,12 @@
  *     migrations (the Versions endpoint does not currently enable them);
  *   - Container application image/capacity and Durable Object ownership;
  *   - D1 migrations.
+ *
+ * The bridge is opt-in and mode-gated.  A staging run may use the bridge for
+ * smoke inputs only when the deployment environment is exactly `staging`; a
+ * disposable production run requires the exact `production` environment and
+ * reviewed acknowledgement exported below.  Ordinary production applies
+ * keep this helper disabled.
  *
  * The file is intentionally standalone.  The source-build command copies it
  * into deploy/opentofu/cloudflare/.takos-build, where a generic runner can
@@ -32,6 +38,20 @@ const D1_LEDGER_TABLE = "_takos_opentofu_migrations";
 const D1_IMPORT_POLL_LIMIT = 600;
 const DEFAULT_D1_IMPORT_POLL_DELAY_MS = 250;
 
+export const CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT =
+  "DISPOSABLE_PRODUCTION_ONE_SHOT";
+
+export const CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODES = [
+  "off",
+  "staging",
+  "disposable-production",
+] as const;
+
+export type CloudflareProviderGapBridgeMode =
+  (typeof CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODES)[number];
+
+export type CloudflareProviderGapBridgeEnvironment = "production" | "staging";
+
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 type JsonObject = { readonly [key: string]: JsonValue | undefined };
@@ -53,6 +73,7 @@ export interface BridgeFetchOptions {
 
 export interface BridgeDigests {
   readonly desiredDigest: string;
+  readonly bridgeActivationDigest: string;
   readonly durableObjectBootstrapDigest?: string;
   readonly helperDigest: string;
   readonly migrationDigest: string;
@@ -62,6 +83,8 @@ export interface BridgeDigests {
 export interface BridgeEvidence {
   readonly ok: true;
   readonly phase: BridgePhase;
+  readonly bridgeMode: CloudflareProviderGapBridgeMode;
+  readonly bridgeEnvironment: CloudflareProviderGapBridgeEnvironment;
   readonly digests: BridgeDigests;
   readonly changed: boolean;
   readonly durableObjects: {
@@ -222,6 +245,86 @@ function phaseValue(value: string | undefined): BridgePhase {
   }
 }
 
+function bridgeModeValue(value: string | undefined): CloudflareProviderGapBridgeMode {
+  switch (value) {
+    case "off":
+    case "staging":
+    case "disposable-production":
+      return value;
+    case undefined:
+    case "":
+      fail("bridge_mode_missing");
+    default:
+      fail("bridge_mode_invalid");
+  }
+}
+
+function bridgeEnvironmentValue(value: string | undefined): CloudflareProviderGapBridgeEnvironment {
+  switch (value) {
+    case "production":
+    case "staging":
+      return value;
+    case undefined:
+    case "":
+      fail("bridge_environment_missing");
+    default:
+      fail("bridge_environment_invalid");
+  }
+}
+
+function rawEnvironmentValue(
+  env: Record<string, string | undefined>,
+  name: string,
+): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(env, name)) return undefined;
+  return env[name];
+}
+
+export function validateCloudflareProviderGapBridgeActivation(
+  modeValue: string | undefined,
+  acknowledgementValue: string | undefined,
+  environmentValue: string | undefined = undefined,
+): {
+  readonly mode: CloudflareProviderGapBridgeMode;
+  readonly environment?: CloudflareProviderGapBridgeEnvironment;
+  readonly acknowledgementDigest: string;
+} {
+  const mode = bridgeModeValue(modeValue);
+  const acknowledgement = acknowledgementValue ?? "";
+  if (mode === "off") {
+    if (acknowledgement !== "") fail("bridge_acknowledgement_unexpected");
+    return {
+      mode,
+      acknowledgementDigest: `sha256:${sha256(new TextEncoder().encode(acknowledgement))}`,
+    };
+  }
+  const environment = bridgeEnvironmentValue(environmentValue);
+  if (mode === "staging" && environment !== "staging") {
+    fail("bridge_environment_mismatch");
+  }
+  if (mode === "disposable-production" && environment !== "production") {
+    fail("bridge_environment_mismatch");
+  }
+  if (
+    mode === "disposable-production" &&
+    acknowledgement !== CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT
+  ) {
+    fail(
+      acknowledgement === ""
+        ? "bridge_acknowledgement_required"
+        : "bridge_acknowledgement_invalid",
+    );
+  }
+  if (mode !== "disposable-production" && acknowledgement !== "") {
+    fail("bridge_acknowledgement_unexpected");
+  }
+  return {
+    mode,
+    environment,
+    acknowledgementDigest: `sha256:${sha256(new TextEncoder().encode(acknowledgement))}`,
+  };
+}
+
 function imageReference(value: unknown, accountId?: string): string {
   const image = stringValue(value, "container_image");
   const repository = "[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?:\\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*";
@@ -287,6 +390,9 @@ interface DesiredContainer {
 
 interface BridgeConfig {
   readonly cwd: string;
+  readonly bridgeMode: CloudflareProviderGapBridgeMode;
+  readonly bridgeEnvironment: CloudflareProviderGapBridgeEnvironment;
+  readonly bridgeAcknowledgementDigest: string;
   readonly accountId: string;
   readonly workerName: string;
   readonly d1DatabaseId: string;
@@ -294,9 +400,11 @@ interface BridgeConfig {
   readonly vectorDimensions: number;
   readonly vectorMetric: "cosine" | "euclidean" | "dot-product";
   readonly migrationSetPath: string;
+  readonly workerAssetsPath?: string;
   readonly durableObjectBootstrapPath?: string;
   readonly durableObjectLifecycle?: DurableObjectLifecycle;
   readonly containerDesiredConfigPath?: string;
+  readonly containerDesiredConfigContent?: string;
   readonly workerArtifactPath: string;
   readonly containerImage?: string;
   readonly importPollDelayMs: number;
@@ -489,6 +597,18 @@ export async function parseBridgeConfig(
 ): Promise<BridgeConfig> {
   const env = options.env ?? process.env;
   const cwd = resolve(options.cwd ?? process.cwd());
+  const activation = validateCloudflareProviderGapBridgeActivation(
+    rawEnvironmentValue(
+      env,
+      "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE",
+    ),
+    rawEnvironmentValue(
+      env,
+      "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT",
+    ),
+    rawEnvironmentValue(env, "TAKOS_CLOUDFLARE_ENVIRONMENT"),
+  );
+  if (activation.mode === "off") fail("bridge_disabled");
   const accountId = stringValue(
     envValue(
       env,
@@ -580,6 +700,12 @@ export async function parseBridgeConfig(
     "worker_artifact_path",
     true,
   )!;
+  const workerAssetsPath = pathInput(
+    cwd,
+    envValue(env, ["TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH"], phase !== "recovery-cleanup"),
+    "worker_assets_path",
+    phase !== "recovery-cleanup",
+  );
   const needsDurableObjectBootstrap = phase === "pre-worker";
   const durableObjectBootstrapPath = pathInput(
     cwd,
@@ -602,6 +728,11 @@ export async function parseBridgeConfig(
       : durableObjectLifecycle(durableObjectLifecycleValue);
   const needsContainers =
     phase === "post-worker" || phase === "verify" || phase === "recovery-cleanup";
+  const containerDesiredConfigContent = envValue(
+    env,
+    ["TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT"],
+    false,
+  );
   const containerDesiredConfigPath = pathInput(
     cwd,
     envValue(
@@ -611,10 +742,10 @@ export async function parseBridgeConfig(
         "TAKOS_CONTAINER_DESIRED_CONFIG_PATH",
         "container_desired_config_path",
       ],
-      needsContainers,
+      needsContainers && containerDesiredConfigContent === undefined,
     ),
     "container_desired_config_path",
-    needsContainers,
+    needsContainers && containerDesiredConfigContent === undefined,
   );
   const delay = Number(
     envValue(env, ["TAKOS_D1_IMPORT_POLL_DELAY_MS", "d1_import_poll_delay_ms"], false) ??
@@ -640,6 +771,9 @@ export async function parseBridgeConfig(
   if (containerImage !== undefined) imageReference(containerImage, accountId);
   return {
     cwd,
+    bridgeMode: activation.mode,
+    bridgeEnvironment: activation.environment!,
+    bridgeAcknowledgementDigest: activation.acknowledgementDigest,
     accountId,
     workerName,
     d1DatabaseId,
@@ -647,6 +781,7 @@ export async function parseBridgeConfig(
     vectorDimensions,
     vectorMetric: metric,
     migrationSetPath,
+    ...(workerAssetsPath === undefined ? {} : { workerAssetsPath }),
     ...(durableObjectBootstrapPath === undefined
       ? {}
       : { durableObjectBootstrapPath }),
@@ -654,6 +789,9 @@ export async function parseBridgeConfig(
       ? {}
       : { durableObjectLifecycle: parsedDurableObjectLifecycle }),
     containerDesiredConfigPath,
+    ...(containerDesiredConfigContent === undefined
+      ? {}
+      : { containerDesiredConfigContent }),
     workerArtifactPath,
     ...(containerImage === undefined ? {} : { containerImage }),
     importPollDelayMs: delay,
@@ -703,10 +841,10 @@ export async function migrationFiles(path: string): Promise<readonly {
   return files;
 }
 
-export async function containerRows(
-  path: string,
+function containerRowsFromValue(
+  rawValue: unknown,
   env: Record<string, string | undefined>,
-): Promise<readonly DesiredContainer[]> {
+): readonly DesiredContainer[] {
   // Template expansion is deliberately allow-listed.  In particular, do not
   // hand the inherited API token (or an arbitrary process.env object) to a
   // user-controlled desired-config file where it could be persisted in an
@@ -724,7 +862,7 @@ export async function containerRows(
   ]) {
     templateEnv[name] = envValue(env, [name], false);
   }
-  const raw = expandTemplate(await readJson(path), templateEnv);
+  const raw = expandTemplate(rawValue, templateEnv);
   const targetAccount = envValue(
     env,
     ["TAKOS_CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID", "account_id"],
@@ -780,6 +918,29 @@ export async function containerRows(
     fail("container_desired_config_duplicates");
   }
   return output;
+}
+
+export async function containerRows(
+  path: string,
+  env: Record<string, string | undefined>,
+): Promise<readonly DesiredContainer[]> {
+  return containerRowsFromValue(await readJson(path), env);
+}
+
+function containerRowsFromContent(
+  content: string,
+  env: Record<string, string | undefined>,
+): readonly DesiredContainer[] {
+  if (new TextEncoder().encode(content).byteLength > MAXIMUM_RESPONSE_BYTES) {
+    fail("container_desired_config_too_large");
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(content);
+  } catch {
+    fail("bridge_json_invalid");
+  }
+  return containerRowsFromValue(value, env);
 }
 
 async function jsonResponse(response: Response): Promise<unknown> {
@@ -1554,6 +1715,68 @@ async function helperDigest(path: string): Promise<string> {
   return `sha256:${sha256(await readBounded(path, MAXIMUM_RESPONSE_BYTES))}`;
 }
 
+function compareTerraformStrings(left: string, right: string): number {
+  // OpenTofu's sort() compares the UTF-8 string values lexicographically.
+  // Compare encoded bytes rather than localeCompare so nested and non-ASCII
+  // asset names have the same order on every runner.
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = leftBytes[index]! - rightBytes[index]!;
+    if (difference !== 0) return difference;
+  }
+  return leftBytes.length - rightBytes.length;
+}
+
+async function workerArtifactDigest(
+  workerArtifactPath: string,
+  workerAssetsPath: string | undefined,
+): Promise<string> {
+  const workerDigest = sha256(
+    await readBounded(workerArtifactPath, MAXIMUM_MIGRATION_BYTES),
+  );
+  if (workerAssetsPath === undefined) {
+    // A pre-mode bridge state created before the asset boundary was added may
+    // still be destroyed. Preserve its entry-only evidence while all new
+    // Terraform-created bridge state passes the assets path below.
+    return `sha256:${workerDigest}`;
+  }
+
+  const metadata = await lstat(workerAssetsPath).catch(() =>
+    fail("worker_assets_path_missing"),
+  );
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    fail("worker_assets_path_invalid");
+  }
+  const entries: Array<{ readonly path: string; readonly digest: string }> = [];
+  async function visit(directory: string): Promise<void> {
+    const children = await readdir(directory, { withFileTypes: true });
+    for (const child of children) {
+      const childPath = join(directory, child.name);
+      const childMetadata = await lstat(childPath);
+      if (childMetadata.isSymbolicLink()) fail("worker_asset_symlink");
+      if (child.isDirectory()) {
+        await visit(childPath);
+        continue;
+      }
+      if (!child.isFile()) fail("worker_asset_file_invalid");
+      if (childMetadata.size > MAXIMUM_MIGRATION_BYTES) {
+        fail("worker_asset_file_too_large");
+      }
+      const digest = sha256(await readFile(childPath));
+      const path = relative(workerAssetsPath, childPath).split(sep).join("/");
+      entries.push({ path, digest });
+    }
+  }
+  await visit(workerAssetsPath);
+  entries.sort((left, right) => compareTerraformStrings(left.path, right.path));
+  return `sha256:${sha256(new TextEncoder().encode([
+    `worker/index.js:${workerDigest}`,
+    ...entries.map(({ path, digest }) => `assets/${path}:${digest}`),
+  ].join("|")))}`;
+}
+
 export function pendingDurableObjectMigration(
   currentTag: string | undefined,
   lifecycle: DurableObjectLifecycle,
@@ -1610,21 +1833,54 @@ async function reconcileDurableObjectMigration(
   const targetTag = lifecycle.tags.at(-1)!;
   if (migrations === null) return { changed: false, tag: targetTag };
 
-  const bootstrap = await readBounded(bootstrapPath, MAXIMUM_MIGRATION_BYTES);
-  const moduleName = "durable-object-migration-bootstrap.js";
-  const metadata: JsonObject = {
-    main_module: moduleName,
+  await uploadDurableObjectBootstrap(api, config, migrations, false);
+  return { changed: true, tag: targetTag };
+}
+
+function bootstrapMetadata(
+  config: BridgeConfig,
+  migrations: JsonObject | null,
+  includeVectorBinding: boolean,
+): JsonObject {
+  const lifecycle = config.durableObjectLifecycle;
+  if (lifecycle === undefined) fail("durable_object_bootstrap_config_missing");
+  const bindings: JsonObject[] = lifecycle.containerBindings.map(({ name, className }) => ({
+    name,
+    type: "durable_object_namespace",
+    class_name: className,
+  }));
+  if (includeVectorBinding) {
+    bindings.push({
+      name: "VECTORIZE",
+      type: "vectorize",
+      index_name: config.vectorIndexName,
+    });
+  }
+  return {
+    main_module: "durable-object-migration-bootstrap.js",
     compatibility_date: "2026-04-01",
-    bindings: lifecycle.containerBindings.map(({ name, className }) => ({
-      name,
-      type: "durable_object_namespace",
-      class_name: className,
-    })),
+    bindings,
     containers: lifecycle.containerBindings.map(({ className }) => ({
       class_name: className,
     })),
-    migrations,
+    ...(migrations === null ? {} : { migrations }),
   };
+}
+
+async function uploadDurableObjectBootstrap(
+  api: CloudflareApi,
+  config: BridgeConfig,
+  migrations: JsonObject | null,
+  includeVectorBinding: boolean,
+): Promise<void> {
+  const bootstrapPath = config.durableObjectBootstrapPath;
+  if (bootstrapPath === undefined || config.durableObjectLifecycle === undefined) {
+    fail("durable_object_bootstrap_config_missing");
+  }
+
+  const bootstrap = await readBounded(bootstrapPath, MAXIMUM_MIGRATION_BYTES);
+  const moduleName = "durable-object-migration-bootstrap.js";
+  const metadata = bootstrapMetadata(config, migrations, includeVectorBinding);
   const form = new FormData();
   form.set("metadata", JSON.stringify(metadata));
   form.set(
@@ -1636,7 +1892,26 @@ async function reconcileDurableObjectMigration(
     `/accounts/${pathSegment(config.accountId, "account_id")}/workers/scripts/${pathSegment(config.workerName, "worker_name")}` +
     "?excludeScript=true&bindings_inherit=strict";
   await api.requestMultipart(uploadPath, form);
-  return { changed: true, tag: targetTag };
+}
+
+async function establishVectorOwnershipProof(
+  api: CloudflareApi,
+  config: BridgeConfig,
+): Promise<void> {
+  // The first migration upload intentionally has only Durable Object
+  // bindings: Cloudflare requires the namespace migration before a
+  // Container-enabled namespace can be attached.  Once Vectorize exists,
+  // publish a second bootstrap Version with the exact Vectorize binding and
+  // read that active Version back.  Cleanup may delete the index only from
+  // this provider-authoritative binding evidence; a local boolean is not an
+  // ownership proof.
+  const current = await workerEvidence(api, config);
+  if (current.vectorIndexes.has(config.vectorIndexName)) return;
+  await uploadDurableObjectBootstrap(api, config, null, true);
+  const attested = await workerEvidence(api, config);
+  if (!attested.vectorIndexes.has(config.vectorIndexName)) {
+    fail("worker_vector_binding_readback_missing");
+  }
 }
 
 export async function runBridge(
@@ -1648,9 +1923,9 @@ export async function runBridge(
   const env = options.env ?? process.env;
   const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const [migrationSet, workerArtifactDigest, bridgeDigest, bootstrapDigest] = await Promise.all([
+  const [migrationSet, workerArtifactEvidence, bridgeDigest, bootstrapDigest] = await Promise.all([
     migrationFiles(config.migrationSetPath),
-    readBounded(config.workerArtifactPath, MAXIMUM_MIGRATION_BYTES).then(sha256),
+    workerArtifactDigest(config.workerArtifactPath, config.workerAssetsPath),
     helperDigest(options.helperPath ?? fileURLToPath(import.meta.url)),
     config.durableObjectBootstrapPath === undefined
       ? Promise.resolve(undefined)
@@ -1658,10 +1933,19 @@ export async function runBridge(
           .then((bytes) => `sha256:${sha256(bytes)}`),
   ]);
   const containerDesired =
-    config.containerDesiredConfigPath === undefined
+    selectedPhase === "pre-worker"
       ? []
-      : await containerRows(config.containerDesiredConfigPath, env);
+      : config.containerDesiredConfigContent !== undefined
+        ? containerRowsFromContent(config.containerDesiredConfigContent, env)
+        : config.containerDesiredConfigPath === undefined
+          ? []
+          : await containerRows(config.containerDesiredConfigPath, env);
   const migrationDigest = digest(migrationSet.map(({ name, sha256: checksum }) => ({ name, sha256: checksum })));
+  const bridgeActivationDigest = digest({
+    mode: config.bridgeMode,
+    environment: config.bridgeEnvironment,
+    acknowledgementDigest: config.bridgeAcknowledgementDigest,
+  });
   const desiredDigest = digest({
     accountId: config.accountId,
     workerName: config.workerName,
@@ -1673,15 +1957,21 @@ export async function runBridge(
     },
     containers: containerDesired,
     durableObjects: config.durableObjectLifecycle,
+    bridge: {
+      mode: config.bridgeMode,
+      environment: config.bridgeEnvironment,
+      acknowledgementDigest: config.bridgeAcknowledgementDigest,
+    },
   });
   const digests: BridgeDigests = {
     desiredDigest,
+    bridgeActivationDigest,
     ...(bootstrapDigest === undefined
       ? {}
       : { durableObjectBootstrapDigest: bootstrapDigest }),
     helperDigest: bridgeDigest,
     migrationDigest,
-    workerArtifactDigest: `sha256:${workerArtifactDigest}`,
+    workerArtifactDigest: workerArtifactEvidence,
   };
   const api = new CloudflareApi(config.accountId, token, fetchImpl);
   let vector: "present" | "created" | "deleted" = "present";
@@ -1704,6 +1994,7 @@ export async function runBridge(
       tag: durableObjectResult.tag,
     };
     vector = await reconcileVector(api, config);
+    await establishVectorOwnershipProof(api, config);
     const migrationResult = await reconcileMigrations(api, config, migrationSet);
     d1 = { applied: migrationResult.applied, pending: migrationResult.pending };
     changed =
@@ -1740,7 +2031,12 @@ export async function runBridge(
         reconciled = [...reconciled, row.name];
       }
     } else {
-      d1 = await verifyMigrations(api, config, migrationSet);
+      // Recovery cleanup is deliberately independent of the D1 migration
+      // ledger.  A failed pre-worker phase may have created Vectorize or
+      // Container resources before the ledger table existed, and a bare
+      // SELECT would prevent ownership-proven cleanup from reaching them.
+      // D1 is never rolled back here; leave its evidence empty rather than
+      // claiming a ledger read that was intentionally skipped.
       const result = await cleanup(api, config, worker, containerDesired);
       deleted = result.deletedContainers;
       vector = result.vectorDeleted ? "deleted" : "present";
@@ -1750,6 +2046,8 @@ export async function runBridge(
   return {
     ok: true,
     phase: selectedPhase,
+    bridgeMode: config.bridgeMode,
+    bridgeEnvironment: config.bridgeEnvironment,
     digests,
     changed,
     durableObjects,

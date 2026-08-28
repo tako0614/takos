@@ -1,6 +1,6 @@
 # Takos をセルフホストする
 
-Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractの完全なgraphを写します。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
+Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractのgraphを宣言します。Cloudflare provider がまだ表現できない一部の gap は通常の production provider path だけでは反映されず、明示的に reviewed bridge を選んだ disposable E2E でだけ補われます。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
@@ -17,6 +17,20 @@ Cloudflare adapterは次の論理リソースをWorkers、D1、R2、KV、Queues�
 - エージェント実行に必要な構成
 
 OpenTofu はリソースと Worker に渡す binding を作ります。Worker のコードは、この binding を使って起動します。
+
+### Cloudflare provider gap bridge
+
+Cloudflare provider がまだ表現できない Vectorize、D1 migration、container-enabled Durable Object、Container
+application の反映には、Takos が所有する補助 bridge があります。`cloudflare_provider_gap_bridge_mode` は既定値が
+`off` で、通常の install や production provider path では bridge は実行されません。検証用の `staging` は
+`environment = "staging"` と併せて、また disposable production E2E 用の `disposable-production` は
+`environment = "production"` と併せて明示的に選んだ場合だけ有効になります。
+
+`disposable-production` は一回限りの使い捨て環境に限り、
+`cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"` を完全一致で指定します。
+`off` と `staging` では acknowledgement を空欄にしてください。bridge は一般の production deploy を有効にする
+ためのものではなく、Container image は immutable digest のまま、destroy 時は所有を証明できる Container application
+と Vectorize index だけを削除します。D1 migration の巻き戻しは行いません。
 
 ## Takosumi は必須か
 

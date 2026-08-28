@@ -6,7 +6,7 @@ Accounts plane が OIDC issuer になります。Takosumi は Takos distribution
 
 ## Current Flow
 
-1. Takos の OpenTofu Capsule (`deploy/opentofu/cloudflare`) を install して **Capsule** を作る。接続した Cloudflare account に完全な product contract を materialize する。
+1. Takos の OpenTofu Capsule (`deploy/opentofu/cloudflare`) を install して **Capsule** を作る。接続した Cloudflare account に product graph を materialize する。Cloudflare provider gap は通常の production provider path では未解決のままで、disposable E2E だけ reviewed bridge mode を明示する。
 2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
 3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateVersion** と **Output** を記録する。
 4. ProviderConnection が credential reference を保持し、ProviderBinding が module の使う provider (+ optional alias) ごとに explicit ProviderConnection を解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。

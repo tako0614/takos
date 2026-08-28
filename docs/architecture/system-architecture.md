@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-**Premise: Takos is a provider-neutral OpenTofu-native AI workspace distribution.** `deploy/product-resources.json` owns the required resource and runtime-connection graph. `deploy/opentofu/cloudflare` is the complete current adapter. Takosumi installs it as an **OpenTofu Capsule** and records **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit ProviderConnection, and policy resolves provider allowlists and state handling. Install metadata comes from the repository Git identity and its `/.well-known/takosumi.json`.
+**Premise: Takos is a provider-neutral OpenTofu-native AI workspace distribution.** `deploy/product-resources.json` owns the required resource and runtime-connection graph. `deploy/opentofu/cloudflare` is the current product-graph adapter; its provider-gap bridge is off by default, so ordinary production provider applies do not silently reconcile unsupported Cloudflare gaps. A disposable E2E that needs those gaps must select the reviewed bridge mode matching its exact environment. Takosumi installs it as an **OpenTofu Capsule** and records **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit ProviderConnection, and policy resolves provider allowlists and state handling. Install metadata comes from the repository Git identity and its `/.well-known/takosumi.json`.
 
 ## Current Flow
 
@@ -17,8 +17,8 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 Takos is not a special Takosumi shape. Its current Cloudflare adapter composes
 Workers, D1, KV, R2, Queues, Vectorize, Containers, and Durable Objects from the
 product-owned graph. The former Provider 1.x Takoform projection is retained as
-source history only; it cannot honestly express the complete topology with the
-current Form vocabulary.
+source history only; it cannot honestly express the required product graph with
+the current Form vocabulary.
 The module does not create a generic tool/runtime container. Computer access,
 browser automation, and Git Actions are separate capabilities installed or
 connected through the same ordinary Capsule and Interface contracts.

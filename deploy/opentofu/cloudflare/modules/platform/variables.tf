@@ -61,14 +61,30 @@ variable "zone_name" {
   default     = null
 }
 
-variable "enable_imperative_staging_bridge" {
-  description = "Opt in to app-owned staging bridges for Cloudflare provider gaps (Vectorize, D1 migrations, container-enabled Durable Object migration, and Container applications)."
-  type        = bool
-  default     = false
+variable "cloudflare_provider_gap_bridge_mode" {
+  description = "Explicit app-owned Cloudflare provider-gap bridge mode. `off` is the default; `staging` requires environment `staging` for smoke inputs; `disposable-production` requires environment `production` for a one-shot disposable production E2E lane."
+  type        = string
+  default     = "off"
+
+  validation {
+    condition     = contains(["off", "staging", "disposable-production"], var.cloudflare_provider_gap_bridge_mode)
+    error_message = "cloudflare_provider_gap_bridge_mode must be exactly off, staging, or disposable-production."
+  }
+}
+
+variable "cloudflare_provider_gap_bridge_acknowledgement" {
+  description = "Exact reviewed acknowledgement for the disposable-production Cloudflare provider-gap bridge in environment `production`: DISPOSABLE_PRODUCTION_ONE_SHOT. Keep empty for off or staging."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.cloudflare_provider_gap_bridge_acknowledgement == "" || var.cloudflare_provider_gap_bridge_acknowledgement == "DISPOSABLE_PRODUCTION_ONE_SHOT"
+    error_message = "cloudflare_provider_gap_bridge_acknowledgement must be empty or exactly DISPOSABLE_PRODUCTION_ONE_SHOT."
+  }
 }
 
 variable "container_image" {
-  description = "Optional immutable Container image reference. Use an account-owned Cloudflare registry digest or a public Docker Hub digest when the staging bridge is enabled."
+  description = "Optional immutable Container image reference. Use an account-owned Cloudflare registry digest or a public Docker Hub digest when the Cloudflare provider-gap bridge is enabled."
   type        = string
   default     = ""
 

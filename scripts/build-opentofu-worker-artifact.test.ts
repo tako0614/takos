@@ -39,7 +39,7 @@ test("the Worker artifact contract is module-local and builds the resolved repos
   expect(builder).toContain("src/worker/cloudflare-entrypoint.ts");
 });
 
-test("the Cloudflare module declares every operator-reviewed staging value as a user input", async () => {
+test("the Cloudflare module declares every operator-reviewed provider-gap value as a user input", async () => {
   const manifest = JSON.parse(
     await readFile(new URL(".well-known/takosumi.json", root), "utf8"),
   ) as {
@@ -55,7 +55,8 @@ test("the Cloudflare module declares every operator-reviewed staging value as a 
     inputs?.find((input) => input.name === name)?.source.kind;
 
   expect(sourceKind("environment")).toBe("user");
-  expect(sourceKind("enable_imperative_staging_bridge")).toBe("user");
+  expect(sourceKind("cloudflare_provider_gap_bridge_mode")).toBe("user");
+  expect(sourceKind("cloudflare_provider_gap_bridge_acknowledgement")).toBe("user");
 });
 
 test("the nested Cloudflare module keeps artifact paths module-local", async () => {

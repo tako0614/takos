@@ -1,6 +1,6 @@
 # Architecture Diagrams
 
-**Takos owns one provider-neutral resource contract and one complete current adapter.** Takosumi installs and applies `deploy/opentofu/cloudflare` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
+**Takos owns one provider-neutral resource contract and one current product-graph adapter.** The Cloudflare provider-gap bridge is off by default; ordinary production provider applies leave unsupported gaps unresolved, and disposable E2E runs must select a reviewed mode explicitly. Takosumi installs and applies `deploy/opentofu/cloudflare` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
 
 ## Deploy flow (Takosumi run ledger)
 

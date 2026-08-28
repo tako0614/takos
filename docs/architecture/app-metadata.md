@@ -88,7 +88,7 @@ Sync を経由しません。
 
 Takos の resource authority は `deploy/product-resources.json` です。Takosumi は
 `deploy/opentofu/cloudflare` を通常の OpenTofu module として install / apply します。
-直接接続した Cloudflare account に完全な runtime connections を写します。
+直接接続した Cloudflare account に product runtime connections を写します。Cloudflare provider-gap bridge は既定で off のため、通常の production provider path では未対応 gap は解決されず、disposable E2E だけ reviewed mode を明示します。
 手書きの `wrangler` / distribution pipeline は direct Cloudflare adapter の artifact materialization であり、
 別の resource authority ではありません。
 
