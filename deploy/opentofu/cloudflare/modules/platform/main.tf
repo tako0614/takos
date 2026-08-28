@@ -491,6 +491,22 @@ resource "cloudflare_worker" "app" {
     enabled          = true
     previews_enabled = false
   }
+
+  # Worker versions bind these resources, but that creates only a sibling
+  # dependency: after the version/deployment is removed, OpenTofu could still
+  # destroy the Worker identity and its backing resources concurrently. Keep
+  # every bound resource alive until the Worker is gone; destroy reverses these
+  # create-time edges and therefore deletes the Worker first.
+  depends_on = [
+    cloudflare_d1_database.this,
+    cloudflare_workers_kv_namespace.this,
+    cloudflare_r2_bucket.this,
+    cloudflare_queue.this,
+    random_password.encryption,
+    random_password.agent_start,
+    random_password.internal_api,
+    tls_private_key.platform,
+  ]
 }
 
 # The ordinary provider path models migration and binding as two Versions
