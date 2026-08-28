@@ -19,9 +19,16 @@ test("selectInstallableSourcePathFromRepo prefers OpenTofu module files", () => 
   assertEquals(
     selectInstallableSourcePathFromRepo([
       "package.json",
-      "deploy/opentofu/takoform/main.tf",
+      "deploy/opentofu/cloudflare/main.tf",
     ]),
-    "deploy/opentofu/takoform/main.tf",
+    "deploy/opentofu/cloudflare/main.tf",
+  );
+  assertEquals(
+    selectInstallableSourcePathFromRepo([
+      "package.json",
+      "deploy/opentofu/takoform/main.tf.history",
+    ]),
+    null,
   );
   assertEquals(selectInstallableSourcePathFromRepo(["package.json"]), null);
 });

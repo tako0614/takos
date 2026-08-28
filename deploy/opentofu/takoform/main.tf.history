@@ -1,3 +1,5 @@
+# Historical Provider 1.x migration reference. This is intentionally not a
+# .tf file and must not be discovered or selected as an installable module.
 terraform {
   required_version = ">= 1.5"
 
