@@ -8,6 +8,7 @@ import {
   createOfficialAgentProofEnvironment,
   installLocalProofSignalHandlers,
   parseLiveProofEvidence,
+  resolveAgentBuildContext,
 } from "./local-agent-proof-support.ts";
 
 type ProofStep = {
@@ -183,9 +184,11 @@ if ("reason" in dockerProbe) {
 }
 
 const liveCommand = ["bun", "scripts/local-e2e.mjs"];
+const agentBuildContext = await resolveAgentBuildContext(takosRoot);
 const expectedSourceFingerprint =
-  await computeAgentSourceFingerprint(takosRoot);
+  await computeAgentSourceFingerprint(agentBuildContext);
 const officialRunEnv = createOfficialAgentProofEnvironment();
+officialRunEnv.TAKOS_AGENT_BUILD_CONTEXT = agentBuildContext.contextRoot;
 const validatorInterruption = createLocalProofInterruption();
 const removeTerminationHandlers = installLocalProofSignalHandlers({
   interruption: validatorInterruption,
@@ -235,7 +238,7 @@ if (validatorInterruption.receivedSignal) {
 const liveStdout = decode(liveResult.stdout);
 const liveStderr = decode(liveResult.stderr);
 const sourceFingerprintAfter = liveResult.success
-  ? await computeAgentSourceFingerprint(takosRoot)
+  ? await computeAgentSourceFingerprint(agentBuildContext)
   : null;
 const liveEvidence =
   liveResult.success && sourceFingerprintAfter === expectedSourceFingerprint

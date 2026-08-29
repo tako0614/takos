@@ -2,6 +2,15 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
+import {
+  computeArtifactDigest,
+  digestFiles,
+  trackedWebInputs,
+  WEB_BUILD_KIND,
+  WEB_BUILD_MANIFEST,
+  type WebBuildManifest,
+} from "./build-web.ts";
+
 type AuditAdvisory = {
   id: number;
   url: string;
@@ -46,6 +55,12 @@ type PackageJson = {
   version?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  overrides?: Record<string, string>;
+};
+
+type BunLockfile = {
+  overrides?: Record<string, string>;
+  packages?: Record<string, unknown>;
 };
 
 type CanonicalAdvisory = {
@@ -57,8 +72,19 @@ type CanonicalAdvisory = {
   vulnerableVersions: string;
 };
 
+export type DependencySecurityOptions = {
+  artifactRoot: string;
+  buildArtifact: boolean;
+};
+
 export type InstalledToolOccurrence = {
   package: "vite" | "esbuild";
+  version: string;
+  path: string;
+};
+
+export type InstalledPackageOccurrence = {
+  package: string;
   version: string;
   path: string;
 };
@@ -184,6 +210,62 @@ export function validateVulnerableToolOccurrences(
   return [];
 }
 
+/**
+ * Keep all security overrides bound to one exact dependency graph. The
+ * package manifest is the requested policy, bun.lock is the resolved policy,
+ * and node_modules is the physical graph actually consumed by build/tests.
+ */
+export function validateSecurityOverrides(
+  rootPackage: PackageJson,
+  lockfile: BunLockfile,
+  installed: readonly InstalledPackageOccurrence[],
+): string[] {
+  const errors: string[] = [];
+  const manifestOverrides = rootPackage.overrides ?? {};
+  const lockOverrides = lockfile.overrides ?? {};
+  if (JSON.stringify(sortRecord(manifestOverrides)) !== JSON.stringify(sortRecord(lockOverrides))) {
+    errors.push("bun.lock override map does not match package.json overrides");
+  }
+
+  const lockPackages = lockfile.packages ?? {};
+  for (const [packageName, expectedVersion] of Object.entries(manifestOverrides).sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    if (!expectedVersion || typeof expectedVersion !== "string") {
+      errors.push(`security override ${packageName} must declare an exact version`);
+      continue;
+    }
+
+    const lockVersions = lockPackageVersions(packageName, lockPackages);
+    if (lockVersions.length === 0) {
+      errors.push(`bun.lock has no resolved package for security override ${packageName}`);
+    } else if (lockVersions.some((version) => version !== expectedVersion)) {
+      errors.push(
+        `bun.lock resolves ${packageName} to ${JSON.stringify(lockVersions)} instead of ${expectedVersion}`,
+      );
+    }
+
+    // Every physical copy must obey the override. A nested copy is not an
+    // exception: a stale duplicate can be selected by a transitive consumer
+    // even when the hoisted root package is current.
+    const physical = installed.filter(
+      (occurrence) => occurrence.package === packageName,
+    );
+    if (physical.length === 0) {
+      errors.push(
+        `node_modules has no physical package for security override ${packageName}`,
+      );
+    } else if (physical.some((occurrence) => occurrence.version !== expectedVersion)) {
+      errors.push(
+        `node_modules resolves ${packageName} to ${JSON.stringify(
+          physical.map((occurrence) => ({ version: occurrence.version, path: occurrence.path })),
+        )} instead of ${expectedVersion}`,
+      );
+    }
+  }
+  return errors;
+}
+
 export function validateReviewWindow(
   evidence: WaiverEvidence,
   today: string,
@@ -244,6 +326,32 @@ function compareOccurrences(
   return left.path.localeCompare(right.path);
 }
 
+function sortRecord(record: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(record).sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function lockPackageVersions(
+  packageName: string,
+  packages: Record<string, unknown>,
+): string[] {
+  const versions: string[] = [];
+  for (const value of Object.values(packages)) {
+    if (!Array.isArray(value) || typeof value[0] !== "string") continue;
+    const descriptor = value[0];
+    const prefix = `${packageName}@`;
+    // Bun encodes nested packages as `parent/package` keys (and scoped
+    // variants as `parent/@scope/package`) while retaining the resolved
+    // package descriptor in the tuple. Match that descriptor rather than
+    // relying on the root key so every nested resolution is checked.
+    if (descriptor.startsWith(prefix)) {
+      versions.push(descriptor.slice(prefix.length));
+    }
+  }
+  return versions.sort((left, right) => left.localeCompare(right));
+}
+
 function isVulnerableToolOccurrence(
   occurrence: InstalledToolOccurrence,
 ): boolean {
@@ -269,10 +377,20 @@ function parseVersion(version: string): [number, number, number] {
 }
 
 function collectInstalledToolOccurrences(): InstalledToolOccurrence[] {
+  return collectInstalledPackageOccurrences(new Set(["vite", "esbuild"])).filter(
+    (occurrence): occurrence is InstalledToolOccurrence =>
+      occurrence.package === "vite" || occurrence.package === "esbuild",
+  );
+}
+
+function collectInstalledPackageOccurrences(
+  packageNames: Set<string>,
+): InstalledPackageOccurrence[] {
   return collectNodeModules(
     resolve(repoRoot, "node_modules"),
     "node_modules",
     new Set(),
+    packageNames,
   );
 }
 
@@ -280,9 +398,10 @@ function collectNodeModules(
   nodeModulesPath: string,
   logicalPath: string,
   ancestors: Set<string>,
-): InstalledToolOccurrence[] {
+  packageNames: Set<string>,
+): InstalledPackageOccurrence[] {
   if (!existsSync(nodeModulesPath)) return [];
-  const occurrences: InstalledToolOccurrence[] = [];
+  const occurrences: InstalledPackageOccurrence[] = [];
   const entries = readdirSync(nodeModulesPath, { withFileTypes: true }).sort(
     (left, right) => left.name.localeCompare(right.name),
   );
@@ -301,12 +420,15 @@ function collectNodeModules(
             resolve(entryPath, scopedEntry.name),
             `${entryLogicalPath}/${scopedEntry.name}`,
             ancestors,
+            packageNames,
           ),
         );
       }
       continue;
     }
-    occurrences.push(...collectPackage(entryPath, entryLogicalPath, ancestors));
+    occurrences.push(
+      ...collectPackage(entryPath, entryLogicalPath, ancestors, packageNames),
+    );
   }
 
   return occurrences;
@@ -316,57 +438,143 @@ function collectPackage(
   packagePath: string,
   logicalPath: string,
   ancestors: Set<string>,
-): InstalledToolOccurrence[] {
+  packageNames: Set<string>,
+): InstalledPackageOccurrence[] {
   if (!existsSync(packagePath)) return [];
   const realPath = realpathSync(packagePath);
-  if (ancestors.has(realPath)) return [];
-  const nextAncestors = new Set(ancestors).add(realPath);
-  const occurrences: InstalledToolOccurrence[] = [];
+  const occurrences: InstalledPackageOccurrence[] = [];
   const packageJsonPath = resolve(packagePath, "package.json");
 
   if (existsSync(packageJsonPath)) {
     const packageJson = readJson<PackageJson>(packageJsonPath);
-    if (
-      (packageJson.name === "vite" || packageJson.name === "esbuild") &&
-      packageJson.version
-    ) {
+    const packageName = packageJson.name;
+    if (packageName && packageNames.has(packageName) && packageJson.version) {
       occurrences.push({
-        package: packageJson.name,
+        package: packageName,
         version: packageJson.version,
         path: `${logicalPath}/package.json`,
       });
     }
   }
 
+  // A nested node_modules entry can be a symlink to an already visited
+  // hoisted package. Count that physical resolution, but do not recurse into
+  // its dependencies again (which would otherwise loop forever).
+  if (ancestors.has(realPath)) return occurrences;
+  const nextAncestors = new Set(ancestors).add(realPath);
+
   occurrences.push(
     ...collectNodeModules(
       resolve(packagePath, "node_modules"),
       `${logicalPath}/node_modules`,
       nextAncestors,
+      packageNames,
     ),
   );
   return occurrences;
 }
 
-function validateProductionSanitizerBundle(): string[] {
-  const build = Bun.spawnSync({
-    cmd: ["bun", "run", "web:build"],
-    cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (build.exitCode !== 0) {
-    return [
-      `web production build failed during dependency validation: ${build.stderr.toString().trim()}`,
-    ];
+export function parseDependencySecurityArgs(
+  args: string[],
+): DependencySecurityOptions {
+  let artifactRoot = resolve(repoRoot, "dist");
+  let buildArtifact = true;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--artifact") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--artifact requires a directory");
+      artifactRoot = resolve(repoRoot, value);
+      buildArtifact = false;
+      index += 1;
+    } else if (argument?.startsWith("--artifact=")) {
+      const value = argument.slice("--artifact=".length);
+      if (!value) throw new Error("--artifact requires a directory");
+      artifactRoot = resolve(repoRoot, value);
+      buildArtifact = false;
+    } else if (argument === "--build") {
+      buildArtifact = true;
+    } else if (argument === "--no-build") {
+      buildArtifact = false;
+    } else {
+      throw new Error(`unknown dependency security option: ${argument}`);
+    }
+  }
+  return { artifactRoot, buildArtifact };
+}
+
+export function validateWebBuildArtifact(
+  artifactRoot: string,
+  root = repoRoot,
+): string[] {
+  const manifestPath = resolve(artifactRoot, WEB_BUILD_MANIFEST);
+  if (!existsSync(manifestPath)) {
+    return [`Web build manifest is missing: ${manifestPath}`];
   }
 
-  const assetPath = resolve(repoRoot, "dist/assets");
+  let manifest: WebBuildManifest;
+  try {
+    manifest = readJson<WebBuildManifest>(manifestPath);
+  } catch (error) {
+    return [
+      `Web build manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    ];
+  }
+  if (manifest.kind !== WEB_BUILD_KIND) {
+    return [`Web build manifest kind is unsupported: ${String(manifest.kind)}`];
+  }
+  if (!Array.isArray(manifest.sourceFiles) || manifest.sourceFiles.length === 0) {
+    return ["Web build manifest must record its source files"];
+  }
+
+  let expectedSourceFiles: string[];
+  try {
+    expectedSourceFiles = trackedWebInputs(root);
+  } catch (error) {
+    return [
+      `unable to verify Web build source inventory: ${error instanceof Error ? error.message : String(error)}`,
+    ];
+  }
+  if (JSON.stringify(manifest.sourceFiles) !== JSON.stringify(expectedSourceFiles)) {
+    return ["Web build source file inventory is stale; rebuild the artifact"];
+  }
+  let sourceDigest: string;
+  try {
+    sourceDigest = digestFiles(root, expectedSourceFiles);
+  } catch (error) {
+    return [
+      `unable to read Web build source inputs: ${error instanceof Error ? error.message : String(error)}`,
+    ];
+  }
+  if (manifest.sourceDigest !== sourceDigest) {
+    return ["Web build source digest is stale; rebuild the artifact"];
+  }
+  let artifactDigest: string;
+  try {
+    artifactDigest = computeArtifactDigest(artifactRoot);
+  } catch (error) {
+    return [
+      `unable to read Web build artifact: ${error instanceof Error ? error.message : String(error)}`,
+    ];
+  }
+  if (manifest.artifactDigest !== artifactDigest) {
+    return ["Web build artifact digest does not match its manifest"];
+  }
+  return [];
+}
+
+export function validateProductionSanitizerBundle(
+  artifactRoot = resolve(repoRoot, "dist"),
+): string[] {
+  const assetPath = resolve(artifactRoot, "assets");
+  if (!existsSync(assetPath)) {
+    return [`Web production assets are missing: ${assetPath}`];
+  }
   const javascript = readdirSync(assetPath)
     .filter((name) => name.endsWith(".js"))
     .map((name) => readFileSync(resolve(assetPath, name), "utf8"))
     .join("\n");
-  const proof = "takos.monaco-dompurify@3.4.12";
+  const proof = "takos.monaco-dompurify@3.4.13";
   const proofCount = javascript.split(proof).length - 1;
   if (proofCount !== 1) {
     return [
@@ -385,7 +593,43 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
+function readLockfile(path: string): BunLockfile {
+  return Bun.JSON5.parse(readFileSync(path, "utf8")) as BunLockfile;
+}
+
+export function buildWebArtifactForStandaloneValidation(): string[] {
+  const build = Bun.spawnSync({
+    cmd: ["bun", "run", "web:build"],
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (build.exitCode !== 0) {
+    return [
+      `web production build failed during dependency validation: ${build.stderr.toString().trim()}`,
+    ];
+  }
+  return [];
+}
+
 function main(): void {
+  const options = parseDependencySecurityArgs(process.argv.slice(2));
+  const buildErrors = options.buildArtifact
+    ? buildWebArtifactForStandaloneValidation()
+    : [];
+  if (buildErrors.length > 0) {
+    console.error("Dependency security validation failed:");
+    for (const error of buildErrors) console.error(`- ${error}`);
+    process.exit(1);
+  }
+
+  const rootPackage = readJson<PackageJson>(resolve(repoRoot, "package.json"));
+  const lockfile = readLockfile(resolve(repoRoot, "bun.lock"));
+  const securityOverrideNames = new Set(Object.keys(rootPackage.overrides ?? {}));
+  const installedSecurityOverrides = collectInstalledPackageOccurrences(
+    securityOverrideNames,
+  );
+
   const evidence = readJson<WaiverEvidence>(
     resolve(repoRoot, "security/dependency-audit-waivers.json"),
   );
@@ -414,9 +658,15 @@ function main(): void {
       collectInstalledToolOccurrences(),
       evidence,
     ),
-    ...validateProductionSanitizerBundle(),
+    ...validateSecurityOverrides(
+      rootPackage,
+      lockfile,
+      installedSecurityOverrides,
+    ),
+    ...validateWebBuildArtifact(options.artifactRoot),
+    ...validateProductionSanitizerBundle(options.artifactRoot),
     ...validateWaiverScope(
-      readJson<PackageJson>(resolve(repoRoot, "package.json")),
+      rootPackage,
       readJson<PackageJson>(
         resolve(repoRoot, "node_modules/vitepress/package.json"),
       ),

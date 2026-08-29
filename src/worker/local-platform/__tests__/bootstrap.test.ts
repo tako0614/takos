@@ -10,9 +10,12 @@ import path from "node:path";
 import os from "node:os";
 import { eq } from "drizzle-orm";
 import {
-  createLocalDispatchFetchForTests,
   createLocalWebFetchForTests,
 } from "../runtime.ts";
+import {
+  createLocalDispatchFetchForTests,
+  disposeLocalTestDispatchRuntimes,
+} from "../test-dispatch-runtime.ts";
 import {
   createNodeWebEnv,
   disposeNodePlatformState,
@@ -33,6 +36,13 @@ import {
   assertStringIncludes,
 } from "@takos/test/assert";
 import { assertSpyCalls, stub } from "@takos/test/mock";
+
+async function disposeLocalBootstrapState(
+  opts?: Parameters<typeof disposeNodePlatformState>[0],
+): Promise<void> {
+  await disposeLocalTestDispatchRuntimes();
+  await disposeNodePlatformState(opts);
+}
 
 const queueMocks = {
   sqsSend: () => Promise.resolve(undefined),
@@ -130,14 +140,14 @@ async function withLocalBootstrapEnv(
   tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
   setEnv("TAKOS_LOCAL_DATA_DIR", tempDataDir);
   deleteEnv("AWS_REGION");
-  await disposeNodePlatformState({ clearData: true });
+  await disposeLocalBootstrapState({ clearData: true });
   prepareQueueMocks();
 
   try {
     await fn({ tempDataDir });
   } finally {
     restoreOriginalBootstrapEnv();
-    await disposeNodePlatformState();
+    await disposeLocalBootstrapState();
     if (tempDataDir) {
       await rm(tempDataDir, { recursive: true, force: true });
       tempDataDir = null;
@@ -171,7 +181,7 @@ async function runMiniflareDispatchSmoke(): Promise<{
     path.join(os.tmpdir(), "takos-local-dispatch-smoke-"),
   );
   setEnv("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-  await disposeNodePlatformState({ clearData: true });
+  await disposeLocalBootstrapState({ clearData: true });
 
   const env = await createNodeWebEnv();
 
@@ -201,7 +211,7 @@ async function runMiniflareDispatchSmoke(): Promise<{
       body: await response.json(),
     };
   } finally {
-    await disposeNodePlatformState();
+    await disposeLocalBootstrapState();
     await rm(tempDataDir, { recursive: true, force: true });
   }
 }
@@ -1727,7 +1737,7 @@ localBootstrapTest(
       const queueFile = path.join(tempDataDir!, "queues", "run-queue.json");
       const queueSnapshot = JSON.parse(await readFile(queueFile, "utf8"));
 
-      await disposeNodePlatformState();
+      await disposeLocalBootstrapState();
 
       const reloaded = await createNodeWebEnv();
       const row = await reloaded.DB.prepare(

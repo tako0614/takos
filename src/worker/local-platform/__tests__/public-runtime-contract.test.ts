@@ -277,7 +277,7 @@ test("local public runtime contract - routes compose and canonical scripts throu
     "core/index.ts",
   ]);
   assertEquals(composeConfig.services?.["takos-agent"]?.build, {
-    context: "..",
+    context: "${TAKOS_AGENT_BUILD_CONTEXT:-..}",
     dockerfile: "takos/containers/agent/Dockerfile",
   });
   assert(!compose.includes("dev:local:web"));

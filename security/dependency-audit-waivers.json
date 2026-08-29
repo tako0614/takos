@@ -1,7 +1,7 @@
 {
   "kind": "takos.dependency-audit-waivers@v1",
-  "reviewedAt": "2026-07-22",
-  "reviewAfter": "2026-08-05",
+  "reviewedAt": "2026-08-29",
+  "reviewAfter": "2026-09-12",
   "scope": {
     "owner": "vitepress",
     "ownerVersion": "1.6.4",

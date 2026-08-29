@@ -55,8 +55,9 @@ export async function buildDispatcher(
     ctx.forwardTargets,
     parseServiceTargetMap(optionalEnv("TAKOS_LOCAL_DISPATCH_TARGETS_JSON")),
   );
-  return createExternalRuntimeServiceRegistry(
+  const dispatcher = createExternalRuntimeServiceRegistry(
     ctx.forwardTargets,
     ctx.runtimeHost,
   );
+  return dispatcher;
 }

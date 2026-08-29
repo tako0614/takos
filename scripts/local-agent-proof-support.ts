@@ -1,10 +1,16 @@
 import { createHash, randomUUID as nodeRandomUUID } from "node:crypto";
-import { lstat, readdir, readFile, rm, stat } from "node:fs/promises";
-import { basename, relative, resolve } from "node:path";
+import { lstat, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 
 export const AGENT_SOURCE_FINGERPRINT_LABEL = "jp.takos.agent.source-sha256";
 
-const AGENT_BUILD_INPUTS = [
+/**
+ * The only files that affect the local agent image. These paths are relative
+ * to the one physical ecosystem build context used by Docker Compose and the
+ * fingerprint below. Keeping this manifest in one place prevents a source
+ * override from being hashed without also being copied into the image.
+ */
+export const AGENT_BUILD_INPUTS = [
   ".dockerignore",
   "takos/containers/agent/Cargo.toml",
   "takos/containers/agent/Cargo.lock",
@@ -14,6 +20,25 @@ const AGENT_BUILD_INPUTS = [
   "takos-agent-engine/Cargo.lock",
   "takos-agent-engine/src",
 ] as const;
+
+/** Exact source roots named by the agent Dockerfile's non-stage COPY lines. */
+export const AGENT_DOCKER_COPY_INPUTS = [
+  "takos/containers/agent/Cargo.toml",
+  "takos/containers/agent/Cargo.lock",
+  "takos/containers/agent/src",
+  "takos-agent-engine",
+] as const;
+
+export type AgentBuildContext = {
+  readonly takosRoot: string;
+  readonly contextRoot: string;
+  readonly engineRoot: string;
+};
+
+type AgentFingerprintFile = {
+  readonly path: string;
+  readonly label: string;
+};
 
 type DockerCommandResult = {
   readonly code: number;
@@ -320,31 +345,140 @@ export function assertCoreDumpsDisabled(
   }
 }
 
-export async function computeAgentSourceFingerprint(
+/**
+ * Resolve one physical Takos + takos-agent-engine pair for both fingerprinting
+ * and Docker Compose. The context override names the complete ecosystem
+ * context; callers cannot point hashing at an engine directory that Docker
+ * would not copy.
+ */
+export async function resolveAgentBuildContext(
   takosRoot: string,
-): Promise<string> {
-  const ecosystemRoot = resolve(takosRoot, "..");
-  const files: string[] = [];
-  for (const input of AGENT_BUILD_INPUTS) {
-    await collectFiles(resolve(ecosystemRoot, input), files);
+): Promise<AgentBuildContext> {
+  const resolvedTakosRoot = resolve(takosRoot);
+  const configuredContext = process.env.TAKOS_AGENT_BUILD_CONTEXT?.trim();
+  const contextRoot = resolve(
+    resolvedTakosRoot,
+    configuredContext && configuredContext.length > 0 ? configuredContext : "..",
+  );
+  await assertPhysicalDirectory(resolvedTakosRoot, "Takos source");
+  await assertPhysicalDirectory(contextRoot, "agent Docker build context");
+
+  const contextTakosRoot = resolve(contextRoot, "takos");
+  await assertPhysicalDirectory(contextTakosRoot, "agent Docker context Takos source");
+  if ((await realpath(contextTakosRoot)) !== (await realpath(resolvedTakosRoot))) {
+    throw new Error(
+      "agent Docker build context must contain this Takos checkout at physical context/takos",
+    );
   }
-  files.sort((left, right) => left.localeCompare(right));
+
+  const engineRoot = resolve(contextRoot, "takos-agent-engine");
+  await assertPhysicalDirectory(engineRoot, "paired takos-agent-engine source");
+  const context: AgentBuildContext = {
+    takosRoot: resolvedTakosRoot,
+    contextRoot,
+    engineRoot,
+  };
+  await collectAgentBuildInputFiles(context);
+  assertAgentDockerfileCopiesExpectedSources(
+    await readFile(resolve(contextRoot, "takos/containers/agent/Dockerfile"), "utf8"),
+  );
+  return context;
+}
+
+export async function computeAgentSourceFingerprint(
+  contextOrTakosRoot: AgentBuildContext | string,
+): Promise<string> {
+  const context =
+    typeof contextOrTakosRoot === "string"
+      ? await resolveAgentBuildContext(contextOrTakosRoot)
+      : contextOrTakosRoot;
+  const files = await collectAgentBuildInputFiles(context);
 
   const hash = createHash("sha256");
   for (const file of files) {
-    const path = relative(ecosystemRoot, file).replaceAll("\\", "/");
-    hash.update(path);
+    hash.update(file.label);
     hash.update("\0");
-    hash.update(await readFile(file));
+    hash.update(await readFile(file.path));
     hash.update("\0");
   }
   return hash.digest("hex");
 }
 
-async function collectFiles(path: string, files: string[]): Promise<void> {
+async function collectAgentBuildInputFiles(
+  context: AgentBuildContext,
+): Promise<AgentFingerprintFile[]> {
+  const expectedTakosRoot = resolve(context.contextRoot, "takos");
+  const expectedEngineRoot = resolve(context.contextRoot, "takos-agent-engine");
+  if (
+    resolve(context.takosRoot) !== expectedTakosRoot ||
+    resolve(context.engineRoot) !== expectedEngineRoot
+  ) {
+    throw new Error(
+      "agent fingerprint context must use the same physical Takos and takos-agent-engine roots as Docker",
+    );
+  }
+  const files: AgentFingerprintFile[] = [];
+  for (const input of AGENT_BUILD_INPUTS) {
+    const path = input.startsWith("takos-agent-engine/")
+      ? resolve(context.engineRoot, input.slice("takos-agent-engine/".length))
+      : resolve(context.contextRoot, input);
+    await collectFiles(path, files, input);
+  }
+  files.sort((left, right) => left.label.localeCompare(right.label));
+  return files;
+}
+
+async function assertPhysicalDirectory(path: string, label: string): Promise<void> {
+  const linkInfo = await lstat(path).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`${label} is missing: ${path}`);
+    }
+    throw error;
+  });
+  if (linkInfo.isSymbolicLink()) {
+    throw new Error(`${label} must be a physical directory: ${path}`);
+  }
+  const info = await stat(path);
+  if (!info.isDirectory()) {
+    throw new Error(`${label} must be a physical directory: ${path}`);
+  }
+}
+
+export function assertAgentDockerfileCopiesExpectedSources(
+  dockerfile: string,
+): void {
+  const actual: string[] = [];
+  for (const line of dockerfile.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!/^COPY\s+/u.test(trimmed) || /\s--from(?:=|\s)/u.test(trimmed)) {
+      continue;
+    }
+    const tokens = trimmed.slice("COPY".length).trim().split(/\s+/u);
+    actual.push(...tokens.slice(0, -1));
+  }
+  const expected = [...AGENT_DOCKER_COPY_INPUTS].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  actual.sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(
+      `agent Dockerfile COPY sources diverge from the fingerprint manifest (actual=${JSON.stringify(actual)}, expected=${JSON.stringify(expected)})`,
+    );
+  }
+}
+
+async function collectFiles(
+  path: string,
+  files: AgentFingerprintFile[],
+  label: string,
+): Promise<void> {
+  const linkInfo = await lstat(path);
+  if (linkInfo.isSymbolicLink()) {
+    throw new Error(`agent build input must not be a symlink: ${path}`);
+  }
   const info = await stat(path);
   if (info.isFile()) {
-    files.push(path);
+    files.push({ path, label });
     return;
   }
   if (!info.isDirectory()) {
@@ -358,7 +492,11 @@ async function collectFiles(path: string, files: string[]): Promise<void> {
         `agent build input must not be a symlink: ${path}/${entry.name}`,
       );
     }
-    await collectFiles(resolve(path, entry.name), files);
+    await collectFiles(
+      resolve(path, entry.name),
+      files,
+      `${label}/${entry.name}`,
+    );
   }
 }
 

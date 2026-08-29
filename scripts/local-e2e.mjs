@@ -15,6 +15,7 @@ import {
   createLocalProofInterruption,
   installLocalProofSignalHandlers,
   parseLocalhostPublishedPort,
+  resolveAgentBuildContext,
 } from "./local-agent-proof-support.ts";
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 2000;
@@ -372,11 +373,12 @@ async function printDiagnostics(composeArgs, commandEnv) {
 async function main() {
   assertFreshAgentProofBuild(runtime.env.get("TAKOS_LOCAL_E2E_SKIP_BUILD"));
   const takosRoot = runtime.cwd();
+  const agentBuildContext = await resolveAgentBuildContext(takosRoot);
   const takosumiRoot = resolve(
     takosRoot,
     env("TAKOSUMI_SOURCE_DIR", "../takosumi"),
   );
-  const sourceFingerprint = await computeAgentSourceFingerprint(takosRoot);
+  const sourceFingerprint = await computeAgentSourceFingerprint(agentBuildContext);
   const project = env(
     "TAKOS_LOCAL_E2E_PROJECT",
     `takos-e2e-${Date.now()}-${runtime.pid}`,
@@ -406,6 +408,7 @@ async function main() {
     TAKOS_AGENT_PROOF_DISPATCH_SECRET: proofDispatchSecret,
     TAKOS_AGENT_PROOF_MODEL_KEY: proofModelKey,
     TAKOS_AGENT_SOURCE_FINGERPRINT: sourceFingerprint,
+    TAKOS_AGENT_BUILD_CONTEXT: agentBuildContext.contextRoot,
   };
   const composeArgs = composeBaseArgs(project, envFile);
   const keepStack = runtime.env.get("TAKOS_LOCAL_E2E_KEEP_STACK") === "1";
@@ -545,7 +548,7 @@ async function main() {
     );
 
     const sourceFingerprintAfterBuild =
-      await computeAgentSourceFingerprint(takosRoot);
+      await computeAgentSourceFingerprint(agentBuildContext);
     if (sourceFingerprintAfterBuild !== sourceFingerprint) {
       throw new Error(
         "takos-agent Rust build inputs changed while the proof image was building",

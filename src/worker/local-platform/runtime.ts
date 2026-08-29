@@ -10,10 +10,9 @@
  *   runtime-types.ts  – shared types and constants
  */
 
-import { loadLocalDispatchEnv, loadLocalWebEnv } from "./load-adapter.ts";
+import { loadLocalWebEnv } from "./load-adapter.ts";
 import { createLocalExecutionContext } from "./execution-context.ts";
 import {
-  buildNodeDispatchPlatform,
   buildNodeWebPlatform,
 } from "../platform/adapters/node.ts";
 
@@ -41,12 +40,4 @@ export async function createLocalWebFetchForTests(): Promise<LocalFetch> {
   const webWorker = createWebWorker(buildNodeWebPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     webWorker.fetch(request, env, executionContext);
-}
-
-export async function createLocalDispatchFetchForTests(): Promise<LocalFetch> {
-  const env = await loadLocalDispatchEnv();
-  const { createDispatchWorker } = await import("../dispatch.ts");
-  const dispatchWorker = createDispatchWorker(buildNodeDispatchPlatform);
-  return (request, executionContext = createLocalExecutionContext()) =>
-    dispatchWorker.fetch(request, env, executionContext);
 }

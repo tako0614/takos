@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  assertAgentDockerfileCopiesExpectedSources,
   assertCoreDumpsDisabled,
   assertFreshAgentProofBuild,
   assertLocalhostComposePorts,
@@ -15,6 +16,7 @@ import {
   installLocalProofSignalHandlers,
   parseLocalhostPublishedPort,
   parseLiveProofEvidence,
+  resolveAgentBuildContext,
   type LocalProofDockerRunner,
 } from "../local-agent-proof-support.ts";
 
@@ -43,6 +45,39 @@ function validStdout(sourceFingerprint = SOURCE_FINGERPRINT): string {
       pollCount: 2,
     })}`,
   ].join("\n");
+}
+
+async function createAgentBuildFixture(): Promise<{
+  root: string;
+  contextRoot: string;
+  takosRoot: string;
+  engineRoot: string;
+}> {
+  const root = await mkdtemp(join(tmpdir(), "takos-agent-build-"));
+  const contextRoot = root;
+  const takosRoot = join(contextRoot, "takos");
+  const engineRoot = join(contextRoot, "takos-agent-engine");
+  await mkdir(join(takosRoot, "containers/agent/src"), { recursive: true });
+  await mkdir(join(engineRoot, "src"), { recursive: true });
+  await Promise.all([
+    writeFile(join(contextRoot, ".dockerignore"), "*\n"),
+    writeFile(join(takosRoot, "containers/agent/Cargo.toml"), "[package]\n"),
+    writeFile(join(takosRoot, "containers/agent/Cargo.lock"), "# lock\n"),
+    writeFile(join(takosRoot, "containers/agent/src/main.rs"), "fn main() {}\n"),
+    writeFile(
+      join(takosRoot, "containers/agent/Dockerfile"),
+      [
+        "FROM rust:1.94-bookworm AS builder",
+        "COPY takos/containers/agent/Cargo.toml takos/containers/agent/Cargo.lock ./",
+        "COPY takos/containers/agent/src ./src",
+        "COPY takos-agent-engine /work/takos-agent-engine",
+      ].join("\n") + "\n",
+    ),
+    writeFile(join(engineRoot, "Cargo.toml"), "[package]\n"),
+    writeFile(join(engineRoot, "Cargo.lock"), "# lock\n"),
+    writeFile(join(engineRoot, "src/lib.rs"), "pub fn engine() {}\n"),
+  ]);
+  return { root, contextRoot, takosRoot, engineRoot };
 }
 
 describe("local agent proof support", () => {
@@ -235,8 +270,54 @@ describe("local agent proof support", () => {
   });
 
   test("fingerprints the exact current agent Docker build inputs", async () => {
-    const fingerprint = await computeAgentSourceFingerprint(process.cwd());
-    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    const fixture = await createAgentBuildFixture();
+    const previousBuildContext = process.env.TAKOS_AGENT_BUILD_CONTEXT;
+    process.env.TAKOS_AGENT_BUILD_CONTEXT = fixture.contextRoot;
+    try {
+      const context = await resolveAgentBuildContext(fixture.takosRoot);
+      const fingerprint = await computeAgentSourceFingerprint(context);
+      expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      await expect(
+        computeAgentSourceFingerprint({
+          ...context,
+          engineRoot: join(fixture.root, "unrelated-engine"),
+        }),
+      ).rejects.toThrow("same physical Takos and takos-agent-engine roots");
+      const dockerfile = await Bun.file(
+        join(fixture.contextRoot, "takos/containers/agent/Dockerfile"),
+      ).text();
+      expect(() => assertAgentDockerfileCopiesExpectedSources(dockerfile)).not.toThrow();
+      expect(() =>
+        assertAgentDockerfileCopiesExpectedSources(
+          dockerfile.replace(
+            "COPY takos-agent-engine /work/takos-agent-engine",
+            "COPY stale-engine /work/takos-agent-engine",
+          ),
+        ),
+      ).toThrow("COPY sources diverge from the fingerprint manifest");
+    } finally {
+      if (previousBuildContext === undefined)
+        delete process.env.TAKOS_AGENT_BUILD_CONTEXT;
+      else process.env.TAKOS_AGENT_BUILD_CONTEXT = previousBuildContext;
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a paired context when its physical engine source is absent", async () => {
+    const fixture = await createAgentBuildFixture();
+    const previousBuildContext = process.env.TAKOS_AGENT_BUILD_CONTEXT;
+    process.env.TAKOS_AGENT_BUILD_CONTEXT = fixture.contextRoot;
+    try {
+      await rm(fixture.engineRoot, { recursive: true, force: true });
+      await expect(resolveAgentBuildContext(fixture.takosRoot)).rejects.toThrow(
+        "paired takos-agent-engine source is missing",
+      );
+    } finally {
+      if (previousBuildContext === undefined)
+        delete process.env.TAKOS_AGENT_BUILD_CONTEXT;
+      else process.env.TAKOS_AGENT_BUILD_CONTEXT = previousBuildContext;
+      await rm(fixture.root, { recursive: true, force: true });
+    }
   });
 
   test("uses project-scoped local-image cleanup and verifies no residue", async () => {
