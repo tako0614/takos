@@ -57,6 +57,7 @@ type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 type JsonObject = { readonly [key: string]: JsonValue | undefined };
 
 export type BridgePhase =
+  | "capability-preflight"
   | "pre-worker"
   | "post-worker"
   | "verify"
@@ -222,6 +223,11 @@ function pathInput(
 
 function phaseValue(value: string | undefined): BridgePhase {
   switch (value?.trim().toLowerCase()) {
+    case "capability":
+    case "capability-preflight":
+    case "capability_preflight":
+    case "preflight":
+      return "capability-preflight";
     case "pre":
     case "pre-worker":
     case "pre_apply":
@@ -411,6 +417,14 @@ interface BridgeConfig {
   readonly importPollLimit: number;
 }
 
+interface CapabilityPreflightConfig {
+  readonly cwd: string;
+  readonly bridgeMode: CloudflareProviderGapBridgeMode;
+  readonly bridgeEnvironment: CloudflareProviderGapBridgeEnvironment;
+  readonly bridgeAcknowledgementDigest: string;
+  readonly accountId: string;
+}
+
 interface DurableObjectMigrationStep {
   readonly new_classes?: readonly string[];
   readonly new_sqlite_classes?: readonly string[];
@@ -589,6 +603,33 @@ function expandTemplate(value: unknown, env: Record<string, string | undefined>)
     return output;
   }
   return value;
+}
+
+function parseCapabilityPreflightConfig(
+  options: BridgeFetchOptions = {},
+): CapabilityPreflightConfig {
+  const env = options.env ?? process.env;
+  const activation = validateCloudflareProviderGapBridgeActivation(
+    rawEnvironmentValue(env, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE"),
+    rawEnvironmentValue(env, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT"),
+    rawEnvironmentValue(env, "TAKOS_CLOUDFLARE_ENVIRONMENT"),
+  );
+  if (activation.mode === "off") fail("bridge_disabled");
+  const accountId = stringValue(
+    envValue(
+      env,
+      ["TAKOS_CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID", "account_id"],
+      true,
+    ),
+    "account_id",
+  );
+  return {
+    cwd: resolve(options.cwd ?? process.cwd()),
+    bridgeMode: activation.mode,
+    bridgeEnvironment: activation.environment!,
+    bridgeAcknowledgementDigest: activation.acknowledgementDigest,
+    accountId,
+  };
 }
 
 export async function parseBridgeConfig(
@@ -1398,6 +1439,10 @@ interface ContainerApplication {
   readonly name: string;
 }
 
+function containersApplicationsPath(config: Pick<BridgeConfig, "accountId">): string {
+  return `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications`;
+}
+
 function containerApplicationRows(result: unknown): readonly unknown[] {
   if (Array.isArray(result)) return result;
   if (plainObject(result)) {
@@ -1408,6 +1453,22 @@ function containerApplicationRows(result: unknown): readonly unknown[] {
     if (Array.isArray(result.result)) return result.result;
   }
   fail("container_list_response_invalid");
+}
+
+async function probeContainersCapability(
+  api: CloudflareApi,
+  config: Pick<BridgeConfig, "accountId">,
+): Promise<void> {
+  // Probe the account-level list surface before any pre-worker mutation.  The
+  // Containers endpoint has returned both a raw array and a v4 envelope, so
+  // requestContainers unwraps the latter and this validates either shape,
+  // including an empty account.  No desired application name is supplied:
+  // absence of a named application is a normal create case in post-worker.
+  const result = await api.requestContainers(
+    "GET",
+    containersApplicationsPath(config),
+  );
+  containerApplicationRows(result);
 }
 
 async function listContainers(
@@ -1914,15 +1975,59 @@ async function establishVectorOwnershipProof(
   }
 }
 
+function capabilityPreflightEvidence(
+  config: CapabilityPreflightConfig,
+): BridgeEvidence {
+  const bridgeActivationDigest = digest({
+    mode: config.bridgeMode,
+    environment: config.bridgeEnvironment,
+    acknowledgementDigest: config.bridgeAcknowledgementDigest,
+  });
+  const preflightDigest = digest({
+    phase: "capability-preflight",
+    accountId: config.accountId,
+    bridgeActivationDigest,
+  });
+  const notCheckedDigest = digest({
+    phase: "capability-preflight",
+    state: "not-checked",
+  });
+  return {
+    ok: true,
+    phase: "capability-preflight",
+    bridgeMode: config.bridgeMode,
+    bridgeEnvironment: config.bridgeEnvironment,
+    digests: {
+      desiredDigest: preflightDigest,
+      bridgeActivationDigest,
+      helperDigest: notCheckedDigest,
+      migrationDigest: notCheckedDigest,
+      workerArtifactDigest: notCheckedDigest,
+    },
+    changed: false,
+    durableObjects: { status: "not-checked" },
+    vector: { status: "present" },
+    d1: { applied: [], pending: [] },
+    containers: { reconciled: [], deleted: [] },
+  };
+}
+
 export async function runBridge(
   phase: BridgePhase | string,
   options: BridgeFetchOptions = {},
 ): Promise<BridgeEvidence> {
   const selectedPhase = typeof phase === "string" ? phaseValue(phase) : phase;
-  const config = await parseBridgeConfig(options, selectedPhase);
   const env = options.env ?? process.env;
-  const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
   const fetchImpl = options.fetchImpl ?? fetch;
+  if (selectedPhase === "capability-preflight") {
+    const config = parseCapabilityPreflightConfig(options);
+    const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
+    const api = new CloudflareApi(config.accountId, token, fetchImpl);
+    await probeContainersCapability(api, config);
+    return capabilityPreflightEvidence(config);
+  }
+  const config = await parseBridgeConfig(options, selectedPhase);
+  const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
   const [migrationSet, workerArtifactEvidence, bridgeDigest, bootstrapDigest] = await Promise.all([
     migrationFiles(config.migrationSetPath),
     workerArtifactDigest(config.workerArtifactPath, config.workerAssetsPath),
@@ -1988,6 +2093,7 @@ export async function runBridge(
   let workerVersion: string | undefined;
   let changed = false;
   if (selectedPhase === "pre-worker") {
+    await probeContainersCapability(api, config);
     const durableObjectResult = await reconcileDurableObjectMigration(api, config);
     durableObjects = {
       status: durableObjectResult.changed ? "migrated" : "present",

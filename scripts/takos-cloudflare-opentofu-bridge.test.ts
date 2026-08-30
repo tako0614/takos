@@ -96,6 +96,128 @@ test("disabled bridge mode refuses helper execution before reading Cloudflare in
   ).rejects.toThrow("bridge_disabled");
 });
 
+test("pre-worker Containers capability 404 fails before any mutation", async () => {
+  const directory = await mkdtemp("takos-cloudflare-bridge-capability-test-");
+  try {
+    const absoluteDirectory = resolve(directory);
+    const migrationDirectory = join(absoluteDirectory, "migrations");
+    const assetsDirectory = join(absoluteDirectory, "assets");
+    const artifactPath = join(absoluteDirectory, "worker.js");
+    const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(migrationDirectory);
+    await mkdir(assetsDirectory);
+    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
+    await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
+    await writeFile(artifactPath, "export default {};\n");
+    await writeFile(bootstrapPath, "export class ExecutorContainerTier1 {}; export default {};\n");
+    const env: Record<string, string> = {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+      TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+      TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
+      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-staging-embeddings",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
+      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
+      TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+      TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: bootstrapPath,
+      TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE: JSON.stringify(DURABLE_OBJECT_LIFECYCLE),
+      CLOUDFLARE_API_TOKEN: "capability-404-token",
+    };
+    const calls: Array<{ method: string; url: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET");
+      calls.push({ method, url });
+      if (method === "GET" && url.endsWith("/accounts/account-1/containers/applications")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 1609, message: "Containers are unavailable" }],
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected request ${method} ${url}`);
+    };
+
+    await expect(runBridge("pre-worker", { env, cwd: directory, fetchImpl })).rejects.toMatchObject({
+      code: "cloudflare_api_error",
+      detail: "GET:containers.applications:404:CF1609",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({
+      method: "GET",
+      url: "https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
+    });
+    expect(calls.some(({ method }) => ["POST", "PUT", "PATCH", "DELETE"].includes(method))).toBe(false);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("capability-preflight accepts an empty envelope without D1 or Worker inputs", async () => {
+  const calls: Array<{ method: string; url: string }> = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method ?? "GET");
+    calls.push({ method, url });
+    return new Response(JSON.stringify({ success: true, result: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  const evidence = await runBridge("capability-preflight", {
+    env: {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+      TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+      CLOUDFLARE_API_TOKEN: "capability-preflight-token",
+    },
+    fetchImpl,
+  });
+  expect(evidence.phase).toBe("capability-preflight");
+  expect(evidence.changed).toBe(false);
+  expect(calls).toEqual([{
+    method: "GET",
+    url: "https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
+  }]);
+});
+
+test("capability-preflight 404 creates zero Cloudflare resources", async () => {
+  const calls: Array<{ method: string; url: string }> = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method ?? "GET");
+    calls.push({ method, url });
+    return new Response(JSON.stringify({ success: false, errors: [{ code: 1609 }] }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  await expect(
+    runBridge("capability-preflight", {
+      env: {
+        TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+        TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+        TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+        CLOUDFLARE_API_TOKEN: "capability-404-token",
+      },
+      fetchImpl,
+    }),
+  ).rejects.toMatchObject({
+    code: "cloudflare_api_error",
+    detail: "GET:containers.applications:404:CF1609",
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls.every(({ method }) => method === "GET")).toBe(true);
+});
+
 function envelope(result: unknown, status = 200): Response {
   return new Response(JSON.stringify({ success: status >= 200 && status < 300, result }), {
     status,
@@ -354,6 +476,12 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
       const url = String(input);
       const method = String(init?.method ?? "GET");
       calls.push(`${method} ${url}`);
+      if (url.endsWith("/containers/applications") && method === "GET") {
+        return new Response("[]", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       if (url.endsWith("/workers/scripts") && method === "GET") {
         return envelope(
           durableObjectMigrationTag === undefined
@@ -438,6 +566,12 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     };
     const first = await runBridge("pre-worker", { env, cwd: directory, fetchImpl });
     expect(first.ok).toBe(true);
+    expect(calls[0]).toBe(
+      "GET https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
+    );
+    expect(
+      calls.findIndex((call) => call.startsWith("PUT https://api.cloudflare.com/client/v4/accounts/account-1/workers/scripts/")),
+    ).toBeGreaterThan(0);
     expect(first.vector.status).toBe("created");
     expect(first.durableObjects.status).toBe("migrated");
     expect(first.d1.applied).toEqual([
@@ -956,6 +1090,9 @@ test("pre-worker proves Vectorize ownership on the bootstrap version before a D1
             ? []
             : [{ id: "takos-staging", migration_tag: migrationTag }],
         );
+      }
+      if (url.endsWith("/containers/applications") && method === "GET") {
+        return envelope([]);
       }
       if (url.endsWith("/workers/scripts/takos-staging/deployments")) {
         return envelope({ versions: [{ version_id: activeVersion, percentage: 100 }] });
