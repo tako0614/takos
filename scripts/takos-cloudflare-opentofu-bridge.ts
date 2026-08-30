@@ -31,7 +31,7 @@ import {
   realpath,
   readdir,
 } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
@@ -41,6 +41,8 @@ const D1_LEDGER_TABLE = "_takos_opentofu_migrations";
 const D1_IMPORT_POLL_LIMIT = 600;
 const DEFAULT_D1_IMPORT_POLL_DELAY_MS = 250;
 const RECOVERY_STATE_FILE_NAME = "terraform.tfstate";
+const RECOVERY_STATE_RELATIVE_PATH = `../${RECOVERY_STATE_FILE_NAME}`;
+const RECOVERY_MODULE_DIRECTORY_NAME = "module";
 const RECOVERY_STATE_MODULE = "module.child.module.platform";
 const TERRAFORM_DATA_PROVIDER = 'provider["terraform.io/builtin/terraform"]';
 const CLOUDFLARE_PROVIDER = 'provider["registry.opentofu.org/cloudflare/cloudflare"]';
@@ -834,13 +836,14 @@ export async function parseBridgeConfig(
   );
   if (
     recoveryStatePathValue !== undefined &&
-    (phase !== "recovery-cleanup" || recoveryStatePathValue !== RECOVERY_STATE_FILE_NAME)
+    (phase !== "recovery-cleanup" ||
+      recoveryStatePathValue !== RECOVERY_STATE_RELATIVE_PATH)
   ) {
     fail("recovery_state_path_invalid");
   }
   const recoveryStatePath = recoveryStatePathValue === undefined
     ? undefined
-    : resolve(cwd, RECOVERY_STATE_FILE_NAME);
+    : resolve(cwd, RECOVERY_STATE_RELATIVE_PATH);
   return {
     cwd,
     bridgeMode: activation.mode,
@@ -1723,6 +1726,15 @@ function recoveryWorkerEvidence(
     fail("recovery_state_input_mismatch");
   }
   const input = cleanupInput;
+  const generatedRootPath = resolve(config.cwd, "..");
+  const stateModuleWorkingDirectory = isAbsolute(
+      input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR,
+    )
+    ? resolve(input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR)
+    : resolve(
+      generatedRootPath,
+      input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR,
+    );
   const activation = validateCloudflareProviderGapBridgeActivation(
     input.TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE,
     input.TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
@@ -1736,6 +1748,7 @@ function recoveryWorkerEvidence(
     activation.mode !== config.bridgeMode ||
     activation.environment !== config.bridgeEnvironment ||
     activation.acknowledgementDigest !== config.bridgeAcknowledgementDigest ||
+    stateModuleWorkingDirectory !== config.cwd ||
     input.TAKOS_CLOUDFLARE_ACCOUNT_ID !== config.accountId ||
     input.TAKOS_CLOUDFLARE_WORKER_NAME !== config.workerName ||
     input.TAKOS_CLOUDFLARE_D1_DATABASE_ID !== config.d1DatabaseId ||
@@ -1877,15 +1890,26 @@ async function workerEvidenceFromRecoveryState(
   if (config.recoveryStatePath === undefined) {
     fail("recovery_state_receipt_missing");
   }
-  const cwdMetadata = await lstat(config.cwd).catch(() =>
-    fail("recovery_state_path_invalid"),
-  );
+  const generatedRootPath = resolve(config.cwd, "..");
+  const expectedStatePath = join(generatedRootPath, RECOVERY_STATE_FILE_NAME);
+  if (
+    basename(config.cwd) !== RECOVERY_MODULE_DIRECTORY_NAME ||
+    config.recoveryStatePath !== expectedStatePath
+  ) {
+    fail("recovery_state_path_invalid");
+  }
+  const [cwdMetadata, generatedRootMetadata] = await Promise.all([
+    lstat(config.cwd),
+    lstat(generatedRootPath),
+  ]).catch(() => fail("recovery_state_path_invalid"));
   const stateMetadata = await lstat(config.recoveryStatePath).catch(() =>
     fail("recovery_state_receipt_missing"),
   );
   if (
     !cwdMetadata.isDirectory() ||
     cwdMetadata.isSymbolicLink() ||
+    !generatedRootMetadata.isDirectory() ||
+    generatedRootMetadata.isSymbolicLink() ||
     !stateMetadata.isFile() ||
     stateMetadata.isSymbolicLink() ||
     stateMetadata.size === 0 ||
@@ -1893,11 +1917,17 @@ async function workerEvidenceFromRecoveryState(
   ) {
     fail("recovery_state_path_invalid");
   }
-  const [cwdRealPath, stateRealPath] = await Promise.all([
+  const [cwdRealPath, generatedRootRealPath, stateRealPath] = await Promise.all([
     realpath(config.cwd),
+    realpath(generatedRootPath),
     realpath(config.recoveryStatePath),
   ]).catch(() => fail("recovery_state_path_invalid"));
-  if (stateRealPath !== join(cwdRealPath, RECOVERY_STATE_FILE_NAME)) {
+  if (
+    cwdRealPath !== config.cwd ||
+    generatedRootRealPath !== generatedRootPath ||
+    dirname(cwdRealPath) !== generatedRootRealPath ||
+    stateRealPath !== join(generatedRootRealPath, RECOVERY_STATE_FILE_NAME)
+  ) {
     fail("recovery_state_path_invalid");
   }
   const handle = await open(
@@ -1912,6 +1942,8 @@ async function workerEvidenceFromRecoveryState(
       openedMetadata.dev !== stateMetadata.dev ||
       openedMetadata.ino !== stateMetadata.ino ||
       openedMetadata.size !== stateMetadata.size ||
+      openedMetadata.mtimeMs !== stateMetadata.mtimeMs ||
+      openedMetadata.ctimeMs !== stateMetadata.ctimeMs ||
       openedMetadata.size === 0 ||
       openedMetadata.size > MAXIMUM_RESPONSE_BYTES
     ) {
@@ -1919,11 +1951,42 @@ async function workerEvidenceFromRecoveryState(
     }
     bytes = new Uint8Array(await handle.readFile());
     const readMetadata = await handle.stat();
+    const [cwdReadMetadata, generatedRootReadMetadata, stateReadMetadata] =
+      await Promise.all([
+        lstat(config.cwd),
+        lstat(generatedRootPath),
+        lstat(config.recoveryStatePath),
+      ]).catch(() => fail("recovery_state_path_invalid"));
+    const [cwdReadRealPath, generatedRootReadRealPath, stateReadRealPath] =
+      await Promise.all([
+        realpath(config.cwd),
+        realpath(generatedRootPath),
+        realpath(config.recoveryStatePath),
+      ]).catch(() => fail("recovery_state_path_invalid"));
     if (
+      !cwdReadMetadata.isDirectory() ||
+      cwdReadMetadata.isSymbolicLink() ||
+      cwdReadMetadata.dev !== cwdMetadata.dev ||
+      cwdReadMetadata.ino !== cwdMetadata.ino ||
+      !generatedRootReadMetadata.isDirectory() ||
+      generatedRootReadMetadata.isSymbolicLink() ||
+      generatedRootReadMetadata.dev !== generatedRootMetadata.dev ||
+      generatedRootReadMetadata.ino !== generatedRootMetadata.ino ||
+      !stateReadMetadata.isFile() ||
+      stateReadMetadata.isSymbolicLink() ||
+      stateReadMetadata.dev !== openedMetadata.dev ||
+      stateReadMetadata.ino !== openedMetadata.ino ||
+      stateReadMetadata.size !== openedMetadata.size ||
+      stateReadMetadata.mtimeMs !== openedMetadata.mtimeMs ||
+      stateReadMetadata.ctimeMs !== openedMetadata.ctimeMs ||
       readMetadata.dev !== openedMetadata.dev ||
       readMetadata.ino !== openedMetadata.ino ||
       readMetadata.size !== openedMetadata.size ||
       readMetadata.mtimeMs !== openedMetadata.mtimeMs ||
+      readMetadata.ctimeMs !== openedMetadata.ctimeMs ||
+      cwdReadRealPath !== cwdRealPath ||
+      generatedRootReadRealPath !== generatedRootRealPath ||
+      stateReadRealPath !== stateRealPath ||
       bytes.byteLength !== openedMetadata.size
     ) {
       fail("recovery_state_path_invalid");

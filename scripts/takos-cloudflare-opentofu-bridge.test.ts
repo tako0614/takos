@@ -273,9 +273,11 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
   const directory = await mkdtemp("takos-cloudflare-bridge-cleanup-delete-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
-    const artifactPath = join(absoluteDirectory, "worker.js");
+    const moduleDirectory = join(absoluteDirectory, "module");
+    const migrationDirectory = join(moduleDirectory, "migrations");
+    const artifactPath = join(moduleDirectory, "worker.js");
     const { mkdir } = await import("node:fs/promises");
+    await mkdir(moduleDirectory);
     await mkdir(migrationDirectory);
     await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
@@ -322,7 +324,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
       TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: desiredConfig,
-      TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH: "terraform.tfstate",
+      TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH: "../terraform.tfstate",
       CLOUDFLARE_API_TOKEN: "cleanup-delete-token",
     };
     const calls: Array<{ method: string; url: string }> = [];
@@ -390,7 +392,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
 
     const cleanup = await runBridge("recovery-cleanup", {
       env,
-      cwd: directory,
+      cwd: moduleDirectory,
       fetchImpl,
       containersReadinessRetryAttempts: 2,
       containersReadinessRetryDelayMs: 0,
@@ -408,7 +410,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
     await expect(
       runBridge("recovery-cleanup", {
         env,
-        cwd: directory,
+        cwd: moduleDirectory,
         fetchImpl,
         containersReadinessRetryAttempts: 2,
         containersReadinessRetryDelayMs: 0,
@@ -433,7 +435,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
     await expect(
       runBridge("recovery-cleanup", {
         env,
-        cwd: directory,
+        cwd: moduleDirectory,
         fetchImpl,
         containersReadinessRetryAttempts: 2,
         containersReadinessRetryDelayMs: 0,
@@ -458,6 +460,9 @@ test("recovery cleanup uses an exact restored state receipt when the Worker is a
     expect(fixture.calls.filter(({ method }) => method === "DELETE")).toHaveLength(2);
     expect(await readFile(join(fixture.directory, "terraform.tfstate"), "utf8"))
       .not.toContain("state-recovery-token");
+    expect(
+      await readFile(join(fixture.directory, "module", "terraform.tfstate"), "utf8"),
+    ).toBe("{");
   } finally {
     await fixture.cleanup();
   }
@@ -510,7 +515,8 @@ test("recovery cleanup refuses missing, malformed, symlinked, or non-10007 recei
     { receipt: "missing" },
     { receipt: "malformed" },
     { receipt: "symlink" },
-    { recoveryStatePath: "../terraform.tfstate" },
+    { recoveryStatePath: "terraform.tfstate" },
+    { recoveryStatePath: "../../terraform.tfstate" },
     { workerCode: 10008 },
     { workerStatus: 500, workerCode: 10007 },
   ];
@@ -518,6 +524,23 @@ test("recovery cleanup refuses missing, malformed, symlinked, or non-10007 recei
     const fixture = await createStateRecoveryFixture(options);
     try {
       await expect(fixture.run()).rejects.toBeInstanceOf(Error);
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("recovery cleanup rejects a symlinked or misnamed generated-root module topology before DELETE", async () => {
+  const cases: readonly StateRecoveryFixtureOptions[] = [
+    { cwdShape: "module-symlink" },
+    { cwdShape: "generated-root-symlink" },
+    { cwdShape: "wrong-module-leaf" },
+  ];
+  for (const options of cases) {
+    const fixture = await createStateRecoveryFixture(options);
+    try {
+      await expect(fixture.run()).rejects.toThrow("recovery_state_path_invalid");
       expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
     } finally {
       await fixture.cleanup();
@@ -723,11 +746,13 @@ test("destroy provisioners pass only the fixed runner-local recovery state path"
   );
   expect(
     moduleSource.match(
-      /TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH\s*=\s*"terraform\.tfstate"/gu,
+      /TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH\s*=\s*"\.\.\/terraform\.tfstate"/gu,
     ),
   ).toHaveLength(2);
   expect(moduleSource).not.toContain("file(\"terraform.tfstate\")");
   expect(moduleSource).not.toContain("filebase64(\"terraform.tfstate\")");
+  expect(moduleSource).not.toContain("file(\"../terraform.tfstate\")");
+  expect(moduleSource).not.toContain("filebase64(\"../terraform.tfstate\")");
 });
 
 function envelope(result: unknown, status = 200): Response {
@@ -929,6 +954,11 @@ interface StateRecoveryFixtureOptions {
   readonly recoveryStatePath?: string;
   readonly mutateState?: (state: Record<string, unknown>) => void;
   readonly omitDesiredContentFromEnvironment?: boolean;
+  readonly cwdShape?:
+    | "exact"
+    | "module-symlink"
+    | "generated-root-symlink"
+    | "wrong-module-leaf";
 }
 
 async function createStateRecoveryFixture(
@@ -941,24 +971,44 @@ async function createStateRecoveryFixture(
 }> {
   const directory = await mkdtemp("takos-cloudflare-bridge-state-recovery-test-");
   const absoluteDirectory = resolve(directory);
-  const migrationDirectory = join(absoluteDirectory, "migrations");
-  const artifactPath = join(absoluteDirectory, "worker.js");
+  const storedModuleDirectory = options.cwdShape === "module-symlink"
+    ? join(absoluteDirectory, "module-target")
+    : options.cwdShape === "wrong-module-leaf"
+      ? join(absoluteDirectory, "app")
+      : join(absoluteDirectory, "module");
+  const moduleDirectory = options.cwdShape === "generated-root-symlink"
+    ? join(absoluteDirectory, "generated-root-link", "module")
+    : options.cwdShape === "module-symlink"
+      ? join(absoluteDirectory, "module")
+      : storedModuleDirectory;
+  const storedMigrationDirectory = join(storedModuleDirectory, "migrations");
+  const migrationDirectory = join(moduleDirectory, "migrations");
+  const artifactPath = join(moduleDirectory, "worker.js");
   const { mkdir } = await import("node:fs/promises");
-  await mkdir(migrationDirectory);
-  await mkdir(join(absoluteDirectory, ".takos-build", "assets"), { recursive: true });
-  await mkdir(join(absoluteDirectory, "modules", "platform"), { recursive: true });
-  await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
-  await writeFile(artifactPath, "export default {};\n");
-  await writeFile(join(absoluteDirectory, ".takos-build", "assets", "index.html"), "ok\n");
+  await mkdir(storedModuleDirectory);
+  await mkdir(storedMigrationDirectory);
+  await mkdir(join(storedModuleDirectory, ".takos-build", "assets"), { recursive: true });
+  await mkdir(join(storedModuleDirectory, "modules", "platform"), { recursive: true });
+  await writeFile(join(storedMigrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
+  await writeFile(join(storedModuleDirectory, "worker.js"), "export default {};\n");
+  await writeFile(join(storedModuleDirectory, ".takos-build", "assets", "index.html"), "ok\n");
   await writeFile(
-    join(absoluteDirectory, "modules", "platform", "durable-object-migration-bootstrap.js"),
+    join(storedModuleDirectory, "modules", "platform", "durable-object-migration-bootstrap.js"),
     "export default {};\n",
   );
+  if (options.cwdShape === "module-symlink") {
+    await symlink("module-target", moduleDirectory, "dir");
+  } else if (options.cwdShape === "generated-root-symlink") {
+    await symlink(".", join(absoluteDirectory, "generated-root-link"), "dir");
+  }
+  // A malformed same-directory decoy makes the real generated-root topology
+  // load-bearing: recovery must read the parent receipt, never module state.
+  await writeFile(join(moduleDirectory, "terraform.tfstate"), "{");
   const receiptInput = {
     TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
     TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT: "",
     TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
-    TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR: ".",
+    TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR: "module",
     TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH: ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
     TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
     TAKOS_CLOUDFLARE_WORKER_NAME: "takos-recovery",
@@ -998,13 +1048,13 @@ async function createStateRecoveryFixture(
     // If recovery ever reads this mutable path before proving a live Worker,
     // it will fail with bridge_json_invalid instead of the exact Worker error.
     await writeFile(
-      join(absoluteDirectory, ".takos-build", "container-desired.json"),
+      join(moduleDirectory, ".takos-build", "container-desired.json"),
       "{",
     );
   }
   if (options.receipt !== "missing") {
     env.TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH =
-      options.recoveryStatePath ?? "terraform.tfstate";
+      options.recoveryStatePath ?? "../terraform.tfstate";
   }
   const defaultRows: Readonly<Record<string, readonly Record<string, unknown>[]>> = {
     "takos-recovery-executor-tier1": [],
@@ -1087,7 +1137,7 @@ async function createStateRecoveryFixture(
     run: () =>
       runBridge("recovery-cleanup", {
         env,
-        cwd: absoluteDirectory,
+        cwd: moduleDirectory,
         fetchImpl,
         containersReadinessRetryAttempts: 1,
         containersReadinessRetryDelayMs: 0,
