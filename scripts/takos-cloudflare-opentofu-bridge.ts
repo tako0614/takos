@@ -1014,6 +1014,8 @@ function pathSegment(value: string, label: string): string {
 
 type CloudflareMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
+type ContainersRequestContext = "default" | "delete-readback";
+
 function cloudflareApiSurface(path: string): string {
   if (path.includes("/containers/applications")) return "containers.applications";
   if (path.includes("/vectorize/")) return "vectorize.indexes";
@@ -1236,7 +1238,16 @@ class CloudflareApi {
     path: string,
     body?: JsonValue,
     allowStatuses: readonly number[] = [],
+    context: ContainersRequestContext = "default",
   ): Promise<unknown | null> {
+    const isContainerApplicationDetailPath =
+      /^\/accounts\/[^/]+\/containers\/applications\/[^/?]+$/u.test(path);
+    if (
+      context === "delete-readback" &&
+      (method !== "GET" || !isContainerApplicationDetailPath)
+    ) {
+      fail("container_request_context_invalid");
+    }
     for (let attempt = 1; attempt <= this.#containersReadinessRetryAttempts; attempt += 1) {
       let response: Response;
       try {
@@ -1253,7 +1264,7 @@ class CloudflareApi {
         fail("cloudflare_request_failed");
       }
       const allowedStatus = allowStatuses.includes(response.status);
-      const inspectAllowedNotFound = method === "GET" && response.status === 404;
+      const inspectAllowedNotFound = response.status === 404;
       if (allowedStatus && !inspectAllowedNotFound) {
         await response.body?.cancel().catch(() => {});
         return null;
@@ -1266,13 +1277,19 @@ class CloudflareApi {
             cloudflareApiFailureDetail(method, path, response.status),
           );
         }
+        if (context === "delete-readback") {
+          fail(
+            "cloudflare_api_error",
+            cloudflareApiFailureDetail(method, path, response.status),
+          );
+        }
         return null;
       }
       let parsed: unknown;
       try {
         parsed = await jsonResponse(response);
       } catch (error) {
-        if (allowedStatus) return null;
+        if (allowedStatus && !inspectAllowedNotFound) return null;
         if (error instanceof BridgeFailure) throw error;
         fail("cloudflare_response_invalid");
       }
@@ -1280,11 +1297,21 @@ class CloudflareApi {
         method === "GET" &&
         response.status === 404 &&
         boundedCloudflareErrorCode(parsed) === "CF1609";
+      if (context === "delete-readback" && response.status === 404) {
+        // Only the exact-ID read immediately after a successful DELETE may
+        // interpret the provider's CF1609 response as authoritative absence.
+        // Arbitrary 404s remain errors so ownership/readback cannot fail open.
+        if (exactContainersNotReady) return null;
+        fail(
+          "cloudflare_api_error",
+          cloudflareApiFailureDetail(method, path, response.status, parsed),
+        );
+      }
       if (exactContainersNotReady && attempt < this.#containersReadinessRetryAttempts) {
         await this.#containersReadinessDelay(this.#containersReadinessRetryDelayMs);
         continue;
       }
-      if (allowedStatus && !exactContainersNotReady) return null;
+      if (allowedStatus && !inspectAllowedNotFound) return null;
       if (!response.ok) {
         fail(
           "cloudflare_api_error",
@@ -1816,7 +1843,8 @@ async function cleanup(
       "GET",
       `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(matches[0].id, "container_id")}`,
       undefined,
-      [404],
+      [],
+      "delete-readback",
     );
     if (remaining !== null) fail("container_cleanup_readback_failed", row.name);
     deletedContainers.push(row.name);

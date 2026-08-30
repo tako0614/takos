@@ -269,6 +269,181 @@ test("Containers GET does not retry an arbitrary 404 error", async () => {
   expect(calls).toHaveLength(1);
 });
 
+test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async () => {
+  const directory = await mkdtemp("takos-cloudflare-bridge-cleanup-delete-test-");
+  try {
+    const absoluteDirectory = resolve(directory);
+    const migrationDirectory = join(absoluteDirectory, "migrations");
+    const artifactPath = join(absoluteDirectory, "worker.js");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(migrationDirectory);
+    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
+    await writeFile(artifactPath, "export default {};\n");
+    const desiredConfig = JSON.stringify({
+      applications: [
+        {
+          name: "takos-executor-tier1",
+          durable_object_class: "ExecutorContainerTier1",
+          image: DOCKER_IMAGE,
+          instance_type: "lite",
+          max_instances: 1,
+          rollout_active_grace_period: 900,
+        },
+        {
+          name: "takos-executor-tier2",
+          durable_object_class: "ExecutorContainerTier2",
+          image: DOCKER_IMAGE,
+          instance_type: "basic",
+          max_instances: 1,
+          rollout_active_grace_period: 900,
+        },
+        {
+          name: "takos-executor-tier3",
+          durable_object_class: "ExecutorContainerTier3",
+          image: DOCKER_IMAGE,
+          instance_type: { vcpu: 1, memory_mib: 12288, disk_mb: 4000 },
+          max_instances: 1,
+          rollout_active_grace_period: 900,
+        },
+      ],
+    });
+    const env: Record<string, string> = {
+      TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+      TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+      TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+      TAKOS_CLOUDFLARE_WORKER_NAME: "takos-cleanup",
+      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-embeddings",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
+      TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
+      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
+      TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+      TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: desiredConfig,
+      CLOUDFLARE_API_TOKEN: "cleanup-delete-token",
+    };
+    const calls: Array<{ method: string; url: string }> = [];
+    let deleted = false;
+    let deleteFails = false;
+    let deletionReadbackCode = 1609;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const method = String(init?.method ?? "GET");
+      calls.push({ method, url });
+      if (url.endsWith("/workers/scripts/takos-cleanup/deployments")) {
+        return envelope({ versions: [{ version_id: "v1", percentage: 100 }] });
+      }
+      if (url.endsWith("/workers/scripts/takos-cleanup/versions/v1")) {
+        return envelope({
+          resources: {
+            bindings: [
+              { type: "durable_object_namespace", class_name: "ExecutorContainerTier1", namespace_id: "ns-1" },
+              { type: "durable_object_namespace", class_name: "ExecutorContainerTier2", namespace_id: "ns-2" },
+              { type: "durable_object_namespace", class_name: "ExecutorContainerTier3", namespace_id: "ns-3" },
+            ],
+          },
+        });
+      }
+      const listMatch = url.match(/\/containers\/applications\?name=([^&]+)/u);
+      if (method === "GET" && listMatch) {
+        const name = decodeURIComponent(listMatch[1]!);
+        return envelope(
+          name === "takos-executor-tier1"
+            ? [{ id: "app-tier1", name }]
+            : [],
+        );
+      }
+      const detailMatch = url.match(/\/containers\/applications\/([^/]+)$/u);
+      if (detailMatch) {
+        const id = decodeURIComponent(detailMatch[1]!);
+        if (method === "GET" && id === "app-tier1" && !deleted) {
+          return envelope({
+            id,
+            name: "takos-executor-tier1",
+            configuration: { image: DOCKER_IMAGE, instance_type: "lite" },
+            max_instances: 1,
+            scheduling_policy: "default",
+            rollout_active_grace_period: 900,
+            durable_objects: { namespace_id: "ns-1" },
+          });
+        }
+        if (method === "DELETE" && id === "app-tier1") {
+          if (deleteFails) return envelope({ error: "DELETE_FAILED" }, 500);
+          deleted = true;
+          return envelope(null);
+        }
+        if (method === "GET" && id === "app-tier1" && deleted) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              errors: [{ code: deletionReadbackCode, message: "Container application is not ready" }],
+            }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
+      }
+      return envelope({ error: `unexpected ${method} ${url}` }, 500);
+    };
+
+    const cleanup = await runBridge("recovery-cleanup", {
+      env,
+      cwd: directory,
+      fetchImpl,
+      containersReadinessRetryAttempts: 2,
+      containersReadinessRetryDelayMs: 0,
+    });
+    expect(cleanup.containers.deleted).toEqual(["takos-executor-tier1"]);
+    expect(cleanup.changed).toBe(true);
+    expect(calls.filter(({ method }) => method === "DELETE")).toHaveLength(1);
+    expect(calls.filter(({ method, url }) => method === "GET" && url.endsWith("/containers/applications/app-tier1"))).toHaveLength(2);
+
+    // A failed mutation must not trigger a deletion readback.  This keeps a
+    // provider error fail-closed instead of treating it as an absent resource.
+    deleted = false;
+    deleteFails = true;
+    calls.length = 0;
+    await expect(
+      runBridge("recovery-cleanup", {
+        env,
+        cwd: directory,
+        fetchImpl,
+        containersReadinessRetryAttempts: 2,
+        containersReadinessRetryDelayMs: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: "cloudflare_api_error",
+      detail: "DELETE:containers.applications:500:DELETE_FAILED",
+    });
+    const failedDeleteIndex = calls.findIndex(({ method }) => method === "DELETE");
+    expect(failedDeleteIndex).toBeGreaterThanOrEqual(0);
+    expect(
+      calls.slice(failedDeleteIndex + 1).some(
+        ({ method, url }) => method === "GET" && url.endsWith("/containers/applications/app-tier1"),
+      ),
+    ).toBe(false);
+
+    // Even after a successful DELETE, an arbitrary not-found code is not an
+    // absence proof; only CF1609 is accepted by the scoped readback seam.
+    deleteFails = false;
+    deletionReadbackCode = 1610;
+    calls.length = 0;
+    await expect(
+      runBridge("recovery-cleanup", {
+        env,
+        cwd: directory,
+        fetchImpl,
+        containersReadinessRetryAttempts: 2,
+        containersReadinessRetryDelayMs: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: "cloudflare_api_error",
+      detail: "GET:containers.applications:404:CF1610",
+    });
+    expect(calls.filter(({ method }) => method === "DELETE")).toHaveLength(1);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
 function envelope(result: unknown, status = 200): Response {
   return new Response(JSON.stringify({ success: status >= 200 && status < 300, result }), {
     status,
@@ -804,6 +979,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     let d1LedgerExists = true;
     let firstTier1ListIsNotReady = true;
     let containerCreateIsNotReady = false;
+    const deletedContainerIds = new Set<string>();
     const readinessDelays: number[] = [];
     const calls: Array<{ method: string; url: string; body?: unknown }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
@@ -894,7 +1070,17 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         const id = decodeURIComponent(detailMatch[1]!);
         if (method === "GET") {
           const detail = details.get(id);
-          return detail === undefined ? envelope({ error: "missing" }, 404) : envelope(detail);
+          if (detail !== undefined) return envelope(detail);
+          if (deletedContainerIds.has(id)) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                errors: [{ code: 1609, message: "Container application is not ready" }],
+              }),
+              { status: 404, headers: { "content-type": "application/json" } },
+            );
+          }
+          return envelope({ error: "missing" }, 404);
         }
         if (method === "PATCH") {
           const current = details.get(id);
@@ -905,6 +1091,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         }
         if (method === "DELETE") {
           details.delete(id);
+          deletedContainerIds.add(id);
           return envelope(null);
         }
       }
