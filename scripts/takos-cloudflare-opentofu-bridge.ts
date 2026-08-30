@@ -37,6 +37,12 @@ const MAXIMUM_MIGRATION_BYTES = 256 * 1024 * 1024;
 const D1_LEDGER_TABLE = "_takos_opentofu_migrations";
 const D1_IMPORT_POLL_LIMIT = 600;
 const DEFAULT_D1_IMPORT_POLL_DELAY_MS = 250;
+// Containers capability can become visible before its application inventory
+// is ready. Seven exact GET attempts at five-second intervals give that
+// control-plane transition a conservative 30-second readiness window without
+// ever retrying a mutation or treating the transient response as absence.
+const CONTAINERS_READINESS_RETRY_ATTEMPTS = 7;
+const CONTAINERS_READINESS_RETRY_DELAY_MS = 5_000;
 
 export const CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT =
   "DISPOSABLE_PRODUCTION_ONE_SHOT";
@@ -69,6 +75,9 @@ export interface BridgeFetchOptions {
   readonly fetchImpl?: typeof fetch;
   readonly importPollDelayMs?: number;
   readonly importPollLimit?: number;
+  readonly containersReadinessRetryAttempts?: number;
+  readonly containersReadinessRetryDelayMs?: number;
+  readonly containersReadinessDelay?: (delayMs: number) => Promise<void>;
   readonly helperPath?: string;
 }
 
@@ -1101,11 +1110,49 @@ class CloudflareApi {
   readonly #accountId: string;
   readonly #token: string;
   readonly #fetch: typeof fetch;
+  readonly #containersReadinessRetryAttempts: number;
+  readonly #containersReadinessRetryDelayMs: number;
+  readonly #containersReadinessDelay: (delayMs: number) => Promise<void>;
 
-  constructor(accountId: string, token: string, fetchImpl: typeof fetch) {
+  constructor(
+    accountId: string,
+    token: string,
+    fetchImpl: typeof fetch,
+    options: Pick<
+      BridgeFetchOptions,
+      | "containersReadinessRetryAttempts"
+      | "containersReadinessRetryDelayMs"
+      | "containersReadinessDelay"
+    > = {},
+  ) {
     this.#accountId = accountId;
     this.#token = token;
     this.#fetch = fetchImpl;
+    const attempts =
+      options.containersReadinessRetryAttempts ?? CONTAINERS_READINESS_RETRY_ATTEMPTS;
+    const delayMs =
+      options.containersReadinessRetryDelayMs ?? CONTAINERS_READINESS_RETRY_DELAY_MS;
+    if (
+      !Number.isSafeInteger(attempts) ||
+      attempts < 1 ||
+      attempts > CONTAINERS_READINESS_RETRY_ATTEMPTS
+    ) {
+      fail("containers_readiness_retry_attempts_invalid");
+    }
+    if (
+      !Number.isSafeInteger(delayMs) ||
+      delayMs < 0 ||
+      delayMs > CONTAINERS_READINESS_RETRY_DELAY_MS
+    ) {
+      fail("containers_readiness_retry_delay_invalid");
+    }
+    this.#containersReadinessRetryAttempts = attempts;
+    this.#containersReadinessRetryDelayMs = delayMs;
+    this.#containersReadinessDelay =
+      options.containersReadinessDelay ??
+      (async (milliseconds) => {
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds));
+      });
   }
 
   async request(
@@ -1190,59 +1237,74 @@ class CloudflareApi {
     body?: JsonValue,
     allowStatuses: readonly number[] = [],
   ): Promise<unknown | null> {
-    let response: Response;
-    try {
-      response = await this.#fetch(`${CLOUDFLARE_API}${path}`, {
-        method,
-        headers: {
-          authorization: `Bearer ${this.#token}`,
-          ...(body === undefined ? {} : { "content-type": "application/json" }),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch {
-      fail("cloudflare_request_failed");
-    }
-    if (allowStatuses.includes(response.status)) {
-      await response.body?.cancel().catch(() => {});
-      return null;
-    }
-    if (response.status === 204) {
-      await response.body?.cancel().catch(() => {});
-      if (!response.ok) {
-        fail(
-          "cloudflare_api_error",
-          cloudflareApiFailureDetail(method, path, response.status),
-        );
+    for (let attempt = 1; attempt <= this.#containersReadinessRetryAttempts; attempt += 1) {
+      let response: Response;
+      try {
+        response = await this.#fetch(`${CLOUDFLARE_API}${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${this.#token}`,
+            ...(body === undefined ? {} : { "content-type": "application/json" }),
+          },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        fail("cloudflare_request_failed");
       }
-      return null;
-    }
-    let parsed: unknown;
-    try {
-      parsed = await jsonResponse(response);
-    } catch (error) {
-      if (error instanceof BridgeFailure) throw error;
-      fail("cloudflare_response_invalid");
-    }
-    if (!response.ok) {
-      fail(
-        "cloudflare_api_error",
-        cloudflareApiFailureDetail(method, path, response.status, parsed),
-      );
-    }
-    if (plainObject(parsed) && Object.prototype.hasOwnProperty.call(parsed, "success")) {
-      if (parsed.success !== true || !Object.prototype.hasOwnProperty.call(parsed, "result")) {
+      const allowedStatus = allowStatuses.includes(response.status);
+      const inspectAllowedNotFound = method === "GET" && response.status === 404;
+      if (allowedStatus && !inspectAllowedNotFound) {
+        await response.body?.cancel().catch(() => {});
+        return null;
+      }
+      if (response.status === 204) {
+        await response.body?.cancel().catch(() => {});
+        if (!response.ok) {
+          fail(
+            "cloudflare_api_error",
+            cloudflareApiFailureDetail(method, path, response.status),
+          );
+        }
+        return null;
+      }
+      let parsed: unknown;
+      try {
+        parsed = await jsonResponse(response);
+      } catch (error) {
+        if (allowedStatus) return null;
+        if (error instanceof BridgeFailure) throw error;
+        fail("cloudflare_response_invalid");
+      }
+      const exactContainersNotReady =
+        method === "GET" &&
+        response.status === 404 &&
+        boundedCloudflareErrorCode(parsed) === "CF1609";
+      if (exactContainersNotReady && attempt < this.#containersReadinessRetryAttempts) {
+        await this.#containersReadinessDelay(this.#containersReadinessRetryDelayMs);
+        continue;
+      }
+      if (allowedStatus && !exactContainersNotReady) return null;
+      if (!response.ok) {
         fail(
           "cloudflare_api_error",
           cloudflareApiFailureDetail(method, path, response.status, parsed),
         );
       }
-      return parsed.result ?? null;
+      if (plainObject(parsed) && Object.prototype.hasOwnProperty.call(parsed, "success")) {
+        if (parsed.success !== true || !Object.prototype.hasOwnProperty.call(parsed, "result")) {
+          fail(
+            "cloudflare_api_error",
+            cloudflareApiFailureDetail(method, path, response.status, parsed),
+          );
+        }
+        return parsed.result ?? null;
+      }
+      // A direct array/object is the raw Containers OpenAPI response shape.
+      if (Array.isArray(parsed) || plainObject(parsed)) return parsed;
+      fail("cloudflare_response_invalid");
     }
-    // A direct array/object is the raw Containers OpenAPI response shape.
-    if (Array.isArray(parsed) || plainObject(parsed)) return parsed;
-    fail("cloudflare_response_invalid");
+    fail("cloudflare_request_failed");
   }
 
   async d1Query(
@@ -2022,7 +2084,7 @@ export async function runBridge(
   if (selectedPhase === "capability-preflight") {
     const config = parseCapabilityPreflightConfig(options);
     const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
-    const api = new CloudflareApi(config.accountId, token, fetchImpl);
+    const api = new CloudflareApi(config.accountId, token, fetchImpl, options);
     await probeContainersCapability(api, config);
     return capabilityPreflightEvidence(config);
   }
@@ -2078,7 +2140,7 @@ export async function runBridge(
     migrationDigest,
     workerArtifactDigest: workerArtifactEvidence,
   };
-  const api = new CloudflareApi(config.accountId, token, fetchImpl);
+  const api = new CloudflareApi(config.accountId, token, fetchImpl, options);
   let vector: "present" | "created" | "deleted" = "present";
   let durableObjects: {
     status: "present" | "migrated" | "not-checked";
