@@ -319,6 +319,16 @@ locals {
     migration_set            = local.migration_set_digest
     product_resources        = local.product_resource_digest
   }
+  # The capability preflight intentionally carries only activation metadata
+  # and the account identifier.  The API token remains inherited by
+  # local-exec from the operator process and is never placed in Terraform
+  # input, triggers, or state.
+  bridge_capability_environment = {
+    TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = var.cloudflare_provider_gap_bridge_mode
+    TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = var.cloudflare_provider_gap_bridge_acknowledgement
+    TAKOS_CLOUDFLARE_ENVIRONMENT                         = var.environment
+    TAKOS_CLOUDFLARE_ACCOUNT_ID                          = var.account_id
+  }
   bridge_environment = merge(
     {
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = var.cloudflare_provider_gap_bridge_mode
@@ -381,24 +391,32 @@ resource "cloudflare_d1_database" "this" {
   read_replication = {
     mode = "disabled"
   }
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "cloudflare_workers_kv_namespace" "this" {
   for_each   = local.kv_namespaces
   account_id = var.account_id
   title      = each.value
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "cloudflare_r2_bucket" "this" {
   for_each   = local.r2_buckets
   account_id = var.account_id
   name       = each.value
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "cloudflare_queue" "this" {
   for_each   = local.queues
   account_id = var.account_id
   queue_name = each.value
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "terraform_data" "provider_gap_contract" {
@@ -431,6 +449,29 @@ resource "terraform_data" "provider_gap_contract" {
   }
 }
 
+resource "terraform_data" "provider_gap_capability" {
+  count = local.provider_gap_bridge_enabled ? 1 : 0
+
+  input = local.bridge_capability_environment
+  triggers_replace = {
+    account_id               = var.account_id
+    provider_gap_bridge_mode = var.cloudflare_provider_gap_bridge_mode
+    bridge_acknowledgement   = local.bridge_acknowledgement_digest
+    environment              = var.environment
+  }
+  depends_on = [terraform_data.provider_gap_contract]
+
+  # This is a read-only account capability probe. The API token is inherited
+  # from the operator process by local-exec and is deliberately absent from
+  # the Terraform environment map/state.
+  provisioner "local-exec" {
+    working_dir = local.app_module_root
+    command     = "bun ${local.bridge_helper_path} capability-preflight"
+    quiet       = true
+    environment = local.bridge_capability_environment
+  }
+}
+
 resource "terraform_data" "provider_gap_cleanup" {
   count = local.provider_gap_bridge_enabled ? 1 : 0
 
@@ -460,7 +501,7 @@ resource "terraform_data" "provider_gap_pre" {
   count = local.provider_gap_bridge_enabled ? 1 : 0
 
   triggers_replace = local.bridge_triggers
-  depends_on       = [cloudflare_worker.app, terraform_data.provider_gap_contract, terraform_data.provider_gap_cleanup]
+  depends_on       = [cloudflare_worker.app, terraform_data.provider_gap_capability, terraform_data.provider_gap_contract, terraform_data.provider_gap_cleanup]
 
   lifecycle {
     precondition {
@@ -498,6 +539,7 @@ resource "cloudflare_worker" "app" {
   # every bound resource alive until the Worker is gone; destroy reverses these
   # create-time edges and therefore deletes the Worker first.
   depends_on = [
+    terraform_data.provider_gap_capability,
     cloudflare_d1_database.this,
     cloudflare_workers_kv_namespace.this,
     cloudflare_r2_bucket.this,
@@ -542,7 +584,7 @@ resource "cloudflare_worker_version" "durable_object_migrations" {
     steps   = local.durable_object_lifecycle.steps
   }
 
-  depends_on = [terraform_data.provider_gap_pre]
+  depends_on = [terraform_data.provider_gap_capability, terraform_data.provider_gap_pre]
 }
 
 resource "cloudflare_workers_deployment" "durable_object_migrations" {
@@ -556,6 +598,8 @@ resource "cloudflare_workers_deployment" "durable_object_migrations" {
     percentage = 100
     version_id = cloudflare_worker_version.durable_object_migrations[0].id
   }]
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "cloudflare_worker_version" "app" {
@@ -619,6 +663,7 @@ resource "cloudflare_worker_version" "app" {
   }]
 
   depends_on = [
+    terraform_data.provider_gap_capability,
     cloudflare_workers_deployment.durable_object_migrations,
     terraform_data.provider_gap_pre,
   ]
@@ -633,6 +678,8 @@ resource "cloudflare_workers_deployment" "app" {
     percentage = 100
     version_id = cloudflare_worker_version.app.id
   }]
+
+  depends_on = [terraform_data.provider_gap_capability]
 }
 
 resource "cloudflare_queue_consumer" "this" {
@@ -651,7 +698,7 @@ resource "cloudflare_queue_consumer" "this" {
     retry_delay      = each.value.retry_delay
   }
 
-  depends_on = [cloudflare_workers_deployment.app]
+  depends_on = [terraform_data.provider_gap_capability, cloudflare_workers_deployment.app]
 }
 
 resource "cloudflare_workers_cron_trigger" "this" {
@@ -665,7 +712,7 @@ resource "cloudflare_workers_cron_trigger" "this" {
     cron = each.value.cron
   }]
 
-  depends_on = [cloudflare_workers_deployment.app]
+  depends_on = [terraform_data.provider_gap_capability, cloudflare_workers_deployment.app]
 }
 
 resource "cloudflare_workers_route" "public" {
@@ -674,7 +721,7 @@ resource "cloudflare_workers_route" "public" {
   pattern = "${local.public_hostname}/*"
   script  = cloudflare_worker.app.name
 
-  depends_on = [cloudflare_workers_deployment.app]
+  depends_on = [terraform_data.provider_gap_capability, cloudflare_workers_deployment.app]
 }
 
 resource "terraform_data" "provider_gap_post" {
