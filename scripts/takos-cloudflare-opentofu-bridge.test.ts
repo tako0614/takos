@@ -144,15 +144,28 @@ test("pre-worker Containers capability 404 fails before any mutation", async () 
       throw new Error(`unexpected request ${method} ${url}`);
     };
 
-    await expect(runBridge("pre-worker", { env, cwd: directory, fetchImpl })).rejects.toMatchObject({
+    await expect(
+      runBridge("pre-worker", {
+        env,
+        cwd: directory,
+        fetchImpl,
+        containersReadinessRetryAttempts: 2,
+        containersReadinessRetryDelayMs: 0,
+      }),
+    ).rejects.toMatchObject({
       code: "cloudflare_api_error",
       detail: "GET:containers.applications:404:CF1609",
     });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({
-      method: "GET",
-      url: "https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
-    });
+    expect(calls).toEqual([
+      {
+        method: "GET",
+        url: "https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
+      },
+      {
+        method: "GET",
+        url: "https://api.cloudflare.com/client/v4/accounts/account-1/containers/applications",
+      },
+    ]);
     expect(calls.some(({ method }) => ["POST", "PUT", "PATCH", "DELETE"].includes(method))).toBe(false);
   } finally {
     await rm(directory, { force: true, recursive: true });
@@ -190,6 +203,7 @@ test("capability-preflight accepts an empty envelope without D1 or Worker inputs
 
 test("capability-preflight 404 creates zero Cloudflare resources", async () => {
   const calls: Array<{ method: string; url: string }> = [];
+  const delays: number[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input);
     const method = String(init?.method ?? "GET");
@@ -209,13 +223,50 @@ test("capability-preflight 404 creates zero Cloudflare resources", async () => {
         CLOUDFLARE_API_TOKEN: "capability-404-token",
       },
       fetchImpl,
+      containersReadinessRetryAttempts: 3,
+      containersReadinessRetryDelayMs: 41,
+      containersReadinessDelay: async (delayMs) => {
+        delays.push(delayMs);
+      },
     }),
   ).rejects.toMatchObject({
     code: "cloudflare_api_error",
     detail: "GET:containers.applications:404:CF1609",
   });
-  expect(calls).toHaveLength(1);
+  expect(calls).toHaveLength(3);
   expect(calls.every(({ method }) => method === "GET")).toBe(true);
+  expect(delays).toEqual([41, 41]);
+});
+
+test("Containers GET does not retry an arbitrary 404 error", async () => {
+  const calls: Array<{ method: string; url: string }> = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method ?? "GET");
+    calls.push({ method, url });
+    return new Response(JSON.stringify({ success: false, errors: [{ code: 1610 }] }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  await expect(
+    runBridge("capability-preflight", {
+      env: {
+        TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+        TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+        TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+        CLOUDFLARE_API_TOKEN: "capability-404-token",
+      },
+      fetchImpl,
+      containersReadinessRetryAttempts: 3,
+      containersReadinessRetryDelayMs: 0,
+    }),
+  ).rejects.toMatchObject({
+    code: "cloudflare_api_error",
+    detail: "GET:containers.applications:404:CF1610",
+  });
+  expect(calls).toHaveLength(1);
 });
 
 function envelope(result: unknown, status = 200): Response {
@@ -751,6 +802,9 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     });
     let vectorExists = true;
     let d1LedgerExists = true;
+    let firstTier1ListIsNotReady = true;
+    let containerCreateIsNotReady = false;
+    const readinessDelays: number[] = [];
     const calls: Array<{ method: string; url: string; body?: unknown }> = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = String(input);
@@ -792,9 +846,25 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         }
         return envelope([{ success: true, results: [] }]);
       }
+      if (method === "GET" && url.endsWith("/containers/applications")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       const listMatch = url.match(/\/containers\/applications\?name=([^&]+)/u);
       if (method === "GET" && listMatch) {
         const name = decodeURIComponent(listMatch[1]!);
+        if (name === "takos-executor-tier1" && firstTier1ListIsNotReady) {
+          firstTier1ListIsNotReady = false;
+          return new Response(
+            JSON.stringify({
+              success: false,
+              errors: [{ code: 1609, message: "Containers application state is not ready" }],
+            }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
         const existing = [...details.values()].find((detail) => detail.name === name);
         // Wrangler's v4 client receives `result` plus pagination metadata and
         // exposes the result array as `data` to its callers.
@@ -809,6 +879,12 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       }
       const detailMatch = url.match(/\/containers\/applications\/([^/]+)$/u);
       if (method === "POST" && url.endsWith("/containers/applications")) {
+        if (containerCreateIsNotReady) {
+          return new Response(
+            JSON.stringify({ success: false, errors: [{ code: 1609 }] }),
+            { status: 404, headers: { "content-type": "application/json" } },
+          );
+        }
         if (!body || typeof body !== "object") return envelope({ error: "invalid" }, 400);
         const created = normalizeNamedCapacity({ id: "app-tier1", ...(body as Record<string, unknown>) });
         details.set("app-tier1", created);
@@ -834,7 +910,18 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       }
       return envelope({ error: `unexpected ${method} ${url}` }, 500);
     };
-    const evidence = await runBridge("post-worker", { env, cwd: directory, fetchImpl });
+    const capability = await runBridge("capability-preflight", { env, fetchImpl });
+    expect(capability.changed).toBe(false);
+    const evidence = await runBridge("post-worker", {
+      env,
+      cwd: directory,
+      fetchImpl,
+      containersReadinessRetryAttempts: 2,
+      containersReadinessRetryDelayMs: 137,
+      containersReadinessDelay: async (delayMs) => {
+        readinessDelays.push(delayMs);
+      },
+    });
     expect(evidence.containers.reconciled).toEqual([
       "takos-executor-tier1",
       "takos-executor-tier2",
@@ -856,6 +943,26 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       max_instances: 2,
       durable_objects: { namespace_id: "ns-1" },
     });
+    const tier1ListUrl =
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/containers/applications?name=takos-executor-tier1`;
+    const containerReadinessSequence = calls.filter(({ method, url }) =>
+      method === "POST" && url.endsWith("/containers/applications") ||
+      method === "GET" &&
+        (url.endsWith("/containers/applications") || url === tier1ListUrl)
+    );
+    expect(containerReadinessSequence.map(({ method, url }) => ({ method, url }))).toEqual([
+      {
+        method: "GET",
+        url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/containers/applications`,
+      },
+      { method: "GET", url: tier1ListUrl },
+      { method: "GET", url: tier1ListUrl },
+      {
+        method: "POST",
+        url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/containers/applications`,
+      },
+    ]);
+    expect(readinessDelays).toEqual([137]);
     const customTierPatch = calls.find(
       ({ method, url }) => method === "PATCH" && url.endsWith("/app-tier3"),
     );
@@ -878,10 +985,39 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     const listCalls = calls.filter(({ url }) => url.includes("/containers/applications?name="));
     expect(listCalls.map(({ url }) => new URL(url).searchParams.get("name"))).toEqual([
       "takos-executor-tier1",
+      "takos-executor-tier1",
       "takos-executor-tier2",
       "takos-executor-tier3",
     ]);
     expect(listCalls.every(({ url }) => url.includes(`/accounts/${accountId}/containers/applications?name=`))).toBe(true);
+
+    const tier1Detail = details.get("app-tier1");
+    expect(tier1Detail).toBeDefined();
+    details.delete("app-tier1");
+    containerCreateIsNotReady = true;
+    const createCallsBeforeFailure = calls.filter(
+      ({ method, url }) => method === "POST" && url.endsWith("/containers/applications"),
+    ).length;
+    await expect(
+      runBridge("post-worker", {
+        env,
+        cwd: directory,
+        fetchImpl,
+        containersReadinessRetryAttempts: 3,
+        containersReadinessRetryDelayMs: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: "cloudflare_api_error",
+      detail: "POST:containers.applications:404:CF1609",
+    });
+    expect(
+      calls.filter(
+        ({ method, url }) => method === "POST" && url.endsWith("/containers/applications"),
+      ),
+    ).toHaveLength(createCallsBeforeFailure + 1);
+    containerCreateIsNotReady = false;
+    if (tier1Detail === undefined) throw new Error("missing tier1 detail");
+    details.set("app-tier1", tier1Detail);
 
     const second = await runBridge("post-worker", { env, cwd: directory, fetchImpl });
     expect(second.changed).toBe(false);
