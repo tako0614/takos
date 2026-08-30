@@ -493,6 +493,7 @@ resource "terraform_data" "provider_gap_cleanup" {
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT", "")
       TAKOS_CLOUDFLARE_ENVIRONMENT                         = lookup(self.input, "TAKOS_CLOUDFLARE_ENVIRONMENT", "staging")
+      TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH                 = "../terraform.tfstate"
     })
   }
 }
@@ -751,6 +752,7 @@ resource "terraform_data" "provider_gap_post" {
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE            = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE", "staging")
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT = lookup(self.input, "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT", "")
       TAKOS_CLOUDFLARE_ENVIRONMENT                         = lookup(self.input, "TAKOS_CLOUDFLARE_ENVIRONMENT", "staging")
+      TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH                 = "../terraform.tfstate"
     })
   }
 }

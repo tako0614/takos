@@ -23,12 +23,15 @@
  */
 
 import { createHash } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import {
   lstat,
+  open,
   readFile,
+  realpath,
   readdir,
 } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
@@ -37,6 +40,12 @@ const MAXIMUM_MIGRATION_BYTES = 256 * 1024 * 1024;
 const D1_LEDGER_TABLE = "_takos_opentofu_migrations";
 const D1_IMPORT_POLL_LIMIT = 600;
 const DEFAULT_D1_IMPORT_POLL_DELAY_MS = 250;
+const RECOVERY_STATE_FILE_NAME = "terraform.tfstate";
+const RECOVERY_STATE_RELATIVE_PATH = `../${RECOVERY_STATE_FILE_NAME}`;
+const RECOVERY_MODULE_DIRECTORY_NAME = "module";
+const RECOVERY_STATE_MODULE = "module.child.module.platform";
+const TERRAFORM_DATA_PROVIDER = 'provider["terraform.io/builtin/terraform"]';
+const CLOUDFLARE_PROVIDER = 'provider["registry.opentofu.org/cloudflare/cloudflare"]';
 // Containers capability can become visible before its application inventory
 // is ready. Seven exact GET attempts at five-second intervals give that
 // control-plane transition a conservative 30-second readiness window without
@@ -421,6 +430,7 @@ interface BridgeConfig {
   readonly containerDesiredConfigPath?: string;
   readonly containerDesiredConfigContent?: string;
   readonly workerArtifactPath: string;
+  readonly recoveryStatePath?: string;
   readonly containerImage?: string;
   readonly importPollDelayMs: number;
   readonly importPollLimit: number;
@@ -819,6 +829,21 @@ export async function parseBridgeConfig(
     false,
   );
   if (containerImage !== undefined) imageReference(containerImage, accountId);
+  const recoveryStatePathValue = envValue(
+    env,
+    ["TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH"],
+    false,
+  );
+  if (
+    recoveryStatePathValue !== undefined &&
+    (phase !== "recovery-cleanup" ||
+      recoveryStatePathValue !== RECOVERY_STATE_RELATIVE_PATH)
+  ) {
+    fail("recovery_state_path_invalid");
+  }
+  const recoveryStatePath = recoveryStatePathValue === undefined
+    ? undefined
+    : resolve(cwd, RECOVERY_STATE_RELATIVE_PATH);
   return {
     cwd,
     bridgeMode: activation.mode,
@@ -843,6 +868,7 @@ export async function parseBridgeConfig(
       ? {}
       : { containerDesiredConfigContent }),
     workerArtifactPath,
+    ...(recoveryStatePath === undefined ? {} : { recoveryStatePath }),
     ...(containerImage === undefined ? {} : { containerImage }),
     importPollDelayMs: delay,
     importPollLimit: limit,
@@ -1418,9 +1444,569 @@ class CloudflareApi {
 }
 
 interface WorkerEvidence {
-  readonly versionId: string;
+  readonly versionId?: string;
   readonly namespaces: ReadonlyMap<string, string>;
   readonly vectorIndexes: ReadonlySet<string>;
+}
+
+const RECOVERY_STATE_INPUT_KEYS = [
+  "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE",
+  "TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT",
+  "TAKOS_CLOUDFLARE_ENVIRONMENT",
+  "TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR",
+  "TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH",
+  "TAKOS_CLOUDFLARE_ACCOUNT_ID",
+  "TAKOS_CLOUDFLARE_WORKER_NAME",
+  "TAKOS_CLOUDFLARE_D1_DATABASE_ID",
+  "TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME",
+  "TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS",
+  "TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC",
+  "TAKOS_CLOUDFLARE_MIGRATION_SET_PATH",
+  "TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH",
+  "TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH",
+  "TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH",
+  "TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH",
+  "TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE",
+  "TAKOS_CONTAINER_IMAGE",
+  "TAKOS_EXECUTOR_TIER1_MAX_INSTANCES",
+  "TAKOS_EXECUTOR_TIER2_MAX_INSTANCES",
+  "TAKOS_EXECUTOR_TIER3_MAX_INSTANCES",
+  "TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT",
+] as const;
+
+const RECOVERY_WORKER_ATTRIBUTE_KEYS = new Set([
+  "account_id",
+  "annotations",
+  "assets",
+  "bindings",
+  "compatibility_date",
+  "compatibility_flags",
+  "containers",
+  "created_on",
+  "id",
+  "limits",
+  "main_module",
+  "main_script_base64",
+  "migration_tag",
+  "migrations",
+  "modules",
+  "number",
+  "placement",
+  "source",
+  "startup_time_ms",
+  "urls",
+  "usage_model",
+  "worker_id",
+]);
+
+const RECOVERY_WORKER_BINDING_ATTRIBUTE_KEYS = new Set([
+  "algorithm",
+  "allowed_destination_addresses",
+  "allowed_sender_addresses",
+  "app_id",
+  "bucket_name",
+  "certificate_id",
+  "class_name",
+  "database_id",
+  "dataset",
+  "destination_address",
+  "dispatch_namespace",
+  "entrypoint",
+  "environment",
+  "format",
+  "id",
+  "index_name",
+  "instance_name",
+  "json",
+  "jurisdiction",
+  "key_base64",
+  "key_jwk",
+  "name",
+  "namespace",
+  "namespace_id",
+  "network_id",
+  "old_name",
+  "outbound",
+  "part",
+  "pipeline",
+  "queue_name",
+  "script_name",
+  "secret_name",
+  "service",
+  "service_id",
+  "simple",
+  "store_id",
+  "text",
+  "tunnel_id",
+  "type",
+  "usages",
+  "version_id",
+  "workflow_name",
+]);
+
+function recoveryStateInput(value: unknown): Record<(typeof RECOVERY_STATE_INPUT_KEYS)[number], string> {
+  if (!plainObject(value)) fail("recovery_state_input_invalid");
+  const keys = Object.keys(value);
+  if (
+    keys.length !== RECOVERY_STATE_INPUT_KEYS.length ||
+    keys.some((key) => !RECOVERY_STATE_INPUT_KEYS.includes(
+      key as (typeof RECOVERY_STATE_INPUT_KEYS)[number],
+    ))
+  ) {
+    fail("recovery_state_input_invalid");
+  }
+  const output: Record<string, string> = {};
+  for (const key of RECOVERY_STATE_INPUT_KEYS) {
+    if (typeof value[key] !== "string") fail("recovery_state_input_invalid");
+    output[key] = value[key];
+  }
+  return output as Record<(typeof RECOVERY_STATE_INPUT_KEYS)[number], string>;
+}
+
+function recoveryStateResourceInstance(
+  resources: readonly unknown[],
+  type: "terraform_data" | "cloudflare_worker_version",
+  name: "provider_gap_cleanup" | "provider_gap_post" | "app",
+  provider: string,
+  schemaVersion: number,
+  indexed: boolean,
+): Record<string, unknown> {
+  const matches = resources.filter((value) =>
+    plainObject(value) &&
+    value.module === RECOVERY_STATE_MODULE &&
+    value.type === type &&
+    value.name === name
+  );
+  if (matches.length !== 1 || !plainObject(matches[0])) {
+    fail(matches.length === 0 ? "recovery_state_resource_missing" : "recovery_state_resource_ambiguous");
+  }
+  const resource = matches[0];
+  const resourceKeys = new Set(["module", "mode", "type", "name", "provider", "instances"]);
+  if (
+    Object.keys(resource).some((key) => !resourceKeys.has(key)) ||
+    resource.mode !== "managed" ||
+    resource.provider !== provider ||
+    !Array.isArray(resource.instances) ||
+    resource.instances.length !== 1 ||
+    !plainObject(resource.instances[0])
+  ) {
+    fail("recovery_state_resource_invalid");
+  }
+  const instance = resource.instances[0];
+  const instanceKeys = new Set([
+    "index_key",
+    "schema_version",
+    "attributes",
+    "sensitive_attributes",
+    "private",
+    "dependencies",
+  ]);
+  if (
+    Object.keys(instance).some((key) => !instanceKeys.has(key)) ||
+    instance.schema_version !== schemaVersion ||
+    !plainObject(instance.attributes) ||
+    !Array.isArray(instance.sensitive_attributes) ||
+    (indexed ? instance.index_key !== 0 : Object.prototype.hasOwnProperty.call(instance, "index_key")) ||
+    (instance.private !== undefined && typeof instance.private !== "string") ||
+    (instance.dependencies !== undefined &&
+      (!Array.isArray(instance.dependencies) ||
+        instance.dependencies.some((dependency) => typeof dependency !== "string")))
+  ) {
+    fail("recovery_state_resource_invalid");
+  }
+  return instance;
+}
+
+function recoveryTerraformDataInput(
+  resources: readonly unknown[],
+  name: "provider_gap_cleanup" | "provider_gap_post",
+): Record<(typeof RECOVERY_STATE_INPUT_KEYS)[number], string> {
+  const instance = recoveryStateResourceInstance(
+    resources,
+    "terraform_data",
+    name,
+    TERRAFORM_DATA_PROVIDER,
+    0,
+    true,
+  );
+  if ((instance.sensitive_attributes as unknown[]).length !== 0) {
+    fail("recovery_state_sensitive_evidence");
+  }
+  const attributes = instance.attributes as Record<string, unknown>;
+  if (
+    Object.keys(attributes).length !== 4 ||
+    Object.keys(attributes).some((key) =>
+      !["id", "input", "output", "triggers_replace"].includes(key)
+    ) ||
+    typeof attributes.id !== "string" ||
+    (attributes.triggers_replace !== null && !plainObject(attributes.triggers_replace))
+  ) {
+    fail("recovery_state_resource_invalid");
+  }
+  const input = recoveryStateInput(attributes.input);
+  if (stableJson(attributes.output) !== stableJson(input)) {
+    fail("recovery_state_input_mismatch");
+  }
+  return input;
+}
+
+function recoverySensitiveWorkerEvidence(value: unknown): void {
+  if (!Array.isArray(value)) fail("recovery_state_sensitive_evidence");
+  for (const path of value) {
+    if (!Array.isArray(path) || path.length !== 3) {
+      fail("recovery_state_sensitive_evidence");
+    }
+    const [attribute, index, nested] = path;
+    if (
+      !plainObject(attribute) ||
+      Object.keys(attribute).length !== 2 ||
+      attribute.type !== "get_attr" ||
+      attribute.value !== "bindings" ||
+      !plainObject(index) ||
+      Object.keys(index).length !== 2 ||
+      index.type !== "index" ||
+      !Number.isSafeInteger(index.value) ||
+      Number(index.value) < 0 ||
+      !plainObject(nested) ||
+      Object.keys(nested).length !== 2 ||
+      nested.type !== "get_attr" ||
+      !["key_base64", "key_jwk", "text"].includes(String(nested.value))
+    ) {
+      fail("recovery_state_sensitive_evidence");
+    }
+  }
+}
+
+function recoveryBindingHasOnly(
+  binding: Record<string, unknown>,
+  evidenceKeys: readonly string[],
+): boolean {
+  const evidence = new Set(evidenceKeys);
+  return Object.entries(binding).every(([key, value]) =>
+    evidence.has(key) || value === null || value === undefined
+  );
+}
+
+function recoveryWorkerEvidence(
+  parsed: unknown,
+  config: BridgeConfig,
+  currentDesired: readonly DesiredContainer[],
+): WorkerEvidence {
+  if (!plainObject(parsed)) fail("recovery_state_invalid");
+  const allowedRootKeys = new Set([
+    "version",
+    "terraform_version",
+    "serial",
+    "lineage",
+    "outputs",
+    "resources",
+    "check_results",
+  ]);
+  if (
+    Object.keys(parsed).some((key) => !allowedRootKeys.has(key)) ||
+    parsed.version !== 4 ||
+    typeof parsed.terraform_version !== "string" ||
+    !/^1\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(parsed.terraform_version) ||
+    !Number.isSafeInteger(parsed.serial) ||
+    Number(parsed.serial) < 0 ||
+    typeof parsed.lineage !== "string" ||
+    parsed.lineage.trim() === "" ||
+    !plainObject(parsed.outputs) ||
+    !Array.isArray(parsed.resources) ||
+    parsed.resources.length > 1024
+  ) {
+    fail("recovery_state_invalid");
+  }
+  const cleanupInput = recoveryTerraformDataInput(
+    parsed.resources,
+    "provider_gap_cleanup",
+  );
+  const postInput = recoveryTerraformDataInput(parsed.resources, "provider_gap_post");
+  if (stableJson(cleanupInput) !== stableJson(postInput)) {
+    fail("recovery_state_input_mismatch");
+  }
+  const input = cleanupInput;
+  const generatedRootPath = resolve(config.cwd, "..");
+  const stateModuleWorkingDirectory = isAbsolute(
+      input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR,
+    )
+    ? resolve(input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR)
+    : resolve(
+      generatedRootPath,
+      input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR,
+    );
+  const activation = validateCloudflareProviderGapBridgeActivation(
+    input.TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE,
+    input.TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT,
+    input.TAKOS_CLOUDFLARE_ENVIRONMENT,
+  );
+  const dimensions = integerValue(
+    input.TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS,
+    "recovery_state_vector_dimensions",
+  );
+  if (
+    activation.mode !== config.bridgeMode ||
+    activation.environment !== config.bridgeEnvironment ||
+    activation.acknowledgementDigest !== config.bridgeAcknowledgementDigest ||
+    stateModuleWorkingDirectory !== config.cwd ||
+    input.TAKOS_CLOUDFLARE_ACCOUNT_ID !== config.accountId ||
+    input.TAKOS_CLOUDFLARE_WORKER_NAME !== config.workerName ||
+    input.TAKOS_CLOUDFLARE_D1_DATABASE_ID !== config.d1DatabaseId ||
+    input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME !== config.vectorIndexName ||
+    dimensions !== config.vectorDimensions ||
+    input.TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC !== config.vectorMetric
+  ) {
+    fail("recovery_state_input_mismatch");
+  }
+  const stateDesired = containerRowsFromContent(
+    input.TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT,
+    input,
+  );
+  const maxInstancesByClass = new Map([
+    ["ExecutorContainerTier1", input.TAKOS_EXECUTOR_TIER1_MAX_INSTANCES],
+    ["ExecutorContainerTier2", input.TAKOS_EXECUTOR_TIER2_MAX_INSTANCES],
+    ["ExecutorContainerTier3", input.TAKOS_EXECUTOR_TIER3_MAX_INSTANCES],
+  ]);
+  if (
+    config.containerDesiredConfigContent === undefined ||
+    config.containerDesiredConfigContent !==
+      input.TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT ||
+    stableJson(stateDesired) !== stableJson(currentDesired) ||
+    stateDesired.some((row) =>
+      row.image !== input.TAKOS_CONTAINER_IMAGE ||
+      row.maxInstances !== integerValue(
+        maxInstancesByClass.get(row.durableObjectClass),
+        "recovery_state_container_max_instances",
+      )
+    )
+  ) {
+    fail("recovery_state_input_mismatch");
+  }
+  const lifecycle = durableObjectLifecycle(
+    input.TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE,
+  );
+  if (
+    config.durableObjectLifecycle === undefined ||
+    stableJson(lifecycle) !== stableJson(config.durableObjectLifecycle) ||
+    stableJson(lifecycle.containerBindings.map(({ className }) => className).sort()) !==
+      stableJson(stateDesired.map(({ durableObjectClass }) => durableObjectClass).sort())
+  ) {
+    fail("recovery_state_input_mismatch");
+  }
+  const workerInstance = recoveryStateResourceInstance(
+    parsed.resources,
+    "cloudflare_worker_version",
+    "app",
+    CLOUDFLARE_PROVIDER,
+    500,
+    false,
+  );
+  recoverySensitiveWorkerEvidence(workerInstance.sensitive_attributes);
+  const attributes = workerInstance.attributes as Record<string, unknown>;
+  if (
+    Object.keys(attributes).some((key) => !RECOVERY_WORKER_ATTRIBUTE_KEYS.has(key)) ||
+    attributes.account_id !== input.TAKOS_CLOUDFLARE_ACCOUNT_ID ||
+    attributes.worker_id !== input.TAKOS_CLOUDFLARE_WORKER_NAME ||
+    !Array.isArray(attributes.bindings)
+  ) {
+    fail("recovery_state_worker_evidence_invalid");
+  }
+  const durableObjectBindings: Array<{
+    readonly name: string;
+    readonly className: string;
+    readonly namespaceId: string;
+  }> = [];
+  const vectorBindings: Array<{ readonly name: string; readonly indexName: string }> = [];
+  for (const rawBinding of attributes.bindings) {
+    if (
+      !plainObject(rawBinding) ||
+      Object.keys(rawBinding).some((key) =>
+        !RECOVERY_WORKER_BINDING_ATTRIBUTE_KEYS.has(key)
+      )
+    ) {
+      fail("recovery_state_worker_binding_invalid");
+    }
+    const name = stringValue(rawBinding.name, "recovery_state_worker_binding_name");
+    const type = stringValue(rawBinding.type, "recovery_state_worker_binding_type");
+    if (type === "durable_object_namespace") {
+      if (!recoveryBindingHasOnly(rawBinding, ["name", "type", "class_name", "namespace_id"])) {
+        fail("recovery_state_worker_binding_invalid");
+      }
+      durableObjectBindings.push({
+        name,
+        className: stringValue(
+          rawBinding.class_name,
+          "recovery_state_worker_binding_class_name",
+        ),
+        namespaceId: stringValue(
+          rawBinding.namespace_id,
+          "recovery_state_worker_binding_namespace_id",
+        ),
+      });
+    } else if (type === "vectorize") {
+      if (!recoveryBindingHasOnly(rawBinding, ["name", "type", "index_name"])) {
+        fail("recovery_state_worker_binding_invalid");
+      }
+      vectorBindings.push({
+        name,
+        indexName: stringValue(
+          rawBinding.index_name,
+          "recovery_state_worker_binding_index_name",
+        ),
+      });
+    } else if (rawBinding.index_name === input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME) {
+      fail("recovery_state_worker_binding_invalid");
+    }
+  }
+  if (
+    new Set(durableObjectBindings.map(({ className }) => className)).size !==
+      durableObjectBindings.length ||
+    new Set(durableObjectBindings.map(({ namespaceId }) => namespaceId)).size !==
+      durableObjectBindings.length ||
+    vectorBindings.length !== 1 ||
+    vectorBindings[0]?.name !== "VECTORIZE" ||
+    vectorBindings[0]?.indexName !== input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME
+  ) {
+    fail("recovery_state_worker_evidence_invalid");
+  }
+  const namespaces = new Map<string, string>();
+  for (const expected of lifecycle.containerBindings) {
+    const matches = durableObjectBindings.filter((binding) =>
+      binding.name === expected.name && binding.className === expected.className
+    );
+    if (matches.length !== 1) fail("recovery_state_worker_evidence_invalid");
+    namespaces.set(expected.className, matches[0]!.namespaceId);
+  }
+  return {
+    namespaces,
+    vectorIndexes: new Set([input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME]),
+  };
+}
+
+async function workerEvidenceFromRecoveryState(
+  config: BridgeConfig,
+  desired: readonly DesiredContainer[],
+): Promise<WorkerEvidence> {
+  if (config.recoveryStatePath === undefined) {
+    fail("recovery_state_receipt_missing");
+  }
+  const generatedRootPath = resolve(config.cwd, "..");
+  const expectedStatePath = join(generatedRootPath, RECOVERY_STATE_FILE_NAME);
+  if (
+    basename(config.cwd) !== RECOVERY_MODULE_DIRECTORY_NAME ||
+    config.recoveryStatePath !== expectedStatePath
+  ) {
+    fail("recovery_state_path_invalid");
+  }
+  const [cwdMetadata, generatedRootMetadata] = await Promise.all([
+    lstat(config.cwd),
+    lstat(generatedRootPath),
+  ]).catch(() => fail("recovery_state_path_invalid"));
+  const stateMetadata = await lstat(config.recoveryStatePath).catch(() =>
+    fail("recovery_state_receipt_missing"),
+  );
+  if (
+    !cwdMetadata.isDirectory() ||
+    cwdMetadata.isSymbolicLink() ||
+    !generatedRootMetadata.isDirectory() ||
+    generatedRootMetadata.isSymbolicLink() ||
+    !stateMetadata.isFile() ||
+    stateMetadata.isSymbolicLink() ||
+    stateMetadata.size === 0 ||
+    stateMetadata.size > MAXIMUM_RESPONSE_BYTES
+  ) {
+    fail("recovery_state_path_invalid");
+  }
+  const [cwdRealPath, generatedRootRealPath, stateRealPath] = await Promise.all([
+    realpath(config.cwd),
+    realpath(generatedRootPath),
+    realpath(config.recoveryStatePath),
+  ]).catch(() => fail("recovery_state_path_invalid"));
+  if (
+    cwdRealPath !== config.cwd ||
+    generatedRootRealPath !== generatedRootPath ||
+    dirname(cwdRealPath) !== generatedRootRealPath ||
+    stateRealPath !== join(generatedRootRealPath, RECOVERY_STATE_FILE_NAME)
+  ) {
+    fail("recovery_state_path_invalid");
+  }
+  const handle = await open(
+    config.recoveryStatePath,
+    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+  ).catch(() => fail("recovery_state_path_invalid"));
+  let bytes: Uint8Array;
+  try {
+    const openedMetadata = await handle.stat();
+    if (
+      !openedMetadata.isFile() ||
+      openedMetadata.dev !== stateMetadata.dev ||
+      openedMetadata.ino !== stateMetadata.ino ||
+      openedMetadata.size !== stateMetadata.size ||
+      openedMetadata.mtimeMs !== stateMetadata.mtimeMs ||
+      openedMetadata.ctimeMs !== stateMetadata.ctimeMs ||
+      openedMetadata.size === 0 ||
+      openedMetadata.size > MAXIMUM_RESPONSE_BYTES
+    ) {
+      fail("recovery_state_path_invalid");
+    }
+    bytes = new Uint8Array(await handle.readFile());
+    const readMetadata = await handle.stat();
+    const [cwdReadMetadata, generatedRootReadMetadata, stateReadMetadata] =
+      await Promise.all([
+        lstat(config.cwd),
+        lstat(generatedRootPath),
+        lstat(config.recoveryStatePath),
+      ]).catch(() => fail("recovery_state_path_invalid"));
+    const [cwdReadRealPath, generatedRootReadRealPath, stateReadRealPath] =
+      await Promise.all([
+        realpath(config.cwd),
+        realpath(generatedRootPath),
+        realpath(config.recoveryStatePath),
+      ]).catch(() => fail("recovery_state_path_invalid"));
+    if (
+      !cwdReadMetadata.isDirectory() ||
+      cwdReadMetadata.isSymbolicLink() ||
+      cwdReadMetadata.dev !== cwdMetadata.dev ||
+      cwdReadMetadata.ino !== cwdMetadata.ino ||
+      !generatedRootReadMetadata.isDirectory() ||
+      generatedRootReadMetadata.isSymbolicLink() ||
+      generatedRootReadMetadata.dev !== generatedRootMetadata.dev ||
+      generatedRootReadMetadata.ino !== generatedRootMetadata.ino ||
+      !stateReadMetadata.isFile() ||
+      stateReadMetadata.isSymbolicLink() ||
+      stateReadMetadata.dev !== openedMetadata.dev ||
+      stateReadMetadata.ino !== openedMetadata.ino ||
+      stateReadMetadata.size !== openedMetadata.size ||
+      stateReadMetadata.mtimeMs !== openedMetadata.mtimeMs ||
+      stateReadMetadata.ctimeMs !== openedMetadata.ctimeMs ||
+      readMetadata.dev !== openedMetadata.dev ||
+      readMetadata.ino !== openedMetadata.ino ||
+      readMetadata.size !== openedMetadata.size ||
+      readMetadata.mtimeMs !== openedMetadata.mtimeMs ||
+      readMetadata.ctimeMs !== openedMetadata.ctimeMs ||
+      cwdReadRealPath !== cwdRealPath ||
+      generatedRootReadRealPath !== generatedRootRealPath ||
+      stateReadRealPath !== stateRealPath ||
+      bytes.byteLength !== openedMetadata.size
+    ) {
+      fail("recovery_state_path_invalid");
+    }
+  } finally {
+    await handle.close();
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    fail("recovery_state_invalid");
+  }
+  return recoveryWorkerEvidence(parsed, config, desired);
+}
+
+function exactWorkerMissing(error: unknown): boolean {
+  return error instanceof BridgeFailure &&
+    error.code === "cloudflare_api_error" &&
+    error.detail === "GET:workers.scripts:404:CF10007";
 }
 
 function activeVersionId(value: unknown): string | undefined {
@@ -1449,11 +2035,21 @@ function activeVersionId(value: unknown): string | undefined {
   return undefined;
 }
 
-async function workerEvidence(api: CloudflareApi, config: BridgeConfig): Promise<WorkerEvidence> {
-  const deployments = await api.request(
-    "GET",
-    `/accounts/${pathSegment(config.accountId, "account_id")}/workers/scripts/${pathSegment(config.workerName, "worker_name")}/deployments`,
-  );
+async function workerEvidence(
+  api: CloudflareApi,
+  config: BridgeConfig,
+  onMissing?: () => Promise<WorkerEvidence>,
+): Promise<WorkerEvidence> {
+  let deployments: unknown;
+  try {
+    deployments = await api.request(
+      "GET",
+      `/accounts/${pathSegment(config.accountId, "account_id")}/workers/scripts/${pathSegment(config.workerName, "worker_name")}/deployments`,
+    );
+  } catch (error) {
+    if (onMissing !== undefined && exactWorkerMissing(error)) return onMissing();
+    throw error;
+  }
   const versionId = activeVersionId(deployments);
   if (!versionId) fail("worker_active_version_readback_missing");
   const detail = await api.request(
@@ -1821,13 +2417,19 @@ async function cleanup(
   worker: WorkerEvidence,
   desired: readonly DesiredContainer[],
 ): Promise<{ readonly deletedContainers: readonly string[]; readonly vectorDeleted: boolean }> {
-  const deletedContainers: string[] = [];
+  const containerTargets: Array<{ readonly id: string; readonly name: string }> = [];
+  // Build and validate the complete deletion set before the first mutation.
+  // A later ownership mismatch must not leave an earlier provider-gap object
+  // deleted just because its row happened to sort first.
   for (const row of desired) {
     const namespaceId = worker.namespaces.get(row.durableObjectClass);
     if (!namespaceId) fail("worker_namespace_for_container_missing", row.durableObjectClass);
     const matches = await listContainers(api, config, row.name);
     if (matches.length > 1) fail("container_name_ambiguous", row.name);
     if (!matches[0]) continue;
+    if (matches[0].name !== row.name) {
+      fail("container_cleanup_ownership_unproven", row.name);
+    }
     const detail = await api.requestContainers(
       "GET",
       `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(matches[0].id, "container_id")}`,
@@ -1835,29 +2437,38 @@ async function cleanup(
     if (!plainObject(detail) || !containerMatches(detail, row, namespaceId)) {
       fail("container_cleanup_ownership_unproven", row.name);
     }
+    containerTargets.push({ id: matches[0].id, name: row.name });
+  }
+  let vectorPresent = false;
+  if (worker.vectorIndexes.has(config.vectorIndexName)) {
+    const current = await readVector(api, config);
+    if (current && !vectorMatches(current, config)) {
+      fail("vector_index_cleanup_ownership_unproven");
+    }
+    vectorPresent = current !== null;
+  }
+
+  const deletedContainers: string[] = [];
+  for (const target of containerTargets) {
     await api.requestContainers(
       "DELETE",
-      `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(matches[0].id, "container_id")}`,
+      `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(target.id, "container_id")}`,
     );
     const remaining = await api.requestContainers(
       "GET",
-      `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(matches[0].id, "container_id")}`,
+      `/accounts/${pathSegment(config.accountId, "account_id")}/containers/applications/${pathSegment(target.id, "container_id")}`,
       undefined,
       [],
       "delete-readback",
     );
-    if (remaining !== null) fail("container_cleanup_readback_failed", row.name);
-    deletedContainers.push(row.name);
+    if (remaining !== null) fail("container_cleanup_readback_failed", target.name);
+    deletedContainers.push(target.name);
   }
   let vectorDeleted = false;
-  if (worker.vectorIndexes.has(config.vectorIndexName)) {
-    const current = await readVector(api, config);
-    if (current && !vectorMatches(current, config)) fail("vector_index_cleanup_ownership_unproven");
-    if (current) {
-      await api.request("DELETE", vectorPath(config));
-      if ((await readVector(api, config)) !== null) fail("vector_index_cleanup_readback_failed");
-      vectorDeleted = true;
-    }
+  if (vectorPresent) {
+    await api.request("DELETE", vectorPath(config));
+    if ((await readVector(api, config)) !== null) fail("vector_index_cleanup_readback_failed");
+    vectorDeleted = true;
   }
   return { deletedContainers, vectorDeleted };
 }
@@ -2127,6 +2738,16 @@ export async function runBridge(
       : readBounded(config.durableObjectBootstrapPath, MAXIMUM_MIGRATION_BYTES)
           .then((bytes) => `sha256:${sha256(bytes)}`),
   ]);
+  const api = new CloudflareApi(config.accountId, token, fetchImpl, options);
+  // Legacy live-Worker cleanup may still need its source path, but an absent
+  // Worker may never turn that mutable path into recovery authority. Probe
+  // the live Worker first when the immutable self.input content is missing;
+  // state fallback remains unavailable in that case.
+  const recoveryLiveWorker =
+    selectedPhase === "recovery-cleanup" &&
+      config.containerDesiredConfigContent === undefined
+      ? await workerEvidence(api, config)
+      : undefined;
   const containerDesired =
     selectedPhase === "pre-worker"
       ? []
@@ -2168,7 +2789,6 @@ export async function runBridge(
     migrationDigest,
     workerArtifactDigest: workerArtifactEvidence,
   };
-  const api = new CloudflareApi(config.accountId, token, fetchImpl, options);
   let vector: "present" | "created" | "deleted" = "present";
   let durableObjects: {
     status: "present" | "migrated" | "not-checked";
@@ -2198,7 +2818,14 @@ export async function runBridge(
       vector === "created" ||
       migrationResult.newlyApplied.length > 0;
   } else {
-    const worker = await workerEvidence(api, config);
+    const worker = recoveryLiveWorker ??
+      await workerEvidence(
+        api,
+        config,
+        selectedPhase === "recovery-cleanup"
+          ? () => workerEvidenceFromRecoveryState(config, containerDesired)
+          : undefined,
+      );
     workerVersion = worker.versionId;
     if (selectedPhase === "post-worker") {
       // Container reconciliation is deliberately after the authoritative

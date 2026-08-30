@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 
@@ -273,12 +273,17 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
   const directory = await mkdtemp("takos-cloudflare-bridge-cleanup-delete-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
-    const artifactPath = join(absoluteDirectory, "worker.js");
+    const moduleDirectory = join(absoluteDirectory, "module");
+    const migrationDirectory = join(moduleDirectory, "migrations");
+    const artifactPath = join(moduleDirectory, "worker.js");
     const { mkdir } = await import("node:fs/promises");
+    await mkdir(moduleDirectory);
     await mkdir(migrationDirectory);
     await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
+    // The live Worker remains the normal authority even if the bounded
+    // fallback receipt is malformed. The receipt must not be read eagerly.
+    await writeFile(join(absoluteDirectory, "terraform.tfstate"), "{");
     const desiredConfig = JSON.stringify({
       applications: [
         {
@@ -319,6 +324,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
       TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: desiredConfig,
+      TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH: "../terraform.tfstate",
       CLOUDFLARE_API_TOKEN: "cleanup-delete-token",
     };
     const calls: Array<{ method: string; url: string }> = [];
@@ -386,7 +392,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
 
     const cleanup = await runBridge("recovery-cleanup", {
       env,
-      cwd: directory,
+      cwd: moduleDirectory,
       fetchImpl,
       containersReadinessRetryAttempts: 2,
       containersReadinessRetryDelayMs: 0,
@@ -404,7 +410,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
     await expect(
       runBridge("recovery-cleanup", {
         env,
-        cwd: directory,
+        cwd: moduleDirectory,
         fetchImpl,
         containersReadinessRetryAttempts: 2,
         containersReadinessRetryDelayMs: 0,
@@ -429,7 +435,7 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
     await expect(
       runBridge("recovery-cleanup", {
         env,
-        cwd: directory,
+        cwd: moduleDirectory,
         fetchImpl,
         containersReadinessRetryAttempts: 2,
         containersReadinessRetryDelayMs: 0,
@@ -444,11 +450,700 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
   }
 });
 
+test("recovery cleanup uses an exact restored state receipt when the Worker is absent", async () => {
+  const fixture = await createStateRecoveryFixture();
+  try {
+    const cleanup = await fixture.run();
+    expect(cleanup.workerVersion).toBeUndefined();
+    expect(cleanup.containers.deleted).toEqual(["takos-recovery-executor-tier3"]);
+    expect(cleanup.vector.status).toBe("deleted");
+    expect(fixture.calls.filter(({ method }) => method === "DELETE")).toHaveLength(2);
+    expect(await readFile(join(fixture.directory, "terraform.tfstate"), "utf8"))
+      .not.toContain("state-recovery-token");
+    expect(
+      await readFile(join(fixture.directory, "module", "terraform.tfstate"), "utf8"),
+    ).toBe("{");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("recovery cleanup validates every provider-gap target before the first DELETE", async () => {
+  const fixture = await createStateRecoveryFixture({
+    containerRowsByName: {
+      "takos-recovery-executor-tier1": [{
+        id: "app-tier1",
+        name: "takos-recovery-executor-tier1",
+      }],
+      "takos-recovery-executor-tier2": [{
+        id: "app-tier2",
+        name: "takos-recovery-executor-tier2",
+      }],
+      "takos-recovery-executor-tier3": [],
+    },
+    containerDetailsById: {
+      "app-tier1": recoveryContainerDetail(
+        "app-tier1",
+        "takos-recovery-executor-tier1",
+        "ns-tier1",
+        "lite",
+      ),
+      "app-tier2": {
+        ...recoveryContainerDetail(
+          "app-tier2",
+          "takos-recovery-executor-tier2",
+          "ns-tier2",
+          "basic",
+        ),
+        configuration: {
+          image: "docker.io/library/alpine@sha256:" + "b".repeat(64),
+          instance_type: "basic",
+        },
+      },
+    },
+  });
+  try {
+    await expect(fixture.run()).rejects.toThrow("container_cleanup_ownership_unproven");
+    expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("recovery cleanup refuses missing, malformed, symlinked, or non-10007 receipts before DELETE", async () => {
+  const cases: readonly StateRecoveryFixtureOptions[] = [
+    { receipt: "missing" },
+    { receipt: "malformed" },
+    { receipt: "symlink" },
+    { recoveryStatePath: "terraform.tfstate" },
+    { recoveryStatePath: "../../terraform.tfstate" },
+    { workerCode: 10008 },
+    { workerStatus: 500, workerCode: 10007 },
+  ];
+  for (const options of cases) {
+    const fixture = await createStateRecoveryFixture(options);
+    try {
+      await expect(fixture.run()).rejects.toBeInstanceOf(Error);
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("recovery cleanup rejects a symlinked or misnamed generated-root module topology before DELETE", async () => {
+  const cases: readonly StateRecoveryFixtureOptions[] = [
+    { cwdShape: "module-symlink" },
+    { cwdShape: "generated-root-symlink" },
+    { cwdShape: "wrong-module-leaf" },
+  ];
+  for (const options of cases) {
+    const fixture = await createStateRecoveryFixture(options);
+    try {
+      await expect(fixture.run()).rejects.toThrow("recovery_state_path_invalid");
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("recovery cleanup does not reread a mutable desired-config path as state authority", async () => {
+  const fixture = await createStateRecoveryFixture({
+    omitDesiredContentFromEnvironment: true,
+  });
+  try {
+    await expect(fixture.run()).rejects.toThrow("cloudflare_api_error");
+    expect(fixture.calls.some(({ url }) => url.includes("/containers/applications")))
+      .toBe(false);
+    expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("recovery cleanup rejects ambiguous exact-name Container discovery before DELETE", async () => {
+  const fixture = await createStateRecoveryFixture({
+    containerRowsByName: {
+      "takos-recovery-executor-tier1": [],
+      "takos-recovery-executor-tier2": [],
+      "takos-recovery-executor-tier3": [
+        { id: "app-tier3-a", name: "takos-recovery-executor-tier3" },
+        { id: "app-tier3-b", name: "takos-recovery-executor-tier3" },
+      ],
+    },
+  });
+  try {
+    await expect(fixture.run()).rejects.toThrow("container_name_ambiguous");
+    expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("recovery cleanup rejects state address, provider, schema, sensitivity, and input drift before DELETE", async () => {
+  const cases: readonly ((state: Record<string, unknown>) => void)[] = [
+    (state) => {
+      state.resources = recoveryFixtureResources(state).filter((resource) =>
+        !(resource.type === "terraform_data" && resource.name === "provider_gap_post")
+      );
+    },
+    (state) => {
+      const resources = recoveryFixtureResources(state);
+      state.resources = [
+        ...resources,
+        structuredClone(
+          recoveryFixtureResource(state, "terraform_data", "provider_gap_post"),
+        ),
+      ];
+    },
+    (state) => {
+      recoveryFixtureResource(state, "cloudflare_worker_version", "app").provider =
+        'provider["registry.opentofu.org/cloudflare/cloudflare-unknown"]';
+    },
+    (state) => {
+      recoveryFixtureInstance(
+        recoveryFixtureResource(state, "cloudflare_worker_version", "app"),
+      ).schema_version = 501;
+    },
+    (state) => {
+      recoveryFixtureInstance(
+        recoveryFixtureResource(state, "terraform_data", "provider_gap_cleanup"),
+      ).sensitive_attributes = [[{ type: "get_attr", value: "input" }]];
+    },
+    (state) => {
+      recoveryFixtureInstance(
+        recoveryFixtureResource(state, "cloudflare_worker_version", "app"),
+      ).sensitive_attributes = [[
+        { type: "get_attr", value: "bindings" },
+        { type: "index", value: 0 },
+        { type: "get_attr", value: "namespace_id" },
+      ]];
+    },
+    (state) => {
+      recoveryFixtureBindings(state)[0]!.unknown_provider_field = "unexpected";
+    },
+    (state) => {
+      const attributes = recoveryFixtureAttributes(
+        recoveryFixtureResource(state, "terraform_data", "provider_gap_post"),
+      );
+      const input = attributes.input as Record<string, unknown>;
+      input.TAKOS_CLOUDFLARE_WORKER_NAME = "other-worker";
+    },
+  ];
+  for (const mutateState of cases) {
+    const fixture = await createStateRecoveryFixture({ mutateState });
+    try {
+      await expect(fixture.run()).rejects.toBeInstanceOf(Error);
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("recovery cleanup rejects missing or ambiguous namespace and Vectorize state evidence before DELETE", async () => {
+  const cases: readonly ((state: Record<string, unknown>) => void)[] = [
+    (state) => {
+      const attributes = recoveryFixtureAttributes(
+        recoveryFixtureResource(state, "cloudflare_worker_version", "app"),
+      );
+      attributes.bindings = recoveryFixtureBindings(state).filter((binding) =>
+        binding.class_name !== "ExecutorContainerTier3"
+      );
+    },
+    (state) => {
+      const bindings = recoveryFixtureBindings(state);
+      const tier2 = bindings.find((binding) =>
+        binding.class_name === "ExecutorContainerTier2"
+      );
+      if (!tier2) throw new Error("tier2 fixture binding missing");
+      tier2.namespace_id = "ns-tier1";
+    },
+    (state) => {
+      const vector = recoveryFixtureBindings(state).find((binding) =>
+        binding.type === "vectorize"
+      );
+      if (!vector) throw new Error("vector fixture binding missing");
+      vector.index_name = "other-index";
+    },
+    (state) => {
+      const attributes = recoveryFixtureAttributes(
+        recoveryFixtureResource(state, "cloudflare_worker_version", "app"),
+      );
+      const bindings = recoveryFixtureBindings(state);
+      const vector = bindings.find((binding) => binding.type === "vectorize");
+      if (!vector) throw new Error("vector fixture binding missing");
+      attributes.bindings = [...bindings, { ...vector }];
+    },
+  ];
+  for (const mutateState of cases) {
+    const fixture = await createStateRecoveryFixture({ mutateState });
+    try {
+      await expect(fixture.run()).rejects.toBeInstanceOf(Error);
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("recovery cleanup rejects Container capacity, namespace, and Vectorize detail drift before DELETE", async () => {
+  const cases: readonly StateRecoveryFixtureOptions[] = [
+    {
+      containerDetailsById: {
+        "app-tier3": {
+          ...recoveryContainerDetail(
+            "app-tier3",
+            "takos-recovery-executor-tier3",
+            "ns-tier3",
+            "tier3",
+          ),
+          configuration: {
+            image: DOCKER_IMAGE,
+            vcpu: 2,
+            memory_mib: 12288,
+            disk: { size_mb: 4000 },
+          },
+        },
+      },
+    },
+    {
+      containerDetailsById: {
+        "app-tier3": recoveryContainerDetail(
+          "app-tier3",
+          "takos-recovery-executor-tier3",
+          "other-namespace",
+          "tier3",
+        ),
+      },
+    },
+    {
+      vectorDetail: {
+        name: "takos-recovery-embeddings",
+        config: { dimensions: 1536, metric: "cosine" },
+      },
+    },
+  ];
+  for (const options of cases) {
+    const fixture = await createStateRecoveryFixture(options);
+    try {
+      await expect(fixture.run()).rejects.toBeInstanceOf(Error);
+      expect(fixture.calls.some(({ method }) => method === "DELETE")).toBe(false);
+    } finally {
+      await fixture.cleanup();
+    }
+  }
+});
+
+test("destroy provisioners pass only the fixed runner-local recovery state path", async () => {
+  const moduleSource = await readFile(
+    resolve(
+      import.meta.dir,
+      "../deploy/opentofu/cloudflare/modules/platform/main.tf",
+    ),
+    "utf8",
+  );
+  expect(
+    moduleSource.match(
+      /TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH\s*=\s*"\.\.\/terraform\.tfstate"/gu,
+    ),
+  ).toHaveLength(2);
+  expect(moduleSource).not.toContain("file(\"terraform.tfstate\")");
+  expect(moduleSource).not.toContain("filebase64(\"terraform.tfstate\")");
+  expect(moduleSource).not.toContain("file(\"../terraform.tfstate\")");
+  expect(moduleSource).not.toContain("filebase64(\"../terraform.tfstate\")");
+});
+
 function envelope(result: unknown, status = 200): Response {
   return new Response(JSON.stringify({ success: status >= 200 && status < 300, result }), {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+function recoveryTerraformState(input: Record<string, string>): Record<string, unknown> {
+  const terraformData = (name: "provider_gap_cleanup" | "provider_gap_post") => ({
+    module: "module.child.module.platform",
+    mode: "managed",
+    type: "terraform_data",
+    name,
+    provider: "provider[\"terraform.io/builtin/terraform\"]",
+    instances: [{
+      index_key: 0,
+      schema_version: 0,
+      attributes: {
+        id: `${name}-id`,
+        input: { ...input },
+        output: { ...input },
+        triggers_replace: null,
+      },
+      sensitive_attributes: [],
+    }],
+  });
+  return {
+    version: 4,
+    terraform_version: "1.12.3",
+    serial: 3,
+    lineage: "00000000-0000-0000-0000-000000000042",
+    outputs: {},
+    resources: [
+      terraformData("provider_gap_cleanup"),
+      terraformData("provider_gap_post"),
+      {
+        module: "module.child.module.platform",
+        mode: "managed",
+        type: "cloudflare_worker_version",
+        name: "app",
+        provider: "provider[\"registry.opentofu.org/cloudflare/cloudflare\"]",
+        instances: [{
+          schema_version: 500,
+          attributes: {
+            account_id: input.TAKOS_CLOUDFLARE_ACCOUNT_ID,
+            worker_id: input.TAKOS_CLOUDFLARE_WORKER_NAME,
+            bindings: [
+              {
+                name: "EXECUTOR_CONTAINER",
+                type: "durable_object_namespace",
+                class_name: "ExecutorContainerTier1",
+                namespace_id: "ns-tier1",
+              },
+              {
+                name: "EXECUTOR_CONTAINER_TIER2",
+                type: "durable_object_namespace",
+                class_name: "ExecutorContainerTier2",
+                namespace_id: "ns-tier2",
+              },
+              {
+                name: "EXECUTOR_CONTAINER_TIER3",
+                type: "durable_object_namespace",
+                class_name: "ExecutorContainerTier3",
+                namespace_id: "ns-tier3",
+              },
+              {
+                name: "VECTORIZE",
+                type: "vectorize",
+                index_name: input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME,
+              },
+            ],
+          },
+          sensitive_attributes: [],
+        }],
+      },
+    ],
+  };
+}
+
+function recoveryFixtureResources(state: Record<string, unknown>): Array<Record<string, unknown>> {
+  if (!Array.isArray(state.resources)) throw new Error("fixture resources missing");
+  return state.resources.map((resource) => {
+    if (typeof resource !== "object" || resource === null || Array.isArray(resource)) {
+      throw new Error("fixture resource invalid");
+    }
+    return resource as Record<string, unknown>;
+  });
+}
+
+function recoveryFixtureResource(
+  state: Record<string, unknown>,
+  type: string,
+  name: string,
+): Record<string, unknown> {
+  const resource = recoveryFixtureResources(state).find((candidate) =>
+    candidate.type === type && candidate.name === name
+  );
+  if (!resource) throw new Error(`fixture resource missing: ${type}.${name}`);
+  return resource;
+}
+
+function recoveryFixtureInstance(resource: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(resource.instances) || resource.instances.length !== 1) {
+    throw new Error("fixture instance missing");
+  }
+  const instance = resource.instances[0];
+  if (typeof instance !== "object" || instance === null || Array.isArray(instance)) {
+    throw new Error("fixture instance invalid");
+  }
+  return instance as Record<string, unknown>;
+}
+
+function recoveryFixtureAttributes(resource: Record<string, unknown>): Record<string, unknown> {
+  const attributes = recoveryFixtureInstance(resource).attributes;
+  if (typeof attributes !== "object" || attributes === null || Array.isArray(attributes)) {
+    throw new Error("fixture attributes invalid");
+  }
+  return attributes as Record<string, unknown>;
+}
+
+function recoveryFixtureBindings(state: Record<string, unknown>): Array<Record<string, unknown>> {
+  const attributes = recoveryFixtureAttributes(
+    recoveryFixtureResource(state, "cloudflare_worker_version", "app"),
+  );
+  if (!Array.isArray(attributes.bindings)) throw new Error("fixture bindings missing");
+  return attributes.bindings.map((binding) => {
+    if (typeof binding !== "object" || binding === null || Array.isArray(binding)) {
+      throw new Error("fixture binding invalid");
+    }
+    return binding as Record<string, unknown>;
+  });
+}
+
+function recoveryDesiredConfig(): string {
+  return JSON.stringify({
+    applications: [
+      {
+        name: "takos-recovery-executor-tier1",
+        durable_object_class: "ExecutorContainerTier1",
+        image: DOCKER_IMAGE,
+        instance_type: "lite",
+        max_instances: 1,
+        rollout_active_grace_period: 900,
+      },
+      {
+        name: "takos-recovery-executor-tier2",
+        durable_object_class: "ExecutorContainerTier2",
+        image: DOCKER_IMAGE,
+        instance_type: "basic",
+        max_instances: 1,
+        rollout_active_grace_period: 900,
+      },
+      {
+        name: "takos-recovery-executor-tier3",
+        durable_object_class: "ExecutorContainerTier3",
+        image: DOCKER_IMAGE,
+        instance_type: { vcpu: 1, memory_mib: 12288, disk_mb: 4000 },
+        max_instances: 1,
+        rollout_active_grace_period: 900,
+      },
+    ],
+  });
+}
+
+function recoveryContainerDetail(
+  id: string,
+  name: string,
+  namespaceId: string,
+  instanceType: "lite" | "basic" | "tier3",
+): Record<string, unknown> {
+  const configuration = instanceType === "tier3"
+    ? {
+      image: DOCKER_IMAGE,
+      vcpu: 1,
+      memory_mib: 12288,
+      disk: { size_mb: 4000 },
+    }
+    : { image: DOCKER_IMAGE, instance_type: instanceType };
+  return {
+    id,
+    name,
+    configuration,
+    max_instances: 1,
+    scheduling_policy: "default",
+    rollout_active_grace_period: 900,
+    durable_objects: { namespace_id: namespaceId },
+  };
+}
+
+interface StateRecoveryFixtureOptions {
+  readonly workerStatus?: number;
+  readonly workerCode?: number;
+  readonly containerRowsByName?: Readonly<Record<string, readonly Record<string, unknown>[]>>;
+  readonly containerDetailsById?: Readonly<Record<string, Record<string, unknown>>>;
+  readonly vectorDetail?: Record<string, unknown> | null;
+  readonly receipt?: "exact" | "missing" | "malformed" | "symlink";
+  readonly recoveryStatePath?: string;
+  readonly mutateState?: (state: Record<string, unknown>) => void;
+  readonly omitDesiredContentFromEnvironment?: boolean;
+  readonly cwdShape?:
+    | "exact"
+    | "module-symlink"
+    | "generated-root-symlink"
+    | "wrong-module-leaf";
+}
+
+async function createStateRecoveryFixture(
+  options: StateRecoveryFixtureOptions = {},
+): Promise<{
+  readonly directory: string;
+  readonly calls: Array<{ method: string; url: string }>;
+  readonly run: () => ReturnType<typeof runBridge>;
+  readonly cleanup: () => Promise<void>;
+}> {
+  const directory = await mkdtemp("takos-cloudflare-bridge-state-recovery-test-");
+  const absoluteDirectory = resolve(directory);
+  const storedModuleDirectory = options.cwdShape === "module-symlink"
+    ? join(absoluteDirectory, "module-target")
+    : options.cwdShape === "wrong-module-leaf"
+      ? join(absoluteDirectory, "app")
+      : join(absoluteDirectory, "module");
+  const moduleDirectory = options.cwdShape === "generated-root-symlink"
+    ? join(absoluteDirectory, "generated-root-link", "module")
+    : options.cwdShape === "module-symlink"
+      ? join(absoluteDirectory, "module")
+      : storedModuleDirectory;
+  const storedMigrationDirectory = join(storedModuleDirectory, "migrations");
+  const migrationDirectory = join(moduleDirectory, "migrations");
+  const artifactPath = join(moduleDirectory, "worker.js");
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(storedModuleDirectory);
+  await mkdir(storedMigrationDirectory);
+  await mkdir(join(storedModuleDirectory, ".takos-build", "assets"), { recursive: true });
+  await mkdir(join(storedModuleDirectory, "modules", "platform"), { recursive: true });
+  await writeFile(join(storedMigrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
+  await writeFile(join(storedModuleDirectory, "worker.js"), "export default {};\n");
+  await writeFile(join(storedModuleDirectory, ".takos-build", "assets", "index.html"), "ok\n");
+  await writeFile(
+    join(storedModuleDirectory, "modules", "platform", "durable-object-migration-bootstrap.js"),
+    "export default {};\n",
+  );
+  if (options.cwdShape === "module-symlink") {
+    await symlink("module-target", moduleDirectory, "dir");
+  } else if (options.cwdShape === "generated-root-symlink") {
+    await symlink(".", join(absoluteDirectory, "generated-root-link"), "dir");
+  }
+  // A malformed same-directory decoy makes the real generated-root topology
+  // load-bearing: recovery must read the parent receipt, never module state.
+  await writeFile(join(moduleDirectory, "terraform.tfstate"), "{");
+  const receiptInput = {
+    TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
+    TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_ACKNOWLEDGEMENT: "",
+    TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
+    TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR: "module",
+    TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH: ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
+    TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
+    TAKOS_CLOUDFLARE_WORKER_NAME: "takos-recovery",
+    TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
+    TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-recovery-embeddings",
+    TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
+    TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
+    TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
+    TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: ".takos-build/assets",
+    TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: ".takos-build/container-desired.json",
+    TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
+    TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: "modules/platform/durable-object-migration-bootstrap.js",
+    TAKOS_CLOUDFLARE_DURABLE_OBJECT_LIFECYCLE: JSON.stringify(DURABLE_OBJECT_LIFECYCLE),
+    TAKOS_CONTAINER_IMAGE: DOCKER_IMAGE,
+    TAKOS_EXECUTOR_TIER1_MAX_INSTANCES: "1",
+    TAKOS_EXECUTOR_TIER2_MAX_INSTANCES: "1",
+    TAKOS_EXECUTOR_TIER3_MAX_INSTANCES: "1",
+    TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: recoveryDesiredConfig(),
+  };
+  const state = recoveryTerraformState(receiptInput);
+  options.mutateState?.(state);
+  if (options.receipt === "symlink") {
+    await writeFile(join(absoluteDirectory, "state-receipt.json"), JSON.stringify(state));
+    await symlink("state-receipt.json", join(absoluteDirectory, "terraform.tfstate"));
+  } else if (options.receipt !== "missing") {
+    await writeFile(
+      join(absoluteDirectory, "terraform.tfstate"),
+      options.receipt === "malformed" ? "{" : JSON.stringify(state),
+    );
+  }
+  const env: Record<string, string> = {
+    ...receiptInput,
+    CLOUDFLARE_API_TOKEN: "state-recovery-token",
+  };
+  if (options.omitDesiredContentFromEnvironment) {
+    delete env.TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT;
+    // If recovery ever reads this mutable path before proving a live Worker,
+    // it will fail with bridge_json_invalid instead of the exact Worker error.
+    await writeFile(
+      join(moduleDirectory, ".takos-build", "container-desired.json"),
+      "{",
+    );
+  }
+  if (options.receipt !== "missing") {
+    env.TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH =
+      options.recoveryStatePath ?? "../terraform.tfstate";
+  }
+  const defaultRows: Readonly<Record<string, readonly Record<string, unknown>[]>> = {
+    "takos-recovery-executor-tier1": [],
+    "takos-recovery-executor-tier2": [],
+    "takos-recovery-executor-tier3": [{
+      id: "app-tier3",
+      name: "takos-recovery-executor-tier3",
+    }],
+  };
+  const defaultDetails: Readonly<Record<string, Record<string, unknown>>> = {
+    "app-tier3": recoveryContainerDetail(
+      "app-tier3",
+      "takos-recovery-executor-tier3",
+      "ns-tier3",
+      "tier3",
+    ),
+  };
+  const calls: Array<{ method: string; url: string }> = [];
+  const deletedContainers = new Set<string>();
+  let vectorDeleted = false;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method ?? "GET");
+    calls.push({ method, url });
+    if (url.endsWith("/workers/scripts/takos-recovery/deployments")) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ code: options.workerCode ?? 10007, message: "not found" }],
+        }),
+        {
+          status: options.workerStatus ?? 404,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+    const listMatch = url.match(/\/containers\/applications\?name=([^&]+)/u);
+    if (method === "GET" && listMatch) {
+      const name = decodeURIComponent(listMatch[1]!);
+      return envelope((options.containerRowsByName ?? defaultRows)[name] ?? []);
+    }
+    const detailMatch = url.match(/\/containers\/applications\/([^/]+)$/u);
+    if (detailMatch) {
+      const id = decodeURIComponent(detailMatch[1]!);
+      if (method === "DELETE") {
+        deletedContainers.add(id);
+        return envelope(null);
+      }
+      if (deletedContainers.has(id)) {
+        return new Response(
+          JSON.stringify({ success: false, errors: [{ code: 1609 }] }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
+      const detail = (options.containerDetailsById ?? defaultDetails)[id];
+      return detail === undefined
+        ? envelope({ error: "unexpected container" }, 500)
+        : envelope(detail);
+    }
+    if (url.endsWith("/vectorize/v2/indexes/takos-recovery-embeddings")) {
+      if (method === "DELETE") {
+        vectorDeleted = true;
+        return envelope(null);
+      }
+      if (vectorDeleted || options.vectorDetail === null) {
+        return new Response("", { status: 404 });
+      }
+      return envelope(
+        options.vectorDetail ?? {
+          name: "takos-recovery-embeddings",
+          config: { dimensions: 768, metric: "cosine" },
+        },
+      );
+    }
+    return envelope({ error: `unexpected ${method} ${url}` }, 500);
+  };
+  return {
+    directory: absoluteDirectory,
+    calls,
+    run: () =>
+      runBridge("recovery-cleanup", {
+        env,
+        cwd: moduleDirectory,
+        fetchImpl,
+        containersReadinessRetryAttempts: 1,
+        containersReadinessRetryDelayMs: 0,
+      }),
+    cleanup: () => rm(absoluteDirectory, { force: true, recursive: true }),
+  };
 }
 
 test("Durable Object migration resumes only after the current known tag", () => {
