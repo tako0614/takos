@@ -83,6 +83,30 @@ The public Host v1 contract does not expose Takoserver's native residual
 inventory/readback; reports carry an explicit `native` blocker and never claim
 zero native residuals or GA readiness from this tracer alone.
 
+After a live destroy, a Takosumi host may opt in to the Takoserver-owned
+residual-attestation seam. It writes one mode-0600 verifier input document
+(`takosumi.external-destroy-verifier-input@v1`) containing the destroy context
+and projected outputs, then invokes:
+
+```bash
+TAKOSERVER_API_ORIGIN='https://api.takoserver.example' \
+TAKOSERVER_ORGANIZATION_ID='ORG_ID' \
+TAKOSERVER_EVIDENCE_API_TOKEN='reader-token' \
+bun run takoserver:native-absence-verifier -- \
+  --input-file verifier-input.json
+```
+
+The child performs five read-only
+`GET /v1/organizations/{org}/resources/{uid}/native-residual` checks with the
+exact Space/name fences and continues through all five before failing. Only a
+closed `residual.status: "absent"` response for every UID produces the closed
+`takosumi.external-destroy-verifier-result@v1` stdout result (the host then
+hashes and retains `takosumi.external-destroy-verification@v1`). The token,
+origin, and organization are read only from the allowlisted environment;
+neither input nor result contains credentials, native provider IDs, provider
+installation/handles, or raw response/error text. The verifier is opt-in and
+does not alter the Takos Worker contract or default deployment.
+
 For an explicit HTTP loopback Host, the local Worker module is exercised only
 as a diagnostic. Its synthetic `.invalid` endpoint has no host-runtime route,
 so endpoint absence is recorded as `not-applicable`, lifecycle absence is not
