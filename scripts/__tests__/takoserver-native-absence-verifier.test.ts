@@ -163,6 +163,7 @@ describe("Takoserver native absence verifier", () => {
     expect(() => parseVerifierArgs([], environment)).toThrow(/input-file/u);
     expect(() => parseVerifierArgs(["--token", token], environment)).toThrow(/unknown/u);
     expect(() => parseVerifierArgs(["--host", host], environment)).toThrow(/unknown/u);
+    expect(() => parseVerifierArgs(["--input-file=input.json"], environment)).toThrow(/unknown/u);
     expect(() => parseVerifierArgs(["--input-file", "input.json", "other.json"], environment)).toThrow(/unknown/u);
     expect(() => parseVerifierArgs(["--input-file", "input.json"], { ...environment, [TAKOSERVER_EVIDENCE_API_TOKEN_ENV]: "" })).toThrow(/environment/u);
   });

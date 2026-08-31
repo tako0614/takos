@@ -1047,20 +1047,16 @@ export function parseVerifierArgs(
   environment: NodeJS.ProcessEnv = process.env,
 ): NativeAbsenceVerifierConfig {
   let inputFile: string | undefined;
-  const expanded: string[] = [];
-  for (const arg of argv) {
-    if (arg.startsWith("--") && arg.includes("=")) {
-      const index = arg.indexOf("=");
-      expanded.push(arg.slice(0, index), arg.slice(index + 1));
-    } else expanded.push(arg);
-  }
   const read = (index: number, flag: string): [string, number] => {
-    const next = expanded[index + 1];
+    const next = argv[index + 1];
     if (!next || next.startsWith("--")) throw new NativeAbsenceVerifierError(`${flag} requires a value`);
     return [next, index + 1];
   };
-  for (let index = 0; index < expanded.length; index += 1) {
-    const arg = expanded[index];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg.includes("=")) {
+      throw new NativeAbsenceVerifierError("unknown option");
+    }
     if (arg === "--help" || arg === "-h") {
       throw new NativeAbsenceVerifierError(usage());
     } else if (arg === "--input-file") {
