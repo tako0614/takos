@@ -6,8 +6,8 @@ export interface AgentExecutorDispatchPayload {
   leaseVersion?: number;
   executorTier?: 1 | 2 | 3;
   executorContainerId?: string;
-  /** Current Worker supports durable lease-fenced checkpoint + fatal fences. */
-  checkpointProtocolVersion?: 1 | 2;
+  /** v3 binds checkpoints and terminal commits to exact Run authority. */
+  checkpointProtocolVersion?: 1 | 2 | 3;
   /**
    * Public control-plane URL the executor calls for token-scoped run I/O.
    *
@@ -82,7 +82,7 @@ export async function dispatchAgentExecutorStart(
     startToken: controlConfig.startToken ?? body.startToken,
     // Capability is minted by the Worker that owns the matching endpoints.
     // Its absence lets a new image remain available during Worker rollback.
-    checkpointProtocolVersion: 2,
+    checkpointProtocolVersion: 3,
   };
   const headers = new Headers({ "Content-Type": "application/json" });
   const startToken = (controlConfig.startToken ?? body.startToken)?.trim();

@@ -1,7 +1,7 @@
 import type { Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
-import type { Run } from "../types/index.ts";
+import type { Run, ThreadHistoryRunSummary } from "../types/index.ts";
 import { parseTimelineEventId } from "../views/chat/timeline.ts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -10,6 +10,7 @@ import {
   TERMINAL_RUN_STATUSES,
   type WebSocketEventPayload,
 } from "./useWsMessageProcessor.ts";
+import { parseChatRunDetailResponse } from "./chat-run-response.ts";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -74,7 +75,7 @@ export function redirectToSignIn(): void {
  * Grouped together to keep the top-level options interface small.
  */
 export interface ConnectionProcessorDeps {
-  setCurrentRun: Setter<Run | null>;
+  setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
   setIsLoading: Setter<boolean>;
   setStreaming: Setter<
     import("../views/chat/chat-types.ts").ChatStreamingState
@@ -221,7 +222,7 @@ export interface TransportCloseInfo {
  *
  * `logPrefix` is used only for console messages (e.g. "WebSocket" or "SSE").
  */
-export function handleTransportClose(
+export async function handleTransportClose(
   savedRunId: string,
   logPrefix: string,
   deps: {
@@ -233,7 +234,7 @@ export function handleTransportClose(
       (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
     >;
     setIsLoading: Setter<boolean>;
-    setCurrentRun: Setter<Run | null>;
+    setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
     setError: (value: string | null) => void;
     t: (
       key: TranslationKey,
@@ -241,9 +242,11 @@ export function handleTransportClose(
     ) => string;
   },
   closeInfo?: TransportCloseInfo,
-): void {
-  if (!deps.isMountedRef.current) return;
-  if (!savedRunId || deps.currentRunIdRef.current !== savedRunId) return;
+): Promise<void> {
+  const isCurrentRun = () =>
+    deps.isMountedRef.current && !!savedRunId &&
+    deps.currentRunIdRef.current === savedRunId;
+  if (!isCurrentRun()) return;
 
   // Auth-expired close: stop reconnecting and bounce to sign-in. The server
   // has already torn down the session; further reconnects will just spin.
@@ -259,6 +262,7 @@ export function handleTransportClose(
   }
 
   const attemptReconnect = () => {
+    if (!isCurrentRun()) return;
     deps.reconnectAttemptsRef.current++;
     if (
       deps.reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS &&
@@ -284,42 +288,44 @@ export function handleTransportClose(
     }
   };
 
-  (async () => {
-    try {
-      const res = await rpcPath(rpc, "runs", ":id").$get({
-        param: { id: savedRunId },
-      });
-      // 401 on the status check is also an auth signal — treat the same.
-      if (res.status === 401) {
-        console.warn(
-          `${logPrefix} run-status check returned 401; redirecting to sign-in.`,
-        );
-        if (!deps.isMountedRef.current) return;
-        deps.setIsLoading(false);
-        deps.setCurrentRun(null);
-        deps.setError(deps.t("networkError"));
-        redirectToSignIn();
-        return;
-      }
-      const data = await rpcJson<{ run: Run }>(res);
-      const status = data.run?.status;
-
-      if (status && TERMINAL_RUN_STATUSES.has(status)) {
-        deps.handleRunCompletedRef.current(
-          data.run,
-          data.run?.session_id ?? undefined,
-        );
-      } else if (status && ACTIVE_RUN_STATUSES.has(status)) {
-        attemptReconnect();
-      }
-    } catch (statusErr) {
-      console.error(
-        `Failed to check run status after ${logPrefix} close:`,
-        statusErr,
+  try {
+    const res = await rpcPath(rpc, "runs", ":id").$get({
+      param: { id: savedRunId },
+    });
+    if (!isCurrentRun()) return;
+    // 401 on the status check is also an auth signal — treat the same.
+    if (res.status === 401) {
+      console.warn(
+        `${logPrefix} run-status check returned 401; redirecting to sign-in.`,
       );
+      if (!deps.isMountedRef.current) return;
+      deps.setIsLoading(false);
+      deps.setCurrentRun(null);
+      deps.setError(deps.t("networkError"));
+      redirectToSignIn();
+      return;
+    }
+    const run = parseChatRunDetailResponse(await rpcJson<unknown>(res), {
+      runId: savedRunId,
+    });
+    if (!isCurrentRun()) return;
+    const status = run.status;
+
+    if (TERMINAL_RUN_STATUSES.has(status)) {
+      void deps.handleRunCompletedRef.current(
+        run,
+        run.session_id ?? undefined,
+      );
+    } else if (ACTIVE_RUN_STATUSES.has(status)) {
       attemptReconnect();
     }
-  })();
+  } catch (statusErr) {
+    console.error(
+      `Failed to check run status after ${logPrefix} close:`,
+      statusErr,
+    );
+    if (isCurrentRun()) attemptReconnect();
+  }
 }
 
 /**
@@ -546,7 +552,7 @@ export function useConnectionManagerBase(
     };
 
     const onClose = (closeInfo?: TransportCloseInfo) => {
-      handleTransportClose(
+      void handleTransportClose(
         currentRunIdRef.current || "",
         "Transport",
         {

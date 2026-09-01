@@ -2,25 +2,17 @@ import { createEffect, createSignal, type JSX, onCleanup } from "solid-js";
 import { For, Show } from "solid-js";
 import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
 import { useI18n } from "../../store/i18n.ts";
-import { rpc, rpcJson, rpcPath } from "../../lib/rpc.ts";
+import { apiJson } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Input } from "../../components/ui/Input.tsx";
 import { Modal } from "../../components/ui/Modal.tsx";
-
-type SpaceSearchResult = {
-  kind: "keyword" | "semantic";
-  score?: number;
-  thread: {
-    id: string;
-    title: string | null;
-    status: "active" | "archived" | "deleted";
-    updated_at: string;
-    created_at: string;
-  };
-  message: { id: string; sequence: number; role: string; created_at: string };
-  snippet: string;
-  match?: { start: number; end: number } | null;
-};
+import {
+  CHAT_SEARCH_QUERY_MAX_LENGTH,
+  CHAT_SEARCH_RESULT_LIMIT,
+  type ChatSearchResult,
+  type ChatSearchType,
+  parseChatSearchResponse,
+} from "./chat-search-response.ts";
 
 function renderSnippet(
   snippet: string,
@@ -47,29 +39,47 @@ function SearchResultsBody(props: {
   loading: boolean;
   error: string | null;
   query: string;
-  results: SpaceSearchResult[];
+  searchType: ChatSearchType;
+  semanticAvailable: boolean | null;
+  results: ChatSearchResult[];
   onSelectResult: (
     threadId: string,
     messageId: string,
     sequence: number,
-  ) => void;
+  ) => Promise<boolean>;
   onClose: () => void;
+  onRetry: () => void;
 }) {
   const { t } = useI18n();
+  const [selecting, setSelecting] = createSignal<string | null>(null);
   return (
     <Show
       when={!props.loading}
       fallback={
-        <div class="flex items-center justify-center py-10 text-zinc-500 dark:text-zinc-400">
+        <div
+          class="flex items-center justify-center py-10 text-zinc-500 dark:text-zinc-400"
+          role="status"
+        >
           <Icons.Loader class="w-6 h-6 animate-spin" />
+          <span class="sr-only">{t("loading")}</span>
         </div>
       }
     >
       <Show
         when={!props.error}
         fallback={
-          <div class="py-4 text-sm text-red-600 dark:text-red-400">
-            {props.error}
+          <div
+            class="space-y-3 py-4 text-sm text-red-600 dark:text-red-400"
+            role="alert"
+          >
+            <p>{props.error}</p>
+            <button
+              type="button"
+              class="rounded-lg border border-red-300 px-3 py-2 font-medium hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
+              onClick={props.onRetry}
+            >
+              {t("tryAgain")}
+            </button>
           </div>
         }
       >
@@ -84,9 +94,24 @@ function SearchResultsBody(props: {
           <Show
             when={props.results.length > 0}
             fallback={
-              <div class="py-10 text-center text-sm text-zinc-600 dark:text-zinc-400">
-                {t("noResults")}
-              </div>
+              <Show
+                when={
+                  props.searchType === "semantic" &&
+                  props.semanticAvailable === false
+                }
+                fallback={
+                  <div class="py-10 text-center text-sm text-zinc-600 dark:text-zinc-400">
+                    {t("noResults")}
+                  </div>
+                }
+              >
+                <div
+                  class="py-10 text-center text-sm text-zinc-600 dark:text-zinc-400"
+                  role="status"
+                >
+                  {t("semanticSearchUnavailable")}
+                </div>
+              </Show>
             }
           >
             <div class="space-y-2">
@@ -95,13 +120,27 @@ function SearchResultsBody(props: {
                   <button
                     type="button"
                     class="w-full text-left p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-700/50 transition-colors"
-                    onClick={() => {
-                      props.onSelectResult(
-                        r.thread.id,
-                        r.message.id,
-                        r.message.sequence,
-                      );
-                      props.onClose();
+                    disabled={selecting() !== null}
+                    aria-busy={
+                      selecting() === `${r.thread.id}:${r.message.id}`
+                    }
+                    onClick={async () => {
+                      if (selecting()) return;
+                      const key = `${r.thread.id}:${r.message.id}`;
+                      setSelecting(key);
+                      try {
+                        if (
+                          await props.onSelectResult(
+                            r.thread.id,
+                            r.message.id,
+                            r.message.sequence,
+                          )
+                        ) {
+                          props.onClose();
+                        }
+                      } finally {
+                        setSelecting(null);
+                      }
                     }}
                   >
                     <div class="flex items-center gap-2">
@@ -137,7 +176,7 @@ interface ChatSearchModalProps {
     threadId: string,
     messageId: string,
     sequence: number,
-  ) => void;
+  ) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -145,53 +184,73 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
   const { t } = useI18n();
   const breakpoint = useBreakpoint();
   const [query, setQuery] = createSignal("");
-  const [searchType, setSearchType] = createSignal<
-    "all" | "keyword" | "semantic"
-  >("all");
-  const [debouncedQuery, setDebouncedQuery] = createSignal("");
-  createEffect(() => {
-    const q = query();
-    const timer = setTimeout(() => setDebouncedQuery(q), 250);
-    onCleanup(() => clearTimeout(timer));
-  });
+  const [searchType, setSearchType] = createSignal<ChatSearchType>("all");
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [results, setResults] = createSignal<SpaceSearchResult[]>([]);
+  const [results, setResults] = createSignal<ChatSearchResult[]>([]);
+  const [semanticAvailable, setSemanticAvailable] = createSignal<
+    boolean | null
+  >(null);
+  const [retryVersion, setRetryVersion] = createSignal(0);
+  let requestVersion = 0;
 
   createEffect(() => {
-    const q = debouncedQuery().trim();
+    retryVersion();
+    const q = query().trim();
     const type = searchType();
+    const version = ++requestVersion;
     if (!q) {
       setResults([]);
       setError(null);
       setLoading(false);
+      setSemanticAvailable(null);
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    rpcPath(rpc, "spaces", ":spaceId", "threads", "search").$get({
-      param: { spaceId: props.spaceId },
-      query: { q, type, limit: "20", offset: "0" },
-    })
-      .then(async (res) => {
-        if (cancelled) return;
-        const data = await rpcJson<{ results: SpaceSearchResult[] }>(res);
-        setResults(data.results || []);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : t("searchFailed"));
-        setResults([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
+    setResults([]);
+    setSemanticAvailable(null);
+    const timer = globalThis.setTimeout(() => {
+      const params = new URLSearchParams({
+        q,
+        type,
+        limit: String(CHAT_SEARCH_RESULT_LIMIT),
+        offset: "0",
       });
+      void apiJson<unknown>(
+        `/api/spaces/${encodeURIComponent(props.spaceId)}/threads/search?${
+          params.toString()
+        }`,
+        { init: { credentials: "include", signal: controller.signal } },
+      )
+        .then((value) => parseChatSearchResponse(value, { query: q, type }))
+        .then((data) => {
+          if (version !== requestVersion) return;
+          setResults(data.results);
+          setSemanticAvailable(data.semanticAvailable);
+        })
+        .catch((err: unknown) => {
+          if (version !== requestVersion) return;
+          setError(
+            err instanceof TypeError
+              ? t("searchFailed")
+              : err instanceof Error
+              ? err.message
+              : t("searchFailed"),
+          );
+          setResults([]);
+        })
+        .finally(() => {
+          if (version === requestVersion) setLoading(false);
+        });
+    }, 250);
 
     onCleanup(() => {
-      cancelled = true;
+      globalThis.clearTimeout(timer);
+      if (version === requestVersion) requestVersion += 1;
+      controller.abort();
     });
   });
 
@@ -202,6 +261,9 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
           <div class="flex-1">
             <Input
               autofocus={!breakpoint.isMobile}
+              name="chat-search-query"
+              aria-label={t("searchThreadsAndMessages")}
+              maxLength={CHAT_SEARCH_QUERY_MAX_LENGTH}
               value={query()}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 setQuery(e.currentTarget.value)}
@@ -222,6 +284,7 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
             />
           </div>
           <select
+            name="chat-search-type"
             value={searchType()}
             onInput={(e) => {
               const v = e.currentTarget.value;
@@ -241,9 +304,12 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
             loading={loading()}
             error={error()}
             query={query()}
+            searchType={searchType()}
+            semanticAvailable={semanticAvailable()}
             results={results()}
             onSelectResult={props.onSelectResult}
             onClose={props.onClose}
+            onRetry={() => setRetryVersion((current) => current + 1)}
           />
         </div>
       </div>

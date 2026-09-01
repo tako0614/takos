@@ -8,6 +8,7 @@ import * as schema from "../../../infra/db/schema.ts";
 import type { Database } from "../../../infra/db/client.ts";
 import type { Env, User } from "../../../shared/types/index.ts";
 import {
+  NOTIFICATION_CHANNELS,
   PUSH_SUPPORTED_NOTIFICATION_TYPES,
   type NotificationPreferenceMatrix,
 } from "../../../application/services/notifications/notification-models.ts";
@@ -80,10 +81,13 @@ test("GET notification preferences exposes the stable Takos push capability", as
   );
   expect(response.status).toBe(200);
   const body = (await response.json()) as {
+    channels: readonly string[];
     push_supported_types: readonly string[];
     preferences: NotificationPreferenceMatrix;
   };
   expect(body.push_supported_types).toEqual(PUSH_SUPPORTED_NOTIFICATION_TYPES);
+  expect(body.channels).toEqual(NOTIFICATION_CHANNELS);
+  expect(body.channels).toEqual(["in_app", "push"]);
   expect(body.preferences["run.completed"].push).toBe(true);
   expect(body.preferences["run.failed"].push).toBe(true);
   expect(body.preferences["workspace.invite"].push).toBe(false);

@@ -108,9 +108,6 @@
       "takosumi-contract/internal/provider-adapter": [
         "../takosumi/contract/provider-adapter.ts"
       ],
-      "takosumi-contract/internal-crypto": [
-        "../takosumi/contract/internal-crypto.ts"
-      ],
       "takosumi-contract/workspaces": [
         "../takosumi/contract/workspaces.ts"
       ],
@@ -180,14 +177,29 @@
       "@takosjp/takosumi-accounts-contract": [
         "../takosumi/accounts/contract/src/mod.ts"
       ],
-      "@takosjp/takosumi-accounts-service": [
-        "../takosumi/accounts/service/src/mod.ts"
-      ],
       "takos-api-contract": [
         "./src/contracts/public/index.ts"
       ],
       "takos-api-contract/rpc-types": [
         "./src/contracts/public/rpc-types.ts"
+      ],
+      "takos-api-contract/chat-message": [
+        "./src/contracts/public/chat-message.ts"
+      ],
+      "takos-api-contract/chat-thread": [
+        "./src/contracts/public/chat-thread.ts"
+      ],
+      "takos-api-contract/chat-history": [
+        "./src/contracts/public/chat-history.ts"
+      ],
+      "takos-api-contract/thread-share": [
+        "./src/contracts/public/thread-share.ts"
+      ],
+      "takos-api-contract/thread-export": [
+        "./src/contracts/public/thread-export.ts"
+      ],
+      "takos-api-contract/mcp-connections": [
+        "./src/contracts/public/mcp-connections.ts"
       ],
       "takos-api-contract/shared/types": [
         "./src/contracts/public/shared/types/index.ts"

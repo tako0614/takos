@@ -6,11 +6,20 @@ import type {
   ReminderTriggerType,
 } from "../../../shared/types/index.ts";
 import {
+  MAX_MEMORY_CATEGORY_CHARACTERS,
+  MAX_MEMORY_CONTENT_CHARACTERS,
+  MAX_MEMORY_SEARCH_QUERY_CHARACTERS,
+  MAX_REMINDER_CONTENT_CHARACTERS,
+  MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
+} from "../../../shared/types/index.ts";
+import {
   bumpMemoryAccess,
   createMemory,
   createReminder,
+  explicitMemoryResourceReference,
   searchMemories,
 } from "../../services/memory/memories.ts";
+import { appendRunContextResourceReferences } from "../../services/runs/run-authority.ts";
 
 export const REMEMBER: ToolDefinition = {
   name: "remember",
@@ -27,6 +36,8 @@ export const REMEMBER: ToolDefinition = {
       content: {
         type: "string",
         description: "The information to remember",
+        minLength: 1,
+        maxLength: MAX_MEMORY_CONTENT_CHARACTERS,
       },
       type: {
         type: "string",
@@ -37,14 +48,18 @@ export const REMEMBER: ToolDefinition = {
       importance: {
         type: "number",
         description: "Importance score from 0 to 1 (optional, default: 0.5)",
+        minimum: 0,
+        maximum: 1,
       },
       category: {
         type: "string",
         description:
           'Category for organization (optional, e.g., "project", "user", "workflow")',
+        maxLength: MAX_MEMORY_CATEGORY_CHARACTERS,
       },
     },
     required: ["content", "type"],
+    additionalProperties: false,
   },
 };
 
@@ -63,6 +78,8 @@ export const RECALL: ToolDefinition = {
       query: {
         type: "string",
         description: "Search query to find relevant memories",
+        minLength: 1,
+        maxLength: MAX_MEMORY_SEARCH_QUERY_CHARACTERS,
       },
       type: {
         type: "string",
@@ -70,11 +87,14 @@ export const RECALL: ToolDefinition = {
         enum: ["episode", "semantic", "procedural"],
       },
       limit: {
-        type: "number",
+        type: "integer",
         description: "Maximum number of results (optional, default: 10)",
+        minimum: 1,
+        maximum: 50,
       },
     },
     required: ["query"],
+    additionalProperties: false,
   },
 };
 
@@ -93,6 +113,8 @@ export const SET_REMINDER: ToolDefinition = {
       content: {
         type: "string",
         description: "What to remind about",
+        minLength: 1,
+        maxLength: MAX_REMINDER_CONTENT_CHARACTERS,
       },
       trigger_type: {
         type: "string",
@@ -104,6 +126,8 @@ export const SET_REMINDER: ToolDefinition = {
         type: "string",
         description:
           "Trigger details - ISO timestamp for time, condition description, or context keywords",
+        minLength: 1,
+        maxLength: MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
       },
       priority: {
         type: "string",
@@ -112,29 +136,58 @@ export const SET_REMINDER: ToolDefinition = {
       },
     },
     required: ["content", "trigger_type", "trigger_value"],
+    additionalProperties: false,
   },
 };
 
-const MAX_MEMORY_CONTENT_SIZE = 100_000; // 100KB max per memory entry
-const MAX_MEMORY_CATEGORY_SIZE = 1000; // 1000 chars max for category
+function requiredBoundedString(
+  value: unknown,
+  label: string,
+  maxCharacters: number,
+): string {
+  if (
+    typeof value !== "string" || !value.trim() ||
+    value.length > maxCharacters
+  ) {
+    throw new Error(
+      `${label} must be non-empty and at most ${maxCharacters} characters`,
+    );
+  }
+  return value;
+}
+
+function optionalBoundedString(
+  value: unknown,
+  label: string,
+  maxCharacters: number,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.length > maxCharacters) {
+    throw new Error(`${label} must be at most ${maxCharacters} characters`);
+  }
+  return value;
+}
 
 export const rememberHandler: ToolHandler = async (args, context) => {
-  const content = args.content as string;
+  const content = requiredBoundedString(
+    args.content,
+    "Memory content",
+    MAX_MEMORY_CONTENT_CHARACTERS,
+  );
+  if (!(["episode", "semantic", "procedural"] as unknown[]).includes(args.type)) {
+    throw new Error("Invalid Memory type");
+  }
   const type = args.type as MemoryType;
-  const importance = (args.importance as number) || 0.5;
-  const category = args.category as string | undefined;
-
-  if (content.length > MAX_MEMORY_CONTENT_SIZE) {
-    throw new Error(
-      `Memory content too large: ${content.length} chars (max: ${MAX_MEMORY_CONTENT_SIZE})`,
-    );
-  }
-
-  if (category && category.length > MAX_MEMORY_CATEGORY_SIZE) {
-    throw new Error(
-      `Memory category too long: ${category.length} chars (max: ${MAX_MEMORY_CATEGORY_SIZE})`,
-    );
-  }
+  const importance = args.importance === undefined ? 0.5 : args.importance;
+  if (
+    typeof importance !== "number" || !Number.isFinite(importance) ||
+    importance < 0 || importance > 1
+  ) throw new Error("Memory importance must be between 0 and 1");
+  const category = optionalBoundedString(
+    args.category,
+    "Memory category",
+    MAX_MEMORY_CATEGORY_CHARACTERS,
+  );
 
   await createMemory(context.db, {
     spaceId: context.spaceId,
@@ -153,9 +206,23 @@ export const rememberHandler: ToolHandler = async (args, context) => {
 };
 
 export const recallHandler: ToolHandler = async (args, context) => {
-  const query = args.query as string;
+  const query = requiredBoundedString(
+    args.query,
+    "Memory search query",
+    MAX_MEMORY_SEARCH_QUERY_CHARACTERS,
+  );
+  if (
+    args.type !== undefined &&
+    !(["episode", "semantic", "procedural"] as unknown[]).includes(args.type)
+  ) throw new Error("Invalid Memory type");
   const type = args.type as MemoryType | undefined;
-  const limit = Math.min((args.limit as number) || 10, 50);
+  const requestedLimit = args.limit ?? 10;
+  if (
+    typeof requestedLimit !== "number" ||
+    !Number.isSafeInteger(requestedLimit) || requestedLimit < 1 ||
+    requestedLimit > 50
+  ) throw new Error("Memory search limit must be an integer from 1 to 50");
+  const limit = requestedLimit;
 
   const memoryResults = await searchMemories(
     context.db,
@@ -168,6 +235,20 @@ export const recallHandler: ToolHandler = async (args, context) => {
   if (memoryResults.length === 0) {
     return `No memories found for: "${query}"`;
   }
+
+  if (!context.runAuthority || !context.toolCallId) {
+    throw new Error("Memory recall requires exact RunContext authority");
+  }
+  const references = await Promise.all(
+    memoryResults.map(explicitMemoryResourceReference),
+  );
+  await appendRunContextResourceReferences({
+    db: context.db,
+    runId: context.runId,
+    expectedAttestation: context.runAuthority.attestation,
+    activationEventId: `tool_call:${context.toolCallId}`,
+    references,
+  });
 
   await bumpMemoryAccess(
     context.db,
@@ -187,10 +268,31 @@ export const recallHandler: ToolHandler = async (args, context) => {
 };
 
 export const setReminderHandler: ToolHandler = async (args, context) => {
-  const content = args.content as string;
+  const content = requiredBoundedString(
+    args.content,
+    "Reminder content",
+    MAX_REMINDER_CONTENT_CHARACTERS,
+  );
+  if (
+    !(["time", "condition", "context"] as unknown[]).includes(
+      args.trigger_type,
+    )
+  ) throw new Error("Invalid Reminder trigger type");
   const triggerType = args.trigger_type as ReminderTriggerType;
-  const triggerValue = args.trigger_value as string;
-  const priority = (args.priority as ReminderPriority) || "normal";
+  const triggerValue = requiredBoundedString(
+    args.trigger_value,
+    "Reminder trigger value",
+    MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
+  );
+  const requestedPriority = args.priority ?? "normal";
+  if (
+    !(["low", "normal", "high", "critical"] as unknown[]).includes(
+      requestedPriority,
+    )
+  ) {
+    throw new Error("Invalid Reminder priority");
+  }
+  const priority = requestedPriority as ReminderPriority;
 
   if (triggerType === "time") {
     const triggerDate = new Date(triggerValue);

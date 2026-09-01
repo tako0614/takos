@@ -15,8 +15,10 @@ import { useAuth } from "../../hooks/useAuth.tsx";
 import { buildStorageNavigationState } from "../../views/storage/storage-page-state.ts";
 import { useModals } from "../../store/modal.tsx";
 import { useNavigation } from "../../store/navigation.ts";
+import { useToast } from "../../store/toast.ts";
 import type { View } from "../../types/index.ts";
 import { McpToolConfirmationCenter } from "./McpToolConfirmationCenter.tsx";
+import { getErrorMessage } from "../../lib/errors.ts";
 
 function getMobileActiveItem(view: View): NavItem | undefined {
   switch (view) {
@@ -24,8 +26,8 @@ function getMobileActiveItem(view: View): NavItem | undefined {
       return "memory";
     case "chat":
       return "chat";
-    // Views without a bottom-nav tab (apps / connections / storage / repos /
-    // store / settings /
+    // Views without a bottom-nav tab (apps / connections / storage / store /
+    // settings /
     // profile / legal …) highlight nothing rather than falsely lighting chat.
     default:
       return undefined;
@@ -38,10 +40,16 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
   const auth = useAuth();
   const modal = useModals();
   const navigation = useNavigation();
+  const { showToast } = useToast();
 
   const handleLogout = async () => {
-    await auth.handleLogout();
-    navigation.replace({ view: "home" });
+    try {
+      await auth.handleLogout();
+      navigation.replace({ view: "home" });
+    } catch (error) {
+      showToast("error", getErrorMessage(error, t("failedToLogout")));
+      throw error;
+    }
   };
 
   const handleMobileNavigate = (item: NavItem) => {
@@ -90,15 +98,19 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
       navigation.runSidebarAction(() => {
         navigation.navigate({ view: "memory" });
       }),
+    onNavigateNotifications: () =>
+      navigation.runSidebarAction(() => {
+        navigation.navigate({ view: "notifications" });
+      }),
     onNavigateStore: () =>
       navigation.runSidebarAction(() => {
-        navigation.navigate({ view: "store", storeTab: "discover" });
-      }),
-    onNavigateRepos: () =>
-      navigation.runSidebarAction(() => {
         navigation.navigate({
-          view: "repos",
-          spaceId: navigation.selectedSpaceId ?? undefined,
+          view: "store",
+          storeTab: "discover",
+          spaceId:
+            navigation.selectedSpaceId ??
+            navigation.preferredSpaceId ??
+            undefined,
         });
       }),
     onOpenSearch: () =>
@@ -115,6 +127,8 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
       }),
     onDeleteThread: navigation.handleDeleteThread,
     onToggleArchiveThread: navigation.toggleArchiveThread,
+    isThreadActionPending: navigation.isThreadActionPending,
+    onRetryThreads: () => void navigation.retryThreadInventory(),
     onOpenAgentModal: () =>
       navigation.runSidebarAction(() => {
         modal.setShowAgentModal(true);
@@ -127,7 +141,7 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
       navigation.runSidebarAction(() =>
         navigation.navigate({ view: "settings" }),
       ),
-    onLogout: () => navigation.runSidebarAction(handleLogout),
+    onLogout: handleLogout,
     onEnterSpace: (ws) =>
       navigation.runSidebarAction(() => {
         navigation.handleEnterSpace(ws);
@@ -156,14 +170,6 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
             "/",
           ),
         );
-      }),
-    onNavigateSpaceRepos: () =>
-      navigation.runSidebarAction(() => {
-        if (!navigation.sidebarSpace) return;
-        navigation.navigate({
-          view: "repos",
-          spaceId: getSpaceIdentifier(navigation.sidebarSpace),
-        });
       }),
     onNavigateSpaceApps: () =>
       navigation.runSidebarAction(() => {
@@ -201,6 +207,11 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
         spaces={auth.spaces}
         threads={navigation.allThreads}
         threadsBySpace={navigation.threadsBySpace}
+        threadInventoryTruncatedBySpace={
+          navigation.threadInventoryTruncatedBySpace
+        }
+        threadInventoryFailedBySpace={navigation.threadInventoryFailedBySpace}
+        threadInventoryLoading={navigation.threadInventoryLoading}
         selectedThreadId={navigation.route.threadId ?? null}
         user={auth.user}
         sidebarSpace={navigation.sidebarSpace}

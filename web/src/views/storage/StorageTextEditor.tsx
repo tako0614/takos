@@ -9,6 +9,7 @@ import {
 import { useI18n } from "../../store/i18n.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { useToast } from "../../store/toast.ts";
+import { useTheme } from "../../store/theme.ts";
 import { useFileContent } from "../../hooks/useFileContent.ts";
 import { detectLanguage } from "../../lib/languageMap.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -35,6 +36,7 @@ export function StorageTextEditor(props: {
 }) {
   const { t } = useI18n();
   const { confirm } = useConfirmDialog();
+  const theme = useTheme();
 
   const handleClose = async () => {
     if (isDirty()) {
@@ -57,9 +59,13 @@ export function StorageTextEditor(props: {
     saving,
     loadContent,
     saveContent,
-  } = useFileContent(() => props.spaceId);
+  } = useFileContent(
+    () => props.spaceId,
+    () => props.file.space_id,
+  );
   const [editedContent, setEditedContent] = createSignal<string | null>(null);
   const [isDirty, setIsDirty] = createSignal(false);
+  let restoreEditorFocus = false;
   createEffect(() => {
     loadContent(props.file.id);
   });
@@ -101,23 +107,19 @@ export function StorageTextEditor(props: {
   });
 
   const language = () => detectLanguage(props.file.name);
-  const prefersDark = typeof globalThis !== "undefined" &&
-    globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches;
 
   const extraButtons = () =>
-    isDirty()
-      ? (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleSave}
-          isLoading={saving()}
-          leftIcon={<Icons.Save class="w-4 h-4" />}
-        >
-          {t("save")}
-        </Button>
-      )
-      : undefined;
+    isDirty() ? (
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={handleSave}
+        isLoading={saving()}
+        leftIcon={<Icons.Save class="w-4 h-4" />}
+      >
+        {t("save")}
+      </Button>
+    ) : undefined;
 
   return (
     <StorageViewerShell
@@ -173,17 +175,41 @@ export function StorageTextEditor(props: {
           >
             <Suspense
               fallback={
-                <div class="flex items-center justify-center h-full">
-                  <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" />
-                </div>
+                <textarea
+                  name="storage-file-editor"
+                  aria-label={t("textEditor")}
+                  value={editedContent() ?? ""}
+                  onInput={(event) =>
+                    handleEditorChange(event.currentTarget.value)
+                  }
+                  onFocus={() => {
+                    restoreEditorFocus = true;
+                  }}
+                  onBlur={(event) => {
+                    const fallbackEditor = event.currentTarget;
+                    globalThis.queueMicrotask(() => {
+                      if (fallbackEditor.isConnected) {
+                        restoreEditorFocus = false;
+                      }
+                    });
+                  }}
+                  spellcheck={false}
+                  class="h-full w-full resize-none bg-white p-4 font-mono text-[13px] leading-5 text-zinc-900 outline-none dark:bg-zinc-950 dark:text-zinc-100"
+                />
               }
             >
               <MonacoEditor
                 height="100%"
                 language={language()}
-                theme={prefersDark ? "vs-dark" : "vs"}
+                theme={
+                  theme.resolvedTheme === "dark" ? "takos-vs-dark" : "takos-vs"
+                }
                 value={editedContent() ?? ""}
                 onChange={handleEditorChange}
+                inputName="storage-file-editor-monaco"
+                onMount={(editor) => {
+                  if (restoreEditorFocus) editor.focus();
+                }}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,
@@ -192,6 +218,7 @@ export function StorageTextEditor(props: {
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   tabSize: 2,
+                  ariaLabel: t("textEditor"),
                 }}
               />
             </Suspense>

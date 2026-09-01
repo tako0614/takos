@@ -5,12 +5,13 @@ import {
   validateReviewWindow,
   validateWaiverScope,
   validateVulnerableToolOccurrences,
+  retainLogicalToolOccurrences,
 } from "../validate-dependency-security.ts";
 
 const evidence = {
   kind: "takos.dependency-audit-waivers@v1" as const,
-  reviewedAt: "2026-07-22",
-  reviewAfter: "2026-08-05",
+  reviewedAt: "2026-08-09",
+  reviewAfter: "2026-08-23",
   scope: {
     owner: "vitepress" as const,
     ownerVersion: "1.6.4",
@@ -62,7 +63,7 @@ const audit = {
 describe("dependency security gate", () => {
   test("accepts only the exact reviewed dev-only advisory", () => {
     expect(validateAuditFindings(audit, evidence)).toEqual([]);
-    expect(validateReviewWindow(evidence, "2026-07-22")).toEqual([]);
+    expect(validateReviewWindow(evidence, "2026-08-09")).toEqual([]);
     expect(
       validateVulnerableToolOccurrences(
         evidence.scope.vulnerableOccurrences,
@@ -84,6 +85,19 @@ describe("dependency security gate", () => {
     ).toEqual([]);
   });
 
+  test("ignores Bun's physical package store without hiding logical paths", () => {
+    expect(
+      retainLogicalToolOccurrences([
+        ...evidence.scope.vulnerableOccurrences,
+        {
+          package: "vite",
+          version: "5.4.21",
+          path: "node_modules/.bun/node_modules/vitepress/node_modules/vite/package.json",
+        },
+      ]),
+    ).toEqual(evidence.scope.vulnerableOccurrences);
+  });
+
   test("rejects a new advisory and a changed dependency path", () => {
     const changedAudit = {
       ...audit,
@@ -100,8 +114,8 @@ describe("dependency security gate", () => {
     expect(
       validateAuditFindings(changedAudit, evidence).length,
     ).toBeGreaterThan(0);
-    expect(validateReviewWindow(evidence, "2026-08-06")).toEqual([
-      "the dependency waiver review window expired on 2026-08-05",
+    expect(validateReviewWindow(evidence, "2026-08-24")).toEqual([
+      "the dependency waiver review window expired on 2026-08-23",
     ]);
     expect(
       validateVulnerableToolOccurrences(

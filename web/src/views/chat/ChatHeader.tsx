@@ -6,6 +6,8 @@ interface ChatHeaderProps {
   selectedModel: string;
   models?: readonly ModelSelectOption[];
   isLoading: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onModelChange?: (model: string) => void;
   actions?: JSX.Element;
 }
@@ -17,6 +19,8 @@ export function ChatHeader(props: ChatHeaderProps) {
         selectedModel={props.selectedModel}
         models={props.models}
         isLoading={props.isLoading}
+        hasError={props.hasError}
+        onRetry={props.onRetry}
         onModelChange={props.onModelChange}
       />
       <div class="ml-auto flex items-center gap-2">{props.actions}</div>

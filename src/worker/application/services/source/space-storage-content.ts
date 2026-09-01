@@ -5,13 +5,16 @@ import type {
 import { accountStorageFiles } from "../../../infra/db/index.ts";
 import {
   buildR2Key,
+  FILE_URL_EXPIRY_SECONDS,
   getStorageDb,
   MAX_CONTENT_SIZE,
   MAX_FILE_SIZE,
+  normalizeStorageMimeType,
   StorageError,
   type StorageFileResponse,
   toApiResponse,
 } from "./space-storage-shared.ts";
+import { and, eq } from "drizzle-orm";
 import { resolveStorageFileCreationPath } from "./space-storage-paths.ts";
 import {
   findStorageRowById,
@@ -76,6 +79,8 @@ export async function confirmUpload(
   return await updateStoredFileMetadata(d1, spaceId, fileId, {
     size: head.size,
     ...(sha256 ? { sha256 } : {}),
+    uploadState: "ready",
+    uploadExpiresAt: null,
   });
 }
 
@@ -130,7 +135,8 @@ export async function writeFileContent(
     missingContentMessage: "File has no storage key",
   });
   const encoded = encodeTextContent(content);
-  const resolvedMimeType = mimeType || fileRecord.mimeType || "text/plain";
+  const resolvedMimeType = normalizeStorageMimeType(mimeType) ||
+    normalizeStorageMimeType(fileRecord.mimeType) || "text/plain";
   await r2Bucket.put(fileRecord.r2Key, encoded, {
     httpMetadata: { contentType: resolvedMimeType },
   });
@@ -163,7 +169,8 @@ export async function createFileWithContent(
   const id = crypto.randomUUID();
   const r2Key = buildR2Key(spaceId, id);
   const timestamp = new Date().toISOString();
-  const resolvedMimeType = mimeType || "application/octet-stream";
+  const resolvedMimeType = normalizeStorageMimeType(mimeType) ||
+    "application/octet-stream";
   await r2Bucket.put(r2Key, encoded, {
     httpMetadata: { contentType: resolvedMimeType },
   });
@@ -197,7 +204,6 @@ export async function uploadPendingFileContent(
   spaceId: string,
   fileId: string,
   content: ArrayBuffer,
-  declaredSize: number,
   mimeType?: string,
 ): Promise<StorageFileResponse> {
   const db = getStorageDb(d1);
@@ -205,29 +211,104 @@ export async function uploadPendingFileContent(
     notFoundMessage: "File not found",
     missingContentMessage: "File has no storage key",
   });
-  if (content.byteLength <= 0) {
-    throw new StorageError("Uploaded content is empty", "VALIDATION");
-  }
   if (content.byteLength > MAX_FILE_SIZE) {
     throw new StorageError(
       `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
       "TOO_LARGE",
     );
   }
-  if (declaredSize > 0 && content.byteLength !== declaredSize) {
+  if (content.byteLength !== fileRecord.size) {
     throw new StorageError(
-      `Upload size mismatch: declared ${declaredSize} bytes but received ${content.byteLength} bytes`,
+      `Upload size mismatch: declared ${fileRecord.size} bytes but received ${content.byteLength} bytes`,
       "VALIDATION",
     );
   }
 
-  const resolvedMimeType = mimeType || fileRecord.mimeType ||
-    "application/octet-stream";
-  await r2Bucket.put(fileRecord.r2Key, content, {
-    httpMetadata: { contentType: resolvedMimeType },
-  });
+  const now = new Date();
+  const currentState = fileRecord.uploadState;
+  if (
+    currentState !== "pending" && currentState !== "uploading" &&
+    currentState !== "ready"
+  ) {
+    throw new StorageError("File upload state is invalid", "STORAGE_ERROR");
+  }
+  if (currentState === "uploading") {
+    throw new StorageError("File upload is already in progress", "CONFLICT");
+  }
+
+  let expiresAt = fileRecord.uploadExpiresAt;
+  if (currentState === "ready") {
+    // Compatibility for records created by an older Worker during an
+    // overlapping rollout: those rows default to ready even though the object
+    // has not been uploaded yet. A real ready object is never overwritten by
+    // this one-time upload route.
+    const existingObject = await r2Bucket.head(fileRecord.r2Key);
+    if (existingObject) {
+      throw new StorageError("File upload is already complete", "CONFLICT");
+    }
+    if (
+      fileRecord.uploadExpiresAt !== null ||
+      fileRecord.createdAt !== fileRecord.updatedAt
+    ) {
+      throw new StorageError("File upload is already complete", "CONFLICT");
+    }
+    expiresAt = new Date(
+      Date.parse(fileRecord.createdAt) + FILE_URL_EXPIRY_SECONDS * 1000,
+    ).toISOString();
+  }
+
+  const expiryMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (!Number.isFinite(expiryMs)) {
+    throw new StorageError("File upload expiry is invalid", "STORAGE_ERROR");
+  }
+  if (now.getTime() > expiryMs) {
+    throw new StorageError("File upload URL has expired", "CONFLICT");
+  }
+
+  const normalizedMimeType = normalizeStorageMimeType(mimeType);
+
+  const claimedAt = now.toISOString();
+  const claimed = await db.update(accountStorageFiles).set({
+    uploadState: "uploading",
+    uploadExpiresAt: expiresAt,
+    updatedAt: claimedAt,
+  }).where(and(
+    eq(accountStorageFiles.id, fileId),
+    eq(accountStorageFiles.accountId, spaceId),
+    eq(accountStorageFiles.uploadState, currentState),
+    eq(accountStorageFiles.updatedAt, fileRecord.updatedAt),
+  )).returning({ id: accountStorageFiles.id }).get();
+  if (!claimed) {
+    throw new StorageError("File upload state changed", "CONFLICT");
+  }
+
+  const resolvedMimeType = normalizedMimeType ||
+    normalizeStorageMimeType(fileRecord.mimeType) || "application/octet-stream";
+  try {
+    await r2Bucket.put(fileRecord.r2Key, content, {
+      httpMetadata: { contentType: resolvedMimeType },
+    });
+  } catch (error) {
+    await db.update(accountStorageFiles).set({
+      uploadState: currentState,
+      uploadExpiresAt: fileRecord.uploadExpiresAt,
+      updatedAt: fileRecord.updatedAt,
+    }).where(and(
+      eq(accountStorageFiles.id, fileId),
+      eq(accountStorageFiles.accountId, spaceId),
+      eq(accountStorageFiles.uploadState, "uploading"),
+      eq(accountStorageFiles.updatedAt, claimedAt),
+    )).catch(() => undefined);
+    throw error;
+  }
+
+  // If this database update fails after the object write, keep the row in the
+  // uploading state. confirmUpload or the scheduled reconciler can then prove
+  // the object exists and finish the transition without permitting overwrite.
   return await updateStoredFileMetadata(d1, spaceId, fileId, {
     size: content.byteLength,
     mimeType: resolvedMimeType,
+    uploadState: "ready",
+    uploadExpiresAt: null,
   });
 }

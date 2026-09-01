@@ -1,5 +1,6 @@
 import type { RouteState } from "../../types/index.ts";
 import type { StorageFile } from "../../types/index.ts";
+import { getFileExtension } from "./file-extension.ts";
 import type { FileHandler } from "./storageUtils.tsx";
 
 export function getParentPath(path: string): string {
@@ -54,12 +55,6 @@ export function buildStorageNavigationState(
   };
 }
 
-function getFileHandlerRequestExtension(fileName: string): string {
-  const lastDot = fileName.lastIndexOf(".");
-  if (lastDot === -1 || lastDot === fileName.length - 1) return "";
-  return fileName.slice(lastDot).toLowerCase();
-}
-
 export function buildStorageFileHandlersUrl(
   spaceId: string,
   file?: Pick<StorageFile, "name" | "mime_type"> | null,
@@ -70,7 +65,7 @@ export function buildStorageFileHandlersUrl(
     query.set("mime", mime);
   }
 
-  const ext = file ? getFileHandlerRequestExtension(file.name) : "";
+  const ext = file ? getFileExtension(file.name) : "";
   if (ext) {
     query.set("ext", ext);
   }

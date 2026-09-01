@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import type { Env } from "../../shared/types/index.ts";
 
 import type { BaseVariables } from "./route-auth.ts";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import { getDb } from "../../infra/db/index.ts";
 import { accounts } from "../../infra/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -30,16 +29,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .post("/complete", async (c) => {
     const user = c.get("user");
 
-    if (user.setup_completed) {
-      throw new BadRequestError("Setup already completed");
+    if (!user.setup_completed) {
+      const db = getDb(c.env.DB);
+      const timestamp = new Date().toISOString();
+      await db.update(accounts).set({
+        setupCompleted: true,
+        updatedAt: timestamp,
+      }).where(eq(accounts.id, user.id));
     }
 
-    const db = getDb(c.env.DB);
-    const timestamp = new Date().toISOString();
-    await db.update(accounts).set({
-      setupCompleted: true,
-      updatedAt: timestamp,
-    }).where(eq(accounts.id, user.id));
-
-    return c.json({ success: true });
+    return c.json({ success: true, setup_completed: true });
   });

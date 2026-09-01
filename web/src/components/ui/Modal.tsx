@@ -6,6 +6,10 @@ import {
   splitProps,
 } from "solid-js";
 import type { JSX } from "solid-js";
+import {
+  getFocusableElements,
+  shouldRestoreFocus,
+} from "../../lib/dialog-focus.ts";
 import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
 import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
 import { useI18n } from "../../store/i18n.ts";
@@ -32,40 +36,6 @@ const sizeClasses: Record<ModalSize, string> = {
   xl: "max-w-5xl",
   full: "max-w-full",
 };
-
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])',
-].join(", ");
-
-function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter(
-      (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
-    );
-}
-
-function shouldRestoreFocus(
-  previousFocusedElement: HTMLElement | null,
-  currentContainer: HTMLElement,
-): boolean {
-  if (!previousFocusedElement || !document.contains(previousFocusedElement)) {
-    return false;
-  }
-  const openDialogs = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[role="dialog"][aria-modal="true"]',
-    ),
-  ).filter((dialog) => dialog !== currentContainer);
-  if (openDialogs.length === 0) {
-    return true;
-  }
-  return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
-}
 
 export function Modal(props: ModalProps) {
   const [local] = splitProps(props, [

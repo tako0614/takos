@@ -9,6 +9,7 @@ export {
   accountStats,
   accountStorageFiles,
   authIdentities,
+  workspaceDeletionReceipts,
 } from "./schema-accounts.ts";
 
 // Auth
@@ -47,6 +48,8 @@ export {
 
 // Agents
 export {
+  agentResourceDeletionOutbox,
+  agentResourceTombstones,
   agentTasks,
   artifacts,
   infoUnits,
@@ -54,12 +57,24 @@ export {
   lgWrites,
   memories,
   messages,
+  providerMaterializationRevisions,
   reminders,
+  runContextProviderMaterializationRefs,
+  runContextRevisions,
+  runContextResourceRefs,
+  runContextToolDescriptorRefs,
   runEvents,
+  runGrants,
+  runSkillPlanRevisions,
   runs,
+  skillResourceRevisions,
+  skillRevisions,
   skills,
   threads,
   threadShares,
+  turnProjectionRevisions,
+  turnProjectionVectorRefs,
+  toolDescriptorRevisions,
   toolOperations,
 } from "./schema-agents.ts";
 
@@ -83,34 +98,36 @@ export { mcpRegistrySources } from "./schema-mcp-registry.ts";
 
 // External MCP tool exposure snapshots
 export {
+  mcpConfirmationRunGrants,
+  mcpToolConfirmationIdentities,
   mcpToolConfirmations,
   mcpToolPolicies,
 } from "./schema-mcp-tool-policies.ts";
 
 // Platform
 export {
+  dlqEntries,
+  edges,
   featuredAppCatalogConfig,
   featuredAppCatalogEntries,
   featuredAppPreinstallJobs,
-  dlqEntries,
-  edges,
-  interfaceFileHandlerMatchers,
-  interfaceFileHandlers,
   infraEndpointRoutes,
   infraEndpoints,
   infraWorkers,
-  notificationPushOutbox,
-  notificationPushers,
+  interfaceFileHandlerMatchers,
+  interfaceFileHandlers,
   moderationAuditLogs,
   nodes,
   notificationPreferences,
+  notificationPushers,
+  notificationPushOutbox,
   notifications,
   notificationSettings,
-  runNotificationOutbox,
   repoGrants,
   reports,
   resourceAccess,
   resources,
+  runNotificationOutbox,
   secretRotationEvents,
   secretVersions,
   serviceEndpoints,

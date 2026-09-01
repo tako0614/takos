@@ -17,17 +17,18 @@ export type { AgentTaskRunSummary } from "takos-api-contract/shared/types";
 export type { AgentTaskResumeTarget } from "takos-api-contract/shared/types";
 export type { ThreadHistoryArtifactSummary } from "takos-api-contract/shared/types";
 export type { ThreadHistoryEvent } from "takos-api-contract/shared/types";
+export type { ThreadHistoryTruncation } from "takos-api-contract/shared/types";
 export type { ThreadHistoryChildRunSummary } from "takos-api-contract/shared/types";
 export type { ThreadHistoryRunNode } from "takos-api-contract/shared/types";
+export type { ThreadHistoryRunSummary } from "takos-api-contract/shared/types";
 export type { ThreadHistoryFocus } from "takos-api-contract/shared/types";
 export type { ThreadHistoryTaskContext } from "takos-api-contract/shared/types";
 
 /**
- * Frontend Thread: narrows `title` to non-null string and `status` to exclude
- * the 'deleted' state (deleted threads are never shown in UI).
+ * Frontend Thread: excludes the deleted state. A newly-created attachment-only
+ * Thread can remain untitled until its first message is persisted.
  */
-export interface Thread extends Omit<BackendThread, "title" | "status"> {
-  title: string;
+export interface Thread extends Omit<BackendThread, "status"> {
   status: "active" | "archived";
 }
 
@@ -55,22 +56,4 @@ export interface AgentTask extends AgentTaskBase {
   thread_title?: string | null;
   latest_run?: AgentTaskRunSummary | null;
   resume_target?: AgentTaskResumeTarget | null;
-}
-
-/** Frontend-only: workspace session diff for merge preview. */
-export interface SessionDiff {
-  changes: Array<{
-    path: string;
-    type: "add" | "modify" | "delete";
-    old_entry?: { hash: string; size: number };
-    new_entry?: { hash: string; size: number };
-    diff?: string;
-    content?: string;
-  }>;
-  conflicts: Array<{
-    path: string;
-    type: string;
-  }>;
-  can_merge: boolean;
-  workspace_head: string;
 }

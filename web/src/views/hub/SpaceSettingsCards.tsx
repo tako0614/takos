@@ -1,12 +1,15 @@
-import { createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
-import type { TranslationKey } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { getSpaceIdentifier } from "../../lib/spaces.ts";
 import type { Space } from "../../types/index.ts";
 import { Button } from "../../components/ui/Button.tsx";
 import { Input } from "../../components/ui/Input.tsx";
+import { Textarea } from "../../components/ui/Textarea.tsx";
+import {
+  MAX_SPACE_DESCRIPTION_CHARACTERS,
+  MAX_SPACE_NAME_CHARACTERS,
+} from "takos-api-contract/shared/types";
 import {
   Card,
   CardContent,
@@ -15,33 +18,15 @@ import {
   CardTitle,
 } from "../../components/ui/Card.tsx";
 
-export interface SpaceMember {
-  username: string;
-  email: string | null;
-  name: string | null;
-  picture: string | null;
-  role: "owner" | "admin" | "member";
-  created_at: string;
-}
-
-function getRoleLabel(role: string, t: (key: TranslationKey) => string) {
-  switch (role) {
-    case "owner":
-      return t("roleOwner");
-    case "admin":
-      return t("roleAdmin");
-    case "member":
-      return t("roleMember");
-    default:
-      return role;
-  }
-}
-
 export function SpaceInfoCard(props: {
   selectedSpace: Space;
   spaceName: string;
   setSpaceName: (name: string) => void;
+  spaceDescription: string;
+  setSpaceDescription: (description: string) => void;
   isPersonal: boolean;
+  canEdit: boolean;
+  busy: boolean;
   saving: boolean;
   onSave: () => void;
 }) {
@@ -56,14 +41,20 @@ export function SpaceInfoCard(props: {
       <CardContent>
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label
+              for="workspace-settings-name"
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               {t("spaceName")}
             </label>
             <Input
               value={props.spaceName}
+              id="workspace-settings-name"
               onInput={(e) => props.setSpaceName(e.currentTarget.value)}
               placeholder={t("spaceNamePlaceholder")}
-              disabled={props.isPersonal}
+              name="workspace-name"
+              maxLength={MAX_SPACE_NAME_CHARACTERS}
+              disabled={props.isPersonal || !props.canEdit || props.busy}
             />
             {props.isPersonal && (
               <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -72,9 +63,31 @@ export function SpaceInfoCard(props: {
             )}
           </div>
           <div>
-            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              {tOr("spaceSlug", t("workspaceSlug"))}
+            <label
+              for="workspace-settings-description"
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
+              {t("description")} {" "}
+              <span class="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                ({t("optional")})
+              </span>
             </label>
+            <Textarea
+              value={props.spaceDescription}
+              id="workspace-settings-description"
+              onInput={(event) =>
+                props.setSpaceDescription(event.currentTarget.value)}
+              placeholder={t("categoryDescriptionPlaceholder")}
+              name="workspace-description"
+              maxLength={MAX_SPACE_DESCRIPTION_CHARACTERS}
+              resize="vertical"
+              disabled={!props.canEdit || props.busy}
+            />
+          </div>
+          <div>
+            <div class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              {tOr("spaceSlug", t("workspaceSlug"))}
+            </div>
             <div class="flex items-center gap-2">
               <code class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate">
                 {getSpaceIdentifier(props.selectedSpace)}
@@ -102,15 +115,19 @@ export function SpaceInfoCard(props: {
           </div>
         </div>
       </CardContent>
-      {!props.isPersonal && (
+      {props.canEdit && (
         <CardFooter>
           <Button
             variant="primary"
             size="sm"
             onClick={props.onSave}
             isLoading={props.saving}
-            disabled={!props.spaceName.trim() ||
-              props.spaceName === props.selectedSpace.name}
+            disabled={
+              props.busy || !props.spaceName.trim() ||
+              (props.spaceName.trim() === props.selectedSpace.name &&
+                props.spaceDescription.trim() ===
+                  (props.selectedSpace.description ?? ""))
+            }
           >
             {t("save")}
           </Button>
@@ -120,162 +137,73 @@ export function SpaceInfoCard(props: {
   );
 }
 
-export function MembersCard(props: {
-  members: SpaceMember[];
-  loadingMembers: boolean;
-  membersError?: string | null;
-  onRetryMembers?: () => void;
-  inviteEmail: string;
-  setInviteEmail: (email: string) => void;
-  inviteRole: "admin" | "member";
-  setInviteRole: (role: "admin" | "member") => void;
-  inviting: boolean;
-  onInvite: () => void;
-  onRemove: (member: SpaceMember) => void;
-  onChangeRole: (member: SpaceMember, role: "admin" | "member") => void;
+export function SecurityPostureCard(props: {
+  securityPosture: Space["security_posture"];
+  savedSecurityPosture: Space["security_posture"];
+  setSecurityPosture: (posture: Space["security_posture"]) => void;
+  canEdit: boolean;
+  busy: boolean;
+  saving: boolean;
+  onSave: () => void;
 }) {
   const { t } = useI18n();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("members")}</CardTitle>
+        <CardTitle>{t("workspaceSecurity")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div class="mb-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
-          <h4 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
-            {t("inviteMember")}
-          </h4>
-          <div class="flex gap-2">
-            <Input
-              type="email"
-              placeholder={t("emailPlaceholder")}
-              value={props.inviteEmail}
-              onInput={(e) => props.setInviteEmail(e.currentTarget.value)}
-              class="flex-1"
-            />
-            <select
-              class="px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm"
-              value={props.inviteRole}
-              onChange={(e) =>
-                props.setInviteRole(
-                  e.currentTarget.value as "admin" | "member",
-                )}
-            >
-              <option value="member">{getRoleLabel("member", t)}</option>
-              <option value="admin">{getRoleLabel("admin", t)}</option>
-            </select>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={props.onInvite}
-              isLoading={props.inviting}
-              disabled={!props.inviteEmail.trim()}
-            >
-              {t("invite")}
-            </Button>
-          </div>
-        </div>
-
-        {props.loadingMembers
-          ? (
-            <div class="flex items-center justify-center py-8">
-              <div class="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-            </div>
-          )
-          : props.membersError
-          ? (
-            <div class="flex flex-col items-center gap-3 py-8 text-center">
-              <p class="text-sm text-red-500">{props.membersError}</p>
-              <Show when={props.onRetryMembers}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => props.onRetryMembers?.()}
-                >
-                  {t("retry")}
-                </Button>
-              </Show>
-            </div>
-          )
-          : props.members.length === 0
-          ? (
-            <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">
-              {t("noMembers")}
-            </div>
-          )
-          : (
-            <div class="space-y-2">
-              {props.members.map((member) => (
-                <div class="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
-                  {member.picture
-                    ? (
-                      <img
-                        src={member.picture}
-                        alt=""
-                        class="w-10 h-10 rounded-full"
-                      />
-                    )
-                    : (
-                      <div class="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center">
-                        <Icons.User class="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-                      </div>
-                    )}
-                  <div class="flex-1 min-w-0">
-                    <div class="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {member.name || member.email || member.username}
-                    </div>
-                    <div class="text-sm text-zinc-500 dark:text-zinc-400 truncate">
-                      @{member.username}
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    {member.role === "owner"
-                      ? (
-                        <span class="px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-200 dark:bg-zinc-700 rounded-lg">
-                          {getRoleLabel("owner", t)}
-                        </span>
-                      )
-                      : (
-                        <>
-                          <select
-                            class="px-2 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg"
-                            value={member.role}
-                            onChange={(e) =>
-                              props.onChangeRole(
-                                member,
-                                e.currentTarget.value as "admin" | "member",
-                              )}
-                          >
-                            <option value="member">
-                              {getRoleLabel("member", t)}
-                            </option>
-                            <option value="admin">
-                              {getRoleLabel("admin", t)}
-                            </option>
-                          </select>
-                          <button
-                            type="button"
-                            class="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
-                            onClick={() => props.onRemove(member)}
-                            title={t("remove")}
-                          >
-                            <Icons.Trash class="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <label
+          for="workspace-security-posture"
+          class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+        >
+          {t("workspaceNetworkAccess")}
+        </label>
+        <select
+          id="workspace-security-posture"
+          name="workspace-security-posture"
+          class="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10 disabled:cursor-not-allowed disabled:opacity-60"
+          value={props.securityPosture}
+          disabled={!props.canEdit || props.busy}
+          onChange={(event) =>
+            props.setSecurityPosture(
+              event.currentTarget.value as Space["security_posture"],
+            )}
+        >
+          <option value="standard">{t("workspaceSecurityStandard")}</option>
+          <option value="restricted_egress">
+            {t("workspaceSecurityRestrictedEgress")}
+          </option>
+        </select>
+        <p class="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+          {props.securityPosture === "restricted_egress"
+            ? t("workspaceSecurityRestrictedEgressHint")
+            : t("workspaceSecurityStandardHint")}
+        </p>
       </CardContent>
+      {props.canEdit && (
+        <CardFooter>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={props.onSave}
+            isLoading={props.saving}
+            disabled={props.busy ||
+              props.securityPosture === props.savedSecurityPosture}
+          >
+            {t("save")}
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   );
 }
 
 export function DangerZoneCard(props: {
   onDelete: () => void;
+  deleting: boolean;
+  disabled: boolean;
 }) {
   const { t } = useI18n();
 
@@ -300,6 +228,8 @@ export function DangerZoneCard(props: {
             variant="danger"
             size="sm"
             onClick={props.onDelete}
+            isLoading={props.deleting}
+            disabled={props.disabled}
           >
             {t("delete")}
           </Button>
@@ -323,94 +253,5 @@ export function PersonalSpaceNote() {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-export function CreateSpaceModal(props: {
-  onClose: () => void;
-  onCreate: (name: string, installFeaturedApps: boolean) => void;
-  creating: boolean;
-}) {
-  const { t } = useI18n();
-  const [newSpaceName, setNewSpaceName] = createSignal("");
-  const [installFeaturedApps, setInstallFeaturedApps] = createSignal(false);
-
-  const handleClose = () => {
-    setNewSpaceName("");
-    setInstallFeaturedApps(false);
-    props.onClose();
-  };
-
-  return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("createSpace")}
-          </h3>
-          <button
-            type="button"
-            class="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-            onClick={handleClose}
-          >
-            <Icons.X class="w-5 h-5" />
-          </button>
-        </div>
-        <div class="p-6">
-          <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-            {t("spaceName")}
-          </label>
-          <Input
-            value={newSpaceName()}
-            onInput={(e) => setNewSpaceName(e.currentTarget.value)}
-            placeholder={t("spaceNamePlaceholder")}
-            autofocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newSpaceName().trim()) {
-                props.onCreate(newSpaceName().trim(), installFeaturedApps());
-              }
-            }}
-          />
-          <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            {t("createSpaceHint")}
-          </p>
-          <label class="mt-4 flex gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3 cursor-pointer">
-            <input
-              type="checkbox"
-              class="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:focus:ring-zinc-100"
-              checked={installFeaturedApps()}
-              onChange={(e) => setInstallFeaturedApps(e.currentTarget.checked)}
-            />
-            <span class="space-y-1">
-              <span class="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                {t("installFeaturedAppsOnCreate")}
-              </span>
-              <span class="block text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                {t("installFeaturedAppsOnCreateHint")}
-              </span>
-            </span>
-          </label>
-        </div>
-        <div class="flex justify-end gap-3 px-6 py-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClose}
-          >
-            {t("cancel")}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              props.onCreate(newSpaceName().trim(), installFeaturedApps())}
-            isLoading={props.creating}
-            disabled={!newSpaceName().trim()}
-          >
-            {t("create")}
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }

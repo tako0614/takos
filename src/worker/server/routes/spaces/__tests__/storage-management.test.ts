@@ -1,6 +1,7 @@
 import { test } from "bun:test";
 import { assertEquals, assertThrows } from "@takos/test/assert";
 import { Hono } from "hono";
+import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import {
   buildFileHandlerOpenUrl,
@@ -8,6 +9,20 @@ import {
 } from "../storage-management.ts";
 import storageManagement from "../storage-management.ts";
 import { routeAuthDeps } from "../../route-auth.ts";
+
+type StorageTestEnv = {
+  Bindings: { DB: unknown };
+  Variables: { user: { id: string; principal_id: string } };
+};
+
+function installAppErrorHandler(app: Hono<StorageTestEnv>) {
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(error.toResponse(), error.statusCode as 400 | 500);
+    }
+    throw error;
+  });
+}
 
 test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
   assertEquals(
@@ -245,5 +260,147 @@ test("PATCH storage with move and rename does not fall back to a partial move wh
       originalMoveAndRenameStorageItem;
     storageManagementRouteDeps.moveStorageItem = originalMoveStorageItem;
     storageManagementRouteDeps.renameStorageItem = originalRenameStorageItem;
+  }
+});
+
+test("DELETE storage echoes the exact deleted file identity", async () => {
+  const originalRequireSpaceAccess = routeAuthDeps.requireSpaceAccess;
+  const originalDeleteStorageItem =
+    storageManagementRouteDeps.deleteStorageItem;
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: { user: { id: string; principal_id: string } };
+  }>();
+  app.use("*", async (c, next) => {
+    c.set("user", { id: "user-1", principal_id: "principal-1" });
+    await next();
+  });
+  installAppErrorHandler(app);
+  app.route("/", storageManagement as never);
+
+  try {
+    routeAuthDeps.requireSpaceAccess = async () =>
+      ({ space: { id: "space-record" } }) as never;
+    storageManagementRouteDeps.deleteStorageItem = async (
+      _db,
+      spaceId,
+      fileId,
+    ) => {
+      assertEquals(spaceId, "space-record");
+      assertEquals(fileId, "file-1");
+      return ["object-key"];
+    };
+
+    const response = await app.request(
+      "/team/storage/file-1",
+      { method: "DELETE" },
+      { DB: {} },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(await response.json(), {
+      success: true,
+      file_id: "file-1",
+      deleted_count: 2,
+    });
+  } finally {
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    storageManagementRouteDeps.deleteStorageItem = originalDeleteStorageItem;
+  }
+});
+
+test("bulk Storage mutations reject duplicate file identities before writes", async () => {
+  const originalRequireSpaceAccess = routeAuthDeps.requireSpaceAccess;
+  const originalMoveStorageItem = storageManagementRouteDeps.moveStorageItem;
+  let moveCalls = 0;
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: { user: { id: string; principal_id: string } };
+  }>();
+  app.use("*", async (c, next) => {
+    c.set("user", { id: "user-1", principal_id: "principal-1" });
+    await next();
+  });
+  installAppErrorHandler(app);
+  app.route("/", storageManagement as never);
+
+  try {
+    routeAuthDeps.requireSpaceAccess = async () =>
+      ({ space: { id: "space-record" } }) as never;
+    storageManagementRouteDeps.moveStorageItem = async () => {
+      moveCalls += 1;
+      throw new Error("must not run");
+    };
+
+    const response = await app.request(
+      "/team/storage/bulk-move",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_ids: ["file-1", "file-1"],
+          parent_path: "/archive",
+        }),
+      },
+      { DB: {} },
+    );
+    assertEquals(response.status, 400);
+    assertEquals(moveCalls, 0);
+  } finally {
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    storageManagementRouteDeps.moveStorageItem = originalMoveStorageItem;
+  }
+});
+
+test("bulk Storage delete partitions every requested identity", async () => {
+  const originalRequireSpaceAccess = routeAuthDeps.requireSpaceAccess;
+  const originalBulkDeleteStorageItems =
+    storageManagementRouteDeps.bulkDeleteStorageItems;
+  const app = new Hono<StorageTestEnv>();
+  app.use("*", async (c, next) => {
+    c.set("user", { id: "user-1", principal_id: "principal-1" });
+    await next();
+  });
+  installAppErrorHandler(app);
+  app.route("/", storageManagement as never);
+
+  try {
+    routeAuthDeps.requireSpaceAccess = async () =>
+      ({ space: { id: "space-record" } }) as never;
+    storageManagementRouteDeps.bulkDeleteStorageItems = async (
+      _db,
+      spaceId,
+      fileIds,
+    ) => {
+      assertEquals(spaceId, "space-record");
+      assertEquals(fileIds, ["file-1", "file-2"]);
+      return {
+        r2Keys: ["object-key"],
+        deletedCount: 1,
+        deletedIds: ["file-1"],
+        failedIds: ["file-2"],
+      };
+    };
+
+    const response = await app.request(
+      "/team/storage/bulk-delete",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_ids: ["file-1", "file-2"] }),
+      },
+      { DB: {} },
+    );
+    assertEquals(response.status, 200);
+    assertEquals(await response.json(), {
+      success: true,
+      deleted_count: 1,
+      deleted_ids: ["file-1"],
+      error_count: 1,
+      failed_ids: ["file-2"],
+    });
+  } finally {
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    storageManagementRouteDeps.bulkDeleteStorageItems =
+      originalBulkDeleteStorageItems;
   }
 });

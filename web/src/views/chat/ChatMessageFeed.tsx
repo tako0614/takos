@@ -2,13 +2,12 @@ import { createMemo, createSignal } from "solid-js";
 import { For, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
-import type { Message, SessionDiff } from "../../types/index.ts";
+import type { Message } from "../../types/index.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import type { ChatStreamingState } from "./chat-types.ts";
 import type { ChatRunMetaMap, ChatTimelineEntry } from "./chat-types.ts";
 import { MessageBubble } from "./MessageBubble.tsx";
 import { MarkdownRenderer } from "./MarkdownRenderer.tsx";
-import { SessionDiffPanel } from "./SessionDiffPanel.tsx";
 import {
   buildActiveRunActivityGroups,
   buildPersistentRunActivityGroups,
@@ -253,10 +252,6 @@ interface ChatMessageFeedProps {
   timelineEntries: ChatTimelineEntry[];
   runMetaById: ChatRunMetaMap;
   isLoading: boolean;
-  sessionDiff: { sessionId: string; diff: SessionDiff } | null;
-  onMerge: () => void;
-  isMerging: boolean;
-  onDismissDiff: () => void;
   emptyText: string;
   messagesEndRef: (element: HTMLDivElement | undefined) => void;
   spaceId?: string;
@@ -341,8 +336,7 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
   const showEmpty = () =>
     uniqueMessages().length === 0 &&
     !props.isLoading &&
-    !props.streaming.currentMessage &&
-    !props.sessionDiff;
+    !props.streaming.currentMessage;
 
   const hasToolCalls = () => props.streaming.toolCalls.length > 0;
   const hasLiveActivity = () => hasToolCalls() || !!props.streaming.thinking;
@@ -425,17 +419,6 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
                 <MarkdownRenderer content={currentMessage()} />
               </div>
             </div>
-          )}
-        </Show>
-
-        <Show when={props.sessionDiff}>
-          {(sessionDiff) => (
-            <SessionDiffPanel
-              sessionDiff={sessionDiff()}
-              onMerge={props.onMerge}
-              isMerging={props.isMerging}
-              onDismiss={props.onDismissDiff}
-            />
           )}
         </Show>
 

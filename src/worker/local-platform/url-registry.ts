@@ -2,12 +2,46 @@ import type { ServiceBindingFetcher } from "../shared/types/bindings.ts";
 
 export type ServiceTargetMap = Record<string, string>;
 
+const SERVICE_TARGET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+
 function normalizeBaseUrl(baseUrl: string): URL {
-  const url = new URL(baseUrl);
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch (error) {
+    throw new Error("Service target must be an absolute HTTP(S) URL", {
+      cause: error,
+    });
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Service target must use HTTP or HTTPS");
+  }
+  if (url.username || url.password) {
+    throw new Error("Service target URL must not contain credentials");
+  }
+  if (url.search || url.hash) {
+    throw new Error("Service target URL must not contain query or fragment state");
+  }
   if (!url.pathname.endsWith("/")) {
     url.pathname = `${url.pathname}/`;
   }
   return url;
+}
+
+function normalizeServiceTargetMap(
+  input: Record<string, unknown>,
+): ServiceTargetMap {
+  const out: ServiceTargetMap = Object.create(null) as ServiceTargetMap;
+  for (const [name, value] of Object.entries(input)) {
+    if (!SERVICE_TARGET_NAME_PATTERN.test(name)) {
+      throw new Error(`Invalid service target name: ${name}`);
+    }
+    if (typeof value !== "string" || !value.trim()) {
+      throw new Error(`Service target ${name} must be a non-empty URL string`);
+    }
+    out[name] = normalizeBaseUrl(value.trim()).toString();
+  }
+  return out;
 }
 
 export function parseServiceTargetMap(
@@ -19,15 +53,7 @@ export function parseServiceTargetMap(
     throw new Error("TAKOS_LOCAL_DISPATCH_TARGETS_JSON must be a JSON object");
   }
 
-  const out: ServiceTargetMap = {};
-  for (
-    const [name, value] of Object.entries(parsed as Record<string, unknown>)
-  ) {
-    if (typeof value === "string" && value) {
-      out[name] = value;
-    }
-  }
-  return out;
+  return normalizeServiceTargetMap(parsed as Record<string, unknown>);
 }
 
 export function createForwardingFetcher(
@@ -64,9 +90,10 @@ export function createFetcherRegistry(
   targets: ServiceTargetMap,
   fallback?: (name: string) => ServiceBindingFetcher,
 ): { get(name: string): ServiceBindingFetcher } {
+  const normalizedTargets = normalizeServiceTargetMap(targets);
   return {
     get(name: string): ServiceBindingFetcher {
-      const target = targets[name];
+      const target = normalizedTargets[name];
       if (target) return createForwardingFetcher(target);
       if (fallback) return fallback(name);
       const missingTargetFetcher: ServiceBindingFetcher = {

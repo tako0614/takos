@@ -135,6 +135,7 @@ export function validatePath(path: string): string {
 
 export function validatePathSegment(name: string): boolean {
   if (!name || name === "." || name === "..") return false;
+  if (name !== name.trim() || /[\u0000-\u001f\u007f]/.test(name)) return false;
   if (name.includes("/")) return false;
   if (name.includes("%") || name.includes("\\")) return false;
   if (name.length > MAX_PATH_SEGMENT_LENGTH) return false;

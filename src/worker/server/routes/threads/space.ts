@@ -1,6 +1,5 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import type { Env, ThreadStatus } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { routeAuthDeps } from "../route-auth.ts";
@@ -11,23 +10,37 @@ import {
   listThreads,
 } from "../../../application/services/threads/thread-service.ts";
 import { searchSpaceThreads } from "../../../application/services/threads/thread-search.ts";
+import { threadSearchQuerySchema } from "./search-query.ts";
+import { CLIENT_OPERATION_ID_PATTERN, ClientOperationConflictError } from "../../../shared/utils/client-operation-id.ts";
+import { MAX_CLIENT_THREAD_TITLE_CHARACTERS } from "../../../shared/utils/client-thread.ts";
+import { InMemoryRateLimiter } from "../../../shared/utils/rate-limiter.ts";
+import {
+  BadRequestError,
+  ConflictError,
+} from "@takos/worker-platform-utils/errors";
 
 type ThreadsRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
 const threadListQuerySchema = z.object({
-  status: z.string().optional(),
-});
+  status: z.enum(["active", "archived"]).optional(),
+}).strict();
 
-const threadSearchQuerySchema = z.object({
-  q: z.string().optional(),
-  type: z.string().optional(),
-  limit: z.string().optional(),
-  offset: z.string().optional(),
-});
-
-const threadCreateSchema = z.object({
-  title: z.string().optional(),
+export const threadCreateSchema = z.object({
+  title: z.string().max(MAX_CLIENT_THREAD_TITLE_CHARACTERS).optional(),
   locale: z.enum(["ja", "en"]).optional(),
+  idempotency_key: z.string().regex(CLIENT_OPERATION_ID_PATTERN).optional(),
+}).strict();
+
+export const threadCreateLimiter = new InMemoryRateLimiter({
+  maxRequests: 30,
+  windowMs: 60_000,
+  keyGenerator: (c) => {
+    const user = (c.get as (key: "user") => { id?: string } | undefined)(
+      "user",
+    );
+    return `${user?.id || "unknown"}:${c.req.param("spaceId")}`;
+  },
+  message: "Too many conversation creation attempts.",
 });
 
 export function registerThreadSpaceRoutes(app: ThreadsRouter) {
@@ -37,15 +50,14 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
     async (c) => {
       const user = c.get("user");
       const spaceId = c.req.param("spaceId");
-      const { status: statusQuery } = c.req.valid("query");
-      const status = statusQuery as ThreadStatus | undefined;
+      const { status } = c.req.valid("query") as { status?: ThreadStatus };
 
       const access = await routeAuthDeps.requireSpaceAccess(
         c,
         spaceId,
         user.id,
       );
-      const threads = await listThreads(
+      const page = await listThreads(
         c.env.DB,
         access.space.id,
         {
@@ -53,7 +65,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         },
       );
 
-      return c.json({ threads });
+      return c.json(page);
     },
   );
 
@@ -64,13 +76,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
       const user = c.get("user");
       const spaceId = c.req.param("spaceId");
       const query = c.req.valid("query");
-      const q = (query.q || "").trim();
-      const type = (query.type || "all").toLowerCase();
       const { limit, offset } = parsePagination(query, { maxLimit: 100 });
-
-      if (!q) {
-        throw new BadRequestError("q is required");
-      }
 
       const access = await routeAuthDeps.requireSpaceAccess(
         c,
@@ -82,8 +88,8 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         await searchSpaceThreads({
           env: c.env,
           spaceId: access.space.id,
-          query: q,
-          type,
+          query: query.q,
+          type: query.type,
           limit,
           offset,
         }),
@@ -91,13 +97,9 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
     },
   );
 
-  // SECURITY: No per-route rate limit on thread creation. An authenticated
-  // owner/admin/editor can create unbounded threads, each consuming DB row
-  // writes and downstream space-quota state. Mitigation relies on the
-  // operator-tier limiter (CDN / WAF) plus the per-space quota enforced
-  // deeper in createThread. See SECURITY.md "Per-route rate limiting".
   app.post(
     "/spaces/:spaceId/threads",
+    threadCreateLimiter.middleware(),
     zValidator("json", threadCreateSchema),
     async (c) => {
       const user = c.get("user");
@@ -108,16 +110,22 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
-      const thread = await createThread(
-        c.env.DB,
-        access.space.id,
-        body,
-      );
-      return c.json({ thread }, 201);
+      try {
+        const thread = await createThread(
+          c.env.DB,
+          access.space.id,
+          body,
+        );
+        return c.json({ thread }, 201);
+      } catch (error) {
+        if (error instanceof ClientOperationConflictError) {
+          throw new ConflictError(error.message);
+        }
+        throw error;
+      }
     },
   );
 }

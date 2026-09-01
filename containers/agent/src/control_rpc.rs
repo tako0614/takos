@@ -42,6 +42,7 @@ pub struct StartPayload {
     pub run_id: String,
     pub worker_id: String,
     pub service_id: Option<String>,
+    #[allow(dead_code)]
     pub model: Option<String>,
     pub lease_version: Option<u32>,
     pub executor_tier: Option<u8>,
@@ -60,13 +61,6 @@ impl StartPayload {
             .unwrap_or(&self.worker_id)
     }
 
-    pub fn resolved_model(&self) -> &str {
-        self.model
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .unwrap_or("local-smoke")
-    }
-
     pub fn supports_durable_checkpoints(&self) -> bool {
         self.checkpoint_protocol_version
             .is_some_and(|version| version >= 1)
@@ -79,7 +73,7 @@ pub struct RunBootstrap {
     pub status: Option<String>,
     #[serde(alias = "spaceId")]
     pub space_id: String,
-    #[serde(default, alias = "installationId")]
+    #[serde(default, alias = "installationId", alias = "capsuleId")]
     pub installation_id: Option<String>,
     #[serde(default, alias = "runtimeNamespace")]
     pub runtime_namespace: Option<String>,
@@ -102,98 +96,15 @@ pub struct HistoryMessage {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-pub struct ConversationHistoryResponse {
-    pub history: Vec<HistoryMessage>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct SkillExecutionContract {
-    #[serde(default)]
-    pub preferred_tools: Vec<String>,
-    #[serde(default)]
-    pub durable_output_hints: Vec<String>,
-    #[serde(default)]
-    pub output_modes: Vec<String>,
-    #[serde(default)]
-    pub required_mcp_servers: Vec<String>,
-    #[serde(default)]
-    pub template_ids: Vec<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ActivatedSkill {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub source: String,
-    pub category: Option<String>,
-    pub locale: Option<String>,
-    pub version: Option<String>,
-    #[serde(default)]
-    pub triggers: Vec<String>,
-    #[serde(default)]
-    pub activation_tags: Vec<String>,
-    pub instructions: String,
-    #[serde(default)]
-    pub execution_contract: SkillExecutionContract,
-    #[serde(default)]
-    pub availability: String,
-    #[serde(default)]
-    pub availability_reasons: Vec<String>,
-    pub priority: Option<i32>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillResolutionContext {
-    #[serde(default)]
-    pub conversation: Vec<String>,
-    #[serde(default, alias = "thread_title")]
-    pub thread_title: Option<String>,
-    #[serde(default, alias = "thread_summary")]
-    pub thread_summary: Option<String>,
-    #[serde(default, alias = "thread_key_points")]
-    pub thread_key_points: Vec<String>,
-    #[serde(default, alias = "run_input")]
-    pub run_input: Value,
-    #[serde(default, alias = "agent_type")]
-    pub agent_type: Option<String>,
-    #[serde(default, alias = "space_locale")]
-    pub space_locale: Option<String>,
-    #[serde(default, alias = "preferred_locale")]
-    pub preferred_locale: Option<String>,
-    #[serde(default, alias = "accept_language")]
-    pub accept_language: Option<String>,
-    #[serde(default, alias = "max_selected")]
-    pub max_selected: Option<usize>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
-pub struct SkillCatalogResponse {
-    pub locale: String,
-    pub skills: Vec<ActivatedSkill>,
-    pub resolution_context: SkillResolutionContext,
-    pub managed_source: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
 pub struct SkillRuntimeContextResponse {
-    pub locale: Option<String>,
-    pub skills: Vec<ActivatedSkill>,
-    pub managed_skills: Vec<ActivatedSkill>,
-    pub custom_skills: Vec<ActivatedSkill>,
-    pub resolution_context: SkillResolutionContext,
-    pub available_mcp_server_names: Vec<String>,
-    pub available_template_ids: Vec<String>,
+    pub run_authority: RunAuthorityAttestation,
+    pub descriptor_count: usize,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunConfigResponse {
     pub system_prompt: String,
     pub max_graph_steps: Option<u32>,
@@ -201,15 +112,39 @@ pub struct RunConfigResponse {
     pub temperature: Option<f32>,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunModelInputResponse {
+    pub run_authority: RunAuthorityAttestation,
+    pub bootstrap: RunBootstrap,
+    pub model_id: String,
+    pub config: RunConfigResponse,
+    #[serde(default)]
+    pub history: Vec<HistoryMessage>,
+    pub transcript_cut_sequence: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderMaterializationRef {
+    pub id: String,
+    pub digest: String,
+    pub source_kind: String,
+    pub protocol: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiKeysResponse {
-    /// The runtime model adapter uses one OpenAI-compatible transport. Native
-    /// vendor credentials are resolved by the configured gateway/endpoint,
-    /// not deserialized into unused container fields.
+    /// Protocol v6 never receives a provider credential at bootstrap. These
+    /// compatibility fields must remain empty; a fresh credential arrives
+    /// only after each model-call begin is durably authorized.
     pub openai: Option<String>,
     #[serde(default, alias = "openaiEndpoint")]
     pub openai_endpoint: Option<String>,
+    pub source_run_authority: RunAuthorityAttestation,
+    pub run_authority: RunAuthorityAttestation,
+    pub provider_materialization: ProviderMaterializationRef,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,8 +163,39 @@ pub struct ToolDefinition {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RunAuthorityAttestation {
+    pub context_revision: u32,
+    pub context_digest: String,
+    pub run_grant_digest: String,
+}
+
+impl RunAuthorityAttestation {
+    pub(crate) fn is_valid(&self) -> bool {
+        fn is_digest(value: &str) -> bool {
+            value.strip_prefix("sha256:").is_some_and(|hex| {
+                hex.len() == 64
+                    && hex
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            })
+        }
+        self.context_revision >= 1
+            && is_digest(&self.context_digest)
+            && is_digest(&self.run_grant_digest)
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ToolCatalogResponse {
+    #[serde(rename = "catalogVersion")]
+    pub catalog_version: u8,
+    #[serde(rename = "sourceRunAuthority")]
+    pub source_run_authority: RunAuthorityAttestation,
+    #[serde(rename = "runAuthority")]
+    pub run_authority: RunAuthorityAttestation,
     #[serde(default)]
     pub tools: Vec<ToolDefinition>,
     #[serde(default, alias = "mcpFailedServers")]
@@ -244,6 +210,8 @@ pub struct RpcToolResult {
     pub error: Option<String>,
     #[serde(default)]
     pub outcome_uncertain: bool,
+    #[serde(default, rename = "runAuthority")]
+    pub run_authority: Option<RunAuthorityAttestation>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,6 +220,51 @@ struct EngineCheckpointLoadResponse {
     usage: UsageSnapshot,
     #[serde(default, rename = "fatalError")]
     fatal_error: Option<String>,
+    #[serde(default, rename = "checkpointAuthority")]
+    checkpoint_authority: Option<RunAuthorityAttestation>,
+    #[serde(default, rename = "runAuthority")]
+    run_authority: Option<RunAuthorityAttestation>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelCallBeginResponse {
+    model_call_id: String,
+    #[allow(dead_code)]
+    idempotent: bool,
+    run_authority: RunAuthorityAttestation,
+    provider_credential: ProviderRuntimeCredential,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderRuntimeCredential {
+    pub materialization_id: String,
+    pub materialization_digest: String,
+    pub protocol: String,
+    pub endpoint: Option<String>,
+    pub api_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelCallAuthorization {
+    pub provider_credential: ProviderRuntimeCredential,
+}
+
+fn is_valid_provider_endpoint(value: &str) -> bool {
+    reqwest::Url::parse(value).ok().is_some_and(|url| {
+        let production_https = url.scheme() == "https";
+        let test_loopback_http = cfg!(any(test, feature = "mock-llm"))
+            && url.scheme() == "http"
+            && url
+                .host_str()
+                .is_some_and(|host| host == "127.0.0.1" || host == "localhost");
+        (production_https || test_loopback_http)
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+    })
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -311,111 +324,74 @@ impl ControlRpcClient {
         self.sequence.fetch_add(1, Ordering::SeqCst)
     }
 
-    pub async fn run_bootstrap(&self) -> AppResult<RunBootstrap> {
-        self.post_control_json(
-            "run-bootstrap",
-            json!({
-                "runId": self.run_id,
-            }),
-        )
-        .await
-    }
-
-    pub async fn run_config(&self, agent_type: Option<&str>) -> AppResult<RunConfigResponse> {
-        let payload: Value = self
+    pub async fn run_model_input(&self) -> AppResult<RunModelInputResponse> {
+        let response: RunModelInputResponse = self
             .post_control_json(
-                "run-config",
+                "run-model-input",
                 json!({
                     "runId": self.run_id,
-                    "agentType": agent_type.unwrap_or("default"),
                 }),
             )
             .await?;
-        Ok(parse_run_config_response(&payload))
+        if !response.run_authority.is_valid()
+            || response.bootstrap.space_id.trim().is_empty()
+            || response.bootstrap.thread_id.trim().is_empty()
+            || response.bootstrap.user_id.trim().is_empty()
+            || response.model_id.trim().is_empty()
+            || response.config.system_prompt.trim().is_empty()
+            || response.transcript_cut_sequence < -1
+        {
+            return Err(io::Error::other("invalid exact Run model input").into());
+        }
+        Ok(response)
     }
 
-    pub async fn conversation_history(
-        &self,
-        thread_id: &str,
-        space_id: &str,
-        ai_model: &str,
-    ) -> AppResult<ConversationHistoryResponse> {
-        self.post_control_json(
-            "conversation-history",
-            json!({
-                "runId": self.run_id,
-                "threadId": thread_id,
-                "spaceId": space_id,
-                "aiModel": ai_model,
-            }),
-        )
-        .await
-    }
-
-    pub async fn skill_runtime_context(
-        &self,
-        thread_id: &str,
-        space_id: &str,
-        agent_type: &str,
-        history: &[HistoryMessage],
-        available_tool_names: &[String],
-    ) -> AppResult<SkillRuntimeContextResponse> {
-        let payload: Value = self
+    pub async fn skill_runtime_context(&self) -> AppResult<SkillRuntimeContextResponse> {
+        let response: SkillRuntimeContextResponse = self
             .post_control_json(
                 "skill-runtime-context",
                 json!({
                     "runId": self.run_id,
-                    "threadId": thread_id,
-                    "spaceId": space_id,
-                    "agentType": agent_type,
-                    "history": history,
-                    "availableToolNames": available_tool_names,
                 }),
             )
             .await?;
-
-        let skills = activated_skill_array_field(&payload, &["skills"]);
-        let managed_skills =
-            activated_skill_array_field(&payload, &["managedSkills", "managed_skills"]);
-        let custom_skills =
-            activated_skill_array_field(&payload, &["customSkills", "custom_skills"]);
-
-        let resolution_context = payload
-            .get("resolutionContext")
-            .cloned()
-            .or_else(|| payload.get("resolution_context").cloned())
-            .and_then(|value| serde_json::from_value::<SkillResolutionContext>(value).ok())
-            .unwrap_or_default();
-
-        Ok(SkillRuntimeContextResponse {
-            locale: string_field(&payload, &["locale"]),
-            skills,
-            managed_skills,
-            custom_skills,
-            resolution_context,
-            available_mcp_server_names: string_array_field(
-                &payload,
-                &["availableMcpServerNames", "available_mcp_server_names"],
-            ),
-            available_template_ids: string_array_field(
-                &payload,
-                &["availableTemplateIds", "available_template_ids"],
-            ),
-        })
+        if !response.run_authority.is_valid() || response.descriptor_count > 8 {
+            return Err(io::Error::other("invalid Skill descriptor context").into());
+        }
+        Ok(response)
     }
 
     pub async fn tool_catalog(&self) -> AppResult<ToolCatalogResponse> {
-        self.post_control_json(
-            "tool-catalog",
-            json!({
-                "runId": self.run_id,
-            }),
-        )
-        .await
+        let response: ToolCatalogResponse = self
+            .post_control_json(
+                "tool-catalog",
+                json!({
+                    "runId": self.run_id,
+                }),
+            )
+            .await?;
+        if response.catalog_version != 2
+            || !response.source_run_authority.is_valid()
+            || !response.run_authority.is_valid()
+            || response.run_authority.run_grant_digest
+                != response.source_run_authority.run_grant_digest
+            || response.run_authority.context_revision
+                < response.source_run_authority.context_revision
+            || response.run_authority.context_revision
+                > response.source_run_authority.context_revision + 1
+            || (response.run_authority.context_revision
+                == response.source_run_authority.context_revision
+                && response.run_authority.context_digest
+                    != response.source_run_authority.context_digest)
+        {
+            return Err(io::Error::other("invalid pinned tool catalog authority").into());
+        }
+        Ok(response)
     }
 
     pub async fn tool_execute(
         &self,
+        run_authority: &RunAuthorityAttestation,
         tool_call_id: &str,
         name: &str,
         arguments: Value,
@@ -424,6 +400,7 @@ impl ControlRpcClient {
         let mut payload = json!({
             "runId": self.run_id,
             "leaseVersion": self.lease_version,
+            "runAuthority": run_authority,
             "toolCall": {
                 "id": tool_call_id,
                 "name": name,
@@ -436,16 +413,92 @@ impl ControlRpcClient {
         self.post_control_json("tool-execute", payload).await
     }
 
+    pub async fn begin_model_call(
+        &self,
+        run_authority: &RunAuthorityAttestation,
+        request_digest: &str,
+        transport_attempt: u32,
+        begin_nonce: &str,
+    ) -> AppResult<ModelCallAuthorization> {
+        let response: ModelCallBeginResponse = self
+            .post_checkpoint_with_retry(
+                "model-call-begin",
+                json!({
+                    "runId": self.run_id,
+                    "leaseVersion": self.lease_version,
+                    "runAuthority": run_authority,
+                    "requestDigest": request_digest,
+                    "transportAttempt": transport_attempt,
+                    "beginNonce": begin_nonce,
+                }),
+            )
+            .await?;
+        if &response.run_authority != run_authority {
+            return Err(io::Error::other(
+                "model-call begin response changed the active Run authority",
+            )
+            .into());
+        }
+        if !response.run_authority.is_valid()
+            || response.model_call_id.len() != 68
+            || !response.model_call_id.starts_with("rmc_")
+            || !response.model_call_id[4..]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(io::Error::other("invalid model-call begin response").into());
+        }
+        let credential = &response.provider_credential;
+        let materialization_id_valid = credential.materialization_id.len() == 68
+            && credential.materialization_id.starts_with("pmr_")
+            && credential.materialization_id[4..]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+        let digest_valid = credential
+            .materialization_digest
+            .strip_prefix("sha256:")
+            .is_some_and(|hex| {
+                hex.len() == 64
+                    && hex
+                        .bytes()
+                        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            });
+        let transport_valid = match credential.protocol.as_str() {
+            "local_smoke" => credential.endpoint.is_none() && credential.api_key.is_none(),
+            "openai_chat_completions" => {
+                credential
+                    .endpoint
+                    .as_deref()
+                    .is_some_and(is_valid_provider_endpoint)
+                    && credential.api_key.as_deref().is_some_and(|value| {
+                        !value.is_empty()
+                            && value.len() <= 8_192
+                            && value.trim() == value
+                            && !value.chars().any(char::is_whitespace)
+                    })
+            }
+            _ => false,
+        };
+        if !materialization_id_valid || !digest_valid || !transport_valid {
+            return Err(io::Error::other("invalid provider credential response").into());
+        }
+        Ok(ModelCallAuthorization {
+            provider_credential: response.provider_credential,
+        })
+    }
+
     pub async fn save_engine_checkpoint(
         &self,
         checkpoint: &LoopState,
         usage: &UsageSnapshot,
+        run_authority: &RunAuthorityAttestation,
     ) -> AppResult<()> {
         let body = json!({
             "runId": self.run_id,
             "leaseVersion": self.lease_version,
             "checkpoint": checkpoint,
             "usage": usage,
+            "runAuthority": run_authority,
             "checkpointProtocolVersion": self.checkpoint_protocol_version,
         });
         let _: Value = self
@@ -456,18 +509,32 @@ impl ControlRpcClient {
 
     pub async fn load_engine_checkpoint(
         &self,
-    ) -> AppResult<(Option<LoopState>, UsageSnapshot, Option<String>)> {
+        run_authority: &RunAuthorityAttestation,
+    ) -> AppResult<(
+        Option<LoopState>,
+        UsageSnapshot,
+        Option<String>,
+        Option<RunAuthorityAttestation>,
+        Option<RunAuthorityAttestation>,
+    )> {
         let response: EngineCheckpointLoadResponse = self
             .post_checkpoint_with_retry(
                 "engine-checkpoint-load",
                 json!({
                     "runId": self.run_id,
                     "leaseVersion": self.lease_version,
+                    "runAuthority": run_authority,
                     "checkpointProtocolVersion": self.checkpoint_protocol_version,
                 }),
             )
             .await?;
-        Ok((response.checkpoint, response.usage, response.fatal_error))
+        Ok((
+            response.checkpoint,
+            response.usage,
+            response.fatal_error,
+            response.checkpoint_authority,
+            response.run_authority,
+        ))
     }
 
     async fn post_checkpoint_with_retry<T: DeserializeOwned>(
@@ -518,25 +585,75 @@ impl ControlRpcClient {
         Ok(())
     }
 
-    pub async fn api_keys(&self) -> AppResult<ApiKeysResponse> {
-        self.post_control_json(
-            "api-keys",
-            json!({
-                "runId": self.run_id,
-            }),
-        )
-        .await
+    pub async fn api_keys(
+        &self,
+        run_authority: &RunAuthorityAttestation,
+    ) -> AppResult<ApiKeysResponse> {
+        let response: ApiKeysResponse = self
+            .post_control_json(
+                "api-keys",
+                json!({
+                    "runId": self.run_id,
+                    "runAuthority": run_authority,
+                    "materializeOnly": true,
+                }),
+            )
+            .await?;
+        let materialization = &response.provider_materialization;
+        let materialization_valid = materialization.id.len() == 68
+            && materialization.id.starts_with("pmr_")
+            && materialization.id[4..]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            && materialization
+                .digest
+                .strip_prefix("sha256:")
+                .is_some_and(|hex| {
+                    hex.len() == 64
+                        && hex
+                            .bytes()
+                            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                })
+            && matches!(
+                materialization.source_kind.as_str(),
+                "local_smoke" | "deployment_shared_key" | "takosumi_interface"
+            )
+            && matches!(
+                materialization.protocol.as_str(),
+                "local_smoke" | "openai_chat_completions"
+            );
+        if response.openai.is_some()
+            || !response.source_run_authority.is_valid()
+            || !response.run_authority.is_valid()
+            || response.source_run_authority != *run_authority
+            || response.run_authority.run_grant_digest != run_authority.run_grant_digest
+            || response.run_authority.context_revision < run_authority.context_revision
+            || response.run_authority.context_revision > run_authority.context_revision + 1
+            || (response.run_authority.context_revision == run_authority.context_revision
+                && response.run_authority.context_digest != run_authority.context_digest)
+            || !materialization_valid
+            || (materialization.protocol == "local_smoke" && response.openai_endpoint.is_some())
+            || (materialization.protocol == "openai_chat_completions"
+                && !response
+                    .openai_endpoint
+                    .as_deref()
+                    .is_some_and(is_valid_provider_endpoint))
+        {
+            return Err(io::Error::other("invalid provider materialization response").into());
+        }
+        Ok(response)
     }
 
     pub async fn complete_run(
         &self,
+        run_authority: Option<&RunAuthorityAttestation>,
         status: &str,
         usage: UsagePayload,
         output: Option<&str>,
         error_message: Option<&str>,
         messages: Vec<Value>,
     ) -> AppResult<()> {
-        let payload = json!({
+        let mut payload = json!({
             "runId": self.run_id,
             "serviceId": self.service_id,
             "leaseVersion": self.lease_version,
@@ -546,6 +663,9 @@ impl ControlRpcClient {
             "error": error_message,
             "messages": messages,
         });
+        if let Some(run_authority) = run_authority {
+            payload["runAuthority"] = serde_json::to_value(run_authority)?;
+        }
         // `complete-run` is atomic and idempotent for this run/lease/payload.
         // A timeout after the Worker committed is indistinguishable from a
         // pre-commit transport failure, so retry the exact same payload only;
@@ -686,6 +806,7 @@ pub struct ControlRpcLoopStateRepository {
     client: ControlRpcClient,
     usage_tracker: Arc<UsageTracker>,
     fatal_error: Arc<Mutex<Option<String>>>,
+    run_authority: Arc<Mutex<RunAuthorityAttestation>>,
 }
 
 impl ControlRpcLoopStateRepository {
@@ -693,16 +814,57 @@ impl ControlRpcLoopStateRepository {
         client: ControlRpcClient,
         usage_tracker: Arc<UsageTracker>,
         fatal_error: Arc<Mutex<Option<String>>>,
+        run_authority: Arc<Mutex<RunAuthorityAttestation>>,
     ) -> Self {
         Self {
             client,
             usage_tracker,
             fatal_error,
+            run_authority,
         }
     }
 
     pub async fn load_current(&self) -> AppResult<Option<LoopState>> {
-        let (checkpoint, usage, fatal_error) = self.client.load_engine_checkpoint().await?;
+        let requested_authority = self
+            .run_authority
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let (checkpoint, usage, fatal_error, checkpoint_authority, run_authority) = self
+            .client
+            .load_engine_checkpoint(&requested_authority)
+            .await?;
+        if self
+            .client
+            .checkpoint_protocol_version
+            .is_some_and(|version| version >= 3)
+        {
+            let returned_authority = run_authority
+                .as_ref()
+                .filter(|authority| authority.is_valid())
+                .ok_or_else(|| io::Error::other("checkpoint response omitted Run authority"))?;
+            if returned_authority != &requested_authority {
+                return Err(io::Error::other(
+                    "checkpoint response changed the active Run authority",
+                )
+                .into());
+            }
+            match (&checkpoint, checkpoint_authority.as_ref()) {
+                (Some(_), Some(checkpoint_authority))
+                    if checkpoint_authority.is_valid()
+                        && checkpoint_authority.run_grant_digest
+                            == returned_authority.run_grant_digest
+                        && checkpoint_authority.context_revision
+                            <= returned_authority.context_revision => {}
+                (None, None) => {}
+                _ => {
+                    return Err(io::Error::other(
+                        "checkpoint response carried an invalid checkpoint authority",
+                    )
+                    .into())
+                }
+            }
+        }
         self.usage_tracker.restore(usage);
         *self
             .fatal_error
@@ -716,6 +878,11 @@ impl ControlRpcLoopStateRepository {
 impl LoopStateRepository for ControlRpcLoopStateRepository {
     async fn save_checkpoint(&self, state: LoopState) -> EngineResult<()> {
         let usage = self.usage_tracker.snapshot();
+        let run_authority = self
+            .run_authority
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let fatal_error = self
             .fatal_error
             .lock()
@@ -731,7 +898,7 @@ impl LoopStateRepository for ControlRpcLoopStateRepository {
             return Ok(());
         }
         self.client
-            .save_engine_checkpoint(&state, &usage)
+            .save_engine_checkpoint(&state, &usage, &run_authority)
             .await
             .map_err(|error| {
                 EngineError::Storage(format!("control-plane checkpoint save failed: {error}"))
@@ -902,15 +1069,6 @@ fn finalization_retry_delay(failed_attempt: usize) -> Duration {
     base.saturating_add(Duration::from_millis(entropy % jitter_bound_ms))
 }
 
-fn parse_run_config_response(payload: &Value) -> RunConfigResponse {
-    RunConfigResponse {
-        system_prompt: string_field(payload, &["systemPrompt"]).unwrap_or_default(),
-        max_graph_steps: u32_field(payload, &["maxGraphSteps"]),
-        max_tool_rounds: u32_field(payload, &["maxToolRounds"]),
-        temperature: f32_field(payload, &["temperature"]),
-    }
-}
-
 fn resolve_control_rpc_config(
     payload: &StartPayload,
     env_base_url: Option<String>,
@@ -999,70 +1157,11 @@ pub fn is_run_authority_lost(error: &(dyn std::error::Error + 'static)) -> bool 
     is_lease_lost(error)
 }
 
-fn string_field(payload: &Value, keys: &[&str]) -> Option<String> {
-    keys.iter().find_map(|key| {
-        payload
-            .get(*key)
-            .and_then(Value::as_str)
-            .map(ToString::to_string)
-    })
-}
-
-fn u32_field(payload: &Value, keys: &[&str]) -> Option<u32> {
-    keys.iter().find_map(|key| {
-        payload
-            .get(*key)
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-    })
-}
-
-fn f32_field(payload: &Value, keys: &[&str]) -> Option<f32> {
-    keys.iter().find_map(|key| {
-        payload.get(*key).and_then(Value::as_f64).map(|value| {
-            // Config knobs (temperature, top_p, etc.) — f32 precision is sufficient.
-            #[allow(clippy::cast_possible_truncation)]
-            let narrowed = value as f32;
-            narrowed
-        })
-    })
-}
-
-fn string_array_field(payload: &Value, keys: &[&str]) -> Vec<String> {
-    keys.iter()
-        .find_map(|key| {
-            payload.get(*key).and_then(Value::as_array).map(|values| {
-                values
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            })
-        })
-        .unwrap_or_default()
-}
-
-fn activated_skill_array_field(payload: &Value, keys: &[&str]) -> Vec<ActivatedSkill> {
-    keys.iter()
-        .find_map(|key| {
-            payload.get(*key).and_then(Value::as_array).map(|values| {
-                values
-                    .iter()
-                    .filter_map(|value| {
-                        serde_json::from_value::<ActivatedSkill>(value.clone()).ok()
-                    })
-                    .collect::<Vec<_>>()
-            })
-        })
-        .unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        is_lease_lost, is_run_authority_lost, parse_run_config_response,
-        resolve_control_rpc_config, ControlRpcClient, ControlRpcError, ControlRpcErrorKind,
-        RunBootstrap, StartPayload,
+        is_lease_lost, is_run_authority_lost, resolve_control_rpc_config, ControlRpcClient,
+        ControlRpcError, ControlRpcErrorKind, RunAuthorityAttestation, RunBootstrap, StartPayload,
     };
     use reqwest::StatusCode;
     use serde_json::json;
@@ -1073,6 +1172,39 @@ mod tests {
     use std::thread;
 
     static CONTROL_RPC_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn valid_run_authority(revision: u32) -> RunAuthorityAttestation {
+        RunAuthorityAttestation {
+            context_revision: revision,
+            context_digest: format!("sha256:{}", "a".repeat(64)),
+            run_grant_digest: format!("sha256:{}", "b".repeat(64)),
+        }
+    }
+
+    #[test]
+    fn run_authority_attestation_rejects_missing_or_malformed_digests() {
+        let valid = RunAuthorityAttestation {
+            context_revision: 1,
+            context_digest: format!("sha256:{}", "a".repeat(64)),
+            run_grant_digest: format!("sha256:{}", "b".repeat(64)),
+        };
+        assert!(valid.is_valid());
+        assert!(RunAuthorityAttestation {
+            context_revision: 2,
+            ..valid.clone()
+        }
+        .is_valid());
+        assert!(!RunAuthorityAttestation {
+            context_revision: 0,
+            ..valid.clone()
+        }
+        .is_valid());
+        assert!(!RunAuthorityAttestation {
+            context_digest: "sha256:ABC".to_string(),
+            ..valid
+        }
+        .is_valid());
+    }
 
     #[test]
     fn checkpoint_capability_is_rolling_compatible() {
@@ -1209,39 +1341,6 @@ mod tests {
             bootstrap.runtime_namespace.as_deref(),
             Some("shared-cell://tokyo-cell-01/namespaces/inst_1")
         );
-    }
-
-    #[test]
-    fn run_config_parser_uses_current_camel_case_fields_only() {
-        let config = parse_run_config_response(&json!({
-            "systemPrompt": "control prompt",
-            "maxGraphSteps": 7,
-            "maxToolRounds": 3
-        }));
-
-        assert_eq!(config.system_prompt, "control prompt");
-        assert_eq!(config.max_graph_steps, Some(7));
-        assert_eq!(config.max_tool_rounds, Some(3));
-    }
-
-    #[test]
-    fn run_config_parser_ignores_snake_case_aliases() {
-        let config = parse_run_config_response(&json!({
-            "system_prompt": "old prompt",
-            "max_iterations": 9,
-            "max_graph_steps": 7,
-            "max_tool_rounds": 3,
-            "rate_limit": 2,
-            "embedding_provider": "openai",
-            "embedding_model": "text-embedding-3-small",
-            "embedding_base_url": "https://api.example/v1",
-            "embedding_api_key": "secret",
-            "embedding_dimensions": 1536
-        }));
-
-        assert_eq!(config.system_prompt, "");
-        assert_eq!(config.max_graph_steps, None);
-        assert_eq!(config.max_tool_rounds, None);
     }
 
     #[tokio::test]
@@ -1383,6 +1482,11 @@ mod tests {
 
         client
             .tool_execute(
+                &RunAuthorityAttestation {
+                    context_revision: 1,
+                    context_digest: format!("sha256:{}", "a".repeat(64)),
+                    run_grant_digest: format!("sha256:{}", "b".repeat(64)),
+                },
                 "call-1",
                 "publish",
                 json!({ "ref": "v1" }),
@@ -1400,6 +1504,11 @@ mod tests {
             serde_json::from_str(body).expect("request body should be json");
 
         assert_eq!(parsed["idempotencyKey"], "loop:loop-1:tool:1:0:publish");
+        assert_eq!(parsed["runAuthority"]["contextRevision"], 1);
+        assert_eq!(
+            parsed["runAuthority"]["contextDigest"],
+            format!("sha256:{}", "a".repeat(64))
+        );
         assert_eq!(parsed["toolCall"]["name"], "publish");
         assert_eq!(parsed["leaseVersion"], 9);
     }
@@ -1466,6 +1575,7 @@ mod tests {
 
         client
             .complete_run(
+                Some(&valid_run_authority(1)),
                 "completed",
                 super::UsagePayload::default(),
                 Some("done"),
@@ -1490,6 +1600,7 @@ mod tests {
         assert_eq!(parsed["output"], "done");
         assert_eq!(parsed["serviceId"], "service-test");
         assert_eq!(parsed["leaseVersion"], 7);
+        assert_eq!(parsed["runAuthority"]["contextRevision"], 1);
         assert_eq!(parsed["messages"][0]["content"], "done");
     }
 
@@ -1552,6 +1663,7 @@ mod tests {
 
         client
             .complete_run(
+                Some(&valid_run_authority(1)),
                 "completed",
                 super::UsagePayload::default(),
                 Some("done"),
@@ -1566,6 +1678,7 @@ mod tests {
         assert_eq!(captured.len(), 3);
         assert!(captured.iter().all(|payload| payload == &captured[0]));
         assert_eq!(captured[0]["status"], "completed");
+        assert_eq!(captured[0]["runAuthority"]["contextRevision"], 1);
     }
 
     #[tokio::test]
@@ -1597,7 +1710,7 @@ mod tests {
                 .expect("request body");
             let body: serde_json::Value =
                 serde_json::from_slice(&bytes).expect("checkpoint request JSON");
-            assert_eq!(body["checkpointProtocolVersion"], 2);
+            assert_eq!(body["checkpointProtocolVersion"], 3);
             if path.ends_with("engine-checkpoint-save") {
                 assert_eq!(body["leaseVersion"], 13);
                 let mut stored = stored.lock().await;
@@ -1635,6 +1748,8 @@ mod tests {
                     |value| value["usage"].clone(),
                 ),
                 "fatalError": crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR,
+                "checkpointAuthority": stored.stored.as_ref().map(|value| value["runAuthority"].clone()),
+                "runAuthority": body["runAuthority"].clone(),
             }))
             .into_response()
         }
@@ -1658,7 +1773,7 @@ mod tests {
             lease_version: Some(13),
             executor_tier: Some(1),
             executor_container_id: Some("checkpoint-container".to_string()),
-            checkpoint_protocol_version: Some(2),
+            checkpoint_protocol_version: Some(3),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1686,10 +1801,12 @@ mod tests {
         let usage_tracker = Arc::new(crate::engine_support::UsageTracker::default());
         usage_tracker.restore(usage.clone());
         let fatal_error = Arc::new(Mutex::new(None));
+        let run_authority = Arc::new(Mutex::new(valid_run_authority(1)));
         let repository = super::ControlRpcLoopStateRepository::new(
             client.clone(),
-            usage_tracker,
+            usage_tracker.clone(),
             fatal_error.clone(),
+            run_authority.clone(),
         );
         repository
             .save_checkpoint(checkpoint.clone())
@@ -1705,11 +1822,28 @@ mod tests {
             .save_checkpoint(reasonless_terminal)
             .await
             .expect("fatal checkpoint save is intentionally skipped");
-        let (loaded, loaded_usage, loaded_fatal_error) = client
-            .load_engine_checkpoint()
+        let loaded = repository
+            .load_current()
             .await
-            .expect("checkpoint load");
-        let loaded = loaded.expect("stored checkpoint");
+            .expect("checkpoint load")
+            .expect("stored checkpoint");
+        let loaded_usage = usage_tracker.snapshot();
+        let loaded_fatal_error = fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        {
+            let mut stored_state = stored.lock().await;
+            stored_state
+                .stored
+                .as_mut()
+                .expect("stored checkpoint payload")["runAuthority"]["runGrantDigest"] =
+                serde_json::Value::String(format!("sha256:{}", "c".repeat(64)));
+        }
+        let authority_error = repository
+            .load_current()
+            .await
+            .expect_err("checkpoint RunGrant mismatch must fail closed");
 
         server.abort();
         assert_eq!(loaded, checkpoint);
@@ -1718,93 +1852,13 @@ mod tests {
             loaded_fatal_error.as_deref(),
             Some(crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR)
         );
+        assert!(authority_error
+            .to_string()
+            .contains("invalid checkpoint authority"));
         let stored = stored.lock().await;
         assert_eq!(stored.save_attempts, 2);
-        assert_eq!(stored.load_attempts, 2);
+        assert_eq!(stored.load_attempts, 3);
         assert_eq!(stored.save_payloads[0], stored.save_payloads[1]);
-    }
-
-    #[tokio::test]
-    async fn control_rpc_client_parses_run_config_system_prompt() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
-        let address = listener.local_addr().expect("test listener address");
-        let handle = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("test server should accept");
-            let mut buffer = [0_u8; 4096];
-            let mut request = Vec::new();
-            let mut expected_len: Option<usize> = None;
-            loop {
-                let read = stream.read(&mut buffer).expect("request should read");
-                if read == 0 {
-                    break;
-                }
-                request.extend_from_slice(&buffer[..read]);
-                if expected_len.is_none() {
-                    if let Some(header_end) =
-                        request.windows(4).position(|window| window == b"\r\n\r\n")
-                    {
-                        let headers = String::from_utf8_lossy(&request[..header_end]);
-                        let content_len = headers
-                            .lines()
-                            .find_map(|line| {
-                                let (name, value) = line.split_once(':')?;
-                                if name.eq_ignore_ascii_case("content-length") {
-                                    value.trim().parse::<usize>().ok()
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or(0);
-                        expected_len = Some(header_end + 4 + content_len);
-                    }
-                }
-                if expected_len.is_some_and(|length| request.len() >= length) {
-                    break;
-                }
-            }
-            let response_body =
-                r#"{"systemPrompt":"control prompt","maxGraphSteps":7,"maxToolRounds":3}"#;
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                response_body.len(),
-                response_body
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("response should write");
-            String::from_utf8(request).expect("request should be utf8")
-        });
-
-        let client = control_rpc_client_with_env_cleared(&StartPayload {
-            run_id: "run-test".to_string(),
-            worker_id: "worker-test".to_string(),
-            service_id: Some("service-test".to_string()),
-            model: Some("local-smoke".to_string()),
-            lease_version: None,
-            executor_tier: None,
-            executor_container_id: None,
-            checkpoint_protocol_version: Some(1),
-            control_rpc_base_url: format!("http://{address}"),
-            control_rpc_token: "test-token".to_string(),
-        })
-        .expect("control RPC client should build");
-
-        let run_config = client
-            .run_config(Some("implementer"))
-            .await
-            .expect("run config should parse");
-        let request = handle.join().expect("test server should join");
-        let body = request
-            .split_once("\r\n\r\n")
-            .map(|(_, body)| body)
-            .expect("request should include http body");
-        let parsed: serde_json::Value =
-            serde_json::from_str(body).expect("request body should be json");
-
-        assert_eq!(parsed["agentType"], "implementer");
-        assert_eq!(run_config.system_prompt, "control prompt");
-        assert_eq!(run_config.max_graph_steps, Some(7));
-        assert_eq!(run_config.max_tool_rounds, Some(3));
     }
 
     #[test]

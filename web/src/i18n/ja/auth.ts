@@ -13,8 +13,6 @@ export const auth = {
   continue: "続行",
 
   // Initial Setup
-  autoUpdateSettings: "自動アップデート",
-  autoUpdateHint: "アップデートを自動適用する",
 
   // Shared action labels
   copied: "コピーしました",

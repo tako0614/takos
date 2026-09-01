@@ -3,8 +3,6 @@ import { assertEquals } from "@takos/test/assert";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   handleConversationHistory,
-  handleSkillCatalog,
-  handleSkillPlan,
   handleSkillRuntimeContext,
   resolveRunThreadTenant,
 } from "../executor-control-rpc.ts";
@@ -17,7 +15,12 @@ import {
  * compromised container reach a victim tenant's data — these tests would catch it.
  */
 
-type RunRow = { accountId: string; threadId: string | null } | null;
+type RunRow = {
+  accountId: string;
+  threadId: string | null;
+  agentType: string;
+  model: string | null;
+} | null;
 
 // Minimal drizzle-like mock: getDb() returns it as-is (isDrizzleLikeDb checks for
 // select/insert/update/delete), and every `.from(...).where(...).get()` resolves
@@ -62,8 +65,6 @@ const HANDLERS: Array<
   [string, (body: Record<string, unknown>, env: Env) => Promise<Response>]
 > = [
   ["conversation-history", handleConversationHistory],
-  ["skill-plan", handleSkillPlan],
-  ["skill-catalog", handleSkillCatalog],
   ["skill-runtime-context", handleSkillRuntimeContext],
 ];
 
@@ -89,10 +90,20 @@ for (const [name, handler] of HANDLERS) {
   });
 }
 
-test("resolveRunThreadTenant binds tenant to the run row, not the request body", async () => {
-  const env = envWithRun({ accountId: "space_A", threadId: "thread_A" });
+test("resolveRunThreadTenant binds execution authority to the run row", async () => {
+  const env = envWithRun({
+    accountId: "space_A",
+    threadId: "thread_A",
+    agentType: "implementer",
+    model: "gpt-5.5",
+  });
   const tenant = await resolveRunThreadTenant(env, "run_1");
-  assertEquals(tenant, { spaceId: "space_A", threadId: "thread_A" });
+  assertEquals(tenant, {
+    spaceId: "space_A",
+    threadId: "thread_A",
+    agentType: "implementer",
+    model: "gpt-5.5",
+  });
 });
 
 test("resolveRunThreadTenant fails closed for a missing run", async () => {
@@ -101,7 +112,12 @@ test("resolveRunThreadTenant fails closed for a missing run", async () => {
 });
 
 test("resolveRunThreadTenant fails closed when the run has no thread", async () => {
-  const env = envWithRun({ accountId: "space_A", threadId: null });
+  const env = envWithRun({
+    accountId: "space_A",
+    threadId: null,
+    agentType: "default",
+    model: "gpt-5.5",
+  });
   const tenant = await resolveRunThreadTenant(env, "run_1");
   assertEquals(tenant, null);
 });

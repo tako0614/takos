@@ -1,20 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import type {
   RoutingRecord,
   RoutingStore,
   RoutingTarget,
 } from "../application/services/routing/routing-models.ts";
+import { readJsonFile, writeJsonFile } from "./persistent-shared.ts";
+import { cloneRecord, normalizeHostname } from "./routing-record.ts";
 
 type RoutingState = Record<string, RoutingRecord>;
-
-function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase();
-}
-
-function cloneRecord(record: RoutingRecord | null): RoutingRecord | null {
-  return record ? JSON.parse(JSON.stringify(record)) as RoutingRecord : null;
-}
 
 export function createInMemoryRoutingStore(): RoutingStore {
   const records = new Map<string, RoutingRecord>();
@@ -59,40 +51,18 @@ export function createInMemoryRoutingStore(): RoutingStore {
   };
 }
 
-async function ensureParentDirectory(filePath: string): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-}
-
-async function readState(filePath: string): Promise<RoutingState> {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8")) as RoutingState;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === "ENOENT") return {};
-    throw error;
-  }
-}
-
-async function writeState(
-  filePath: string,
-  state: RoutingState,
-): Promise<void> {
-  await ensureParentDirectory(filePath);
-  await writeFile(filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-}
-
 export function createPersistentRoutingStore(filePath: string): RoutingStore {
   let cache: RoutingState | null = null;
 
   async function loadState(): Promise<RoutingState> {
     if (cache) return cache;
-    cache = await readState(filePath);
+    cache = await readJsonFile<RoutingState>(filePath, {});
     return cache;
   }
 
   async function flushState(): Promise<void> {
     if (!cache) return;
-    await writeState(filePath, cache);
+    await writeJsonFile(filePath, cache);
   }
 
   return {

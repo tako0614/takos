@@ -27,7 +27,7 @@ Source 画面が行わないこと:
 - app を公開・発見・連合する(Takos は単一オーナー product で store network を持たない)
 - Takosumi の Source / Capsule / Run ledger を置き換える
 
-つまり product copy では「Store から追加」と言ってよいですが、architecture と policy の意味では「Git URL の Capsule を追加する」が正本です。
+つまり product copy では「Store から追加」と言ってよいですが、architecture と policy の意味では「Git URL の Capsule を追加する」が正本 (正とする情報)です。
 
 ## 関連 app も同じ仕組みに乗る
 

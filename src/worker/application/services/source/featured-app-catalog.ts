@@ -16,7 +16,6 @@ export {
   featuredAppCatalogDeps,
   hasFeaturedAppCatalogEnvOverride,
   invalidateCatalogCache,
-  isFeaturedAppCatalogConfigError,
   isFeaturedAppCatalogInvalidError,
 } from "./featured-app-catalog-internal.ts";
 

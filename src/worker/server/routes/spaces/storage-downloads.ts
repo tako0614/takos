@@ -7,10 +7,10 @@ import {
 import { zValidator } from "../zod-validator.ts";
 import {
   escapeSqlLike,
-  FILE_URL_EXPIRY_SECONDS,
-  getStorageItem,
   getStorageItemByPath,
   MAX_ZIP_ENTRIES,
+  normalizeStorageMimeType,
+  normalizePath,
   readFileContent,
   writeFileContent,
 } from "../../../application/services/source/space-storage.ts";
@@ -22,15 +22,44 @@ import {
   BadRequestError,
   InternalError,
   NotFoundError,
+  PayloadTooLargeError,
 } from "@takos/worker-platform-utils/errors";
 import {
   handleStorageError,
-  INLINE_SAFE_MIME_PREFIXES,
+  isStorageMimeTypeSafeForInline,
   requireOAuthScope,
+  storageArchiveLimiter,
 } from "./storage-operations.ts";
+import { MAX_STORAGE_PATH_CHARACTERS } from "../../../shared/types/index.ts";
 
+export function buildStorageZipEntryName(
+  filePath: string,
+  normalizedFolderPath: string,
+): string {
+  const prefix = normalizedFolderPath === "/"
+    ? "/"
+    : `${normalizedFolderPath}/`;
+  if (!filePath.startsWith(prefix)) {
+    throw new InternalError("Storage archive contains an invalid file path");
+  }
+  const relative = filePath.slice(prefix.length);
+  if (
+    !relative || relative.startsWith("/") || relative.includes("\\") ||
+    /[\u0000-\u001f\u007f]/.test(relative) ||
+    relative.split("/").some((segment) =>
+      !segment || segment === "." || segment === ".."
+    )
+  ) {
+    throw new InternalError("Storage archive contains an invalid file path");
+  }
+  return relative;
+}
 
 const app = new Hono<AuthenticatedRouteEnv>()
+  .use(
+    "/:spaceId/storage/download-zip",
+    storageArchiveLimiter.middleware(),
+  )
   // --- Content read endpoint ---
   .get(
     "/:spaceId/storage/:fileId/content",
@@ -87,8 +116,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       if (!c.env.GIT_OBJECTS) {
@@ -165,17 +193,31 @@ const app = new Hono<AuthenticatedRouteEnv>()
         throw new NotFoundError("File");
       }
 
-      const contentType = fileRecord.mimeType ||
-        object.httpMetadata?.contentType || "application/octet-stream";
+      let contentType = "application/octet-stream";
+      for (
+        const candidate of [
+          fileRecord.mimeType,
+          object.httpMetadata?.contentType,
+        ]
+      ) {
+        try {
+          const normalized = normalizeStorageMimeType(candidate);
+          if (normalized) {
+            contentType = normalized;
+            break;
+          }
+        } catch {
+          // Legacy or provider metadata may be invalid. Serve it as opaque
+          // bytes instead of copying an unsafe value into a response header.
+        }
+      }
       // Force attachment for types that could execute in browser (XSS prevention)
-      const isSafeForInline =
-        INLINE_SAFE_MIME_PREFIXES.some((p) => contentType.startsWith(p)) ||
-        contentType === "text/plain";
+      const isSafeForInline = isStorageMimeTypeSafeForInline(contentType);
       const disposition = isSafeForInline ? "inline" : "attachment";
 
       const headers = new Headers();
       headers.set("Content-Type", contentType);
-      headers.set("Content-Length", String(fileRecord.size));
+      headers.set("Content-Length", String(object.size));
       headers.set(
         "Content-Disposition",
         `${disposition}; filename*=UTF-8''${
@@ -187,62 +229,20 @@ const app = new Hono<AuthenticatedRouteEnv>()
       return new Response(object.body as BodyInit, { headers });
     },
   )
-  // --- Download URL ---
-  .get(
-    "/:spaceId/storage/download-url",
-    requireOAuthScope("files:read"),
-    zValidator("query", z.object({ file_id: z.string().optional() })),
-    async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
-      const { file_id: fileId } = c.req.valid("query");
-
-      if (!fileId) {
-        throw new BadRequestError("file_id is required");
-      }
-
-      const access = await requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-      );
-
-      const file = await getStorageItem(
-        c.env.DB,
-        access.space.id,
-        fileId,
-      );
-      if (!file) {
-        throw new NotFoundError("File");
-      }
-
-      if (file.type !== "file") {
-        throw new BadRequestError("Cannot download a folder");
-      }
-
-      const downloadUrl = new URL(
-        `/api/spaces/${spaceId}/storage/download/${fileId}`,
-        c.req.url,
-      ).toString();
-      const expiresAt = new Date(Date.now() + FILE_URL_EXPIRY_SECONDS * 1000)
-        .toISOString();
-
-      return c.json({
-        download_url: downloadUrl,
-        expires_at: expiresAt,
-        file,
-      });
-    },
-  )
   // --- Download ZIP ---
   .get(
     "/:spaceId/storage/download-zip",
     requireOAuthScope("files:read"),
-    zValidator("query", z.object({ path: z.string().optional() })),
+    zValidator(
+      "query",
+      z.object({
+        path: z.string().max(MAX_STORAGE_PATH_CHARACTERS).optional(),
+      }).strict(),
+    ),
     async (c) => {
       const user = c.get("user");
       const spaceId = c.req.param("spaceId");
-      const path = c.req.valid("query").path || "/";
+      const path = normalizePath(c.req.valid("query").path?.trim() || "/");
 
       const access = await requireSpaceAccess(
         c,
@@ -267,13 +267,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       const db = getDb(c.env.DB);
-      const normalizedPath = path.startsWith("/")
-        ? path.replace(/\/+$/, "") || "/"
-        : `/${path.replace(/\/+$/, "")}`;
+      const normalizedPath = path;
       const prefix = normalizedPath === "/" ? "/" : `${normalizedPath}/`;
       const escapedPrefix = escapeSqlLike(prefix);
 
-      const files = await db.select({
+      const selectedFiles = await db.select({
         id: accountStorageFiles.id,
         path: accountStorageFiles.path,
         size: accountStorageFiles.size,
@@ -287,29 +285,38 @@ const app = new Hono<AuthenticatedRouteEnv>()
             escapedPrefix + "%"
           } ESCAPE '\\'`,
         ),
-      ).orderBy(asc(accountStorageFiles.path)).limit(MAX_ZIP_ENTRIES).all();
+      ).orderBy(asc(accountStorageFiles.path)).limit(MAX_ZIP_ENTRIES + 1)
+        .all();
 
-      const entries = files
-        .filter((f) => typeof f.r2Key === "string" && f.r2Key)
-        .map((f) => {
-          const zipName = normalizedPath === "/"
-            ? f.path.replace(/^\//, "")
-            : f.path.startsWith(prefix)
-            ? f.path.slice(prefix.length)
-            : f.path.replace(/^\//, "");
-          return {
-            name: zipName || f.id,
-            size: f.size,
-            modifiedAt: new Date(f.updatedAt),
-            stream: async () => {
-              const obj = await gitObjects.get(f.r2Key as string);
-              if (!obj || !obj.body) {
-                throw new Error(`Missing object: ${f.r2Key}`);
-              }
-              return obj.body as ReadableStream<Uint8Array>;
-            },
-          };
-        });
+      if (selectedFiles.length > MAX_ZIP_ENTRIES) {
+        throw new PayloadTooLargeError(
+          `Storage archive exceeds the ${MAX_ZIP_ENTRIES}-file limit`,
+        );
+      }
+
+      const entries = selectedFiles.map((file) => {
+        if (!file.r2Key) {
+          throw new InternalError(
+            "Storage archive contains a file without content",
+          );
+        }
+        const modifiedTimestamp = Date.parse(file.updatedAt);
+        if (!Number.isFinite(modifiedTimestamp)) {
+          throw new InternalError("Storage archive metadata is invalid");
+        }
+        return {
+          name: buildStorageZipEntryName(file.path, normalizedPath),
+          size: file.size,
+          modifiedAt: new Date(modifiedTimestamp),
+          stream: async () => {
+            const obj = await gitObjects.get(file.r2Key as string);
+            if (!obj || !obj.body) {
+              throw new Error("Storage archive object is missing");
+            }
+            return obj.body as ReadableStream<Uint8Array>;
+          },
+        };
+      });
 
       const baseName = normalizedPath === "/"
         ? "space-storage"
@@ -318,12 +325,12 @@ const app = new Hono<AuthenticatedRouteEnv>()
 
       const headers = new Headers();
       headers.set("Content-Type", "application/zip");
-      headers.set("Content-Disposition", `attachment; filename="${fileName}"`);
+      headers.set(
+        "Content-Disposition",
+        `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      );
       headers.set("Cache-Control", "no-store");
       headers.set("X-Takos-Zip-Entries", String(entries.length));
-      if (files.length >= MAX_ZIP_ENTRIES) {
-        headers.set("X-Takos-Zip-Truncated", "true");
-      }
 
       const stream = createZipStream(entries);
       return new Response(stream, { status: 200, headers });

@@ -1,4 +1,5 @@
 import type { Env } from "../../../shared/types/index.ts";
+import { asRecord as readRecord } from "../../../shared/utils/guards.ts";
 import { sourceServiceDeps } from "./deps.ts";
 import {
   fetchCapsuleWorkloadServices,
@@ -48,12 +49,6 @@ function readString(value: unknown): string | null {
 
 function readEnvString(value: string | undefined): string | undefined {
   return readString(value) ?? undefined;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function normalizeAccountsBaseUrl(raw: string): string | null {

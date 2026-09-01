@@ -12,9 +12,9 @@ import { toSessionSnakeCase } from "./session-mappers.ts";
 import type { SessionContext } from "./session-mappers.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import {
-  AuthorizationError,
   BadRequestError,
   InternalError,
+  NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { requireFound, requireParam } from "../validation-utils.ts";
 import { getPlatformServices } from "../../../platform/accessors.ts";
@@ -57,8 +57,7 @@ export async function startSession(
     c,
     spaceId,
     user.id,
-    ["owner", "admin", "editor"],
-    "Workspace not found or insufficient permissions",
+    "Workspace not found",
   );
 
   const repoId = body.repo_id;
@@ -157,9 +156,7 @@ export async function stopSession(
     c,
     session.space_id,
     user.id,
-    ["owner", "admin"],
-    "Permission denied - only space owners and admins can stop sessions",
-    403,
+    "Workspace not found",
   );
 
   if (session.status !== "running") {
@@ -246,9 +243,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     c,
     sessionRow.accountId,
     user.id,
-    ["owner", "admin"],
-    "Permission denied - only space owners and admins can resume sessions",
-    403,
+    "Workspace not found",
   );
 
   if (sessionRow.status !== "stopped") {
@@ -287,12 +282,9 @@ export async function discardSession(c: SessionContext): Promise<Response> {
     dbBinding,
     sessionRow.accountId,
     user.id,
-    ["owner", "admin"],
   );
   if (!access) {
-    throw new AuthorizationError(
-      "Permission denied - only space owners and admins can discard sessions",
-    );
+    throw new NotFoundError("Session");
   }
 
   if (sessionRow.status === "merged") {

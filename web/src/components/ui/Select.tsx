@@ -16,6 +16,8 @@ interface SelectOption {
 }
 
 interface SelectProps {
+  id?: string;
+  name?: string;
   options: SelectOption[];
   value?: string;
   placeholder?: string;
@@ -219,6 +221,8 @@ export function Select(props: SelectProps) {
     >
       <button
         ref={triggerRef}
+        id={props.id}
+        name={props.name}
         type="button"
         role="combobox"
         aria-haspopup="listbox"

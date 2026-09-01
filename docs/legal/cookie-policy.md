@@ -22,32 +22,31 @@ publishing.
 localStorage を使用します。当社は **広告 Cookie および第三者 tracking Cookie を一切使用しません**。
 
 詳細な利用目的別の処理一覧は [Privacy Rights](/legal/privacy-rights)
-の Cookie Consent セクションも参照してください。
+の Cookie and Local Storage セクションも参照してください。
 
 ## 2. 使用する Cookie / ストレージ
 
 ### 2.1 Strictly Necessary (必須) — 同意不要
 
-| 名前                   | 種別         | 用途                            | 有効期間            |
-| ---------------------- | ------------ | ------------------------------- | ------------------- |
-| `__Host-tp_session`    | HTTP Cookie  | 認証済みセッションの維持        | セッション終了時    |
-| OIDC `state` / `nonce` | HTTP Cookie  | OIDC ログインフローの CSRF 対策 | 数分 (フロー中のみ) |
-| Dashboard CSRF token   | HTTP Cookie  | dashboard 操作の CSRF 対策      | セッション終了時    |
-| `takos-cookie-consent` | localStorage | 同意状態の記録                  | 1 年                |
+| 名前                   | 種別        | 用途                            | 有効期間            |
+| ---------------------- | ----------- | ------------------------------- | ------------------- |
+| `__Host-tp_session`    | HTTP Cookie | 認証済みセッションの維持        | セッション終了時    |
+| OIDC `state` / `nonce` | HTTP Cookie | OIDC ログインフローの CSRF 対策 | 数分 (フロー中のみ) |
+| Dashboard CSRF token   | HTTP Cookie | dashboard 操作の CSRF 対策      | セッション終了時    |
 
 これらは本サービスの基本機能 (ログイン、セキュリティ) に必須であり、GDPR / ePrivacy
 Directive 上 **同意なしに設定できます**。
 
-### 2.2 Preference (個人設定) — オプトイン同意必要
+### 2.2 Device-local Preference (端末内の個人設定)
 
-| 名前          | 種別         | 用途                              | 有効期間 |
-| ------------- | ------------ | --------------------------------- | -------- |
-| `takos-lang`  | localStorage | 表示言語の選択                    | 1 年     |
-| `takos-theme` | localStorage | テーマ (light / dark) の選択      | 1 年     |
-| UI 個人設定   | localStorage | sidebar 開閉状態、layout 設定など | 1 年     |
+| 名前                            | 種別         | 用途                           | 有効期間                   |
+| ------------------------------- | ------------ | ------------------------------ | -------------------------- |
+| `takos-lang`                    | localStorage | 表示言語                       | ブラウザデータ消去時まで   |
+| `takos-theme`                   | localStorage | テーマ (light / dark / system) | ブラウザデータ消去時まで   |
+| `takos:default-file-handlers`   | localStorage | 拡張子ごとの既定ファイル処理   | ブラウザデータ消去時まで   |
 
-これらは利用者が個人設定を保存する場合のみ書き込まれます。同意 banner で
-opt-in できます。
+これらは同じ端末で UI 設定を維持するためだけに使用し、tracking identifier として
+送信しません。
 
 ### 2.3 Analytics / Advertising — 使用しない
 
@@ -55,16 +54,15 @@ opt-in できます。
 Cookie を一切使用しません**。サーバーサイドの aggregate 利用統計のみを
 [Privacy Policy](/legal/privacy-policy) §2.3 に従って処理します。
 
-## 3. 同意管理
+## 3. 現在の実装
 
-- 初回訪問時に同意 banner を表示し、Preference Cookie の opt-in を取得します。
-- 同意状態は `takos-cookie-consent` localStorage に記録されます。
-- 同意撤回は dashboard の `/settings/privacy` から随時可能です。
-- 同意撤回後、Preference Cookie はクリアされ、再書き込みされません。
+- 現在の build は広告・分析・tracking Cookie を使用しません。
+- Cookie 確認 banner は表示せず、別の同意状態も保存しません。
+- 端末内の個人設定はブラウザのサイトデータ削除で消去できます。
 
-GDPR / ePrivacy Directive のもとでは、**non-essential Cookie への opt-in 同意が必須**
-です。当社は現状 essential Cookie のみを必須としているため、Preference
-Cookie 不同意でもサービスの基本機能は継続利用できます。
+operator が non-essential storage や tracking を追加する場合は、production で
+有効にする前に inventory と文面を更新し、その deployment に必要な notice / choice
+を実装しなければなりません。
 
 ## 4. ブラウザでの無効化方法
 

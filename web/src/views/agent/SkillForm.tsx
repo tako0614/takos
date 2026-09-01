@@ -3,6 +3,16 @@ import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { type JsonResponseLike, rpcJson } from "../../lib/rpc.ts";
 import { Button, Input, Textarea } from "../../components/ui/index.ts";
+import {
+  MAX_CUSTOM_SKILL_DESCRIPTION_CHARACTERS,
+  MAX_CUSTOM_SKILL_INSTRUCTION_BYTES,
+  MAX_CUSTOM_SKILL_LIST_INPUT_CHARACTERS,
+  MAX_CUSTOM_SKILL_NAME_CHARACTERS,
+  MAX_CUSTOM_SKILL_RESOURCES,
+} from "takos-api-contract/shared/types";
+import type { SkillResourceTemplate } from "../../types/index.ts";
+import { getSkillInstructionByteLength } from "./skill-form-utils.ts";
+import { readCustomSkillMutationResponse } from "./skill-response.ts";
 
 export interface SkillFormData {
   name: string;
@@ -107,9 +117,13 @@ function isSkillMutationErrorBody(
 export async function readSkillMutationResponse(
   response: JsonResponseLike,
   fallbackMessage: string,
+  expected: { id?: string; name: string },
 ) {
   if (response.ok) {
-    return rpcJson(response);
+    return readCustomSkillMutationResponse(
+      await rpcJson<unknown>(response),
+      expected,
+    );
   }
 
   const data = await response.json().catch(() => null);
@@ -130,6 +144,8 @@ const selectStyle: JSX.CSSProperties = {
 };
 
 function MetadataInput(props: {
+  id: string;
+  name: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -138,6 +154,7 @@ function MetadataInput(props: {
   return (
     <div style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}>
       <label
+        for={props.id}
         style={{
           "font-size": "0.875rem",
           "font-weight": 500,
@@ -147,6 +164,10 @@ function MetadataInput(props: {
         {props.label}
       </label>
       <Input
+        id={props.id}
+        name={props.name}
+        autocomplete="off"
+        maxLength={MAX_CUSTOM_SKILL_LIST_INPUT_CHARACTERS}
         value={props.value}
         onInput={(e) =>
           props.onChange(e.currentTarget.value)}
@@ -163,10 +184,35 @@ export function SkillFormView(props: {
   saving: boolean;
   error: string | null;
   fieldErrors: Record<string, string>;
+  resourceTemplates: SkillResourceTemplate[];
   onSubmit: (e: Event & { currentTarget: HTMLFormElement }) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const instructionBytes = () =>
+    getSkillInstructionByteLength(props.form.instructions);
+  const instructionsOverBudget = () =>
+    instructionBytes() > MAX_CUSTOM_SKILL_INSTRUCTION_BYTES;
+  const selectedResourceIds = () => splitCsv(props.form.templateIds);
+  const selectedResourceIdSet = () => new Set(selectedResourceIds());
+  const resourceOptions = () => {
+    const knownIds = new Set(props.resourceTemplates.map((item) => item.id));
+    return [
+      ...props.resourceTemplates.map((item) => ({
+        ...item,
+        unavailable: false,
+      })),
+      ...selectedResourceIds()
+        .filter((id) => !knownIds.has(id))
+        .map((id) => ({
+          id,
+          title: id,
+          description: t("skillResourceUnavailable"),
+          media_type: "text/markdown" as const,
+          unavailable: true,
+        })),
+    ];
+  };
 
   const updateField = <K extends keyof SkillFormData>(
     key: K,
@@ -175,8 +221,17 @@ export function SkillFormView(props: {
     props.setForm({ ...props.form, [key]: value });
   };
 
+  const toggleResource = (resourceId: string, selected: boolean) => {
+    const current = selectedResourceIds();
+    const next = selected
+      ? [...current.filter((id) => id !== resourceId), resourceId]
+      : current.filter((id) => id !== resourceId);
+    updateField("templateIds", next.join(", "));
+  };
+
   return (
     <form
+      autocomplete="off"
       style={{ display: "flex", "flex-direction": "column", gap: "1rem" }}
       onSubmit={props.onSubmit}
     >
@@ -188,7 +243,13 @@ export function SkillFormView(props: {
           "margin-bottom": "0.5rem",
         }}
       >
-        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={props.onClose}
+          disabled={props.saving}
+        >
           <Icons.ArrowLeft />
         </Button>
         <h4
@@ -206,6 +267,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for="skill-name"
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -215,6 +277,10 @@ export function SkillFormView(props: {
           {t("skillName")}
         </label>
         <Input
+          id="skill-name"
+          name="name"
+          autocomplete="off"
+          maxLength={MAX_CUSTOM_SKILL_NAME_CHARACTERS}
           placeholder={t("skillNamePlaceholder")}
           value={props.form.name}
           onInput={(e) => updateField("name", e.currentTarget.value)}
@@ -226,6 +292,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for="skill-description"
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -235,6 +302,10 @@ export function SkillFormView(props: {
           {t("skillDescription")}
         </label>
         <Input
+          id="skill-description"
+          name="description"
+          autocomplete="off"
+          maxLength={MAX_CUSTOM_SKILL_DESCRIPTION_CHARACTERS}
           placeholder={t("skillDescriptionPlaceholder")}
           value={props.form.description}
           onInput={(e) => updateField("description", e.currentTarget.value)}
@@ -244,6 +315,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for="skill-instructions"
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -253,6 +325,12 @@ export function SkillFormView(props: {
           {t("skillInstructions")}
         </label>
         <Textarea
+          id="skill-instructions"
+          name="instructions"
+          autocomplete="off"
+          aria-describedby="skill-instructions-budget"
+          aria-invalid={instructionsOverBudget()}
+          maxLength={MAX_CUSTOM_SKILL_INSTRUCTION_BYTES}
           placeholder={t("skillInstructionsPlaceholder")}
           value={props.form.instructions}
           onInput={(e) => updateField("instructions", e.currentTarget.value)}
@@ -260,11 +338,32 @@ export function SkillFormView(props: {
           rows={8}
           style={{ "min-height": "200px" }}
         />
+        <span
+          id="skill-instructions-budget"
+          role={instructionsOverBudget() ? "alert" : undefined}
+          style={{
+            "font-size": "0.75rem",
+            color: instructionsOverBudget()
+              ? "var(--color-error)"
+              : "var(--color-text-tertiary)",
+          }}
+        >
+          {instructionsOverBudget()
+            ? t("skillInstructionsTooLarge", {
+              count: instructionBytes(),
+              limit: MAX_CUSTOM_SKILL_INSTRUCTION_BYTES,
+            })
+            : t("skillInstructionsBytes", {
+              count: instructionBytes(),
+              limit: MAX_CUSTOM_SKILL_INSTRUCTION_BYTES,
+            })}
+        </span>
       </div>
       <div
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for="skill-triggers"
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -274,6 +373,10 @@ export function SkillFormView(props: {
           {t("skillTriggers")}
         </label>
         <Input
+          id="skill-triggers"
+          name="triggers"
+          autocomplete="off"
+          maxLength={MAX_CUSTOM_SKILL_LIST_INPUT_CHARACTERS}
           placeholder={t("skillTriggersPlaceholder")}
           value={props.form.triggers}
           onInput={(e) => updateField("triggers", e.currentTarget.value)}
@@ -298,6 +401,7 @@ export function SkillFormView(props: {
           style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
         >
           <label
+            for="skill-locale"
             style={{
               "font-size": "0.875rem",
               "font-weight": 500,
@@ -307,6 +411,9 @@ export function SkillFormView(props: {
             {t("skillLocaleLabel")}
           </label>
           <select
+            id="skill-locale"
+            name="locale"
+            autocomplete="off"
             value={props.form.skillLocale}
             onChange={(e) => updateField("skillLocale", e.currentTarget.value)}
             style={selectStyle}
@@ -320,6 +427,7 @@ export function SkillFormView(props: {
           style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
         >
           <label
+            for="skill-category"
             style={{
               "font-size": "0.875rem",
               "font-weight": 500,
@@ -329,6 +437,9 @@ export function SkillFormView(props: {
             {t("skillCategoryLabel")}
           </label>
           <select
+            id="skill-category"
+            name="category"
+            autocomplete="off"
             value={props.form.category}
             onChange={(e) => updateField("category", e.currentTarget.value)}
             style={selectStyle}
@@ -350,45 +461,162 @@ export function SkillFormView(props: {
         }}
       >
         <MetadataInput
+          id="skill-activation-tags"
+          name="activation_tags"
           label={t("skillActivationTags")}
           value={props.form.activationTags}
           onChange={(v) => updateField("activationTags", v)}
           placeholder="slides, narrative"
         />
         <MetadataInput
+          id="skill-preferred-tools"
+          name="preferred_tools"
           label={t("skillPreferredTools")}
           value={props.form.preferredTools}
           onChange={(v) => updateField("preferredTools", v)}
           placeholder="create_artifact, toolbox"
         />
         <MetadataInput
+          id="skill-durable-outputs"
+          name="durable_output_hints"
           label={t("skillDurableOutputs")}
           value={props.form.durableOutputs}
           onChange={(v) => updateField("durableOutputs", v)}
           placeholder="artifact, workspace_file"
         />
         <MetadataInput
+          id="skill-output-modes"
+          name="output_modes"
           label={t("skillOutputModes")}
           value={props.form.outputModes}
           onChange={(v) => updateField("outputModes", v)}
           placeholder="chat, artifact"
         />
         <MetadataInput
+          id="skill-required-mcp-servers"
+          name="required_mcp_servers"
           label={t("skillRequiredMcpServers")}
           value={props.form.requiredMcpServers}
           onChange={(v) => updateField("requiredMcpServers", v)}
           placeholder="figma, notion"
         />
-        <MetadataInput
-          label={t("skillTemplateIds")}
-          value={props.form.templateIds}
-          onChange={(v) => updateField("templateIds", v)}
-          placeholder="slides-outline, speaker-notes"
-        />
       </div>
+      <fieldset
+        aria-describedby="skill-resources-hint"
+        aria-invalid={Boolean(
+          props.fieldErrors["execution_contract.template_ids"],
+        )}
+        style={{
+          display: "flex",
+          "flex-direction": "column",
+          gap: "0.75rem",
+          margin: 0,
+          padding: "1rem",
+          border: "1px solid var(--color-border-primary)",
+          "border-radius": "var(--radius-md)",
+        }}
+      >
+        <legend
+          style={{
+            padding: "0 0.375rem",
+            "font-size": "0.875rem",
+            "font-weight": 600,
+            color: "var(--color-text-primary)",
+          }}
+        >
+          {t("skillResources")}
+        </legend>
+        <span
+          id="skill-resources-hint"
+          style={{
+            "font-size": "0.75rem",
+            color: "var(--color-text-tertiary)",
+          }}
+        >
+          {t("skillResourcesHint", {
+            count: selectedResourceIds().length,
+            limit: MAX_CUSTOM_SKILL_RESOURCES,
+          })}
+        </span>
+        {resourceOptions().length === 0
+          ? (
+            <span
+              style={{
+                "font-size": "0.8rem",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {t("skillResourcesEmpty")}
+            </span>
+          )
+          : resourceOptions().map((resource) => {
+            const selected = () => selectedResourceIdSet().has(resource.id);
+            const atLimit = () =>
+              selectedResourceIds().length >= MAX_CUSTOM_SKILL_RESOURCES;
+            return (
+              <label
+                style={{
+                  display: "grid",
+                  "grid-template-columns": "auto minmax(0, 1fr)",
+                  gap: "0.625rem",
+                  padding: "0.625rem",
+                  border: "1px solid var(--color-border-secondary)",
+                  "border-radius": "var(--radius-sm)",
+                  cursor: resource.unavailable ? "default" : "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name="template_ids"
+                  value={resource.id}
+                  checked={selected()}
+                  disabled={!selected() && (atLimit() || resource.unavailable)}
+                  onChange={(event) =>
+                    toggleResource(resource.id, event.currentTarget.checked)}
+                />
+                <span
+                  style={{
+                    display: "flex",
+                    "flex-direction": "column",
+                    gap: "0.2rem",
+                  }}
+                >
+                  <span
+                    style={{
+                      "font-size": "0.825rem",
+                      "font-weight": 600,
+                      color: "var(--color-text-primary)",
+                    }}
+                  >
+                    {resource.title}
+                  </span>
+                  <span
+                    style={{
+                      "font-size": "0.75rem",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    {resource.description}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        {props.fieldErrors["execution_contract.template_ids"]
+          ? (
+            <span
+              role="alert"
+              style={{ color: "var(--color-error)", "font-size": "0.75rem" }}
+            >
+              {props.fieldErrors["execution_contract.template_ids"]}
+            </span>
+          )
+          : null}
+      </fieldset>
       {Object.keys(props.fieldErrors).length > 0
         ? (
           <div
+            role="alert"
             style={{
               display: "flex",
               "flex-direction": "column",
@@ -404,7 +632,10 @@ export function SkillFormView(props: {
         )
         : null}
       {props.error && (
-        <div style={{ color: "var(--color-error)", "font-size": "0.875rem" }}>
+        <div
+          role="alert"
+          style={{ color: "var(--color-error)", "font-size": "0.875rem" }}
+        >
           {props.error}
         </div>
       )}
@@ -416,7 +647,12 @@ export function SkillFormView(props: {
           "margin-top": "1rem",
         }}
       >
-        <Button type="button" variant="secondary" onClick={props.onClose}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={props.onClose}
+          disabled={props.saving}
+        >
           {t("cancel")}
         </Button>
         <Button
@@ -424,7 +660,7 @@ export function SkillFormView(props: {
           variant="primary"
           isLoading={props.saving}
           disabled={!props.form.name.trim() ||
-            !props.form.instructions.trim()}
+            !props.form.instructions.trim() || instructionsOverBudget()}
         >
           {t("save")}
         </Button>

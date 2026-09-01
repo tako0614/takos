@@ -15,40 +15,137 @@ import {
   getSkillByName,
   SkillMetadataValidationError,
 } from "../../application/services/source/skills.ts";
+import {
+  MAX_CUSTOM_SKILL_DESCRIPTION_CHARACTERS,
+  MAX_CUSTOM_SKILL_INSTRUCTION_BYTES,
+  MAX_CUSTOM_SKILL_METADATA_ITEM_CHARACTERS,
+  MAX_CUSTOM_SKILL_METADATA_LIST_ITEMS,
+  MAX_CUSTOM_SKILL_RESOURCES,
+  MAX_CUSTOM_SKILL_NAME_CHARACTERS,
+  MAX_CUSTOM_SKILL_REFERENCE_CHARACTERS,
+  MAX_CUSTOM_SKILL_TRIGGER_CHARACTERS,
+  MAX_CUSTOM_SKILL_TRIGGERS,
+} from "../../shared/types/skills.ts";
 
 export type SkillsContext = Context<SpaceAccessRouteEnv>;
 
+const skillListItemSchema = z.string().trim().min(1).max(
+  MAX_CUSTOM_SKILL_METADATA_ITEM_CHARACTERS,
+);
+const skillListSchema = z.array(skillListItemSchema).max(
+  MAX_CUSTOM_SKILL_METADATA_LIST_ITEMS,
+);
+const skillExecutionContractSchema = z.object({
+  preferred_tools: skillListSchema.optional(),
+  durable_output_hints: z.array(z.enum([
+    "artifact",
+    "reminder",
+    "repo",
+    "app",
+    "workspace_file",
+  ])).max(MAX_CUSTOM_SKILL_METADATA_LIST_ITEMS).optional(),
+  output_modes: z.array(z.enum([
+    "chat",
+    "artifact",
+    "reminder",
+    "repo",
+    "app",
+    "workspace_file",
+    "text",
+    "structured",
+  ])).max(MAX_CUSTOM_SKILL_METADATA_LIST_ITEMS).optional(),
+  required_mcp_servers: skillListSchema.optional(),
+  template_ids: z.array(skillListItemSchema).max(
+    MAX_CUSTOM_SKILL_RESOURCES,
+  ).optional(),
+}).strict();
+const skillMetadataSchema = z.object({
+  locale: z.enum(["ja", "en"]).optional(),
+  category: z.enum([
+    "research",
+    "writing",
+    "planning",
+    "slides",
+    "software",
+  ]).optional(),
+  activation_tags: skillListSchema.optional(),
+  execution_contract: skillExecutionContractSchema.optional(),
+}).strict();
+const skillNameSchema = z.string().trim().min(1, "name is required").max(
+  MAX_CUSTOM_SKILL_NAME_CHARACTERS,
+);
+const skillDescriptionSchema = z.string().max(
+  MAX_CUSTOM_SKILL_DESCRIPTION_CHARACTERS,
+).nullable();
+const skillInstructionsSchema = z.string().trim().min(
+  1,
+  "instructions is required",
+).refine(
+  (value) =>
+    new TextEncoder().encode(value).byteLength <=
+      MAX_CUSTOM_SKILL_INSTRUCTION_BYTES,
+  `instructions must be at most ${MAX_CUSTOM_SKILL_INSTRUCTION_BYTES} bytes`,
+);
+const skillTriggersSchema = z.array(
+  z.string().trim().min(1).max(MAX_CUSTOM_SKILL_TRIGGER_CHARACTERS),
+).max(MAX_CUSTOM_SKILL_TRIGGERS);
+
 export const createSkillSchema = z.object({
-  name: z.string().min(1, "name is required"),
-  description: z.string().optional(),
-  instructions: z.string().min(1, "instructions is required"),
-  triggers: z.array(z.string()).optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
+  name: skillNameSchema,
+  description: skillDescriptionSchema.optional(),
+  instructions: skillInstructionsSchema,
+  triggers: skillTriggersSchema.optional(),
+  metadata: skillMetadataSchema.nullable().optional(),
+}).strict();
 
 export const updateSkillSchema = z.object({
-  name: z.string().min(1, "name must not be empty").optional(),
-  description: z.string().optional(),
-  instructions: z.string().min(1, "instructions must not be empty").optional(),
-  triggers: z.array(z.string()).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  name: skillNameSchema.optional(),
+  description: skillDescriptionSchema.optional(),
+  instructions: skillInstructionsSchema.optional(),
+  triggers: skillTriggersSchema.optional(),
+  metadata: skillMetadataSchema.nullable().optional(),
   enabled: z.boolean().optional(),
-});
+}).strict().refine(
+  (body) => Object.keys(body).length > 0,
+  "At least one Skill field is required",
+);
 
 export const patchSkillSchema = z.object({
-  enabled: z.boolean().optional(),
-});
+  enabled: z.boolean(),
+}).strict();
+
+export function decodeSkillReference(
+  value: string | undefined,
+  label: "id" | "name",
+  maxCharacters: number,
+): string {
+  let decoded = "";
+  try {
+    decoded = value ? decodeURIComponent(value) : "";
+  } catch {
+    throw new BadRequestError(`Invalid skill ${label}`);
+  }
+
+  if (!decoded || decoded.length > maxCharacters) {
+    throw new BadRequestError(`Invalid skill ${label}`);
+  }
+  return decoded;
+}
 
 export function getSkillIdParam(c: SkillsContext): string {
-  const skillId = c.req.param("skillId");
-  if (!skillId) throw new Error("skillId param is required");
-  return decodeURIComponent(skillId);
+  return decodeSkillReference(
+    c.req.param("skillId"),
+    "id",
+    MAX_CUSTOM_SKILL_REFERENCE_CHARACTERS,
+  );
 }
 
 export function getSkillNameParam(c: SkillsContext): string {
-  const skillName = c.req.param("skillName");
-  if (!skillName) throw new Error("skillName param is required");
-  return decodeURIComponent(skillName);
+  return decodeSkillReference(
+    c.req.param("skillName"),
+    "name",
+    MAX_CUSTOM_SKILL_NAME_CHARACTERS,
+  );
 }
 
 export function getSkillLocaleInput(c: SkillsContext) {

@@ -1,5 +1,5 @@
 import type { RegisteredTool, ToolDefinition } from "./tool-definitions.ts";
-import type { Env, SpaceRole } from "../../shared/types/index.ts";
+import type { Env } from "../../shared/types/index.ts";
 import { getDb, mcpServers, mcpToolPolicies } from "../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { McpClient } from "./mcp-client.ts";
@@ -23,9 +23,9 @@ import {
 import { computeSHA256 } from "../../shared/utils/hash.ts";
 import { requireMcpToolInvocationConfirmation } from "../services/platform/mcp/tool-confirmation.ts";
 import {
+  type AuthorizedRuntimeInterface,
   fetchAuthorizedRuntimeInterfaces,
   issueRuntimeInterfaceAccessToken,
-  type AuthorizedRuntimeInterface,
   type RuntimeInterfaceRequestConfig,
 } from "../services/platform/runtime-interface-client.ts";
 import {
@@ -121,21 +121,18 @@ export function deriveMcpToolExecutionPolicy(input: {
   annotations?: ToolDefinition["annotations"];
   trustedLocalReadonlyServerIds?: ReadonlySet<string>;
 }): Pick<ToolDefinition, "risk_level" | "side_effects"> {
-  const explicitlyTrustedLocal =
-    input.sourceType !== "external" &&
+  const explicitlyTrustedLocal = input.sourceType !== "external" &&
     input.trustedLocalReadonlyServerIds?.has(input.serverId) === true;
-  const trustedReadOnly =
-    explicitlyTrustedLocal &&
+  const trustedReadOnly = explicitlyTrustedLocal &&
     input.annotations?.readOnlyHint === true &&
     input.annotations?.destructiveHint !== true;
 
   return {
-    risk_level:
-      input.annotations?.destructiveHint === true
-        ? "high"
-        : input.sourceType === "external"
-          ? "medium"
-          : "low",
+    risk_level: input.annotations?.destructiveHint === true
+      ? "high"
+      : input.sourceType === "external"
+      ? "medium"
+      : "low",
     // MCP annotations are server assertions, not a security boundary. Every
     // tool is de-duplicated by default; only an operator-allowlisted local MCP
     // server may opt a read-only tool out of the side-effect path.
@@ -170,23 +167,10 @@ export function requiresMcpToolInvocationConfirmation(input: {
   );
 }
 
-const DYNAMIC_MCP_ALLOWED_ROLES: ReadonlySet<SpaceRole> = new Set<SpaceRole>([
-  "owner",
-  "admin",
-  "editor",
-]);
-
 function assertDynamicMcpExecutionAllowed(
   server: McpServerLoadRecord,
-  context: { role?: SpaceRole; capabilities?: string[] },
+  context: { capabilities?: string[] },
 ): void {
-  const role = context.role;
-  if (role && !DYNAMIC_MCP_ALLOWED_ROLES.has(role)) {
-    throw new Error(
-      `Permission denied for MCP tool execution on server "${server.name}": role "${role}" is not allowed`,
-    );
-  }
-
   if (server.sourceType === "external") {
     const capabilities = new Set(context.capabilities || []);
     if (!capabilities.has("egress.http")) {
@@ -301,7 +285,7 @@ export async function loadMcpTools(
   spaceId: string,
   env: Env,
   existingNames: Set<string>,
-  exposureContext?: { role?: SpaceRole; capabilities?: string[] },
+  exposureContext?: { capabilities?: string[] },
   runtimeInterfaceConfig?: RuntimeMcpInterfaceConfig,
 ): Promise<McpLoadResult> {
   const tools = new Map<string, RegisteredTool>();
@@ -338,7 +322,7 @@ export async function loadMcpTools(
       .then((rows) =>
         (rows as McpServerLoadRecord[]).filter(
           (row) => row.sourceType !== "publication",
-        ),
+        )
       );
     const runtimeInterfaceServers = runtimeInterfaceConfig
       ? await loadRuntimeMcpInterfaceServers(runtimeInterfaceConfig)
@@ -388,12 +372,6 @@ export async function loadMcpTools(
   let runtimeCatalogBytes = 0;
 
   const serverIsEligible = (server: McpServerLoadRecord): boolean => {
-    if (
-      exposureContext?.role &&
-      !DYNAMIC_MCP_ALLOWED_ROLES.has(exposureContext.role)
-    ) {
-      return false;
-    }
     if (server.sourceType === "external") {
       const capabilities = new Set(exposureContext?.capabilities || []);
       if (exposureContext && !capabilities.has("egress.http")) return false;
@@ -445,14 +423,13 @@ export async function loadMcpTools(
                 );
               });
             }
-            const externalPolicies =
-              server.sourceType === "external"
-                ? new Map(
-                    (await listMcpToolPolicies(db, spaceId, server.id)).map(
-                      (policy) => [policy.toolName, policy],
-                    ),
-                  )
-                : null;
+            const externalPolicies = server.sourceType === "external"
+              ? new Map(
+                (await listMcpToolPolicies(db, spaceId, server.id)).map(
+                  (policy) => [policy.toolName, policy],
+                ),
+              )
+              : null;
             loadedCatalogs.set(server, { mcpTools, externalPolicies });
           } catch (error) {
             catalogErrors.set(server, error);
@@ -499,8 +476,8 @@ export async function loadMcpTools(
             continue;
           }
           approvedExternalSchemaHash = runtimeSchemaHash;
-          externalInvocationPolicy =
-            externalPolicy?.invocationPolicy ?? "confirm_each_time";
+          externalInvocationPolicy = externalPolicy?.invocationPolicy ??
+            "confirm_each_time";
         }
         const exposedName = await chooseMcpToolExposureName(reservedNames, {
           serverName: server.name,
@@ -521,8 +498,26 @@ export async function loadMcpTools(
           family: `mcp.${sanitizeMcpToolNamespace(server.name || server.id)}`,
           ...executionPolicy,
           name: exposedName,
+          adapter_identity: {
+            source: "mcp",
+            reference: `mcp:${await computeSHA256(JSON.stringify({
+              serverId: server.id,
+              toolName: sdkTool.name,
+            }))}`,
+            revision: `sha256:${await computeSHA256(JSON.stringify({
+              serverId: server.id,
+              sourceType: server.sourceType,
+              serviceId: server.serviceId,
+              bundleDeploymentId: server.bundleDeploymentId,
+              interfaceId: server.runtimeInterface?.interfaceId ?? null,
+              interfaceRevision:
+                server.runtimeInterface?.interfaceRevision ?? null,
+              bindingId: server.runtimeInterface?.bindingId ?? null,
+              toolName: sdkTool.name,
+              schemaHash: runtimeSchemaHash,
+            }))}`,
+          },
         };
-        namespacedDef.required_roles = Array.from(DYNAMIC_MCP_ALLOWED_ROLES);
         if (server.sourceType === "external") {
           namespacedDef.required_capabilities = ["egress.http"];
         }
@@ -600,7 +595,7 @@ export async function loadMcpTools(
                     client: callClient,
                     signal,
                   });
-                } else if (invocationNeedsConfirmation) {
+                } else {
                   await assertMcpToolRuntimeSnapshotStillMatches({
                     toolName: sdkToolName,
                     expectedSchemaHash: runtimeSchemaHash,
@@ -613,6 +608,11 @@ export async function loadMcpTools(
                 // one-time approval. A stale catalog must not burn the user's
                 // decision without attempting the reviewed operation.
                 if (invocationNeedsConfirmation) {
+                  if (!ctx.runAuthority || !ctx.toolCallId) {
+                    throw new Error(
+                      "MCP tool confirmation requires exact Run authority and tool-call identity",
+                    );
+                  }
                   const confirmation =
                     await requireMcpToolInvocationConfirmation(db, env, {
                       accountId: spaceId,
@@ -624,6 +624,8 @@ export async function loadMcpTools(
                       arguments: args,
                       runId: ctx.runId,
                       threadId: ctx.threadId,
+                      runAuthority: ctx.runAuthority,
+                      toolCallId: ctx.toolCallId,
                     });
                   if (confirmation.kind === "denied") {
                     throw new Error(
@@ -633,6 +635,11 @@ export async function loadMcpTools(
                   if (confirmation.kind === "pending") {
                     throw new Error(
                       `MCP tool invocation requires one-time user confirmation ${confirmation.confirmationId}. Ask the user to approve it in Takos, then retry the exact call.`,
+                    );
+                  }
+                  if (confirmation.kind === "handoff") {
+                    throw new Error(
+                      `MCP tool confirmation ${confirmation.confirmationId} was approved. Start the next Run in this Thread so Takos can attach its one-time grant, then retry the exact call.`,
                     );
                   }
                 }
@@ -682,7 +689,9 @@ const PROVIDER_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
 function boundedHashedToolName(base: string, digest: string): string {
   const suffix = `__${digest.slice(0, 12)}`;
-  return `${base.slice(0, PROVIDER_TOOL_NAME_MAX_LENGTH - suffix.length)}${suffix}`;
+  return `${
+    base.slice(0, PROVIDER_TOOL_NAME_MAX_LENGTH - suffix.length)
+  }${suffix}`;
 }
 
 /**
@@ -716,7 +725,9 @@ export async function chooseMcpToolExposureName(
   let counter = 2;
   while (true) {
     const suffix = `__${counter}`;
-    const counted = `${candidate.slice(0, PROVIDER_TOOL_NAME_MAX_LENGTH - suffix.length)}${suffix}`;
+    const counted = `${
+      candidate.slice(0, PROVIDER_TOOL_NAME_MAX_LENGTH - suffix.length)
+    }${suffix}`;
     if (!existingNames.has(counted)) return counted;
     counter++;
   }
@@ -830,8 +841,8 @@ function runtimeMcpServerFromAuthorized(
   if (deliveryType === "oauth2") {
     const resource = resourceInput
       ? canonicalRuntimeMcpEndpoint(
-          iface.status.resolvedInputs?.[resourceInput],
-        )
+        iface.status.resolvedInputs?.[resourceInput],
+      )
       : null;
     if (resource !== endpoint) return null;
   }
@@ -924,10 +935,9 @@ async function refreshTokenIfNeeded(
 ): Promise<void> {
   if (!server.oauthTokenExpiresAt) return;
 
-  const expiresAt =
-    typeof server.oauthTokenExpiresAt === "string"
-      ? new Date(server.oauthTokenExpiresAt)
-      : server.oauthTokenExpiresAt;
+  const expiresAt = typeof server.oauthTokenExpiresAt === "string"
+    ? new Date(server.oauthTokenExpiresAt)
+    : server.oauthTokenExpiresAt;
   const fiveMinutes = 5 * 60 * 1000;
 
   if (expiresAt.getTime() - Date.now() >= fiveMinutes) return;

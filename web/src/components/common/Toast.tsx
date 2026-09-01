@@ -6,13 +6,13 @@ import { useI18n } from "../../store/i18n.ts";
 
 /** Renders the global toast list from the shared Solid store. */
 export function ToastRenderer() {
-  const { toasts, dismissToast, pauseToast, resumeToast } = useToast();
+  const toast = useToast();
   return (
     <ToastContainer
-      toasts={toasts}
-      onDismiss={dismissToast}
-      onPause={pauseToast}
-      onResume={resumeToast}
+      toasts={toast.toasts}
+      onDismiss={toast.dismissToast}
+      onPause={toast.pauseToast}
+      onResume={toast.resumeToast}
     />
   );
 }
@@ -23,14 +23,12 @@ const iconClasses: Record<Toast["type"], string> = {
   info: "text-[var(--color-text-secondary)] opacity-90",
 };
 
-export function ToastContainer(
-  props: {
-    toasts: Toast[];
-    onDismiss: (id: string) => void;
-    onPause?: (id: string) => void;
-    onResume?: (id: string) => void;
-  },
-) {
+export function ToastContainer(props: {
+  toasts: Toast[];
+  onDismiss: (id: string) => void;
+  onPause?: (id: string) => void;
+  onResume?: (id: string) => void;
+}) {
   const { t } = useI18n();
   const [isMobile, setIsMobile] = createSignal(
     typeof globalThis.innerWidth === "number"
@@ -50,10 +48,10 @@ export function ToastContainer(
         class={`
           fixed z-[9999] flex flex-col gap-3 pointer-events-none
           ${
-          isMobile()
-            ? "bottom-[calc(var(--nav-height-mobile)+1rem+var(--spacing-safe-bottom))] left-4 right-4 items-center"
-            : "bottom-6 right-6 items-end"
-        }
+            isMobile()
+              ? "bottom-[calc(var(--nav-height-mobile)+1rem+var(--spacing-safe-bottom))] left-4 right-4 items-center"
+              : "bottom-6 right-6 items-end"
+          }
         `}
       >
         <For each={props.toasts}>

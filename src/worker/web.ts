@@ -199,7 +199,7 @@ app.use("*", async (c, next): Promise<Response | void> => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https: blob:",
     "connect-src 'self' https://api.openai.com",
-    "frame-ancestors 'self'",
+    "frame-ancestors 'none'",
     "base-uri 'self'",
     `form-action 'self' https://${adminDomain}`,
     "object-src 'none'",
@@ -274,9 +274,9 @@ app.get(TAKOSUMI_WELL_KNOWN_PATH, (c) =>
   c.json(createTakosDistributionWellKnown(new URL(c.req.url).origin)),
 );
 
-// Git Smart HTTP (read-only clone/fetch) served from the R2-backed object store.
-// Mounted at the top level so `git clone https://<host>/git/<owner>/<repo>.git`
-// works; push is refused inside the router.
+// Built-in migration-only Git Smart HTTP quarantine. The router is mounted at
+// the top level only to return stable fail-closed protocol responses; it does
+// not inspect repositories or serve legacy R2 objects.
 app.route("/", gitSmartHttp);
 
 app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
@@ -549,10 +549,9 @@ app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;
 
   // If it's an API/auth/reserved route, return a JSON error instead of the SPA
-  // shell. `/git/` (worker-native Git Smart HTTP, read-only clone/fetch) is
-  // handled by the gitSmartHttp router above; it is listed here so that any
-  // request that does fall through is answered as a machine-readable 404
-  // rather than HTML.
+  // shell. `/git/` is handled by the built-in Git compatibility quarantine
+  // above; it is listed here so that any request that does fall through is
+  // answered as a machine-readable 404 rather than HTML.
   if (
     path.startsWith("/api/") ||
     path.startsWith("/auth/") ||

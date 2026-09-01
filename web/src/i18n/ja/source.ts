@@ -44,7 +44,6 @@ export const source = {
 
   // Source Page
   sourceTitle: "ソース",
-  newRepository: "新しいリポジトリ",
   installFromGitUrl: "Git URLからインストール",
   gitUrlLabel: "Git URL",
   gitRefLabel: "参照",
@@ -53,6 +52,15 @@ export const source = {
   installApp: "インストール",
   installPlanFailed: "インストールプランの作成に失敗しました",
   gitUrlInstallQueued: "{name}のインストールを開始しました",
+  gitUrlInstallQueuedRefreshFailed:
+    "{name}のインストールは開始しましたが、インストール済みアプリ一覧を更新できませんでした。現在の状態はアプリ一覧を再読み込みして確認してください。",
+  capsulePlanAdd: "追加",
+  capsulePlanChange: "変更",
+  capsulePlanDestroy: "削除",
+  capsulePlanMoreResources: "ほか{count}件のリソース",
+  capsulePlanRequiresApproval:
+    "このプランにはTakosumi上の承認記録が必要です。インストールすると、applyの前に承認を記録します。",
+  capsulePlanEnded: "インストールプランは{status}で終了しました。",
   unknownApp: "不明なアプリ",
   runtimeModeLabel: "ランタイムモード",
   bindingsLabel: "バインディング",
@@ -141,6 +149,7 @@ export const source = {
   updateApp: "更新",
   updatingApp: "更新中...",
   uninstalledItem: "{name}をアンインストールしました",
+  uninstallStartedItem: "{name}のアンインストールを開始しました",
   uninstallConfirmTitle: "アプリをアンインストールしますか？",
   uninstallConfirmMessage:
     "「{name}」をアンインストールすると、稼働中の Capsule と worker が削除されます。この操作は元に戻せません。",

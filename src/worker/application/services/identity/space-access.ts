@@ -1,8 +1,4 @@
-import type {
-  Space,
-  SpaceMembership,
-  SpaceRole,
-} from "../../../shared/types/index.ts";
+import type { Space } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import { resolveUserPrincipalId } from "./principals.ts";
@@ -41,18 +37,6 @@ function toSpace(row: SelectOf<typeof accounts>): Space {
   };
 }
 
-function toSpaceMembership(
-  row: SelectOf<typeof accountMemberships>,
-): SpaceMembership {
-  return {
-    id: row.id,
-    space_id: row.accountId,
-    principal_id: row.memberId,
-    role: row.role as SpaceRole,
-    created_at: row.createdAt,
-  };
-}
-
 export async function loadSpace(
   db: SqlDatabaseLike,
   spaceIdOrSlug: string,
@@ -62,49 +46,63 @@ export async function loadSpace(
 
   if (spaceIdOrSlug === "me") {
     const row = await drizzle.select().from(accounts)
-      .where(and(eq(accounts.id, userId), eq(accounts.type, "user")))
+      .where(
+        and(
+          eq(accounts.id, userId),
+          eq(accounts.type, "user"),
+          eq(accounts.status, "active"),
+        ),
+      )
       .limit(1)
       .get();
     return row ? toSpace(row) : null;
   }
 
   const row = await drizzle.select().from(accounts)
-    .where(or(eq(accounts.id, spaceIdOrSlug), eq(accounts.slug, spaceIdOrSlug)))
+    .where(
+      and(
+        eq(accounts.status, "active"),
+        or(
+          eq(accounts.id, spaceIdOrSlug),
+          eq(accounts.slug, spaceIdOrSlug),
+        ),
+      ),
+    )
     .limit(1)
     .get();
 
   return row ? toSpace(row) : null;
 }
 
-async function loadSpaceMembership(
+async function hasActiveOwnerMembership(
   db: SqlDatabaseLike,
   spaceId: string,
   principalId: string,
-): Promise<SpaceMembership | null> {
+): Promise<boolean> {
   const drizzle = getDb(db);
-  const row = await drizzle.select().from(accountMemberships)
+  const row = await drizzle.select({ role: accountMemberships.role })
+    .from(accountMemberships)
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),
         eq(accountMemberships.memberId, principalId),
+        eq(accountMemberships.status, "active"),
       ),
     )
     .limit(1)
     .get();
 
-  return row ? toSpaceMembership(row) : null;
+  return row?.role === "owner";
 }
 
 export interface SpaceAccess {
   space: Space;
-  membership: SpaceMembership;
 }
 
 export async function checkSpaceAccess(
   db: SqlDatabaseLike,
   spaceIdOrSlug: string,
   userId: string,
-  requiredRoles?: SpaceRole[],
 ): Promise<SpaceAccess | null> {
   if (!isValidOpaqueId(userId)) {
     return null;
@@ -119,14 +117,20 @@ export async function checkSpaceAccess(
     return null;
   }
 
-  const membership = await loadSpaceMembership(db, space.id, principalId);
-  if (!membership) {
+  const hasOwnerMembership = await hasActiveOwnerMembership(
+    db,
+    space.id,
+    principalId,
+  );
+  // Takos Workspaces are personal tenancies. Historical membership rows can
+  // remain during schema compatibility, but they must never grant product
+  // access to a principal other than the Workspace owner.
+  if (
+    !hasOwnerMembership ||
+    space.owner_principal_id !== principalId
+  ) {
     return null;
   }
 
-  if (requiredRoles && !requiredRoles.includes(membership.role)) {
-    return null;
-  }
-
-  return { space, membership };
+  return { space };
 }

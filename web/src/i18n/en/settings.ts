@@ -5,64 +5,61 @@ export const settings = {
   name: "Name",
   language: "Language",
 
-  // Workspace Settings
-  workspaceSlug: "Space Slug",
+  // Category Settings
+  workspaceSlug: "Category ID",
 
-  // Members
-  members: "Members",
-  noMembers: "No members yet",
-  inviteMember: "Invite Member",
-  memberInvited: "Member invited",
-  failedToInvite: "Failed to invite member",
-  removeMember: "Remove Member",
-  removeMemberWarning:
-    "Are you sure you want to remove this member from the space?",
-  memberRemoved: "Member removed",
-  failedToRemove: "Failed to remove member",
-  memberUpdated: "Member role updated",
   failedToUpdate: "Failed to update",
-  invite: "Invite",
-  emailPlaceholder: "email@example.com",
-  roleOwner: "Owner",
-  roleAdmin: "Admin",
-  roleMember: "Member",
 
-  // Space aliases (code uses "space" prefix, while established keys use "workspace")
-  spaceSettings: "Space Settings",
-  spaceInfo: "Space Information",
-  spaceSlug: "Space Slug",
-  spaceName: "Space Name",
-  spaceNamePlaceholder: "My Space",
-  selectSpace: "Select Space",
-  selectSpaceHint: "Select a space to view settings",
-  selectSpaceFirst: "Select a space first",
-  selectSpaceToChat: "Select a space to start chatting",
-  noSpacesAvailable: "No spaces available",
-  spaceNotFound: "Space not found",
+  // Category aliases (internal keys retain the Space/Workspace API vocabulary)
+  spaceSettings: "Category settings",
+  categorySettings: "Category settings",
+  categoryManagement: "Category management",
+  spaceInfo: "Category information",
+  spaceSlug: "Category ID",
+  spaceName: "Category name",
+  spaceNamePlaceholder: "Work",
+  selectSpace: "Select a category",
+  selectSpaceHint: "Select a category to view its settings",
+  selectSpaceFirst: "Select a category first",
+  selectSpaceToChat: "Select a category to start chatting",
+  noSpacesAvailable: "No categories available",
+  spaceNotFound: "Category not found",
   spaceNotFoundDesc:
-    "The space you are looking for does not exist or you do not have access.",
-  personalSpaceNameHint: "Personal space name cannot be changed",
+    "The category you are looking for does not exist or is unavailable.",
+  personalSpaceNameHint: "The default place cannot be renamed",
   personalSpaceNote:
-    "This is your personal space. It cannot be deleted or shared with others.",
-  deleteSpace: "Delete Space",
+    "This is the default place for chats and memory. It cannot be deleted.",
+  workspaceSecurity: "Category security",
+  workspaceNetworkAccess: "External network access",
+  workspaceSecurityStandard: "Standard",
+  workspaceSecurityStandardHint:
+    "The agent can use outbound HTTP tools configured for this category.",
+  workspaceSecurityRestrictedEgress: "Restrict outbound HTTP",
+  workspaceSecurityRestrictedEgressHint:
+    "General outbound HTTP tools are hidden and denied. Storage and Git in this category remain available.",
+  deleteSpace: "Delete category",
   deleteSpaceWarning:
-    "Are you sure you want to delete this space? This action cannot be undone and all data will be permanently deleted.",
-  deleteSpaceHint: "Permanently delete this space and all its data",
-  spaceDeleted: "Space deleted",
-  createSpace: "Create Space",
-  createSpaceHint: "Create a team space to collaborate with others",
+    'Delete the empty category "{name}"? This cannot be undone. Takos will refuse deletion while chats, Storage files, Git data, apps, Capsules, or managed resources remain.',
+  typeWorkspaceNameToConfirm:
+    "Type the category name exactly to confirm deletion",
+  typeToConfirm: "Type the requested text to confirm",
+  deleteSpaceHint: "Permanently delete this category after it is empty",
+  spaceDeleted: "Category deleted",
+  createCategory: "Create category",
+  createCategoryHint:
+    "Make a private place for each area you want to keep separate, such as work, home, or hobbies.",
+  categoryName: "Category name",
+  categoryNamePlaceholder: "For example: Work, Home, Hobbies",
+  categoryDescriptionPlaceholder: "What belongs in this category (optional)",
   installFeaturedAppsOnCreate: "Install featured apps",
   installFeaturedAppsOnCreateHint:
     "Add operator-selected apps from the connected app catalog.",
-  spaceCreated: "Space created",
-  targetSpace: "Target Space",
-
-  // Settings Privacy
-  privacyTitle: "Privacy",
-  privateAccount: "Private account",
-  requireApprovalForFollowers: "Require approval for new followers.",
-  activityVisibility: "Activity visibility",
-  visibilityPublic: "Public",
-  visibilityFollowers: "Followers",
-  visibilityPrivate: "Private",
+  categoryCreated: "Category created",
+  workspaceSavedRefreshFailed:
+    "The category was saved, but the category list could not be refreshed. Reload to see the latest state.",
+  workspaceCreatedRefreshFailed:
+    "The category was created, but the category list could not be refreshed. Reload to see it.",
+  workspaceDeletedRefreshFailed:
+    "The category was deleted, but the category list could not be refreshed. Reload to update the list.",
+  targetSpace: "Target category",
 } as const;

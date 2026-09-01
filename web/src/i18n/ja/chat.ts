@@ -1,4 +1,6 @@
 export const chat = {
+  chatMessageTooLong: "メッセージが長すぎます（最大{count}文字）",
+  tooManyChatAttachments: "添付できるファイルは最大{count}件です",
   // Chat
   chat: "チャット",
   threads: "スレッド",
@@ -9,12 +11,15 @@ export const chat = {
   startConversation: "メッセージを送信して会話を開始",
   messageInputPlaceholder: "メッセージを入力...",
   searchThreadsAndMessages: "スレッドとメッセージを検索...",
+  olderThreadsSearch: "過去のチャットは検索から表示できます",
   typeToSearch: "検索語を入力\u2026",
   searchFailed: "検索に失敗しました",
   untitled: "無題",
   searchTypeAll: "すべて",
   searchTypeKeyword: "キーワード",
   searchTypeSemantic: "セマンティック",
+  semanticSearchUnavailable:
+    "この Takos ホストではセマンティック検索を利用できません。キーワード検索をお試しください。",
   inputHint: "Shift + Enter で改行",
 
   // Welcome
@@ -67,23 +72,26 @@ export const chat = {
   toolStatus_deploying: "デプロイ中…",
   toolStatus_memory: "メモリ操作中…",
 
-  // Session Diff
-  fileChanges: "ファイル変更",
-
-  // Session diff / merge
-  alreadyMerged: "マージ済み",
-  merging: "マージ中...",
-  merge: "マージ",
-
   // Chat View
   messageNotLoaded: "現在のビューにメッセージが読み込まれていません",
   failedToLoadMessages: "メッセージの読み込みに失敗しました",
+  historyTruncated:
+    "長い会話のため、実行状況は取得できた最新範囲を表示しています。古い履歴または大きすぎる詳細の一部は省略されています。",
   runLabel: "Run {id}",
   failedToSaveTier: "ティアの保存に失敗しました",
   failedToLoadShares: "共有リンクの読み込みに失敗しました",
   failedToCreateShare: "共有の作成に失敗しました",
   failedToRevoke: "無効化に失敗しました",
+  confirmRevokeShare:
+    "このリンクを無効化しますか？このリンクを使っている人はすぐにアクセスできなくなります。",
   exportFailed: "エクスポートに失敗しました",
+  threadExportDescription:
+    "完全なデータを直接ダウンロードします。非常に大きい会話は部分ファイルを返さず、支援付き処理が必要です。",
+  threadExportPreparing: "完全なエクスポートを準備しています…",
+  threadExportRequiresAssistance:
+    "この会話は直接エクスポートの上限を超えています。支援付きのエクスポート処理が必要です。",
+  threadExportUnavailable:
+    "会話の完全なデータを一時的に取得できません。時間をおいて再度エクスポートしてください。",
   failedToCopy: "コピーに失敗しました",
   shareMode: "モード",
   sharePublic: "公開",

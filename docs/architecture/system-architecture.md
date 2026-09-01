@@ -12,7 +12,7 @@
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the policy decisions that authorize each run. The Takosumi Accounts plane owns account-plane policy: billing, OIDC, domains, and dashboard.
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 Takos is not a special Takosumi shape. Its Takoform adapter composes portable
 forms: `EdgeWorker` for `takos-worker`, `RelationalDatabase` for workspace/control data, `KeyValueStore` for session/cache/state
@@ -35,5 +35,5 @@ The Cloudflare `wrangler.toml` is an artifact/runtime configuration inside the d
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](./internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi の考え方](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

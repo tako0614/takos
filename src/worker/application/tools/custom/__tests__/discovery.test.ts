@@ -25,12 +25,11 @@ test("toolbox search hides router tools and points agents back to toolbox", asyn
         selectable: true,
       },
       {
-        id: "skill:research-brief",
+        id: "skill:managed:research-brief",
         kind: "skill",
         namespace: "web",
         name: "Research Brief",
         summary: "Research workflow manual.",
-        instructions: "Gather facts before concluding.",
         tags: ["research", "sources"],
         triggers: ["research"],
         family: "skill.research",
@@ -39,6 +38,12 @@ test("toolbox search hides router tools and points agents back to toolbox", asyn
         source: "managed_skill",
         discoverable: true,
         selectable: false,
+        manual_identity: {
+          source: "managed",
+          skill_id: "research-brief",
+        },
+        availability: "available",
+        availability_reasons: [],
       },
       {
         id: "tool:sheet_create",
@@ -84,15 +89,14 @@ test("toolbox search hides router tools and points agents back to toolbox", asyn
   assertStringIncludes(output.hint, "action=call");
 });
 
-test("toolbox describe returns manual instructions for skill descriptors", async () => {
+test("toolbox describe activates exact pinned manual instructions", async () => {
   const registry = new CapabilityRegistry();
   registry.register({
-    id: "skill:research-brief",
+    id: "skill:managed:research-brief",
     kind: "skill",
     namespace: "web",
     name: "Research Brief",
     summary: "Research workflow manual.",
-    instructions: "Gather facts before concluding.",
     recommended_tools: ["web_fetch"],
     output_modes: ["chat"],
     durable_output_hints: ["artifact"],
@@ -104,13 +108,47 @@ test("toolbox describe returns manual instructions for skill descriptors", async
     source: "managed_skill",
     discoverable: true,
     selectable: false,
+    manual_identity: {
+      source: "managed",
+      skill_id: "research-brief",
+    },
+    availability: "available",
+    availability_reasons: [],
+    resource_manifest: [{
+      id: "research-brief",
+      title: "Research brief template",
+      description: "Evidence structure.",
+      mediaType: "text/markdown",
+      byteSize: 18,
+      digest: `sha256:${"a".repeat(64)}`,
+    }],
   });
+  const activations: unknown[] = [];
 
   const output = JSON.parse(
     await toolboxHandler(
       { action: "describe", tool_name: "research-brief" },
       {
         capabilityRegistry: registry,
+        toolCallId: "tool_call_manual_1",
+        _activateSkillManuals: async (manuals: unknown, toolCallId: string) => {
+          activations.push({ manuals, toolCallId });
+          return [{
+            skill: {
+              id: "research-brief",
+              source: "managed",
+              instructions: "Gather facts before concluding.",
+            },
+            resourceManifest: [{
+              id: "research-brief",
+              title: "Research brief template",
+              description: "Evidence structure.",
+              mediaType: "text/markdown",
+              byteSize: 18,
+              digest: `sha256:${"a".repeat(64)}`,
+            }],
+          }];
+        },
         _toolExecutor: {
           getAvailableTools: () => [],
           execute: async () => ({ output: "" }),
@@ -121,8 +159,155 @@ test("toolbox describe returns manual instructions for skill descriptors", async
 
   assertEquals(output.tools, []);
   assertEquals(output.manuals[0].kind, "manual");
+  assertEquals(output.manuals[0].activated, true);
   assertEquals(output.manuals[0].recommended_tools, ["web_fetch"]);
+  assertEquals(output.manuals[0].resource_manifest[0].id, "research-brief");
   assertStringIncludes(output.manuals[0].instructions, "Gather facts");
+  assertEquals(activations, [{
+    manuals: [{ source: "managed", skillId: "research-brief" }],
+    toolCallId: "tool_call_manual_1",
+  }]);
+});
+
+test("toolbox describe reads one exact resource after manual activation", async () => {
+  const registry = new CapabilityRegistry();
+  registry.register({
+    id: "skill:managed:research-brief",
+    kind: "skill",
+    namespace: "web",
+    name: "Research Brief",
+    summary: "Research workflow manual.",
+    tags: ["research"],
+    family: "skill.research",
+    risk_level: "none",
+    side_effects: false,
+    source: "managed_skill",
+    discoverable: true,
+    selectable: false,
+    manual_identity: { source: "managed", skill_id: "research-brief" },
+    availability: "available",
+    availability_reasons: [],
+    resource_manifest: [{
+      id: "research-brief",
+      title: "Research brief template",
+      description: "Evidence structure.",
+      mediaType: "text/markdown",
+      byteSize: 18,
+      digest: `sha256:${"a".repeat(64)}`,
+    }],
+  });
+  const activations: unknown[] = [];
+  const output = JSON.parse(await toolboxHandler(
+    {
+      action: "describe",
+      tool_name: "skill:managed:research-brief",
+      resource_id: "research-brief",
+    },
+    {
+      capabilityRegistry: registry,
+      toolCallId: "tool_call_resource_1",
+      _activateSkillResource: async (resource: unknown, toolCallId: string) => {
+        activations.push({ resource, toolCallId });
+        return {
+          manual: { source: "managed", skillId: "research-brief" },
+          id: "research-brief",
+          title: "Research brief template",
+          description: "Evidence structure.",
+          mediaType: "text/markdown",
+          byteSize: 18,
+          digest: `sha256:${"a".repeat(64)}`,
+          content: "# Research brief\n",
+        };
+      },
+      _toolExecutor: {
+        getAvailableTools: () => [],
+        execute: async () => ({ output: "" }),
+      },
+    } as unknown as ToolContext,
+  ));
+  assertEquals(output.manual.id, "skill:managed:research-brief");
+  assertEquals(output.resource.activated, true);
+  assertEquals(output.resource.content, "# Research brief\n");
+  assertEquals(activations, [{
+    resource: {
+      source: "managed",
+      skillId: "research-brief",
+      resourceId: "research-brief",
+    },
+    toolCallId: "tool_call_resource_1",
+  }]);
+});
+
+test("toolbox describe never exposes unavailable or ambiguous manual content", async () => {
+  const registry = new CapabilityRegistry();
+  registry.registerAll([
+    {
+      id: "skill:managed:shared",
+      kind: "skill",
+      namespace: "web",
+      name: "Managed Shared",
+      summary: "Needs a removed server.",
+      tags: ["shared"],
+      family: "skill.research",
+      risk_level: "none",
+      side_effects: false,
+      source: "managed_skill",
+      discoverable: true,
+      selectable: false,
+      manual_identity: { source: "managed", skill_id: "shared" },
+      availability: "unavailable",
+      availability_reasons: ["missing required MCP servers: private"],
+    },
+    {
+      id: "skill:custom:shared",
+      kind: "skill",
+      namespace: "discovery",
+      name: "Custom Shared",
+      summary: "Custom manual with the same logical name.",
+      tags: ["shared"],
+      family: "skill.custom",
+      risk_level: "none",
+      side_effects: false,
+      source: "custom_skill",
+      discoverable: true,
+      selectable: false,
+      manual_identity: { source: "custom", skill_id: "shared" },
+      availability: "available",
+      availability_reasons: [],
+    },
+  ]);
+  const unavailable = JSON.parse(await toolboxHandler(
+    { action: "describe", tool_name: "skill:managed:shared" },
+    {
+      capabilityRegistry: registry,
+      _toolExecutor: {
+        getAvailableTools: () => [],
+        execute: async () => ({ output: "" }),
+      },
+    } as unknown as ToolContext,
+  ));
+  assertEquals(unavailable.manuals[0].activated, false);
+  assertEquals(unavailable.manuals[0].instructions, undefined);
+  assertStringIncludes(
+    unavailable.manuals[0].availability_reasons[0],
+    "missing required MCP",
+  );
+
+  await assertRejects(
+    () =>
+      toolboxHandler(
+        { action: "describe", tool_name: "shared" },
+        {
+          capabilityRegistry: registry,
+          _toolExecutor: {
+            getAvailableTools: () => [],
+            execute: async () => ({ output: "" }),
+          },
+        } as unknown as ToolContext,
+      ),
+    Error,
+    "ambiguous",
+  );
 });
 
 test("toolbox describe returns full schemas for discovered tools", async () => {
@@ -152,6 +337,20 @@ test("toolbox describe returns full schemas for discovered tools", async () => {
     await toolboxHandler(
       { action: "describe", tool_names: ["slide_create", "missing_tool"] },
       {
+        toolCallId: "describe-tools",
+        _activateToolDescriptors: async (names: readonly string[]) =>
+          names.map((name, index) => ({
+            revisionId: `revision-${index}`,
+            reference: {
+              resourceKind: "tool_descriptor_revision",
+              resourceId: `tooldescriptor_${String(index).padStart(64, "0")}`,
+              resourceDigest: `sha256:${String(index).padStart(64, "0")}`,
+            },
+            snapshot: {
+              logicalName: name,
+              definition: tools.find((tool) => tool.name === name),
+            },
+          })) as never,
         _toolExecutor: {
           getAvailableTools: () => tools,
           execute: async () => ({ output: "" }),
@@ -167,8 +366,12 @@ test("toolbox describe returns full schemas for discovered tools", async () => {
   assertStringIncludes(output.hint, "toolbox action=call");
 });
 
-test("toolbox call executes non-router tools", async () => {
-  const calls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
+test("toolbox call executes non-router tools under the outer call identity", async () => {
+  const calls: Array<{
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+  }> = [];
 
   const output = await toolboxHandler(
     {
@@ -177,6 +380,26 @@ test("toolbox call executes non-router tools", async () => {
       arguments: { title: "Quarterly Review" },
     },
     {
+      toolCallId: "call-slide-create",
+      _activateToolDescriptors: async () => [{
+        revisionId: "revision-slide-create",
+        reference: {
+          resourceKind: "tool_descriptor_revision",
+          resourceId: `tooldescriptor_${"a".repeat(64)}`,
+          resourceDigest: `sha256:${"b".repeat(64)}`,
+        },
+        snapshot: {
+          logicalName: "slide_create",
+          definition: {
+            name: "slide_create",
+            description: "Create a slide deck.",
+            category: "mcp",
+            risk_level: "low",
+            side_effects: true,
+            parameters: { type: "object", properties: {} },
+          },
+        },
+      }] as never,
       _toolExecutor: {
         getAvailableTools: () => [{
           name: "slide_create",
@@ -185,9 +408,17 @@ test("toolbox call executes non-router tools", async () => {
           parameters: { type: "object", properties: {} },
         }],
         execute: async (
-          call: { name: string; arguments: Record<string, unknown> },
+          call: {
+            id: string;
+            name: string;
+            arguments: Record<string, unknown>;
+          },
         ) => {
-          calls.push({ name: call.name, arguments: call.arguments });
+          calls.push({
+            id: call.id,
+            name: call.name,
+            arguments: call.arguments,
+          });
           return { output: JSON.stringify({ ok: true }) };
         },
       },
@@ -196,7 +427,11 @@ test("toolbox call executes non-router tools", async () => {
 
   assertEquals(JSON.parse(output), { ok: true });
   assertEquals(calls, [
-    { name: "slide_create", arguments: { title: "Quarterly Review" } },
+    {
+      id: "call-slide-create",
+      name: "slide_create",
+      arguments: { title: "Quarterly Review" },
+    },
   ]);
 });
 

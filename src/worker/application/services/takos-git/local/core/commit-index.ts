@@ -431,8 +431,9 @@ async function countCommitsTo(
 }
 
 /**
- * Collect all object SHAs reachable from want set, stopping at have set.
- * Used for upload-pack negotiation.
+ * Collect all object SHAs reachable from a starting set, stopping at a known
+ * set. Retained for explicit legacy-repository migration and integrity tooling;
+ * the built-in upload-pack route is quarantined.
  */
 export async function collectReachableObjects(
   dbBinding: SqlDatabaseBinding,

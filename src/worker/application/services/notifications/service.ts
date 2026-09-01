@@ -223,7 +223,7 @@ export async function setNotificationsMutedUntil(
 function emptyMatrix(): NotificationPreferenceMatrix {
   const matrix = {} as NotificationPreferenceMatrix;
   for (const t of NOTIFICATION_TYPES) {
-    matrix[t] = { in_app: false, email: false, push: false };
+    matrix[t] = { in_app: false, push: false };
   }
   return matrix;
 }

@@ -12,14 +12,25 @@ import {
   Textarea,
 } from "../../components/ui/index.ts";
 import type { Memory } from "../../types/index.ts";
+import { getMemoryImportanceStars } from "../memory/memory-importance.ts";
+import {
+  MAX_MEMORY_CATEGORY_CHARACTERS,
+  MAX_MEMORY_CONTENT_CHARACTERS,
+  MAX_MEMORY_SEARCH_QUERY_CHARACTERS,
+} from "takos-api-contract/shared/types";
 
 export function MemoryList(props: {
   memories: Memory[];
   onDelete: (id: string) => void;
   onCreateMemory: (
     data: { content: string; type: Memory["type"]; category?: string },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
+  onUpdateMemory: (
+    id: string,
+    data: { content: string; category?: string },
+  ) => Promise<boolean>;
   savingMemory: boolean;
+  canEdit: boolean;
   // Shared classification helpers from useMemoryData — same source as the
   // full-page MemoryList so the two surfaces cannot drift on type icon/label.
   getTypeIcon: (type: Memory["type"]) => string;
@@ -31,6 +42,9 @@ export function MemoryList(props: {
     "all" | "episode" | "semantic" | "procedural"
   >("all");
   const [showCreateMemory, setShowCreateMemory] = createSignal(false);
+  const [editingMemoryId, setEditingMemoryId] = createSignal<string | null>(
+    null,
+  );
 
   const [memoryContent, setMemoryContent] = createSignal("");
   const [memoryType, setMemoryType] = createSignal<Memory["type"]>("semantic");
@@ -52,15 +66,41 @@ export function MemoryList(props: {
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
-    if (!memoryContent().trim()) return;
-    await props.onCreateMemory({
-      content: memoryContent().trim(),
-      type: memoryType(),
-      category: memoryCategory().trim() || undefined,
-    });
+    if (!props.canEdit || !memoryContent().trim()) return;
+    const currentId = editingMemoryId();
+    const saved = currentId
+      ? await props.onUpdateMemory(currentId, {
+        content: memoryContent().trim(),
+        category: memoryCategory().trim(),
+      })
+      : await props.onCreateMemory({
+        content: memoryContent().trim(),
+        type: memoryType(),
+        category: memoryCategory().trim() || undefined,
+      });
+    if (!saved) return;
     setMemoryContent("");
     setMemoryCategory("");
+    setEditingMemoryId(null);
     setShowCreateMemory(false);
+  };
+
+  const openCreateMemory = () => {
+    if (!props.canEdit) return;
+    setEditingMemoryId(null);
+    setMemoryContent("");
+    setMemoryType("semantic");
+    setMemoryCategory("");
+    setShowCreateMemory(true);
+  };
+
+  const openEditMemory = (memory: Memory) => {
+    if (!props.canEdit) return;
+    setEditingMemoryId(memory.id);
+    setMemoryContent(memory.content);
+    setMemoryType(memory.type);
+    setMemoryCategory(memory.category ?? "");
+    setShowCreateMemory(true);
   };
 
   return (
@@ -69,7 +109,11 @@ export function MemoryList(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
         <Input
+          name="agent-memory-search"
+          aria-label={t("memorySearch")}
           placeholder={t("memorySearch")}
+          maxLength={MAX_MEMORY_SEARCH_QUERY_CHARACTERS}
+          autocomplete="off"
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
           leftIcon={<Icons.Search style={{ width: "1rem", height: "1rem" }} />}
@@ -112,8 +156,10 @@ export function MemoryList(props: {
             </div>
           )
           : (
-            filteredMemories().map((memory) => (
-              <Card padding="md">
+            filteredMemories().map((memory) => {
+              const stars = getMemoryImportanceStars(memory.importance);
+              return (
+                <Card padding="md">
                 <div
                   style={{
                     display: "flex",
@@ -137,8 +183,8 @@ export function MemoryList(props: {
                     }}
                     title={t("memoryImportance")}
                   >
-                    {"★".repeat(Math.round(memory.importance * 5))}
-                    {"☆".repeat(5 - Math.round(memory.importance * 5))}
+                    {"★".repeat(stars.filled)}
+                    {"☆".repeat(stars.empty)}
                   </span>
                 </div>
                 <div
@@ -176,38 +222,57 @@ export function MemoryList(props: {
                   >
                     {new Date(memory.created_at).toLocaleDateString()}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => props.onDelete(memory.id)}
-                    title={t("deleteMemory")}
-                    style={{ color: "var(--color-text-tertiary)" }}
-                  >
-                    <Icons.Trash />
-                  </Button>
+                  {props.canEdit && (
+                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditMemory(memory)}
+                      title={t("editMemory")}
+                      aria-label={t("editMemory")}
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      <Icons.Edit />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => props.onDelete(memory.id)}
+                      title={t("deleteMemory")}
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      <Icons.Trash />
+                    </Button>
+                  </div>
+                  )}
                 </div>
-              </Card>
-            ))
+                </Card>
+              );
+            })
           )}
       </div>
 
-      <Button
-        variant="secondary"
-        leftIcon={<Icons.Plus />}
-        onClick={() => setShowCreateMemory(true)}
-        style={{
-          width: "100%",
-          "margin-top": "0.5rem",
-          border: "2px dashed var(--color-border-primary)",
-        }}
-      >
-        {t("createMemory")}
-      </Button>
+      {props.canEdit && (
+        <Button
+          variant="secondary"
+          leftIcon={<Icons.Plus />}
+          onClick={openCreateMemory}
+          style={{
+            width: "100%",
+            "margin-top": "0.5rem",
+            border: "2px dashed var(--color-border-primary)",
+          }}
+        >
+          {t("createMemory")}
+        </Button>
+      )}
 
       <Modal
-        isOpen={showCreateMemory()}
-        onClose={() => setShowCreateMemory(false)}
-        title={t("createMemory")}
+        isOpen={props.canEdit && showCreateMemory()}
+        onClose={() => {
+          if (!props.savingMemory) setShowCreateMemory(false);
+        }}
+        title={editingMemoryId() ? t("editMemory") : t("createMemory")}
       >
         <form onSubmit={handleCreateMemory}>
           <div
@@ -221,6 +286,7 @@ export function MemoryList(props: {
               }}
             >
               <label
+                for="agent-memory-content"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -230,10 +296,15 @@ export function MemoryList(props: {
                 {t("memoryContent")}
               </label>
               <Textarea
+                id="agent-memory-content"
+                name="agent-memory-content"
                 placeholder={t("memoryContentPlaceholder")}
                 value={memoryContent()}
                 onInput={(e) => setMemoryContent(e.currentTarget.value)}
                 rows={4}
+                maxLength={MAX_MEMORY_CONTENT_CHARACTERS}
+                autocomplete="off"
+                disabled={props.savingMemory}
                 required
                 autofocus
               />
@@ -246,6 +317,7 @@ export function MemoryList(props: {
               }}
             >
               <label
+                for="agent-memory-type"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -255,6 +327,10 @@ export function MemoryList(props: {
                 {t("memoryType")}
               </label>
               <Select
+                id="agent-memory-type"
+                name="agent-memory-type"
+                aria-label={t("memoryType")}
+                disabled={editingMemoryId() !== null || props.savingMemory}
                 value={memoryType()}
                 onChange={(value) => setMemoryType(value as Memory["type"])}
                 options={[
@@ -287,6 +363,7 @@ export function MemoryList(props: {
               }}
             >
               <label
+                for="agent-memory-category"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -296,8 +373,13 @@ export function MemoryList(props: {
                 {t("memoryCategory")}
               </label>
               <Input
+                id="agent-memory-category"
+                name="agent-memory-category"
                 placeholder={t("memoryCategoryPlaceholder")}
                 value={memoryCategory()}
+                maxLength={MAX_MEMORY_CATEGORY_CHARACTERS}
+                autocomplete="off"
+                disabled={props.savingMemory}
                 onInput={(e) => setMemoryCategory(e.currentTarget.value)}
               />
             </div>
@@ -306,7 +388,10 @@ export function MemoryList(props: {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setShowCreateMemory(false)}
+              disabled={props.savingMemory}
+              onClick={() => {
+                if (!props.savingMemory) setShowCreateMemory(false);
+              }}
             >
               {t("cancel")}
             </Button>
@@ -316,7 +401,7 @@ export function MemoryList(props: {
               isLoading={props.savingMemory}
               disabled={!memoryContent().trim()}
             >
-              {t("create")}
+              {editingMemoryId() ? t("save") : t("create")}
             </Button>
           </ModalFooter>
         </form>

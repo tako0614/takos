@@ -7,6 +7,7 @@ import {
 } from "solid-js";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
+import { markExplicitLogout } from "../lib/oidc-auto-login.ts";
 import type { Space, User, UserSettings } from "../types/index.ts";
 import {
   type AuthActionDeps,
@@ -81,7 +82,10 @@ export const AuthProvider: ParentComponent = (props) => {
   ) => {
     const snapshotValue = authSnapshot();
     const effectiveUser = currentUser ?? snapshotValue.user;
-    const spaces = await fetchSpacesAction(deps(), effectiveUser, options);
+    const spaces = await fetchSpacesAction(deps(), effectiveUser, {
+      ...options,
+      fallbackSpaces: snapshotValue.spaces,
+    });
     mutate((previous) => ({
       ...ensureSnapshot(previous),
       authState: effectiveUser ? "authenticated" : ensureSnapshot(previous)
@@ -94,7 +98,9 @@ export const AuthProvider: ParentComponent = (props) => {
   };
 
   const fetchUserSettings = async () => {
-    const settings = await fetchUserSettingsAction();
+    const settings = await fetchUserSettingsAction(
+      authSnapshot().userSettings,
+    );
     mutate((previous) => ({
       ...ensureSnapshot(previous),
       userSettings: settings,
@@ -104,6 +110,7 @@ export const AuthProvider: ParentComponent = (props) => {
 
   const handleLogout = async () => {
     await handleLogoutAction();
+    markExplicitLogout(globalThis.sessionStorage);
     mutate(() => ({
       ...INITIAL_AUTH_SNAPSHOT,
       authState: "login",

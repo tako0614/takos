@@ -42,6 +42,19 @@ DROP TABLE IF EXISTS skills;
 DROP TABLE IF EXISTS apps;
 
 -- Threads / runs / memory / indexing
+DROP TABLE IF EXISTS skill_resource_revisions;
+DROP TABLE IF EXISTS run_skill_plan_revisions;
+DROP TABLE IF EXISTS skill_revisions;
+DROP TABLE IF EXISTS run_context_tool_descriptor_refs;
+DROP TABLE IF EXISTS tool_descriptor_revisions;
+DROP TABLE IF EXISTS run_model_calls;
+DROP TABLE IF EXISTS mcp_confirmation_run_grants;
+DROP TABLE IF EXISTS mcp_tool_confirmation_identities;
+DROP TABLE IF EXISTS agent_resource_deletion_outbox;
+DROP TABLE IF EXISTS agent_resource_tombstones;
+DROP TABLE IF EXISTS run_context_resource_refs;
+DROP TABLE IF EXISTS turn_projection_vector_refs;
+DROP TABLE IF EXISTS turn_projection_revisions;
 DROP TABLE IF EXISTS run_events;
 DROP TABLE IF EXISTS artifacts;
 DROP TABLE IF EXISTS agent_tasks;
@@ -59,6 +72,8 @@ DROP TABLE IF EXISTS edges;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS index_jobs;
 DROP TABLE IF EXISTS run_notification_outbox;
+DROP TABLE IF EXISTS run_context_revisions;
+DROP TABLE IF EXISTS run_grants;
 DROP TABLE IF EXISTS runs;
 DROP TABLE IF EXISTS tool_operations;
 
@@ -106,6 +121,8 @@ DROP TABLE IF EXISTS common_env_reconcile_jobs;
 DROP TABLE IF EXISTS common_env_audit_logs;
 DROP TABLE IF EXISTS worker_bindings;
 DROP TABLE IF EXISTS resource_access;
+DROP TABLE IF EXISTS mcp_tool_policies;
+DROP TABLE IF EXISTS mcp_tool_confirmations;
 DROP TABLE IF EXISTS mcp_servers;
 DROP TABLE IF EXISTS mcp_oauth_pending;
 DROP TABLE IF EXISTS infra_endpoint_routes;

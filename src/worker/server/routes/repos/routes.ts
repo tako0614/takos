@@ -39,7 +39,7 @@ export {
   generateExploreInvalidationUrls,
   getTreeFlattenLimitError,
   type GitBucket,
-  hasWriteRole,
+  hasRepoWriteAccess,
   readableCommitErrorResponse,
   type RepoBucketBinding,
   sanitizeRepoName,
@@ -81,8 +81,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         c,
         spaceIdentifier,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
       const spaceId = access.space.id;
 
@@ -204,7 +203,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       "Repository",
     );
 
-    const userRole = user?.id ? repoAccess.role : null;
+    const userRole = repoAccess.accessKind === "owner" ? "owner" : null;
 
     let branchCount = 0;
     try {

@@ -6,23 +6,35 @@ import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
 import { getErrorMessage } from "../../lib/errors.ts";
 import { findSpaceByIdentifier, splitSpaces } from "../../lib/spaces.ts";
+import { createClientOperationId } from "../../lib/client-operation-id.ts";
 import type { Space } from "../../types/index.ts";
 import { Button } from "../../components/ui/Button.tsx";
+import { CreateSpaceModal } from "../shared/spaces/CreateSpaceModal.tsx";
 import {
-  CreateSpaceModal,
   DangerZoneCard,
-  MembersCard,
   PersonalSpaceNote,
+  SecurityPostureCard,
   SpaceInfoCard,
-  type SpaceMember,
 } from "./SpaceSettingsCards.tsx";
+import {
+  buildWorkspaceDeletionRequest,
+  parseWorkspaceDeletionResponse,
+  parseWorkspaceMutationResponseFor,
+} from "./workspace-response.ts";
 
 interface SpaceSettingsSectionProps {
   spaces: Space[];
   selectedSpaceId: string | null;
   setSelectedSpaceId: (id: string | null) => void;
-  onSpaceDeleted?: () => void;
-  onSpaceUpdated?: () => void;
+  onSpaceDeleted?: () => void | Promise<void>;
+  onSpaceUpdated?: () => void | Promise<void>;
+}
+
+type SettingsSaveKind = "details" | "security";
+
+interface SettingsSaveOperation {
+  spaceId: string;
+  kind: SettingsSaveKind;
 }
 
 export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
@@ -32,21 +44,27 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
   const selectedSpaceId = () => props.selectedSpaceId;
 
   const [spaceName, setSpaceName] = createSignal("");
+  const [spaceDescription, setSpaceDescription] = createSignal("");
   const [isPersonal, setIsPersonal] = createSignal(false);
-  const [saving, setSaving] = createSignal(false);
-
-  const [members, setMembers] = createSignal<SpaceMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = createSignal(false);
-  const [membersError, setMembersError] = createSignal<string | null>(null);
-
-  const [inviteEmail, setInviteEmail] = createSignal("");
-  const [inviteRole, setInviteRole] = createSignal<"admin" | "member">(
-    "member",
+  const [securityPosture, setSecurityPosture] = createSignal<
+    Space["security_posture"]
+  >("standard");
+  const [saveOperation, setSaveOperation] = createSignal<
+    SettingsSaveOperation | null
+  >(null);
+  const [deletingSpaceId, setDeletingSpaceId] = createSignal<string | null>(
+    null,
   );
-  const [inviting, setInviting] = createSignal(false);
+  const settingsBusy = createMemo(() =>
+    saveOperation() !== null || deletingSpaceId() !== null
+  );
 
   const [showCreateSpace, setShowCreateSpace] = createSignal(false);
-  const [creatingSpace, setCreatingSpace] = createSignal(false);
+  let pendingDeletion: {
+    spaceId: string;
+    workspaceName: string;
+    operationId: string;
+  } | null = null;
 
   const groupedSpaces = createMemo(() =>
     splitSpaces(props.spaces || [], t("personal"))
@@ -59,187 +77,209 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
       ? findSpaceByIdentifier(props.spaces || [], id, t("personal"))
       : null;
   });
+  const ownsSelectedSpace = createMemo(() =>
+    selectedSpace() !== null
+  );
 
   createEffect(() => {
     const space = selectedSpace();
     if (space) {
       setSpaceName(space.name as string);
-      setIsPersonal(space.is_personal as boolean);
+      setSpaceDescription(space.description ?? "");
+      setIsPersonal(space.is_default);
+      setSecurityPosture(space.security_posture);
     } else {
       setSpaceName("");
+      setSpaceDescription("");
       setIsPersonal(false);
-    }
-  });
-
-  const fetchMembers = async () => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId) return;
-    try {
-      setLoadingMembers(true);
-      setMembersError(null);
-      const res = await rpc.spaces[":spaceId"].members.$get({
-        param: { spaceId: targetSpaceId },
-      });
-      const data = await rpcJson<{ members: SpaceMember[] }>(res);
-      if (targetSpaceId !== selectedSpaceId()) return;
-      setMembers(data.members || []);
-    } catch (err) {
-      if (targetSpaceId !== selectedSpaceId()) return;
-      // Surface the failure (with retry) instead of rendering an empty member
-      // list, which would read as "this space has no members".
-      setMembers([]);
-      setMembersError(
-        err instanceof Error && err.message
-          ? err.message
-          : t("failedToLoad"),
-      );
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  createEffect(() => {
-    if (selectedSpaceId() && !selectedSpace()?.is_personal) {
-      void fetchMembers();
-    } else {
-      setMembers([]);
-      setMembersError(null);
+      setSecurityPosture("standard");
     }
   });
 
   const handleSaveSpace = async () => {
     const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || !spaceName().trim()) return;
+    const targetSpace = selectedSpace();
+    const nextName = spaceName().trim();
+    const nextDescription = spaceDescription().trim();
+    if (
+      !targetSpaceId || !targetSpace || !nextName || settingsBusy() ||
+      !ownsSelectedSpace()
+    ) return;
+    const operation: SettingsSaveOperation = {
+      spaceId: targetSpace.id,
+      kind: "details",
+    };
     try {
-      setSaving(true);
+      setSaveOperation(operation);
       const res = await rpc.spaces[":spaceId"].$patch({
         param: { spaceId: targetSpaceId },
-        json: { name: spaceName().trim() },
+        json: {
+          name: nextName,
+          description: nextDescription || null,
+        },
       });
-      await rpcJson(res);
+      parseWorkspaceMutationResponseFor(await rpcJson<unknown>(res), {
+        id: targetSpace.id,
+        name: nextName,
+        description: nextDescription || null,
+      });
       showToast("success", t("saved"));
-      props.onSpaceUpdated?.();
+      try {
+        await props.onSpaceUpdated?.();
+      } catch {
+        showToast("error", t("workspaceSavedRefreshFailed"));
+      }
     } catch {
       showToast("error", t("failedToSave"));
     } finally {
-      setSaving(false);
+      const current = saveOperation();
+      if (
+        current?.spaceId === operation.spaceId &&
+        current.kind === operation.kind
+      ) setSaveOperation(null);
     }
   };
 
-  const handleInviteMember = async () => {
+  const handleSaveSecurityPosture = async () => {
     const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || !inviteEmail().trim()) return;
+    const targetSpace = selectedSpace();
+    const nextSecurityPosture = securityPosture();
+    if (
+      !targetSpaceId || !targetSpace || settingsBusy() ||
+      !ownsSelectedSpace() ||
+      nextSecurityPosture === targetSpace.security_posture
+    ) return;
+    const operation: SettingsSaveOperation = {
+      spaceId: targetSpace.id,
+      kind: "security",
+    };
     try {
-      setInviting(true);
-      const res = await rpc.spaces[":spaceId"].members.$post({
+      setSaveOperation(operation);
+      const res = await rpc.spaces[":spaceId"].$patch({
         param: { spaceId: targetSpaceId },
-        json: { email: inviteEmail().trim(), role: inviteRole() },
+        json: { security_posture: nextSecurityPosture },
       });
-      await rpcJson(res);
-      showToast("success", t("memberInvited"));
-      setInviteEmail("");
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToInvite")),
-      );
+      parseWorkspaceMutationResponseFor(await rpcJson<unknown>(res), {
+        id: targetSpace.id,
+        securityPosture: nextSecurityPosture,
+      });
+      showToast("success", t("saved"));
+      try {
+        await props.onSpaceUpdated?.();
+      } catch {
+        showToast("error", t("workspaceSavedRefreshFailed"));
+      }
+    } catch {
+      if (selectedSpace()?.id === targetSpace.id) {
+        setSecurityPosture(targetSpace.security_posture);
+      }
+      showToast("error", t("failedToSave"));
     } finally {
-      setInviting(false);
-    }
-  };
-
-  const handleRemoveMember = async (member: SpaceMember) => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId) return;
-    const confirmed = await confirm({
-      title: t("removeMember"),
-      message: t("removeMemberWarning"),
-      confirmText: t("remove"),
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    try {
-      const res = await rpc.spaces[":spaceId"].members[":username"].$delete({
-        param: { spaceId: targetSpaceId, username: member.username },
-      });
-      await rpcJson(res);
-      showToast("success", t("memberRemoved"));
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToRemove")),
-      );
-    }
-  };
-
-  const handleChangeMemberRole = async (
-    member: SpaceMember,
-    newRole: "admin" | "member",
-  ) => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || member.role === newRole) return;
-    try {
-      const res = await rpc.spaces[":spaceId"].members[":username"].$patch({
-        param: { spaceId: targetSpaceId, username: member.username },
-        json: { role: newRole },
-      });
-      await rpcJson(res);
-      showToast("success", t("memberUpdated"));
-      fetchMembers();
-    } catch (err: unknown) {
-      showToast(
-        "error",
-        getErrorMessage(err, t("failedToUpdate")),
-      );
+      const current = saveOperation();
+      if (
+        current?.spaceId === operation.spaceId &&
+        current.kind === operation.kind
+      ) setSaveOperation(null);
     }
   };
 
   const handleDeleteSpace = async () => {
-    const targetSpaceId = selectedSpaceId();
-    if (!targetSpaceId || isPersonal()) return;
+    const targetSpaceIdentifier = selectedSpaceId();
+    const targetSpace = selectedSpace();
+    if (
+      !targetSpaceIdentifier || !targetSpace || isPersonal() ||
+      settingsBusy() ||
+      !ownsSelectedSpace()
+    ) return;
     const confirmed = await confirm({
       title: t("deleteSpace"),
-      message: t("deleteSpaceWarning"),
+      message: t("deleteSpaceWarning", { name: selectedSpace()?.name || "" }),
       confirmText: t("delete"),
       danger: true,
+      confirmationText: selectedSpace()?.name,
+      confirmationLabel: t("typeWorkspaceNameToConfirm"),
     });
     if (!confirmed) return;
+    if (settingsBusy() || selectedSpace()?.id !== targetSpace.id) return;
 
+    const canonicalSpaceId = targetSpace.id;
     try {
-      const res = await rpc.spaces[":spaceId"].$delete({
-        param: { spaceId: targetSpaceId },
+      setDeletingSpaceId(canonicalSpaceId);
+      if (
+        !pendingDeletion || pendingDeletion.spaceId !== canonicalSpaceId ||
+        pendingDeletion.workspaceName !== targetSpace.name
+      ) {
+        pendingDeletion = {
+          spaceId: canonicalSpaceId,
+          workspaceName: targetSpace.name,
+          operationId: createClientOperationId(),
+        };
+      }
+      const request = buildWorkspaceDeletionRequest(
+        targetSpace,
+        pendingDeletion.operationId,
+      );
+      const res = await rpc.spaces[":spaceId"].$delete(request);
+      parseWorkspaceDeletionResponse(await rpcJson<unknown>(res), {
+        spaceId: canonicalSpaceId,
+        operationId: pendingDeletion.operationId,
       });
-      await rpcJson(res);
+      pendingDeletion = null;
       showToast("success", t("spaceDeleted"));
-      props.onSpaceDeleted?.();
+      props.setSelectedSpaceId(null);
+      try {
+        await props.onSpaceDeleted?.();
+      } catch {
+        showToast("error", t("workspaceDeletedRefreshFailed"));
+      }
     } catch (err: unknown) {
       showToast("error", getErrorMessage(err, t("failedToDelete")));
+    } finally {
+      if (deletingSpaceId() === canonicalSpaceId) setDeletingSpaceId(null);
     }
   };
 
   const handleCreateSpace = async (
     name: string,
+    description: string,
     installFeaturedApps: boolean,
+    operationId: string,
   ) => {
-    if (!name) return;
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedName) return;
+    let space: Space;
     try {
-      setCreatingSpace(true);
       const res = await rpc.spaces.$post({
-        json: { name, installFeaturedApps },
+        json: {
+          name: trimmedName,
+          description: trimmedDescription || undefined,
+          installFeaturedApps,
+          idempotency_key: operationId,
+        },
       });
-      const data = await rpcJson<{ space: { slug: string } }>(res);
-      showToast("success", t("spaceCreated"));
-      setShowCreateSpace(false);
-      props.onSpaceUpdated?.();
-      props.setSelectedSpaceId(data.space.slug);
+      space = parseWorkspaceMutationResponseFor(
+        await rpcJson<unknown>(res),
+        {
+          isDefault: false,
+          name: trimmedName,
+          description: trimmedDescription || null,
+        },
+      );
     } catch (err: unknown) {
-      showToast("error", getErrorMessage(err, t("failedToCreate")));
-    } finally {
-      setCreatingSpace(false);
+      throw new Error(getErrorMessage(err, t("failedToCreate")));
     }
+
+    showToast("success", t("categoryCreated"));
+    setShowCreateSpace(false);
+    let refreshed = true;
+    try {
+      await props.onSpaceUpdated?.();
+    } catch {
+      refreshed = false;
+      showToast("error", t("workspaceCreatedRefreshFailed"));
+    }
+    if (refreshed) props.setSelectedSpaceId(space.slug ?? null);
   };
 
   return (
@@ -249,28 +289,35 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           <Icons.Settings class="w-4 h-4" />
         </div>
         <h3 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-          {t("spaceSettings")}
+          {t("categoryManagement")}
         </h3>
       </div>
 
       <div class="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div class="flex items-center justify-between mb-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for="workspace-settings-target"
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("selectSpace")}
           </label>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowCreateSpace(true)}
+            disabled={settingsBusy()}
           >
             <Icons.Plus class="w-4 h-4 mr-1" />
-            {t("createSpace")}
+            {t("createCategory")}
           </Button>
         </div>
         <select
+          id="workspace-settings-target"
+          name="workspace-settings-target"
           class="w-full max-w-md px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
           value={selectedSpaceId() ?? ""}
           onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
+          disabled={settingsBusy()}
         >
           <option value="" disabled>
             {t("selectSpace")}
@@ -291,7 +338,6 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           <CreateSpaceModal
             onClose={() => setShowCreateSpace(false)}
             onCreate={handleCreateSpace}
-            creating={creatingSpace()}
           />
         )}
       </div>
@@ -310,29 +356,38 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
               selectedSpace={space()}
               spaceName={spaceName()}
               setSpaceName={setSpaceName}
+              spaceDescription={spaceDescription()}
+              setSpaceDescription={setSpaceDescription}
               isPersonal={isPersonal()}
-              saving={saving()}
+              canEdit={ownsSelectedSpace()}
+              busy={settingsBusy()}
+              saving={
+                saveOperation()?.spaceId === space().id &&
+                saveOperation()?.kind === "details"
+              }
               onSave={handleSaveSpace}
             />
 
-            {!isPersonal() && (
-              <MembersCard
-                members={members()}
-                loadingMembers={loadingMembers()}
-                membersError={membersError()}
-                onRetryMembers={() => void fetchMembers()}
-                inviteEmail={inviteEmail()}
-                setInviteEmail={setInviteEmail}
-                inviteRole={inviteRole()}
-                setInviteRole={setInviteRole}
-                inviting={inviting()}
-                onInvite={handleInviteMember}
-                onRemove={handleRemoveMember}
-                onChangeRole={handleChangeMemberRole}
+            <SecurityPostureCard
+              securityPosture={securityPosture()}
+              savedSecurityPosture={space().security_posture}
+              setSecurityPosture={setSecurityPosture}
+              canEdit={ownsSelectedSpace()}
+              busy={settingsBusy()}
+              saving={
+                saveOperation()?.spaceId === space().id &&
+                saveOperation()?.kind === "security"
+              }
+              onSave={handleSaveSecurityPosture}
+            />
+
+            {!isPersonal() && ownsSelectedSpace() && (
+              <DangerZoneCard
+                onDelete={handleDeleteSpace}
+                deleting={deletingSpaceId() === selectedSpace()?.id}
+                disabled={settingsBusy()}
               />
             )}
-
-            {!isPersonal() && <DangerZoneCard onDelete={handleDeleteSpace} />}
 
             {isPersonal() && <PersonalSpaceNote />}
           </div>

@@ -12,7 +12,7 @@ Takos に公開する方法を示します。リポジトリには Takos 専用�
 4. `InstallConfig.interfaceBlueprints` から、`inputs.endpoint` を Capsule の公開 endpoint Output へ明示的に
    mapping する service-side の `mcp.server` Interface を materialize します。Form-backed Resource として実現する
    サービスなら、verified な Takoform Form Definition の `interfaces[]` descriptor から portable な宣言を
-   materialize する経路もあります。
+   反映する経路もあります。
 5. 意図した Principal に `mcp.invoke` を許可する InterfaceBinding を作ります。
 6. Takos は、解決され認可された Interface を Workspace の tool catalog に一覧表示します。
 

@@ -3,6 +3,8 @@ import type { Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpcJson } from "../lib/rpc.ts";
 import type { Message } from "../types/index.ts";
+import { parseChatMessagesResponse } from "./chat-message-response.ts";
+import { DEFAULT_CHAT_TIMELINE_MESSAGES } from "takos-api-contract/chat-message";
 
 const ACTIVE_RUN_MESSAGE_POLL_INTERVAL_MS = 5_000;
 
@@ -22,6 +24,8 @@ export interface UseMessagePollingResult {
   abortPendingFetch: () => void;
   error: string | null;
   setError: (value: string | null) => void;
+  messageDataTruncated: boolean;
+  setMessageDataTruncated: (value: boolean) => void;
 }
 
 export function useMessagePolling({
@@ -30,6 +34,7 @@ export function useMessagePolling({
 }: UseMessagePollingOptions): UseMessagePollingResult {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [error, setError] = createSignal<string | null>(null);
+  const [messageDataTruncated, setMessageDataTruncated] = createSignal(false);
   const messagesCountRef = { current: 0 as number };
   const isMountedRef = { current: true as boolean };
   let messagePollingRef: ReturnType<typeof setInterval> | null = null;
@@ -58,19 +63,24 @@ export function useMessagePolling({
 
     try {
       const res = await fetch(
-        `/api/threads/${encodeURIComponent(currentThreadId)}/messages`,
+        `/api/threads/${encodeURIComponent(currentThreadId)}/messages?latest=1`,
         {
           headers: { Accept: "application/json" },
           signal: controller.signal,
         },
       );
-      const data = await rpcJson<{ messages: Message[] }>(res);
+      const page = parseChatMessagesResponse(
+        await rpcJson<unknown>(res),
+        currentThreadId,
+        { limit: DEFAULT_CHAT_TIMELINE_MESSAGES, latest: true },
+      );
 
       if (controller.signal.aborted) return;
       if (!isMountedRef.current) return;
       if (requestSeq !== messageFetchSeqRef) return;
       if (threadId() !== currentThreadId) return;
-      setMessages(data.messages);
+      setMessages(page.messages);
+      setMessageDataTruncated(page.truncation.message_data);
       if (messageFetchErrorVisible && errorRef) {
         messageFetchErrorVisible = false;
         setError(null);
@@ -129,5 +139,9 @@ export function useMessagePolling({
       return error();
     },
     setError,
+    get messageDataTruncated() {
+      return messageDataTruncated();
+    },
+    setMessageDataTruncated,
   };
 }

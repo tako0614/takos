@@ -480,21 +480,25 @@ export async function listCatalogItems(
     (item): item is CatalogItemResponse => item !== null,
   );
 
-  const repositoryUrlKeys = new Set(
-    repos
-      .map((repo) => repo.remoteCloneUrl)
-      .filter((url): url is string => typeof url === "string" && !!url.trim())
-      .map(normalizeCatalogRepositoryUrlKey),
-  );
+  const repositoryUrlKeys = new Set<string>();
+  for (const repo of repos) {
+    const repositoryUrl = repo.remoteCloneUrl;
+    if (typeof repositoryUrl === "string" && repositoryUrl.trim()) {
+      repositoryUrlKeys.add(normalizeCatalogRepositoryUrlKey(repositoryUrl));
+    }
+  }
+
   const featuredAppTimestamp = options.now ?? new Date().toISOString();
-  const featuredAppItems = (options.featuredAppEntries ?? [])
-    .filter(
-      (entry) =>
-        !repositoryUrlKeys.has(
-          normalizeCatalogRepositoryUrlKey(entry.repositoryUrl),
-        ) && shouldIncludeFeaturedAppEntry(entry, options, parsedTags),
-    )
-    .map((entry) =>
+  for (const entry of options.featuredAppEntries ?? []) {
+    if (
+      repositoryUrlKeys.has(
+        normalizeCatalogRepositoryUrlKey(entry.repositoryUrl),
+      ) ||
+      !shouldIncludeFeaturedAppEntry(entry, options, parsedTags)
+    ) {
+      continue;
+    }
+    items.push(
       mapFeaturedAppCatalogItem(
         entry,
         capsuleMap.get(featuredAppPackageAppId(entry)) ??
@@ -502,28 +506,40 @@ export async function listCatalogItems(
         featuredAppTimestamp,
       ),
     );
-  items = [...items, ...featuredAppItems];
-
-  if (options.type === "deployable-app") {
-    items = items.filter((item) => item.package.available);
   }
 
-  if (options.category) {
-    items = items.filter((item) => item.package.category === options.category);
-  }
-
-  if (parsedTags.tags.length > 0) {
+  const requiredTags = parsedTags.tags.length > 0 ? parsedTags.tags : undefined;
+  const hasPostFilters =
+    options.type === "deployable-app" ||
+    Boolean(options.category) ||
+    requiredTags !== undefined ||
+    Boolean(options.certifiedOnly);
+  if (hasPostFilters) {
     items = items.filter((item) => {
-      if (!item.package.available) return false;
-      const packageTags = item.package.tags
-        .map((tag) => tag.trim().toLowerCase())
-        .filter(Boolean);
-      return parsedTags.tags.every((tag) => packageTags.includes(tag));
-    });
-  }
+      if (options.type === "deployable-app" && !item.package.available) {
+        return false;
+      }
 
-  if (options.certifiedOnly) {
-    items = items.filter((item) => item.package.certified);
+      if (options.category && item.package.category !== options.category) {
+        return false;
+      }
+
+      if (requiredTags) {
+        if (!item.package.available) return false;
+        const packageTags = new Set<string>();
+        for (const tag of item.package.tags) {
+          const normalizedTag = tag.trim().toLowerCase();
+          if (normalizedTag) packageTags.add(normalizedTag);
+        }
+        if (!requiredTags.every((tag) => packageTags.has(tag))) return false;
+      }
+
+      if (options.certifiedOnly && !item.package.certified) {
+        return false;
+      }
+
+      return true;
+    });
   }
 
   const sort = options.sort;

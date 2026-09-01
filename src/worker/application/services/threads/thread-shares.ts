@@ -5,6 +5,12 @@ import { base64UrlEncode } from "../../../shared/utils/index.ts";
 import { hashPassword, verifyPassword } from "../identity/auth-utils.ts";
 import { getDb, threadShares } from "../../../infra/db/index.ts";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import {
+  MAX_THREAD_SHARE_PASSWORD_BYTES,
+  MAX_THREAD_SHARE_PASSWORD_CHARACTERS,
+  MIN_THREAD_SHARE_PASSWORD_CHARACTERS,
+  THREAD_SHARE_TOKEN_PATTERN,
+} from "../../../../contracts/public/thread-share.ts";
 
 export type ThreadShareMode = "public" | "password";
 
@@ -29,6 +35,36 @@ export const threadShareDeps = {
   now: () => new Date().toISOString(),
   randomUUID: () => crypto.randomUUID(),
 };
+
+const textEncoder = new TextEncoder();
+
+function normalizedNewPassword(password: string | null | undefined): string {
+  const value = password ?? "";
+  if (
+    value.length > MAX_THREAD_SHARE_PASSWORD_CHARACTERS ||
+    textEncoder.encode(value).byteLength > MAX_THREAD_SHARE_PASSWORD_BYTES ||
+    value.trim().length < MIN_THREAD_SHARE_PASSWORD_CHARACTERS
+  ) {
+    throw new BadRequestError(
+      `Password must contain at least ${MIN_THREAD_SHARE_PASSWORD_CHARACTERS} non-whitespace characters and stay within ${MAX_THREAD_SHARE_PASSWORD_CHARACTERS} characters`,
+    );
+  }
+  return value;
+}
+
+function boundedPasswordCandidate(
+  password: string | null | undefined,
+): string | null {
+  if (
+    typeof password !== "string" ||
+    password.length === 0 ||
+    password.length > MAX_THREAD_SHARE_PASSWORD_CHARACTERS ||
+    textEncoder.encode(password).byteLength > MAX_THREAD_SHARE_PASSWORD_BYTES
+  ) {
+    return null;
+  }
+  return password;
+}
 
 function toRecord(row: SelectOf<typeof threadShares>): ThreadShareRecord {
   return {
@@ -67,10 +103,7 @@ export async function createThreadShare(params: {
 
   let passwordHash: string | null = null;
   if (mode === "password") {
-    const pw = (params.password || "").trim();
-    if (pw.length < 8) {
-      throw new BadRequestError("Password is required (min 8 characters)");
-    }
+    const pw = normalizedNewPassword(params.password);
     passwordHash = await threadShareDeps.hashPassword(pw);
   }
 
@@ -103,7 +136,8 @@ export async function createThreadShare(params: {
     createdAt,
   });
 
-  const row = await db.select()
+  const row = await db
+    .select()
     .from(threadShares)
     .where(eq(threadShares.id, id))
     .get();
@@ -125,7 +159,8 @@ export async function listThreadShares(
   threadId: string,
 ): Promise<ThreadShareRecord[]> {
   const db = threadShareDeps.getDb(d1);
-  const rows = await db.select()
+  const rows = await db
+    .select()
     .from(threadShares)
     .where(eq(threadShares.threadId, threadId))
     .orderBy(desc(threadShares.createdAt))
@@ -143,13 +178,16 @@ export async function revokeThreadShare(params: {
   const revokedAt = threadShareDeps.now();
   const db = threadShareDeps.getDb(d1);
 
-  const result = await db.update(threadShares)
+  const result = await db
+    .update(threadShares)
     .set({ revokedAt })
-    .where(and(
-      eq(threadShares.id, shareId),
-      eq(threadShares.threadId, threadId),
-      isNull(threadShares.revokedAt),
-    ))
+    .where(
+      and(
+        eq(threadShares.id, shareId),
+        eq(threadShares.threadId, threadId),
+        isNull(threadShares.revokedAt),
+      ),
+    )
     .returning({ id: threadShares.id });
 
   return result.length > 0;
@@ -159,8 +197,10 @@ export async function getThreadShareByToken(
   d1: SqlDatabaseBinding,
   token: string,
 ): Promise<(ThreadShareRecord & { password_hash: string | null }) | null> {
+  if (!THREAD_SHARE_TOKEN_PATTERN.test(token)) return null;
   const db = threadShareDeps.getDb(d1);
-  const row = await db.select()
+  const row = await db
+    .select()
     .from(threadShares)
     .where(eq(threadShares.token, token))
     .get();
@@ -185,7 +225,8 @@ export async function markThreadShareAccessed(
   shareId: string,
 ): Promise<void> {
   const db = threadShareDeps.getDb(d1);
-  await db.update(threadShares)
+  await db
+    .update(threadShares)
     .set({ lastAccessedAt: threadShareDeps.now() })
     .where(eq(threadShares.id, shareId));
 }
@@ -194,24 +235,37 @@ export async function verifyThreadShareAccess(params: {
   db: SqlDatabaseBinding;
   token: string;
   password?: string | null;
+  beforePasswordVerification?: () => Promise<void>;
 }): Promise<
-  { share: ThreadShareRecord; threadId: string; spaceId: string } | {
-    error: "not_found" | "password_required" | "forbidden";
-  }
+  | { share: ThreadShareRecord; threadId: string; spaceId: string }
+  | {
+      error: "not_found" | "password_required" | "forbidden";
+    }
 > {
   const { db, token } = params;
   const share = await getThreadShareByToken(db, token);
   if (!share) return { error: "not_found" };
 
   if (share.mode === "password") {
-    const pw = (params.password || "").trim();
+    const pw = boundedPasswordCandidate(params.password);
     if (!pw) {
       return { error: "password_required" };
     }
     if (!share.password_hash) {
       return { error: "forbidden" };
     }
-    const ok = await threadShareDeps.verifyPassword(pw, share.password_hash);
+    await params.beforePasswordVerification?.();
+    let ok = await threadShareDeps.verifyPassword(pw, share.password_hash);
+    // Shares created before exact-password preservation trimmed the input
+    // before hashing. Keep those links usable while every newly created share
+    // hashes and verifies the exact bounded password supplied by its owner.
+    const legacyPassword = pw.trim();
+    if (!ok && legacyPassword !== pw) {
+      ok = await threadShareDeps.verifyPassword(
+        legacyPassword,
+        share.password_hash,
+      );
+    }
     if (!ok) return { error: "forbidden" };
   }
 

@@ -164,7 +164,7 @@ evidence は digest と count だけを返します。
 Wrangler の deployment status が成功かつ stdout/stderr とも空の場合は、Cloudflare の
 Worker settings endpoint を直接 readback します。HTTP `200` は Worker が存在するため
 `resource_conflict`、HTTP `404` だけを不在として扱い、それ以外の status または通信
-失敗は digest-only evidence で fail-closed にします。
+失敗は digest-only evidence で安全側に停止します。
 
 同様に `wrangler deploy` の exit code `0` だけでは deployment 成功とみなしません。
 exact deployment、100% traffic の version、release tag と provenance message を

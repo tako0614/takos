@@ -1,6 +1,7 @@
 import { createSignal } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { formatFileSize } from "../lib/format.ts";
+import { MAX_CHAT_ATTACHMENTS } from "./chat-limits.ts";
 
 export interface UseFileAttachmentOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -79,7 +80,14 @@ export function useFileAttachment(
       validFiles.push(file);
     }
     if (validFiles.length > 0) {
-      setAttachedFiles((prev) => [...prev, ...validFiles]);
+      const remaining = Math.max(0, MAX_CHAT_ATTACHMENTS - attachedFiles().length);
+      const acceptedFiles = validFiles.slice(0, remaining);
+      if (acceptedFiles.length > 0) {
+        setAttachedFiles((prev) => [...prev, ...acceptedFiles]);
+      }
+      if (acceptedFiles.length < validFiles.length) {
+        setError(t("tooManyChatAttachments", { count: MAX_CHAT_ATTACHMENTS }));
+      }
     }
   }
 

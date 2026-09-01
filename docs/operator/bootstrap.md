@@ -2,19 +2,21 @@
 
 > このページでわかること: self-host / operator-managed Takos を新規に立ち上げるときの Web ベース確認。
 
-Takos distribution worker は Takos product surface を提供し、Accounts / deploy-control / dashboard は外部 Takosumi
-control plane が所有します。self-host では self-hoster または operator が運用する Takosumi Accounts origin が OIDC issuer
-です。hosted Takosumi の public platform では `https://app.takosumi.com` が issuer になります。
+Takos distribution worker は Takos product surface を提供します。production login
+には外部 OIDC issuer が必要ですが、その issuer は Takosumi Accounts に限定されません。
+Takosumi integrationを構成した場合はAccounts / deploy-control / dashboardを外部
+Takosumi control planeが所有します。
 
-Takos runtime は外部 hosted Takosumi Accounts を必須にしません。upstream Google / GitHub / enterprise OIDC / passkey は
-Takosumi Accounts plane の upstream IdP / credential policy として扱い、Takos product routes は account-plane subject
-から app-local profile / session を作ります。
+Takosumi未接続時はgeneric OIDC subjectからapp-local profile / sessionを作り、
+delegated Capsule stateとInterface機能だけを無効にします。接続時のupstream
+Google / GitHub / enterprise OIDC / passkeyはTakosumi Accounts側のpolicyです。
 
 ## Prerequisites
 
 - Takos OpenTofu module が product backing resources (D1 / KV / R2 / Queues) を provision 済み
 - worker artifact が同じ origin に deploy 済み
-- `BASE_URL` が Takos worker origin、`TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` が Takosumi Accounts origin を指す
+- `BASE_URL` がTakos worker origin、`OIDC_ISSUER_URL`が選択したissuerを指す
+- shared control-plane機能を使う場合だけ`TAKOSUMI_ACCOUNTS_URL`を設定する
 - `DB` / `SESSION_DO` などの Takos product bindings が production または staging profile にある
 - trusted edge / internal service secret は public internet へ露出していない
 
@@ -26,17 +28,18 @@ Takosumi operations runbook で管理してください。
 | key                        | secret  | scope                 | 用途                                               |
 | -------------------------- | ------- | --------------------- | -------------------------------------------------- |
 | `BASE_URL`                 | no      | worker origin         | Takos public origin                                |
-| `TAKOSUMI_ACCOUNTS_URL`    | no      | Accounts plane        | external Takosumi Accounts API / issuer origin     |
-| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | Takosumi Accounts issuer                           |
-| `OIDC_CLIENT_ID`           | no      | Accounts projection   | Takosumi Accounts plane が発行した client id       |
-| `OIDC_CLIENT_SECRET`       | optional | Accounts projection  | confidential client の場合だけ使う secret          |
-| `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
+| `TAKOSUMI_ACCOUNTS_URL`    | no      | optional integration  | external Takosumi public control API               |
+| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | generic OIDC issuerまたはTakosumi Accounts         |
+| `OIDC_CLIENT_ID`           | no      | OIDC client           | issuerが発行したclient id                          |
+| `OIDC_CLIENT_SECRET`       | optional | OIDC client          | confidential clientの場合だけ使うsecret            |
+| `OIDC_REDIRECT_URI`        | no      | OIDC client           | `<BASE_URL>/auth/oidc/callback`                    |
 | `ENCRYPTION_KEY`           | yes     | Takos product DB      | app-local secret と委任OAuth tokenの暗号化         |
 | `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | legacy-named app-local Capsule/profile id          |
 | `DB`                       | binding | Takos product         | app-local persistence                              |
 | `SESSION_DO`               | binding | Takos product session | browser session store                              |
 
-`OIDC_*` は Takosumi Accounts plane が Takos product routes に投影する consumer metadata です。
+`OIDC_*` は選択したissuerのconsumer metadataです。local developmentでは
+`http://127.0.0.1:8792`の`takosumi-dev-server`を既定issuer/control APIとして使います。
 
 ## 1. Admin Web に入る
 
@@ -46,9 +49,9 @@ browser で worker origin を開きます。
 https://<BASE_URL>/
 ```
 
-未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts issuer で認証します。Takos は
+未ログインなら `/auth/oidc/login` へ進み、構成したOIDC issuerで認証します。Takos は
 `/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout` を consumer route として受けます。upstream IdP は Accounts
-plane 側の policy で扱います。
+issuer側のpolicyで扱います。
 
 Takos の dynamic client は public PKCE client を標準とし、`openid profile email offline_access capsules:read
 capsules:write` を要求します。callback は access/refresh token と UserInfo の親 Takosumi Workspace binding を

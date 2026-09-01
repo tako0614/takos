@@ -6,6 +6,9 @@ export interface ConfirmDialogOptions {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  /** Exact text the user must enter before a destructive action is enabled. */
+  confirmationText?: string;
+  confirmationLabel?: string;
 }
 
 interface ConfirmDialogState {
@@ -15,6 +18,8 @@ interface ConfirmDialogState {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  confirmationText?: string;
+  confirmationLabel?: string;
   resolve: ((value: boolean) => void) | null;
 }
 
@@ -30,14 +35,19 @@ const [confirmDialogState, setConfirmDialogState] = createSignal(
 );
 
 export function useConfirmDialog() {
-  const confirm = (options: ConfirmDialogOptions): Promise<boolean> =>
-    new Promise<boolean>((resolve) => {
+  const confirm = (options: ConfirmDialogOptions): Promise<boolean> => {
+    const current = confirmDialogState();
+    if (current.isOpen || current.resolve) {
+      return Promise.resolve(false);
+    }
+    return new Promise<boolean>((resolve) => {
       setConfirmDialogState({
         isOpen: true,
         ...options,
         resolve,
       });
     });
+  };
 
   return { confirm };
 }
@@ -47,19 +57,14 @@ export function useConfirmDialogState() {
 }
 
 export function useConfirmDialogActions() {
-  const handleConfirm = () => {
-    setConfirmDialogState((prev) => {
-      prev.resolve?.(true);
-      return { ...initialState };
-    });
+  const settle = (accepted: boolean) => {
+    const resolve = confirmDialogState().resolve;
+    setConfirmDialogState({ ...initialState });
+    resolve?.(accepted);
   };
 
-  const handleCancel = () => {
-    setConfirmDialogState((prev) => {
-      prev.resolve?.(false);
-      return { ...initialState };
-    });
-  };
+  const handleConfirm = () => settle(true);
+  const handleCancel = () => settle(false);
 
   return { handleConfirm, handleCancel };
 }

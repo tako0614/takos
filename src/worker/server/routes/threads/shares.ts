@@ -21,15 +21,48 @@ import {
   resolveThreadShareInput,
   withThreadShareLinks,
 } from "./helpers.ts";
+import {
+  MAX_THREAD_SHARE_PASSWORD_CHARACTERS,
+  MIN_THREAD_SHARE_PASSWORD_CHARACTERS,
+} from "../../../../contracts/public/thread-share.ts";
 
 type ThreadsRouter = HonoType<{ Bindings: Env; Variables: BaseVariables }>;
 
-const createThreadShareSchema = z.object({
-  mode: z.string().optional(),
-  password: z.string().optional(),
-  expires_at: z.string().optional(),
-  expires_in_days: z.number().optional(),
-});
+const createThreadShareSchema = z
+  .object({
+    mode: z.enum(["public", "password"]).optional(),
+    password: z.string().max(MAX_THREAD_SHARE_PASSWORD_CHARACTERS).optional(),
+    expires_at: z.string().max(64).optional(),
+    expires_in_days: z.number().int().min(1).max(365).optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expires_at !== undefined && value.expires_in_days !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Choose expires_at or expires_in_days, not both",
+        path: ["expires_at"],
+      });
+    }
+    if (
+      value.mode === "password" &&
+      (value.password ?? "").trim().length <
+        MIN_THREAD_SHARE_PASSWORD_CHARACTERS
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `Password must contain at least ${MIN_THREAD_SHARE_PASSWORD_CHARACTERS} non-whitespace characters`,
+        path: ["password"],
+      });
+    }
+    if (value.mode !== "password" && value.password !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "password is only valid for password-protected shares",
+        path: ["password"],
+      });
+    }
+  });
 
 export function registerThreadShareRoutes(app: ThreadsRouter) {
   app.post(
@@ -45,16 +78,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
         expires_in_days?: number;
       };
       const access = requireThreadAccess(
-        await checkThreadAccess(
-          c.env.DB,
-          threadId,
-          user.id,
-          [
-            "owner",
-            "admin",
-            "editor",
-          ],
-        ),
+        await checkThreadAccess(c.env.DB, threadId, user.id),
       );
       const shareInput = resolveThreadShareInput(body);
 
@@ -70,12 +94,15 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
         const sharePath = `/share/${created.share.token}`;
         const origin = new URL(c.req.url).origin;
 
-        return c.json({
-          share: created.share,
-          share_path: sharePath,
-          share_url: origin + sharePath,
-          password_required: created.passwordRequired,
-        }, 201);
+        return c.json(
+          {
+            share: created.share,
+            share_path: sharePath,
+            share_url: origin + sharePath,
+            password_required: created.passwordRequired,
+          },
+          201,
+        );
       } catch (err) {
         if (isAppError(err)) {
           throw err;
@@ -83,9 +110,8 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
         logError("Failed to create share", err, {
           module: "routes/thread-shares",
         });
-        const message = err instanceof Error
-          ? err.message
-          : "Failed to create share";
+        const message =
+          err instanceof Error ? err.message : "Failed to create share";
         throw new BadRequestError(message);
       }
     },
@@ -94,18 +120,9 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
   app.get("/threads/:id/shares", async (c) => {
     const user = c.get("user");
     const threadId = c.req.param("id");
-    requireThreadAccess(
-      await checkThreadAccess(
-        c.env.DB,
-        threadId,
-        user.id,
-      ),
-    );
+    requireThreadAccess(await checkThreadAccess(c.env.DB, threadId, user.id));
 
-    const shares = await listThreadShares(
-      c.env.DB,
-      threadId,
-    );
+    const shares = await listThreadShares(c.env.DB, threadId);
     return c.json({
       shares: withThreadShareLinks(new URL(c.req.url).origin, shares),
     });
@@ -116,16 +133,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
     const threadId = c.req.param("id");
     const shareId = c.req.param("shareId");
     requireThreadAccess(
-      await checkThreadAccess(
-        c.env.DB,
-        threadId,
-        user.id,
-        [
-          "owner",
-          "admin",
-          "editor",
-        ],
-      ),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
     const ok = await revokeThreadShare({
@@ -141,9 +149,10 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
   });
 }
 
-const threadSharesRoutes = new Hono<
-  { Bindings: Env; Variables: BaseVariables }
->();
+const threadSharesRoutes = new Hono<{
+  Bindings: Env;
+  Variables: BaseVariables;
+}>();
 registerThreadShareRoutes(threadSharesRoutes);
 
 export default threadSharesRoutes;

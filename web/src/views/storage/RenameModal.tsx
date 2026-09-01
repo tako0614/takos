@@ -24,6 +24,9 @@ export function RenameModal(props: RenameModalProps) {
     >
       <div class="space-y-4">
         <Input
+          id="storage-rename-name"
+          name="storage-rename-name"
+          aria-label={t("newName")}
           value={props.newName}
           onInput={(e) =>
             props.onNewNameChange((e.target as HTMLInputElement).value)}

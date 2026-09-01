@@ -1,12 +1,11 @@
 /**
  * Permission checks for tool execution.
  *
- * Centralises role-based access control and capability gating that was
+ * Centralises capability gating that was
  * previously inlined in ToolExecutor.
  */
 
 import type { ToolContext, ToolDefinition } from "./tool-definitions.ts";
-import { canRoleAccessTool, filterToolsForRole } from "./tool-policy.ts";
 import { ErrorCodes, ToolError } from "./tool-error-classifier.ts";
 
 // ---------------------------------------------------------------------------
@@ -18,20 +17,6 @@ export function getAllRequiredCapabilities(tool: {
   required_capabilities?: string[];
 }): string[] {
   return Array.from(new Set(tool.required_capabilities || []));
-}
-
-/** Check whether the caller's role satisfies the tool's `required_roles` list. */
-export function canRoleAccessExposedTool(
-  role: ToolContext["role"],
-  tool: { required_roles?: string[] },
-): boolean {
-  if (!tool.required_roles || tool.required_roles.length === 0) {
-    return true;
-  }
-  if (!role) {
-    return false;
-  }
-  return tool.required_roles.includes(role);
 }
 
 /** Check whether the granted capabilities cover all that the tool requires. */
@@ -56,22 +41,8 @@ export function canUseToolCapabilities(
 export function assertToolPermission(
   toolName: string,
   toolDefinition: ToolDefinition,
-  context: Pick<ToolContext, "role" | "capabilities">,
+  context: Pick<ToolContext, "capabilities">,
 ): void {
-  if (context.role && !canRoleAccessTool(context.role, toolDefinition)) {
-    throw new ToolError(
-      `Permission denied for tool "${toolName}": space role "${context.role}" cannot use this space operation`,
-      ErrorCodes.PERMISSION_DENIED,
-    );
-  }
-
-  if (!canRoleAccessExposedTool(context.role, toolDefinition)) {
-    throw new ToolError(
-      `Permission denied for tool "${toolName}": space role "${context.role}" is not allowed`,
-      ErrorCodes.PERMISSION_DENIED,
-    );
-  }
-
   const requiredCapabilities = getAllRequiredCapabilities(toolDefinition);
   if (requiredCapabilities.length > 0) {
     const granted = new Set(context.capabilities || []);
@@ -91,13 +62,10 @@ export function assertToolPermission(
 // Filtering for getAvailableTools
 // ---------------------------------------------------------------------------
 
-/** Return only the tools accessible to the given role and capabilities. */
+/** Return only the tools accessible to the granted capabilities. */
 export function filterAccessibleTools(
   tools: ToolDefinition[],
-  role: ToolContext["role"],
   capabilities: readonly string[],
 ): ToolDefinition[] {
-  return filterToolsForRole(tools, role)
-    .filter((tool) => canRoleAccessExposedTool(role, tool))
-    .filter((tool) => canUseToolCapabilities(capabilities, tool));
+  return tools.filter((tool) => canUseToolCapabilities(capabilities, tool));
 }

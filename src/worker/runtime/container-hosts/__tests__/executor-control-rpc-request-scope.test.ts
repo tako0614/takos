@@ -6,6 +6,75 @@ import {
   handleToolExecute,
   type RemoteToolExecutorDependencies,
 } from "../executor-control-rpc.ts";
+import type { RunExecutionAuthority } from "../../../application/services/runs/run-authority.ts";
+import type { ToolDefinition } from "../../../application/tools/tool-definitions.ts";
+import { toolDescriptorSnapshot } from "../../../application/tools/tool-descriptor-revisions.ts";
+
+const TEST_AUTHORITY: RunExecutionAuthority = {
+  runId: "run-request-local",
+  principalId: "user-a",
+  workspaceId: "space-a",
+  threadId: "thread-a",
+  capabilities: ["storage.read"],
+  confirmationGrantIds: [],
+  budgets: { maxGraphSteps: 64, maxToolRounds: 8 },
+  baseAttestation: {
+    contextRevision: 1,
+    contextDigest: `sha256:${"a".repeat(64)}`,
+    runGrantDigest: `sha256:${"b".repeat(64)}`,
+  },
+  attestation: {
+    contextRevision: 1,
+    contextDigest: `sha256:${"a".repeat(64)}`,
+    runGrantDigest: `sha256:${"b".repeat(64)}`,
+  },
+};
+
+function authorityForRun(runId: string): RunExecutionAuthority {
+  return { ...TEST_AUTHORITY, runId };
+}
+
+function resolveTestAuthority(runId: string): Promise<RunExecutionAuthority> {
+  return Promise.resolve(authorityForRun(runId));
+}
+
+function testTool(name: string, sideEffects = false): ToolDefinition {
+  return {
+    name,
+    description: `${name} description`,
+    category: name === "toolbox" ? "space" : "web",
+    namespace: name === "toolbox" ? "discovery" : "web",
+    family: name === "toolbox" ? "discovery.toolbox" : "web.direct",
+    risk_level: sideEffects ? "medium" : "none",
+    side_effects: sideEffects,
+    parameters: { type: "object", properties: {} },
+  };
+}
+
+async function activateTestCatalog(
+  _db: unknown,
+  authority: RunExecutionAuthority,
+  tools: readonly ToolDefinition[],
+) {
+  return {
+    authority,
+    descriptors: await Promise.all(tools.map(async (tool, index) => {
+      const snapshot = await toolDescriptorSnapshot(
+        authority.workspaceId,
+        tool,
+      );
+      return {
+        revisionId: `revision-${index}`,
+        reference: {
+          resourceKind: "tool_descriptor_revision" as const,
+          resourceId: snapshot.resourceId,
+          resourceDigest: `sha256:${String(index).padStart(64, "0")}`,
+        },
+        snapshot,
+      };
+    })),
+  };
+}
 
 function envWithBrokenDb(): Record<string, unknown> {
   return {
@@ -43,13 +112,14 @@ test("tool catalog and execution use separate request-local executors", async ()
   const cleaned: string[] = [];
   let sequence = 0;
   const dependencies: RemoteToolExecutorDependencies = {
-    async createExecutor(_runId, _env, signal) {
+    resolveAuthority: resolveTestAuthority,
+    async createExecutor(_runId, _env, _authority, signal) {
       sequence += 1;
       const id = `executor-${sequence}`;
       signals.push(signal);
       return {
         mcpFailedServers: [],
-        getAvailableTools: () => [{ name: id }] as never,
+        getAvailableTools: () => [testTool("toolbox", true)],
         execute: async (toolCall) => ({
           tool_call_id: toolCall.id,
           output: id,
@@ -59,6 +129,7 @@ test("tool catalog and execution use separate request-local executors", async ()
         },
       };
     },
+    activateToolCatalog: activateTestCatalog,
   };
 
   const catalog = await handleToolCatalog(
@@ -69,6 +140,7 @@ test("tool catalog and execution use separate request-local executors", async ()
   const execution = await handleToolExecute(
     {
       runId: "run-request-local",
+      runAuthority: TEST_AUTHORITY.attestation,
       toolCall: { id: "call-1", name: "example", arguments: {} },
     },
     {} as never,
@@ -80,6 +152,7 @@ test("tool catalog and execution use separate request-local executors", async ()
   assertEquals(await execution.json(), {
     tool_call_id: "call-1",
     output: "executor-2",
+    runAuthority: TEST_AUTHORITY.attestation,
   });
   assertEquals(sequence, 2);
   assertEquals(signals[0], undefined);
@@ -89,20 +162,21 @@ test("tool catalog and execution use separate request-local executors", async ()
 
 test("tool catalog attests which side effects take the durable operation fence", async () => {
   const dependencies: RemoteToolExecutorDependencies = {
+    resolveAuthority: resolveTestAuthority,
     async createExecutor() {
       return {
         mcpFailedServers: [],
-        getAvailableTools: () =>
-          [
-            { name: "publish", side_effects: true },
-            { name: "read", side_effects: false },
-          ] as never,
+        getAvailableTools: () => [
+          testTool("toolbox", true),
+          testTool("web_fetch", false),
+        ],
         execute: async () => {
           throw new Error("not used");
         },
         cleanup() {},
       };
     },
+    activateToolCatalog: activateTestCatalog,
   };
 
   const response = await handleToolCatalog(
@@ -113,18 +187,62 @@ test("tool catalog attests which side effects take the durable operation fence",
 
   assertEquals(response.status, 200);
   const payload = await response.json() as {
+    catalogVersion: number;
+    sourceRunAuthority: typeof TEST_AUTHORITY.attestation;
+    runAuthority: typeof TEST_AUTHORITY.attestation;
     tools: Array<{ name: string; durable_idempotency: boolean }>;
   };
-  assertEquals(payload.tools, [
-    { name: "publish", side_effects: true, durable_idempotency: true },
-    { name: "read", side_effects: false, durable_idempotency: false },
+  assertEquals(payload.catalogVersion, 2);
+  assertEquals(payload.sourceRunAuthority, TEST_AUTHORITY.attestation);
+  assertEquals(payload.runAuthority, TEST_AUTHORITY.attestation);
+  assertEquals(payload.tools.map((tool) => ({
+    name: tool.name,
+    durable_idempotency: tool.durable_idempotency,
+  })), [
+    { name: "toolbox", durable_idempotency: true },
+    { name: "web_fetch", durable_idempotency: false },
   ]);
+});
+
+test("tool execution rejects missing or stale catalog authority before executor creation", async () => {
+  let createCalls = 0;
+  const dependencies: RemoteToolExecutorDependencies = {
+    resolveAuthority: resolveTestAuthority,
+    async createExecutor() {
+      createCalls += 1;
+      throw new Error("must not create an executor for stale authority");
+    },
+  };
+  const call = { id: "call-stale", name: "publish", arguments: {} };
+
+  const missing = await handleToolExecute(
+    { runId: "run-request-local", toolCall: call },
+    {} as never,
+    dependencies,
+  );
+  assertEquals(missing.status, 409);
+
+  const stale = await handleToolExecute(
+    {
+      runId: "run-request-local",
+      runAuthority: {
+        ...TEST_AUTHORITY.attestation,
+        contextDigest: `sha256:${"c".repeat(64)}`,
+      },
+      toolCall: call,
+    },
+    {} as never,
+    dependencies,
+  );
+  assertEquals(stale.status, 409);
+  assertEquals(createCalls, 0);
 });
 
 test("every tool execution request gets an independent abort signal", async () => {
   const signals: AbortSignal[] = [];
   const dependencies: RemoteToolExecutorDependencies = {
-    async createExecutor(_runId, _env, signal) {
+    resolveAuthority: resolveTestAuthority,
+    async createExecutor(_runId, _env, _authority, signal) {
       if (!signal) throw new Error("execution signal is required");
       signals.push(signal);
       return {
@@ -143,6 +261,7 @@ test("every tool execution request gets an independent abort signal", async () =
     const response = await handleToolExecute(
       {
         runId: "run-request-local",
+        runAuthority: TEST_AUTHORITY.attestation,
         toolCall: { id, name: "example", arguments: {} },
       },
       {} as never,
@@ -159,6 +278,7 @@ test("every tool execution request gets an independent abort signal", async () =
 test("tool execution forwards the engine idempotency key to the durable executor", async () => {
   let receivedKey: string | undefined;
   const dependencies: RemoteToolExecutorDependencies = {
+    resolveAuthority: resolveTestAuthority,
     async createExecutor() {
       return {
         mcpFailedServers: [],
@@ -178,6 +298,7 @@ test("tool execution forwards the engine idempotency key to the durable executor
   const response = await handleToolExecute(
     {
       runId: "run-idempotent",
+      runAuthority: TEST_AUTHORITY.attestation,
       idempotencyKey: "loop:loop-1:tool:1:0:publish",
       toolCall: { id: "call-1", name: "publish", arguments: { ref: "v1" } },
     },
@@ -230,7 +351,8 @@ test("in-flight tool polling aborts the request-local executor after lease loss"
     delete() {},
   };
   const dependencies: RemoteToolExecutorDependencies = {
-    async createExecutor(_runId, _env, signal) {
+    resolveAuthority: resolveTestAuthority,
+    async createExecutor(_runId, _env, _authority, signal) {
       executionSignal = signal;
       return {
         mcpFailedServers: [],
@@ -254,6 +376,7 @@ test("in-flight tool polling aborts the request-local executor after lease loss"
     handleToolExecute(
       {
         ...lease,
+        runAuthority: authorityForRun(lease.runId).attestation,
         toolCall: { id: "tool-1", name: "slow_mcp", arguments: {} },
       },
       {
@@ -263,7 +386,7 @@ test("in-flight tool polling aborts the request-local executor after lease loss"
       dependencies,
     ),
     new Promise<never>((_resolve, reject) =>
-      setTimeout(() => reject(new Error("lease polling timed out")), 500),
+      setTimeout(() => reject(new Error("lease polling timed out")), 500)
     ),
   ]);
 

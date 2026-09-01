@@ -21,5 +21,5 @@ cd takos
 bun run check
 ```
 
-immutable candidateのdigestは、公式release時に`takos-control`のRelease
+変更不可の candidateのdigestは、公式release時に`takos-control`のRelease
 deploy entrypoint の owner gate が生成・固定します。

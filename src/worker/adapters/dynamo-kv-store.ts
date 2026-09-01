@@ -7,6 +7,12 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import type { KvStoreBinding } from "../shared/types/bindings.ts";
 import { Buffer } from "node:buffer";
+import {
+  coerceValue,
+  isExpired,
+  nowEpoch,
+  serializeValue,
+} from "./kv-store-shared.ts";
 
 export type DynamoKvStoreConfig = {
   region: string;
@@ -37,16 +43,6 @@ export function createDynamoKvStore(
     return client;
   }
 
-  function nowEpoch(): number {
-    return Math.floor(Date.now() / 1000);
-  }
-
-  function isExpired(expirationValue: string | undefined): boolean {
-    if (expirationValue === undefined) return false;
-    const exp = Number(expirationValue);
-    return exp > 0 && exp <= nowEpoch();
-  }
-
   const kv = {
     async get(
       key: string,
@@ -62,29 +58,7 @@ export function createDynamoKvStore(
 
       if (isExpired(item.expiration?.N)) return null;
 
-      const raw = item.value.S;
-
-      switch (type) {
-        case "json":
-          return JSON.parse(raw);
-        case "arrayBuffer": {
-          const encoder = new TextEncoder();
-          return encoder.encode(raw).buffer;
-        }
-        case "stream": {
-          const encoder = new TextEncoder();
-          const bytes = encoder.encode(raw);
-          return new ReadableStream({
-            start(controller) {
-              controller.enqueue(bytes);
-              controller.close();
-            },
-          });
-        }
-        case "text":
-        default:
-          return raw;
-      }
+      return coerceValue(item.value.S, type);
     },
 
     async getWithMetadata(
@@ -108,34 +82,7 @@ export function createDynamoKvStore(
         return { value: null, metadata: null, cacheStatus: null };
       }
 
-      const raw = item.value.S;
-      let value: unknown;
-
-      switch (type) {
-        case "json":
-          value = JSON.parse(raw);
-          break;
-        case "arrayBuffer": {
-          const encoder = new TextEncoder();
-          value = encoder.encode(raw).buffer;
-          break;
-        }
-        case "stream": {
-          const encoder = new TextEncoder();
-          const bytes = encoder.encode(raw);
-          value = new ReadableStream({
-            start(controller) {
-              controller.enqueue(bytes);
-              controller.close();
-            },
-          });
-          break;
-        }
-        case "text":
-        default:
-          value = raw;
-          break;
-      }
+      const value = coerceValue(item.value.S, type);
 
       const metadata: Record<string, string> | null = item.metadata?.S
         ? (JSON.parse(item.metadata.S) as Record<string, string>)
@@ -153,32 +100,7 @@ export function createDynamoKvStore(
         metadata?: Record<string, string>;
       },
     ): Promise<void> {
-      let serialized: string;
-
-      if (typeof value === "string") {
-        serialized = value;
-      } else if (value instanceof ArrayBuffer) {
-        const decoder = new TextDecoder();
-        serialized = decoder.decode(value);
-      } else {
-        // ReadableStream
-        const reader = (value as ReadableStream).getReader();
-        const chunks: Uint8Array[] = [];
-        for (;;) {
-          const { done, value: chunk } = await reader.read();
-          if (done) break;
-          chunks.push(chunk);
-        }
-        const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-        const combined = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          combined.set(chunk, offset);
-          offset += chunk.length;
-        }
-        const decoder = new TextDecoder();
-        serialized = decoder.decode(combined);
-      }
+      const serialized = await serializeValue(value);
 
       const item: Record<string, { S?: string; N?: string }> = {
         pk: { S: key },

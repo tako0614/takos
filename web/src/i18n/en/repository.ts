@@ -32,6 +32,7 @@ export const repository = {
   installStatusStale: "Stale",
   installStatusError: "Error",
   installStatusFailed: "Failed",
+  installStatusUninstalling: "Uninstalling",
 
   // Branches
   branches: "Branches",

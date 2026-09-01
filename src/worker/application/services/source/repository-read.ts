@@ -1,7 +1,6 @@
 import type {
   Env,
   Repository,
-  SpaceRole,
 } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import { repositories, type SqlDatabaseLike } from "../../../infra/db/index.ts";
@@ -12,7 +11,7 @@ import { sourceServiceDeps } from "./deps.ts";
 export interface RepoAccess {
   repo: Repository;
   spaceId: string;
-  role: SpaceRole;
+  accessKind: "owner" | "public-read";
 }
 
 export interface CheckRepoAccessOptions {
@@ -50,7 +49,6 @@ export async function checkRepoAccess(
   env: Pick<Env, "DB">,
   repoId: string,
   userId: string | null | undefined,
-  requiredRoles?: SpaceRole[],
   options: CheckRepoAccessOptions = {},
 ): Promise<RepoAccess | null> {
   if (!isValidOpaqueId(repoId)) return null;
@@ -73,19 +71,17 @@ export async function checkRepoAccess(
       env.DB,
       repo.space_id,
       normalizedUserId,
-      requiredRoles,
     );
     if (access) {
-      return { repo, spaceId: repo.space_id, role: access.membership.role };
+      return { repo, spaceId: repo.space_id, accessKind: "owner" };
     }
   }
 
   if (
     options.allowPublicRead &&
-    !requiredRoles &&
     repo.visibility === "public"
   ) {
-    return { repo, spaceId: repo.space_id, role: "viewer" };
+    return { repo, spaceId: repo.space_id, accessKind: "public-read" };
   }
 
   return null;

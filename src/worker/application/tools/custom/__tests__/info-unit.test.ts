@@ -27,8 +27,13 @@ test("info_unit_search filters Vectorize with the writer's Workspace metadata ke
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     INSERT INTO info_units
-      (id, account_id, run_id, kind, content)
-      VALUES ('unit_a', 'space_a', 'run_a', 'session', 'durable answer');
+      (id, account_id, run_id, kind, content, vector_id)
+      VALUES (
+        'unit_a', 'space_a', 'run_a', 'session', 'durable answer', 'vector_a'
+      ), (
+        'unit_b', 'space_b', 'run_b', 'session', 'cross Workspace secret',
+        'vector_b'
+      );
   `);
   const db = drizzle(client, { schema });
   let observedFilter: Record<string, unknown> | undefined;
@@ -49,12 +54,27 @@ test("info_unit_search filters Vectorize with the writer's Workspace metadata ke
             return {
               matches: [
                 {
+                  id: "vector_a",
                   score: 0.9,
                   metadata: {
                     kind: "info_unit",
                     spaceId: "space_a",
                     runId: "run_a",
-                    content: "durable answer",
+                    segmentIndex: 0,
+                    segmentCount: 1,
+                    content: "forged metadata payload",
+                  },
+                },
+                {
+                  id: "vector_b",
+                  score: 0.99,
+                  metadata: {
+                    kind: "info_unit",
+                    spaceId: "space_a",
+                    runId: "run_b",
+                    segmentIndex: 0,
+                    segmentCount: 1,
+                    content: "cross Workspace secret",
                   },
                 },
               ],
@@ -69,6 +89,8 @@ test("info_unit_search filters Vectorize with the writer's Workspace metadata ke
       kind: "info_unit",
     });
     expect(output).toContain("durable answer");
+    expect(output).not.toContain("forged metadata payload");
+    expect(output).not.toContain("cross Workspace secret");
     expect(output.match(/durable answer/g)).toHaveLength(1);
   } finally {
     client.close();

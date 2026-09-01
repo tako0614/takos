@@ -1,4 +1,6 @@
-const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
+export const STORAGE_EDITOR_LANGUAGE_BY_EXTENSION: Readonly<
+  Record<string, string>
+> = {
   ".js": "javascript",
   ".mjs": "javascript",
   ".cjs": "javascript",
@@ -43,7 +45,6 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   ".graphql": "graphql",
   ".gql": "graphql",
   ".r": "r",
-  ".R": "r",
   ".lua": "lua",
   ".pl": "perl",
   ".dart": "dart",
@@ -63,7 +64,9 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
 
 export function detectLanguage(fileName: string): string {
   const ext = getExtension(fileName);
-  if (ext && EXTENSION_LANGUAGE_MAP[ext]) return EXTENSION_LANGUAGE_MAP[ext];
+  if (ext && STORAGE_EDITOR_LANGUAGE_BY_EXTENSION[ext]) {
+    return STORAGE_EDITOR_LANGUAGE_BY_EXTENSION[ext];
+  }
   const baseName = fileName.toLowerCase();
   if (baseName === "dockerfile") return "dockerfile";
   if (baseName === "makefile") return "shell";

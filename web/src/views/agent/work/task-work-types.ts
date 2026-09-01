@@ -2,41 +2,23 @@ import type {
   AgentTaskPriority,
   AgentTaskStatus,
 } from "../../../types/index.ts";
+import {
+  AGENT_TYPES,
+  DEFAULT_AGENT_TYPE,
+  MAX_AGENT_TASK_DESCRIPTION_CHARACTERS,
+  MAX_AGENT_TASK_TITLE_CHARACTERS,
+} from "takos-api-contract/shared/types";
+import type { AgentTaskPlan } from "takos-api-contract/shared/types";
 import type { ModelSelectOption } from "../../../lib/modelCatalog.ts";
+import type { ModelSettingsResponse } from "../../../lib/model-settings-response.ts";
 
-export type ModelOption = string | {
-  id: string;
-  name?: string;
-  description?: string;
-  source?: "models_api" | "gateway" | "fallback";
-  disabled?: boolean;
-};
 export type { ModelSelectOption };
 
-export interface ModelSettings {
-  ai_model?: string;
-  model?: string;
-  model_backend?: string;
-  available_models: {
-    openai: ModelOption[];
-    anthropic: ModelOption[];
-    google: ModelOption[];
-  };
-  catalog_status?: "fresh" | "cached" | "fallback" | "unconfigured";
-}
+export type ModelSettings = ModelSettingsResponse;
 
 export type TaskFilter = "all" | AgentTaskStatus;
 
-export type TaskPlan = {
-  type?: string;
-  tools?: string[];
-  needsRepo?: boolean;
-  needsRuntime?: boolean;
-  usePR?: boolean;
-  needsReview?: boolean;
-  commitMessage?: string;
-  reasoning?: string;
-};
+export type TaskPlan = AgentTaskPlan;
 
 export const STATUS_ORDER = [
   "planned",
@@ -52,13 +34,9 @@ export const PRIORITY_OPTIONS: AgentTaskPriority[] = [
   "high",
   "urgent",
 ];
-export const DEFAULT_AGENT_TYPE = "default";
-
-export const AGENT_TYPES = [
+export {
+  AGENT_TYPES,
   DEFAULT_AGENT_TYPE,
-  "assistant",
-  "planner",
-  "researcher",
-  "implementer",
-  "reviewer",
-];
+  MAX_AGENT_TASK_DESCRIPTION_CHARACTERS,
+  MAX_AGENT_TASK_TITLE_CHARACTERS,
+};

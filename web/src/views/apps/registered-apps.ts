@@ -14,18 +14,47 @@ export interface RegisteredApp {
   space_name: string | null;
   service_hostname: string | null;
   service_status: string | null;
-  source_type?: "runtime_projection";
+  source_type?: "interface";
   capsule_id?: string | null;
   interface_name?: string | null;
   category?: string | null;
   sort_order?: number | null;
 }
 
-interface RegisteredAppsResponse {
-  apps?: RegisteredApp[];
+const registeredAppsCache = new Map<string, RegisteredApp[]>();
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-const registeredAppsCache = new Map<string, RegisteredApp[]>();
+function nullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
+}
+
+export function parseRegisteredAppsResponse(value: unknown): RegisteredApp[] {
+  const response = record(value);
+  if (!response || !Array.isArray(response.apps)) {
+    throw new TypeError("Invalid registered-app inventory response");
+  }
+  return response.apps.map((value) => {
+    const app = record(value);
+    if (
+      !app || typeof app.id !== "string" || !app.id ||
+      typeof app.name !== "string" || !app.name ||
+      typeof app.icon !== "string" ||
+      (app.app_type !== "platform" && app.app_type !== "custom") ||
+      !nullableString(app.description) || !nullableString(app.url) ||
+      !nullableString(app.space_id) || !nullableString(app.space_name) ||
+      !nullableString(app.service_hostname) ||
+      !nullableString(app.service_status)
+    ) {
+      throw new TypeError("Invalid registered-app inventory record");
+    }
+    return app as unknown as RegisteredApp;
+  });
+}
 
 function toTitleCase(value: string): string {
   return value
@@ -117,8 +146,7 @@ export async function loadRegisteredApps(
     },
   });
 
-  const data = await rpcJson<RegisteredAppsResponse>(response);
-  return Array.isArray(data.apps) ? data.apps : [];
+  return parseRegisteredAppsResponse(await rpcJson<unknown>(response));
 }
 
 /**
@@ -163,7 +191,7 @@ export function useRegisteredApps(spaceId: Accessor<string>) {
       const fallback = registeredAppsCache.get(currentSpaceId);
       if (fallback) {
         setApps(fallback);
-        setError(null);
+        setError(err instanceof Error ? err.message : t("failedToLoadApps"));
       } else if (apps().length === 0) {
         setError(err instanceof Error ? err.message : t("failedToLoadApps"));
       }

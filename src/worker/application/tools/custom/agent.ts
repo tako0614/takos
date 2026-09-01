@@ -9,7 +9,7 @@ import {
   threads,
 } from "../../../infra/db/index.ts";
 import { createThreadRun } from "../../services/execution/run-creation.ts";
-import { resolveRunModel } from "../../services/runs/create-thread-run-validation.ts";
+import { resolveSelectableRunModel } from "../../services/runs/create-thread-run-validation.ts";
 import {
   createThread,
   updateThreadStatus,
@@ -20,6 +20,11 @@ import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
 import { defineTools } from "./define-tools.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  AGENT_TYPES,
+  DEFAULT_AGENT_TYPE,
+  isAgentType,
+} from "../../../shared/types/agent-tasks.ts";
 
 const TERMINAL_RUN_STATUSES = new Set<RunStatus>([
   "completed",
@@ -117,6 +122,7 @@ export const SPAWN_AGENT: ToolDefinition = {
         type: "string",
         description:
           'Agent type for the sub-agent (optional, default: "default")',
+        enum: [...AGENT_TYPES],
       },
       model: {
         type: "string",
@@ -270,7 +276,11 @@ function parseInputObject(
 
 export const spawnAgentHandler: ToolHandler = async (args, context) => {
   const task = args.task as string;
-  const agentType = (args.agent_type as string | undefined) || "default";
+  const requestedAgentType = args.agent_type ?? DEFAULT_AGENT_TYPE;
+  if (!isAgentType(requestedAgentType)) {
+    throw new Error("Agent type is not available");
+  }
+  const agentType = requestedAgentType;
   const requestedModel = args.model as string | undefined;
 
   if (!task || typeof task !== "string" || task.trim().length === 0) {
@@ -278,11 +288,15 @@ export const spawnAgentHandler: ToolHandler = async (args, context) => {
   }
 
   const db = getDb(context.db);
-  const model = await resolveRunModel(
+  const model = await resolveSelectableRunModel(
     context.db,
     context.spaceId,
     requestedModel,
+    context.env,
   );
+  if (!model) {
+    throw new Error("Model is not available");
+  }
   const [parentThread, latestUserMessage, parentRunRow, spaceLocale] =
     await Promise.all([
       db.select({

@@ -1,5 +1,5 @@
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
@@ -7,13 +7,18 @@ use reqwest::header::HeaderMap;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use takos_agent_engine::model::{
     ConversationMessage, ConversationRole, ModelInput, ModelOutput, ModelRunner, ModelUsage,
     ToolCallRequest,
 };
 use tokio::time::Instant;
+use uuid::Uuid;
 
-use crate::control_rpc::{ToolDefinition, UsagePayload};
+use crate::control_rpc::{
+    ControlRpcClient, ProviderMaterializationRef, ProviderRuntimeCredential,
+    RunAuthorityAttestation, ToolDefinition, UsagePayload,
+};
 use crate::engine_support::UsageTracker;
 use crate::AppResult;
 
@@ -135,6 +140,15 @@ pub struct TakosModelRunner {
     tools: Arc<Vec<ToolDefinition>>,
     usage_tracker: Arc<UsageTracker>,
     endpoint: Arc<String>,
+    model_call_authority: Option<Arc<ModelCallAuthority>>,
+}
+
+struct ModelCallAuthority {
+    client: ControlRpcClient,
+    run_authority: Arc<Mutex<RunAuthorityAttestation>>,
+    materialization_id: String,
+    materialization_digest: String,
+    materialization_protocol: String,
 }
 
 impl TakosModelRunner {
@@ -177,6 +191,7 @@ impl TakosModelRunner {
                     .filter(|value| !value.is_empty())
                     .unwrap_or_else(|| DEFAULT_OPENAI_ENDPOINT.to_string()),
             ),
+            model_call_authority: None,
         }
     }
 
@@ -202,7 +217,24 @@ impl TakosModelRunner {
             tools: Arc::new(tools),
             usage_tracker,
             endpoint: Arc::new(endpoint.into()),
+            model_call_authority: None,
         }
+    }
+
+    pub fn with_model_call_authority(
+        mut self,
+        client: ControlRpcClient,
+        run_authority: Arc<Mutex<RunAuthorityAttestation>>,
+        provider_materialization: &ProviderMaterializationRef,
+    ) -> Self {
+        self.model_call_authority = Some(Arc::new(ModelCallAuthority {
+            client,
+            run_authority,
+            materialization_id: provider_materialization.id.clone(),
+            materialization_digest: provider_materialization.digest.clone(),
+            materialization_protocol: provider_materialization.protocol.clone(),
+        }));
+        self
     }
 
     pub fn usage_payload(&self) -> UsagePayload {
@@ -288,14 +320,67 @@ impl TakosModelRunner {
         })
     }
 
-    async fn openai_response(&self, input: &ModelInput) -> AppResult<ModelOutput> {
-        if self.openai_api_keys.is_empty() {
+    async fn authorize_model_request(
+        &self,
+        request_body: &[u8],
+        transport_attempt: u32,
+    ) -> AppResult<Option<ProviderRuntimeCredential>> {
+        let Some(model_call_authority) = &self.model_call_authority else {
+            // Direct runner unit tests do not have a Worker. The production
+            // execute_run constructor always installs this authority boundary.
+            return Ok(None);
+        };
+        let run_authority = model_call_authority
+            .run_authority
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let digest = Sha256::digest(request_body);
+        let request_digest = format!("sha256:{digest:x}");
+        let begin_nonce = Uuid::new_v4().to_string();
+        let authorization = model_call_authority
+            .client
+            .begin_model_call(
+                &run_authority,
+                &request_digest,
+                transport_attempt,
+                &begin_nonce,
+            )
+            .await?;
+        let credential = authorization.provider_credential;
+        if credential.materialization_id != model_call_authority.materialization_id
+            || credential.materialization_digest != model_call_authority.materialization_digest
+            || credential.protocol != model_call_authority.materialization_protocol
+        {
+            return Err(io::Error::other(
+                "model-call credential changed the pinned provider materialization",
+            )
+            .into());
+        }
+        Ok(Some(credential))
+    }
+
+    async fn openai_response(
+        &self,
+        input: &ModelInput,
+        transport_attempt: &mut u32,
+    ) -> AppResult<ModelOutput> {
+        if self.model_call_authority.is_none() && self.openai_api_keys.is_empty() {
             return Err(io::Error::other("OpenAI-compatible API key is not configured").into());
+        }
+
+        if self.model_call_authority.is_some() {
+            return self
+                .openai_response_with_key(input, "", transport_attempt)
+                .await;
         }
 
         let mut last_auth_error: Option<String> = None;
         for (index, api_key) in self.openai_api_keys.iter().enumerate() {
-            match self.openai_response_with_key(input, api_key).await {
+            match self
+                .openai_response_with_key(input, api_key, transport_attempt)
+                .await
+            {
                 Ok(output) => return Ok(output),
                 Err(err) => {
                     let message = err.to_string();
@@ -319,11 +404,17 @@ impl TakosModelRunner {
         &self,
         input: &ModelInput,
         api_key: &str,
+        transport_attempt: &mut u32,
     ) -> AppResult<ModelOutput> {
         let repeated_tool_failure = has_repeated_tool_failure(input);
         if repeated_tool_failure {
             return self
-                .send_openai_request(input, api_key, Some(TOOL_RECOVERY_INSTRUCTION))
+                .send_openai_request(
+                    input,
+                    api_key,
+                    Some(TOOL_RECOVERY_INSTRUCTION),
+                    transport_attempt,
+                )
                 .await;
         }
 
@@ -331,13 +422,20 @@ impl TakosModelRunner {
         // router call doubled latency/cost and shared the same node timeout,
         // while `tool_choice=auto` already lets the provider decide whether a
         // tool is needed.
-        let output = self.send_openai_request(input, api_key, None).await?;
+        let output = self
+            .send_openai_request(input, api_key, None, transport_attempt)
+            .await?;
         if !self.has_unavailable_tool_call(&output) {
             return Ok(output);
         }
 
-        self.send_openai_request(input, api_key, Some(UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION))
-            .await
+        self.send_openai_request(
+            input,
+            api_key,
+            Some(UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION),
+            transport_attempt,
+        )
+        .await
     }
 
     async fn send_openai_request(
@@ -345,6 +443,7 @@ impl TakosModelRunner {
         input: &ModelInput,
         api_key: &str,
         recovery_instruction: Option<&str>,
+        transport_attempt: &mut u32,
     ) -> AppResult<ModelOutput> {
         let request = self.build_openai_request_with_recovery(input, recovery_instruction);
         let request_body = serde_json::to_vec(&request)
@@ -363,8 +462,36 @@ impl TakosModelRunner {
                     "OpenAI chat completions exceeded the total 120s transport budget",
                 )));
             };
+            *transport_attempt = transport_attempt
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("model transport attempt counter overflow"))?;
+            if *transport_attempt > 64 {
+                return Err(io::Error::other(
+                    "model transport attempts exceed the Worker authority contract",
+                )
+                .into());
+            }
+            let live_credential = self
+                .authorize_model_request(&request_body, *transport_attempt)
+                .await?;
+            let live_api_key = match live_credential {
+                Some(credential) => {
+                    if credential.protocol != "openai_chat_completions"
+                        || credential.endpoint.as_deref() != Some(self.endpoint.as_str())
+                    {
+                        return Err(io::Error::other(
+                            "model-call credential does not match the pinned OpenAI transport",
+                        )
+                        .into());
+                    }
+                    credential.api_key.ok_or_else(|| {
+                        io::Error::other("model-call credential omitted the provider token")
+                    })?
+                }
+                None => api_key.to_string(),
+            };
             let result = self
-                .send_openai_request_once(api_key, request_body.clone(), remaining)
+                .send_openai_request_once(&live_api_key, request_body.clone(), remaining)
                 .await;
             match result {
                 Ok(output) => return Ok(output),
@@ -741,10 +868,43 @@ impl ModelRunner for TakosModelRunner {
                 "agent turn transcript exceeds the {MODEL_MAX_TURN_TRANSCRIPT_BYTES} byte provider contract"
             )));
         }
+        let mut transport_attempt = 0;
         let result = if self.use_local_smoke() {
+            let smoke_request = serde_json::to_vec(&json!({
+                "model": &self.model,
+                "sessionId": input.session_id.to_string(),
+                "loopId": input.loop_id.to_string(),
+                "systemPrompt": &input.system_prompt,
+                "sessionContext": &input.session_context,
+                "memoryContext": &input.memory_context,
+                "toolContext": &input.tool_context,
+                "conversationHistory": &input.conversation_history,
+                "turnMessages": &input.turn_messages,
+                "userMessage": &input.user_message,
+                "plan": &input.plan,
+            }))
+            .map_err(|error| {
+                takos_agent_engine::EngineError::Model(format!(
+                    "failed to encode local model request: {error}"
+                ))
+            })?;
+            transport_attempt = 1;
+            let credential = self
+                .authorize_model_request(&smoke_request, transport_attempt)
+                .await
+                .map_err(|error| takos_agent_engine::EngineError::Model(error.to_string()))?;
+            if credential.as_ref().is_some_and(|credential| {
+                credential.protocol != "local_smoke"
+                    || credential.endpoint.is_some()
+                    || credential.api_key.is_some()
+            }) {
+                return Err(takos_agent_engine::EngineError::Model(
+                    "model-call credential does not match local-smoke".to_string(),
+                ));
+            }
             self.local_smoke_response(&input)
         } else {
-            self.openai_response(&input).await
+            self.openai_response(&input, &mut transport_attempt).await
         };
         let output =
             result.map_err(|err| takos_agent_engine::EngineError::Model(err.to_string()))?;

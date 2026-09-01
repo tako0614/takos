@@ -39,10 +39,10 @@ import {
   handleConversationHistory,
   handleEngineCheckpointLoad,
   handleEngineCheckpointSave,
+  handleModelCallBegin,
   handleRunConfig,
+  handleRunModelInput,
   handleRunEvent,
-  handleSkillCatalog,
-  handleSkillPlan,
   handleSkillRuntimeContext,
   handleToolCatalog,
   handleToolCleanup,
@@ -61,6 +61,13 @@ import {
 import { getDb } from "../infra/db/index.ts";
 import { runs } from "../infra/db/schema.ts";
 import { eq } from "drizzle-orm";
+import {
+  ensureRunProviderMaterialization,
+  ProviderMaterializationUnavailableError,
+} from "../application/services/runs/provider-materialization.ts";
+import {
+  parseRunAuthorityAttestation,
+} from "../application/services/runs/run-authority.ts";
 
 // Terminal run statuses: a run in any of these states must not be handed
 // deployment-global provider keys. Mirrors isTerminalRunStatus in
@@ -155,11 +162,13 @@ const CONTROL_RPC_HANDLERS: Record<
   "run-fail": handleRunFail,
   "run-reset": handleRunReset,
   "run-config": handleRunConfig,
+  "run-model-input": handleRunModelInput,
   "is-cancelled": handleIsCancelled,
   "update-run-status": handleUpdateRunStatus,
   "complete-run": handleCompleteRun,
   "engine-checkpoint-load": handleEngineCheckpointLoad,
   "engine-checkpoint-save": handleEngineCheckpointSave,
+  "model-call-begin": handleModelCallBegin,
   "run-event": handleRunEvent,
   // conversation / session / messages
   "conversation-history": handleConversationHistory,
@@ -167,8 +176,6 @@ const CONTROL_RPC_HANDLERS: Record<
   // memory
   // skills
   "skill-runtime-context": handleSkillRuntimeContext,
-  "skill-catalog": handleSkillCatalog,
-  "skill-plan": handleSkillPlan,
   // tools
   "tool-catalog": handleToolCatalog,
   "tool-execute": handleToolExecute,
@@ -207,6 +214,49 @@ async function handleApiKeys(
   const inactive = await rejectApiKeysIfRunInactive(body, env);
   if (inactive) return inactive;
 
+  // Protocol v6+ first pins the secret-free provider meaning to the current
+  // RunContext. It deliberately receives no credential here: every actual
+  // provider transport attempt gets a fresh credential only from the
+  // model-call-begin success response.
+  if (body.materializeOnly === true || body.runAuthority !== undefined) {
+    const runId = nonEmptyString(body.runId)!;
+    const expectedAuthority = parseRunAuthorityAttestation(body.runAuthority);
+    if (!expectedAuthority) {
+      return err("Run authority attestation is required", 409);
+    }
+    try {
+      const pinned = await ensureRunProviderMaterialization({
+        env,
+        runId,
+        expectedAuthority,
+      });
+      const snapshot = pinned.materialization.snapshot;
+      return ok({
+        openai: null,
+        openaiEndpoint: "endpoint" in snapshot ? snapshot.endpoint : null,
+        sourceRunAuthority: pinned.sourceAuthority,
+        runAuthority: pinned.authority.attestation,
+        providerMaterialization: {
+          id: pinned.materialization.resourceId,
+          digest: pinned.materialization.materializationDigest,
+          sourceKind: snapshot.sourceKind,
+          protocol: snapshot.protocol,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ProviderMaterializationUnavailableError) {
+        return err(error.message, 409);
+      }
+      logError("Provider materialization failed", error, {
+        module: "executor-proxy-api",
+        runId,
+      });
+      return err("Provider materialization failed", 503);
+    }
+  }
+
+  // Rolling compatibility for old container images. New images always use
+  // the branch above and ignore durable/shared credentials at bootstrap.
   const configuredDirectOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
   const allowSharedProviderKey =
     env.ENVIRONMENT === "development" ||

@@ -17,7 +17,6 @@ pub mod engine_support;
 pub mod hash;
 pub mod model;
 pub mod redaction;
-pub mod skills;
 pub mod tool_bridge;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;

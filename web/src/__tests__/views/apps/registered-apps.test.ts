@@ -7,11 +7,12 @@ import {
   getAppIconImageSrc,
   getAppStatusVariant,
   loadRegisteredApps,
+  parseRegisteredAppsResponse,
   type RegisteredApp,
   useRegisteredApps,
 } from "../../../views/apps/registered-apps.ts";
 import type { TranslationKey } from "../../../store/i18n.ts";
-import { test } from "bun:test";
+import { expect, test } from "bun:test";
 
 function makeRegisteredApp(overrides: Partial<RegisteredApp> = {}) {
   return {
@@ -25,7 +26,7 @@ function makeRegisteredApp(overrides: Partial<RegisteredApp> = {}) {
     space_name: "Personal",
     service_hostname: "docs.example.com",
     service_status: "deployed",
-    source_type: "runtime_projection",
+    source_type: "interface",
     capsule_id: "capsule-docs",
     interface_name: "docs-ui",
     category: "office",
@@ -106,6 +107,15 @@ test("registered apps - treats safe icon URLs as images", () => {
   assertEquals(getAppIconImageSrc("data:image/svg+xml,<svg />"), null);
 });
 
+test("registered apps - rejects malformed successful inventory bodies", () => {
+  expect(() => parseRegisteredAppsResponse({})).toThrow(TypeError);
+  expect(() => parseRegisteredAppsResponse({ apps: [{ id: "app-1" }] }))
+    .toThrow(TypeError);
+  expect(parseRegisteredAppsResponse({ apps: [makeRegisteredApp()] })).toEqual(
+    [makeRegisteredApp()],
+  );
+});
+
 test("registered apps - keeps cached apps visible while revalidating", async () => {
   clearRegisteredAppsCacheForTests();
   const originalFetch = globalThis.fetch;
@@ -121,7 +131,7 @@ test("registered apps - keeps cached apps visible while revalidating", async () 
       resolveSecondFetch = () =>
         resolve(appsResponse([makeRegisteredApp({ name: "Docs Updated" })]));
     });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   try {
     let disposeFirst: (() => void) | undefined;
@@ -166,6 +176,46 @@ test("registered apps - keeps cached apps visible while revalidating", async () 
       ["Docs Updated"],
     );
 
+    disposeSecond?.();
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearRegisteredAppsCacheForTests();
+  }
+});
+
+test("registered apps - surfaces a failed revalidation without dropping cache", async () => {
+  clearRegisteredAppsCacheForTests();
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = (() => {
+    fetchCount++;
+    return fetchCount === 1
+      ? Promise.resolve(appsResponse([makeRegisteredApp()]))
+      : Promise.reject(new Error("Launcher refresh unavailable"));
+  }) as unknown as typeof fetch;
+
+  try {
+    let disposeFirst: (() => void) | undefined;
+    let first: ReturnType<typeof useRegisteredApps> | undefined;
+    createRoot((dispose) => {
+      disposeFirst = dispose;
+      const [spaceId] = createSignal("space-123");
+      first = useRegisteredApps(spaceId);
+    });
+    await waitFor(() => first?.apps().length === 1);
+    disposeFirst?.();
+
+    let disposeSecond: (() => void) | undefined;
+    let second: ReturnType<typeof useRegisteredApps> | undefined;
+    createRoot((dispose) => {
+      disposeSecond = dispose;
+      const [spaceId] = createSignal("space-123");
+      second = useRegisteredApps(spaceId);
+    });
+    await waitFor(() => second?.error() !== null);
+
+    expect(second?.apps().map((app) => app.name)).toEqual(["Docs"]);
+    expect(second?.error()).toBe("Launcher refresh unavailable");
     disposeSecond?.();
   } finally {
     globalThis.fetch = originalFetch;

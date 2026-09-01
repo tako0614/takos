@@ -48,6 +48,28 @@ variable "worker_artifact_sha256" {
   }
 }
 
+variable "database_schema_url" {
+  description = "Immutable Takos relational schema bundle URL for worker_release_tag."
+  type        = string
+  default     = "https://raw.githubusercontent.com/tako0614/takos/v0.12.0/deploy/opentofu/takoform/migrations/schema-bundle.json"
+
+  validation {
+    condition     = can(regex("^https://[^@/?#]+(?:/[^?#]*)?$", trimspace(var.database_schema_url)))
+    error_message = "database_schema_url must be a credential-free immutable HTTPS URL without a query or fragment."
+  }
+}
+
+variable "database_schema_sha256" {
+  description = "Expected SHA-256 of database_schema_url."
+  type        = string
+  default     = "6a1037302bc18e38448c0d386d76f5226fe066618988a24c1efc54d1e358df29"
+
+  validation {
+    condition     = can(regex("^[a-f0-9]{64}$", trimspace(var.database_schema_sha256)))
+    error_message = "database_schema_sha256 must be a canonical lowercase SHA-256 digest."
+  }
+}
+
 variable "agent_image" {
   description = "Digest-pinned OCI image for the bounded Takos agent execution service."
   type        = string
@@ -163,9 +185,16 @@ locals {
 resource "takoform_relational_database" "database" {
   name          = format("%s-db", local.prefix)
   engine        = "sqlite"
-  schema_url    = "https://raw.githubusercontent.com/tako0614/takos/bf6446644e1cda24abb12d4a26dac7a4b2ca97e8/deploy/takoform/migrations/schema-bundle.json"
-  schema_sha256 = "6a1037302bc18e38448c0d386d76f5226fe066618988a24c1efc54d1e358df29"
+  schema_url    = trimspace(var.database_schema_url)
+  schema_sha256 = trimspace(var.database_schema_sha256)
   schema_format = "takosumi.resource-migrations"
+
+  lifecycle {
+    precondition {
+      condition     = strcontains(trimspace(var.database_schema_url), format("/%s/", trimspace(var.worker_release_tag)))
+      error_message = "database_schema_url must select the exact worker_release_tag."
+    }
+  }
 }
 
 resource "takoform_key_value_store" "hostname_routing" {

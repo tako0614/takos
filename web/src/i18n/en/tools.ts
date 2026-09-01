@@ -24,9 +24,12 @@ export const tools = {
     "Takos has not verified who operates this connector. Its endpoint may receive tool inputs and context when its tools are used.",
   connectionAdded: "Connection added",
   connectionAuthorizationOpened: "Authorization opened in a new window",
+  connectionAuthorizationReady: "Continue authorization to finish connecting",
   connectionAuthorizationComplete: "Authorization completed",
   connectionAuthorizationPending:
-    "Finish authorization in the other window. Takos will refresh this list automatically.",
+    "Finish authorization to use this connection. Takos will refresh this list automatically.",
+  connectionAuthorizationTimedOut:
+    "Automatic authorization checking stopped. Continue authorization, then retry the check.",
   continueAuthorization: "Continue authorization",
   connectedConnections: "Connected",
   connectedConnectionsDescription:
@@ -168,9 +171,11 @@ export const tools = {
   mcpToolAutomatic: "Run automatically",
   mcpToolKeepDisabled: "Keep disabled",
   mcpToolConfirmationsTitle: "MCP tool confirmations",
+  mcpToolConfirmationsTruncated:
+    "More confirmations are pending. Decide the visible requests to load the rest.",
   mcpToolConfirmationRequired: "An MCP tool needs your approval",
   mcpToolConfirmationRetryNotice:
-    "Approve once, then ask the agent to retry the exact call. The approval expires after ten minutes and is consumed once.",
+    "Approve once, then send the next message in this Thread asking the agent to retry the exact call. Takos attaches the approval only to that next Run; it expires after ten minutes and is consumed once.",
   mcpToolConfirmationArguments: "Exact arguments",
   approveOnce: "Approve once",
   deny: "Deny",

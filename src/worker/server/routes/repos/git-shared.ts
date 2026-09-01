@@ -14,17 +14,8 @@ import {
 } from "../../../application/services/source/repos.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
-import { ADMIN_ROLES, WRITE_ROLES } from "../../../shared/constants/roles.ts";
 
 export type RepoContext = Context<AuthenticatedRouteEnv>;
-
-/**
- * Repo role policy is sourced from the canonical roles chokepoint
- * (`shared/constants/roles.ts`): `WRITE_ROLES` gates create/update operations;
- * `ADMIN_ROLES` gates destructive/admin operations. Re-exported here for the
- * existing repo-route import sites.
- */
-export { ADMIN_ROLES, WRITE_ROLES };
 
 /**
  * Resolve repo access for a read request, throwing `NotFoundError("Repository")`
@@ -37,7 +28,7 @@ export async function requireRepoRead(
   userId: string | null | undefined,
   options?: CheckRepoAccessOptions,
 ): Promise<RepoAccess> {
-  const access = await checkRepoAccess(env, repoId, userId, undefined, options);
+  const access = await checkRepoAccess(env, repoId, userId, options);
   if (!access) {
     throw new NotFoundError("Repository");
   }
@@ -45,7 +36,7 @@ export async function requireRepoRead(
 }
 
 /**
- * Resolve repo access for a write request (`WRITE_ROLES`), throwing
+ * Resolve repo access for an owner write request, throwing
  * `NotFoundError("Repository")` when the caller lacks write access.
  */
 export async function requireRepoWrite(
@@ -53,7 +44,7 @@ export async function requireRepoWrite(
   repoId: string,
   userId: string | null | undefined,
 ): Promise<RepoAccess> {
-  const access = await checkRepoAccess(env, repoId, userId, [...WRITE_ROLES]);
+  const access = await checkRepoAccess(env, repoId, userId);
   if (!access) {
     throw new NotFoundError("Repository");
   }
@@ -61,15 +52,15 @@ export async function requireRepoWrite(
 }
 
 /**
- * Resolve repo access for an admin request (`ADMIN_ROLES`), throwing
- * `NotFoundError("Repository")` when the caller lacks admin access.
+ * Resolve repo access for an owner-only destructive request, throwing
+ * `NotFoundError("Repository")` when the caller is not the Workspace owner.
  */
 export async function requireRepoAdmin(
   env: Pick<Env, "DB">,
   repoId: string,
   userId: string | null | undefined,
 ): Promise<RepoAccess> {
-  const access = await checkRepoAccess(env, repoId, userId, [...ADMIN_ROLES]);
+  const access = await checkRepoAccess(env, repoId, userId);
   if (!access) {
     throw new NotFoundError("Repository");
   }

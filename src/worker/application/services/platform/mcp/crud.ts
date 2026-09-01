@@ -30,6 +30,7 @@ import {
   BadRequestError,
   ConflictError,
 } from "@takos/worker-platform-utils/errors";
+import { affectedRowCount } from "../../../../shared/utils/affected-row-count.ts";
 
 // ---------------------------------------------------------------------------
 // Managed server upsert & reconciliation
@@ -298,6 +299,84 @@ export async function registerExternalMcpServer(
     scope: params.scope,
   });
   if (authorization.kind === "oauth") {
+    const nowIso = new Date().toISOString();
+    if (existing) {
+      const updated = await db
+        .update(mcpServers)
+        .set({
+          authMode: "oauth_pkce",
+          oauthAccessToken: null,
+          oauthRefreshToken: null,
+          oauthTokenExpiresAt: null,
+          oauthScope: params.scope ?? null,
+          oauthIssuerUrl: null,
+          oauthResourceUri: null,
+          oauthResourceMetadataUrl: null,
+          oauthClientId: null,
+          oauthClientSecret: null,
+          oauthClientIdIssuedAt: null,
+          oauthClientSecretExpiresAt: null,
+          oauthRegistrationMode: null,
+          oauthTokenEndpointAuthMethod: null,
+          updatedAt: nowIso,
+        })
+        .where(
+          and(
+            eq(mcpServers.id, existing.id),
+            eq(mcpServers.accountId, params.spaceId),
+            eq(mcpServers.url, serverUrl),
+            eq(mcpServers.sourceType, "external"),
+          ),
+        );
+      if (affectedRowCount(updated) === 0) {
+        throw new ConflictError(
+          `MCP server "${params.name}" changed while authorization was being prepared`,
+        );
+      }
+    } else {
+      const serverId = generateId(16);
+      try {
+        await db.insert(mcpServers).values({
+          id: serverId,
+          accountId: params.spaceId,
+          name: params.name,
+          url: serverUrl,
+          transport: "streamable-http",
+          sourceType: "external",
+          authMode: "oauth_pkce",
+          oauthScope: params.scope ?? null,
+          enabled: true,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+      } catch (insertError) {
+        const raced = await db
+          .select({
+            id: mcpServers.id,
+            url: mcpServers.url,
+            sourceType: mcpServers.sourceType,
+          })
+          .from(mcpServers)
+          .where(
+            and(
+              eq(mcpServers.accountId, params.spaceId),
+              eq(mcpServers.name, params.name),
+            ),
+          )
+          .get();
+        if (
+          !raced ||
+          raced.sourceType !== "external" ||
+          normalizeMcpEndpointUrl(
+            raced.url,
+            urlOptions,
+            "Existing MCP server",
+          ) !== normalizedRequestedUrl
+        ) {
+          throw insertError;
+        }
+      }
+    }
     return {
       status: "pending_oauth",
       name: params.name,

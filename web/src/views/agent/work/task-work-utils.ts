@@ -1,20 +1,23 @@
 import type {
+  AgentTask,
   AgentTaskPriority,
   AgentTaskStatus,
 } from "../../../types/index.ts";
 import type { ModelSelectOption } from "../../../lib/modelCatalog.ts";
 import type { TranslationKey } from "../../../i18n.ts";
+import { parseAgentTaskPlan } from "takos-api-contract/shared/types";
 import {
   AGENT_TYPES,
   DEFAULT_AGENT_TYPE,
-  type ModelOption,
   type ModelSettings,
   type TaskPlan,
 } from "./task-work-types.ts";
 
 export function getAgentTypeOptions(current?: string | null): string[] {
   const normalized = current?.trim();
-  if (!normalized || AGENT_TYPES.includes(normalized)) {
+  if (
+    !normalized || (AGENT_TYPES as readonly string[]).includes(normalized)
+  ) {
     return [...AGENT_TYPES];
   }
   return [normalized, ...AGENT_TYPES];
@@ -78,10 +81,19 @@ export function getPriorityClasses(priority: AgentTaskPriority): string {
   }
 }
 
+export function canStartAgentTask(
+  task: Pick<AgentTask, "status" | "latest_run">,
+): boolean {
+  if (task.status === "completed" || task.status === "cancelled") return false;
+  const runStatus = task.latest_run?.status;
+  return runStatus !== "pending" && runStatus !== "queued" &&
+    runStatus !== "running";
+}
+
 export function parsePlan(plan: string | null): TaskPlan | null {
   if (!plan) return null;
   try {
-    return JSON.parse(plan) as TaskPlan;
+    return parseAgentTaskPlan(JSON.parse(plan));
   } catch {
     return null;
   }
@@ -91,33 +103,9 @@ export function getModelsForModelBackend(
   modelSettings: ModelSettings | null,
   modelBackend?: string,
 ): ModelSelectOption[] {
-  if (!modelSettings?.available_models) return [];
-
-  let raw: ModelOption[];
-  switch (modelBackend) {
-    case "anthropic":
-      raw = modelSettings.available_models.anthropic;
-      break;
-    case "google":
-      raw = modelSettings.available_models.google;
-      break;
-    default:
-      raw = modelSettings.available_models.openai;
-      break;
+  if (!modelSettings) return [];
+  if (modelBackend === "anthropic" || modelBackend === "google") {
+    return modelSettings.availableModels[modelBackend];
   }
-
-  return (raw || [])
-    .map((entry) => {
-      if (typeof entry === "string") {
-        return { id: entry, label: entry };
-      }
-      return {
-        id: entry.id,
-        label: entry.name || entry.id,
-        description: entry.description,
-        source: entry.source,
-        disabled: entry.disabled,
-      };
-    })
-    .filter((entry) => entry.id);
+  return modelSettings.availableModels.openai;
 }

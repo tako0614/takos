@@ -1,6 +1,7 @@
 import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import type { RouteState } from "../../types/index.ts";
 import {
+  buildPath,
   normalizeNavigationState,
   parseRoute,
   shouldPushHistory,
@@ -163,6 +164,40 @@ test("parseRoute - preserves search params for internal routes", () => {
     runId: "run-7",
     messageId: "msg-1",
   });
+});
+
+test("Store routes preserve the target Workspace and selected tab", () => {
+  assertEquals(parseRoute("/store", "?space=workspace-2"), {
+    view: "store",
+    storeTab: "discover",
+    spaceId: "workspace-2",
+  });
+  assertEquals(parseRoute("/store/installed", "?space=workspace-2"), {
+    view: "store",
+    storeTab: "installed",
+    spaceId: "workspace-2",
+  });
+  assertEquals(
+    buildPath({
+      view: "store",
+      storeTab: "discover",
+      spaceId: "workspace 2",
+    }),
+    "/store?space=workspace+2",
+  );
+  assertEquals(
+    buildPath({
+      view: "store",
+      storeTab: "installed",
+      spaceId: "workspace-2",
+    }),
+    "/store/installed?space=workspace-2",
+  );
+});
+
+test("Notifications are a canonical protected top-level route", () => {
+  assertEquals(parseRoute("/notifications"), { view: "notifications" });
+  assertEquals(buildPath({ view: "notifications" }), "/notifications");
 });
 
 test("parseRoute - retired /app shortcuts do not fall through to repo routes", () => {

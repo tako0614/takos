@@ -28,7 +28,7 @@ import { registerRunListRoutes } from "./list.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { checkRunAccess } from "./access.ts";
-import { loadRunObservation } from "./observation.ts";
+import { loadRunObservation, parseRunReplayCursor } from "./observation.ts";
 import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-header-utils.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import type { AgentExecutorEnv } from "../../../runtime/container-hosts/executor-utils.ts";
@@ -129,7 +129,6 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
 
     return c.json({
       run: access.run,
-      role: access.role,
     });
   });
 
@@ -137,11 +136,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await checkRunAccess(c.env.DB, runId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
@@ -246,12 +241,11 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       const lastEventIdQuery = c.req.valid("query") as {
         last_event_id?: string;
       };
-      const lastEventId = Number.parseInt(
-        lastEventIdQuery.last_event_id ?? "0",
-        10,
+      const lastEventId = parseRunReplayCursor(
+        lastEventIdQuery.last_event_id,
       );
 
-      if (!Number.isFinite(lastEventId) || lastEventId < 0) {
+      if (lastEventId === null) {
         throw new BadRequestError("Invalid last_event_id");
       }
 
@@ -269,6 +263,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       return c.json({
         events: observation.events,
         run_status: observation.runStatus,
+        truncation: observation.truncation,
       });
     },
   );
@@ -311,9 +306,9 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const runId = c.req.param("id");
     const rawCursor =
       c.req.query("last_event_id") ?? c.req.query("after") ?? "0";
-    const lastEventId = Number.parseInt(rawCursor, 10);
+    const lastEventId = parseRunReplayCursor(rawCursor);
 
-    if (!Number.isFinite(lastEventId) || lastEventId < 0) {
+    if (lastEventId === null) {
       throw new BadRequestError("Invalid last_event_id");
     }
 
@@ -331,6 +326,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     return c.json({
       events: observation.events,
       run_status: observation.runStatus,
+      truncation: observation.truncation,
     });
   });
 }
@@ -381,11 +377,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         metadata?: Record<string, unknown>;
       };
 
-      const access = await checkRunAccess(c.env.DB, runId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
+      const access = await checkRunAccess(c.env.DB, runId, user.id);
       if (!access) {
         throw new NotFoundError("Run");
       }

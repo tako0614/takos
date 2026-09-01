@@ -1,12 +1,19 @@
-import { type Accessor, createEffect, type Setter } from "solid-js";
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  type Setter,
+} from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
-import { rpc, rpcJson } from "../lib/rpc.ts";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import type {
   Message,
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
+  ThreadHistoryRunSummary,
   ThreadHistoryTaskContext,
+  ThreadHistoryTruncation,
 } from "../types/index.ts";
 import type {
   ChatRunArtifactMap,
@@ -16,22 +23,17 @@ import type {
 } from "../views/chat/chat-types.ts";
 import { isRunInRootTree } from "../views/chat/timeline.ts";
 import {
-  type PendingSessionDiffSummary,
-  type SessionDiffState,
-  useWsSessionDiff,
-} from "./useWsSessionDiff.ts";
-import {
   TERMINAL_RUN_STATUSES,
   useWsMessageProcessor,
 } from "./useWsMessageProcessor.ts";
 import { useConnectionManagerWithFallback } from "./useConnectionManagerWithFallback.ts";
-
-export type { SessionDiffState } from "./useWsSessionDiff.ts";
+import { parseChatHistoryResponse } from "./chat-history-response.ts";
 
 type MutableRefObject<T> = { current: T };
 
 export interface UseWebSocketConnectionOptions {
   threadId: Accessor<string>;
+  spaceRecordId: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
   fetchMessages: (showError?: boolean) => Promise<void>;
@@ -44,8 +46,8 @@ export interface UseWebSocketConnectionOptions {
 }
 
 export interface UseWebSocketConnectionResult {
-  currentRun: Run | null;
-  setCurrentRun: Setter<Run | null>;
+  currentRun: ThreadHistoryRunSummary | null;
+  setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
   isLoading: boolean;
   setIsLoading: Setter<boolean>;
   streaming: ChatStreamingState;
@@ -55,38 +57,34 @@ export interface UseWebSocketConnectionResult {
   artifactsByRunId: ChatRunArtifactMap;
   historyFocus: ThreadHistoryFocus | null;
   taskContext: ThreadHistoryTaskContext | null;
+  historyTruncation: ThreadHistoryTruncation;
   resetTimeline: () => void;
   applyHistorySnapshot: (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }) => void;
   mergeHistorySnapshot: (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }) => void;
-  sessionDiff: SessionDiffState | null;
-  setSessionDiff: Setter<SessionDiffState | null>;
-  loadPendingSessionDiff: (
-    pending: PendingSessionDiffSummary | null,
-  ) => Promise<void>;
-  isMerging: boolean;
-  handleMerge: () => Promise<void>;
   isCancelling: boolean;
   setIsCancelling: Setter<boolean>;
   handleCancel: () => Promise<void>;
-  dismissSessionDiff: () => void;
   startWebSocket: (runId: string) => void;
   closeWebSocket: () => void;
   currentRunIdRef: MutableRefObject<string | null>;
   lastEventIdRef: MutableRefObject<number>;
   rootRunIdRef: MutableRefObject<string | null>;
-  syncThreadAfterSendFailure: () => Promise<void>;
+  syncThreadAfterSendFailure: () => Promise<ThreadHistoryRunSummary | null>;
 }
 
 export function useWebSocketConnection({
   threadId,
+  spaceRecordId,
   t,
   isMountedRef,
   fetchMessages,
@@ -95,21 +93,21 @@ export function useWebSocketConnection({
   setMessages,
   setError,
 }: UseWebSocketConnectionOptions): UseWebSocketConnectionResult {
-  // --- Session diff sub-hook ---
-  const sessionDiffHook = useWsSessionDiff({ t, setError });
+  // Stable refs for cross-hook communication. The status processor receives
+  // this ref so a request started for an old Thread cannot settle into the
+  // newly selected Run.
+  const currentRunIdRef: MutableRefObject<string | null> = { current: null };
+  const lastEventIdRef: MutableRefObject<number> = { current: 0 };
 
   // --- Message processor sub-hook ---
   const processor = useWsMessageProcessor({
+    threadId,
+    spaceRecordId,
+    currentRunIdRef,
     t,
-    isMountedRef,
     fetchMessages,
-    setError,
-    fetchSessionDiff: sessionDiffHook.fetchSessionDiff,
   });
-
-  // Stable refs for cross-hook communication
-  const currentRunIdRef: MutableRefObject<string | null> = { current: null };
-  const lastEventIdRef: MutableRefObject<number> = { current: 0 };
+  const [isCancelling, setIsCancelling] = createSignal(false);
 
   // --- Connection manager sub-hook (WS with SSE fallback) ---
   const connection = useConnectionManagerWithFallback({
@@ -135,14 +133,9 @@ export function useWebSocketConnection({
 
   // --- Wire up handleRunCompleted (needs connection.closeWebSocket) ---
   processor.handleRunCompletedRef.current = (
-    run?: Partial<Run>,
-    sessionId?: string | null,
+    _run?: Partial<Run>,
+    _sessionId?: string | null,
   ): Promise<void> => {
-    const effectiveSessionId = sessionId ?? run?.session_id ?? undefined;
-    if (effectiveSessionId) {
-      sessionDiffHook.fetchSessionDiff(effectiveSessionId);
-    }
-
     connection.closeWebSocket();
     currentRunIdRef.current = null;
     // Reset for next run (each run uses its own DO instance)
@@ -174,6 +167,7 @@ export function useWebSocketConnection({
 
     try {
       const currentThreadId = threadId();
+      const currentSpaceRecordId = spaceRecordId();
       const historyRes = await rpc.threads[":id"].history.$get({
         param: { id: currentThreadId },
         query: {
@@ -183,15 +177,20 @@ export function useWebSocketConnection({
           root_run_id: rootRunId,
         },
       });
-      const historyData = await rpcJson<{
-        runs: ThreadHistoryRunNode[];
-        focus: ThreadHistoryFocus | null;
-        pendingSessionDiff: PendingSessionDiffSummary | null;
-        activeRun: Run | null;
-        taskContext: ThreadHistoryTaskContext | null;
-      }>(historyRes);
+      const historyData = parseChatHistoryResponse(
+        await rpcJson<unknown>(historyRes),
+        {
+          spaceId: currentSpaceRecordId,
+          threadId: currentThreadId,
+          limit: 100,
+          offset: 0,
+          includeMessages: false,
+          rootRunId,
+        },
+      );
       if (!isMountedRef.current) return;
       if (threadId() !== currentThreadId) return;
+      if (spaceRecordId() !== currentSpaceRecordId) return;
       const runsById = new Map(
         historyData.runs.map((
           node,
@@ -204,11 +203,8 @@ export function useWebSocketConnection({
         runs: treeRuns,
         focus: historyData.focus,
         taskContext: historyData.taskContext,
+        truncation: historyData.truncation,
       });
-      void sessionDiffHook.loadPendingSessionDiff(
-        historyData.pendingSessionDiff,
-      );
-
       const rootRun = treeRuns.find((node) => node.run.id === rootRunId)?.run;
       if (
         rootRun &&
@@ -226,44 +222,61 @@ export function useWebSocketConnection({
 
   // --- Wrapped handleCancel (adapts the sub-hook's signature) ---
   const handleCancel = async (): Promise<void> => {
-    await sessionDiffHook.handleCancel(() => {
-      return processor.currentRun;
-    });
+    const runToCancel = processor.currentRun;
+    if (!runToCancel) return;
+
+    setIsCancelling(true);
+    try {
+      const res = await rpcPath(rpc, "runs", ":id", "cancel").$post({
+        param: { id: runToCancel.id },
+      });
+      await rpcJson(res);
+    } catch {
+      setError(t("networkError"));
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   // --- syncThreadAfterSendFailure ---
-  const syncThreadAfterSendFailure = async (): Promise<void> => {
+  const syncThreadAfterSendFailure = async (): Promise<
+    ThreadHistoryRunSummary | null
+  > => {
     try {
       const currentThreadId = threadId();
+      const currentSpaceRecordId = spaceRecordId();
       const res = await rpc.threads[":id"].history.$get({
         param: { id: currentThreadId },
-        query: { limit: "100", offset: "0" },
+        query: { limit: "100", offset: "0", latest: "1" },
       });
-      const data = await rpcJson<{
-        messages: Message[];
-        runs: ThreadHistoryRunNode[];
-        focus: ThreadHistoryFocus | null;
-        activeRun: Run | null;
-        pendingSessionDiff: PendingSessionDiffSummary | null;
-        taskContext: ThreadHistoryTaskContext | null;
-      }>(res);
-      if (!isMountedRef.current) return;
-      if (threadId() !== currentThreadId) return;
+      const data = parseChatHistoryResponse(await rpcJson<unknown>(res), {
+        spaceId: currentSpaceRecordId,
+        threadId: currentThreadId,
+        limit: 100,
+        offset: 0,
+        includeMessages: true,
+        latest: true,
+      });
+      if (!isMountedRef.current) return null;
+      if (threadId() !== currentThreadId) return null;
+      if (spaceRecordId() !== currentSpaceRecordId) return null;
 
-      setMessages(data.messages || []);
+      setMessages(data.messages);
       processor.applyHistorySnapshot({
         runs: data.runs || [],
         focus: data.focus,
         taskContext: data.taskContext,
+        truncation: data.truncation,
       });
-      void sessionDiffHook.loadPendingSessionDiff(data.pendingSessionDiff);
       if (data.activeRun) {
         processor.setCurrentRun(data.activeRun);
         processor.setIsLoading(true);
         connection.startWebSocketRef.current(data.activeRun.id);
       }
+      return data.activeRun;
     } catch (syncErr) {
       console.debug("Failed to sync thread after send failure:", syncErr);
+      return null;
     }
   };
 
@@ -317,24 +330,17 @@ export function useWebSocketConnection({
     get taskContext() {
       return processor.taskContext;
     },
+    get historyTruncation() {
+      return processor.historyTruncation;
+    },
     resetTimeline: processor.resetTimeline,
     applyHistorySnapshot: processor.applyHistorySnapshot,
     mergeHistorySnapshot: processor.mergeHistorySnapshot,
-    get sessionDiff() {
-      return sessionDiffHook.sessionDiff;
-    },
-    setSessionDiff: sessionDiffHook.setSessionDiff,
-    loadPendingSessionDiff: sessionDiffHook.loadPendingSessionDiff,
-    get isMerging() {
-      return sessionDiffHook.isMerging;
-    },
-    handleMerge: sessionDiffHook.handleMerge,
     get isCancelling() {
-      return sessionDiffHook.isCancelling;
+      return isCancelling();
     },
-    setIsCancelling: sessionDiffHook.setIsCancelling,
+    setIsCancelling,
     handleCancel,
-    dismissSessionDiff: sessionDiffHook.dismissSessionDiff,
     startWebSocket: connection.startWebSocket,
     closeWebSocket: connection.closeWebSocket,
     currentRunIdRef,

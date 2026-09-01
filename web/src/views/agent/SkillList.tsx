@@ -116,6 +116,10 @@ export function SkillList(props: {
   onDelete: (skill: Skill) => void;
   onToggle: (skill: Skill) => void;
   onCreateNew: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
+  mutatingSkillId: string | null;
+  mutationKind: "toggle" | "delete" | null;
 }) {
   const { t } = useI18n();
 
@@ -278,15 +282,17 @@ export function SkillList(props: {
                     {t("skillsEmptyHint")}
                   </p>
                 </div>
-                <Button
-                  variant="primary"
-                  leftIcon={
-                    <Icons.Plus style={{ width: "1rem", height: "1rem" }} />
-                  }
-                  onClick={props.onCreateNew}
-                >
-                  {t("addSkill")}
-                </Button>
+                {props.canEdit && (
+                  <Button
+                    variant="primary"
+                    leftIcon={
+                      <Icons.Plus style={{ width: "1rem", height: "1rem" }} />
+                    }
+                    onClick={props.onCreateNew}
+                  >
+                    {t("addSkill")}
+                  </Button>
+                )}
               </div>
             )
             : (
@@ -357,33 +363,48 @@ export function SkillList(props: {
                           "flex-shrink": 0,
                         }}
                       >
-                        <Button
-                          variant={skill.enabled ? "primary" : "secondary"}
-                          size="sm"
-                          onClick={() => props.onToggle(skill)}
-                          title={skill.enabled
-                            ? t("skillEnabled")
-                            : t("skillDisabled")}
-                        >
-                          {skill.enabled ? <Icons.Check /> : <Icons.X />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => props.onEdit(skill)}
-                          title={t("edit")}
-                        >
-                          <Icons.Edit />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => props.onDelete(skill)}
-                          title={t("deleteSkill")}
-                          style={{ color: "var(--color-text-tertiary)" }}
-                        >
-                          <Icons.Trash />
-                        </Button>
+                        {props.canEdit && (
+                          <>
+                            <Button
+                              variant={skill.enabled
+                                ? "primary"
+                                : "secondary"}
+                              size="sm"
+                              isLoading={props.mutatingSkillId === skill.id &&
+                                props.mutationKind === "toggle"}
+                              disabled={props.mutatingSkillId !== null}
+                              onClick={() => props.onToggle(skill)}
+                              title={skill.enabled
+                                ? t("skillEnabled")
+                                : t("skillDisabled")}
+                            >
+                              {skill.enabled ? <Icons.Check /> : <Icons.X />}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={props.mutatingSkillId !== null}
+                              onClick={() => props.onEdit(skill)}
+                              title={t("edit")}
+                            >
+                              <Icons.Edit />
+                            </Button>
+                          </>
+                        )}
+                        {props.canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            isLoading={props.mutatingSkillId === skill.id &&
+                              props.mutationKind === "delete"}
+                            disabled={props.mutatingSkillId !== null}
+                            onClick={() => props.onDelete(skill)}
+                            title={t("deleteSkill")}
+                            style={{ color: "var(--color-text-tertiary)" }}
+                          >
+                            <Icons.Trash />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {renderTriggers(skill.triggers)}
@@ -420,18 +441,21 @@ export function SkillList(props: {
             )}
         </div>
       </div>
-      <Button
-        variant="secondary"
-        leftIcon={<Icons.Plus />}
-        onClick={props.onCreateNew}
-        style={{
-          width: "100%",
-          "margin-top": "1rem",
-          border: "2px dashed var(--color-border-primary)",
-        }}
-      >
-        {t("addSkill")}
-      </Button>
+      {props.canEdit && (
+        <Button
+          variant="secondary"
+          disabled={props.mutatingSkillId !== null}
+          leftIcon={<Icons.Plus />}
+          onClick={props.onCreateNew}
+          style={{
+            width: "100%",
+            "margin-top": "1rem",
+            border: "2px dashed var(--color-border-primary)",
+          }}
+        >
+          {t("addSkill")}
+        </Button>
+      )}
     </>
   );
 }

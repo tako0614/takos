@@ -99,42 +99,49 @@ export async function extractAndCreateEdges(
       `${importPath}/index.js`,
     ];
 
-    for (const path of possiblePaths) {
-      const normalizedPath = path.startsWith("./") || path.startsWith("../")
+    const normalizedPaths = possiblePaths.map((path) =>
+      path.startsWith("./") || path.startsWith("../")
         ? resolvePath(file.path, path)
-        : path;
-      const targetFile = await drizzle.select({ id: files.id }).from(files)
-        .where(
-          and(eq(files.accountId, spaceId), eq(files.path, normalizedPath)),
-        ).get();
+        : path,
+    );
+    const targetFiles = await drizzle.select({ id: files.id, path: files.path })
+      .from(files)
+      .where(
+        and(eq(files.accountId, spaceId), inArray(files.path, normalizedPaths)),
+      )
+      .all();
+    const targetFilesByPath = new Map(
+      targetFiles.map((targetFile) => [targetFile.path, targetFile]),
+    );
 
-      if (!targetFile) {
-        continue;
-      }
-
-      const targetNode = await drizzle.select({ id: nodes.id }).from(nodes)
-        .where(
-          and(
-            eq(nodes.accountId, spaceId),
-            eq(nodes.type, "file"),
-            eq(nodes.refId, targetFile.id),
-          ),
-        ).get();
-
-      if (targetNode) {
-        const edgeId = generateId();
-        await drizzle.insert(edges).values({
-          id: edgeId,
-          accountId: spaceId,
-          sourceId: sourceNodeId,
-          targetId: targetNode.id,
-          type: "imports",
-          weight: 1.0,
-          metadata: "{}",
-          createdAt: timestamp,
-        });
-      }
-      break;
+    let targetFile: (typeof targetFiles)[number] | undefined;
+    for (const normalizedPath of normalizedPaths) {
+      targetFile = targetFilesByPath.get(normalizedPath);
+      if (targetFile) break;
     }
+    if (!targetFile) continue;
+
+    const targetNode = await drizzle.select({ id: nodes.id }).from(nodes)
+      .where(
+        and(
+          eq(nodes.accountId, spaceId),
+          eq(nodes.type, "file"),
+          eq(nodes.refId, targetFile.id),
+        ),
+      ).get();
+
+    if (!targetNode) continue;
+
+    const edgeId = generateId();
+    await drizzle.insert(edges).values({
+      id: edgeId,
+      accountId: spaceId,
+      sourceId: sourceNodeId,
+      targetId: targetNode.id,
+      type: "imports",
+      weight: 1.0,
+      metadata: "{}",
+      createdAt: timestamp,
+    });
   }
 }

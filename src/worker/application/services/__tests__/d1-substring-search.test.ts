@@ -51,6 +51,10 @@ test("D1 substring searches accept long input and keep LIKE metacharacters liter
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE accounts (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL
+    );
     CREATE TABLE files (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -94,6 +98,10 @@ test("D1 substring searches accept long input and keep LIKE metacharacters liter
   );
   const now = "2026-07-29T00:00:00.000Z";
   await client.batch([
+    {
+      sql: "INSERT INTO accounts (id, status) VALUES ('space_a', 'active'), ('space_b', 'active')",
+      args: [],
+    },
     {
       sql: `INSERT INTO memories
         (id, account_id, type, content, importance, created_at, updated_at)
@@ -150,6 +158,18 @@ test("D1 substring searches accept long input and keep LIKE metacharacters liter
         VALUES ('message_decoy', 'thread_a', 'user', ?, 2, ?)`,
       args: [`message ${wildcardDecoy}`, now],
     },
+    {
+      sql: `INSERT INTO threads
+        (id, account_id, title, status, created_at, updated_at)
+        VALUES ('thread_b', 'space_b', 'Other workspace', 'active', ?, ?)`,
+      args: [now, now],
+    },
+    {
+      sql: `INSERT INTO messages
+        (id, thread_id, role, content, sequence, created_at)
+        VALUES ('message_b', 'thread_b', 'assistant', 'private other workspace', 1, ?)`,
+      args: [now],
+    },
   ]);
 
   const db = drizzle(client, { schema });
@@ -205,6 +225,152 @@ test("D1 substring searches accept long input and keep LIKE metacharacters liter
     expect(
       threadResults.results.map((result) => result.message.id),
     ).toEqual(["message_exact"]);
+
+    const semanticEnv = {
+      DB: binding,
+      AI: {
+        run: async () => ({ data: [[0.1, 0.2]] }),
+      },
+      VECTORIZE: {
+        query: async (_embedding: number[], options: { topK: number }) => {
+          expect(options.topK).toBe(50);
+          return {
+            matches: [
+              {
+                id: "thread_msg:space_a:thread_a:1",
+                score: 0.9,
+                metadata: {
+                  kind: "thread_message",
+                  spaceId: "space_a",
+                  threadId: "thread_a",
+                  messageId: "message_exact",
+                  sequence: 1,
+                  role: "system",
+                  createdAt: "forged",
+                  content: "forged metadata content",
+                },
+              },
+              {
+                id: "thread_msg:space_a:thread_b:1",
+                score: 0.8,
+                metadata: {
+                  kind: "thread_message",
+                  spaceId: "space_a",
+                  threadId: "thread_b",
+                  messageId: "message_b",
+                  sequence: 1,
+                },
+              },
+              {
+                id: "thread_msg:space_a:thread_b:1",
+                score: 0.7,
+                metadata: {
+                  kind: "thread_message",
+                  spaceId: "space_a",
+                  threadId: "thread_b",
+                  messageId: "message_exact",
+                  sequence: 1,
+                },
+              },
+            ],
+          };
+        },
+      },
+    } as unknown as Env;
+    const semanticResults = await searchSpaceThreads({
+      env: semanticEnv,
+      spaceId: "space_a",
+      query: LONG_LITERAL_QUERY,
+      type: "semantic",
+      limit: 100,
+      offset: 0,
+    });
+    expect(semanticResults.results).toHaveLength(1);
+    expect(semanticResults.results[0]).toMatchObject({
+      kind: "semantic",
+      thread: { id: "thread_a" },
+      message: {
+        id: "message_exact",
+        sequence: 1,
+        role: "user",
+        created_at: now,
+      },
+    });
+    expect(semanticResults.results[0]?.snippet).toContain(exact);
+    expect(semanticResults.results[0]?.snippet).not.toContain("forged");
+  } finally {
+    client.close();
+  }
+});
+
+test("Workspace keyword search stays below D1's 100 bound-parameter limit", async () => {
+  const client = createClient({ url: ":memory:" });
+  await client.executeMultiple(`
+    CREATE TABLE threads (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      title TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+  const now = "2026-07-29T00:00:00.000Z";
+  await client.batch(
+    Array.from({ length: 125 }, (_, index) => [
+      {
+        sql: `INSERT INTO threads
+          (id, account_id, title, status, created_at, updated_at)
+          VALUES (?, 'space_a', ?, 'active', ?, ?)`,
+        args: [`thread_${index}`, `Thread ${index}`, now, now],
+      },
+      {
+        sql: `INSERT INTO messages
+          (id, thread_id, role, content, sequence, created_at)
+          VALUES (?, ?, 'user', ?, 1, ?)`,
+        args: [
+          `message_${index}`,
+          `thread_${index}`,
+          index === 124 ? "bounded needle" : "ordinary content",
+          now,
+        ],
+      },
+    ]).flat(),
+  );
+
+  const parameterCounts: number[] = [];
+  const strictDb = drizzle(client, {
+    schema,
+    logger: {
+      logQuery(_query, params) {
+        parameterCounts.push(params.length);
+        if (params.length > 100) {
+          throw new Error("D1 maximum bound parameters exceeded");
+        }
+      },
+    },
+  });
+  try {
+    const result = await searchSpaceThreads({
+      env: { DB: strictDb } as unknown as Env,
+      spaceId: "space_a",
+      query: "bounded needle",
+      type: "keyword",
+      limit: 20,
+      offset: 0,
+    });
+    expect(result.results.map((item) => item.message.id)).toEqual([
+      "message_124",
+    ]);
+    expect(Math.max(...parameterCounts)).toBeLessThanOrEqual(100);
   } finally {
     client.close();
   }

@@ -4,6 +4,7 @@
  * These mirror the shapes returned by the API, using snake_case field names
  * as they appear in JSON responses.
  */
+import type { PublicMcpToolConfirmation } from "takos-api-contract/shared/types";
 
 export interface McpServerRecord {
   id: string;
@@ -61,19 +62,7 @@ export interface McpServerTool {
   invocation_policy: "automatic" | "confirm_each_time";
 }
 
-export interface McpToolConfirmation {
-  id: string;
-  server_id: string;
-  server_name: string;
-  tool_name: string;
-  schema_hash: string;
-  arguments: Record<string, unknown>;
-  requested_run_id: string;
-  requested_thread_id: string;
-  status: "pending";
-  expires_at: string;
-  created_at: string;
-}
+export type McpToolConfirmation = PublicMcpToolConfirmation;
 
 export type McpRegistrySourceKind =
   "official" | "organization" | "community" | "custom";

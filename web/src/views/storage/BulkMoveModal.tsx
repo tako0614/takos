@@ -25,6 +25,9 @@ export function BulkMoveModal(props: BulkMoveModalProps) {
     >
       <div class="space-y-4">
         <Input
+          id="storage-bulk-move-path"
+          name="storage-bulk-move-path"
+          aria-label={t("destinationPath")}
           value={props.bulkMovePath}
           onInput={(e) =>
             props.onPathChange((e.target as HTMLInputElement).value)}

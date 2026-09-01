@@ -41,7 +41,7 @@ export function BulkRenameModal(props: BulkRenameModalProps) {
         >
           <div class="space-y-3">
             <For each={props.bulkRenames}>
-              {(r) => (
+              {(r, index) => (
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 items-center">
                   <div
                     class="text-sm text-zinc-600 dark:text-zinc-300 truncate"
@@ -50,6 +50,9 @@ export function BulkRenameModal(props: BulkRenameModalProps) {
                     {r.old_name}
                   </div>
                   <Input
+                    id={`storage-bulk-rename-${index()}`}
+                    name="storage-bulk-rename"
+                    aria-label={`${t("newName")}: ${r.old_name}`}
                     value={r.name}
                     onInput={(e) => {
                       const next = (e.target as HTMLInputElement).value;

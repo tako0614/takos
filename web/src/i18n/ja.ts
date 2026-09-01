@@ -7,6 +7,7 @@ import { repository } from "./ja/repository.ts";
 import { source } from "./ja/source.ts";
 import { storage } from "./ja/storage.ts";
 import { tools } from "./ja/tools.ts";
+import { notifications } from "./ja/notifications.ts";
 
 export const ja = {
   ...common,
@@ -18,4 +19,5 @@ export const ja = {
   ...source,
   ...storage,
   ...tools,
+  ...notifications,
 } as const;

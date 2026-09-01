@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import { createEffect, createSignal, onCleanup, type JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import {
@@ -14,6 +14,8 @@ interface ConfirmDialogProps {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  confirmationText?: string;
+  confirmationLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -54,6 +56,14 @@ const messageStyle: JSX.CSSProperties = {
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
   const { t } = useI18n();
+  const [confirmationValue, setConfirmationValue] = createSignal("");
+
+  createEffect(() => {
+    if (props.isOpen) setConfirmationValue("");
+  });
+
+  const confirmationMatches = () =>
+    !props.confirmationText || confirmationValue() === props.confirmationText;
 
   const iconStyle = (): JSX.CSSProperties => ({
     ...iconContainerStyle,
@@ -77,6 +87,26 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         </div>
         <h3 style={titleStyle}>{props.title}</h3>
         <p style={messageStyle}>{props.message}</p>
+        {props.confirmationText && (
+          <div class="w-full text-left space-y-2">
+            <label
+              for="confirm-dialog-confirmation"
+              class="block text-sm font-medium text-[var(--color-text-primary)]"
+            >
+              {props.confirmationLabel || t("typeToConfirm")}
+            </label>
+            <input
+              id="confirm-dialog-confirmation"
+              name="destructive-confirmation"
+              type="text"
+              value={confirmationValue()}
+              onInput={(event) =>
+                setConfirmationValue(event.currentTarget.value)}
+              autocomplete="off"
+              class="w-full rounded-[var(--radius-md)] border border-[var(--color-border-primary)] bg-[var(--color-surface-primary)] px-3 py-2 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-border-focus)]"
+            />
+          </div>
+        )}
       </div>
       <ModalFooter
         style={{
@@ -91,6 +121,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         <Button
           variant={props.danger ? "danger" : "primary"}
           onClick={props.onConfirm}
+          disabled={!confirmationMatches()}
         >
           {props.confirmText || t("confirm")}
         </Button>
@@ -107,6 +138,8 @@ export function ConfirmDialogRenderer() {
   const state = useConfirmDialogState();
   const { handleConfirm, handleCancel } = useConfirmDialogActions();
 
+  onCleanup(handleCancel);
+
   return (
     <ConfirmDialog
       isOpen={state().isOpen}
@@ -115,6 +148,8 @@ export function ConfirmDialogRenderer() {
       confirmText={state().confirmText}
       cancelText={state().cancelText}
       danger={state().danger}
+      confirmationText={state().confirmationText}
+      confirmationLabel={state().confirmationLabel}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

@@ -5,7 +5,10 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../../../../infra/db/schema.ts";
 import type { Database } from "../../../../infra/db/index.ts";
 import type { ObjectStoreBinding } from "../../../../shared/types/bindings.ts";
-import { InfoUnitIndexer } from "../info-units.ts";
+import {
+  InfoUnitIndexer,
+  MAX_INFO_UNIT_SEGMENTS_PER_RUN,
+} from "../info-units.ts";
 
 const TEST_DDL = `
   CREATE TABLE runs (
@@ -79,7 +82,7 @@ test("info unit indexing keeps SQL terminal evidence when configured R2 has no n
 
   const db = drizzle(client, { schema }) as unknown as Database;
   const emptyOffload = {
-    list: async () => ({ objects: [], truncated: false }),
+    get: async () => null,
   } as unknown as ObjectStoreBinding;
 
   try {
@@ -111,6 +114,80 @@ test("info unit indexing keeps SQL terminal evidence when configured R2 has no n
     expect(retried.rows).toHaveLength(1);
     expect(String(retried.rows[0]?.content)).toContain(
       "[assistant] recovered final answer",
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("info unit indexing caps long Run transcripts and records the omission", async () => {
+  const client = createClient({ url: ":memory:" });
+  await client.executeMultiple(TEST_DDL);
+  await seedCompletedRun(client, "run_long", "durable final answer");
+  await client.execute(`
+    WITH RECURSIVE sequence(value) AS (
+      SELECT 1
+      UNION ALL
+      SELECT value + 1 FROM sequence WHERE value < 520
+    )
+    INSERT INTO run_events (run_id, type, event_key, data, created_at)
+    SELECT
+      'run_long',
+      'message',
+      'event:' || value,
+      '{"content":"event-' || value || '-' ||
+        replace(hex(zeroblob(1000)), '00', 'x') || '"}',
+      '2026-07-11T00:00:00.000Z'
+    FROM sequence
+  `);
+  const db = drizzle(client, { schema }) as unknown as Database;
+
+  try {
+    await new InfoUnitIndexer({ DB: db as never }).indexRun(
+      "space_a",
+      "run_long",
+    );
+
+    const indexed = await client.execute(
+      `SELECT content, metadata, segment_index
+       FROM info_units WHERE run_id = 'run_long'
+       ORDER BY segment_index`,
+    );
+    expect(indexed.rows).toHaveLength(MAX_INFO_UNIT_SEGMENTS_PER_RUN);
+    expect(String(indexed.rows[0]?.content)).toContain(
+      "Earlier Run activity was omitted",
+    );
+    expect(indexed.rows.some((row) =>
+      String(row.content).includes("event-520-")
+    )).toBe(true);
+    expect(indexed.rows.some((row) =>
+      String(row.content).includes("durable final answer")
+    )).toBe(true);
+    for (const row of indexed.rows) {
+      expect(JSON.parse(String(row.metadata))).toMatchObject({
+        source_truncated: true,
+        event_data_truncated: false,
+        repos_truncated: false,
+      });
+    }
+
+    await client.execute("DELETE FROM run_events WHERE run_id = 'run_long'");
+    await client.execute(
+      "UPDATE runs SET output = 'recovered short answer' WHERE id = 'run_long'",
+    );
+    await new InfoUnitIndexer({ DB: db as never }).indexRun(
+      "space_a",
+      "run_long",
+    );
+    const reconciled = await client.execute(
+      `SELECT content, segment_index, segment_count
+       FROM info_units WHERE run_id = 'run_long'`,
+    );
+    expect(reconciled.rows).toHaveLength(1);
+    expect(reconciled.rows[0]?.segment_index).toBe(0);
+    expect(reconciled.rows[0]?.segment_count).toBe(1);
+    expect(String(reconciled.rows[0]?.content)).toContain(
+      "recovered short answer",
     );
   } finally {
     client.close();

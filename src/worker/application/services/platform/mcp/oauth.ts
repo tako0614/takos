@@ -23,7 +23,7 @@ import { generateId } from "../../../../shared/utils/index.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 import { logError } from "../../../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../../../shared/utils/affected-row-count.ts";
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../../../shared/utils/constant-time.ts";
 import type {
   McpOAuthPendingParams,
   McpOAuthRegistrationMode,
@@ -552,7 +552,6 @@ export async function completeMcpOAuthFlow(
     oauthClientSecretExpiresAt: params.clientSecretExpiresAt ?? null,
     oauthRegistrationMode: params.registrationMode,
     oauthTokenEndpointAuthMethod: params.tokenEndpointAuthMethod,
-    enabled: true,
     updatedAt: nowIso,
   });
 
@@ -576,6 +575,7 @@ export async function completeMcpOAuthFlow(
       transport: "streamable-http",
       sourceType: "external",
       ...(await tokenFields(serverId)),
+      enabled: true,
       createdAt: nowIso,
     });
     return { serverId };

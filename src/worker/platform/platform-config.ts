@@ -95,9 +95,6 @@ export type PlatformServices = {
   assets: {
     binding?: PlatformServiceBinding;
   };
-  documents: {
-    renderPdf?: (html: string) => Promise<ArrayBuffer>;
-  };
   serviceRegistry?: {
     get(
       name: string,

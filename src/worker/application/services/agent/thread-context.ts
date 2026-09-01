@@ -2,19 +2,20 @@ import type { AiEnv, DbEnv } from "../../../shared/types/index.ts";
 
 type ThreadContextEnv = DbEnv & AiEnv;
 import { accounts, getDb, messages, threads } from "../../../infra/db/index.ts";
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import { getBackendFromModel, LLMClient } from "./llm.ts";
 import { DEFAULT_MODEL_ID } from "./model-catalog.ts";
 import type { AgentMessage } from "./agent-models.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
 import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
-import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 export const THREAD_MESSAGE_VECTOR_KIND = "thread_message";
 
 const MAX_EMBEDDING_TEXT_CHARS = 4000;
 const MAX_VECTOR_UPSERT_BATCH = 100;
+const MAX_VECTOR_QUERY_MATCHES = 50;
+const MAX_VECTOR_REFERENCE_CHARS = 512;
 
 export const DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB = 200;
 
@@ -85,12 +86,77 @@ function getMetaNumber(
   key: string,
 ): number | undefined {
   const value = meta[key];
-  if (typeof value === "number") return value;
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  }
   if (typeof value === "string") {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    if (!/^(?:0|[1-9][0-9]*)$/.test(value)) return undefined;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function boundedVectorReference(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 &&
+      value.length <= MAX_VECTOR_REFERENCE_CHARS && value.trim() === value
+    ? value
+    : undefined;
+}
+
+export type ThreadMessageVectorReference = {
+  id: string;
+  score: number;
+  spaceId: string;
+  threadId: string;
+  messageId: string;
+  sequence: number;
+};
+
+export function buildThreadMessageVectorId(
+  spaceId: string,
+  threadId: string,
+  sequence: number,
+): string {
+  return `thread_msg:${spaceId}:${threadId}:${sequence}`;
+}
+
+export function parseThreadMessageVectorReference(
+  match: {
+    id: unknown;
+    score: unknown;
+    metadata?: unknown;
+  },
+  expected: { spaceId: string; threadId?: string },
+): ThreadMessageVectorReference | null {
+  if (typeof match.score !== "number" || !Number.isFinite(match.score)) {
+    return null;
+  }
+  const meta = match.metadata && typeof match.metadata === "object" &&
+      !Array.isArray(match.metadata)
+    ? match.metadata as Record<string, unknown>
+    : {};
+  const id = boundedVectorReference(match.id);
+  const spaceId = boundedVectorReference(meta.spaceId);
+  const threadId = boundedVectorReference(meta.threadId);
+  const messageId = boundedVectorReference(meta.messageId);
+  const sequence = getMetaNumber(meta, "sequence");
+  if (
+    !id || !spaceId || !threadId || !messageId || sequence === undefined ||
+    getMetaString(meta, "kind") !== THREAD_MESSAGE_VECTOR_KIND ||
+    spaceId !== expected.spaceId ||
+    (expected.threadId !== undefined && threadId !== expected.threadId)
+  ) {
+    return null;
+  }
+  return {
+    id,
+    score: match.score,
+    spaceId,
+    threadId,
+    messageId,
+    sequence,
+  };
 }
 
 async function generateEmbeddings(
@@ -136,7 +202,7 @@ export async function queryRelevantThreadMessages(params: {
     excludeSequences,
   } = params;
 
-  if (!env.AI || !env.VECTORIZE) return [];
+  if (!env.AI || !env.VECTORIZE || topK <= 0) return [];
   const q = query.trim();
   if (!q) return [];
 
@@ -150,7 +216,7 @@ export async function queryRelevantThreadMessages(params: {
   }
 
   const searchResult = (await env.VECTORIZE.query(queryEmbedding, {
-    topK: Math.max(10, topK * 3),
+    topK: Math.min(MAX_VECTOR_QUERY_MATCHES, Math.max(10, topK * 3)),
     filter: {
       kind: THREAD_MESSAGE_VECTOR_KIND,
       spaceId,
@@ -159,32 +225,77 @@ export async function queryRelevantThreadMessages(params: {
     returnMetadata: "all",
   })) as { matches: VectorMatch[] };
 
-  const results: RetrievedThreadMessage[] = [];
-  const seenSeq = new Set<number>();
+  const candidates: ThreadMessageVectorReference[] = [];
 
   for (const match of searchResult.matches || []) {
-    if (match.score < minScore) continue;
+    const candidate = parseThreadMessageVectorReference(match, {
+      spaceId,
+      threadId,
+    });
+    if (!candidate || candidate.score < minScore) continue;
+    candidates.push(candidate);
+  }
 
-    const meta = (match.metadata || {}) as Record<string, unknown>;
-    const sequence = getMetaNumber(meta, "sequence");
-    if (sequence === undefined) continue;
+  if (candidates.length === 0) return [];
 
-    if (beforeSequence !== undefined && sequence >= beforeSequence) continue;
-    if (excludeSequences && excludeSequences.has(sequence)) continue;
-    if (seenSeq.has(sequence)) continue;
-    seenSeq.add(sequence);
+  const db = getDb(env.DB);
+  const messageIds = Array.from(
+    new Set(candidates.map((candidate) => candidate.messageId)),
+  );
+  const canonicalRows = await db
+    .select({
+      messageId: messages.id,
+      threadId: messages.threadId,
+      sequence: messages.sequence,
+      role: messages.role,
+      content: messages.content,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .innerJoin(threads, eq(messages.threadId, threads.id))
+    .innerJoin(accounts, eq(threads.accountId, accounts.id))
+    .where(
+      and(
+        inArray(messages.id, messageIds),
+        eq(threads.id, threadId),
+        eq(threads.accountId, spaceId),
+        ne(threads.status, "deleted"),
+        eq(accounts.status, "active"),
+        inArray(messages.role, ["user", "assistant", "tool"]),
+      ),
+    )
+    .all();
+  const canonicalById = new Map(
+    canonicalRows.map((row) => [row.messageId, row]),
+  );
 
-    const content = getMetaString(meta, "content");
-    if (!content) continue;
+  const results: RetrievedThreadMessage[] = [];
+  const seenSeq = new Set<number>();
+  for (const candidate of candidates) {
+    const row = canonicalById.get(candidate.messageId);
+    if (
+      !row || row.threadId !== threadId ||
+      row.sequence !== candidate.sequence ||
+      candidate.id !== buildThreadMessageVectorId(
+        spaceId,
+        threadId,
+        row.sequence,
+      ) ||
+      (beforeSequence !== undefined && row.sequence >= beforeSequence) ||
+      excludeSequences?.has(row.sequence) || seenSeq.has(row.sequence)
+    ) {
+      continue;
+    }
 
+    seenSeq.add(row.sequence);
     results.push({
-      id: match.id,
-      score: match.score,
-      sequence,
-      role: getMetaString(meta, "role") || "unknown",
-      content,
-      createdAt: getMetaString(meta, "createdAt"),
-      messageId: getMetaString(meta, "messageId"),
+      id: candidate.id,
+      score: candidate.score,
+      sequence: row.sequence,
+      role: row.role,
+      content: row.content,
+      createdAt: row.createdAt,
+      messageId: row.messageId,
     });
 
     if (results.length >= topK) break;
@@ -410,7 +521,7 @@ export async function indexThreadContext(params: {
     }
 
     const vectors = newMessages.map((m, i) => ({
-      id: `thread_msg:${spaceId}:${threadId}:${m.sequence}`,
+      id: buildThreadMessageVectorId(spaceId, threadId, m.sequence),
       values: embeddings[i],
       metadata: {
         kind: THREAD_MESSAGE_VECTOR_KIND,
@@ -418,9 +529,6 @@ export async function indexThreadContext(params: {
         threadId,
         messageId: m.id,
         sequence: m.sequence,
-        role: m.role,
-        createdAt: textDateNullable(m.createdAt) ?? new Date(0).toISOString(),
-        content: truncateText(m.content ?? "", 1000),
       },
     }));
 

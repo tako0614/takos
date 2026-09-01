@@ -17,9 +17,9 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
   がcanonical historyを受け取り、bounded model/tool loopを実行します
 - agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
-Thread message、summary、memory、skill/tool catalogのdurable authorityはTakos Workerです。engine checkpointもRunに
+Thread message、summary、memory、skill/tool catalogの永続 authorityはTakos Workerです。engine checkpointもRunに
 lease-fenced保存し、restart / 別pool slotではidempotent nodeからresumeできます。ただしcheckpointはconversationやmemoryの第二の
-正本ではありません。model request中断点はprovider-neutralなexactly-onceを保証できないため、自動再発行せずfail closedします。
+正本 (正とする情報)ではありません。model request中断点はprovider-neutralなexactly-onceを保証できないため、自動再発行せず安全側に停止します。
 side-effect outcomeが不明な場合はtool operation ledgerをauthorityとしてfatal fenceを復元し、新leaseはmodel/toolを再実行しません。
 `tool_calls` / `tool_call_id`はstructured transcriptとしてprovider、tool execution、eventまで同じIDを保ちます。
 
@@ -74,8 +74,9 @@ pending (生成直後) → queued (実行待ち) → running → completed
 | ------------------------------- | --------------------------------------------------------------------- |
 | `id` / `thread_id` / `space_id` | 識別子                                                                |
 | `status`                        | 上記の status                                                         |
-| `agent_type`                    | 使用する agent type                                                   |
+| `agent_type`                    | Run作成時に許可リストから固定した agent type                          |
 | `model`                         | Run作成時に解決・固定したprovider model。stale recoveryでも変更しない |
+| `input`                         | 64 KiB以下の有界なRun入力JSON                                         |
 | `parent_run_id` / `root_run_id` | 親子関係の追跡                                                        |
 | `session_id`                    | 実行セッション ID                                                     |
 | `usage`                         | トークン使用量                                                        |
@@ -101,7 +102,7 @@ Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other
   の型を持ちます
 - **Reminder** — `time` / `condition` / `context` のトリガー型を持ちます
 - **Info unit / Thread context index** — 完了した Run と古い Thread message から作る検索用の派生データ。Run の terminal
-  transaction が durable outbox を作り、index queue が後処理します。再生成可能な index であり、Thread message や明示的な
+  transaction が永続 outbox を作り、index queue が後処理します。再生成可能な index であり、Thread message や明示的な
   Memory の正本ではありません
 
 Memory / Reminder の取得と更新は Web UI と public API から行います。

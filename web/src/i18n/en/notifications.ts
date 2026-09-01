@@ -1,0 +1,20 @@
+export const notifications = {
+  notifications: "Notifications",
+  notificationsTitle: "Notifications",
+  notificationsEmpty: "You're all caught up",
+  notificationsEmptyHint: "New agent and Workspace updates will appear here.",
+  notificationsLoadFailed: "Notifications could not be loaded.",
+  notificationMarkReadFailed: "The notification could not be marked as read.",
+  notificationMarkAllReadFailed: "Notifications could not be marked as read.",
+  notificationMarkAllRead: "Mark all as read",
+  notificationUnreadCount: "{count} unread",
+  notificationOpen: "Open {title}",
+  notificationMarkRead: "Mark {title} as read",
+  notificationRunCompletedTitle: "Agent response is ready",
+  notificationRunCompletedBody: "Open the conversation to review the response.",
+  notificationRunFailedTitle: "Agent run failed",
+  notificationRunFailedBody: "Open the conversation to review the error.",
+  notificationLegacyWorkspaceTitle: "Legacy Workspace notification",
+  notificationLegacyWorkspaceBody:
+    "This notification came from an older collaboration model that Takos no longer supports.",
+} as const;

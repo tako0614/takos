@@ -7,6 +7,7 @@ import {
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_INTERFACE_VERSION,
 } from "takosumi-contract";
+import { asRecord as readRecord } from "../../../shared/utils/guards.ts";
 
 export type AuthorizedUiSurface = {
   readonly id: string;
@@ -37,12 +38,6 @@ type AuthorizedRuntimeInterfaceProjection = Pick<
   AuthorizedRuntimeInterface,
   "interface"
 >;
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 export function safeRuntimeUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;

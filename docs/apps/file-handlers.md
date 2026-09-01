@@ -13,7 +13,7 @@ Capsule output projection, not through a Takos-specific manifest.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) for the applied OpenTofu Capsule, while Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists and state handling. The Takosumi Accounts plane owns account-plane policy (OIDC / billing / dashboard).
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 ## Install Shape
 
@@ -35,5 +35,5 @@ Capsule output projection instead of exposing a separate product-local deploymen
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi の考え方](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

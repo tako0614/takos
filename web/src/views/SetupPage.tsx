@@ -1,9 +1,10 @@
 import { createSignal } from "solid-js";
 import { useI18n } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { parseSetupCompleteResponse } from "../lib/auth-response.ts";
 
 interface SetupPageProps {
-  onComplete: () => void;
+  onComplete: () => Promise<void>;
 }
 
 export function SetupPage(props: SetupPageProps) {
@@ -15,13 +16,14 @@ export function SetupPage(props: SetupPageProps) {
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
+    if (submitting()) return;
     setError(null);
 
     setSubmitting(true);
     try {
       const res = await rpc.setup.complete.$post();
-      await rpcJson(res);
-      props.onComplete();
+      parseSetupCompleteResponse(await rpcJson<unknown>(res));
+      await props.onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
@@ -44,7 +46,12 @@ export function SetupPage(props: SetupPageProps) {
 
           <form onSubmit={handleSubmit} class="space-y-4">
             {error() && (
-              <p class="text-xs text-zinc-600 dark:text-zinc-400">{error()}</p>
+              <p
+                class="text-xs text-zinc-600 dark:text-zinc-400"
+                role="alert"
+              >
+                {error()}
+              </p>
             )}
 
             <button

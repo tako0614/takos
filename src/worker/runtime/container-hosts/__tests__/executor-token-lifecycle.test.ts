@@ -40,7 +40,7 @@ test("proxy token identity includes run, service, and lease version", () => {
   assertFalse(proxyTokenMatchesLease(info, "run-1", "service-1", 5));
 });
 
-test("protocol v2 tokens cannot bypass atomic completion through split RPCs", () => {
+test("current protocol tokens cannot bypass atomic completion through split RPCs", () => {
   const splitPaths = [
     "/api/internal/v1/agent-control/add-message",
     "/api/internal/v1/agent-control/update-run-status",
@@ -50,6 +50,18 @@ test("protocol v2 tokens cannot bypass atomic completion through split RPCs", ()
   for (const path of splitPaths) {
     assertEquals(
       rejectsLegacySplitFinalization({ runtimeProtocolVersion: 2 }, path),
+      true,
+    );
+    assertEquals(
+      rejectsLegacySplitFinalization({ runtimeProtocolVersion: 3 }, path),
+      true,
+    );
+    assertEquals(
+      rejectsLegacySplitFinalization({ runtimeProtocolVersion: 4 }, path),
+      true,
+    );
+    assertEquals(
+      rejectsLegacySplitFinalization({ runtimeProtocolVersion: 5 }, path),
       true,
     );
     assertEquals(rejectsLegacySplitFinalization({}, path), false);
@@ -63,7 +75,7 @@ test("protocol v2 tokens cannot bypass atomic completion through split RPCs", ()
   );
 });
 
-test("rolling start negotiation upgrades only the exact v2 token", () => {
+test("rolling start negotiation upgrades only the exact known token", () => {
   const tokens = new Map<string, ProxyTokenInfo>([
     ["old-image", tokenInfo("run-old", "service-old", 1)],
     ["new-image", tokenInfo("run-new", "service-new", 2)],
@@ -76,12 +88,19 @@ test("rolling start negotiation upgrades only the exact v2 token", () => {
   });
   const newVersion = runtimeProtocolVersionFromStartResult({
     ok: true,
-    body: JSON.stringify({ accepted: true, runtimeProtocolVersion: 2 }),
+    body: JSON.stringify({ accepted: true, runtimeProtocolVersion: 5 }),
   });
+  assertEquals(
+    runtimeProtocolVersionFromStartResult({
+      ok: true,
+      body: JSON.stringify({ accepted: true, runtimeProtocolVersion: 2 }),
+    }),
+    2,
+  );
   assertEquals(oldVersion, undefined);
-  assertEquals(newVersion, 2);
+  assertEquals(newVersion, 5);
 
-  if (newVersion !== 2) throw new Error("expected v2 negotiation");
+  if (newVersion !== 5) throw new Error("expected v5 negotiation");
   assertEquals(
     upgradeProxyTokenRuntimeProtocol(
       tokens,
@@ -92,7 +111,7 @@ test("rolling start negotiation upgrades only the exact v2 token", () => {
     true,
   );
   assertEquals(tokens.get("old-image")?.runtimeProtocolVersion, undefined);
-  assertEquals(tokens.get("new-image")?.runtimeProtocolVersion, 2);
+  assertEquals(tokens.get("new-image")?.runtimeProtocolVersion, 5);
   assertEquals(
     tokens.get("same-lease-other-token")?.runtimeProtocolVersion,
     undefined,

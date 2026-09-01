@@ -81,9 +81,10 @@ untrusted party, so it keeps a real credential:
 
 - a **per-run proxy token** verified against the issuing host (`executor-host.ts` `verifyProxyToken`), with
   `body.runId`/`serviceId` **overwritten from the verified token** and `claimsMatchRequestBody` failing closed;
-- every control-RPC handler derives **tenant + thread + identity from the token-bound run, never from the request body**
+- every control-RPC handler derives **tenant + thread + execution policy from the token-bound run, never from the request body**
   (`resolveRunThreadTenant`, `getRunBootstrap`, and the TIER A binding) — a compromised container cannot target another
-  tenant;
+  tenant or substitute its `agentType` / provider model when requesting prompts,
+  history, or skill context;
 - least privilege: secrets forwarded to an execution container are limited to those the job references
   (`collectReferencedSecretNames`).
 - Target hardening (tracked, not yet done): split the single coarse `ProxyCapability="control"` into per-purpose scopes

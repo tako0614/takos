@@ -1,4 +1,4 @@
-export const NOTIFICATION_CHANNELS = ["in_app", "email", "push"] as const;
+export const NOTIFICATION_CHANNELS = ["in_app", "push"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 // Keep this list stable. DB stores these values.
@@ -68,18 +68,18 @@ export type NotificationPreferenceMatrix = Record<
 >;
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceMatrix = {
-  "deploy.completed": { in_app: true, email: true, push: false },
-  "deploy.failed": { in_app: true, email: true, push: false },
+  "deploy.completed": { in_app: true, push: false },
+  "deploy.failed": { in_app: true, push: false },
 
-  "run.completed": { in_app: true, email: false, push: true },
-  "run.failed": { in_app: true, email: true, push: true },
+  "run.completed": { in_app: true, push: true },
+  "run.failed": { in_app: true, push: true },
 
-  "pr.review.requested": { in_app: true, email: false, push: false },
-  "pr.comment": { in_app: true, email: false, push: false },
+  "pr.review.requested": { in_app: true, push: false },
+  "pr.comment": { in_app: true, push: false },
 
-  "workspace.invite": { in_app: true, email: true, push: false },
+  "workspace.invite": { in_app: true, push: false },
 
-  "billing.quota_warning": { in_app: true, email: true, push: false },
+  "billing.quota_warning": { in_app: true, push: false },
 
-  "security.new_login": { in_app: true, email: true, push: false },
+  "security.new_login": { in_app: true, push: false },
 };

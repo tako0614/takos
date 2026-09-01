@@ -1,7 +1,7 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { User } from "../../../shared/types/index.ts";
 import { accounts, getDb as realGetDb } from "../../../infra/db/index.ts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 
 interface UserCacheContext {
@@ -46,10 +46,14 @@ export async function getCachedUser<C extends UserCacheContext>(
 
   const db = userCacheDeps.getDb(c.env.DB);
   const row = await db.select().from(accounts).where(
-    eq(accounts.id, normalizedUserId),
+    and(
+      eq(accounts.id, normalizedUserId),
+      eq(accounts.type, "user"),
+      eq(accounts.status, "active"),
+    ),
   ).get();
 
-  if (row && row.status === "active") {
+  if (row && row.type === "user" && row.status === "active") {
     const user: User = {
       id: row.id,
       principal_id: undefined,

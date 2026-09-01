@@ -1,5 +1,6 @@
 import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { SpaceStorageFileType } from "../../../shared/types/index.ts";
+import { MAX_STORAGE_MIME_TYPE_CHARACTERS } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import type { accountStorageFiles } from "../../../infra/db/index.ts";
 import type { Database, SqlDatabaseLike } from "../../../infra/db/index.ts";
@@ -8,6 +9,7 @@ import { sourceServiceDeps } from "./deps.ts";
 import { type TtlSeconds, ttlSeconds } from "@takos/worker-platform-utils/ttl";
 
 export type StorageFileRow = SelectOf<typeof accountStorageFiles>;
+export type StorageUploadState = "pending" | "uploading" | "ready";
 
 export const R2_KEY_PREFIX = "ws-storage";
 
@@ -37,6 +39,29 @@ export const MAX_CONTENT_SIZE = 50 * 1024 * 1024; // 50MB - safe for Worker memo
 export const MAX_PATH_LENGTH = 1024;
 export const MAX_LIST_ITEMS = 5000;
 export const MAX_ZIP_ENTRIES = 10000;
+
+const STORAGE_MIME_ESSENCE_PATTERN =
+  /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/;
+
+export function normalizeStorageMimeType(
+  value: string | null | undefined,
+): string | undefined {
+  if (value === null || value === undefined || value.trim() === "") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (
+    normalized.length > MAX_STORAGE_MIME_TYPE_CHARACTERS ||
+    /[\u0000-\u001f\u007f]/.test(normalized)
+  ) {
+    throw new StorageError("Invalid Storage MIME type", "VALIDATION");
+  }
+  const essence = normalized.split(";", 1)[0]?.trim() ?? "";
+  if (!STORAGE_MIME_ESSENCE_PATTERN.test(essence)) {
+    throw new StorageError("Invalid Storage MIME type", "VALIDATION");
+  }
+  return normalized;
+}
 
 export interface CreateFolderInput {
   name: string;
@@ -78,21 +103,14 @@ export interface UploadUrlResponse {
   file_id: string;
   /** Temporary authenticated API URL for the upload route. */
   upload_url: string;
-  r2_key: string;
   /** ISO timestamp when the upload URL stops being accepted. */
-  expires_at: string;
-}
-
-export interface DownloadUrlResponse {
-  /** Temporary authenticated API URL for the download route. */
-  download_url: string;
-  /** ISO timestamp when the download URL stops being accepted. */
   expires_at: string;
 }
 
 export interface BulkDeleteStorageResult {
   r2Keys: string[];
   deletedCount: number;
+  deletedIds: string[];
   failedIds: string[];
 }
 

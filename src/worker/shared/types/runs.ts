@@ -21,6 +21,8 @@ export type RunStatus =
   | 'failed'
   | 'cancelled';
 
+export type RunTerminalReason = 'context_revoked' | 'context_invalid';
+
 export interface Run {
   id: string;
   thread_id: string;
@@ -33,6 +35,7 @@ export interface Run {
   agent_type: string;
   model: string | null;
   status: RunStatus;
+  terminal_reason: RunTerminalReason | null;
   input: string;
   output: string | null;
   error: string | null;
@@ -56,6 +59,7 @@ export type RunRow = {
   agentType: string;
   model?: string | null;
   status: string;
+  terminalReason?: string | null;
   input: string;
   output: string | null;
   error: string | null;
@@ -125,6 +129,7 @@ export function asRunRow(row: Record<string, unknown>): RunRow {
     agentType: stringField(row, 'agentType'),
     model: nullableStringField(row, 'model'),
     status: stringField(row, 'status'),
+    terminalReason: nullableStringField(row, 'terminalReason'),
     input: stringField(row, 'input'),
     output: nullableStringField(row, 'output'),
     error: nullableStringField(row, 'error'),
@@ -156,6 +161,7 @@ export function runRowToApi(row: RunRow): Run {
     agent_type: row.agentType,
     model: row.model ?? null,
     status: row.status as RunStatus,
+    terminal_reason: row.terminalReason as RunTerminalReason | null,
     input: row.input,
     output: row.output,
     error: row.error,

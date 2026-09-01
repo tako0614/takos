@@ -10,17 +10,28 @@ export function McpToolConfirmationCenter(props: {
   const confirmations = useMcpToolConfirmations(props.spaceId);
 
   return (
-    <Show when={confirmations.confirmations().length > 0}>
+    <Show
+      when={confirmations.confirmations().length > 0 || confirmations.error() ||
+        confirmations.truncated()}
+    >
       <aside
         class="fixed right-4 top-4 z-[80] grid max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] gap-3 overflow-y-auto"
         aria-label={t("mcpToolConfirmationsTitle")}
       >
         <Show when={confirmations.error()}>
           {(message) => (
-            <p class="rounded-xl border border-red-300 bg-white p-3 text-xs text-red-700 shadow-xl dark:border-red-800 dark:bg-zinc-950 dark:text-red-200">
+            <p
+              role="alert"
+              class="rounded-xl border border-red-300 bg-white p-3 text-xs text-red-700 shadow-xl dark:border-red-800 dark:bg-zinc-950 dark:text-red-200"
+            >
               {message()}
             </p>
           )}
+        </Show>
+        <Show when={confirmations.truncated()}>
+          <p class="rounded-xl border border-amber-300 bg-white p-3 text-xs text-amber-800 shadow-xl dark:border-amber-800 dark:bg-zinc-950 dark:text-amber-200">
+            {t("mcpToolConfirmationsTruncated")}
+          </p>
         </Show>
         <For each={confirmations.confirmations()}>
           {(confirmation) => (

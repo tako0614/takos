@@ -4,7 +4,10 @@ import { generateId, parsePagination } from "../../../shared/utils/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import { requireRepoRead } from "./git-shared.ts";
-import { generateExploreInvalidationUrls, hasWriteRole } from "./routes.ts";
+import {
+  generateExploreInvalidationUrls,
+  hasRepoWriteAccess,
+} from "./routes.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
   accounts,
@@ -35,7 +38,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
       allowPublicRead: true,
     });
 
-    const canSeeDrafts = hasWriteRole(repoAccess.role);
+    const canSeeDrafts = hasRepoWriteAccess(repoAccess.accessKind);
     const showDrafts = includeDrafts && canSeeDrafts;
 
     const releaseWhere = showDrafts
@@ -180,7 +183,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
     }
 
     if (releaseData.isDraft) {
-      const canSeeDrafts = hasWriteRole(repoAccess.role);
+      const canSeeDrafts = hasRepoWriteAccess(repoAccess.accessKind);
       if (!canSeeDrafts) {
         throw new NotFoundError("Release");
       }
@@ -254,7 +257,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
 
       const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-      if (!hasWriteRole(repoAccess.role)) {
+      if (!hasRepoWriteAccess(repoAccess.accessKind)) {
         throw new AuthorizationError();
       }
 
@@ -337,7 +340,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
 
       const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-      if (!hasWriteRole(repoAccess.role)) {
+      if (!hasRepoWriteAccess(repoAccess.accessKind)) {
         throw new AuthorizationError();
       }
 
@@ -425,7 +428,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
 
       const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
-      if (!hasWriteRole(repoAccess.role)) {
+      if (!hasRepoWriteAccess(repoAccess.accessKind)) {
         throw new AuthorizationError();
       }
 

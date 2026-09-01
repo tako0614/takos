@@ -117,6 +117,8 @@ export const accountStorageFiles = sqliteTable("account_storage_files", {
   mimeType: text("mime_type"),
   r2Key: text("r2_key"),
   sha256: text("sha256"),
+  uploadState: text("upload_state").notNull().default("ready"),
+  uploadExpiresAt: text("upload_expires_at"),
   uploadedByAccountId: text("uploaded_by_account_id"),
   ...timestamps,
 }, (table) => ({
@@ -131,6 +133,9 @@ export const accountStorageFiles = sqliteTable("account_storage_files", {
   ),
   idxAccountParentType: index("idx_account_storage_files_account_parent_type")
     .on(table.accountId, table.parentId, table.type),
+  idxUploadStateExpiresAt: index(
+    "idx_account_storage_files_upload_state_expires_at",
+  ).on(table.uploadState, table.uploadExpiresAt),
 }));
 
 // 12. Account
@@ -216,3 +221,29 @@ export const authIdentities = sqliteTable("auth_identities", {
   ),
   index("idx_auth_identities_user_id").on(table.userId),
 ]);
+
+// Durable replay receipts for destructive Workspace deletion. The deleted
+// Workspace cannot own this row because its account row is removed in the same
+// atomic batch. The requesting user owns the short-lived receipt instead.
+export const workspaceDeletionReceipts = sqliteTable(
+  "workspace_deletion_receipts",
+  {
+    operationId: text("operation_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    requestedByUserId: text("requested_by_user_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    requestSignature: text("request_signature").notNull(),
+    deletedAt: text("deleted_at").notNull(),
+  },
+  (table) => ({
+    uniqWorkspace: uniqueIndex("idx_workspace_deletion_receipts_workspace_id")
+      .on(table.workspaceId),
+    idxRequestedBy: index(
+      "idx_workspace_deletion_receipts_requested_by_user_id",
+    ).on(table.requestedByUserId),
+    idxDeletedAt: index("idx_workspace_deletion_receipts_deleted_at").on(
+      table.deletedAt,
+    ),
+  }),
+);

@@ -28,5 +28,5 @@
 
 - [API Reference](/reference/api)
 - [Takosumi operator model](https://takosumi.com/docs/reference/operator)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Capsule Run ledger](https://takosumi.com/docs/reference/model)
+- [Takosumi model](https://takosumi.com/docs/concepts/)
+- [Capsule Run ledger](https://takosumi.com/docs/concepts/)

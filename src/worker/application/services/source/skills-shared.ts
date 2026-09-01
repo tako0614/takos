@@ -51,7 +51,7 @@ export interface SkillRow {
 
 export type SkillMutationInput = {
   name?: string;
-  description?: string;
+  description?: string | null;
   instructions?: string;
   triggers?: string[];
   metadata?: unknown;

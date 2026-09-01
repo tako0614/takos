@@ -1,9 +1,4 @@
-import type {
-  Run,
-  ThreadHistoryArtifactSummary,
-  ThreadHistoryFocus,
-  ThreadHistoryTaskContext,
-} from "../../types/index.ts";
+import type { Run, ThreadHistoryArtifactSummary } from "../../types/index.ts";
 
 export type ChatTimelineEventType =
   | "started"
@@ -54,9 +49,3 @@ export interface ChatStreamingState {
 }
 
 export type ChatRunMetaMap = Record<string, ChatRunMeta>;
-
-export interface ChatHistoryState {
-  artifactsByRunId: ChatRunArtifactMap;
-  focus: ThreadHistoryFocus | null;
-  taskContext: ThreadHistoryTaskContext | null;
-}

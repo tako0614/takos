@@ -1,9 +1,10 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { Env } from "../../../shared/types/index.ts";
-import { type BaseVariables, parseJsonBody } from "../route-auth.ts";
+import { type BaseVariables } from "../route-auth.ts";
+import { zValidator } from "../zod-validator.ts";
 import {
   AuthorizationError,
-  BadRequestError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import {
@@ -11,30 +12,28 @@ import {
   formatUserSettingsResponse,
   updateUserSettings,
 } from "../../../application/services/identity/user-settings.ts";
-import { toUserResponse } from "../../../application/services/identity/response-formatters.ts";
+import {
+  toUserResponse,
+  toWorkspaceResponse,
+} from "../../../application/services/identity/response-formatters.ts";
 import { getOrCreatePersonalWorkspace } from "../../../application/services/identity/spaces.ts";
 import privacy from "./privacy.ts";
 
+const activityVisibilitySchema = z.string().trim().toLowerCase().pipe(
+  z.enum(["public", "followers", "private"]),
+);
 
-function toPersonalSpaceResponse(space: {
-  id: string;
-  name: string;
-  slug: string | null;
-  owner_principal_id: string;
-  kind: string;
-  created_at: string;
-  updated_at: string;
-}) {
-  return {
-    id: space.id,
-    slug: space.slug || space.id,
-    name: space.name,
-    owner_principal_id: space.owner_principal_id,
-    kind: space.kind,
-    created_at: space.created_at,
-    updated_at: space.updated_at,
-  };
-}
+export const userSettingsPatchSchema = z
+  .object({
+    setup_completed: z.boolean().optional(),
+    auto_update_enabled: z.boolean().optional(),
+    private_account: z.boolean().optional(),
+    activity_visibility: activityVisibilitySchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one setting is required",
+  });
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .use("*", async (c, next) => {
@@ -61,7 +60,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Personal space");
     }
 
-    return c.json({ space: toPersonalSpaceResponse(personalSpace) });
+    return c.json({ space: toWorkspaceResponse(personalSpace) });
   })
   // Get user settings (including setup state)
   .get("/settings", async (c) => {
@@ -71,43 +70,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     return c.json(formatUserSettingsResponse(settings));
   })
   // Update user settings
-  .patch("/settings", async (c) => {
-    const user = c.get("user");
-    const body = await parseJsonBody<{
-      setup_completed?: boolean;
-      auto_update_enabled?: boolean;
-      private_account?: boolean;
-      activity_visibility?: string;
-    }>(c);
-
-    if (!body) {
-      throw new BadRequestError("Invalid JSON body");
-    }
-
-    if (
-      body.private_account !== undefined &&
-      typeof body.private_account !== "boolean"
-    ) {
-      throw new BadRequestError("private_account must be boolean");
-    }
-
-    let activityVisibility = body.activity_visibility;
-    if (activityVisibility !== undefined) {
-      if (typeof activityVisibility !== "string") {
-        throw new BadRequestError("activity_visibility must be string");
-      }
-      activityVisibility = activityVisibility.trim().toLowerCase();
-      if (!["public", "followers", "private"].includes(activityVisibility)) {
-        throw new BadRequestError(
-          "activity_visibility must be one of public|followers|private",
-        );
-      }
-    }
-
-    const settings = await updateUserSettings(c.env.DB, user.id, {
-      ...body,
-      activity_visibility: activityVisibility,
-    });
-    return c.json(formatUserSettingsResponse(settings));
-  })
+  .patch(
+    "/settings",
+    zValidator("json", userSettingsPatchSchema),
+    async (c) => {
+      const user = c.get("user");
+      const body = c.req.valid("json");
+      const settings = await updateUserSettings(c.env.DB, user.id, body);
+      return c.json(formatUserSettingsResponse(settings));
+    },
+  )
   .route("/privacy", privacy);

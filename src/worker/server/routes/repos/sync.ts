@@ -68,9 +68,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       c,
       repo.space_id,
       user.id,
-      ["owner", "admin", "editor"],
-      "Permission denied",
-      403,
+      "Workspace not found",
     );
 
     if (!repo.forked_from_id) {
@@ -247,9 +245,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
         c,
         repo.space_id,
         user.id,
-        ["owner", "admin", "editor"],
-        "Permission denied",
-        403,
+        "Workspace not found",
       );
 
       if (!repo.forked_from_id) {

@@ -9,7 +9,6 @@ import {
   type McpRegistrySearchCandidate,
   type McpRegistrySourceRecord,
 } from "../../../application/services/platform/mcp.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { ok } from "../response-utils.ts";
@@ -56,14 +55,6 @@ const searchRegistrySchema = z.object({
 });
 
 const registrySourceRoutes = new Hono<SpaceAccessRouteEnv>();
-
-const MCP_LIST_ROLES = getSpaceOperationPolicy("mcp_server.list").allowed_roles;
-const MCP_CREATE_ROLES =
-  getSpaceOperationPolicy("mcp_server.create").allowed_roles;
-const MCP_UPDATE_ROLES =
-  getSpaceOperationPolicy("mcp_server.update").allowed_roles;
-const MCP_DELETE_ROLES =
-  getSpaceOperationPolicy("mcp_server.delete").allowed_roles;
 
 export function serializeSource(source: McpRegistrySourceRecord) {
   return {
@@ -129,7 +120,7 @@ function serializeCandidate(candidate: McpRegistrySearchCandidate) {
 
 registrySourceRoutes.get(
   "/registry-sources",
-  spaceAccess({ roles: MCP_LIST_ROLES }),
+  spaceAccess(),
   async (c) => {
     const sources = await listMcpRegistrySources(c.env.DB, c.get("spaceId"));
     return c.json({ data: sources.map(serializeSource) });
@@ -138,7 +129,7 @@ registrySourceRoutes.get(
 
 registrySourceRoutes.post(
   "/registry-sources",
-  spaceAccess({ roles: MCP_CREATE_ROLES }),
+  spaceAccess(),
   zValidator("json", createRegistrySourceSchema),
   async (c) => {
     const body = c.req.valid("json");
@@ -163,7 +154,7 @@ registrySourceRoutes.post(
 
 registrySourceRoutes.patch(
   "/registry-sources/:id",
-  spaceAccess({ roles: MCP_UPDATE_ROLES }),
+  spaceAccess(),
   zValidator("json", updateRegistrySourceSchema),
   async (c) => {
     const body = c.req.valid("json");
@@ -190,7 +181,7 @@ registrySourceRoutes.patch(
 
 registrySourceRoutes.delete(
   "/registry-sources/:id",
-  spaceAccess({ roles: MCP_DELETE_ROLES }),
+  spaceAccess(),
   async (c) => {
     const deleted = await deleteMcpRegistrySource(
       c.env.DB,
@@ -204,7 +195,7 @@ registrySourceRoutes.delete(
 
 registrySourceRoutes.get(
   "/search",
-  spaceAccess({ roles: MCP_LIST_ROLES }),
+  spaceAccess(),
   zValidator("query", searchRegistrySchema),
   async (c) => {
     const result = await searchMcpRegistrySources(c.env.DB, c.env, {

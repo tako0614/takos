@@ -72,7 +72,7 @@ async function isReferencedChatAttachment(
     .all();
 
   return candidateMessages.some((message) =>
-    parseMessageAttachmentRefs(message.metadata).some(
+    parseMessageAttachmentRefs(message.metadata, context.threadId).some(
       (attachment) => attachment.file_id === fileId,
     ),
   );

@@ -2,11 +2,13 @@ import { useI18n } from "../../store/i18n.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
 import { Button } from "../../components/ui/Button.tsx";
 import { Icons } from "../../lib/Icons.tsx";
+import type { ThreadExportDownloadFormat } from "takos-api-contract/thread-export";
 
 export interface ChatExportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport: (format: "markdown" | "json" | "pdf") => void;
+  exportingFormat: ThreadExportDownloadFormat | null;
+  onExport: (format: ThreadExportDownloadFormat) => void;
 }
 
 export function ChatExportModal(props: ChatExportModalProps) {
@@ -23,6 +25,8 @@ export function ChatExportModal(props: ChatExportModalProps) {
         <Button
           variant="secondary"
           onClick={() => props.onExport("markdown")}
+          disabled={props.exportingFormat !== null}
+          isLoading={props.exportingFormat === "markdown"}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
           Markdown
@@ -30,19 +34,19 @@ export function ChatExportModal(props: ChatExportModalProps) {
         <Button
           variant="secondary"
           onClick={() => props.onExport("json")}
+          disabled={props.exportingFormat !== null}
+          isLoading={props.exportingFormat === "json"}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
           JSON
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => props.onExport("pdf")}
-          leftIcon={<Icons.Download class="w-4 h-4" />}
+        <div
+          role={props.exportingFormat ? "status" : undefined}
+          class="text-xs text-zinc-500 dark:text-zinc-400"
         >
-          PDF
-        </Button>
-        <div class="text-xs text-zinc-500 dark:text-zinc-400">
-          {t("download")}
+          {props.exportingFormat
+            ? t("threadExportPreparing")
+            : t("threadExportDescription")}
         </div>
       </div>
     </Modal>

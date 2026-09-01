@@ -249,6 +249,18 @@ describe("materializer input and topology", () => {
     ]);
   });
 
+  test("accepts standalone output and a public PKCE client without Takosumi control or a client secret", () => {
+    const workerEnv = { ...rawOutputs.worker_env } as Record<string, string>;
+    delete workerEnv.TAKOSUMI_ACCOUNTS_URL;
+    expect(parseTakosOutputs({ ...rawOutputs, worker_env: workerEnv }).workerEnv)
+      .not.toHaveProperty("TAKOSUMI_ACCOUNTS_URL");
+    const publicClientSecrets = { ...secrets } as Record<string, string>;
+    delete publicClientSecrets.OIDC_CLIENT_SECRET;
+    expect(validateRuntimeSecrets(publicClientSecrets)).not.toHaveProperty(
+      "OIDC_CLIENT_SECRET",
+    );
+  });
+
   test("rejects output, provider, artifact, and runtime-secret authority drift", () => {
     expect(() =>
       parseTakosOutputs({

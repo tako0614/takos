@@ -341,15 +341,15 @@ checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 
 請求は operator の BillingPort を使います。usage ingest、payment enforcement、
 entitlement、customer portal、invoice download は Takosumi Cloud / Operator
-extension の責務で、Takos はその非公開 endpoint を正本化しません。
+extension の責務で、Takos はその非公開 endpoint を正本 (正とする情報)化しません。
 
 ## 関連ドキュメント
 
 - [Takosumi operator model](https://takosumi.com/docs/reference/operator)
   —契約主体 / billing owner / OIDC issuer の詳細
-- [Takosumi Capsule Lifecycle](https://takosumi.com/docs/reference/model)
+- [Takosumi Capsule Lifecycle](https://takosumi.com/docs/concepts/)
   — Takos app installation と billing の関係
-- [Capsule Run Ledger](https://takosumi.com/docs/reference/model)
+- [Capsule Run Ledger](https://takosumi.com/docs/concepts/)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
   export 時の billing 再紐付け

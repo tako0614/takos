@@ -9,6 +9,8 @@
  * RPC protocol: POST with JSON body to `/methodName`, JSON response.
  */
 
+import { jsonResponse } from "../shared/utils/http-response.ts";
+
 // ---------------------------------------------------------------------------
 // Types — minimal interfaces matching the adapters
 // ---------------------------------------------------------------------------
@@ -77,13 +79,6 @@ interface QueueAdapter {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ error: message }, status);

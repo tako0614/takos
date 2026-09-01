@@ -3,7 +3,6 @@ import type {
   SqlDatabaseBinding,
 } from "../../shared/types/bindings.ts";
 import type { Env } from "../../shared/types/index.ts";
-import type { SpaceRole } from "../../shared/types/index.ts";
 import type {
   SensitiveReadPolicy,
   SpaceOperationId,
@@ -11,13 +10,17 @@ import type {
 } from "./tool-policy-types.ts";
 import type { CapabilityNamespace, RiskLevel } from "./capability-types.ts";
 import type { CapabilityRegistry } from "./capability-registry.ts";
+import type { RunExecutionAuthority } from "../services/runs/run-authority.ts";
 
 export interface ToolContext {
   spaceId: string;
   threadId: string;
   runId: string;
   userId: string;
-  role?: SpaceRole;
+  /** Exact immutable Run authority verified by the Worker control boundary. */
+  runAuthority?: RunExecutionAuthority;
+  /** Current model/tool-protocol call identity; never caller-supplied to handlers. */
+  toolCallId?: string;
   // Capability set granted to this run (SSOT policy is in services/platform/capabilities.ts)
   capabilities: string[];
   // Environment bindings
@@ -38,7 +41,6 @@ export interface ToolDefinition {
   operation_id?: SpaceOperationId;
   composed_operations?: SpaceOperationId[];
   sensitive_read_policy?: SensitiveReadPolicy;
-  required_roles?: SpaceRole[];
   required_capabilities?: string[];
   canonical_name?: string;
   namespace?: CapabilityNamespace;
@@ -53,19 +55,37 @@ export interface ToolDefinition {
     idempotentHint?: boolean;
     openWorldHint?: boolean;
   };
+  /**
+   * Worker-internal adapter identity used to build an immutable
+   * ToolDescriptorRevision. It is never a permission, credential, endpoint,
+   * or model-visible annotation.
+   */
+  adapter_identity?: {
+    source: "native" | "mcp";
+    reference: string;
+    revision: string;
+  };
   parameters: {
     type: "object";
     properties: Record<string, ToolParameter>;
     required?: string[];
+    additionalProperties?: boolean;
   };
 }
 
 export interface ToolParameter {
-  type: "string" | "number" | "boolean" | "array" | "object";
+  type: "string" | "number" | "integer" | "boolean" | "array" | "object";
   description: string;
   enum?: string[];
   items?: ToolParameter;
   default?: unknown;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  minItems?: number;
+  maxItems?: number;
+  additionalProperties?: boolean;
   // For nested object types
   properties?: Record<string, ToolParameter>;
   required?: string[];

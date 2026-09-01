@@ -1,73 +1,25 @@
-import type { JSX } from "solid-js";
-import { ConfirmDialogRenderer } from "./components/common/ConfirmDialog.tsx";
-import { CookieConsentBanner } from "./components/common/CookieConsentBanner.tsx";
+import { lazy, Show, type JSX } from "solid-js";
 import { ToastRenderer } from "./components/common/Toast.tsx";
-import { AppModals } from "./components/layout/AppModals.tsx";
-import { rpc, rpcJson } from "./lib/rpc.ts";
-import { getErrorMessage } from "./lib/errors.ts";
-import { getSpaceIdentifier } from "./lib/spaces.ts";
-import type { Space } from "./types/index.ts";
 import { AuthProvider, useAuth } from "./hooks/useAuth.tsx";
-import { ModalProvider, useModals } from "./store/modal.tsx";
-import { NavigationProvider, useNavigation } from "./store/navigation.ts";
-import { useI18n } from "./store/i18n.ts";
+import { ModalProvider } from "./store/modal.tsx";
+import { NavigationProvider } from "./store/navigation.ts";
+
+const AppModals = lazy(() =>
+  import("./components/layout/AppModals.tsx").then((module) => ({
+    default: module.AppModals,
+  })),
+);
 
 function AppShell(props: { children?: JSX.Element }) {
   const auth = useAuth();
-  const modal = useModals();
-  const navigation = useNavigation();
-  const i18n = useI18n();
-
-  const handleCreateSpace = async (
-    name: string,
-    description: string,
-    installFeaturedApps: boolean,
-  ) => {
-    const trimmedName = name.trim();
-    const trimmedDescription = description.trim();
-    let space: Space;
-
-    try {
-      const response = await rpc.spaces.$post({
-        json: {
-          name: trimmedName,
-          description: trimmedDescription || undefined,
-          installFeaturedApps,
-        },
-      });
-      const data = await rpcJson<{ space: Space }>(response);
-      space = data.space;
-    } catch (error) {
-      throw new Error(
-        getErrorMessage(
-          error,
-          i18n.t("failedToCreate"),
-        ),
-      );
-    }
-
-    try {
-      await auth.fetchSpaces(auth.user, {
-        notifyOnError: false,
-        throwOnError: true,
-      });
-    } catch (error) {
-      throw new Error(
-        getErrorMessage(error, i18n.t("failedToLoad")),
-      );
-    }
-
-    modal.setShowCreateSpace(false);
-    navigation.navigateToChat(getSpaceIdentifier(space));
-  };
 
   return (
     <>
       {props.children}
-      <AppModals onCreateSpace={handleCreateSpace} />
-      <ConfirmDialogRenderer />
+      <Show when={auth.authState === "authenticated"}>
+        <AppModals />
+      </Show>
       <ToastRenderer />
-      <CookieConsentBanner />
     </>
   );
 }

@@ -3,7 +3,6 @@ import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import type {
   SecurityPosture,
   Space,
-  SpaceRole,
 } from "../../../shared/types/index.ts";
 import { resolveUserPrincipalId } from "./principals.ts";
 
@@ -23,7 +22,6 @@ export type AccountLikeRow = {
 };
 
 export type MembershipWorkspaceRow = {
-  memberRole: string;
   spaceId: string;
   spaceType: string;
   spaceName: string;
@@ -52,7 +50,6 @@ export interface SpaceListItem {
   security_posture: SecurityPosture;
   created_at: string;
   updated_at: string;
-  member_role: SpaceRole;
 }
 
 export function toWorkspaceKind(type: string): Space["kind"] {
@@ -96,7 +93,6 @@ export function toSpaceListItem(row: MembershipWorkspaceRow): SpaceListItem {
     security_posture: toSecurityPosture(row.spaceSecurityPosture),
     created_at: row.spaceCreatedAt,
     updated_at: row.spaceUpdatedAt,
-    member_role: row.memberRole as SpaceRole,
   };
 }
 
@@ -123,6 +119,5 @@ export function toPersonalWorkspaceListItem(
     security_posture: toSecurityPosture(row.securityPosture),
     created_at: row.createdAt,
     updated_at: row.updatedAt,
-    member_role: "owner",
   };
 }

@@ -10,10 +10,12 @@ import { recordSessionRevocation } from "../../../application/services/identity/
 import {
   buildDataSubjectExport,
   getPrivacyAccessSummary,
+  PrivacyExportCapacityError,
   requestAccountDeletion,
 } from "../../../application/services/identity/privacy-rights.ts";
 import { getPlatformServices } from "../../../platform/accessors.ts";
 import { type BaseVariables, parseJsonBody } from "../route-auth.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 export const privacyRouteDeps = {
   buildDataSubjectExport,
@@ -29,6 +31,19 @@ export const privacyRouteDeps = {
 function exportFilename(userId: string): string {
   const date = new Date().toISOString().slice(0, 10);
   return `takos-data-export-${userId}-${date}.json`;
+}
+
+function parseDeletionRequestBody(
+  value: unknown,
+): { reason?: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  if (Object.keys(body).some((key) => key !== "reason")) return null;
+  if (body.reason === undefined) return {};
+  if (typeof body.reason !== "string") return null;
+  const reason = body.reason.trim();
+  if (!reason || reason.length > 1000) return null;
+  return { reason };
 }
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
@@ -50,19 +65,35 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   })
   .get("/export", async (c) => {
     const user = c.get("user");
-    const payload = await privacyRouteDeps.buildDataSubjectExport(
-      c.env.DB,
-      user,
-    );
-    return c.json(payload, 200, {
-      "Content-Disposition": `attachment; filename="${
-        exportFilename(user.id)
-      }"`,
-    });
+    try {
+      const payload = await privacyRouteDeps.buildDataSubjectExport(
+        c.env.DB,
+        user,
+      );
+      return c.json(payload, 200, {
+        "Content-Disposition": `attachment; filename="${
+          exportFilename(user.id)
+        }"`,
+      });
+    } catch (error) {
+      if (error instanceof PrivacyExportCapacityError) {
+        return c.json({
+          error: "This export requires assisted processing",
+          code: error.code,
+          collection: error.collection,
+          contact: "privacy@takos.jp",
+        }, 413);
+      }
+      throw error;
+    }
   })
   .post("/deletion-requests", async (c) => {
     const user = c.get("user");
-    const body = await parseJsonBody<{ reason?: string }>(c, {});
+    const parsed = await parseJsonBody<unknown>(c, {});
+    const body = parseDeletionRequestBody(parsed);
+    if (!body) {
+      return c.json({ error: "Invalid deletion request" }, 400);
+    }
     const result = await privacyRouteDeps.requestAccountDeletion(
       c.env.DB,
       user,
@@ -73,16 +104,36 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.req.header("Cookie"),
     );
     if (sessionId) {
-      await privacyRouteDeps.recordSessionRevocation(c.env.DB, {
-        sessionId,
-        userId: user.id,
-        reason: "admin_revoked",
-      });
+      try {
+        await privacyRouteDeps.recordSessionRevocation(c.env.DB, {
+          sessionId,
+          userId: user.id,
+          reason: "admin_revoked",
+        });
+      } catch (error) {
+        // The accepted request atomically disabled the account and removed
+        // app-local SQL sessions. This extra blacklist write is cleanup for a
+        // stale cookie and must not turn an accepted request into a retry that
+        // appears to have failed.
+        logWarn("Deletion request session revocation cleanup failed", {
+          module: "privacy-rights",
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       const sessionStore = privacyRouteDeps.getPlatformServices(c)
         .notifications.sessionStore;
       if (sessionStore) {
-        await privacyRouteDeps.deleteSession(sessionStore, sessionId);
+        try {
+          await privacyRouteDeps.deleteSession(sessionStore, sessionId);
+        } catch (error) {
+          logWarn("Deletion request session store cleanup failed", {
+            module: "privacy-rights",
+            userId: user.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 

@@ -30,6 +30,8 @@ deploy/cloudflare/.takos-release-wrangler.*.toml
 deploy/cloudflare/.takos-release-artifact.*/
 deploy/cloudflare/.takos-release-bundle.*/
 *.log
+/core
+/core.*
 tmp/
 temp/
 *.tmp

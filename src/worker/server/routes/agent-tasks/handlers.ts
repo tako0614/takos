@@ -15,7 +15,9 @@ import {
   runs,
   threads,
 } from "../../../infra/db/schema.ts";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { selectInChunks } from "../../../shared/utils/in-clause.ts";
+import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -94,6 +96,35 @@ export async function fetchTask(
   return result ? toApiTask(result) : null;
 }
 
+/**
+ * Claim one task-start attempt with a compare-and-swap on the row version.
+ * This closes the same-tick/double-request window before message or Run side
+ * effects begin. A loser must reload the task and reuse an active Run (or ask
+ * the caller to retry while the winner is still launching it).
+ */
+export async function claimAgentTaskStart(
+  d1: Env["DB"],
+  input: {
+    taskId: string;
+    expectedUpdatedAt: string;
+    startedAt: string;
+    updatedAt: string;
+  },
+): Promise<boolean> {
+  const result = await getDb(d1).update(agentTasks).set({
+    status: "in_progress",
+    startedAt: input.startedAt,
+    completedAt: null,
+    updatedAt: input.updatedAt,
+  }).where(
+    and(
+      eq(agentTasks.id, input.taskId),
+      eq(agentTasks.updatedAt, input.expectedUpdatedAt),
+    ),
+  ).run();
+  return affectedRowCount(result) === 1;
+}
+
 // ---------------------------------------------------------------------------
 // Enrichment logic
 // ---------------------------------------------------------------------------
@@ -167,26 +198,50 @@ export async function enrichTasks(
     }));
   }
 
-  const [threadRows, runRows] = await Promise.all([
-    db.select({
-      id: threads.id,
-      title: threads.title,
-    }).from(threads).where(inArray(threads.id, threadIds)).all(),
-    db.select({
-      id: runs.id,
-      threadId: runs.threadId,
-      rootThreadId: runs.rootThreadId,
-      status: runs.status,
-      agentType: runs.agentType,
-      startedAt: runs.startedAt,
-      completedAt: runs.completedAt,
-      createdAt: runs.createdAt,
-      error: runs.error,
-    }).from(runs).where(inArray(runs.threadId, threadIds)).orderBy(
-      desc(runs.createdAt),
-      desc(runs.id),
-    ).all(),
+  const runSelection = {
+    id: runs.id,
+    threadId: runs.threadId,
+    rootThreadId: runs.rootThreadId,
+    status: runs.status,
+    agentType: runs.agentType,
+    startedAt: runs.startedAt,
+    completedAt: runs.completedAt,
+    createdAt: runs.createdAt,
+    error: runs.error,
+  };
+  const [threadRows, directRunRows, rootedRunRows] = await Promise.all([
+    selectInChunks(threadIds, (chunk) =>
+      db.select({
+        id: threads.id,
+        title: threads.title,
+      }).from(threads).where(inArray(threads.id, chunk)).all()
+    ),
+    selectInChunks(threadIds, (chunk) =>
+      db.select(runSelection).from(runs).where(
+        inArray(runs.threadId, chunk),
+      ).all()
+    ),
+    // A task owns the whole run tree rooted at its thread. Child runs execute
+    // on their own thread, so a direct thread_id lookup alone silently omits
+    // the most recent work and its artifacts.
+    selectInChunks(threadIds, (chunk) =>
+      db.select(runSelection).from(runs).where(
+        inArray(runs.rootThreadId, chunk),
+      ).all()
+    ),
   ]);
+  // Root runs match both lookups. De-duplicate them, then restore the global
+  // ordering that per-chunk queries cannot provide.
+  const runRows = Array.from(
+    new Map(
+      [...directRunRows, ...rootedRunRows].map((row) => [row.id, row]),
+    ).values(),
+  ).sort((left, right) => {
+    const createdAtOrder = (toIsoTimestamp(right.createdAt) ?? "").localeCompare(
+      toIsoTimestamp(left.createdAt) ?? "",
+    );
+    return createdAtOrder || right.id.localeCompare(left.id);
+  });
 
   const threadTitleById = new Map(threadRows.map((row) => [row.id, row.title]));
   const runsByRootThreadId = new Map<string, typeof runRows>();
@@ -217,11 +272,13 @@ export async function enrichTasks(
     }
   }
 
-  const artifactRows = summaryRunIds.size === 0
-    ? []
-    : await db.select({ runId: artifacts.runId }).from(artifacts).where(
-      inArray(artifacts.runId, Array.from(summaryRunIds)),
-    ).all();
+  const artifactRows = await selectInChunks(
+    Array.from(summaryRunIds),
+    (chunk) =>
+      db.select({ runId: artifacts.runId }).from(artifacts).where(
+        inArray(artifacts.runId, chunk),
+      ).all(),
+  );
   const artifactCountByRunId = new Map<string, number>();
   for (const row of artifactRows) {
     artifactCountByRunId.set(

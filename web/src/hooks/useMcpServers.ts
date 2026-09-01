@@ -1,4 +1,10 @@
-import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import {
+  type Accessor,
+  createComputed,
+  createEffect,
+  createSignal,
+  on,
+} from "solid-js";
 import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
 import { getErrorMessage } from "../lib/errors.ts";
@@ -9,9 +15,46 @@ import {
   buildMcpToolPolicyPatch,
   buildMcpToolPolicyPath,
 } from "./mcp-server-paths.ts";
+import {
+  parseConnectionsImportResponse,
+  parseConnectionsExportResponse,
+  parseMcpServerActionResponse,
+  parseMcpServerDeleteResponse,
+  parseMcpServerResponse,
+  parseMcpServerToolResponse,
+  parseMcpServersResponse,
+  parseMcpServerToolsResponse,
+  serializeConnectionsExportDocument,
+} from "../views/connections/mcp-response.ts";
+import { parseMcpConnectionsDocument } from "takos-api-contract/mcp-connections";
 
 interface UseMcpServersOptions {
   spaceId: Accessor<string>;
+}
+
+interface McpServerInventoryState {
+  spaceId: string;
+  servers: McpServerRecord[];
+  error: string | null;
+  verified: boolean;
+}
+
+interface McpScopeClaim {
+  spaceId: string;
+  generation: number;
+}
+
+export class McpScopeChangedError extends Error {
+  constructor() {
+    super("MCP Workspace changed while the request was in progress");
+    this.name = "McpScopeChangedError";
+  }
+}
+
+export function isMcpScopeChangedError(
+  value: unknown,
+): value is McpScopeChangedError {
+  return value instanceof McpScopeChangedError;
 }
 
 export function useMcpServers({ spaceId }: UseMcpServersOptions) {
@@ -19,26 +62,91 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   const { t } = useI18n();
   const { confirm } = useConfirmDialog();
   const currentSpaceId = () => spaceId().trim();
-  const basePath = () =>
-    `/api/mcp/servers?workspaceId=${encodeURIComponent(currentSpaceId())}`;
-  const [servers, setServers] = createSignal<McpServerRecord[]>([]);
+  const [inventory, setInventory] = createSignal<McpServerInventoryState>({
+    spaceId: "",
+    servers: [],
+    error: null,
+    verified: false,
+  });
+  const servers = () => inventory().servers;
+  const error = () => inventory().error;
+  const hasVerifiedInventory = () => inventory().verified;
   const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string | null>(null);
   const latestRefresh = createLatestRequest();
+  const deletingServers = new Set<string>();
+  let observedSpaceId = currentSpaceId();
+  let scopeGeneration = 0;
+
+  const observeCurrentScope = (): McpScopeClaim => {
+    const nextSpaceId = currentSpaceId();
+    if (nextSpaceId !== observedSpaceId) {
+      observedSpaceId = nextSpaceId;
+      scopeGeneration += 1;
+    }
+    return { spaceId: nextSpaceId, generation: scopeGeneration };
+  };
+
+  // createComputed runs synchronously when the accessor changes. The request
+  // fence therefore remembers A -> B -> A even when no request is started in B.
+  createComputed(() => {
+    observeCurrentScope();
+  });
+
+  const isCurrentScope = (claim: McpScopeClaim): boolean => {
+    const current = observeCurrentScope();
+    return (
+      claim.spaceId === current.spaceId &&
+      claim.generation === current.generation
+    );
+  };
+
+  const assertCurrentScope = (claim: McpScopeClaim): void => {
+    if (!isCurrentScope(claim)) throw new McpScopeChangedError();
+  };
+
+  const inventoryStillContains = (
+    claim: McpScopeClaim,
+    server: McpServerRecord,
+  ): boolean => {
+    if (!isCurrentScope(claim)) return false;
+    const current = inventory();
+    return (
+      current.verified &&
+      current.spaceId === claim.spaceId &&
+      current.servers.some(
+        (entry) =>
+          entry.id === server.id &&
+          entry.name === server.name &&
+          entry.url === server.url,
+      )
+    );
+  };
 
   const refresh = async () => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
+    if (inventory().spaceId !== targetSpaceId) {
+      latestRefresh.next();
+      setInventory({
+        spaceId: targetSpaceId,
+        servers: [],
+        error: null,
+        verified: false,
+      });
+    }
     if (!targetSpaceId) {
       latestRefresh.next();
-      setServers([]);
-      setError(null);
       setLoading(false);
       return;
     }
 
-    const claim = latestRefresh.claim(() => targetSpaceId === currentSpaceId());
+    const claim = latestRefresh.claim(() => isCurrentScope(target));
     setLoading(true);
-    setError(null);
+    setInventory((current) =>
+      current.spaceId === targetSpaceId
+        ? { ...current, error: null }
+        : current,
+    );
     try {
       const res = await fetch(
         `/api/mcp/servers?workspaceId=${encodeURIComponent(targetSpaceId)}`,
@@ -46,16 +154,32 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       if (!res.ok) throw new Error(t("failedToFetchMcpServers"));
       const data = await res.json();
       if (!claim.won()) return;
-      setServers(data.data || []);
+      try {
+        const nextServers = parseMcpServersResponse(data);
+        setInventory((current) =>
+          current.spaceId === targetSpaceId
+            ? {
+                spaceId: targetSpaceId,
+                servers: nextServers,
+                error: null,
+                verified: true,
+              }
+            : current,
+        );
+      } catch {
+        throw new Error(t("failedToFetchMcpServers"));
+      }
     } catch (err) {
       if (!claim.won()) return;
       // Surface load failures with a retry instead of rendering an empty
       // "no servers connected" state that hides the error.
-      setServers([]);
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : t("failedToFetchMcpServers"),
+      const message = err instanceof Error && err.message
+        ? err.message
+        : t("failedToFetchMcpServers");
+      setInventory((current) =>
+        current.spaceId === targetSpaceId
+          ? { ...current, error: message }
+          : current,
       );
     } finally {
       if (claim.won()) {
@@ -65,13 +189,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   };
 
   createEffect(
-    on(spaceId, (nextSpaceId) => {
-      if (nextSpaceId.trim()) {
-        void refresh();
-      } else {
-        setServers([]);
-        setLoading(false);
-      }
+    on(currentSpaceId, () => {
+      observeCurrentScope();
+      void refresh();
     }),
   );
 
@@ -80,30 +200,47 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     url: string;
     scope?: string;
   }) => {
-    if (!currentSpaceId()) {
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
+    if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
-    const res = await fetch(basePath(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || t("failedToCreateMcpServer"));
-    }
-    await refresh();
-    return data.data as {
-      status: string;
-      name: string;
-      url: string;
-      auth_url?: string;
-      message: string;
+    const res = await fetch(
+      `/api/mcp/servers?workspaceId=${encodeURIComponent(targetSpaceId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: unknown;
     };
+    assertCurrentScope(target);
+    if (!res.ok) {
+      throw new Error(
+        getErrorMessage(data.error, t("failedToCreateMcpServer")),
+      );
+    }
+    let result;
+    try {
+      result = parseMcpServerActionResponse(
+        data,
+        globalThis.location?.origin,
+        input,
+      );
+    } catch {
+      throw new Error(t("failedToCreateMcpServer"));
+    }
+    assertCurrentScope(target);
+    await refresh();
+    assertCurrentScope(target);
+    return result;
   };
 
   const reauthorizeServer = async (serverId: string) => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
@@ -116,15 +253,24 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
         headers: { "Content-Type": "application/json" },
       },
     );
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: unknown;
+    };
+    assertCurrentScope(target);
     if (!res.ok) {
-      throw new Error(data.error || t("failedToReauthorizeMcpServer"));
+      throw new Error(
+        getErrorMessage(data.error, t("failedToReauthorizeMcpServer")),
+      );
     }
-    const result = data.data as { auth_url?: string; message?: string };
-    if (result.auth_url) {
-      globalThis.open(result.auth_url, "_blank", "noopener,noreferrer");
+    let result;
+    try {
+      result = parseMcpServerActionResponse(data, globalThis.location?.origin);
+    } catch {
+      throw new Error(t("failedToReauthorizeMcpServer"));
     }
+    assertCurrentScope(target);
     await refresh();
+    assertCurrentScope(target);
     return result;
   };
 
@@ -132,7 +278,8 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     serverId: string,
     input: { enabled?: boolean; name?: string },
   ) => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
@@ -146,37 +293,61 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
         body: JSON.stringify(input),
       },
     );
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: unknown;
+    };
+    assertCurrentScope(target);
     if (!res.ok) {
-      throw new Error(data.error || t("failedToUpdateMcpServer"));
+      throw new Error(
+        getErrorMessage(data.error, t("failedToUpdateMcpServer")),
+      );
     }
+    let result;
+    try {
+      result = parseMcpServerResponse(data, serverId);
+    } catch {
+      throw new Error(t("failedToUpdateMcpServer"));
+    }
+    assertCurrentScope(target);
     await refresh();
-    return data.data as McpServerRecord;
+    assertCurrentScope(target);
+    return result;
   };
 
   const toggleServer = async (server: McpServerRecord) => {
+    const target = observeCurrentScope();
     try {
       await updateServer(server.id, { enabled: !server.enabled });
       return true;
     } catch (error) {
-      showToast("error", getErrorMessage(error, t("failedToUpdateMcpServer")));
+      if (isCurrentScope(target) && !isMcpScopeChangedError(error)) {
+        showToast(
+          "error",
+          getErrorMessage(error, t("failedToUpdateMcpServer")),
+        );
+      }
       return false;
     }
   };
 
   const deleteServer = async (server: McpServerRecord) => {
-    const confirmed = await confirm({
-      title: t("removeMcpServer"),
-      message: t("removeMcpServerConfirm", { name: server.name }),
-      confirmText: t("remove"),
-      cancelText: t("cancel"),
-      danger: true,
-    });
-    if (!confirmed) return false;
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) return false;
-
+    if (!inventoryStillContains(target, server)) return false;
+    const deleteKey = `${target.generation}:${targetSpaceId}:${server.id}`;
+    if (deletingServers.has(deleteKey)) return false;
+    deletingServers.add(deleteKey);
     try {
+      const confirmed = await confirm({
+        title: t("removeMcpServer"),
+        message: t("removeMcpServerConfirm", { name: server.name }),
+        confirmText: t("remove"),
+        cancelText: t("cancel"),
+        danger: true,
+      });
+      if (!confirmed || !inventoryStillContains(target, server)) return false;
+
       const res = await fetch(
         `/api/mcp/servers/${server.id}?workspaceId=${encodeURIComponent(
           targetSpaceId,
@@ -186,21 +357,42 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
         },
       );
       const data = await res.json().catch(() => ({}));
+      assertCurrentScope(target);
       if (!res.ok) {
-        throw new Error(data.error || t("failedToRemoveMcpServer"));
+        throw new Error(
+          getErrorMessage(
+            (data as { error?: unknown }).error,
+            t("failedToRemoveMcpServer"),
+          ),
+        );
       }
+      try {
+        parseMcpServerDeleteResponse(data);
+      } catch {
+        throw new Error(t("failedToRemoveMcpServer"));
+      }
+      assertCurrentScope(target);
       await refresh();
+      assertCurrentScope(target);
       return true;
     } catch (error) {
-      showToast("error", getErrorMessage(error, t("failedToRemoveMcpServer")));
+      if (isCurrentScope(target) && !isMcpScopeChangedError(error)) {
+        showToast(
+          "error",
+          getErrorMessage(error, t("failedToRemoveMcpServer")),
+        );
+      }
       return false;
+    } finally {
+      deletingServers.delete(deleteKey);
     }
   };
 
   const fetchServerTools = async (
     serverId: string,
   ): Promise<McpServerTool[]> => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
@@ -211,12 +403,19 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     );
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
+      assertCurrentScope(target);
       throw new Error(data.error || t("failedToFetchTools"));
     }
-    const data = (await res.json()) as {
-      data: { tools: McpServerTool[] };
-    };
-    return data.data.tools;
+    const data = (await res.json()) as unknown;
+    assertCurrentScope(target);
+    let tools: McpServerTool[];
+    try {
+      tools = parseMcpServerToolsResponse(data);
+    } catch {
+      throw new Error(t("failedToFetchTools"));
+    }
+    assertCurrentScope(target);
+    return tools;
   };
 
   const updateServerToolPolicy = async (
@@ -226,7 +425,8 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     schemaHash: string,
     invocationPolicy: "automatic" | "confirm_each_time",
   ): Promise<McpServerTool> => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) {
       throw new Error(t("missingSpaceId"));
     }
@@ -240,23 +440,29 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
         ),
       },
     );
-    const data = (await res.json().catch(() => ({}))) as {
-      data?: McpServerTool;
-      error?: unknown;
-    };
+    const data = (await res.json().catch(() => ({}))) as { error?: unknown };
+    assertCurrentScope(target);
     if (res.status === 409) {
       throw new Error(t("mcpToolPolicyRefreshRequired"));
     }
-    if (!res.ok || !data.data) {
+    if (!res.ok) {
       throw new Error(
         getErrorMessage(data.error, t("failedToUpdateMcpToolPolicy")),
       );
     }
-    return data.data;
+    let tool: McpServerTool;
+    try {
+      tool = parseMcpServerToolResponse(data, { toolName, schemaHash });
+    } catch {
+      throw new Error(t("failedToUpdateMcpToolPolicy"));
+    }
+    assertCurrentScope(target);
+    return tool;
   };
 
-  const exportConnections = async (): Promise<unknown> => {
-    const targetSpaceId = currentSpaceId();
+  const exportConnections = async (): Promise<string> => {
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) throw new Error(t("missingSpaceId"));
     const response = await fetch(
       `/api/mcp/connections/export?workspaceId=${encodeURIComponent(targetSpaceId)}`,
@@ -265,51 +471,72 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       data?: unknown;
       error?: unknown;
     };
-    if (!response.ok || body.data === undefined) {
+    assertCurrentScope(target);
+    if (!response.ok) {
       throw new Error(
         getErrorMessage(body.error, t("connectionsExportFailed")),
       );
     }
-    return body.data;
+    let serialized: string;
+    try {
+      serialized = serializeConnectionsExportDocument(
+        parseConnectionsExportResponse(body),
+      );
+    } catch {
+      throw new Error(t("connectionsExportFailed"));
+    }
+    assertCurrentScope(target);
+    return serialized;
   };
 
   const importConnections = async (document: unknown) => {
-    const targetSpaceId = currentSpaceId();
+    const target = observeCurrentScope();
+    const targetSpaceId = target.spaceId;
     if (!targetSpaceId) throw new Error(t("missingSpaceId"));
+    let requestDocument;
+    try {
+      requestDocument = parseMcpConnectionsDocument(document);
+    } catch {
+      throw new Error(t("connectionsImportFailed"));
+    }
     const response = await fetch(
       `/api/mcp/connections/import?workspaceId=${encodeURIComponent(targetSpaceId)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(document),
+        body: JSON.stringify(requestDocument),
       },
     );
     const body = (await response.json().catch(() => ({}))) as {
-      data?: {
-        registry_sources: Array<{ status: string }>;
-        connections: Array<{
-          name: string;
-          status: string;
-          authorization_url?: string;
-          tool_policies_require_review: number;
-          message?: string;
-        }>;
-      };
       error?: unknown;
     };
-    if (!response.ok || !body.data) {
+    assertCurrentScope(target);
+    if (!response.ok) {
       throw new Error(
         getErrorMessage(body.error, t("connectionsImportFailed")),
       );
     }
+    let result;
+    try {
+      result = parseConnectionsImportResponse(
+        body,
+        globalThis.location?.origin,
+        requestDocument,
+      );
+    } catch {
+      throw new Error(t("connectionsImportFailed"));
+    }
+    assertCurrentScope(target);
     await refresh();
-    return body.data;
+    assertCurrentScope(target);
+    return result;
   };
 
   return {
     servers,
     loading,
     error,
+    hasVerifiedInventory,
     refresh,
     createExternalServer,
     reauthorizeServer,

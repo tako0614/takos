@@ -145,67 +145,6 @@ async function withLocalBootstrapEnv(
   }
 }
 
-async function runMiniflareDispatchSmoke(): Promise<{
-  status: number;
-  body: unknown;
-}> {
-  setEnv("ADMIN_DOMAIN", "admin.local");
-  setEnv("TENANT_BASE_DOMAIN", "tenant.local");
-  setEnv(
-    "TAKOS_LOCAL_ROUTING_JSON",
-    JSON.stringify({
-      "hello.local": {
-        type: "deployments",
-        deployments: [
-          {
-            routeRef: "worker-demo-v1",
-            weight: 100,
-            status: "active",
-          },
-        ],
-      },
-    }),
-  );
-
-  const tempDataDir = await mkdtemp(
-    path.join(os.tmpdir(), "takos-local-dispatch-smoke-"),
-  );
-  setEnv("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-  await disposeNodePlatformState({ clearData: true });
-
-  const env = await createNodeWebEnv();
-
-  try {
-    await seedTenantWorkerBundle({
-      env,
-      bundleContent: `
-        export default {
-          async fetch(request) {
-            return new Response(JSON.stringify({
-              ok: true,
-              worker: 'worker-demo-v1',
-              path: new URL(request.url).pathname
-            }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-        };
-      `,
-    });
-
-    const fetch = await createLocalDispatchFetchForTests();
-    const response = await fetch(new Request("http://hello.local/api/demo"));
-
-    return {
-      status: response.status,
-      body: await response.json(),
-    };
-  } finally {
-    await disposeNodePlatformState();
-    await rm(tempDataDir, { recursive: true, force: true });
-  }
-}
-
 async function seedTenantWorkerBundle(params: {
   env: Awaited<ReturnType<typeof createNodeWebEnv>>;
   serviceId?: string;
@@ -322,9 +261,11 @@ localBootstrapTest(
   async () => {
     const guardedKeys = [
       "ENVIRONMENT",
+      "TAKOSUMI_ACCOUNTS_URL",
       "OIDC_ISSUER_URL",
       "OIDC_CLIENT_ID",
       "OIDC_CLIENT_SECRET",
+      "OIDC_REDIRECT_URI",
       "PLATFORM_PRIVATE_KEY",
       "PLATFORM_PUBLIC_KEY",
       "ENCRYPTION_KEY",
@@ -346,6 +287,56 @@ localBootstrapTest(
           Error,
           "Self-hosted production requires explicit non-local values",
         );
+      });
+    } finally {
+      for (const key of guardedKeys) {
+        const value = previous[key];
+        if (value === undefined) {
+          deleteEnv(key);
+        } else {
+          setEnv(key, value);
+        }
+      }
+    }
+  },
+);
+
+localBootstrapTest(
+  "local bootstrap - accepts standalone production with a public PKCE client",
+  async () => {
+    const productionConfig = {
+      ENVIRONMENT: "production",
+      ADMIN_DOMAIN: "takos.example.test",
+      TENANT_BASE_DOMAIN: "apps.takos.example.test",
+      OIDC_ISSUER_URL: "https://accounts.example.test",
+      OIDC_CLIENT_ID: "takos-public-client",
+      OIDC_REDIRECT_URI: "https://takos.example.test/auth/oidc/callback",
+      PLATFORM_PRIVATE_KEY: "production-private-key",
+      PLATFORM_PUBLIC_KEY: "production-public-key",
+      ENCRYPTION_KEY: "production-encryption-key",
+      TAKOS_AGENT_START_TOKEN: "production-agent-start-token",
+    } as const;
+    const guardedKeys = [
+      ...Object.keys(productionConfig),
+      "TAKOSUMI_ACCOUNTS_URL",
+      "OIDC_CLIENT_SECRET",
+    ] as const;
+    const previous = Object.fromEntries(
+      guardedKeys.map((key) => [key, getEnv(key)]),
+    ) as Record<string, string | undefined>;
+
+    try {
+      await withLocalBootstrapEnv(async () => {
+        for (const [key, value] of Object.entries(productionConfig)) {
+          setEnv(key, value);
+        }
+        deleteEnv("TAKOSUMI_ACCOUNTS_URL");
+        deleteEnv("OIDC_CLIENT_SECRET");
+
+        const env = await createNodeWebEnv();
+
+        assertEquals(env.TAKOSUMI_ACCOUNTS_URL, undefined);
+        assertEquals(env.OIDC_CLIENT_SECRET, undefined);
       });
     } finally {
       for (const key of guardedKeys) {
@@ -428,8 +419,8 @@ localBootstrapTest(
 
       assertEquals(response.status, 503);
       await assertEquals(await response.json(), {
-        error: "Tenant service not found",
-        message: "The tenant service may be provisioning or has been deleted",
+        error: "Local service target not configured",
+        worker: "tenant-app",
       });
     });
   },
@@ -452,10 +443,25 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - rejects tenant service URL overrides in local dispatch config",
+  "local bootstrap - forwards deployment routes to an external runtime target",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
+      setEnv(
+        "TAKOS_LOCAL_ROUTING_JSON",
+        JSON.stringify({
+          "hello.local": {
+            type: "deployments",
+            deployments: [
+              {
+                routeRef: "tenant-app",
+                weight: 100,
+                status: "active",
+              },
+            ],
+          },
+        }),
+      );
       setEnv(
         "TAKOS_LOCAL_DISPATCH_TARGETS_JSON",
         JSON.stringify({
@@ -463,13 +469,24 @@ localBootstrapTest(
         }),
       );
 
-      const error = (await assertRejects(async () => {
-        await createLocalDispatchFetchForTests();
-      })) as Error;
-      assertStringIncludes(
-        (error as Error).message,
-        "TAKOS_LOCAL_DISPATCH_TARGETS_JSON may only override infra service targets",
-      );
+      const upstreamFetch = stubGlobalFetch((request) => {
+        assertEquals(request.url, "http://worker.internal/base/api/runs");
+        assertEquals(request.headers.get("X-Tenant-Worker"), "tenant-app");
+        return Promise.resolve(new Response("external-runtime"));
+      });
+
+      try {
+        const fetch = await createLocalDispatchFetchForTests();
+        const response = await fetch(
+          new Request("http://hello.local/api/runs"),
+        );
+
+        assertSpyCalls(upstreamFetch, 1);
+        assertEquals(response.status, 200);
+        assertEquals(await response.text(), "external-runtime");
+      } finally {
+        upstreamFetch.restore();
+      }
     });
   },
 );
@@ -524,23 +541,7 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - dispatches to a locally materialized tenant service via Miniflare when no URL target is configured",
-  async () => {
-    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
-      void tempDataDir;
-      const response = await runMiniflareDispatchSmoke();
-
-      assertEquals(response.status, 200);
-      assertEquals(response.body, {
-        ok: true,
-        worker: "worker-demo-v1",
-        path: "/api/demo",
-      });
-    });
-  },
-);
-localBootstrapTest(
-  "local bootstrap - materializes tenant services by default when no URL target is configured",
+  "local bootstrap - does not treat app-local deployment rows as runtime authority",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -617,11 +618,10 @@ localBootstrapTest(
       const fetch = await createLocalDispatchFetchForTests();
       const response = await fetch(new Request("http://hello.local/api/demo"));
 
-      assertEquals(response.status, 200);
+      assertEquals(response.status, 503);
       await assertEquals(await response.json(), {
-        ok: true,
+        error: "Local service target not configured",
         worker: "worker-demo-v1",
-        path: "/api/demo",
       });
     });
   },
@@ -1337,7 +1337,7 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - materializes canary worker bundles when routing selects a canary route ref",
+  "local bootstrap - keeps canary route selection outside app-local runtime state",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -1441,8 +1441,11 @@ localBootstrapTest(
           new Request("http://hello.local/api/demo"),
         );
 
-        assertEquals(response.status, 200);
-        await assertEquals(await response.json(), { worker: "worker-demo-v2" });
+        assertEquals(response.status, 503);
+        await assertEquals(await response.json(), {
+          error: "Local service target not configured",
+          worker: "worker-demo-v2",
+        });
       } finally {
         randomStub.restore();
       }
@@ -1450,7 +1453,7 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - materializes canary worker bundles when weighted targets share a stable service route ref",
+  "local bootstrap - forwards stable canary refs only through an external runtime",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -1570,8 +1573,11 @@ localBootstrapTest(
           new Request("http://hello.local/api/demo"),
         );
 
-        assertEquals(response.status, 200);
-        await assertEquals(await response.json(), { worker: "worker-demo-v2" });
+        assertEquals(response.status, 503);
+        await assertEquals(await response.json(), {
+          error: "Local service target not configured",
+          worker: "worker-demo",
+        });
       } finally {
         randomStub.restore();
       }
@@ -1579,7 +1585,7 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - re-resolves stable service route refs when the active deployment pointer changes",
+  "local bootstrap - ignores app-local active deployment pointers",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -1682,9 +1688,10 @@ localBootstrapTest(
       const firstResponse = await fetch(
         new Request("http://hello.local/api/demo"),
       );
-      assertEquals(firstResponse.status, 200);
+      assertEquals(firstResponse.status, 503);
       await assertEquals(await firstResponse.json(), {
-        worker: "worker-demo-v1",
+        error: "Local service target not configured",
+        worker: "worker-demo",
       });
 
       await db
@@ -1696,9 +1703,10 @@ localBootstrapTest(
       const secondResponse = await fetch(
         new Request("http://hello.local/api/demo"),
       );
-      assertEquals(secondResponse.status, 200);
+      assertEquals(secondResponse.status, 503);
       await assertEquals(await secondResponse.json(), {
-        worker: "worker-demo-v2",
+        error: "Local service target not configured",
+        worker: "worker-demo",
       });
     });
   },

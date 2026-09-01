@@ -10,24 +10,26 @@ export type {
   AgentTaskStatus,
   Message,
   Run,
-  SessionDiff,
   Thread,
   ThreadHistoryArtifactSummary,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
+  ThreadHistoryRunSummary,
   ThreadHistoryTaskContext,
+  ThreadHistoryTruncation,
   ToolExecution,
 } from "./thread.ts";
 
 export type { RouteState, View } from "./routing.ts";
 
-export type { ManagedSkill, Skill } from "./skill.ts";
+export type { ManagedSkill, Skill, SkillResourceTemplate } from "./skill.ts";
 
 export type { Memory, Reminder } from "./memory.ts";
 
 export type { StorageFile } from "./storage.ts";
 
 export type {
+  McpAuthorizationStatus,
   McpDiscoverySourceKind,
   McpRegistryAuthType,
   McpRegistryPackage,
@@ -38,9 +40,8 @@ export type {
   McpRegistrySearchSourceResult,
   McpRegistrySource,
   McpRegistrySourceKind,
-  McpAuthorizationStatus,
-  McpServerRecord,
   McpServerCardDiscoveryResult,
+  McpServerRecord,
   McpServerTool,
   McpToolConfirmation,
 } from "./hub.ts";

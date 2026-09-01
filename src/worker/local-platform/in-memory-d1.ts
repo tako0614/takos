@@ -79,22 +79,6 @@ interface SqlPreparedStatementShape {
   ): Promise<T[] | [string[], ...T[]]>;
 }
 
-interface SqlDatabaseShape {
-  prepare(query: string): SqlPreparedStatementShape;
-  batch<T = Record<string, unknown>>(
-    statements: SqlPreparedStatementShape[],
-  ): Promise<SqlResultShape<T>[]>;
-  exec(query: string): Promise<{ count: number; duration: number }>;
-  withSession(): {
-    prepare(query: string): SqlPreparedStatementShape;
-    batch<T = Record<string, unknown>>(
-      statements: SqlPreparedStatementShape[],
-    ): Promise<SqlResultShape<T>[]>;
-    getBookmark(): null;
-  };
-  dump(): Promise<ArrayBuffer>;
-}
-
 function createSqlResultMeta(): SqlResultMetaShape {
   return {
     changed_db: false,

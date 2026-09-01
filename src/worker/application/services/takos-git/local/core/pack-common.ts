@@ -2,10 +2,11 @@
  * Shared git wire-protocol primitives: packfile object type numbers, the
  * base-128 object header varint, and pkt-line framing.
  *
- * Used by the packfile writer (`pack.ts`, clone/fetch serving), the smart-HTTP
- * serve route, and the remote-fetch client (external import). The packfile
- * reader (`pack-reader.ts`) keeps its own copy of the type numbers so it stays
- * self-contained; keep the two in sync if the git object model ever changes.
+ * Used by the retained packfile writer (`pack.ts`), protocol fixtures, and the
+ * remote-fetch client (external import). The built-in Smart HTTP serve route is
+ * quarantined. The packfile reader (`pack-reader.ts`) keeps its own copy of the
+ * type numbers so it stays self-contained; keep the two in sync if the git
+ * object model ever changes.
  */
 
 import { concatBytes } from "./sha1.ts";

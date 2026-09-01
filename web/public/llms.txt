@@ -1,0 +1,8 @@
+# Takos
+
+> Takos is a workspace for creating and editing code with AI agents.
+
+## Documentation
+
+- [Takos documentation](https://docs.takos.jp/): Product documentation and operator guidance.
+- [Security disclosure](https://docs.takos.jp/legal/security-disclosure): Vulnerability reporting policy and contact details.

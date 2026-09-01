@@ -5,7 +5,7 @@ import {
   MAX_TOTAL_SKILL_INSTRUCTION_BYTES,
 } from "../skill-loader.ts";
 import {
-  activateSelectedSkills,
+  materializeSelectedSkills,
   type SkillSelection,
 } from "../skill-resolution.ts";
 
@@ -34,17 +34,17 @@ function selection(id: string, instructions: string): SkillSelection {
   } as SkillSelection;
 }
 
-test("skill activation enforces UTF-8 bytes inside the shared model reserve", () => {
+test("Skill revision selection enforces UTF-8 bytes inside the shared model reserve", () => {
   const multibyte = selection("multibyte", "あ".repeat(2_000));
   expect(
-    activateSelectedSkills(
+    materializeSelectedSkills(
       [multibyte],
       MAX_TOTAL_SKILL_INSTRUCTION_BYTES,
       MAX_PER_SKILL_INSTRUCTION_BYTES,
     ),
   ).toHaveLength(0);
 
-  const selected = activateSelectedSkills(
+  const selected = materializeSelectedSkills(
     [
       selection("one", "a".repeat(4_000)),
       selection("two", "b".repeat(4_000)),

@@ -15,8 +15,13 @@ export async function withTimeout<T>(
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      abortController.abort();
-      reject(new TimeoutError(errorMessage));
+      const timeoutError = new TimeoutError(errorMessage);
+      // Settle the public contract before aborting the underlying request.
+      // Native fetch rejects immediately when its signal is aborted, so doing
+      // this in the opposite order can leak a browser-specific AbortError
+      // instead of the localized timeout message.
+      reject(timeoutError);
+      abortController.abort(timeoutError);
     }, timeoutMs);
   });
 

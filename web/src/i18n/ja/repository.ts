@@ -33,6 +33,7 @@ export const repository = {
   installStatusStale: "古い",
   installStatusError: "エラー",
   installStatusFailed: "失敗",
+  installStatusUninstalling: "アンインストール中",
 
   // Branches
   branches: "ブランチ",

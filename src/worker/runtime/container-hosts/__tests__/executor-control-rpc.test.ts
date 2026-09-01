@@ -3,15 +3,51 @@ import { assertEquals, assertFalse } from "@takos/test/assert";
 import { readFile } from "node:fs/promises";
 import { handleRunConfig, handleRunEvent } from "../executor-control-rpc.ts";
 
+function runConfigEnv(
+  agentType: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    ...extra,
+    DB: {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return {
+                  get: async () => ({
+                    accountId: "space_a",
+                    threadId: "thread_a",
+                    agentType,
+                    model: "gpt-5.5",
+                  }),
+                };
+              },
+            };
+          },
+        };
+      },
+      insert() {},
+      update() {},
+      delete() {},
+      prepare() {},
+    },
+  };
+}
+
 test("handleRunConfig emits current camelCase fields only", async () => {
-  const response = await handleRunConfig({ agentType: "default" }, {
-    TAKOS_AGENT_MAX_GRAPH_STEPS: "7",
-    TAKOS_AGENT_MAX_TOOL_ROUNDS: "3",
-  } as never);
+  const response = await handleRunConfig(
+    { runId: "run_a", agentType: "reviewer" },
+    runConfigEnv("implementer", {
+      TAKOS_AGENT_MAX_GRAPH_STEPS: "7",
+      TAKOS_AGENT_MAX_TOOL_ROUNDS: "3",
+    }) as never,
+  );
   const body = (await response.json()) as Record<string, unknown>;
 
   assertEquals(response.status, 200);
-  assertEquals(body.agentType, "default");
+  assertEquals(body.agentType, "implementer");
   assertEquals(body.maxGraphSteps, 7);
   assertEquals(body.maxToolRounds, 3);
 
@@ -36,12 +72,16 @@ test("handleRunConfig emits current camelCase fields only", async () => {
 });
 
 test("handleRunConfig leaves engine defaults explicit when budgets are unset", async () => {
-  const response = await handleRunConfig({ agentType: "default" }, {} as never);
+  const response = await handleRunConfig(
+    { runId: "run_a", agentType: "reviewer" },
+    runConfigEnv("unknown-legacy-type") as never,
+  );
   const body = (await response.json()) as Record<string, unknown>;
 
   assertEquals(response.status, 200);
-  assertEquals(body.maxGraphSteps, null);
-  assertEquals(body.maxToolRounds, null);
+  assertEquals(body.agentType, "default");
+  assertEquals(body.maxGraphSteps, 64);
+  assertEquals(body.maxToolRounds, 8);
 });
 
 test("executor run-config source does not reintroduce snake_case response fields", async () => {

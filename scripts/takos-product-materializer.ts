@@ -48,7 +48,6 @@ const ARTIFACT_DOWNLOAD_ATTEMPTS = 3;
 const ARTIFACT_DOWNLOAD_RETRY_DELAY_MS = 250;
 const REQUIRED_SECRET_NAMES = [
   "ENCRYPTION_KEY",
-  "OIDC_CLIENT_SECRET",
   "PLATFORM_PRIVATE_KEY",
   "PLATFORM_PUBLIC_KEY",
   "TAKOS_AGENT_START_TOKEN",
@@ -56,6 +55,7 @@ const REQUIRED_SECRET_NAMES = [
 ] as const;
 const ALLOWED_SECRET_NAMES = new Set([
   ...REQUIRED_SECRET_NAMES,
+  "OIDC_CLIENT_SECRET",
   "ANTHROPIC_API_KEY",
   "AUDIT_IP_HASH_KEY",
   "CF_API_TOKEN",
@@ -514,7 +514,6 @@ export function parseTakosOutputs(value: unknown): TakosOutputs {
     "OIDC_ISSUER_URL",
     "OIDC_CLIENT_ID",
     "OIDC_REDIRECT_URI",
-    "TAKOSUMI_ACCOUNTS_URL",
   ]) {
     invariant(workerEnv[requiredWorkerVar], `worker_env.${requiredWorkerVar} is required`);
   }
@@ -527,10 +526,12 @@ export function parseTakosOutputs(value: unknown): TakosOutputs {
     "worker_env.OIDC_REDIRECT_URI must match the public Takos callback",
   );
   parsePublicOriginLike(workerEnv.OIDC_ISSUER_URL!, "worker_env.OIDC_ISSUER_URL");
-  parsePublicOriginLike(
-    workerEnv.TAKOSUMI_ACCOUNTS_URL!,
-    "worker_env.TAKOSUMI_ACCOUNTS_URL",
-  );
+  if (workerEnv.TAKOSUMI_ACCOUNTS_URL) {
+    parsePublicOriginLike(
+      workerEnv.TAKOSUMI_ACCOUNTS_URL,
+      "worker_env.TAKOSUMI_ACCOUNTS_URL",
+    );
+  }
 
   return {
     target: "cloudflare",

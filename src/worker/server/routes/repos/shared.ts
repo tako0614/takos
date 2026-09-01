@@ -4,7 +4,7 @@
 import type { Context } from "hono";
 import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type { ResolveReadableCommitResult } from "../../../application/services/takos-git/index.ts";
-import { WRITE_ROLES } from "./git-shared.ts";
+import type { RepoAccess } from "../../../application/services/source/repos.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports
@@ -60,7 +60,7 @@ export function generateExploreInvalidationUrls(c: Context): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Encoding / role helpers
+// Encoding / access helpers
 // ---------------------------------------------------------------------------
 
 export function encodeBase64(data: Uint8Array): string {
@@ -71,8 +71,10 @@ export function encodeBase64(data: Uint8Array): string {
   return btoa(binary);
 }
 
-export function hasWriteRole(role: string | null | undefined): boolean {
-  return role != null && (WRITE_ROLES as readonly string[]).includes(role);
+export function hasRepoWriteAccess(
+  accessKind: RepoAccess["accessKind"],
+): boolean {
+  return accessKind === "owner";
 }
 
 // ---------------------------------------------------------------------------

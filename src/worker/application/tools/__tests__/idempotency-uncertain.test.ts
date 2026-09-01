@@ -13,6 +13,7 @@ import {
   STALE_PENDING_THRESHOLD_MS,
 } from "../idempotency.ts";
 import { ToolExecutor } from "../executor.ts";
+import { TOOLBOX } from "../custom/discovery.ts";
 import type { ToolResolver } from "../resolver.ts";
 import type {
   RegisteredTool,
@@ -186,7 +187,6 @@ test("a side-effect timeout records an uncertain outcome", async () => {
       threadId: "thread-1",
       runId: "run-timeout",
       userId: "user-1",
-      role: "editor",
       capabilities: [],
       env: {},
       db,
@@ -245,7 +245,6 @@ test("an explicit engine operation key fences concurrent and replayed side effec
       threadId: "thread-1",
       runId: "run-engine-key",
       userId: "user-1",
-      role: "editor",
       capabilities: [],
       env: {},
       db,
@@ -292,5 +291,68 @@ test("an explicit engine operation key fences concurrent and replayed side effec
     );
     expect(replay.output).toBe("published");
     expect(handlerCalls).toBe(1);
+  });
+});
+
+test("descriptor activation uses RunContext fencing without a conflicting outer operation", async () => {
+  await withOperationsDb(async (db, client) => {
+    let handlerCalls = 0;
+    const registered: RegisteredTool = {
+      definition: TOOLBOX,
+      custom: true,
+      handler: async () => {
+        handlerCalls += 1;
+        return "pinned manual";
+      },
+    };
+    const resolver = {
+      resolve: (name: string) => name === TOOLBOX.name ? registered : undefined,
+    } as unknown as ToolResolver;
+    const context = {
+      spaceId: "space-1",
+      threadId: "thread-1",
+      runId: "run-manual",
+      userId: "user-1",
+      capabilities: [],
+      env: {},
+      db,
+    } as unknown as ToolContext;
+    const executor = new ToolExecutor(resolver, context);
+    executor.setSideEffectTools([TOOLBOX.name]);
+    const call = {
+      id: "manual-describe",
+      name: TOOLBOX.name,
+      arguments: { action: "describe", tool_name: "skill:custom:manual" },
+    };
+    const first = await executor.execute(call, {
+      idempotencyKey: "loop:manual:describe",
+    });
+    const retry = await executor.execute(call, {
+      idempotencyKey: "loop:manual:describe",
+    });
+    expect(first.output).toBe("pinned manual");
+    expect(retry.output).toBe("pinned manual");
+    expect(handlerCalls).toBe(2);
+    const operations = await client.execute(
+      "SELECT COUNT(*) AS count FROM tool_operations WHERE run_id = 'run-manual'",
+    );
+    expect(Number(operations.rows[0]?.count)).toBe(0);
+
+    const routedCall = {
+      id: "toolbox-call",
+      name: TOOLBOX.name,
+      arguments: { action: "call", tool_name: "remote_write" },
+    };
+    await executor.execute(routedCall, {
+      idempotencyKey: "loop:toolbox:call",
+    });
+    await executor.execute(routedCall, {
+      idempotencyKey: "loop:toolbox:call",
+    });
+    expect(handlerCalls).toBe(3);
+    const routedOperations = await client.execute(
+      "SELECT COUNT(*) AS count FROM tool_operations WHERE run_id = 'run-manual'",
+    );
+    expect(Number(routedOperations.rows[0]?.count)).toBe(1);
   });
 });

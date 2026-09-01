@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import type { Env, SpaceRole, User } from "../../shared/types/index.ts";
+import type { Env, User } from "../../shared/types/index.ts";
 import type { AccountsBearerAuthContext } from "../middleware/accounts-bearer.ts";
 import type { SpaceAccess } from "../../application/services/identity/space-access.ts";
 import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
@@ -84,11 +84,10 @@ export async function requireSpaceAccess(
   c: RouteHelperContext,
   spaceId: string,
   userId: string,
-  roles?: Array<"owner" | "admin" | "editor" | "viewer">,
   message = "Space not found",
   status = 404,
 ) {
-  const access = await checkSpaceAccess(c.env.DB, spaceId, userId, roles);
+  const access = await checkSpaceAccess(c.env.DB, spaceId, userId);
   if (!access) {
     throw new AppError(message, ErrorCodes.NOT_FOUND, status);
   }
@@ -141,7 +140,7 @@ export async function parseJsonBody<T>(
  *
  * After the middleware runs, route handlers can call:
  *   - `c.get('spaceId')` for the resolved (canonical) space ID
- *   - `c.get('access')` for the full `SpaceAccess` object (space + membership)
+ *   - `c.get('access')` for the resolved private Workspace
  *
  * Always combine with `BaseVariables` so `c.get('user')` is also available.
  */
@@ -186,8 +185,6 @@ function resolveSpaceIdentifier(c: RouteHelperContext): string | null {
 }
 
 export interface SpaceAccessOptions {
-  /** Required roles for access. When omitted any role is accepted. */
-  roles?: SpaceRole[];
   /** Error message on access failure. */
   message?: string;
   /** HTTP status code on access failure (default: 404). */
@@ -202,7 +199,7 @@ export interface SpaceAccessOptions {
  * ```ts
  * const user = c.get('user');
  * const spaceId = c.req.param('spaceId');
- * const access = await requireSpaceAccess(c, spaceId, user.id, roles);
+ * const access = await requireSpaceAccess(c, spaceId, user.id);
  * ```
  *
  * Usage:
@@ -212,28 +209,13 @@ export interface SpaceAccessOptions {
  *   // ...
  * });
  *
- * app.post('/spaces/:spaceId/things', spaceAccess({ roles: ['owner', 'admin', 'editor'] }), async (c) => {
- *   const { space } = c.get('access');
- *   // ...
- * });
+ * All current Takos Workspace callers are the private owner Principal. The
+ * middleware deliberately has no role-list option.
  * ```
  */
 export function spaceAccess(
-  options?: SpaceAccessOptions | SpaceRole[],
+  options: SpaceAccessOptions = {},
 ): MiddlewareHandler<SpaceAccessRouteEnv> {
-  const opts: SpaceAccessOptions = Array.isArray(options)
-    ? { roles: options }
-    : (options ?? {});
-
-  // Default access-failure message. When a role gate is present the failure may
-  // be either "space missing" or "caller lacks the role", so the message is
-  // phrased to cover both. Routes no longer hand-repeat this literal.
-  const message =
-    opts.message ??
-    (opts.roles && opts.roles.length > 0
-      ? "Space not found or insufficient permissions"
-      : undefined);
-
   return async (c, next) => {
     const user = c.get("user");
     if (!user) {
@@ -249,9 +231,8 @@ export function spaceAccess(
       c,
       spaceIdentifier,
       user.id,
-      opts.roles,
-      message,
-      opts.status,
+      options.message,
+      options.status,
     );
 
     c.set("spaceId", access.space.id);

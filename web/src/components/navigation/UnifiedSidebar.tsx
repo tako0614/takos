@@ -1,10 +1,14 @@
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { getSpaceIdentifier } from "../../lib/spaces.ts";
 import { useSidebarCallbacks } from "./SidebarContext.tsx";
 import { ThreadList } from "./ThreadList.tsx";
 import { ProfileMenu } from "./ProfileMenu.tsx";
+import { NotificationNavigationButton } from "./NotificationNavigationButton.tsx";
+import {
+  getThreadLifecyclePermissions,
+} from "../../lib/workspace-permissions.ts";
 import type { Space, Thread, User, View } from "../../types/index.ts";
 
 const ROW_BASE =
@@ -25,6 +29,9 @@ export interface UnifiedSidebarProps {
   spaces: Space[];
   threads: Thread[];
   threadsBySpace: Record<string, Thread[]>;
+  threadInventoryTruncatedBySpace: Record<string, boolean>;
+  threadInventoryFailedBySpace: Record<string, boolean>;
+  threadInventoryLoading: boolean;
   selectedThreadId: string | null;
   user: User | null;
   sidebarSpace: Space | null;
@@ -33,32 +40,20 @@ export interface UnifiedSidebarProps {
 export function UnifiedSidebar(props: UnifiedSidebarProps) {
   const { t } = useI18n();
   const callbacks = useSidebarCallbacks();
-  const [expandedSpaceIds, setExpandedSpaceIds] = createSignal<
-    Record<string, boolean>
-  >({});
 
   const isNewChatActive = () =>
     props.activeView === "chat" && props.selectedThreadId === null;
   const isMemoryActive = () => props.activeView === "memory";
+  const isNotificationsActive = () => props.activeView === "notifications";
   const isConnectionsActive = () => props.activeView === "connections";
   const isWsSettingsActive = () => props.activeView === "space-settings";
   const isChatActive = () => props.activeView === "chat";
 
-  const projectSpaces = () => props.spaces.filter((ws) => !ws.is_personal);
-  const toggleSpaceAccordion = (spaceIdentifier: string) => {
-    setExpandedSpaceIds((prev) => ({
-      ...prev,
-      [spaceIdentifier]: !prev[spaceIdentifier],
-    }));
-  };
-
-  createEffect(() => {
-    const sid = props.spaceId;
-    if (!sid) return;
-    setExpandedSpaceIds((prev) =>
-      prev[sid] ? prev : { ...prev, [sid]: true },
-    );
-  });
+  const categorySpaces = () => props.spaces.filter((ws) => !ws.is_default);
+  const canArchiveThread = (thread: Thread) =>
+    getThreadLifecyclePermissions(props.spaces, thread).canArchive;
+  const canDeleteThread = (thread: Thread) =>
+    getThreadLifecyclePermissions(props.spaces, thread).canDelete;
 
   // ── Space mode ───────────────────────────────────────────────────────────
   return (
@@ -68,12 +63,16 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
         const ws = () => props.sidebarSpace!;
         const wsId = () => getSpaceIdentifier(ws());
         const wsThreads = () => props.threadsBySpace[wsId()] ?? [];
+        const wsThreadsTruncated = () =>
+          props.threadInventoryTruncatedBySpace[wsId()] ?? false;
+        const wsThreadsFailed = () =>
+          props.threadInventoryFailedBySpace[wsId()] ?? false;
 
         return (
           <nav
             class="w-[280px] bg-zinc-50 dark:bg-zinc-900 flex flex-col h-full shrink-0 border-r border-zinc-200 dark:border-zinc-800"
             role="navigation"
-            aria-label={t("spaceNavigation")}
+            aria-label={t("categoryNavigation")}
           >
             {/* Header: back button + space name */}
             <div class="px-4 py-4">
@@ -137,18 +136,27 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
               <ThreadList
                 threads={wsThreads()}
                 selectedThreadId={props.selectedThreadId}
+                canArchive={canArchiveThread}
+                canDelete={canDeleteThread}
+                truncated={wsThreadsTruncated()}
+                loadFailed={wsThreadsFailed()}
+                loading={props.threadInventoryLoading}
               />
             </div>
 
             {/* Bottom: Space Settings + profile */}
             <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
+              <NotificationNavigationButton
+                active={isNotificationsActive()}
+                onOpen={callbacks.onNavigateNotifications}
+              />
               <button
                 type="button"
                 class={isWsSettingsActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceSettings}
               >
                 <Icons.Settings class="w-4 h-4 shrink-0" />
-                <span>{t("spaceSettings")}</span>
+                <span>{t("categorySettings")}</span>
               </button>
               <ProfileMenu user={props.user} />
             </div>
@@ -164,7 +172,13 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
       >
         <div class="px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-semibold text-lg">
-            <img src="/logo.png" alt="takos" class="w-6 h-6 rounded" />
+            <img
+              src="/logo.png"
+              alt="takos"
+              width="24"
+              height="24"
+              class="w-6 h-6 rounded"
+            />
             <span>takos</span>
           </div>
         </div>
@@ -208,111 +222,53 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
         </div>
 
         <div class="mt-6 px-4 mb-2 flex items-center justify-between">
-          <span class={SECTION_LABEL}>{t("projects")}</span>
+          <span class={SECTION_LABEL}>{t("categories")}</span>
           <button
             type="button"
             onClick={callbacks.onCreateSpace}
             class="text-zinc-500 hover:text-zinc-300 transition-colors"
-            aria-label={t("createSpace")}
+            aria-label={t("createCategory")}
           >
             <Icons.Plus class="w-4 h-4" />
           </button>
         </div>
         <div class="px-3 space-y-0.5">
           <Show
-            when={projectSpaces().length > 0}
+            when={categorySpaces().length > 0}
             fallback={
               <div class="px-1 py-2 text-xs text-zinc-500 dark:text-zinc-400">
-                {t("noProjects")}
+                {t("noCategories")}
               </div>
             }
           >
-            <For each={projectSpaces()}>
+            <For each={categorySpaces()}>
               {(ws) => {
                 const id = getSpaceIdentifier(ws);
                 const active = () => id === props.spaceId;
-                const isExpanded = () => expandedSpaceIds()[id] ?? false;
-                const spaceThreads = () => props.threadsBySpace[id] ?? [];
                 return (
-                  <div class="space-y-1">
-                    <div class="group relative">
-                      <button
-                        type="button"
-                        class={active() ? ROW_ACTIVE : ROW_DEFAULT}
-                        onClick={() => callbacks.onEnterSpace(ws)}
-                      >
-                        <Icons.Folder class="w-4 h-4 shrink-0 opacity-70" />
-                        <span class="flex-1 truncate text-left">{ws.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSpaceAccordion(id);
-                        }}
-                        aria-label={
-                          isExpanded()
-                            ? t("collapseThreads")
-                            : t("expandThreads")
-                        }
-                        aria-expanded={isExpanded()}
-                        title={
-                          isExpanded()
-                            ? t("collapseThreads")
-                            : t("expandThreads")
-                        }
-                      >
-                        <Icons.ChevronDown
-                          class={`w-3 h-3 transition-transform ${
-                            isExpanded() ? "rotate-180" : ""
-                          }`}
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          callbacks.onOpenSpaceSettings(id);
-                        }}
-                        aria-label={t("spaceSettings")}
-                        title={t("spaceSettings")}
-                      >
-                        <Icons.Settings class="w-3 h-3" />
-                      </button>
-                    </div>
-                    <Show when={isExpanded()}>
-                      <div class="ml-6 space-y-0.5">
-                        <Show
-                          when={spaceThreads().length > 0}
-                          fallback={
-                            <div class="px-3 py-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                              {t("noThreadsYet")}
-                            </div>
-                          }
-                        >
-                          <For each={spaceThreads()}>
-                            {(thread) => (
-                              <button
-                                type="button"
-                                class={
-                                  props.selectedThreadId === thread.id
-                                    ? "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                    : "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                                }
-                                onClick={() => callbacks.onSelectThread(thread)}
-                              >
-                                <Icons.MessageSquare class="w-3 h-3 shrink-0 opacity-70" />
-                                <span class="truncate text-left">
-                                  {thread.title}
-                                </span>
-                              </button>
-                            )}
-                          </For>
-                        </Show>
-                      </div>
-                    </Show>
+                  <div class="group relative">
+                    <button
+                      type="button"
+                      class={active() ? ROW_ACTIVE : ROW_DEFAULT}
+                      onClick={() => callbacks.onEnterSpace(ws)}
+                    >
+                      <Icons.Folder class="w-4 h-4 shrink-0 opacity-70" />
+                      <span class="flex-1 truncate pr-7 text-left">
+                        {ws.name}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        callbacks.onOpenSpaceSettings(id);
+                      }}
+                      aria-label={t("categorySettings")}
+                      title={t("categorySettings")}
+                    >
+                      <Icons.Settings class="w-3 h-3" />
+                    </button>
                   </div>
                 );
               }}
@@ -327,10 +283,23 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
           <ThreadList
             threads={props.threads}
             selectedThreadId={props.selectedThreadId}
+            canArchive={canArchiveThread}
+            canDelete={canDeleteThread}
+            truncated={Object.values(
+              props.threadInventoryTruncatedBySpace,
+            ).some(Boolean)}
+            loadFailed={Object.values(
+              props.threadInventoryFailedBySpace,
+            ).some(Boolean)}
+            loading={props.threadInventoryLoading}
           />
         </div>
 
         <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
+          <NotificationNavigationButton
+            active={isNotificationsActive()}
+            onOpen={callbacks.onNavigateNotifications}
+          />
           <button
             type="button"
             class={ROW_DEFAULT}

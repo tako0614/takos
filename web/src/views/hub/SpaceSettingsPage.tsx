@@ -5,8 +5,8 @@ import type { Space } from "../../types/index.ts";
 interface SpaceSettingsPageProps {
   spaces: Space[];
   initialSpaceId: string | null;
-  onSpaceDeleted?: () => void;
-  onSpaceUpdated?: () => void;
+  onSpaceDeleted?: () => void | Promise<void>;
+  onSpaceUpdated?: () => void | Promise<void>;
 }
 
 export function SpaceSettingsPage(props: SpaceSettingsPageProps) {

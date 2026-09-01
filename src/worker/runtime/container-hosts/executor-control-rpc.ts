@@ -8,16 +8,16 @@
 import { getDb } from "../../infra/db/index.ts";
 import {
   runEvents,
+  runContextRevisions,
   runs,
   threads,
   toolOperations,
 } from "../../infra/db/schema.ts";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, exists, gte, isNull, lte } from "drizzle-orm";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import { type TtlMs, ttlMs } from "@takos/worker-platform-utils/ttl";
 import { persistMessage } from "../../application/services/agent/message-persistence.ts";
-import type { AgentMessage } from "../../application/services/agent/agent-models.ts";
 import {
   buildConversationHistory,
   updateRunStatusImpl,
@@ -30,18 +30,22 @@ import {
 } from "../../application/services/agent/complete-run.ts";
 import { dispatchTerminalIndexOutbox } from "../../application/services/run-notifier/index-outbox.ts";
 import {
-  buildSkillResolutionContext,
-  resolveSkillPlanForRun,
+  resolveSkillPlanForPinnedRun,
 } from "../../application/services/agent/skills.ts";
-import { listDetailedSkillContext } from "../../application/services/source/skills.ts";
 import {
   createToolExecutor,
   type ToolExecutorLike,
 } from "../../application/tools/executor.ts";
 import { AGENT_DISABLED_CUSTOM_TOOLS } from "../../application/tools/tool-policy.ts";
-import type { ToolCall } from "../../application/tools/tool-definitions.ts";
-import { listSkillTemplates } from "../../application/services/agent/skill-templates.ts";
-import { listMcpServers } from "../../application/services/platform/mcp.ts";
+import type {
+  ToolCall,
+  ToolDefinition,
+} from "../../application/tools/tool-definitions.ts";
+import {
+  activateToolDescriptors,
+  selectModelVisibleTools,
+  type ActivatedToolDescriptor,
+} from "../../application/tools/tool-descriptor-revisions.ts";
 import {
   buildTerminalPayload,
   buildRunNotifierEmitPayload,
@@ -62,9 +66,74 @@ import {
 } from "./executor-run-state.ts";
 import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
 import { accountsDelegatedAuthorization } from "../../server/routes/auth/accounts-delegation.ts";
+import { DEFAULT_MODEL_ID } from "../../application/services/agent/model-catalog.ts";
+import { recordRunUsageBatch } from "../../application/services/app-usage/usage-recorder.ts";
+import {
+  appendRunContextResourceReferences,
+  loadRunExecutionAuthority,
+  parseRunAuthorityAttestation,
+  runContextActivationEventKey,
+  runAuthorityAttestationsEqual,
+  RunContextActivationConflictError,
+  RunExecutionAuthorityUnavailableError,
+  verifyRunContextAttestation,
+  type RunAuthorityAttestation,
+  type RunExecutionAuthority,
+} from "../../application/services/runs/run-authority.ts";
+import {
+  ensureInitialSkillPlan,
+  loadPinnedSkillPlan,
+  SkillRevisionUnavailableError,
+} from "../../application/services/agent/skill-revisions.ts";
+import {
+  cancelRunForRevokedContext,
+  failRunForInvalidContext,
+  type InvalidRunContextCode,
+  type InvalidRunContextStage,
+} from "../../application/services/runs/run-context-revocation.ts";
+import {
+  beginRunModelCallAtomically,
+  isRunModelCallBeginNonce,
+  isRunModelCallRequestDigest,
+  isRunModelCallTransportAttempt,
+  RunModelCallAlreadyBeganError,
+  RunModelCallAuthorityChangedError,
+  RunModelCallRecordInvalidError,
+  type BeginRunModelCallInput,
+  type BeginRunModelCallResult,
+} from "../../application/services/runs/run-model-call-authority.ts";
+import {
+  resolveRunModelInput,
+  RunModelInputUnavailableError,
+} from "../../application/services/runs/run-model-input.ts";
+import {
+  ProviderMaterializationUnavailableError,
+  resolveRunProviderCredential,
+  type ProviderRuntimeCredential,
+} from "../../application/services/runs/provider-materialization.ts";
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function recordCommittedRunUsage(
+  env: Env,
+  runId: string,
+  source: "complete-run" | "legacy-run-status",
+): Promise<void> {
+  try {
+    await recordRunUsageBatch(env, runId);
+  } catch (error) {
+    // The terminal Run commit is authoritative and cannot be rolled back by a
+    // derived app-local rollup. Exact per-meter idempotency makes a later
+    // terminal replay or explicit run-usage retry safe.
+    logWarn("Committed Run usage recording failed", {
+      module: "executor-host",
+      runId,
+      source,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function runtimeMcpInterfaceConfig(
@@ -139,7 +208,7 @@ async function runtimeMcpInterfaceConfig(
  * the fence is skipped.
  */
 export async function ensureRunLease(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB" | "TAKOS_OFFLOAD">,
   runId: string,
   body: {
     readonly serviceId?: unknown;
@@ -149,11 +218,22 @@ export async function ensureRunLease(
   options: { readonly allowTerminalRetry?: boolean } = {},
 ): Promise<Response | null> {
   const serviceId = readRunServiceId(body);
-  if (!serviceId) return null;
+  const supportsFullSql = Boolean(
+    env.DB &&
+      typeof (env.DB as { prepare?: unknown }).prepare === "function",
+  );
+  // The in-process event-only test/dev path may intentionally omit DB and a
+  // lease identity. Every deployed run-scoped path has a complete binding.
+  if (!serviceId && !supportsFullSql) return null;
   const leaseVersion =
     typeof body.leaseVersion === "number" ? body.leaseVersion : null;
   let run:
-    | { serviceId: string | null; leaseVersion: number; status: string }
+    | {
+      serviceId: string | null;
+      leaseVersion: number;
+      status: string;
+      currentContextRevision: number | null;
+    }
     | undefined;
   try {
     run = await getDb(env.DB)
@@ -161,6 +241,7 @@ export async function ensureRunLease(
         serviceId: runs.serviceId,
         leaseVersion: runs.leaseVersion,
         status: runs.status,
+        currentContextRevision: runs.currentContextRevision,
       })
       .from(runs)
       .where(eq(runs.id, runId))
@@ -173,16 +254,40 @@ export async function ensureRunLease(
     return err("Run lease lookup failed", 503);
   }
   if (!run) return err("Run not found", 404);
-  if (run.serviceId !== serviceId) return err("Lease lost", 409);
-  if (leaseVersion !== null && run.leaseVersion !== leaseVersion) {
-    return err("Lease lost", 409);
+  if (serviceId) {
+    if (run.serviceId !== serviceId) return err("Lease lost", 409);
+    if (leaseVersion !== null && run.leaseVersion !== leaseVersion) {
+      return err("Lease lost", 409);
+    }
+    if (run.status !== "running" && !options.allowTerminalRetry) {
+      // Terminal status revokes the executor's authority just like a replaced
+      // service/lease. Keep the canonical lease-lost wire signal so the Rust
+      // heartbeat/finalization path cancels cleanly instead of retrying failure
+      // reporting for a user-cancelled run.
+      return err("Lease lost", 409);
+    }
   }
-  if (run.status !== "running" && !options.allowTerminalRetry) {
-    // Terminal status revokes the executor's authority just like a replaced
-    // service/lease. Keep the canonical lease-lost wire signal so the Rust
-    // heartbeat/finalization path cancels cleanly instead of retrying failure
-    // reporting for a user-cancelled run.
-    return err("Lease lost", 409);
+
+  // Check tombstones only after rejecting a stale/terminal lease. Apart from
+  // avoiding a more expensive join for an unauthorized caller, this keeps a
+  // stale executor from turning an unrelated transient lookup failure into a
+  // retryable 503. Legacy Runs without a context pointer cannot reference a
+  // RunContext resource and therefore have nothing to revoke here.
+  if (supportsFullSql && run.currentContextRevision != null) {
+    try {
+      const revocation = await cancelRunForRevokedContext(
+        env.DB,
+        runId,
+        env.TAKOS_OFFLOAD,
+      );
+      if (revocation.revoked) return err("Lease lost", 409);
+    } catch (error) {
+      logError("Run context revocation lookup failed", error, {
+        module: "executor-host",
+        runId,
+      });
+      return err("Run context revocation lookup failed", 503);
+    }
   }
   return null;
 }
@@ -239,21 +344,25 @@ const ALLOWED_RUN_EVENT_TYPES: ReadonlySet<string> = new Set([
 async function createRemoteToolExecutor(
   runId: string,
   env: Env,
+  authority: RunExecutionAuthority,
   runAbortSignal?: AbortSignal,
 ): Promise<ToolExecutorLike> {
   const bootstrap = await getRunBootstrap(env, runId);
+  if (
+    bootstrap.spaceId !== authority.workspaceId ||
+    bootstrap.threadId !== authority.threadId
+  ) {
+    throw new RunExecutionAuthorityUnavailableError();
+  }
   const runtimeMcpInterfaces = await runtimeMcpInterfaceConfig(
     env,
     bootstrap.userId,
   );
 
-  // The agent acts on behalf of the run's triggering user and must never hold
-  // MORE authority than that user. Resolving capabilities with NO role floor
-  // makes `assertToolPermission` evaluate the user's REAL space role, so an
-  // editor-initiated run cannot invoke owner/admin-only operations (service /
-  // skill delete, frontend deploy) that the user could not perform directly.
-  // (A previous `minimumRole: "admin"` floor raised every agent run to admin,
-  // erasing that boundary.)
+  // The agent acts on behalf of the run's triggering Principal and receives
+  // only the capabilities of that private Workspace. Execution revalidates
+  // ownership before this point, so no historical collaboration role can
+  // widen the Run's authority.
   return createToolExecutor(
     env,
     env.DB,
@@ -264,6 +373,7 @@ async function createRemoteToolExecutor(
     bootstrap.userId,
     {
       disabledCustomTools: [...AGENT_DISABLED_CUSTOM_TOOLS],
+      runAuthority: authority,
       ...(runtimeMcpInterfaces ? { runtimeMcpInterfaces } : {}),
     },
     undefined,
@@ -272,16 +382,244 @@ async function createRemoteToolExecutor(
 }
 
 export interface RemoteToolExecutorDependencies {
+  resolveAuthority(runId: string, env: Env): Promise<RunExecutionAuthority>;
   createExecutor(
     runId: string,
     env: Env,
+    authority: RunExecutionAuthority,
     runAbortSignal?: AbortSignal,
   ): Promise<ToolExecutorLike>;
+  activateToolCatalog?(
+    db: Env["DB"],
+    authority: RunExecutionAuthority,
+    tools: readonly ToolDefinition[],
+  ): Promise<{
+    authority: RunExecutionAuthority;
+    descriptors: ActivatedToolDescriptor[];
+  }>;
 }
 
 const remoteToolExecutorDependencies: RemoteToolExecutorDependencies = {
+  resolveAuthority: (runId, env) =>
+    loadRunExecutionAuthority({ db: env.DB, runId }),
   createExecutor: createRemoteToolExecutor,
+  activateToolCatalog: (db, authority, tools) =>
+    activateToolDescriptors({
+      db,
+      authority,
+      activationEventId: "tool_catalog:v2",
+      tools,
+    }),
 };
+
+export interface ModelCallAuthorityDependencies {
+  resolveAuthority(runId: string, env: Env): Promise<RunExecutionAuthority>;
+  begin(
+    db: Env["DB"],
+    input: BeginRunModelCallInput,
+  ): Promise<BeginRunModelCallResult>;
+  resolveProviderCredential?(
+    runId: string,
+    env: Env,
+    authority: RunExecutionAuthority,
+  ): Promise<ProviderRuntimeCredential>;
+}
+
+const modelCallAuthorityDependencies: ModelCallAuthorityDependencies = {
+  resolveAuthority: (runId, env) =>
+    loadRunExecutionAuthority({ db: env.DB, runId }),
+  begin: beginRunModelCallAtomically,
+  resolveProviderCredential: (runId, env, authority) =>
+    resolveRunProviderCredential({ env, runId, authority }),
+};
+
+async function invalidRunContextResponse(params: {
+  env: Env;
+  runId: string;
+  stage: InvalidRunContextStage;
+  code: InvalidRunContextCode;
+  checkpointContextRevision?: number;
+}): Promise<Response> {
+  if (
+    !params.env.DB ||
+    typeof (params.env.DB as { prepare?: unknown }).prepare !== "function"
+  ) {
+    // Tiny request-scope test doubles cannot run the product terminal
+    // transaction. Supported Worker and local-platform bindings always expose
+    // prepare(), so production never silently skips this convergence.
+    return err("Run execution authority is unavailable", 409);
+  }
+  try {
+    const outcome = await failRunForInvalidContext(
+      params.env.DB,
+      params.runId,
+      {
+        stage: params.stage,
+        code: params.code,
+        ...(params.checkpointContextRevision !== undefined
+          ? {
+              checkpointContextRevision:
+                params.checkpointContextRevision,
+            }
+          : {}),
+      },
+      params.env.TAKOS_OFFLOAD,
+    );
+    if (outcome.revoked) return err("Lease lost", 409);
+    if (outcome.legacy) {
+      return err("Run execution authority is unavailable", 409);
+    }
+    if (outcome.invalid) return err("Lease lost", 409);
+    return err("Run execution authority is unavailable", 409);
+  } catch (terminalError) {
+    logError("Invalid Run context terminalization failed", terminalError, {
+      module: "executor-host",
+      runId: params.runId,
+      stage: params.stage,
+      code: params.code,
+    });
+    return err("Run context integrity handling failed", 503);
+  }
+}
+
+async function runAuthorityErrorResponse(params: {
+  error: unknown;
+  env: Env;
+  runId: string;
+  stage: InvalidRunContextStage;
+}): Promise<Response | null> {
+  if (params.error instanceof SkillRevisionUnavailableError) {
+    return await invalidRunContextResponse({
+      env: params.env,
+      runId: params.runId,
+      stage: params.stage,
+      code: "skill_revision_invalid",
+    });
+  }
+  return params.error instanceof RunExecutionAuthorityUnavailableError
+    ? await invalidRunContextResponse({
+        env: params.env,
+        runId: params.runId,
+        stage: params.stage,
+        code: "authority_record_invalid",
+      })
+    : null;
+}
+
+/**
+ * Bind one outbound provider request to the exact current RunContext before
+ * any model bytes leave the container. The immutable row contains only
+ * digests/lease identity. A repeated begin with the same ephemeral nonce is an
+ * idempotent RPC retry; another task cannot silently replay the same request.
+ */
+export async function handleModelCallBegin(
+  body: Record<string, unknown>,
+  env: Env,
+  dependencies: ModelCallAuthorityDependencies =
+    modelCallAuthorityDependencies,
+): Promise<Response> {
+  const runId = typeof body.runId === "string" ? body.runId : null;
+  const serviceId = readRunServiceId(body);
+  const leaseVersion = body.leaseVersion;
+  if (!runId) return err("Missing runId", 400);
+  if (!serviceId) return err("Missing serviceId", 400);
+  if (
+    typeof leaseVersion !== "number" ||
+    !Number.isSafeInteger(leaseVersion) || leaseVersion < 0
+  ) {
+    return err("Invalid leaseVersion", 400);
+  }
+  if (!isRunModelCallRequestDigest(body.requestDigest)) {
+    return err("Invalid model request digest", 400);
+  }
+  if (!isRunModelCallTransportAttempt(body.transportAttempt)) {
+    return err("Invalid model transport attempt", 400);
+  }
+  if (!isRunModelCallBeginNonce(body.beginNonce)) {
+    return err("Invalid model call begin nonce", 400);
+  }
+  const requestedAuthority = parseRunAuthorityAttestation(body.runAuthority);
+  if (!requestedAuthority) {
+    return err("Run authority attestation is required", 409);
+  }
+
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
+  let authority: RunExecutionAuthority;
+  try {
+    authority = await dependencies.resolveAuthority(runId, env);
+  } catch (error) {
+    const authorityError = await runAuthorityErrorResponse({
+      error,
+      env,
+      runId,
+      stage: "model_call_begin",
+    });
+    if (authorityError) return authorityError;
+    logError("Model-call authority lookup failed", error, {
+      module: "executor-host",
+      runId,
+    });
+    return err("Model-call authority lookup failed", 503);
+  }
+  if (
+    !runAuthorityAttestationsEqual(
+      requestedAuthority,
+      authority.attestation,
+    )
+  ) {
+    return err("Run authority attestation is stale", 409);
+  }
+
+  try {
+    const result = await dependencies.begin(env.DB, {
+      runId,
+      serviceId,
+      leaseVersion,
+      authority: requestedAuthority,
+      requestDigest: body.requestDigest,
+      transportAttempt: body.transportAttempt,
+      beginNonce: body.beginNonce,
+    });
+    const providerCredential = dependencies.resolveProviderCredential
+      ? await dependencies.resolveProviderCredential(runId, env, authority)
+      : undefined;
+    return ok({
+      modelCallId: result.modelCallId,
+      idempotent: result.idempotent,
+      runAuthority: authority.attestation,
+      ...(providerCredential ? { providerCredential } : {}),
+    });
+  } catch (error) {
+    if (error instanceof RunModelCallAlreadyBeganError) {
+      return err("Model call already began under another execution", 409);
+    }
+    if (error instanceof RunModelCallAuthorityChangedError) {
+      return err("Run authority changed during model-call begin", 409);
+    }
+    if (error instanceof RunModelCallRecordInvalidError) {
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "model_call_begin",
+        code: "model_call_record_invalid",
+      });
+    }
+    if (error instanceof ProviderMaterializationUnavailableError) {
+      logWarn("Provider credential live check failed", {
+        module: "executor-host",
+        runId,
+        error: error.message,
+      });
+      return err("Provider credential is unavailable", 503);
+    }
+    logError("Model-call authority commit failed", error, {
+      module: "executor-host",
+      runId,
+    });
+    return err("Model-call authority commit failed", 503);
+  }
+}
 
 async function cleanupRequestToolExecutor(
   executor: ToolExecutorLike,
@@ -396,6 +734,46 @@ function cleanupRecentRunEventKeys(nowMs: number): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve the exact Worker-owned model input for one RunContext revision.
+ * Caller-supplied Thread, Workspace, model, prompt, history, or Run input is
+ * never accepted by this interface.
+ */
+export async function handleRunModelInput(
+  body: Record<string, unknown>,
+  env: Env,
+): Promise<Response> {
+  const runId = typeof body.runId === "string" ? body.runId : null;
+  if (!runId) return err("Missing runId", 400);
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
+
+  try {
+    return ok(await resolveRunModelInput({ env, runId }));
+  } catch (error) {
+    if (error instanceof RunModelInputUnavailableError) {
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "model_input",
+        code: "model_input_record_invalid",
+      });
+    }
+    const authorityError = await runAuthorityErrorResponse({
+      error,
+      env,
+      runId,
+      stage: "model_input",
+    });
+    if (authorityError) return authorityError;
+    logError("Run model input RPC error", error, {
+      module: "executor-host",
+      runId,
+    });
+    return err("Run model input unavailable", 503);
+  }
+}
+
+/**
  * Resolve the agent runtime config for a run.
  *
  * The takos-agent wrapper reads this once while starting a run. It carries only
@@ -407,28 +785,10 @@ export async function handleRunConfig(
   env: Env,
 ): Promise<Response> {
   const runId = typeof body.runId === "string" ? body.runId : null;
-  const explicitAgentType =
-    typeof body.agentType === "string" ? body.agentType : null;
-
-  let agentType = explicitAgentType;
-  if (!agentType && runId) {
-    try {
-      const db = getDb(env.DB);
-      const run = await db
-        .select({ agentType: runs.agentType })
-        .from(runs)
-        .where(eq(runs.id, runId))
-        .get();
-      agentType = run?.agentType ?? null;
-    } catch (e) {
-      logWarn("Failed to look up run agentType", {
-        module: "executor-host",
-        detail: e,
-      });
-    }
-  }
-
-  const config = getAgentConfig(agentType ?? "default", env);
+  if (!runId) return err("Missing runId", 400);
+  const authority = await resolveRunThreadTenant(env, runId);
+  if (!authority) return err("Run not found", 404);
+  const config = getAgentConfig(authority.agentType, env);
   return ok({
     agentType: config.type,
     systemPrompt: config.systemPrompt,
@@ -442,40 +802,53 @@ export async function handleRunConfig(
  * Resolve the authoritative tenant + thread for a control RPC from the
  * token-bound run, never from caller-supplied body fields. executor-host
  * overwrites body.runId with the verified per-run proxy token, so runId is
- * trustworthy; the run row is the authority for accountId/threadId. This blocks
+ * trustworthy; the run row is the authority for accountId, threadId,
+ * agentType, and model. This blocks
  * a compromised container from setting threadId/spaceId to a victim tenant's.
  */
 export async function resolveRunThreadTenant(
   env: Env,
   runId: string,
-): Promise<{ spaceId: string; threadId: string } | null> {
+): Promise<{
+  spaceId: string;
+  threadId: string;
+  agentType: string;
+  model: string | null;
+} | null> {
   const run = await getDb(env.DB)
     .select({
       accountId: runs.accountId,
       threadId: runs.threadId,
+      agentType: runs.agentType,
+      model: runs.model,
     })
     .from(runs)
     .where(eq(runs.id, runId))
     .get();
   if (!run || !run.threadId) return null;
-  return { spaceId: run.accountId, threadId: run.threadId };
+  return {
+    spaceId: run.accountId,
+    threadId: run.threadId,
+    agentType: run.agentType,
+    model: run.model ?? null,
+  };
 }
 
 export async function handleConversationHistory(
   body: Record<string, unknown>,
   env: Env,
 ): Promise<Response> {
-  const { runId, aiModel } = body as {
+  const { runId } = body as {
     runId?: string;
-    aiModel?: string;
   };
-  if (!runId || !aiModel) {
-    return err("Missing runId or aiModel", 400);
+  if (!runId) {
+    return err("Missing runId", 400);
   }
 
   const tenant = await resolveRunThreadTenant(env, runId);
   if (!tenant) return err("Run not found", 404);
   const { spaceId, threadId } = tenant;
+  const aiModel = tenant.model ?? DEFAULT_MODEL_ID;
 
   try {
     const history = await buildConversationHistory({
@@ -494,189 +867,113 @@ export async function handleConversationHistory(
   }
 }
 
-export async function handleSkillPlan(
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response> {
-  const { runId, agentType, history, availableToolNames } = body as {
-    runId?: string;
-    agentType?: string;
-    history?: AgentMessage[];
-    availableToolNames?: string[];
-  };
-  if (
-    !runId ||
-    !agentType ||
-    !Array.isArray(history) ||
-    !Array.isArray(availableToolNames)
-  ) {
-    return err("Missing runId, agentType, history, or availableToolNames", 400);
-  }
-
-  const tenant = await resolveRunThreadTenant(env, runId);
-  if (!tenant) return err("Run not found", 404);
-  const { spaceId, threadId } = tenant;
-
-  try {
-    const result = await resolveSkillPlanForRun(env.DB, {
-      runId,
-      threadId,
-      spaceId,
-      agentType,
-      history,
-      availableToolNames,
-    });
-    return ok(result);
-  } catch (e: unknown) {
-    logError("Skill plan RPC error", e, { module: "executor-host" });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
-}
-
-export async function handleSkillCatalog(
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response> {
-  const { runId, agentType, history, availableToolNames } = body as {
-    runId?: string;
-    agentType?: string;
-    history?: AgentMessage[];
-    availableToolNames?: string[];
-  };
-  if (
-    !runId ||
-    !agentType ||
-    !Array.isArray(history) ||
-    !Array.isArray(availableToolNames)
-  ) {
-    return err("Missing runId, agentType, history, or availableToolNames", 400);
-  }
-
-  const tenant = await resolveRunThreadTenant(env, runId);
-  if (!tenant) return err("Run not found", 404);
-  const { spaceId, threadId } = tenant;
-
-  try {
-    const resolutionContext = await buildSkillResolutionContext(
-      env.DB,
-      {
-        threadId,
-        runId,
-        spaceId,
-      },
-      {
-        type: agentType,
-        systemPrompt: "",
-      },
-      history,
-    );
-    const localeSamples = [
-      ...(resolutionContext.conversation ?? []),
-      resolutionContext.threadTitle ?? "",
-      resolutionContext.threadSummary ?? "",
-      ...(resolutionContext.threadKeyPoints ?? []).slice(0, 8),
-    ].filter(Boolean);
-    const preferredLocale =
-      typeof resolutionContext.runInput?.skill_locale === "string"
-        ? resolutionContext.runInput.skill_locale
-        : typeof resolutionContext.runInput?.locale === "string"
-          ? resolutionContext.runInput.locale
-          : (resolutionContext.preferredLocale ??
-            resolutionContext.spaceLocale ??
-            (typeof resolutionContext.runInput?.accept_language === "string"
-              ? resolutionContext.runInput.accept_language
-              : null));
-
-    const catalog = await listDetailedSkillContext(
-      env.DB,
-      spaceId,
-      {
-        preferredLocale,
-        acceptLanguage: resolutionContext.acceptLanguage,
-        textSamples: localeSamples,
-      },
-      availableToolNames,
-    );
-    return ok({
-      locale: catalog.locale,
-      skills: catalog.skills,
-      resolutionContext,
-    });
-  } catch (e: unknown) {
-    logError("Skill catalog RPC error", e, { module: "executor-host" });
-    const classified = classifyProxyError(e);
-    return err(classified.message, classified.status);
-  }
-}
-
 export async function handleSkillRuntimeContext(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: RemoteToolExecutorDependencies = remoteToolExecutorDependencies,
 ): Promise<Response> {
-  const { runId, agentType, history, availableToolNames } = body as {
+  const { runId } = body as {
     runId?: string;
-    agentType?: string;
-    history?: AgentMessage[];
-    availableToolNames?: string[];
   };
-  if (!runId || !agentType || !Array.isArray(history)) {
-    return err("Missing runId, agentType, or history", 400);
-  }
+  if (!runId) return err("Missing runId", 400);
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
 
-  const tenant = await resolveRunThreadTenant(env, runId);
-  if (!tenant) return err("Run not found", 404);
-  const { spaceId, threadId } = tenant;
-
+  let executor: ToolExecutorLike | null = null;
   try {
-    const resolutionContext = await buildSkillResolutionContext(
-      env.DB,
-      {
-        threadId,
+    const modelInput = await resolveRunModelInput({ env, runId });
+    const authority = await dependencies.resolveAuthority(runId, env);
+    if (
+      !runAuthorityAttestationsEqual(
+        modelInput.runAuthority,
+        authority.attestation,
+      )
+    ) {
+      return err("Run authority changed during Skill resolution", 409);
+    }
+    executor = await dependencies.createExecutor(runId, env, authority);
+    const availableToolNames = executor.getAvailableTools().map((tool) =>
+      tool.name
+    );
+    if (!authority.modelInput) {
+      throw new RunModelInputUnavailableError();
+    }
+    let activeAuthority = authority;
+    let pinnedPlan = await loadPinnedSkillPlan({
+      db: env.DB,
+      authority,
+    });
+    if (!pinnedPlan) {
+      const { plan } = await resolveSkillPlanForPinnedRun(env.DB, {
+        spaceId: authority.workspaceId,
+        agentType: authority.modelInput.agentType,
+        history: modelInput.history,
+        runInputJson: authority.modelInput.runInputJson,
+        availableToolNames,
+      });
+      const preparedPlan = await ensureInitialSkillPlan({
+        db: env.DB,
+        authority,
+        skillLocale: plan.skillLocale,
+        selectedSkills: plan.selectedSkillContents,
+      });
+      activeAuthority = await appendRunContextResourceReferences({
+        db: env.DB,
         runId,
-        spaceId,
-      },
-      {
-        type: agentType,
-        systemPrompt: "",
-      },
-      history,
-    );
-    const [plan, mcpServers] = await Promise.all([
-      resolveSkillPlanForRun(env.DB, {
-        runId,
-        threadId,
-        spaceId,
-        agentType,
-        history,
-        availableToolNames: Array.isArray(availableToolNames)
-          ? availableToolNames
-          : [],
-      }),
-      listMcpServers(env.DB, spaceId),
-    ]);
-    const managedSkills = plan.activatedSkills.filter(
-      (skill) => skill.source === "managed",
-    );
-    const customSkills = plan.activatedSkills.filter(
-      (skill) => skill.source === "custom",
-    );
-
+        expectedAttestation: authority.attestation,
+        activationEventId:
+          `skill_plan:${preparedPlan.planReference.resourceId}:${preparedPlan.planReference.resourceDigest}`,
+        // The plan is the descriptor catalog authority. Individual Skill
+        // content revisions are appended only when toolbox describe activates
+        // that exact manual, before its instructions become model-visible.
+        references: [preparedPlan.planReference],
+      });
+      pinnedPlan = await loadPinnedSkillPlan({
+        db: env.DB,
+        authority: activeAuthority,
+      });
+      if (!pinnedPlan) {
+        throw new SkillRevisionUnavailableError(
+          "Pinned Skill plan is missing after RunContext activation",
+        );
+      }
+    }
     return ok({
-      locale: plan.skillLocale,
-      resolutionContext,
-      skills: plan.activatedSkills,
-      managedSkills,
-      customSkills,
-      availableMcpServerNames: mcpServers
-        .filter((server) => server.enabled)
-        .map((server) => server.name),
-      availableTemplateIds: listSkillTemplates().map((template) => template.id),
+      runAuthority: activeAuthority.attestation,
+      descriptorCount: pinnedPlan.selectedSkills.length,
     });
   } catch (e: unknown) {
+    if (e instanceof RunContextActivationConflictError) {
+      return err("Run authority changed during Skill activation", 409);
+    }
+    if (e instanceof SkillRevisionUnavailableError) {
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "skill_context",
+        code: "skill_revision_invalid",
+      });
+    }
+    if (e instanceof RunModelInputUnavailableError) {
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "model_input",
+        code: "model_input_record_invalid",
+      });
+    }
+    const authorityError = await runAuthorityErrorResponse({
+      error: e,
+      env,
+      runId,
+      stage: "model_input",
+    });
+    if (authorityError) return authorityError;
     logError("Skill runtime context RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
+  } finally {
+    if (executor) await cleanupRequestToolExecutor(executor);
   }
 }
 
@@ -923,6 +1220,8 @@ export async function handleUpdateRunStatus(
         });
       }
 
+      await recordCommittedRunUsage(env, runId, "legacy-run-status");
+
       if (status === "completed" || status === "failed") {
         await dispatchRunNotificationOutbox(env, {
           completionKey,
@@ -1158,9 +1457,20 @@ export function parseCompleteRunMessages(
  * lease-fenced DB operation. The notifier is deliberately post-commit and
  * best-effort; SQL remains replay authority.
  */
+export interface CompleteRunAuthorityDependencies {
+  resolveAuthority(runId: string, env: Env): Promise<RunExecutionAuthority>;
+}
+
+const completeRunAuthorityDependencies: CompleteRunAuthorityDependencies = {
+  resolveAuthority: (runId, env) =>
+    loadRunExecutionAuthority({ db: env.DB, runId }),
+};
+
 export async function handleCompleteRun(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: CompleteRunAuthorityDependencies =
+    completeRunAuthorityDependencies,
 ): Promise<Response> {
   const runId = typeof body.runId === "string" ? body.runId : null;
   const serviceId = readRunServiceId(body);
@@ -1214,6 +1524,35 @@ export async function handleCompleteRun(
     allowTerminalRetry: true,
   });
   if (leaseError) return leaseError;
+  let runAuthority: RunExecutionAuthority;
+  try {
+    runAuthority = await dependencies.resolveAuthority(runId, env);
+  } catch (authorityError) {
+    const response = await runAuthorityErrorResponse({
+      error: authorityError,
+      env,
+      runId,
+      stage: "terminal_commit",
+    });
+    if (response) return response;
+    logError("Complete-run authority lookup failed", authorityError, {
+      module: "executor-host",
+      runId,
+    });
+    return err("Complete-run authority lookup failed", 503);
+  }
+  const requestedAuthority = parseRunAuthorityAttestation(body.runAuthority);
+  if (
+    (body.runAuthority !== undefined && !requestedAuthority) ||
+    (requestedAuthority
+      ? !runAuthorityAttestationsEqual(
+        requestedAuthority,
+        runAuthority.attestation,
+      )
+      : runAuthority.attestation.contextRevision !== 1)
+  ) {
+    return err("Run authority attestation is stale", 409);
+  }
   const output = typeof body.output === "string" ? body.output : undefined;
   const errorMessage = typeof body.error === "string" ? body.error : undefined;
   if (
@@ -1234,11 +1573,18 @@ export async function handleCompleteRun(
       sessionId: runs.sessionId,
       threadId: runs.threadId,
       engineCheckpoint: runs.engineCheckpoint,
+      currentContextRevision: runs.currentContextRevision,
     })
     .from(runs)
     .where(eq(runs.id, runId))
     .get();
   if (!terminalRun?.threadId) return err("Run not found", 404);
+  if (
+    terminalRun.currentContextRevision !==
+      runAuthority.attestation.contextRevision
+  ) {
+    return err("Run authority changed during finalization", 409);
+  }
   const normalizedUsage = {
     inputTokens,
     outputTokens,
@@ -1278,6 +1624,10 @@ export async function handleCompleteRun(
       {
         offloadBucket: env.TAKOS_OFFLOAD,
         expectedEngineCheckpoint: terminalRun.engineCheckpoint,
+        expectedRunAuthority: runAuthority.attestation,
+        requireModelCallAuthorityForCompletion:
+          typeof body.runtimeProtocolVersion === "number" &&
+          body.runtimeProtocolVersion >= 3,
       },
     );
     if (!result.committed) {
@@ -1304,7 +1654,7 @@ export async function handleCompleteRun(
       const stub = getRunNotifierStub(env, runId);
       for (const [index, message] of messages.entries()) {
         if (message.role !== "assistant" || !message.content) continue;
-        await stub.fetch(
+        const response = await stub.fetch(
           buildRunNotifierEmitRequest({
             ...buildRunNotifierEmitPayload(
               runId,
@@ -1315,8 +1665,16 @@ export async function handleCompleteRun(
             dedup_key: `run:${runId}:completion:${result.completionKey}:message:${index}`,
           }),
         );
+        if (!response.ok) {
+          logWarn("Complete-run message notifier emit failed", {
+            module: "executor-host",
+            runId,
+            index,
+            notifierStatus: response.status,
+          });
+        }
       }
-      await stub.fetch(
+      const terminalResponse = await stub.fetch(
         buildRunNotifierEmitRequest({
           ...buildRunNotifierEmitPayload(
             runId,
@@ -1327,6 +1685,13 @@ export async function handleCompleteRun(
           dedup_key: `run:${runId}:completion:${result.completionKey}:terminal-status:${status}`,
         }),
       );
+      if (!terminalResponse.ok) {
+        logWarn("Complete-run terminal notifier emit failed", {
+          module: "executor-host",
+          runId,
+          notifierStatus: terminalResponse.status,
+        });
+      }
     } catch (notifyError) {
       logWarn("Complete-run notifier emit failed", {
         module: "executor-host",
@@ -1334,6 +1699,8 @@ export async function handleCompleteRun(
         error: String(notifyError),
       });
     }
+
+    await recordCommittedRunUsage(env, runId, "complete-run");
 
     try {
       await dispatchRunNotificationOutbox(env, {
@@ -1401,7 +1768,32 @@ type EngineCheckpointUsage = {
 type StoredEngineCheckpoint = {
   checkpoint: Record<string, unknown>;
   usage: EngineCheckpointUsage;
+  runAuthority: RunAuthorityAttestation | null;
 };
+
+export interface EngineCheckpointAuthorityDependencies {
+  resolveAuthority(runId: string, env: Env): Promise<RunExecutionAuthority>;
+  verifyCheckpointAuthority(params: {
+    runId: string;
+    checkpointAuthority: RunAuthorityAttestation;
+    currentAuthority: RunExecutionAuthority;
+    env: Env;
+  }): Promise<void>;
+}
+
+const engineCheckpointAuthorityDependencies:
+  EngineCheckpointAuthorityDependencies = {
+    resolveAuthority: (runId, env) =>
+      loadRunExecutionAuthority({ db: env.DB, runId }),
+    verifyCheckpointAuthority: async (params) => {
+      await verifyRunContextAttestation({
+        db: params.env.DB,
+        runId: params.runId,
+        expected: params.checkpointAuthority,
+        currentAuthority: params.currentAuthority,
+      });
+    },
+  };
 
 const UNCERTAIN_SIDE_EFFECT_FATAL_ERROR =
   "side-effect outcome is uncertain; verify remote state before issuing a new operation; automatic replay is blocked";
@@ -1478,7 +1870,13 @@ function parseStoredEngineCheckpoint(
   const stored = value as Record<string, unknown>;
   const checkpoint = parseEngineCheckpoint(stored.checkpoint);
   const usage = parseEngineCheckpointUsage(stored.usage);
-  return checkpoint && usage ? { checkpoint, usage } : null;
+  const runAuthority = stored.runAuthority === undefined
+    ? null
+    : parseRunAuthorityAttestation(stored.runAuthority);
+  return checkpoint && usage &&
+      (stored.runAuthority === undefined || runAuthority !== null)
+    ? { checkpoint, usage, runAuthority }
+    : null;
 }
 
 function isBoundedCheckpointJson(value: unknown): boolean {
@@ -1568,9 +1966,66 @@ function supportsFatalCheckpointProtocol(value: unknown): boolean {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
 }
 
+function supportsAuthorityCheckpointProtocol(value: unknown): boolean {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 3;
+}
+
+async function resolveCheckpointRequestAuthority(params: {
+  body: Record<string, unknown>;
+  env: Env;
+  runId: string;
+  stage: "checkpoint_save" | "checkpoint_load";
+  dependencies: EngineCheckpointAuthorityDependencies;
+}): Promise<
+  | { authority: RunExecutionAuthority; requested: RunAuthorityAttestation }
+  | Response
+> {
+  try {
+    const authority = await params.dependencies.resolveAuthority(
+      params.runId,
+      params.env,
+    );
+    const requested = parseRunAuthorityAttestation(params.body.runAuthority);
+    if (supportsAuthorityCheckpointProtocol(
+      params.body.checkpointProtocolVersion,
+    )) {
+      if (
+        !requested ||
+        !runAuthorityAttestationsEqual(requested, authority.attestation)
+      ) {
+        return err("Run authority attestation is stale", 409);
+      }
+      return { authority, requested };
+    }
+    // Rolling compatibility for released v1/v2 wrappers: the Worker binds the
+    // checkpoint to the current verified revision itself. Such wrappers cannot
+    // perform progressive tool activation against the authority-gated broker,
+    // so they can only produce a base-revision read-only completion.
+    if (authority.attestation.contextRevision !== 1) {
+      return err("Run authority checkpoint protocol is required", 409);
+    }
+    return { authority, requested: authority.attestation };
+  } catch (error) {
+    const authorityError = await runAuthorityErrorResponse({
+      error,
+      env: params.env,
+      runId: params.runId,
+      stage: params.stage,
+    });
+    if (authorityError) return authorityError;
+    logError("Engine checkpoint authority lookup failed", error, {
+      module: "executor-host",
+      runId: params.runId,
+    });
+    return err("Engine checkpoint authority lookup failed", 503);
+  }
+}
+
 export async function handleEngineCheckpointSave(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: EngineCheckpointAuthorityDependencies =
+    engineCheckpointAuthorityDependencies,
 ): Promise<Response> {
   const runId = typeof body.runId === "string" ? body.runId : null;
   const serviceId = readRunServiceId(body);
@@ -1585,9 +2040,24 @@ export async function handleEngineCheckpointSave(
   ) {
     return err("Invalid engine checkpoint payload", 400);
   }
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
+  const resolvedAuthority = await resolveCheckpointRequestAuthority({
+    body,
+    env,
+    runId,
+    stage: "checkpoint_save",
+    dependencies,
+  });
+  if (resolvedAuthority instanceof Response) return resolvedAuthority;
+  const { authority, requested: checkpointAuthority } = resolvedAuthority;
   let serialized: string;
   try {
-    serialized = JSON.stringify({ checkpoint, usage });
+    serialized = JSON.stringify({
+      checkpoint,
+      usage,
+      runAuthority: checkpointAuthority,
+    });
   } catch {
     return err("Invalid engine checkpoint payload", 400);
   }
@@ -1597,16 +2067,40 @@ export async function handleEngineCheckpointSave(
   ) {
     return err("Engine checkpoint is too large", 413);
   }
-  const leaseError = await ensureRunLease(env, runId, body);
-  if (leaseError) return leaseError;
 
-  const conditions = [eq(runs.id, runId), eq(runs.status, "running")];
-  if (serviceId) conditions.push(eq(runs.serviceId, serviceId));
-  if (typeof leaseVersion === "number") {
-    conditions.push(eq(runs.leaseVersion, leaseVersion));
-  }
   try {
     const db = getDb(env.DB);
+    const conditions = [
+      eq(runs.id, runId),
+      eq(runs.status, "running"),
+      eq(
+        runs.currentContextRevision,
+        authority.attestation.contextRevision,
+      ),
+      exists(
+        db.select({ revision: runContextRevisions.revision })
+          .from(runContextRevisions)
+          .where(and(
+            eq(runContextRevisions.runId, runId),
+            eq(
+              runContextRevisions.revision,
+              authority.attestation.contextRevision,
+            ),
+            eq(
+              runContextRevisions.digest,
+              authority.attestation.contextDigest,
+            ),
+            eq(
+              runContextRevisions.runGrantDigest,
+              authority.attestation.runGrantDigest,
+            ),
+          )),
+      ),
+    ];
+    if (serviceId) conditions.push(eq(runs.serviceId, serviceId));
+    if (typeof leaseVersion === "number") {
+      conditions.push(eq(runs.leaseVersion, leaseVersion));
+    }
     const current = await db
       .select({ checkpoint: runs.engineCheckpoint })
       .from(runs)
@@ -1675,6 +2169,8 @@ export async function handleEngineCheckpointSave(
 export async function handleEngineCheckpointLoad(
   body: Record<string, unknown>,
   env: Env,
+  dependencies: EngineCheckpointAuthorityDependencies =
+    engineCheckpointAuthorityDependencies,
 ): Promise<Response> {
   const runId = typeof body.runId === "string" ? body.runId : null;
   const serviceId = readRunServiceId(body);
@@ -1684,14 +2180,31 @@ export async function handleEngineCheckpointLoad(
   }
   const leaseError = await ensureRunLease(env, runId, body);
   if (leaseError) return leaseError;
+  const resolvedAuthority = await resolveCheckpointRequestAuthority({
+    body,
+    env,
+    runId,
+    stage: "checkpoint_load",
+    dependencies,
+  });
+  if (resolvedAuthority instanceof Response) return resolvedAuthority;
+  const { authority } = resolvedAuthority;
   try {
     const db = getDb(env.DB);
     const row = await db
-      .select({ checkpoint: runs.engineCheckpoint })
+      .select({
+        checkpoint: runs.engineCheckpoint,
+        currentContextRevision: runs.currentContextRevision,
+      })
       .from(runs)
       .where(eq(runs.id, runId))
       .get();
     if (!row) return err("Run not found", 404);
+    if (
+      row.currentContextRevision !== authority.attestation.contextRevision
+    ) {
+      return err("Run authority changed during checkpoint load", 409);
+    }
     // The operation ledger is the durable authority for commit-ambiguous side
     // effects. It also closes the tiny crash window between tool-execute
     // returning `outcome_uncertain` and the engine saving its next checkpoint.
@@ -1723,6 +2236,8 @@ export async function handleEngineCheckpointLoad(
         checkpoint: null,
         usage: EMPTY_ENGINE_CHECKPOINT_USAGE,
         fatalError: authoritativeFatalError,
+        checkpointAuthority: null,
+        runAuthority: authority.attestation,
       });
     }
     const parsed = await loadStoredEngineCheckpoint(env, row.checkpoint);
@@ -1732,13 +2247,54 @@ export async function handleEngineCheckpointLoad(
           checkpoint: null,
           usage: EMPTY_ENGINE_CHECKPOINT_USAGE,
           fatalError: authoritativeFatalError,
+          checkpointAuthority: null,
+          runAuthority: authority.attestation,
         });
       }
-      return err("Stored engine checkpoint is invalid", 500);
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "checkpoint_load",
+        code: "checkpoint_envelope_invalid",
+      });
+    }
+    const checkpointAuthority = parsed.runAuthority ??
+      (authority.attestation.contextRevision === 1
+        ? authority.attestation
+        : null);
+    if (!checkpointAuthority) {
+      return await invalidRunContextResponse({
+        env,
+        runId,
+        stage: "checkpoint_load",
+        code: "checkpoint_authority_missing",
+      });
+    }
+    try {
+      await dependencies.verifyCheckpointAuthority({
+        runId,
+        checkpointAuthority,
+        currentAuthority: authority,
+        env,
+      });
+    } catch (error) {
+      if (error instanceof RunExecutionAuthorityUnavailableError) {
+        return await invalidRunContextResponse({
+          env,
+          runId,
+          stage: "checkpoint_load",
+          code: "checkpoint_authority_invalid",
+          checkpointContextRevision: checkpointAuthority.contextRevision,
+        });
+      }
+      throw error;
     }
     return ok({
-      ...parsed,
+      checkpoint: parsed.checkpoint,
+      usage: parsed.usage,
       fatalError: authoritativeFatalError,
+      checkpointAuthority,
+      runAuthority: authority.attestation,
     });
   } catch (error) {
     logError("Engine checkpoint load failed", error, {
@@ -1756,27 +2312,107 @@ export async function handleToolCatalog(
 ): Promise<Response> {
   const { runId } = body as { runId?: string };
   if (!runId) return err("Missing runId", 400);
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
 
   let executor: ToolExecutorLike | null = null;
   try {
-    executor = await dependencies.createExecutor(runId, env);
+    const authority = await dependencies.resolveAuthority(runId, env);
+    executor = await dependencies.createExecutor(runId, env, authority);
+    const visibleTools = selectModelVisibleTools(executor.getAvailableTools());
+    const activated = await (
+      dependencies.activateToolCatalog ??
+        remoteToolExecutorDependencies.activateToolCatalog!
+    )(env.DB, authority, visibleTools);
     return ok({
-      tools: executor.getAvailableTools().map((tool) => ({
-        ...tool,
+      catalogVersion: 2,
+      sourceRunAuthority: authority.attestation,
+      runAuthority: activated.authority.attestation,
+      tools: activated.descriptors.map(({ snapshot }) => ({
+        ...snapshot.definition,
         // This is an executor-host protocol attestation, not provider-supplied
         // metadata: execute() installs the same side-effect name set into the
         // Worker-owned ToolOperation fence before dispatch.
-        durable_idempotency: tool.side_effects === true,
+        durable_idempotency: snapshot.definition.side_effects === true,
       })),
       mcpFailedServers: executor.mcpFailedServers,
     });
   } catch (e: unknown) {
+    const authorityError = await runAuthorityErrorResponse({
+      error: e,
+      env,
+      runId,
+      stage: "tool_catalog",
+    });
+    if (authorityError) return authorityError;
     logError("Tool catalog RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);
   } finally {
     if (executor) await cleanupRequestToolExecutor(executor);
   }
+}
+
+async function isToolCallActivationDescendant(params: {
+  db: Env["DB"];
+  runId: string;
+  toolCallId: string;
+  requested: RunAuthorityAttestation;
+  current: RunAuthorityAttestation;
+}): Promise<boolean> {
+  const distance = params.current.contextRevision -
+    params.requested.contextRevision;
+  if (
+    distance < 1 || distance > 2 ||
+    params.current.runGrantDigest !== params.requested.runGrantDigest
+  ) {
+    return false;
+  }
+  const [source, lineage, baseKey, descriptorKey] = await Promise.all([
+    getDb(params.db).select({ digest: runContextRevisions.digest })
+      .from(runContextRevisions)
+      .where(and(
+        eq(runContextRevisions.runId, params.runId),
+        eq(
+          runContextRevisions.revision,
+          params.requested.contextRevision,
+        ),
+      )).get(),
+    getDb(params.db).select({
+      revision: runContextRevisions.revision,
+      parentRevision: runContextRevisions.parentRevision,
+      activationEventKey: runContextRevisions.activationEventKey,
+      runGrantDigest: runContextRevisions.runGrantDigest,
+    }).from(runContextRevisions).where(and(
+      eq(runContextRevisions.runId, params.runId),
+      gte(
+        runContextRevisions.revision,
+        params.requested.contextRevision + 1,
+      ),
+      lte(runContextRevisions.revision, params.current.contextRevision),
+    )).orderBy(runContextRevisions.revision).all(),
+    runContextActivationEventKey(`tool_call:${params.toolCallId}`),
+    runContextActivationEventKey(
+      `tool_call:${params.toolCallId}:descriptor`,
+    ),
+  ]);
+  if (
+    source?.digest !== params.requested.contextDigest ||
+    lineage.length !== distance ||
+    lineage.some((row, index) =>
+      row.revision !== params.requested.contextRevision + index + 1 ||
+      row.parentRevision !== row.revision - 1 ||
+      row.runGrantDigest !== params.requested.runGrantDigest
+    )
+  ) {
+    return false;
+  }
+  if (distance === 1) {
+    return lineage[0]?.activationEventKey === baseKey ||
+      lineage[0]?.activationEventKey === descriptorKey;
+  }
+  return lineage[0]?.activationEventKey === descriptorKey &&
+    lineage[1]?.activationEventKey === baseKey;
 }
 
 export async function handleToolExecute(
@@ -1791,6 +2427,10 @@ export async function handleToolExecute(
   };
   if (!runId || !toolCall || typeof toolCall !== "object") {
     return err("Missing runId or toolCall", 400);
+  }
+  const requestedAuthority = parseRunAuthorityAttestation(body.runAuthority);
+  if (!requestedAuthority) {
+    return err("Run authority attestation is required", 409);
   }
   if (
     typeof toolCall.id !== "string" ||
@@ -1819,9 +2459,33 @@ export async function handleToolExecute(
   const abortController = new AbortController();
   let executor: ToolExecutorLike | null = null;
   try {
+    const authority = await dependencies.resolveAuthority(runId, env);
+    if (
+      !runAuthorityAttestationsEqual(
+        requestedAuthority,
+        authority.attestation,
+      )
+    ) {
+      if (
+        !env.DB ||
+        typeof (env.DB as { prepare?: unknown }).prepare !== "function"
+      ) {
+        return err("Run authority attestation is stale", 409);
+      }
+      if (!await isToolCallActivationDescendant({
+        db: env.DB,
+        runId,
+        toolCallId: toolCall.id,
+        requested: requestedAuthority,
+        current: authority.attestation,
+      })) {
+        return err("Run authority attestation is stale", 409);
+      }
+    }
     executor = await dependencies.createExecutor(
       runId,
       env,
+      authority,
       abortController.signal,
     );
     const stopMonitor = new AbortController();
@@ -1841,13 +2505,24 @@ export async function handleToolExecute(
       // Cancellation can race a handler that ignores AbortSignal. Never return
       // its stale result to the superseded container.
       if (abortController.signal.aborted) return err("Lease lost", 409);
-      return ok(result);
+      const finalAuthority = await dependencies.resolveAuthority(runId, env);
+      return ok({
+        ...result,
+        runAuthority: finalAuthority.attestation,
+      });
     } finally {
       stopMonitor.abort();
       await monitor;
     }
   } catch (e: unknown) {
     if (abortController.signal.aborted) return err("Lease lost", 409);
+    const authorityError = await runAuthorityErrorResponse({
+      error: e,
+      env,
+      runId,
+      stage: "tool_execute",
+    });
+    if (authorityError) return authorityError;
     logError("Tool execute RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
     return err(classified.message, classified.status);

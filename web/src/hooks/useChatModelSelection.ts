@@ -1,11 +1,16 @@
-import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
-import { rpc, rpcJson } from "../lib/rpc.ts";
 import {
-  DEFAULT_MODEL_ID,
-  FALLBACK_MODELS,
-  type ModelSelectOption,
-} from "../lib/modelCatalog.ts";
-import type { ModelOption } from "../views/agent/work/task-work-types.ts";
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  untrack,
+} from "solid-js";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import type { ModelSelectOption } from "../lib/modelCatalog.ts";
+import {
+  isSelectableChatModel,
+  readChatModelSelection,
+} from "./chat-model-selection.ts";
 
 export interface UseChatModelSelectionOptions {
   spaceId: Accessor<string>;
@@ -16,6 +21,9 @@ export interface UseChatModelSelectionResult {
   availableModels: Accessor<ModelSelectOption[]>;
   selectedModel: Accessor<string>;
   setSelectedModel: (model: string) => void;
+  isLoading: Accessor<boolean>;
+  hasError: Accessor<boolean>;
+  isReady: Accessor<boolean>;
   fetchSpaceModels: () => Promise<void>;
 }
 
@@ -23,88 +31,45 @@ export function useChatModelSelection({
   spaceId,
   initialModel,
 }: UseChatModelSelectionOptions): UseChatModelSelectionResult {
-  const [selectedModel, setSelectedModel] = createSignal<string>(
-    initialModel?.() ?? DEFAULT_MODEL_ID,
-  );
+  const [selectedModel, setSelectedModelState] = createSignal("");
   const [availableModels, setAvailableModels] = createSignal<
     ModelSelectOption[]
-  >([...FALLBACK_MODELS]);
+  >([]);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [hasError, setHasError] = createSignal(false);
+  let requestVersion = 0;
+
+  const setSelectedModel = (model: string) => {
+    if (isSelectableChatModel(availableModels(), model)) {
+      setSelectedModelState(model);
+    }
+  };
 
   const loadSpaceModels = async (
     currentSpaceId: string,
     seedModel?: string,
-    isCancelled?: () => boolean,
   ): Promise<void> => {
+    const version = ++requestVersion;
+    setIsLoading(true);
+    setHasError(false);
+    setAvailableModels([]);
+    setSelectedModelState("");
     try {
       const res = await rpc.spaces[":spaceId"].model.$get({
         param: { spaceId: currentSpaceId },
       });
-      const data = await rpcJson<{
-        ai_model?: string;
-        model?: string;
-        model_backend?: string;
-        available_models: {
-          openai: ModelOption[];
-          anthropic: ModelOption[];
-          google: ModelOption[];
-        };
-      }>(res);
-
-      const modelBackend = data.model_backend || "openai";
-      let raw: ModelOption[] | undefined;
-      if (modelBackend === "anthropic") {
-        raw = data.available_models?.anthropic;
-      } else if (modelBackend === "google") {
-        raw = data.available_models?.google;
-      } else {
-        raw = data.available_models?.openai;
+      const data = await rpcJson<unknown>(res);
+      const projection = readChatModelSelection(data, seedModel);
+      if (version !== requestVersion || spaceId() !== currentSpaceId) return;
+      setAvailableModels(projection.models);
+      setSelectedModelState(projection.selectedModel);
+    } catch {
+      if (version !== requestVersion || spaceId() !== currentSpaceId) return;
+      setHasError(true);
+    } finally {
+      if (version === requestVersion && spaceId() === currentSpaceId) {
+        setIsLoading(false);
       }
-
-      const models = (raw || [])
-        .map((entry) => {
-          if (typeof entry === "string") {
-            return { id: entry, label: entry };
-          }
-          return {
-            id: entry.id,
-            label: entry.name || entry.id,
-            description: entry.description,
-            source: entry.source,
-            disabled: entry.disabled,
-          };
-        })
-        .filter((entry) => entry.id);
-
-      const resolvedModels = models.length > 0 ? models : [...FALLBACK_MODELS];
-      if (isCancelled?.()) return;
-      setAvailableModels(resolvedModels);
-
-      const resolvedIds = resolvedModels.map((model) => model.id);
-      const selectableIds = resolvedModels
-        .filter((model) => !model.disabled)
-        .map((model) => model.id);
-      if (seedModel && resolvedIds.includes(seedModel)) {
-        if (isCancelled?.()) return;
-        setSelectedModel(seedModel);
-      } else {
-        const desiredModel = data.ai_model || data.model;
-        if (desiredModel && resolvedIds.includes(desiredModel)) {
-          if (isCancelled?.()) return;
-          setSelectedModel(desiredModel);
-        } else {
-          if (isCancelled?.()) return;
-          setSelectedModel((
-            prev,
-          ) =>
-            resolvedIds.includes(prev)
-              ? prev
-              : (selectableIds[0] ?? resolvedModels[0].id));
-        }
-      }
-    } catch (err) {
-      if (isCancelled?.()) return;
-      console.error("Failed to fetch space models:", err);
-      setAvailableModels([...FALLBACK_MODELS]);
     }
   };
 
@@ -116,12 +81,21 @@ export function useChatModelSelection({
 
   createEffect(() => {
     const currentSpaceId = spaceId();
-    const currentSeedModel = initialModel?.();
-    if (!currentSpaceId) return;
-    let cancelled = false;
-    void loadSpaceModels(currentSpaceId, currentSeedModel, () => cancelled);
+    // The seed describes the Run/thread that caused this mount. Clearing the
+    // hand-off after the first send must not refetch the same Workspace
+    // catalog and reset the user's next-Run selection.
+    const currentSeedModel = untrack(() => initialModel?.());
+    if (!currentSpaceId) {
+      requestVersion++;
+      setAvailableModels([]);
+      setSelectedModelState("");
+      setHasError(false);
+      setIsLoading(false);
+      return;
+    }
+    void loadSpaceModels(currentSpaceId, currentSeedModel);
     onCleanup(() => {
-      cancelled = true;
+      requestVersion++;
     });
   });
 
@@ -129,6 +103,11 @@ export function useChatModelSelection({
     availableModels,
     selectedModel,
     setSelectedModel,
+    isLoading,
+    hasError,
+    isReady: () =>
+      !isLoading() && !hasError() &&
+      isSelectableChatModel(availableModels(), selectedModel()),
     fetchSpaceModels,
   };
 }

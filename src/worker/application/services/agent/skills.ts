@@ -34,12 +34,9 @@ export type {
   SkillSelection,
 } from "./skill-resolution.ts";
 export {
-  activateSelectedSkills,
   applySkillAvailability,
-  buildDynamicSkillNote,
-  buildSkillEnhancedPrompt,
   evaluateSkillAvailability,
-  formatContractList,
+  materializeSelectedSkills,
   resolveSkillPlan,
   toSkillCatalogEntry,
 } from "./skill-resolution.ts";
@@ -47,8 +44,7 @@ export {
 // ── Loader ──────────────────────────────────────────────────────────────
 export type { SkillLoadResult } from "./skill-loader.ts";
 export {
-  buildSkillResolutionContext,
+  buildPinnedSkillResolutionContext,
   emitSkillLoadOutcome,
-  loadEquippedSkills,
-  resolveSkillPlanForRun,
+  resolveSkillPlanForPinnedRun,
 } from "./skill-loader.ts";

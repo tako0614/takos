@@ -13,7 +13,7 @@
   docs / 実装間で揃えるためのチェックリスト。
 - runner boundary: OpenTofu state backend、provider credential、Connection / ProviderBinding / policy の
   wiring は external Takosumi control plane が解決します。Takos product routes は Takosumi の StateVersion / Output
-  ledger と、認可済みの Interface / InterfaceBinding を消費します。
+  ledger と、認可済みの Interface / InterfaceBinding を読み込みます。
 
 ## 検証
 
@@ -63,7 +63,7 @@ self-hoster 自身の runbook と authority に従います。
 ## Takosumi Capsule Lifecycle
 
 Takosumi Capsule Lifecycle の公開モデルは
-[Takosumi specification](https://takosumi.com/docs/reference/model) を参照してください。Takos 側では
+[Takosumi specification](https://takosumi.com/docs/concepts/) を参照してください。Takos 側では
 [Takos App Interface](../architecture/app-interface.md) と
 [OpenTofu Outputs and Runtime Interfaces](../deploy/runtime-interfaces.md) を、app launcher / MCP / file handler / storage /
 Git / agent runtime の product profile として扱います。

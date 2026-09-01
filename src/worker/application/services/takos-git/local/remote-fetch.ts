@@ -3,9 +3,10 @@
  *
  * Replaces the container-based external import: the worker itself speaks the
  * git-upload-pack protocol to a remote server, receives a packfile, and unpacks
- * it into the R2-backed object store. This keeps a single source of truth (R2)
- * so imported repositories are immediately browsable and cloneable through the
- * worker, with no separate filesystem git store to keep in sync.
+ * it into the R2-backed object store. This keeps legacy imported data in one
+ * store for internal repository APIs and explicit migration tooling, with no
+ * separate filesystem git store to keep in sync. The built-in serve route is
+ * quarantined and does not expose these objects for clone/fetch.
  *
  * SSRF note: workerd has no DNS resolver, so hostnames cannot be pre-resolved
  * here. We reject private/loopback **IP literals** and require http(s); DNS

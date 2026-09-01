@@ -6,7 +6,11 @@
 
 ### Workspace
 
-会話、ファイル、リポジトリ、メモリ、アプリ、外部ツールをまとめる作業場所です。
+一人の Principal が会話、ファイル、リポジトリ、メモリ、アプリ、外部ツールを用途別にまとめる private なカテゴリーです。仕事・趣味・案件などを分けるため複数作れます。team、member、invite、role、ownership transfer は Takos Workspace の概念ではありません。
+
+### Principal
+
+外部 OIDC の `(issuer, sub)` から作る Takos 内の利用者 identity です。一つの host が複数 Principal を収容することはできますが、それぞれの Workspace は互いに分離します。DB に残る `account` / `team` / `membership` は移行互換の内部名です。
 
 ### Agent
 
@@ -40,7 +44,7 @@ Model Context Protocol の略です。外部サービスがエージェント向
 
 ### Takosumi
 
-Takos とは別のプロジェクトです。ホスト環境のアカウント、アプリのインストール、OpenTofu の実行と履歴を管理します。
+Takos とは別のプロジェクトです。ホスト環境のアカウント、アプリのインストール、OpenTofu の実行と履歴を管理します。Takosumi Workspace は Takos の private なカテゴリー Workspace とは別の control-plane object です。
 
 ### Capsule
 

@@ -44,6 +44,9 @@ export function CreateFolderModal(props: CreateFolderModalProps) {
     >
       <div class="space-y-4">
         <Input
+          id="storage-new-folder-name"
+          name="storage-new-folder-name"
+          aria-label={t("folderName")}
           value={newFolderName()}
           onInput={(e) =>
             setNewFolderName((e.target as HTMLInputElement).value)}

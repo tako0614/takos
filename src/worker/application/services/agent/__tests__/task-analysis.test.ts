@@ -52,7 +52,28 @@ test("analyzeTask coerces an unknown plan type to conversation", async () => {
 
   assertEquals(VALID_PLAN_TYPES.has("bogus"), false);
   assertEquals(plan.type, "conversation");
-  assertEquals(plan.tools, ["x"]);
+  assertEquals(plan.tools, []);
+});
+
+test("analyzeTask rejects malformed plan fields instead of trusting LLM JSON", async () => {
+  stubLLM(JSON.stringify({ type: "tool_only", tools: "search" }));
+
+  const plan = await analyzeTask("search the web", ctx);
+
+  assertEquals(plan.type, "conversation");
+  assertEquals(plan.tools, []);
+  assertEquals(plan.reasoning, "Analysis failed, defaulting to conversation");
+});
+
+test("analyzeTask only returns tools exposed to the analyzer", async () => {
+  stubLLM(JSON.stringify({
+    type: "tool_only",
+    tools: ["search", "invented", "search"],
+  }));
+
+  const plan = await analyzeTask("search the web", ctx);
+
+  assertEquals(plan.tools, ["search"]);
 });
 
 test("analyzeTask strips a ```json fence before parsing", async () => {

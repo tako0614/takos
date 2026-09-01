@@ -10,29 +10,20 @@
 import type { AgentMessage } from "./agent-models.ts";
 import { LLMClient } from "./llm.ts";
 import { logError } from "../../../shared/utils/logger.ts";
+import {
+  AGENT_TASK_PLAN_TYPES,
+  parseAgentTaskPlan,
+  type AgentTaskPlan,
+} from "../../../shared/types/agent-task-plan.ts";
 
 // ── Public types ────────────────────────────────────────────────────────
 
-export interface TaskPlan {
-  type: "conversation" | "tool_only" | "code_change" | "composite";
-  tools?: string[];
-  needsRepo?: boolean;
-  repoId?: string;
-  needsRuntime?: boolean;
-  usePR?: boolean;
-  needsReview?: boolean;
-  reviewType?: "self" | "separate_ai";
-  commitMessage?: string;
-  reasoning?: string;
-}
+export type TaskPlan = AgentTaskPlan;
 
 /** Valid task plan types. */
-export const VALID_PLAN_TYPES: ReadonlySet<string> = new Set([
-  "conversation",
-  "tool_only",
-  "code_change",
-  "composite",
-]);
+export const VALID_PLAN_TYPES: ReadonlySet<string> = new Set(
+  AGENT_TASK_PLAN_TYPES,
+);
 
 // ── Prompt ──────────────────────────────────────────────────────────────
 
@@ -103,20 +94,14 @@ export async function analyzeTask(
           .replace(/```json?\n?/g, "")
           .replace(/```/g, "")
           .trim();
-    const plan = JSON.parse(jsonBody) as TaskPlan;
+    const plan = parseAgentTaskPlan(JSON.parse(jsonBody));
+    if (!plan) throw new Error("Task analyzer returned an invalid plan shape");
 
-    if (!VALID_PLAN_TYPES.has(plan.type)) {
-      plan.type = "conversation";
-    }
-
-    plan.tools = plan.tools || [];
-    plan.needsRepo = plan.needsRepo ?? false;
-    plan.needsRuntime = plan.needsRuntime ?? false;
-    plan.usePR = plan.usePR ?? false;
-    plan.needsReview = plan.needsReview ?? false;
-    plan.reviewType = plan.reviewType || "self";
-
-    return plan;
+    const availableTools = new Set(context.tools);
+    return {
+      ...plan,
+      tools: plan.tools.filter((tool) => availableTools.has(tool)),
+    };
   } catch (error) {
     taskAnalysisDeps.logError("Task analysis failed", error, {
       module: "services/agent/task-analysis",
@@ -124,6 +109,11 @@ export async function analyzeTask(
     return {
       type: "conversation",
       tools: [],
+      needsRepo: false,
+      needsRuntime: false,
+      usePR: false,
+      needsReview: false,
+      reviewType: "self",
       reasoning: "Analysis failed, defaulting to conversation",
     };
   }

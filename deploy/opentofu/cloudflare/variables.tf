@@ -72,7 +72,7 @@ variable "public_url" {
 }
 
 variable "takosumi_accounts_url" {
-  description = "Optional Takosumi Accounts/control-plane URL consumed by the Takos Worker for OIDC and Capsule projection APIs."
+  description = "Optional Takosumi Accounts/control-plane URL consumed by the Takos Worker for shared Capsule and Interface APIs."
   type        = string
   default     = ""
 
@@ -83,7 +83,7 @@ variable "takosumi_accounts_url" {
 }
 
 variable "takosumi_accounts_issuer_url" {
-  description = "Optional Takosumi Accounts OIDC issuer URL consumed by the Takos Worker."
+  description = "Optional OIDC issuer URL consumed by the Takos Worker; it may be Takosumi Accounts or another operator-selected issuer."
   type        = string
   default     = ""
 
@@ -94,7 +94,7 @@ variable "takosumi_accounts_issuer_url" {
 }
 
 variable "takosumi_accounts_client_id" {
-  description = "Optional Takosumi Accounts public OIDC client id issued for this Takos Capsule."
+  description = "Optional public OIDC client id issued for this Takos deployment. A client secret is unnecessary for public PKCE clients."
   type        = string
   default     = ""
 }
@@ -121,7 +121,7 @@ variable "env" {
 }
 
 variable "takosumi_accounts_redirect_uri" {
-  description = "Optional Takosumi Accounts OIDC redirect URI. When unset, the Cloudflare module derives <public_url>/auth/oidc/callback when public_url is available."
+  description = "Optional OIDC redirect URI. When unset, the Cloudflare module derives <public_url>/auth/oidc/callback when public_url is available."
   type        = string
   default     = ""
 

@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -220,6 +221,71 @@ export const memories = sqliteTable(
   }),
 );
 
+// 52a. Canonical, content-free deletion authority for agent resources.
+//
+// The source row may be physically removed in the same transaction, while
+// this tombstone remains authoritative until the owning Workspace is deleted.
+// Derived vector/object replicas are handled by the one-to-one outbox below.
+export const agentResourceTombstones = sqliteTable(
+  "agent_resource_tombstones",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceKind: text("resource_kind").notNull(),
+    resourceId: text("resource_id").notNull(),
+    sourceDigest: text("source_digest").notNull(),
+    deletedByAccountId: text("deleted_by_account_id").references(
+      () => accounts.id,
+      { onDelete: "set null" },
+    ),
+    deletedAt: text("deleted_at").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqResource: uniqueIndex("idx_agent_resource_tombstones_resource")
+      .on(table.accountId, table.resourceKind, table.resourceId),
+    idxAccountDeletedAt: index(
+      "idx_agent_resource_tombstones_account_deleted_at",
+    ).on(table.accountId, table.deletedAt),
+  }),
+);
+
+// 52b. Exact cleanup targets captured with the source tombstone. Provider
+// cleanup is idempotent and may be retried after a Worker/Queue failure; no
+// provider listing or prefix-wide deletion is authorized by this record.
+export const agentResourceDeletionOutbox = sqliteTable(
+  "agent_resource_deletion_outbox",
+  {
+    id: text("id").primaryKey().references(() => agentResourceTombstones.id, {
+      onDelete: "cascade",
+    }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceKind: text("resource_kind").notNull(),
+    resourceId: text("resource_id").notNull(),
+    vectorIds: text("vector_ids").notNull().default("[]"),
+    offloadObjectKeys: text("offload_object_keys").notNull().default("[]"),
+    deliveryStatus: text("delivery_status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    claimToken: text("claim_token"),
+    claimedAt: text("claimed_at"),
+    nextAttemptAt: text("next_attempt_at"),
+    completedAt: text("completed_at"),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => ({
+    uniqResource: uniqueIndex("idx_agent_resource_deletion_outbox_resource")
+      .on(table.accountId, table.resourceKind, table.resourceId),
+    idxStatusNextAttempt: index(
+      "idx_agent_resource_deletion_outbox_status_next_attempt",
+    ).on(table.deliveryStatus, table.nextAttemptAt, table.claimedAt),
+  }),
+);
+
 // 53. Message
 export const messages = sqliteTable(
   "messages",
@@ -332,6 +398,10 @@ const runsTable = sqliteTable(
     leaseVersion: integer("lease_version").notNull().default(0),
     /** Unique marker for one lease-fenced atomic terminal commit. */
     completionKey: text("completion_key"),
+    /** Exact immutable RunContext revision accepted for the next operation. */
+    currentContextRevision: integer("current_context_revision"),
+    /** Machine-readable terminal authority failure, separate from error text. */
+    terminalReason: text("terminal_reason"),
     /** First thread-message sequence reserved by the atomic terminal commit. */
     transcriptSequenceStart: integer("transcript_sequence_start"),
     /** Opaque takos-agent-engine LoopState for lease-fenced crash recovery. */
@@ -384,7 +454,476 @@ export const runs = Object.assign(runsTable, {
   workerHeartbeat: runsTable.serviceHeartbeat,
 });
 
-// 92. Skill
+/**
+ * Immutable, derived transcript projections. `run_model_input` records the
+ * exact provider-visible history pinned by one Run; `semantic_turn` shares the
+ * same authority/deletion surface for the terminal recall cutover.
+ */
+export const turnProjectionRevisions = sqliteTable(
+  "turn_projection_revisions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runsTable.id, { onDelete: "cascade" }),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => threads.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    projectionKind: text("projection_kind").notNull(),
+    formatVersion: integer("format_version").notNull().default(1),
+    algorithmRevision: text("algorithm_revision").notNull(),
+    sourceStartSequence: integer("source_start_sequence").notNull(),
+    sourceEndSequence: integer("source_end_sequence").notNull(),
+    projectionDigest: text("projection_digest").notNull(),
+    projectionJson: text("projection_json").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqRunKind: uniqueIndex(
+      "turn_projection_revisions_account_id_run_id_projection_kind_unique",
+    ).on(table.accountId, table.runId, table.projectionKind),
+    uniqResourceDigest: uniqueIndex(
+      "turn_projection_revisions_account_id_resource_id_projection_digest_unique",
+    ).on(table.accountId, table.resourceId, table.projectionDigest),
+    idxThreadKindSequence: index(
+      "idx_turn_projection_revisions_thread_kind_sequence",
+    ).on(
+      table.accountId,
+      table.threadId,
+      table.projectionKind,
+      table.sourceEndSequence,
+    ),
+    idxRunKind: index("idx_turn_projection_revisions_run_kind").on(
+      table.runId,
+      table.projectionKind,
+    ),
+  }),
+);
+
+/** Content-free Vectorize identities for canonical semantic projections. */
+export const turnProjectionVectorRefs = sqliteTable(
+  "turn_projection_vector_refs",
+  {
+    projectionId: text("projection_id")
+      .notNull()
+      .references(() => turnProjectionRevisions.id, { onDelete: "cascade" }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    vectorId: text("vector_id").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    chunkCount: integer("chunk_count").notNull(),
+    chunkDigest: text("chunk_digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.projectionId, table.chunkIndex] }),
+    uniqVectorId: uniqueIndex(
+      "turn_projection_vector_refs_vector_id_unique",
+    ).on(table.vectorId),
+    idxAccount: index("idx_turn_projection_vector_refs_account_id").on(
+      table.accountId,
+      table.projectionId,
+    ),
+  }),
+);
+
+/**
+ * Immutable, allowlisted permission and execution-budget snapshot for one Run.
+ * Tool execution treats this immutable snapshot as an upper bound and still
+ * intersects it with current Workspace policy. The broader context record
+ * remains shadow-only until every control input is revisioned.
+ */
+export const runGrants = sqliteTable(
+  "run_grants",
+  {
+    runId: text("run_id").primaryKey().references(() => runsTable.id),
+    formatVersion: integer("format_version").notNull().default(1),
+    principalId: text("principal_id").notNull().references(() => accounts.id),
+    workspaceId: text("workspace_id").notNull().references(() => accounts.id),
+    parentRunId: text("parent_run_id").references(() => runsTable.id),
+    parentGrantDigest: text("parent_grant_digest"),
+    enforcementMode: text("enforcement_mode").notNull().default("enforced"),
+    grantJson: text("grant_json").notNull(),
+    digest: text("digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    idxWorkspaceCreatedAt: index("idx_run_grants_workspace_created_at").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    idxPrincipalCreatedAt: index("idx_run_grants_principal_created_at").on(
+      table.principalId,
+      table.createdAt,
+    ),
+    idxParentRun: index("idx_run_grants_parent_run_id").on(table.parentRunId),
+  }),
+);
+
+/**
+ * Append-only materialization identity for a Run. Revision 1 is committed with
+ * the Run and RunGrant; later progressive activation appends new revisions.
+ */
+export const runContextRevisions = sqliteTable(
+  "run_context_revisions",
+  {
+    runId: text("run_id").notNull().references(() => runsTable.id),
+    revision: integer("revision").notNull(),
+    parentRevision: integer("parent_revision"),
+    activationEventId: integer("activation_event_id"),
+    activationEventKey: text("activation_event_key"),
+    formatVersion: integer("format_version").notNull().default(1),
+    principalId: text("principal_id").notNull().references(() => accounts.id),
+    workspaceId: text("workspace_id").notNull().references(() => accounts.id),
+    threadId: text("thread_id").notNull().references(() => threads.id),
+    transcriptCutSequence: integer("transcript_cut_sequence").notNull(),
+    agentProfileRevision: text("agent_profile_revision").notNull(),
+    modelRevision: text("model_revision").notNull(),
+    systemPromptRevision: text("system_prompt_revision").notNull(),
+    runGrantDigest: text("run_grant_digest").notNull(),
+    recordMode: text("record_mode").notNull().default("shadow"),
+    contextJson: text("context_json").notNull(),
+    digest: text("digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.runId, table.revision] }),
+    idxWorkspaceCreatedAt: index(
+      "idx_run_context_revisions_workspace_created_at",
+    ).on(table.workspaceId, table.createdAt),
+    idxThreadCreatedAt: index("idx_run_context_revisions_thread_created_at").on(
+      table.threadId,
+      table.createdAt,
+    ),
+    idxGrantDigest: index("idx_run_context_revisions_grant_digest").on(
+      table.runGrantDigest,
+    ),
+    uniqActivationEventKey: uniqueIndex(
+      "idx_run_context_revisions_activation_event_key",
+    ).on(table.runId, table.activationEventKey),
+  }),
+);
+
+/**
+ * Immutable, content-free proof that one exact RunContext revision authorized
+ * an outbound provider request. Request bodies and credentials stay out of the
+ * Worker database; their stable digest is sufficient for replay prevention and
+ * audit correlation.
+ */
+export const runModelCalls = sqliteTable(
+  "run_model_calls",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id").notNull(),
+    contextRevision: integer("context_revision").notNull(),
+    contextDigest: text("context_digest").notNull(),
+    runGrantDigest: text("run_grant_digest").notNull(),
+    requestDigest: text("request_digest").notNull(),
+    transportAttempt: integer("transport_attempt").notNull(),
+    beginNonceDigest: text("begin_nonce_digest").notNull(),
+    serviceId: text("service_id").notNull(),
+    leaseVersion: integer("lease_version").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    revisionFk: foreignKey({
+      columns: [table.runId, table.contextRevision],
+      foreignColumns: [runContextRevisions.runId, runContextRevisions.revision],
+      name: "run_model_calls_revision_fkey",
+    }).onDelete("cascade"),
+    uniqIdentity: uniqueIndex("idx_run_model_calls_identity").on(
+      table.runId,
+      table.contextRevision,
+      table.requestDigest,
+      table.transportAttempt,
+    ),
+    idxRunCreatedAt: index("idx_run_model_calls_run_created_at").on(
+      table.runId,
+      table.createdAt,
+    ),
+  }),
+);
+
+/** Secret-free provider transport meaning selected once for one Run. */
+export const providerMaterializationRevisions = sqliteTable(
+  "provider_materialization_revisions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runsTable.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    protocol: text("protocol").notNull(),
+    endpoint: text("endpoint"),
+    materializationDigest: text("materialization_digest").notNull(),
+    materializationJson: text("materialization_json").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqRun: uniqueIndex("idx_provider_materialization_revisions_run").on(
+      table.runId,
+    ),
+    uniqContent: uniqueIndex(
+      "idx_provider_materialization_revisions_content",
+    ).on(
+      table.accountId,
+      table.resourceId,
+      table.materializationDigest,
+    ),
+  }),
+);
+
+/**
+ * Normalized exact source identities for each immutable RunContext revision.
+ * The context JSON is the digest-bearing replay record; this table is the
+ * deletion/live-fence index and must be verified against that JSON on read.
+ */
+export const runContextResourceRefs = sqliteTable(
+  "run_context_resource_refs",
+  {
+    runId: text("run_id").notNull(),
+    contextRevision: integer("context_revision").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceKind: text("resource_kind").notNull(),
+    resourceId: text("resource_id").notNull(),
+    resourceDigest: text("resource_digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [
+        table.runId,
+        table.contextRevision,
+        table.resourceKind,
+        table.resourceId,
+      ],
+    }),
+    revisionFk: foreignKey({
+      columns: [table.runId, table.contextRevision],
+      foreignColumns: [runContextRevisions.runId, runContextRevisions.revision],
+      name: "run_context_resource_refs_revision_fkey",
+    }).onDelete("cascade"),
+    idxResource: index("idx_run_context_resource_refs_resource").on(
+      table.workspaceId,
+      table.resourceKind,
+      table.resourceId,
+      table.runId,
+      table.contextRevision,
+    ),
+  }),
+);
+
+/** Immutable, content-addressed native/MCP tool contract revision. */
+export const toolDescriptorRevisions = sqliteTable(
+  "tool_descriptor_revisions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    logicalName: text("logical_name").notNull(),
+    source: text("source").notNull(),
+    adapterReference: text("adapter_reference").notNull(),
+    adapterRevision: text("adapter_revision").notNull(),
+    schemaDigest: text("schema_digest").notNull(),
+    descriptorDigest: text("descriptor_digest").notNull(),
+    descriptorJson: text("descriptor_json").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqContent: uniqueIndex("idx_tool_descriptor_revisions_content").on(
+      table.accountId,
+      table.resourceId,
+      table.descriptorDigest,
+    ),
+    idxLogicalName: index("idx_tool_descriptor_revisions_logical_name").on(
+      table.accountId,
+      table.logicalName,
+      table.createdAt,
+    ),
+  }),
+);
+
+/** Exact ToolDescriptorRevision references carried by one RunContext. */
+export const runContextToolDescriptorRefs = sqliteTable(
+  "run_context_tool_descriptor_refs",
+  {
+    runId: text("run_id").notNull(),
+    contextRevision: integer("context_revision").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    resourceDigest: text("resource_digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.runId, table.contextRevision, table.resourceId],
+    }),
+    revisionFk: foreignKey({
+      columns: [table.runId, table.contextRevision],
+      foreignColumns: [runContextRevisions.runId, runContextRevisions.revision],
+      name: "run_context_tool_descriptor_refs_revision_fkey",
+    }).onDelete("cascade"),
+    idxResource: index("idx_run_context_tool_descriptor_refs_resource").on(
+      table.workspaceId,
+      table.resourceId,
+      table.runId,
+      table.contextRevision,
+    ),
+  }),
+);
+
+/** Exact ProviderMaterializationRevision carried by one RunContext. */
+export const runContextProviderMaterializationRefs = sqliteTable(
+  "run_context_provider_materialization_refs",
+  {
+    runId: text("run_id").notNull(),
+    contextRevision: integer("context_revision").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    resourceDigest: text("resource_digest").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.runId, table.contextRevision, table.resourceId],
+    }),
+    revisionFk: foreignKey({
+      columns: [table.runId, table.contextRevision],
+      foreignColumns: [runContextRevisions.runId, runContextRevisions.revision],
+      name: "run_context_provider_materialization_refs_revision_fkey",
+    }).onDelete("cascade"),
+    resourceFk: foreignKey({
+      columns: [table.workspaceId, table.resourceId, table.resourceDigest],
+      foreignColumns: [
+        providerMaterializationRevisions.accountId,
+        providerMaterializationRevisions.resourceId,
+        providerMaterializationRevisions.materializationDigest,
+      ],
+      name: "run_context_provider_materialization_refs_resource_fkey",
+    }).onDelete("cascade"),
+    idxResource: index(
+      "idx_run_context_provider_materialization_refs_resource",
+    ).on(
+      table.workspaceId,
+      table.resourceId,
+      table.runId,
+      table.contextRevision,
+    ),
+  }),
+);
+
+// 92. Immutable Skill content revision
+export const skillRevisions = sqliteTable(
+  "skill_revisions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    source: text("source").notNull(),
+    skillId: text("skill_id").notNull(),
+    contentDigest: text("content_digest").notNull(),
+    contentJson: text("content_json").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqContent: uniqueIndex("idx_skill_revisions_content").on(
+      table.accountId,
+      table.resourceId,
+      table.contentDigest,
+    ),
+    idxLogicalSkill: index("idx_skill_revisions_logical_skill").on(
+      table.accountId,
+      table.source,
+      table.skillId,
+      table.createdAt,
+    ),
+  }),
+);
+
+// 93. Immutable Skill resource revision
+export const skillResourceRevisions = sqliteTable(
+  "skill_resource_revisions",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    skillRevisionId: text("skill_revision_id")
+      .notNull()
+      .references(() => skillRevisions.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    resourceKey: text("resource_key").notNull(),
+    mediaType: text("media_type").notNull(),
+    contentDigest: text("content_digest").notNull(),
+    contentBytes: integer("content_bytes").notNull(),
+    contentText: text("content_text").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    uniqKey: uniqueIndex("idx_skill_resource_revisions_key").on(
+      table.skillRevisionId,
+      table.resourceKey,
+    ),
+    uniqContent: uniqueIndex("idx_skill_resource_revisions_content").on(
+      table.accountId,
+      table.resourceId,
+      table.contentDigest,
+    ),
+    idxSkill: index("idx_skill_resource_revisions_skill").on(
+      table.accountId,
+      table.skillRevisionId,
+    ),
+  }),
+);
+
+// 94. Immutable Run Skill-plan revision
+export const runSkillPlanRevisions = sqliteTable(
+  "run_skill_plan_revisions",
+  {
+    runId: text("run_id")
+      .notNull()
+      .references(() => runsTable.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    planDigest: text("plan_digest").notNull(),
+    planJson: text("plan_json").notNull(),
+    ...createdAtColumn,
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.runId, table.revision] }),
+    uniqResource: uniqueIndex("idx_run_skill_plan_revisions_resource").on(
+      table.resourceId,
+    ),
+    idxAccountCreated: index("idx_run_skill_plan_revisions_account_created").on(
+      table.accountId,
+      table.createdAt,
+    ),
+  }),
+);
+
+// 95. Mutable custom Skill identity
 export const skills = sqliteTable(
   "skills",
   {

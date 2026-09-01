@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { For, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { MAX_CHAT_MESSAGE_CHARACTERS } from "../../hooks/chat-limits.ts";
 
 interface ChatInputBarProps {
   input: string;
@@ -11,6 +12,8 @@ interface ChatInputBarProps {
   onRemoveFile: (index: number) => void;
   onSend: () => void;
   isLoading: boolean;
+  sendBlocked?: boolean;
+  interactionDisabled?: boolean;
   isCancelling?: boolean;
   onCancel?: () => void;
   attachLabel: string;
@@ -45,12 +48,14 @@ export function ChatInputBar(props: ChatInputBarProps) {
   });
   const sendDisabled = () =>
     (!props.input.trim() && props.attachedFiles.length === 0) ||
+    props.sendBlocked ||
+    props.interactionDisabled ||
     props.isLoading;
 
   // Create object URLs for image thumbnails and revoke on cleanup
   const objectUrls = createMemo(() => {
     return props.attachedFiles.map((file) =>
-      file.type.startsWith("image/") ? URL.createObjectURL(file) : null
+      file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
     );
   });
 
@@ -65,6 +70,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
 
   const handleSubmit = (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
+    if (sendDisabled()) return;
     props.onSend();
   };
 
@@ -74,6 +80,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (sendDisabled()) return;
       props.onSend();
     }
   };
@@ -89,9 +96,10 @@ export function ChatInputBar(props: ChatInputBarProps) {
       if (item.kind === "file") {
         const file = item.getAsFile();
         if (file) {
-          const name = file.name && file.name !== "image.png"
-            ? file.name
-            : `pasted-${Date.now()}.png`;
+          const name =
+            file.name && file.name !== "image.png"
+              ? file.name
+              : `pasted-${Date.now()}.png`;
           const renamedFile = new File([file], name, { type: file.type });
           pastedFiles.push(renamedFile);
         }
@@ -124,8 +132,9 @@ export function ChatInputBar(props: ChatInputBarProps) {
                       class="w-10 h-10 rounded object-cover flex-shrink-0"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
-                        (e.target as HTMLImageElement).nextElementSibling
-                          ?.classList.remove("hidden");
+                        (
+                          e.target as HTMLImageElement
+                        ).nextElementSibling?.classList.remove("hidden");
                       }}
                     />
                   </Show>
@@ -153,7 +162,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
             type="button"
             class="flex-shrink-0 w-11 h-11 md:w-10 md:h-10 flex items-center justify-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             onClick={() => fileInputRef?.click()}
-            disabled={props.isLoading}
+            disabled={props.isLoading || props.interactionDisabled}
             title={props.attachLabel}
             aria-label={props.attachLabel}
           >
@@ -162,16 +171,19 @@ export function ChatInputBar(props: ChatInputBarProps) {
           <input
             ref={fileInputRef}
             type="file"
+            name="chat-attachments"
             multiple
             style={{ display: "none" }}
             onChange={props.onFileSelect}
           />
           <textarea
             ref={textareaRef}
+            name="chat-message"
             class="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 min-h-[44px] max-h-48 text-base"
             placeholder={props.placeholder}
             aria-label={props.placeholder}
             value={props.input}
+            maxLength={MAX_CHAT_MESSAGE_CHARACTERS}
             onInput={(e) => {
               props.onInputChange(e.currentTarget.value);
               autoResizeTextarea();
@@ -183,7 +195,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
               setIsComposing(false);
               props.onInputChange(e.currentTarget.value);
             }}
-            disabled={props.isLoading}
+            disabled={props.isLoading || props.interactionDisabled}
             rows={1}
           />
           <Show
@@ -209,9 +221,9 @@ export function ChatInputBar(props: ChatInputBarProps) {
               onClick={props.onCancel}
               disabled={props.isCancelling}
               title={props.isCancelling ? t("cancellingRun") : t("cancelRun")}
-              aria-label={props.isCancelling
-                ? t("cancellingRun")
-                : t("cancelRun")}
+              aria-label={
+                props.isCancelling ? t("cancellingRun") : t("cancelRun")
+              }
             >
               <Show
                 when={props.isCancelling}

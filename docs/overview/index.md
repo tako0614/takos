@@ -1,6 +1,6 @@
 # Takos の全体像
 
-Takos は、AI エージェントへの依頼と、その作業に必要なファイル・Git・メモリ・アプリ・外部ツールを一つにまとめるワークスペースです。
+Takos は、一人の利用者が AI エージェントへの依頼と、その作業に必要なファイル・Git・メモリ・アプリ・外部ツールをまとめるソフトウェアです。
 
 ## 利用者が触るもの
 
@@ -10,18 +10,23 @@ Takos は、AI エージェントへの依頼と、その作業に必要なフ�
 - **Apps**: Workspace に追加したアプリを開く
 - **Connections**: MCP サーバーを接続し、利用できるツールを管理する
 
-この作業場所を **Workspace** と呼びます。新しい Workspace にアプリは自動追加されません。
+この作業場所を **Workspace** と呼びます。仕事・趣味・案件などを分ける private なカテゴリーとして複数作れます。他のアカウントを招待する共同作業単位ではありません。新しい Workspace にアプリは自動追加されません。
 
 ## 裏側の役割分担
 
-Takos と Takosumi は別のソフトウェアです。
+Takos と Takosumi は別のソフトウェアです。Takos の基本機能は単独で動き、
+Takosumi へ接続した場合だけ Principal に委任された state、canonical Capsule lifecycle、Interface
+を利用します。公式 hosted service の Takosumi Cloud も optional です。
 
 | ソフトウェア | 担当すること |
 | --- | --- |
 | Takos | Chat、エージェント、Files、Memory、Apps、Connections |
 | Takosumi | ホスト環境のアカウント、アプリのインストール、OpenTofu の実行と履歴 |
 
-Takos の利用者は、通常この違いを意識する必要はありません。アプリの追加やセルフホストを行うときだけ、Takosumi の管理画面や API が登場します。
+Takosumi 未接続時も Chat、エージェント、Files、Memory、app-local Workspace は
+利用できます。外部 OIDC identity やアプリ lifecycle が必要な場合に、運営者または
+self-hoster が Takosumi を接続します。Takosumi Accounts が他 product 向けに持つ
+組織・team 機能は Takos Workspace へ投影しません。
 
 ## アプリとツール
 
@@ -38,7 +43,7 @@ Takos の利用者は、通常この違いを意識する必要はありませ�
 
 - 運営者が提供する Takos を使う
 - ローカルの開発環境を起動する
-- OpenTofu モジュールで自分の Cloudflare アカウントへ配置する
+- OpenTofu moduleで自分のCloudflare accountへ配置し、必要ならTakosumiを接続する
 
 いずれの場合も、利用者から見える基本操作は同じです。
 

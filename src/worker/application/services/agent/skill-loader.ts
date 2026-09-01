@@ -1,31 +1,25 @@
 /**
  * Skill Loading and Runtime Resolution.
  *
- * Contains functions that load equipped skills from the database,
- * build skill resolution context from conversation history and
- * thread metadata, and emit skill load outcome events.
+ * Resolves the immutable initial Skill plan only from exact Run model input,
+ * then emits bounded load telemetry. Mutable Thread metadata is deliberately
+ * outside this module's interface.
  *
  * Extracted from skills.ts to separate runtime loading concerns
  * from scoring and resolution logic.
  */
 
 import type { AgentConfig, AgentEvent, AgentMessage } from "./agent-models.ts";
-import type { ToolExecutorLike } from "../../tools/executor.ts";
-import { getDb, runs, threads } from "../../../infra/db/index.ts";
-import { eq } from "drizzle-orm";
 import {
   listLocalizedManagedSkills,
   resolveSkillLocale,
 } from "./managed-skills.ts";
+import { MAX_CUSTOM_SKILL_INSTRUCTION_BYTES } from "../../../shared/types/skills.ts";
 import { listEnabledCustomSkillContext } from "../source/skills.ts";
 import { listMcpServers } from "../platform/mcp.ts";
-import { getSpaceLocale } from "../identity/locale.ts";
-import {
-  getDelegationPacketFromRunInput,
-  isDelegationLocale,
-} from "./delegation.ts";
+import { getDelegationPacketFromRunInput } from "./delegation.ts";
 import { listSkillTemplates } from "./skill-templates.ts";
-import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type {
   SkillCatalogEntry,
@@ -42,7 +36,8 @@ import { resolveSkillPlan } from "./skill-resolution.ts";
 // therefore get a conservative byte budget inside that same reserve instead
 // of an independent 1 MiB allowance that could overflow the model window.
 export const MAX_TOTAL_SKILL_INSTRUCTION_BYTES = 8 * 1024;
-export const MAX_PER_SKILL_INSTRUCTION_BYTES = 4 * 1024;
+export const MAX_PER_SKILL_INSTRUCTION_BYTES =
+  MAX_CUSTOM_SKILL_INSTRUCTION_BYTES;
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -52,7 +47,7 @@ export interface SkillLoadResult {
   skillLocale: "ja" | "en";
   availableSkills: SkillCatalogEntry[];
   selectedSkills: SkillSelection[];
-  activatedSkills: SkillContext[];
+  selectedSkillContents: SkillContext[];
 }
 
 type SkillAvailabilityInput = {
@@ -79,7 +74,7 @@ async function loadEquippedSkillsWithAvailability(
     skillLocale: "en",
     availableSkills: [],
     selectedSkills: [],
-    activatedSkills: [],
+    selectedSkillContents: [],
   };
 
   try {
@@ -155,7 +150,7 @@ async function loadEquippedSkillsWithAvailability(
       skillLocale,
       availableSkills: plan.availableSkills,
       selectedSkills: plan.selectedSkills,
-      activatedSkills: plan.activatedSkills,
+      selectedSkillContents: plan.selectedSkillContents,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -166,140 +161,78 @@ async function loadEquippedSkillsWithAvailability(
   }
 }
 
-export async function loadEquippedSkills(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-  toolExecutor: ToolExecutorLike | undefined,
-  config: AgentConfig,
-  skillContext: SkillResolutionContext,
-): Promise<SkillLoadResult> {
-  return loadEquippedSkillsWithAvailability(db, spaceId, config, skillContext, {
-    availableToolNames:
-      toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
-  });
-}
-
-/**
- * Build the skill resolution context from conversation history and thread metadata.
- */
-export async function buildSkillResolutionContext(
-  db: SqlDatabaseBinding,
-  context: { threadId: string; runId: string; spaceId: string },
-  config: AgentConfig,
-  history: AgentMessage[],
-): Promise<SkillResolutionContext> {
-  const drizzleDb = getDb(db);
-  const recentUserConversation = history
-    .filter((message) => message.role === "user")
-    .map((message) => message.content);
-
-  const thread = await drizzleDb
-    .select({
-      title: threads.title,
-      locale: threads.locale,
-      summary: threads.summary,
-      keyPoints: threads.keyPoints,
-    })
-    .from(threads)
-    .where(eq(threads.id, context.threadId))
-    .get();
-
-  const runRow = await drizzleDb
-    .select({
-      input: runs.input,
-    })
-    .from(runs)
-    .where(eq(runs.id, context.runId))
-    .get();
-
-  let parsedRunInput: Record<string, unknown> = {};
+/** Build only from the exact inputs already verified for the model request. */
+export function buildPinnedSkillResolutionContext(
+  input: {
+    agentType: string;
+    history: AgentMessage[];
+    runInputJson: string;
+  },
+): SkillResolutionContext {
+  let runInput: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(runRow?.input || "{}") as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      parsedRunInput = parsed as Record<string, unknown>;
+    const parsed = JSON.parse(input.runInputJson) as unknown;
+    if (
+      typeof parsed !== "object" || parsed === null || Array.isArray(parsed)
+    ) {
+      throw new TypeError("Run input must be an object");
     }
+    runInput = parsed as Record<string, unknown>;
   } catch (error) {
-    logWarn("Failed to parse run input for skill resolution", {
-      module: "services/agent/skill-loader",
-      error: error instanceof Error ? error.message : String(error),
-    });
+    throw new TypeError("Pinned Run input is invalid", { cause: error });
   }
-
-  let threadKeyPoints: string[] = [];
-  try {
-    const parsed = JSON.parse(thread?.keyPoints || "[]") as unknown;
-    if (Array.isArray(parsed)) {
-      threadKeyPoints = parsed
-        .map((item) => String(item).trim())
-        .filter(Boolean);
-    }
-  } catch (error) {
-    logWarn("Failed to parse thread key points for skill resolution", {
-      module: "services/agent/skill-loader",
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  const delegationPacket = getDelegationPacketFromRunInput(parsedRunInput);
-  const preferredLocale =
-    delegationPacket?.locale ??
-    (isDelegationLocale(thread?.locale) ? thread.locale : null);
-
+  const delegationPacket = getDelegationPacketFromRunInput(runInput);
   return {
-    conversation: recentUserConversation,
-    threadTitle: thread?.title ?? null,
-    threadSummary: thread?.summary ?? null,
-    threadKeyPoints,
-    runInput: parsedRunInput,
-    agentType: config.type,
-    preferredLocale,
-    spaceLocale: await getSpaceLocale(db, context.spaceId),
+    conversation: input.history
+      .filter((message) => message.role === "user")
+      .map((message) => message.content),
+    threadTitle: null,
+    threadSummary: null,
+    threadKeyPoints: [],
+    runInput,
+    agentType: input.agentType,
+    preferredLocale: delegationPacket?.locale ?? null,
+    spaceLocale: null,
     acceptLanguage:
-      typeof parsedRunInput.accept_language === "string"
-        ? parsedRunInput.accept_language
-        : typeof parsedRunInput.acceptLanguage === "string"
-          ? parsedRunInput.acceptLanguage
+      typeof runInput.accept_language === "string"
+        ? runInput.accept_language
+        : typeof runInput.acceptLanguage === "string"
+          ? runInput.acceptLanguage
           : null,
   };
 }
 
-export async function resolveSkillPlanForRun(
+/**
+ * Resolve Skill selection from the same pinned inputs used for the model
+ * request. This deliberately excludes mutable Thread summary/title/key-points
+ * and caller-supplied history. The result must be persisted as immutable
+ * Skill revisions before any instructions become model-visible.
+ */
+export async function resolveSkillPlanForPinnedRun(
   db: SqlDatabaseBinding,
   input: {
-    threadId: string;
-    runId: string;
     spaceId: string;
     agentType: string;
     history: AgentMessage[];
+    runInputJson: string;
     availableToolNames: string[];
   },
-): Promise<SkillLoadResult> {
-  const skillContext = await buildSkillResolutionContext(
-    db,
-    {
-      threadId: input.threadId,
-      runId: input.runId,
-      spaceId: input.spaceId,
-    },
-    {
-      type: input.agentType,
-      systemPrompt: "",
-    },
-    input.history,
-  );
-
-  return loadEquippedSkillsWithAvailability(
+): Promise<{
+  resolutionContext: SkillResolutionContext;
+  plan: SkillLoadResult;
+}> {
+  const resolutionContext = buildPinnedSkillResolutionContext(input);
+  const plan = await loadEquippedSkillsWithAvailability(
     db,
     input.spaceId,
-    {
-      type: input.agentType,
-      systemPrompt: "",
-    },
-    skillContext,
-    {
-      availableToolNames: input.availableToolNames,
-    },
+    { type: input.agentType, systemPrompt: "" },
+    resolutionContext,
+    { availableToolNames: input.availableToolNames },
   );
+  if (!plan.success) {
+    throw new Error(plan.error || "Pinned Skill plan resolution failed");
+  }
+  return { resolutionContext, plan };
 }
 
 /**
@@ -327,7 +260,7 @@ export async function emitSkillLoadOutcome(
         (skill) => skill.availability !== "unavailable",
       ).length,
       selected_skill_count: result.selectedSkills.length,
-      activated_skill_count: result.activatedSkills.length,
+      selected_skill_content_count: result.selectedSkillContents.length,
       managed_skill_count: managedCount,
       custom_skill_count: customCount,
       available_skill_ids: result.availableSkills.map((skill) => skill.id),
@@ -335,14 +268,16 @@ export async function emitSkillLoadOutcome(
         .filter((skill) => skill.availability !== "unavailable")
         .map((skill) => skill.id),
       selected_skill_ids: result.selectedSkills.map((entry) => entry.skill.id),
-      activated_skill_ids: result.activatedSkills.map((skill) => skill.id),
+      selected_skill_content_ids: result.selectedSkillContents.map((skill) =>
+        skill.id
+      ),
       selected_skills: result.selectedSkills.map((entry) => ({
         id: entry.skill.id,
         name: entry.skill.name,
         score: entry.score,
         reasons: entry.reasons,
       })),
-      skills: result.activatedSkills.map((skill) => skill.name),
+      skills: result.selectedSkillContents.map((skill) => skill.name),
     });
     return;
   }

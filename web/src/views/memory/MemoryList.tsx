@@ -2,15 +2,21 @@ import { createMemo, createSignal } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import type { Memory, Reminder } from "../../types/index.ts";
+import { getMemoryImportanceStars } from "./memory-importance.ts";
+import { MAX_MEMORY_SEARCH_QUERY_CHARACTERS } from "takos-api-contract/shared/types";
 
 export interface MemoryListProps {
   memories: Memory[];
   reminders: Reminder[];
   loading: boolean;
+  error: string | null;
+  onRetry: () => void;
   showReminders: boolean;
   onShowRemindersChange: (value: boolean) => void;
   onDeleteMemory: (id: string) => void;
   onDeleteReminder: (id: string) => void;
+  onEditMemory: (memory: Memory) => void;
+  onEditReminder: (reminder: Reminder) => void;
   getTypeIcon: (type: Memory["type"]) => string;
   getTypeLabel: (type: Memory["type"]) => string;
   getTriggerIcon: (type: Reminder["trigger_type"]) => string;
@@ -65,6 +71,22 @@ export function MemoryList(props: MemoryListProps) {
         </button>
       </div>
 
+      {props.error && (
+        <div
+          class="mb-6 flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          role="alert"
+        >
+          <span>{props.error}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded-md px-3 py-1.5 font-medium hover:bg-red-100 dark:hover:bg-red-900/40"
+            onClick={props.onRetry}
+          >
+            {t("retry")}
+          </button>
+        </div>
+      )}
+
       {props.loading
         ? (
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
@@ -72,6 +94,11 @@ export function MemoryList(props: MemoryListProps) {
             <span>{t("loading")}</span>
           </div>
         )
+        : props.error &&
+            (props.showReminders
+              ? props.reminders.length === 0
+              : props.memories.length === 0)
+        ? null
         : !props.showReminders
         ? (
           <div class="flex flex-col gap-6">
@@ -80,8 +107,12 @@ export function MemoryList(props: MemoryListProps) {
                 <Icons.Search class="w-5 h-5 absolute left-3 text-zinc-500 dark:text-zinc-400" />
                 <input
                   type="text"
+                  name="memory-search"
+                  aria-label={t("memorySearch")}
                   class="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                   placeholder={t("memorySearch")}
+                  maxLength={MAX_MEMORY_SEARCH_QUERY_CHARACTERS}
+                  autocomplete="off"
                   value={searchQuery()}
                   onInput={(e) => setSearchQuery(e.currentTarget.value)}
                 />
@@ -116,8 +147,10 @@ export function MemoryList(props: MemoryListProps) {
               )
               : (
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredMemories().map((memory) => (
-                    <div class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl p-4 flex flex-col gap-3 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors">
+                  {filteredMemories().map((memory) => {
+                    const stars = getMemoryImportanceStars(memory.importance);
+                    return (
+                      <div class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl p-4 flex flex-col gap-3 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors">
                       <div class="flex items-center justify-between gap-2">
                         <span class="text-sm text-zinc-500 dark:text-zinc-400">
                           {props.getTypeIcon(memory.type)}{" "}
@@ -137,25 +170,35 @@ export function MemoryList(props: MemoryListProps) {
                           class="text-xs text-zinc-600 dark:text-zinc-400"
                           title={t("memoryImportance")}
                         >
-                          {"\u2605".repeat(Math.round(memory.importance * 5))}
-                          {"\u2606".repeat(
-                            5 - Math.round(memory.importance * 5),
-                          )}
+                          {"\u2605".repeat(stars.filled)}
+                          {"\u2606".repeat(stars.empty)}
                         </span>
                         <span class="text-xs text-zinc-500 dark:text-zinc-400">
                           {new Date(memory.created_at).toLocaleDateString()}
                         </span>
-                        <button
-                          type="button"
-                          class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                          onClick={() => props.onDeleteMemory(memory.id)}
-                          title={t("deleteMemory")}
-                        >
-                          <Icons.Trash />
-                        </button>
+                        <div class="flex items-center gap-1">
+                          <button
+                            type="button"
+                            class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            onClick={() => props.onEditMemory(memory)}
+                            title={t("editMemory")}
+                            aria-label={t("editMemory")}
+                          >
+                            <Icons.Edit />
+                          </button>
+                          <button
+                            type="button"
+                            class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            onClick={() => props.onDeleteMemory(memory.id)}
+                            title={t("deleteMemory")}
+                          >
+                            <Icons.Trash />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
           </div>
@@ -214,14 +257,25 @@ export function MemoryList(props: MemoryListProps) {
                         <span class="text-xs text-zinc-500 dark:text-zinc-400">
                           {new Date(reminder.created_at).toLocaleDateString()}
                         </span>
-                        <button
-                          type="button"
-                          class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                          onClick={() => props.onDeleteReminder(reminder.id)}
-                          title={t("delete")}
-                        >
-                          <Icons.Trash />
-                        </button>
+                        <div class="flex items-center gap-1">
+                          <button
+                            type="button"
+                            class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            onClick={() => props.onEditReminder(reminder)}
+                            title={t("editReminder")}
+                            aria-label={t("editReminder")}
+                          >
+                            <Icons.Edit />
+                          </button>
+                          <button
+                            type="button"
+                            class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            onClick={() => props.onDeleteReminder(reminder.id)}
+                            title={t("delete")}
+                          >
+                            <Icons.Trash />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

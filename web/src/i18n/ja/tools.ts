@@ -24,9 +24,12 @@ export const tools = {
     "Takos はこのコネクタの運営者を検証していません。ツールを使うと、接続先へ入力やコンテキストが送信される場合があります。",
   connectionAdded: "接続を追加しました",
   connectionAuthorizationOpened: "認証画面を新しいウィンドウで開きました",
+  connectionAuthorizationReady: "認証を続けて接続を完了してください",
   connectionAuthorizationComplete: "認証が完了しました",
   connectionAuthorizationPending:
-    "別ウィンドウで認証を完了してください。Takos が接続一覧を自動更新します。",
+    "この接続を使うには認証を完了してください。Takos が接続一覧を自動更新します。",
+  connectionAuthorizationTimedOut:
+    "認証の自動確認を停止しました。認証を続けたあと、もう一度確認してください。",
   continueAuthorization: "認証を続ける",
   connectedConnections: "接続済み",
   connectedConnectionsDescription:
@@ -168,9 +171,11 @@ export const tools = {
   mcpToolAutomatic: "自動実行",
   mcpToolKeepDisabled: "無効のまま確認",
   mcpToolConfirmationsTitle: "MCP ツールの確認",
+  mcpToolConfirmationsTruncated:
+    "ほかにも確認待ちがあります。表示中のリクエストを判断すると続きが読み込まれます。",
   mcpToolConfirmationRequired: "MCP ツールの実行確認が必要です",
   mcpToolConfirmationRetryNotice:
-    "一度だけ許可したあと、同じ呼び出しを再試行するようエージェントに伝えてください。許可は10分で失効し、1回だけ消費されます。",
+    "一度だけ許可したあと、このThreadで次のメッセージを送り、同じ呼び出しを再試行するようエージェントに伝えてください。許可はその次のRunだけに付与され、10分で失効し、1回だけ消費されます。",
   mcpToolConfirmationArguments: "実際の引数",
   approveOnce: "一度だけ許可",
   deny: "拒否",

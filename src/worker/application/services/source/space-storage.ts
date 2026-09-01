@@ -12,10 +12,10 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import {
-  cleanupOrphanedUploads,
   deleteR2Objects,
   deleteStorageRowsByDescendantPath,
   listDescendantFileR2Keys,
+  runPendingStorageUploadGcBatch,
 } from "./space-storage-cleanup.ts";
 import {
   confirmUpload,
@@ -42,6 +42,7 @@ import {
   ensureValidStorageName,
   escapeSqlLike,
   getParentPath,
+  normalizePath,
   validateFullPath,
 } from "./space-storage-paths.ts";
 import { applyStoragePathMutation } from "./space-storage-tree.ts";
@@ -50,7 +51,6 @@ import {
   type BulkDeleteStorageResult,
   type CreateFileInput,
   type CreateFolderInput,
-  type DownloadUrlResponse,
   FILE_URL_EXPIRY_SECONDS,
   getStorageDb,
   MAX_CONTENT_SIZE,
@@ -58,6 +58,7 @@ import {
   MAX_LIST_ITEMS,
   MAX_PATH_LENGTH,
   MAX_ZIP_ENTRIES,
+  normalizeStorageMimeType,
   type MoveInput,
   R2_KEY_PREFIX,
   type RenameInput,
@@ -106,15 +107,23 @@ export async function createFileRecord(
   spaceId: string,
   userId: string,
   input: CreateFileInput,
-): Promise<{ file: StorageFileResponse; r2Key: string }> {
+): Promise<{
+  file: StorageFileResponse;
+  r2Key: string;
+  expiresAt: string;
+}> {
   const db = getStorageDb(d1);
   const { size, mimeType, sha256 } = input;
+  if (!Number.isInteger(size) || size < 0) {
+    throw new StorageError("File size must be a non-negative integer", "VALIDATION");
+  }
   if (size > MAX_FILE_SIZE) {
     throw new StorageError(
       `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
       "TOO_LARGE",
     );
   }
+  const normalizedMimeType = normalizeStorageMimeType(mimeType);
   const { name, parentId, path } = await resolveStorageCreateContext(
     db,
     spaceId,
@@ -127,6 +136,9 @@ export async function createFileRecord(
   const id = crypto.randomUUID();
   const r2Key = buildR2Key(spaceId, id);
   const timestamp = new Date().toISOString();
+  const expiresAt = new Date(
+    Date.parse(timestamp) + FILE_URL_EXPIRY_SECONDS * 1000,
+  ).toISOString();
   await withStorageConflict(async () => {
     await db.insert(accountStorageFiles).values({
       id,
@@ -136,15 +148,21 @@ export async function createFileRecord(
       path,
       type: "file",
       size,
-      mimeType: mimeType || null,
+      mimeType: normalizedMimeType || null,
       r2Key,
       sha256: sha256 || null,
+      uploadState: "pending",
+      uploadExpiresAt: expiresAt,
       uploadedByAccountId: userId,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
   });
-  return { file: await loadStorageItemResponse(d1, spaceId, id), r2Key };
+  return {
+    file: await loadStorageItemResponse(d1, spaceId, id),
+    r2Key,
+    expiresAt,
+  };
 }
 
 export async function deleteStorageItem(
@@ -263,22 +281,23 @@ export async function bulkDeleteStorageItems(
   fileIds: string[],
 ): Promise<BulkDeleteStorageResult> {
   const allR2Keys: string[] = [];
+  const deletedIds: string[] = [];
   const failedIds: string[] = [];
   let deletedCount = 0;
   for (const fileId of fileIds) {
     try {
       const keys = await deleteStorageItem(d1, spaceId, fileId);
       allR2Keys.push(...keys);
+      deletedIds.push(fileId);
       deletedCount += 1;
     } catch {
       failedIds.push(fileId);
     }
   }
-  return { r2Keys: allR2Keys, deletedCount, failedIds };
+  return { r2Keys: allR2Keys, deletedCount, deletedIds, failedIds };
 }
 
 export {
-  cleanupOrphanedUploads,
   confirmUpload,
   createFileWithContent,
   deleteR2Objects,
@@ -287,7 +306,9 @@ export {
   getStorageItem,
   getStorageItemByPath,
   listStorageFiles,
+  normalizePath,
   readFileContent,
+  runPendingStorageUploadGcBatch,
   uploadPendingFileContent,
   writeFileContent,
 };
@@ -299,6 +320,7 @@ export {
   MAX_LIST_ITEMS,
   MAX_PATH_LENGTH,
   MAX_ZIP_ENTRIES,
+  normalizeStorageMimeType,
   R2_KEY_PREFIX,
   StorageError,
 };
@@ -307,7 +329,6 @@ export type {
   BulkDeleteStorageResult,
   CreateFileInput,
   CreateFolderInput,
-  DownloadUrlResponse,
   ListStorageFilesResult,
   MoveInput,
   RenameInput,

@@ -128,8 +128,14 @@ test("executor auth maps current dispatch-issued RPC paths to per-purpose scopes
     "conversation",
   );
   assertEquals(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/skill-catalog"),
+    getRequiredProxyCapability(
+      "/api/internal/v1/agent-control/skill-runtime-context",
+    ),
     "skills",
+  );
+  assertEquals(
+    getRequiredProxyCapability("/api/internal/v1/agent-control/skill-catalog"),
+    null,
   );
 });
 

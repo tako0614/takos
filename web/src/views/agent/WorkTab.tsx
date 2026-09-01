@@ -1,19 +1,23 @@
-import { createEffect, createMemo, createSignal, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Show,
+  untrack,
+} from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { useRouter } from "../../hooks/useRouter.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
-import { rpc, rpcJson, rpcPath } from "../../lib/rpc.ts";
+import { rpc, rpcJson } from "../../lib/rpc.ts";
 import { getErrorMessage } from "../../lib/errors.ts";
 import { Icons } from "../../lib/Icons.tsx";
-import { DEFAULT_MODEL_ID, FALLBACK_MODELS } from "../../lib/modelCatalog.ts";
+import { readModelSettingsResponse } from "../../lib/model-settings-response.ts";
 import { SkeletonList } from "../../components/Skeleton.tsx";
 import type {
   AgentTask,
   AgentTaskPriority,
   AgentTaskStatus,
-  Run,
-  Thread,
 } from "../../types/index.ts";
 import { TaskForm } from "./work/TaskForm.tsx";
 import { TaskCard } from "./work/TaskCard.tsx";
@@ -28,6 +32,8 @@ import {
   ensureModelOption,
   getModelsForModelBackend,
 } from "./work/task-work-utils.ts";
+import { readTaskStartResponse } from "./work/task-start-response.ts";
+import { readAgentTaskListResponse } from "./work/task-response.ts";
 
 interface TaskFormState {
   title: string;
@@ -55,7 +61,9 @@ function toEditableStatus(status: AgentTaskStatus): EditableAgentTaskStatus {
     : "blocked";
 }
 
-export function WorkTab(props: { spaceId: string }) {
+export function WorkTab(
+  props: { spaceId: string; canEdit: boolean; canDelete: boolean },
+) {
   const { t, lang } = useI18n();
   const { showToast } = useToast();
   const { navigate } = useRouter();
@@ -70,11 +78,13 @@ export function WorkTab(props: { spaceId: string }) {
   const [startingTaskId, setStartingTaskId] = createSignal<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  const [taskLoadError, setTaskLoadError] = createSignal<string | null>(null);
   const [modelSettings, setModelSettings] = createSignal<ModelSettings | null>(
     null,
   );
   let tasksSeq = 0;
   let modelSettingsSeq = 0;
+  let tasksSpaceId: string | null = null;
 
   const [form, setForm] = createSignal<TaskFormState>(INITIAL_FORM_STATE);
   const updateForm = <K extends keyof TaskFormState>(
@@ -84,6 +94,11 @@ export function WorkTab(props: { spaceId: string }) {
 
   createEffect(() => {
     const spaceId = props.spaceId;
+    if (tasksSpaceId !== spaceId) {
+      tasksSpaceId = spaceId;
+      setTasks([]);
+      setTaskLoadError(null);
+    }
     void fetchTasks(spaceId);
     void fetchModelSettings(spaceId);
   });
@@ -94,49 +109,32 @@ export function WorkTab(props: { spaceId: string }) {
       const res = await rpc.spaces[":spaceId"].model.$get({
         param: { spaceId },
       });
-      const data = await rpcJson<ModelSettings>(res);
+      const data = readModelSettingsResponse(await rpcJson<unknown>(res));
       if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
-      const resolvedModel = data.ai_model || data.model || DEFAULT_MODEL_ID;
-      const resolvedModelBackend = data.model_backend || "openai";
-      const modelBackendKey =
-        resolvedModelBackend as keyof typeof data.available_models;
-      const raw = data.available_models?.[modelBackendKey] ??
-        data.available_models?.openai;
-      const modelIds = (raw || [])
-        .map((entry) => (typeof entry === "string" ? entry : entry.id))
-        .filter(Boolean);
-      const fallbackModel = modelIds[0] || resolvedModel;
-      setModelSettings({
-        ...data,
-        ai_model: resolvedModel,
-        model_backend: resolvedModelBackend,
-      });
-      if (!form().model) {
-        updateForm(
-          "model",
-          modelIds.includes(resolvedModel) ? resolvedModel : fallbackModel,
-        );
-      }
+      setModelSettings(data);
     } catch (err) {
       if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
       console.error("Failed to fetch model settings:", err);
+      setModelSettings(null);
     }
   };
 
   const fetchTasks = async (spaceId = props.spaceId) => {
     const seq = ++tasksSeq;
-    setLoading(true);
+    // fetchTasks is called from a createEffect. Do not make the current list a
+    // dependency of that effect or every successful setTasks would refetch.
+    setLoading(untrack(tasks).length === 0);
     try {
       const res = await rpc.spaces[":spaceId"]["agent-tasks"].$get({
         param: { spaceId },
       });
-      const data = await rpcJson<{ tasks: AgentTask[] }>(res);
+      const nextTasks = readAgentTaskListResponse(await rpcJson<unknown>(res));
       if (seq !== tasksSeq || spaceId !== props.spaceId) return;
-      setTasks(data.tasks || []);
+      setTasks(nextTasks);
+      setTaskLoadError(null);
     } catch {
       if (seq !== tasksSeq || spaceId !== props.spaceId) return;
-      setTasks([]);
-      showToast("error", t("failedToLoad"));
+      setTaskLoadError(t("failedToLoad"));
     } finally {
       if (seq === tasksSeq && spaceId === props.spaceId) {
         setLoading(false);
@@ -145,27 +143,26 @@ export function WorkTab(props: { spaceId: string }) {
   };
 
   const resetForm = () => {
-    setForm({
-      ...INITIAL_FORM_STATE,
-      model: modelSettings()?.ai_model || DEFAULT_MODEL_ID,
-    });
+    setForm(INITIAL_FORM_STATE);
     setError(null);
   };
 
   const openCreateForm = () => {
+    if (!props.canEdit) return;
     resetForm();
     setEditingTask(null);
     setIsCreating(true);
   };
 
   const openEditForm = (task: AgentTask) => {
+    if (!props.canEdit) return;
     setForm({
       title: task.title,
       description: task.description || "",
       status: toEditableStatus(task.status),
       priority: task.priority,
       agentType: task.agent_type || "default",
-      model: task.model || modelSettings()?.ai_model || DEFAULT_MODEL_ID,
+      model: task.model || "",
       dueAt: task.due_at
         ? new Date(task.due_at).toISOString().slice(0, 10)
         : "",
@@ -185,7 +182,7 @@ export function WorkTab(props: { spaceId: string }) {
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
-    if (!form().title.trim()) return;
+    if (!props.canEdit || !form().title.trim()) return;
 
     setSaving(true);
     setError(null);
@@ -193,14 +190,14 @@ export function WorkTab(props: { spaceId: string }) {
     const f = form();
     const payload = {
       title: f.title.trim(),
-      description: f.description.trim() || undefined,
+      description: f.description.trim() || null,
       status: f.status,
       priority: f.priority,
       agent_type: f.agentType,
-      model: f.model || undefined,
+      model: f.model || null,
       due_at: f.dueAt
         ? new Date(`${f.dueAt}T00:00:00.000Z`).toISOString()
-        : undefined,
+        : null,
     };
 
     try {
@@ -228,6 +225,7 @@ export function WorkTab(props: { spaceId: string }) {
   };
 
   const handleDelete = async (taskId: string) => {
+    if (!props.canDelete) return;
     const confirmed = await confirm({
       title: t("confirmDelete"),
       message: t("deleteWarning"),
@@ -254,6 +252,7 @@ export function WorkTab(props: { spaceId: string }) {
     taskId: string,
     nextStatus: EditableAgentTaskStatus,
   ) => {
+    if (!props.canEdit) return;
     try {
       const res = await rpc["agent-tasks"][":id"].$patch({
         param: { id: taskId },
@@ -267,7 +266,7 @@ export function WorkTab(props: { spaceId: string }) {
   };
 
   const handlePlan = async (taskId: string) => {
-    if (planningTaskId() === taskId) return;
+    if (!props.canEdit || planningTaskId() === taskId) return;
     setPlanningTaskId(taskId);
     try {
       const res = await rpc["agent-tasks"][":id"].plan.$post({
@@ -284,71 +283,25 @@ export function WorkTab(props: { spaceId: string }) {
   };
 
   const handleStart = async (task: AgentTask) => {
-    if (startingTaskId() === task.id) return;
+    if (!props.canEdit || startingTaskId() === task.id) return;
     setStartingTaskId(task.id);
     try {
-      let threadId = task.thread_id;
-
-      if (!threadId) {
-        const threadRes = await rpcPath(rpc, "spaces", ":spaceId", "threads")
-          .$post({
-            param: { spaceId: props.spaceId },
-            json: { title: task.title, locale: lang },
-          });
-        const threadResponse = await rpcJson<{ thread: Thread }>(threadRes);
-        threadId = threadResponse.thread.id;
-        const patchRes = await rpc["agent-tasks"][":id"].$patch({
-          param: { id: task.id },
-          json: { thread_id: threadId },
-        });
-        await rpcJson(patchRes);
-      }
-
-      const msgRes = await rpcPath(rpc, "threads", ":id", "messages").$post({
-        param: { id: threadId },
-        json: {
-          role: "user",
-          content: task.description?.trim() || task.title,
-        },
-      });
-      await rpcJson(msgRes);
-
-      const runPayload: {
-        agent_type: string;
-        model?: string;
-        input?: Record<string, unknown>;
-      } = {
-        agent_type: task.agent_type || "default",
-        input: { locale: lang },
-      };
-      if (task.model) {
-        runPayload.model = task.model;
-      }
-
-      const runRes = await rpcPath(rpc, "threads", ":threadId", "runs").$post({
-        param: { threadId },
-        json: runPayload,
-      });
-      const runResponse = await rpcJson<{ run: Run }>(runRes);
-
-      const finalRes = await rpc["agent-tasks"][":id"].$patch({
+      const response = await rpc["agent-tasks"][":id"].start.$post({
         param: { id: task.id },
-        json: {
-          status: "in_progress",
-          last_run_id: runResponse.run.id,
-          started_at: new Date().toISOString(),
-          thread_id: threadId,
-        },
+        json: { locale: lang },
       });
-      await rpcJson(finalRes);
+      const started = readTaskStartResponse(
+        await rpcJson<unknown>(response),
+        task.id,
+      );
 
       showToast("success", t("taskRunStarted"));
       await fetchTasks();
       navigate({
         view: "chat",
         spaceId: props.spaceId,
-        threadId,
-        runId: runResponse.run.id,
+        threadId: started.threadId,
+        runId: started.runId,
         messageId: undefined,
       });
     } catch {
@@ -376,9 +329,8 @@ export function WorkTab(props: { spaceId: string }) {
 
   const availableModels = createMemo(() => {
     const ms = modelSettings();
-    const models = getModelsForModelBackend(ms, ms?.model_backend || "openai");
-    const resolved = models.length > 0 ? models : [...FALLBACK_MODELS];
-    return ensureModelOption(resolved, form().model);
+    const models = getModelsForModelBackend(ms, ms?.modelBackend);
+    return ensureModelOption(models, form().model);
   });
 
   return (
@@ -402,22 +354,43 @@ export function WorkTab(props: { spaceId: string }) {
       }
     >
       <div class="flex flex-col gap-6">
+        <Show when={taskLoadError()}>
+          {(message) => (
+            <div
+              role="alert"
+              aria-live="assertive"
+              class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+            >
+              <span>{message()}</span>
+              <button
+                type="button"
+                class="min-h-[44px] rounded-lg border border-red-300 px-3 py-2 font-medium hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-950/60"
+                onClick={() => void fetchTasks()}
+                disabled={loading()}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          )}
+        </Show>
         <div class="flex flex-col gap-3">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t("taskBoard")}
             </h4>
-            <button
-              type="button"
-              class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isCreating()
-                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                  : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
-              }`}
-              onClick={isCreating() ? closeForm : openCreateForm}
-            >
-              {isCreating() ? t("cancel") : t("addTask")}
-            </button>
+            {props.canEdit && (
+              <button
+                type="button"
+                class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isCreating()
+                    ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                }`}
+                onClick={isCreating() ? closeForm : openCreateForm}
+              >
+                {isCreating() ? t("cancel") : t("addTask")}
+              </button>
+            )}
           </div>
           <TaskFilters
             activeFilter={activeFilter()}
@@ -425,7 +398,7 @@ export function WorkTab(props: { spaceId: string }) {
           />
         </div>
 
-        {isCreating() && (
+        {props.canEdit && isCreating() && (
           <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
             <TaskForm
               editingTask={editingTask()}
@@ -444,6 +417,7 @@ export function WorkTab(props: { spaceId: string }) {
               dueAt={form().dueAt}
               setDueAt={(v) => updateForm("dueAt", v)}
               availableModels={availableModels()}
+              workspaceModel={modelSettings()?.model}
               saving={saving()}
               error={error()}
               onSubmit={handleSubmit}
@@ -454,7 +428,7 @@ export function WorkTab(props: { spaceId: string }) {
 
         {filteredTasks().length === 0
           ? (
-            isCreating()
+            taskLoadError() || isCreating()
               ? null
               : (
                 <div class="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
@@ -469,14 +443,16 @@ export function WorkTab(props: { spaceId: string }) {
                       {t("tasksEmptyHint")}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
-                    onClick={openCreateForm}
-                  >
-                    <Icons.Plus class="w-4 h-4" />
-                    {t("addTask")}
-                  </button>
+                  {props.canEdit && (
+                    <button
+                      type="button"
+                      class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                      onClick={openCreateForm}
+                    >
+                      <Icons.Plus class="w-4 h-4" />
+                      {t("addTask")}
+                    </button>
+                  )}
                 </div>
               )
           )
@@ -488,6 +464,8 @@ export function WorkTab(props: { spaceId: string }) {
                   isPlanning={planningTaskId() === task.id}
                   isStarting={startingTaskId() === task.id}
                   isDeleting={deletingTaskId() === task.id}
+                  canEdit={props.canEdit}
+                  canDelete={props.canDelete}
                   onStart={handleStart}
                   onPlan={handlePlan}
                   onOpenChat={handleOpenChat}

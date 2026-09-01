@@ -14,7 +14,7 @@ import {
 } from "../../../application/services/source/external-import.ts";
 import { buildAuthHeader } from "../../../application/services/source/external-import-utils.ts";
 import { toGitBucket } from "../../../application/services/takos-git/index.ts";
-import { requireBucket, requireRepoWrite, WRITE_ROLES } from "./git-shared.ts";
+import { requireBucket, requireRepoWrite } from "./git-shared.ts";
 import { getDb, repositories } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -79,8 +79,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       c,
       space_id,
       user.id,
-      [...WRITE_ROLES],
-      "Workspace not found or insufficient permissions",
+      "Workspace not found",
     );
     const spaceId = access.space.id;
 

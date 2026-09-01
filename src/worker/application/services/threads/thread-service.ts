@@ -3,9 +3,6 @@ import type {
   Env,
   Message,
   MessageRole,
-  Run,
-  RunStatus,
-  SpaceRole,
   Thread,
   ThreadStatus,
 } from "../../../shared/types/index.ts";
@@ -15,21 +12,53 @@ import type {
 } from "../../../shared/types/drizzle-utils.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../identity/space-access.ts";
-import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
+import { getDb, messages, threads } from "../../../infra/db/index.ts";
 import { and, asc, count, desc, eq, max, ne } from "drizzle-orm";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import {
   makeMessagePreview,
+  MAX_MESSAGE_PAGE_HYDRATION_BYTES,
+  readOffloadedMessageRecord,
   readMessageFromR2,
   shouldOffloadMessage,
   writeMessageToR2,
 } from "../offload/messages.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
-import { reserveThreadMessageSequence } from "./message-sequence.ts";
+import {
+  reserveThreadMessageSequence,
+  ThreadMessageSequenceUnavailableError,
+} from "./message-sequence.ts";
+import {
+  clientOperationRowId,
+  ClientOperationConflictError,
+} from "../../../shared/utils/client-operation-id.ts";
+import { MAX_CLIENT_THREAD_TITLE_CHARACTERS } from "../../../shared/utils/client-thread.ts";
+import { stringifyCanonicalJson } from "../../../shared/utils/canonical-json.ts";
+import { MAX_CHAT_THREADS_PER_RESPONSE } from "takos-api-contract/chat-thread";
+import { retireDeletedThreadTurnProjectionsBatch } from "../agent/memory-projection.ts";
+
+function normalizeThreadTitle(
+  value: string | null | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") throw new TypeError("Invalid Thread title");
+  const title = value.trim();
+  if (title.length > MAX_CLIENT_THREAD_TITLE_CHARACTERS) {
+    throw new TypeError("Invalid Thread title");
+  }
+  return title || null;
+}
 
 export interface ThreadAccess {
   thread: Thread;
-  role: SpaceRole;
+}
+
+export class ArchivedThreadWriteError extends Error {
+  constructor() {
+    super("Archived Thread must be unarchived before writing");
+    this.name = "ArchivedThreadWriteError";
+  }
 }
 
 type MessageRow = {
@@ -79,33 +108,6 @@ function toMessage(m: MessageRow): Message {
   };
 }
 
-function toRun(r: SelectOf<typeof runs>): Run {
-  const rootThreadId = r.rootThreadId ?? r.threadId;
-  const rootRunId = r.rootRunId ?? r.id;
-  return {
-    id: r.id,
-    thread_id: r.threadId,
-    space_id: r.accountId,
-    session_id: r.sessionId ?? null,
-    parent_run_id: r.parentRunId ?? null,
-    child_thread_id: r.childThreadId ?? null,
-    root_thread_id: rootThreadId,
-    root_run_id: rootRunId,
-    agent_type: r.agentType,
-    model: r.model ?? null,
-    status: r.status as RunStatus,
-    input: r.input,
-    output: r.output ?? null,
-    error: r.error ?? null,
-    usage: r.usage,
-    worker_id: r.serviceId ?? null,
-    worker_heartbeat: r.serviceHeartbeat ?? null,
-    started_at: r.startedAt ?? null,
-    completed_at: r.completedAt ?? null,
-    created_at: r.createdAt,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Exported service functions
 // ---------------------------------------------------------------------------
@@ -114,7 +116,6 @@ export async function checkThreadAccess(
   dbBinding: SqlDatabaseLike,
   threadId: string,
   userId: string,
-  requiredRole?: SpaceRole[],
 ): Promise<ThreadAccess | null> {
   if (!isValidOpaqueId(threadId) || !isValidOpaqueId(userId)) {
     return null;
@@ -124,7 +125,7 @@ export async function checkThreadAccess(
   const row = await db
     .select()
     .from(threads)
-    .where(eq(threads.id, threadId))
+    .where(and(eq(threads.id, threadId), ne(threads.status, "deleted")))
     .get();
 
   if (!row) {
@@ -133,24 +134,19 @@ export async function checkThreadAccess(
 
   const thread = toThread(row);
 
-  const access = await checkSpaceAccess(
-    dbBinding,
-    thread.space_id,
-    userId,
-    requiredRole,
-  );
+  const access = await checkSpaceAccess(dbBinding, thread.space_id, userId);
   if (!access) {
     return null;
   }
 
-  return { thread, role: access.membership.role };
+  return { thread };
 }
 
 export async function listThreads(
   dbBinding: SqlDatabaseLike,
   spaceId: string,
   options: { status?: ThreadStatus },
-): Promise<Thread[]> {
+): Promise<{ threads: Thread[]; truncated: boolean }> {
   const db = getDb(dbBinding);
 
   const conditions = [eq(threads.accountId, spaceId)];
@@ -165,35 +161,73 @@ export async function listThreads(
     .select()
     .from(threads)
     .where(and(...conditions))
-    .orderBy(desc(threads.updatedAt))
+    .orderBy(desc(threads.updatedAt), desc(threads.id))
+    .limit(MAX_CHAT_THREADS_PER_RESPONSE + 1)
     .all();
 
-  return results.map(toThread);
+  return {
+    threads: results.slice(0, MAX_CHAT_THREADS_PER_RESPONSE).map(toThread),
+    truncated: results.length > MAX_CHAT_THREADS_PER_RESPONSE,
+  };
 }
 
 export async function createThread(
   dbBinding: SqlDatabaseLike,
   spaceId: string,
-  input: { title?: string; locale?: "ja" | "en" | null },
+  input: {
+    title?: string;
+    locale?: "ja" | "en" | null;
+    idempotency_key?: string;
+  },
 ): Promise<Thread | null> {
   const db = getDb(dbBinding);
-  const id = generateId();
+  const id = input.idempotency_key
+    ? clientOperationRowId("thread", input.idempotency_key)
+    : generateId();
   const timestamp = new Date().toISOString();
-  const title = input.title || null;
+  const title = normalizeThreadTitle(input.title) ?? null;
+  if (
+    input.locale !== undefined && input.locale !== null &&
+    input.locale !== "ja" && input.locale !== "en"
+  ) {
+    throw new TypeError("Invalid Thread locale");
+  }
 
-  const result = await db
-    .insert(threads)
-    .values({
-      id,
-      accountId: spaceId,
-      title,
-      locale: input.locale ?? null,
-      status: "active",
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-    .returning()
-    .get();
+  const readExistingIdempotentThread = async (): Promise<Thread | null> => {
+    if (!input.idempotency_key) return null;
+    const row = await db.select().from(threads).where(eq(threads.id, id)).get();
+    if (!row) return null;
+    if (row.accountId !== spaceId) {
+      throw new ClientOperationConflictError(
+        "Idempotency key already used by another Workspace",
+      );
+    }
+    return toThread(row);
+  };
+
+  const existing = await readExistingIdempotentThread();
+  if (existing) return existing;
+
+  let result;
+  try {
+    result = await db
+      .insert(threads)
+      .values({
+        id,
+        accountId: spaceId,
+        title,
+        locale: input.locale ?? null,
+        status: "active",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .returning()
+      .get();
+  } catch (error) {
+    const winner = await readExistingIdempotentThread();
+    if (winner) return winner;
+    throw error;
+  }
 
   return toThread(result);
 }
@@ -204,14 +238,12 @@ export async function updateThread(
   updates: {
     title?: string | null;
     locale?: "ja" | "en" | null;
-    status?: ThreadStatus;
     context_window?: number;
   },
 ): Promise<Thread | null> {
   if (
     updates.title === undefined &&
     updates.locale === undefined &&
-    !updates.status &&
     updates.context_window === undefined
   ) {
     return null;
@@ -219,19 +251,30 @@ export async function updateThread(
 
   const db = getDb(dbBinding);
   const timestamp = new Date().toISOString();
+  const normalizedTitle = normalizeThreadTitle(updates.title);
+
+  if (
+    updates.locale !== undefined && updates.locale !== null &&
+    updates.locale !== "ja" && updates.locale !== "en"
+  ) {
+    throw new TypeError("Invalid Thread locale");
+  }
+  if (
+    updates.context_window !== undefined &&
+    (!Number.isSafeInteger(updates.context_window) ||
+      updates.context_window < 20 || updates.context_window > 200)
+  ) {
+    throw new TypeError("Invalid Thread context window");
+  }
 
   const data: Partial<InsertOf<typeof threads>> = { updatedAt: timestamp };
 
-  if (updates.title !== undefined) {
-    data.title = updates.title || null;
+  if (normalizedTitle !== undefined) {
+    data.title = normalizedTitle;
   }
 
   if (updates.locale !== undefined) {
     data.locale = updates.locale || null;
-  }
-
-  if (updates.status) {
-    data.status = updates.status;
   }
 
   if (updates.context_window !== undefined) {
@@ -241,7 +284,7 @@ export async function updateThread(
   const result = await db
     .update(threads)
     .set(data)
-    .where(eq(threads.id, threadId))
+    .where(and(eq(threads.id, threadId), ne(threads.status, "deleted")))
     .returning()
     .get();
 
@@ -251,29 +294,54 @@ export async function updateThread(
 export async function updateThreadStatus(
   dbBinding: SqlDatabaseLike,
   threadId: string,
-  status: ThreadStatus,
-): Promise<void> {
+  status: Exclude<ThreadStatus, "deleted">,
+): Promise<Thread | null> {
   const db = getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
-  await db
+  const result = await db
     .update(threads)
     .set({ status, updatedAt: timestamp })
-    .where(eq(threads.id, threadId));
+    .where(and(eq(threads.id, threadId), ne(threads.status, "deleted")))
+    .returning()
+    .get();
+
+  return result ? toThread(result) : null;
 }
 
 export async function deleteThread(
   _env: Env,
   dbBinding: SqlDatabaseLike,
   threadId: string,
-): Promise<void> {
+  deletedByAccountId: string | null = null,
+): Promise<boolean> {
   const db = getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
-  await db
+  const result = await db
     .update(threads)
     .set({ status: "deleted", updatedAt: timestamp })
-    .where(eq(threads.id, threadId));
+    .where(and(eq(threads.id, threadId), ne(threads.status, "deleted")))
+    .returning({ id: threads.id })
+    .get();
+
+  if (result?.id !== threadId) return false;
+  try {
+    await retireDeletedThreadTurnProjectionsBatch(dbBinding, {
+      threadId,
+      deletedByAccountId,
+    });
+  } catch (error) {
+    // The deleted Thread is already excluded from every read/execution path.
+    // Hourly maintenance rediscovers its remaining projections and retries the
+    // tombstone/outbox transition without trusting this response.
+    logWarn("TurnProjection retirement will retry after Thread deletion", {
+      module: "thread_service",
+      threadId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return true;
 }
 
 export async function listThreadMessages(
@@ -282,14 +350,37 @@ export async function listThreadMessages(
   threadId: string,
   limit: number,
   offset: number,
-): Promise<{ messages: Message[]; total: number; runs: Run[] }> {
+  options: { latest?: boolean } = {},
+): Promise<{
+  messages: Message[];
+  total: number;
+  offset: number;
+  messageDataTruncated: boolean;
+}> {
   if (!isValidOpaqueId(threadId)) {
-    return { messages: [], total: 0, runs: [] };
+    return {
+      messages: [],
+      total: 0,
+      offset: options.latest ? 0 : offset,
+      messageDataTruncated: false,
+    };
   }
 
   const db = getDb(dbBinding);
 
-  // SQL store does not support concurrent queries in a single request -- run sequentially
+  // SQL store does not support concurrent queries in a single request -- run
+  // sequentially. Count first so a latest-page request has one canonical
+  // effective offset and still returns messages in transcript order.
+  const totalResult = await db
+    .select({ count: count() })
+    .from(messages)
+    .where(eq(messages.threadId, threadId))
+    .get();
+  const total = totalResult?.count ?? 0;
+  const effectiveOffset = options.latest
+    ? Math.max(0, total - limit)
+    : offset;
+
   const rows = await db
     .select({
       id: messages.id,
@@ -307,59 +398,62 @@ export async function listThreadMessages(
     .where(eq(messages.threadId, threadId))
     .orderBy(asc(messages.sequence))
     .limit(limit)
-    .offset(offset)
+    .offset(effectiveOffset)
     .all();
 
-  const totalResult = await db
-    .select({ count: count() })
-    .from(messages)
-    .where(eq(messages.threadId, threadId))
-    .get();
-  const total = totalResult?.count ?? 0;
+  const candidates = rows
+    .map((message, index) => ({ index, key: message.r2Key }))
+    .filter((candidate): candidate is { index: number; key: string } =>
+      typeof candidate.key === "string" && candidate.key.length > 0
+    )
+    .reverse();
+  let messageDataTruncated = candidates.length > 0 && !env.TAKOS_OFFLOAD;
 
-  const runRows = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.threadId, threadId))
-    .orderBy(desc(runs.createdAt))
-    .limit(10)
-    .all();
-
-  // Hydrate offloaded message payloads from object store (best-effort).
-  if (env.TAKOS_OFFLOAD) {
+  // Hydrate newest offloaded payloads first under one request-wide budget.
+  // A missing, corrupt, or over-budget object keeps its bounded SQL preview
+  // and is exposed as explicit truncation rather than silently looking full.
+  if (env.TAKOS_OFFLOAD && candidates.length > 0) {
     const bucket = env.TAKOS_OFFLOAD;
-    const candidates = rows
-      .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<{
-      idx: number;
-      key: string;
-    }>;
-
-    const concurrency = 20;
+    let remainingBytes = MAX_MESSAGE_PAGE_HYDRATION_BYTES;
+    const concurrency = 4;
     for (let i = 0; i < candidates.length; i += concurrency) {
+      if (remainingBytes <= 0) {
+        messageDataTruncated = true;
+        break;
+      }
       const batch = candidates.slice(i, i + concurrency);
-      await Promise.all(
-        batch.map(async ({ idx, key }) => {
-          const persisted = await readMessageFromR2(bucket, key);
-          if (!persisted) return;
-          if (persisted.id !== rows[idx].id) return;
-          if (persisted.thread_id !== threadId) return;
-          rows[idx] = {
-            ...rows[idx],
-            content: persisted.content,
-            toolCalls: persisted.tool_calls,
-            toolCallId: persisted.tool_call_id,
-            metadata: persisted.metadata,
-          };
-        }),
+      const records = await Promise.all(
+        batch.map(({ key }) => readOffloadedMessageRecord(bucket, key)),
       );
+      for (let index = 0; index < batch.length; index++) {
+        const candidate = batch[index];
+        const record = records[index];
+        const row = rows[candidate.index];
+        if (
+          !record || record.size > remainingBytes ||
+          record.message.id !== row.id ||
+          record.message.thread_id !== threadId
+        ) {
+          messageDataTruncated = true;
+          continue;
+        }
+        remainingBytes -= record.size;
+        rows[candidate.index] = {
+          ...row,
+          content: record.message.content,
+          toolCalls: record.message.tool_calls,
+          toolCallId: record.message.tool_call_id,
+          metadata: record.message.metadata,
+        };
+      }
     }
   }
 
   return {
     messages: rows.map(toMessage),
     total,
-    runs: runRows.map(toRun),
+    offset: effectiveOffset,
+    messageDataTruncated,
   };
 }
 
@@ -373,23 +467,96 @@ export async function createMessage(
     tool_calls?: unknown[];
     tool_call_id?: string | null;
     metadata?: Record<string, unknown>;
+    idempotency_key?: string;
+    require_active_thread?: boolean;
   },
 ): Promise<Message | null> {
   const db = getDb(dbBinding);
-  const id = generateId();
+  const id = input.idempotency_key
+    ? clientOperationRowId("message", input.idempotency_key)
+    : generateId();
   const timestamp = new Date().toISOString();
   const toolCallsStr = input.tool_calls
-    ? JSON.stringify(input.tool_calls)
+    ? stringifyCanonicalJson(input.tool_calls) ?? null
     : null;
-  const metadataStr = JSON.stringify(input.metadata || {});
+  const metadataStr = stringifyCanonicalJson(input.metadata || {}) ?? "{}";
+  const toolCallId = input.tool_call_id || null;
+
+  const readExistingIdempotentMessage = async (): Promise<Message | null> => {
+    if (!input.idempotency_key) return null;
+    const row = await db.select({
+      id: messages.id,
+      threadId: messages.threadId,
+      role: messages.role,
+      content: messages.content,
+      r2Key: messages.r2Key,
+      toolCalls: messages.toolCalls,
+      toolCallId: messages.toolCallId,
+      metadata: messages.metadata,
+      sequence: messages.sequence,
+      createdAt: messages.createdAt,
+    }).from(messages).where(eq(messages.id, id)).get();
+    if (!row) return null;
+    if (row.threadId !== thread.id) {
+      throw new ClientOperationConflictError();
+    }
+
+    let persistedRow = row;
+    if (row.r2Key && env.TAKOS_OFFLOAD) {
+      const persisted = await readMessageFromR2(env.TAKOS_OFFLOAD, row.r2Key);
+      if (persisted?.id === row.id && persisted.thread_id === thread.id) {
+        persistedRow = {
+          ...row,
+          content: persisted.content,
+          toolCalls: persisted.tool_calls,
+          toolCallId: persisted.tool_call_id,
+          metadata: persisted.metadata,
+        };
+      }
+    }
+    if (
+      persistedRow.role !== input.role ||
+      persistedRow.content !== input.content ||
+      persistedRow.toolCalls !== toolCallsStr ||
+      persistedRow.toolCallId !== toolCallId ||
+      persistedRow.metadata !== metadataStr
+    ) {
+      throw new ClientOperationConflictError();
+    }
+    return toMessage(persistedRow);
+  };
+
+  const existing = await readExistingIdempotentMessage();
+  if (existing) return existing;
+
+  if (input.require_active_thread) {
+    const current = await db.select({ status: threads.status }).from(threads)
+      .where(eq(threads.id, thread.id)).get();
+    if (current?.status !== "active") {
+      throw new ArchivedThreadWriteError();
+    }
+  }
 
   let sequence = -1;
   const maxSequenceAttempts = 16;
   for (let attempt = 0; attempt < maxSequenceAttempts; attempt++) {
-    const reservedSequence = await reserveThreadMessageSequence(
-      dbBinding,
-      thread.id,
-    );
+    let reservedSequence: number | null;
+    try {
+      reservedSequence = await reserveThreadMessageSequence(
+        dbBinding,
+        thread.id,
+        1,
+        { requireActive: input.require_active_thread === true },
+      );
+    } catch (error) {
+      if (
+        input.require_active_thread &&
+        error instanceof ThreadMessageSequenceUnavailableError
+      ) {
+        throw new ArchivedThreadWriteError();
+      }
+      throw error;
+    }
     const agg =
       reservedSequence === null
         ? await db
@@ -405,6 +572,7 @@ export async function createMessage(
     let toolCallsForD1: string | null = toolCallsStr;
     const offloadBucket = env.TAKOS_OFFLOAD;
     if (
+      !input.idempotency_key &&
       offloadBucket &&
       shouldOffloadMessage({ role: input.role, content: input.content })
     ) {
@@ -437,7 +605,7 @@ export async function createMessage(
       role: input.role,
       content: contentForD1,
       toolCalls: toolCallsForD1,
-      toolCallId: input.tool_call_id || null,
+      toolCallId,
       metadata: metadataStr,
       sequence,
       createdAt: timestamp,
@@ -447,6 +615,8 @@ export async function createMessage(
       await db.insert(messages).values(createData);
       break;
     } catch (error) {
+      const idempotentWinner = await readExistingIdempotentMessage();
+      if (idempotentWinner) return idempotentWinner;
       const detail = [
         error instanceof Error ? error.message : String(error),
         error instanceof Error && error.cause instanceof Error

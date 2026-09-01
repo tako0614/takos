@@ -56,6 +56,8 @@ type CommonErrorBody = {
   };
 };
 
+const DIFF_FILE_CONCURRENCY = 8;
+
 function parseFlattenLimitError(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error);
   if (
@@ -190,11 +192,16 @@ async function computeDetailedFileDiffs(
   const allPaths = new Set<string>([...baseMap.keys(), ...headMap.keys()]);
   const paths = Array.from(allPaths).sort((a, b) => a.localeCompare(b));
 
-  const files: DetailedDiffFile[] = [];
+  const candidates: Array<{
+    path: string;
+    status: FileStatus;
+    baseOid: string | null;
+    headOid: string | null;
+  }> = [];
   let truncated = false;
 
   for (const path of paths) {
-    if (files.length >= MAX_FILES) {
+    if (candidates.length >= MAX_FILES) {
       truncated = true;
       break;
     }
@@ -204,17 +211,43 @@ async function computeDetailedFileDiffs(
     const status = determineFileStatus(baseOid, headOid);
     if (!status) continue;
 
-    files.push(
-      await computeFileDiffWithHunks(
-        bucket,
-        path,
-        status,
-        baseOid,
-        headOid,
-        MAX_FILE_BYTES,
-        MAX_LINES,
-      ),
-    );
+    candidates.push({ path, status, baseOid, headOid });
+  }
+
+  const files: DetailedDiffFile[] = [];
+  for (
+    let waveStart = 0;
+    waveStart < candidates.length;
+    waveStart += DIFF_FILE_CONCURRENCY
+  ) {
+    const wave = candidates.slice(waveStart, waveStart + DIFF_FILE_CONCURRENCY);
+    const results = wave.map(async (candidate) => {
+      try {
+        return {
+          status: "fulfilled" as const,
+          value: await computeFileDiffWithHunks(
+            bucket,
+            candidate.path,
+            candidate.status,
+            candidate.baseOid,
+            candidate.headOid,
+            MAX_FILE_BYTES,
+            MAX_LINES,
+          ),
+        };
+      } catch (reason) {
+        return { status: "rejected" as const, reason };
+      }
+    });
+
+    // Await the already-started work in path order. This preserves the serial
+    // implementation's deterministic error selection without waiting for a
+    // later path once the earliest failing path is known.
+    for (const resultPromise of results) {
+      const result = await resultPromise;
+      if (result.status === "rejected") throw result.reason;
+      files.push(result.value);
+    }
   }
 
   return { files, truncated };

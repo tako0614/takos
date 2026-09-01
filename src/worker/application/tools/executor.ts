@@ -46,6 +46,8 @@ import {
 import { ToolCircuitBreaker } from "./tool-circuit-breaker.ts";
 import { combineSignals } from "@takos/worker-platform-utils/abort";
 import { assertValidToolArguments } from "./argument-validator.ts";
+import { loadRunExecutionAuthority } from "../services/runs/run-authority.ts";
+import { assertPinnedToolDescriptorForExecution } from "./tool-descriptor-revisions.ts";
 
 // Public executor setup exports.
 export { createToolExecutor } from "./executor-setup.ts";
@@ -62,6 +64,26 @@ export interface ToolExecutorLike {
   getAvailableTools(): ToolDefinition[];
   readonly mcpFailedServers: string[];
   cleanup(): void | Promise<void>;
+}
+
+const TOOLBOX_SELF_FENCED_ACTIONS = new Set([
+  "search",
+  "describe",
+  "families",
+]);
+
+function requiresOperationLedger(
+  sideEffectTools: ReadonlySet<string>,
+  toolCall: ToolCall,
+): boolean {
+  if (!sideEffectTools.has(toolCall.name)) return false;
+  // Toolbox `call` can dispatch arbitrary remote mutations and keeps the
+  // outer operation fence. Search/families are reads; describe commits its
+  // exact Skill reference through RunContext's own CAS/idempotency identity.
+  // Wrapping those actions in a second pending operation ledger would turn a
+  // harmless response-loss retry into an `outcome_uncertain` fatal error.
+  return toolCall.name !== "toolbox" ||
+    !TOOLBOX_SELF_FENCED_ACTIONS.has(String(toolCall.arguments.action ?? ""));
 }
 
 // MAX_TOOL_OUTPUT_SIZE is also part of the atomic run-transcript budget. Keep
@@ -251,6 +273,7 @@ export class ToolExecutor implements ToolExecutorLike {
     const executionContext: ToolContext = {
       ...this.context,
       abortSignal: executionAbortSignal,
+      toolCallId: toolCall.id,
     };
 
     try {
@@ -264,6 +287,30 @@ export class ToolExecutor implements ToolExecutorLike {
         };
       }
 
+      // The model may only execute the exact native/MCP contract pinned in
+      // its current RunContext. Refresh after any progressive toolbox/manual
+      // activation, then compare the live adapter/schema against that
+      // immutable revision before permission, idempotency, confirmation, or
+      // handler dispatch.
+      if (this.context.runAuthority && this.db) {
+        const currentAuthority = await loadRunExecutionAuthority({
+          db: this.db,
+          runId: this.context.runId,
+        });
+        if (
+          currentAuthority.attestation.runGrantDigest !==
+            this.context.runAuthority.attestation.runGrantDigest
+        ) {
+          throw new Error("RunGrant changed before tool execution");
+        }
+        await assertPinnedToolDescriptorForExecution({
+          db: this.db,
+          authority: currentAuthority,
+          tool: tool.definition,
+        });
+        executionContext.runAuthority = currentAuthority;
+      }
+
       // --- Permission checks (delegated) ---
       assertToolPermission(toolCall.name, tool.definition, executionContext);
       // Provider/MCP schemas are an execution contract, not merely model
@@ -273,7 +320,7 @@ export class ToolExecutor implements ToolExecutorLike {
 
       // Idempotency guard for side-effect tools
       const db = this.db;
-      if (this.sideEffectTools.has(toolCall.name) && db) {
+      if (requiresOperationLedger(this.sideEffectTools, toolCall) && db) {
         const idempotencyResult = options.idempotencyKey
           ? await checkIdempotencyForOperationKey(
               db,
@@ -493,7 +540,6 @@ export class ToolExecutor implements ToolExecutorLike {
   getAvailableTools() {
     return filterAccessibleTools(
       this.resolver.getAvailableTools(),
-      this.context.role,
       this.context.capabilities || [],
     );
   }

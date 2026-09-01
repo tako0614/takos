@@ -28,8 +28,8 @@ TAKOS_LOCAL_ENV_FILE=.env.local bun run local:down
 
 ## Expected Product Services
 
-- `takos-worker` (serves migration-only read-only Git Smart HTTP for existing R2 repositories)
+- `takos-worker` (preserves legacy Git data while its built-in migration compatibility route remains quarantined fail-closed)
 - `takos-agent`
 
-Takosumi kernel / Takosumi Accounts are substrate / account-plane services, not
+Takosumi kernel / Takosumi Accounts are 実行基盤 / account-plane services, not
 Takos product services.

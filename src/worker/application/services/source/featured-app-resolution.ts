@@ -46,6 +46,8 @@ import {
   setCatalogCacheEntry,
 } from "./featured-app-catalog-internal.ts";
 
+const MAX_PREINSTALL_STATUS_ERRORS = 10;
+
 export function readDefaults(
   env: FeaturedAppCatalogEnv,
 ): FeaturedAppCatalogDefaults {
@@ -433,25 +435,36 @@ async function readFeaturedAppPreinstallJobsStatus(
         latestUpdatedAt = row.updatedAt;
       }
       if (row.lastError) {
-        lastErrors.push({
-          id: row.id,
-          spaceId: row.spaceId,
-          status,
-          lastError: row.lastError,
-          updatedAt: row.updatedAt,
-        });
+        const updatedAt = String(row.updatedAt ?? "");
+        let insertionIndex = lastErrors.length;
+        while (insertionIndex > 0) {
+          const previousUpdatedAt = String(
+            lastErrors[insertionIndex - 1].updatedAt ?? "",
+          );
+          if (updatedAt.localeCompare(previousUpdatedAt) <= 0) break;
+          insertionIndex -= 1;
+        }
+        if (insertionIndex < MAX_PREINSTALL_STATUS_ERRORS) {
+          lastErrors.splice(insertionIndex, 0, {
+            id: row.id,
+            spaceId: row.spaceId,
+            status,
+            lastError: row.lastError,
+            updatedAt: row.updatedAt,
+          });
+          if (lastErrors.length > MAX_PREINSTALL_STATUS_ERRORS) {
+            lastErrors.pop();
+          }
+        }
       }
     }
 
-    lastErrors.sort((left, right) =>
-      String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")),
-    );
     return {
       available: true,
       total: rows.length,
       byStatus,
       latestUpdatedAt,
-      lastErrors: lastErrors.slice(0, 10),
+      lastErrors,
     };
   } catch (error) {
     return {

@@ -1,6 +1,6 @@
 # Takos
 
-Takos は、AI エージェントに作業を頼み、その結果をファイル・Git・メモリ・アプリへ残せるワークスペースです。チャットだけでなく、作業に必要な道具と成果物を同じ場所で扱えます。
+Takos は、一人の利用者が AI エージェントに作業を頼み、その結果をファイル・Git・メモリ・アプリへ残せるワークスペースです。チャットだけでなく、作業に必要な道具と成果物を同じ場所で扱えます。
 
 このリポジトリには、ブラウザ UI、API を提供する Worker、エージェント実行サービス、セルフホスト用の OpenTofu モジュールが入っています。
 
@@ -13,10 +13,10 @@ Takos は、AI エージェントに作業を頼み、その結果をファイ�
 - 必要なアプリを Git URL から追加して、Apps 画面から開く
 - MCP サーバーを接続し、そのツールをエージェントから使う
 - エージェントの回答が完了または失敗したときに通知を受け取る
-- Takosumi Cloud などの Takoform 対応ホストへ配置する
+- Takosumi Cloud などの Takosumi-managed host へ配置する
 - 必要なら自分の Cloudflare アカウントへ直接セルフホストする
 
-**Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、接続をまとめる作業場所です。新しい Workspace にアプリは自動追加されません。必要なものだけを選んで追加します。
+**Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、接続を仕事・趣味・案件などの用途別にまとめる private なカテゴリーです。一人で複数作成できますが、他のアカウントを招待したり共有したりはしません。新しい Workspace にアプリは自動追加されず、必要なものだけを選んで追加します。
 
 ## まず使ってみる
 
@@ -65,7 +65,15 @@ Takos の基本ツール
 
 Takos は利用者が触る AI ワークスペースを提供します。Takosumi は別プロジェクトで、ホスト環境のアカウント、アプリのインストール、OpenTofu の実行履歴を管理します。
 
-Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用の構成は通常の OpenTofu モジュールであり、Takosumi から実行することも、運用者が自分の手順で実行することもできます。
+Takos の Chat、agent、Memory、app-local Workspace は Takosumi なしでも動きます。
+Takosumi へ接続すると、外部 OIDC identity と、その Principal に委任された Capsule
+state、canonical plan/apply/state/output/audit、Interface を利用できます。未接続時はその連携機能だけ
+が使えず、Takos 内に代替の production lifecycle ledger は作りません。
+
+Takos 自体に独自のデプロイ制御やクラウド provider はありません。セルフホスト用
+の構成は通常の OpenTofu モジュールで、Takosumi から実行することも、運用者が自分
+の手順で実行することもできます。local integration には product-neutral な
+[`takosumi-dev-server`](../takosumi-dev-server/README.md) を利用できます。
 
 Takosumi が同じ Git commit から導入画面を組み立てる場合は、
 [`/.well-known/takosumi.json`](.well-known/takosumi.json) の既定

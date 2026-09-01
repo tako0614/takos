@@ -23,6 +23,7 @@ import {
   resolveStorageInitialPath,
   shouldEmitStoragePathChange,
 } from "./storage-page-state.ts";
+import { findSpaceByIdentifier } from "../../lib/spaces.ts";
 
 interface StoragePageProps {
   spaceId: string;
@@ -34,6 +35,9 @@ interface StoragePageProps {
 
 export function StoragePage(props: StoragePageProps) {
   const { t } = useI18n();
+  const spaceRecordId = () =>
+    props.spaces.find((space) => space.id === props.spaceId)?.id ??
+    findSpaceByIdentifier(props.spaces, props.spaceId)?.id;
 
   const {
     files,
@@ -50,7 +54,10 @@ export function StoragePage(props: StoragePageProps) {
     bulkRenameItems,
     getDownloadUrl,
     downloadFolderZip,
-  } = useSpaceStorage(() => props.spaceId);
+  } = useSpaceStorage(
+    () => props.spaceId,
+    spaceRecordId,
+  );
 
   const [selectedFiles, setSelectedFiles] = createSignal<Set<string>>(
     new Set(),

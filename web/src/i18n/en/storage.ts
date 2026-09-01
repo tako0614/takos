@@ -34,6 +34,7 @@ export const storage = {
   createNewFolder: "Create New Folder",
   folderName: "Folder name",
   newName: "New name",
+  destinationPath: "Destination path",
   renameTitle: "Rename",
   failedToCreateFolder: "Failed to create folder",
   failedToLoadFiles: "Failed to load files",

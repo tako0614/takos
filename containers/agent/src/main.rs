@@ -3,7 +3,6 @@ mod engine_support;
 mod hash;
 mod model;
 mod redaction;
-mod skills;
 mod tool_bridge;
 
 use std::collections::{HashMap, HashSet};
@@ -42,7 +41,6 @@ use crate::engine_support::{
     durable_history_before_current, last_user_message,
 };
 use crate::model::TakosModelRunner;
-use crate::skills::{build_skill_catalog, render_available_skill_context};
 use crate::tool_bridge::CompositeToolExecutor;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -101,21 +99,9 @@ const START_REQUEST_BODY_LIMIT_BYTES: usize = 64 * 1024;
 /// Per-request timeout applied to every axum handler. Keeps a stuck control
 /// plane from holding a connection slot for the full process lifetime.
 const REQUEST_HANDLER_TIMEOUT_SECS: u64 = 30;
-const OPENAI_MAX_TOOL_DEFINITIONS: usize = 128;
-const RUNTIME_PROTOCOL_VERSION: u32 = 2;
-const TOOLBOX_TOOL_NAME: &str = "toolbox";
-const CORE_DIRECT_TOOL_NAMES: [&str; 10] = [
-    TOOLBOX_TOOL_NAME,
-    "web_fetch",
-    "chat_attachment_read",
-    "create_artifact",
-    "remember",
-    "recall",
-    "set_reminder",
-    "spawn_agent",
-    "wait_agent",
-    "store_search",
-];
+// v3 requires every outbound provider request to begin through the
+// exact-RunContext Worker ledger before bytes leave this container.
+const RUNTIME_PROTOCOL_VERSION: u32 = 5;
 
 #[derive(Clone)]
 struct ServiceState {
@@ -550,7 +536,7 @@ async fn handle_run_task_error(
     );
     if let Ok(client) = ControlRpcClient::new(payload) {
         let _ = client.tool_cleanup().await;
-        let _ = handle_failure(&client, err, UsagePayload::default(), None).await;
+        let _ = handle_failure(&client, None, err, UsagePayload::default(), None).await;
     }
 }
 
@@ -629,68 +615,42 @@ struct RunContextBundle {
     bootstrap: crate::control_rpc::RunBootstrap,
     run_config: crate::control_rpc::RunConfigResponse,
     tool_catalog: crate::control_rpc::ToolCatalogResponse,
+    model_id: String,
     manual_count: usize,
     user_message: String,
     conversation_history: Vec<ConversationMessage>,
 }
 
-async fn load_run_context(
-    client: &ControlRpcClient,
-    payload: &StartPayload,
-) -> AppResult<RunContextBundle> {
-    let bootstrap = client.run_bootstrap().await?;
-    let run_config = client.run_config(bootstrap.agent_type.as_deref()).await?;
+async fn load_run_context(client: &ControlRpcClient) -> AppResult<RunContextBundle> {
+    // Skill resolution may append the first immutable Skill-plan revision.
+    // Load it first, then require every model/tool input to use the returned
+    // active authority; never keep consuming the pre-activation revision.
+    let skill_runtime_context = client.skill_runtime_context().await?;
+    let model_input = client.run_model_input().await?;
+    if model_input.run_authority != skill_runtime_context.run_authority {
+        return Err(
+            io::Error::other("exact model input does not match pinned Skill authority").into(),
+        );
+    }
     let tool_catalog = client.tool_catalog().await?;
-    let all_tool_names = tool_catalog
-        .tools
-        .iter()
-        .map(|tool| tool.name.clone())
-        .collect::<Vec<_>>();
-    let history = client
-        .conversation_history(
-            &bootstrap.thread_id,
-            &bootstrap.space_id,
-            payload.resolved_model(),
+    if tool_catalog.source_run_authority != skill_runtime_context.run_authority {
+        return Err(io::Error::other(
+            "tool catalog source authority does not match pinned Skill authority",
         )
-        .await?
-        .history;
-    let skill_runtime_context = client
-        .skill_runtime_context(
-            &bootstrap.thread_id,
-            &bootstrap.space_id,
-            bootstrap
-                .agent_type
-                .as_deref()
-                .filter(|value| !value.is_empty())
-                .unwrap_or("default"),
-            &history,
-            &all_tool_names,
-        )
-        .await
-        .unwrap_or_default();
-    let manual_catalog = build_skill_catalog(&skill_runtime_context, &all_tool_names);
-    let manual_count = manual_catalog
-        .skills
-        .iter()
-        .filter(|skill| skill.availability != "unavailable")
-        .count();
+        .into());
+    }
+    let history = model_input.history;
+    let manual_count = skill_runtime_context.descriptor_count;
     let user_message = last_user_message(&history, None).ok_or_else(|| {
         io::Error::other("failed to resolve the current user message for this run")
     })?;
-    let mut conversation_history = durable_history_before_current(&history, &user_message);
-    if let Some(skill_context) = render_available_skill_context(&manual_catalog) {
-        conversation_history.push(ConversationMessage {
-            role: ConversationRole::System,
-            content: skill_context,
-            tool_call_id: None,
-            tool_calls: Vec::new(),
-        });
-    }
+    let conversation_history = durable_history_before_current(&history, &user_message);
 
     Ok(RunContextBundle {
-        bootstrap,
-        run_config,
+        bootstrap: model_input.bootstrap,
+        run_config: model_input.config,
         tool_catalog,
+        model_id: model_input.model_id,
         manual_count,
         user_message,
         conversation_history,
@@ -708,34 +668,13 @@ async fn execute_run(
     if cancellation_token.is_cancelled() {
         return Ok(());
     }
-    // Defense-in-depth: a run MUST arrive with an explicit, real model. A
-    // missing/empty model (or the literal `local-smoke` test affordance) would
-    // otherwise enter the local-smoke engine, where a `tool:`-prefixed user
-    // message is dispatched directly as a remote tool call with no LLM
-    // mediation. The control plane always resolves a concrete model
-    // (run creation + cron re-enqueue), so this only fires on a control-plane
-    // bug — fail closed unless the smoke engine is explicitly opted into.
-    let has_real_model = payload
-        .model
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|model| !model.is_empty() && model != "local-smoke");
-    if !has_real_model && !local_smoke_opt_in() {
-        return Err(io::Error::other(
-            "run started without a concrete model; refusing to default to the \
-             local-smoke engine (set TAKOS_AGENT_ALLOW_LOCAL_SMOKE=true to enable \
-             the smoke engine in dev/test)",
-        )
-        .into());
-    }
-
     let client = ControlRpcClient::new(&payload)?;
     // Validate and renew the token-bound lease before loading conversation,
     // memory, skills, provider credentials, or model context. The periodic
     // heartbeat starts later, so without this synchronous fence an already
     // cancelled/replaced task could perform several expensive reads first.
     client.heartbeat().await?;
-    let context = load_run_context(&client, &payload).await?;
+    let context = load_run_context(&client).await?;
     if cancellation_token.is_cancelled() {
         return Ok(());
     }
@@ -743,36 +682,67 @@ async fn execute_run(
         bootstrap,
         run_config,
         tool_catalog,
+        model_id,
         manual_count,
         user_message,
         conversation_history,
     } = context;
 
+    // The Worker-owned exact RunContext chooses the model. The queue/start
+    // payload is transport metadata and cannot downgrade a production Run to
+    // the local smoke adapter.
+    if model_id == "local-smoke" && !local_smoke_opt_in() {
+        return Err(io::Error::other(
+            "exact RunContext selected local-smoke without the explicit dev/test opt-in",
+        )
+        .into());
+    }
+
     let engine_config = build_engine_config(&run_config)?;
     let engine_session_id = derive_engine_session_id(&bootstrap.thread_id);
-    let api_keys = client.api_keys().await?;
+    let provider_context = client.api_keys(&tool_catalog.run_authority).await?;
+    if (model_id == "local-smoke")
+        != (provider_context.provider_materialization.protocol == "local_smoke")
+    {
+        return Err(io::Error::other(
+            "provider materialization protocol does not match the exact Run model",
+        )
+        .into());
+    }
     let usage_tracker = Arc::new(engine_support::UsageTracker::default());
     // The admission registry owns this token so a fresh lease for the same
     // run can cancel and replace an old in-container task. The heartbeat loop
     // also cancels it when the control-plane lease/status fence returns 409.
-    let composite_tool_executor =
-        CompositeToolExecutor::new(client.clone(), tool_catalog.tools.clone())
-            .with_cancellation_token(cancellation_token.clone());
+    let composite_tool_executor = CompositeToolExecutor::new(
+        client.clone(),
+        provider_context.run_authority.clone(),
+        tool_catalog.tools.clone(),
+    )
+    .with_cancellation_token(cancellation_token.clone());
     let tool_execution_state = composite_tool_executor.clone();
-    let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools());
+    // The Worker is the sole ToolBroker authority. Every returned definition
+    // is already an immutable RunContext-pinned model-visible contract; the
+    // container must not re-select from a larger mutable catalog.
+    let exposed_tools = composite_tool_executor.exposed_tools();
     let model_runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
-        payload.resolved_model(),
+        &model_id,
         run_config.temperature,
-        collect_openai_api_keys(api_keys.openai, env::var("OPENAI_API_KEY").ok()),
+        Vec::new(),
         exposed_tools.clone(),
         usage_tracker.clone(),
-        api_keys.openai_endpoint,
+        provider_context.openai_endpoint.clone(),
+    )
+    .with_model_call_authority(
+        client.clone(),
+        tool_execution_state.run_authority_handle(),
+        &provider_context.provider_materialization,
     );
     let durable_checkpoint_repository = if payload.supports_durable_checkpoints() {
         Some(Arc::new(ControlRpcLoopStateRepository::new(
             client.clone(),
             usage_tracker,
             tool_execution_state.fatal_error_handle(),
+            tool_execution_state.run_authority_handle(),
         )))
     } else {
         None
@@ -885,7 +855,10 @@ async fn execute_run(
         .await
         .ok();
     let finalization_result = match run_result {
-        Ok(response) => handle_success(&client, &response, usage).await,
+        Ok(response) => {
+            let run_authority = tool_execution_state.current_run_authority();
+            handle_success(&client, &run_authority, &response, usage).await
+        }
         Err(err) => {
             // A model/engine failure is finalized once with its real usage.
             // `FinalizationError` keeps an unconfirmed terminal transport from
@@ -896,7 +869,15 @@ async fn execute_run(
             }
             .and_then(|checkpoint| ExecutionState::from_checkpoint(checkpoint).ok())
             .map(|(state, _, _)| state.turn_messages);
-            handle_failure(&client, &err, usage, checkpoint_turn_messages.as_deref()).await
+            let run_authority = tool_execution_state.current_run_authority();
+            handle_failure(
+                &client,
+                Some(&run_authority),
+                &err,
+                usage,
+                checkpoint_turn_messages.as_deref(),
+            )
+            .await
         }
     };
 
@@ -947,6 +928,7 @@ async fn heartbeat_loop(
 
 async fn handle_success(
     client: &ControlRpcClient,
+    run_authority: &crate::control_rpc::RunAuthorityAttestation,
     response: &SessionResponse,
     usage: UsagePayload,
 ) -> AppResult<()> {
@@ -963,6 +945,7 @@ async fn handle_success(
     let messages = build_terminal_transcript(response, terminal_error)?;
     if let Err(status_err) = client
         .complete_run(
+            Some(run_authority),
             status,
             usage.clone(),
             Some(&output),
@@ -982,6 +965,7 @@ async fn handle_success(
 
 async fn handle_failure(
     client: &ControlRpcClient,
+    run_authority: Option<&crate::control_rpc::RunAuthorityAttestation>,
     err: &(impl std::fmt::Display + ?Sized),
     usage: UsagePayload,
     turn_messages: Option<&[ConversationMessage]>,
@@ -1001,7 +985,14 @@ async fn handle_failure(
         Some("Tool execution failed before a result was recorded."),
     )?;
     if let Err(update_err) = client
-        .complete_run(status, usage.clone(), None, Some(&error_message), messages)
+        .complete_run(
+            run_authority,
+            status,
+            usage.clone(),
+            None,
+            Some(&error_message),
+            messages,
+        )
         .await
     {
         if is_run_authority_lost(update_err.as_ref()) {
@@ -1186,6 +1177,7 @@ fn user_visible_failure_message(error: &str) -> String {
         .to_string()
 }
 
+#[cfg(test)]
 fn collect_openai_api_keys(
     control_key: Option<String>,
     container_key: Option<String>,
@@ -1199,62 +1191,6 @@ fn collect_openai_api_keys(
         keys.push(trimmed.to_string());
     }
     keys
-}
-
-fn select_model_tools(
-    remote_tools: &[crate::control_rpc::ToolDefinition],
-) -> Vec<crate::control_rpc::ToolDefinition> {
-    let mut selected = Vec::new();
-    let mut seen = HashSet::new();
-
-    // Selective exposure depends on toolbox being callable. During a partial
-    // rollout or a control-plane regression where toolbox is absent, expose
-    // the bounded full catalog so installed MCP tools do not become
-    // unreachable merely because the router is missing.
-    if !remote_tools
-        .iter()
-        .any(|tool| tool.name == TOOLBOX_TOOL_NAME)
-    {
-        for tool in remote_tools {
-            push_tool(tool, &mut selected, &mut seen);
-            if selected.len() >= max_tool_definitions() {
-                break;
-            }
-        }
-        return selected;
-    }
-
-    for name in CORE_DIRECT_TOOL_NAMES {
-        push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
-    }
-
-    selected
-}
-
-fn push_tool_by_name(
-    tools: &[crate::control_rpc::ToolDefinition],
-    name: &str,
-    selected: &mut Vec<crate::control_rpc::ToolDefinition>,
-    seen: &mut HashSet<String>,
-) {
-    if selected.len() >= max_tool_definitions() {
-        return;
-    }
-    if let Some(tool) = tools.iter().find(|tool| tool.name == name) {
-        push_tool(tool, selected, seen);
-    }
-}
-
-fn push_tool(
-    tool: &crate::control_rpc::ToolDefinition,
-    selected: &mut Vec<crate::control_rpc::ToolDefinition>,
-    seen: &mut HashSet<String>,
-) -> bool {
-    if selected.len() >= max_tool_definitions() || !seen.insert(tool.name.clone()) {
-        return false;
-    }
-    selected.push(tool.clone());
-    true
 }
 
 const fn run_status_for_loop(status: &LoopStatus) -> &'static str {
@@ -1312,14 +1248,6 @@ fn parse_heartbeat_interval_secs(raw: Option<String>) -> u64 {
         .unwrap_or(DEFAULT_HEARTBEAT_INTERVAL_SECS)
 }
 
-fn max_tool_definitions() -> usize {
-    env::var("TAKOS_AGENT_MAX_TOOL_DEFINITIONS")
-        .ok()
-        .and_then(|v| v.trim().parse::<usize>().ok())
-        .filter(|v| *v >= 1)
-        .unwrap_or(OPENAI_MAX_TOOL_DEFINITIONS)
-}
-
 #[cfg(test)]
 mod tests {
     use super::execute_run;
@@ -1327,11 +1255,12 @@ mod tests {
         accepted_start_payload, authorize_start_with_token, build_terminal_transcript_messages,
         collect_openai_api_keys, handle_failure, handle_run_task_error, handle_success,
         heartbeat_loop, parse_max_concurrent_runs, resolve_bind_host,
-        sanitize_failure_error_message, select_model_tools, user_visible_failure_message,
-        worker_context_run_options, RunAdmission, ServiceState, StartAuthError,
-        OPENAI_MAX_TOOL_DEFINITIONS, RUNTIME_PROTOCOL_VERSION,
+        sanitize_failure_error_message, user_visible_failure_message, worker_context_run_options,
+        RunAdmission, ServiceState, StartAuthError, RUNTIME_PROTOCOL_VERSION,
     };
-    use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition, UsagePayload};
+    use crate::control_rpc::{
+        ControlRpcClient, RunAuthorityAttestation, StartPayload, UsagePayload,
+    };
     use axum::body::{to_bytes, Body};
     use axum::extract::State;
     use axum::http::Request;
@@ -1348,14 +1277,11 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio_util::sync::CancellationToken;
 
-    fn tool(name: &str) -> ToolDefinition {
-        ToolDefinition {
-            name: name.to_string(),
-            description: format!("{name} description"),
-            parameters: serde_json::json!({ "type": "object" }),
-            risk_level: Some("low".to_string()),
-            side_effects: Some(false),
-            durable_idempotency: false,
+    fn run_authority() -> RunAuthorityAttestation {
+        RunAuthorityAttestation {
+            context_revision: 1,
+            context_digest: format!("sha256:{}", "a".repeat(64)),
+            run_grant_digest: format!("sha256:{}", "b".repeat(64)),
         }
     }
 
@@ -1430,13 +1356,13 @@ mod tests {
     }
 
     #[test]
-    fn accepted_start_responses_negotiate_runtime_protocol_v2() {
+    fn accepted_start_responses_negotiate_runtime_protocol_v5() {
         let started = accepted_start_payload("run-1", Some("service-1"), None, Some(false));
         let duplicate = accepted_start_payload("run-1", None, Some(true), None);
 
-        assert_eq!(RUNTIME_PROTOCOL_VERSION, 2);
-        assert_eq!(started["runtimeProtocolVersion"], 2);
-        assert_eq!(duplicate["runtimeProtocolVersion"], 2);
+        assert_eq!(RUNTIME_PROTOCOL_VERSION, 5);
+        assert_eq!(started["runtimeProtocolVersion"], 5);
+        assert_eq!(duplicate["runtimeProtocolVersion"], 5);
         assert_eq!(started["serviceId"], "service-1");
         assert_eq!(duplicate["duplicate"], true);
     }
@@ -1546,6 +1472,7 @@ mod tests {
 
         handle_failure(
             &client,
+            Some(&run_authority()),
             &std::io::Error::other("model request failed"),
             UsagePayload::default(),
             None,
@@ -1633,6 +1560,7 @@ mod tests {
         };
         let error = handle_success(
             &ControlRpcClient::new(&payload).expect("control RPC client should build"),
+            &run_authority(),
             &response,
             UsagePayload::default(),
         )
@@ -1726,8 +1654,14 @@ mod tests {
                 "heartbeat must renew the lease while complete-run is pending"
             );
         };
+        let finalization_authority = run_authority();
         let (finalization_result, ()) = tokio::join!(
-            handle_success(&client, &response, UsagePayload::default(),),
+            handle_success(
+                &client,
+                &finalization_authority,
+                &response,
+                UsagePayload::default(),
+            ),
             observe_pending_finalization,
         );
         finalization_result.expect("atomic finalization should succeed");
@@ -1741,6 +1675,7 @@ mod tests {
         base_url: String,
         requests: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
         checkpoint_fatal_error: bool,
+        skill_authority_mismatch: bool,
     }
 
     async fn agent_e2e_handler(
@@ -1753,9 +1688,41 @@ mod tests {
             .expect("e2e request body");
         let payload = serde_json::from_slice::<serde_json::Value>(&body)
             .unwrap_or_else(|_| serde_json::json!({}));
-        state.requests.lock().await.push((path.clone(), payload));
+        state
+            .requests
+            .lock()
+            .await
+            .push((path.clone(), payload.clone()));
 
         let response = match path.as_str() {
+            "/api/internal/v1/agent-control/run-model-input" => serde_json::json!({
+                "runAuthority": {
+                    "contextRevision": 2,
+                    "contextDigest": format!("sha256:{}", "c".repeat(64)),
+                    "runGrantDigest": format!("sha256:{}", "b".repeat(64))
+                },
+                "bootstrap": {
+                    "status": "running",
+                    "spaceId": "workspace-e2e",
+                    "threadId": "thread-e2e",
+                    "userId": "user-e2e",
+                    "agentType": "assistant"
+                },
+                "modelId": "gpt-e2e",
+                "config": {
+                    "agentType": "assistant",
+                    "systemPrompt": "You are the e2e agent.",
+                    "maxGraphSteps": 32,
+                    "maxToolRounds": 2,
+                    "temperature": 0
+                },
+                "history": [
+                    { "role": "user", "content": "earlier question" },
+                    { "role": "assistant", "content": "earlier answer" },
+                    { "role": "user", "content": "current question" }
+                ],
+                "transcriptCutSequence": 3
+            }),
             "/api/internal/v1/agent-control/run-bootstrap" => serde_json::json!({
                 "status": "running",
                 "spaceId": "workspace-e2e",
@@ -1770,7 +1737,20 @@ mod tests {
                 "temperature": 0
             }),
             "/api/internal/v1/agent-control/tool-catalog" => {
-                serde_json::json!({ "tools": [] })
+                serde_json::json!({
+                    "catalogVersion": 2,
+                    "sourceRunAuthority": {
+                        "contextRevision": 2,
+                        "contextDigest": format!("sha256:{}", "c".repeat(64)),
+                        "runGrantDigest": format!("sha256:{}", "b".repeat(64))
+                    },
+                    "runAuthority": {
+                        "contextRevision": 2,
+                        "contextDigest": format!("sha256:{}", "c".repeat(64)),
+                        "runGrantDigest": format!("sha256:{}", "b".repeat(64))
+                    },
+                    "tools": []
+                })
             }
             "/api/internal/v1/agent-control/conversation-history" => serde_json::json!({
                 "history": [
@@ -1781,13 +1761,37 @@ mod tests {
                 ]
             }),
             "/api/internal/v1/agent-control/skill-runtime-context" => serde_json::json!({
-                "skills": [],
-                "managedSkills": [],
-                "customSkills": []
+                "runAuthority": {
+                    "contextRevision": if state.skill_authority_mismatch { 3 } else { 2 },
+                    "contextDigest": format!(
+                        "sha256:{}",
+                        if state.skill_authority_mismatch { "d" } else { "c" }.repeat(64)
+                    ),
+                    "runGrantDigest": format!("sha256:{}", "b".repeat(64))
+                },
+                "descriptorCount": 0,
+                // A stale/hostile bulk-content field must remain unknown to
+                // the descriptor-only wrapper protocol and never reach the
+                // provider request.
+                "skills": [{
+                    "instructions": "legacy-bulk-skill-must-not-be-injected"
+                }]
             }),
             "/api/internal/v1/agent-control/api-keys" => serde_json::json!({
-                "openai": "sk-e2e",
-                "openaiEndpoint": format!("{}/v1/chat/completions", state.base_url)
+                "openai": null,
+                "openaiEndpoint": format!("{}/v1/chat/completions", state.base_url),
+                "sourceRunAuthority": payload["runAuthority"].clone(),
+                "runAuthority": {
+                    "contextRevision": 3,
+                    "contextDigest": format!("sha256:{}", "d".repeat(64)),
+                    "runGrantDigest": format!("sha256:{}", "b".repeat(64))
+                },
+                "providerMaterialization": {
+                    "id": format!("pmr_{}", "e".repeat(64)),
+                    "digest": format!("sha256:{}", "f".repeat(64)),
+                    "sourceKind": "takosumi_interface",
+                    "protocol": "openai_chat_completions"
+                }
             }),
             "/api/internal/v1/agent-control/engine-checkpoint-load" => serde_json::json!({
                 "checkpoint": null,
@@ -1799,6 +1803,18 @@ mod tests {
                 "fatalError": state.checkpoint_fatal_error.then_some(
                     crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR
                 )
+            }),
+            "/api/internal/v1/agent-control/model-call-begin" => serde_json::json!({
+                "modelCallId": format!("rmc_{}", "c".repeat(64)),
+                "idempotent": false,
+                "runAuthority": payload["runAuthority"].clone(),
+                "providerCredential": {
+                    "materializationId": format!("pmr_{}", "e".repeat(64)),
+                    "materializationDigest": format!("sha256:{}", "f".repeat(64)),
+                    "protocol": "openai_chat_completions",
+                    "endpoint": format!("{}/v1/chat/completions", state.base_url),
+                    "apiKey": "sk-e2e"
+                }
             }),
             "/v1/chat/completions" => serde_json::json!({
                 "choices": [{
@@ -1826,6 +1842,7 @@ mod tests {
             base_url: format!("http://{address}"),
             requests: requests.clone(),
             checkpoint_fatal_error: false,
+            skill_authority_mismatch: false,
         };
         let app = Router::new()
             .fallback(post(agent_e2e_handler))
@@ -1837,7 +1854,9 @@ mod tests {
             run_id: "run-e2e".to_string(),
             worker_id: "service-e2e".to_string(),
             service_id: Some("service-e2e".to_string()),
-            model: Some("gpt-e2e".to_string()),
+            // Transport metadata is deliberately hostile. The Worker-owned
+            // exact RunContext still selects gpt-e2e.
+            model: Some("local-smoke".to_string()),
             lease_version: Some(1),
             executor_tier: Some(1),
             executor_container_id: Some("container-e2e".to_string()),
@@ -1856,6 +1875,31 @@ mod tests {
             .find(|(path, _)| path == "/v1/chat/completions")
             .map(|(_, body)| body)
             .expect("model request");
+        let model_call_begin_index = requests
+            .iter()
+            .position(|(path, _)| path.ends_with("/model-call-begin"))
+            .expect("model-call authority begin");
+        let model_request_index = requests
+            .iter()
+            .position(|(path, _)| path == "/v1/chat/completions")
+            .expect("provider model request");
+        assert!(model_call_begin_index < model_request_index);
+        let model_call_begin = &requests[model_call_begin_index].1;
+        assert_eq!(model_call_begin["runAuthority"]["contextRevision"], 3);
+        assert_eq!(model_call_begin["transportAttempt"], 1);
+        assert!(model_call_begin["requestDigest"]
+            .as_str()
+            .is_some_and(|digest| digest.starts_with("sha256:") && digest.len() == 71));
+        assert!(model_call_begin["beginNonce"]
+            .as_str()
+            .is_some_and(|nonce| uuid::Uuid::parse_str(nonce).is_ok()));
+        let provider_context = requests
+            .iter()
+            .find(|(path, _)| path.ends_with("/api-keys"))
+            .map(|(_, body)| body)
+            .expect("provider materialization request");
+        assert_eq!(provider_context["materializeOnly"], true);
+        assert_eq!(provider_context["runAuthority"]["contextRevision"], 2);
         let messages = model_request["messages"]
             .as_array()
             .expect("model messages");
@@ -1868,6 +1912,9 @@ mod tests {
                     .as_str()
                     .is_some_and(|content| content.contains("current question"))
         }));
+        assert!(!model_request
+            .to_string()
+            .contains("legacy-bulk-skill-must-not-be-injected"));
         let checkpoint_saves = requests
             .iter()
             .filter(|(path, _)| path.ends_with("/engine-checkpoint-save"))
@@ -1898,6 +1945,74 @@ mod tests {
         assert!(!requests
             .iter()
             .any(|(path, _)| path.ends_with("/update-run-status")));
+        assert!(requests
+            .iter()
+            .any(|(path, _)| path.ends_with("/run-model-input")));
+        let skill_context_index = requests
+            .iter()
+            .position(|(path, _)| path.ends_with("/skill-runtime-context"))
+            .expect("pinned Skill context request");
+        let model_input_index = requests
+            .iter()
+            .position(|(path, _)| path.ends_with("/run-model-input"))
+            .expect("exact model input request");
+        assert!(skill_context_index < model_input_index);
+        assert!(!requests.iter().any(|(path, _)| {
+            path.ends_with("/run-bootstrap")
+                || path.ends_with("/run-config")
+                || path.ends_with("/conversation-history")
+        }));
+    }
+
+    #[tokio::test]
+    async fn execute_run_rejects_skill_context_from_another_authority() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("e2e listener");
+        let address = listener.local_addr().expect("e2e address");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let state = AgentE2eState {
+            base_url: format!("http://{address}"),
+            requests: requests.clone(),
+            checkpoint_fatal_error: false,
+            skill_authority_mismatch: true,
+        };
+        let app = Router::new()
+            .fallback(post(agent_e2e_handler))
+            .with_state(state.clone());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("e2e server");
+        });
+        let payload = StartPayload {
+            run_id: "run-authority-mismatch".to_string(),
+            worker_id: "service-authority-mismatch".to_string(),
+            service_id: Some("service-authority-mismatch".to_string()),
+            model: Some("attacker-selected-model".to_string()),
+            lease_version: Some(1),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-authority-mismatch".to_string()),
+            checkpoint_protocol_version: Some(1),
+            control_rpc_base_url: state.base_url,
+            control_rpc_token: "token-authority-mismatch".to_string(),
+        };
+
+        let error = execute_run(payload, CancellationToken::new())
+            .await
+            .expect_err("mismatched Skill authority must fail closed");
+        assert!(error
+            .to_string()
+            .contains("exact model input does not match pinned Skill authority"));
+        server.abort();
+        let requests = requests.lock().await;
+        assert!(requests
+            .iter()
+            .any(|(path, _)| path.ends_with("/run-model-input")));
+        assert!(requests
+            .iter()
+            .any(|(path, _)| path.ends_with("/skill-runtime-context")));
+        assert!(!requests
+            .iter()
+            .any(|(path, _)| path == "/v1/chat/completions"));
     }
 
     #[tokio::test]
@@ -1911,6 +2026,7 @@ mod tests {
             base_url: format!("http://{address}"),
             requests: requests.clone(),
             checkpoint_fatal_error: true,
+            skill_authority_mismatch: false,
         };
         let app = Router::new()
             .fallback(post(agent_e2e_handler))
@@ -2052,86 +2168,6 @@ mod tests {
             authorize_start_with_token(&headers, None),
             Err(StartAuthError::NotConfigured)
         );
-    }
-
-    #[test]
-    fn select_model_tools_caps_openai_tool_count_and_deduplicates_names() {
-        let mut tools = (0..150)
-            .map(|index| tool(&format!("tool_{index}")))
-            .collect::<Vec<_>>();
-        tools.push(tool("tool_1"));
-
-        let selected = select_model_tools(&tools);
-        let unique_names = selected
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<std::collections::HashSet<_>>();
-
-        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
-        assert_eq!(unique_names.len(), OPENAI_MAX_TOOL_DEFINITIONS);
-    }
-
-    #[test]
-    fn select_model_tools_keeps_toolbox_plus_core_direct_tools() {
-        let mut tools = (0..20)
-            .map(|index| tool(&format!("tool_{index}")))
-            .collect::<Vec<_>>();
-        tools.extend([
-            tool("toolbox"),
-            tool("web_fetch"),
-            tool("create_artifact"),
-            tool("skill_list"),
-        ]);
-
-        let selected = select_model_tools(&tools);
-        let names = selected
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(names, vec!["toolbox", "web_fetch", "create_artifact"]);
-    }
-
-    #[test]
-    fn select_model_tools_uses_full_catalog_when_toolbox_is_missing() {
-        let tools = vec![
-            tool("web_fetch"),
-            tool("create_artifact"),
-            tool("info_unit_search"),
-            tool("skill_list"),
-        ];
-
-        let selected = select_model_tools(&tools);
-        let names = selected
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            names,
-            vec![
-                "web_fetch",
-                "create_artifact",
-                "info_unit_search",
-                "skill_list"
-            ]
-        );
-    }
-
-    #[test]
-    fn select_model_tools_uses_full_catalog_only_when_no_core_path_exists() {
-        let tools = (0..150)
-            .map(|index| tool(&format!("tool_{index}")))
-            .collect::<Vec<_>>();
-
-        let selected = select_model_tools(&tools);
-        let selected_names = selected
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(selected_names[0], "tool_0");
-        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
     }
 
     #[test]

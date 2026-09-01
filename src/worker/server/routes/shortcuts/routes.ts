@@ -255,7 +255,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -312,7 +311,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -346,7 +344,6 @@ export const shortcutGroupRoutes = new Hono<
       c,
       spaceId,
       user.id,
-      ["owner", "admin"],
     );
 
     const deleted = await deleteShortcutGroup(
@@ -375,7 +372,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const body = c.req.valid("json");
@@ -411,7 +407,6 @@ export const shortcutGroupRoutes = new Hono<
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
       );
 
       const removed = await removeItemFromGroup(

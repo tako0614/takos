@@ -1,6 +1,7 @@
 /**
- * Git packfile **writer** (format v2), used to serve clone/fetch over smart
- * HTTP from the R2-backed loose-object store.
+ * Git packfile **writer** (format v2), retained for migration tooling and
+ * protocol fixtures over the legacy R2-backed loose-object store. The built-in
+ * Smart HTTP serve route is quarantined and does not call this module.
  *
  * Objects are emitted **undeltified** (full, zlib-compressed content). This is
  * a valid packfile that every git client accepts; it trades a larger transfer

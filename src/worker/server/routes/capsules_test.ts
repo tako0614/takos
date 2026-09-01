@@ -40,7 +40,7 @@ function createApp() {
 
 function authorize(spaceId = "space-local") {
   routeAuthDeps.requireSpaceAccess = async () =>
-    ({ space: { id: spaceId }, membership: { role: "editor" } }) as never;
+    ({ space: { id: spaceId } }) as never;
 }
 
 const operatorEnv = {
@@ -139,6 +139,36 @@ describe("Capsule routes on canonical Takosumi records", () => {
       calls.push({ kind: "apply", input });
       return { status: 202, body: { run: { id: "run_apply" } } };
     };
+    capsulesRouteDeps.getInstallableAppPlanRun = async (input) => {
+      calls.push({ kind: "read-plan", input });
+      return {
+        status: 200,
+        body: {
+          run: {
+            id: input.runId,
+            workspaceId: input.workspaceId,
+            capsuleId: "cap_1",
+            type: "plan",
+            status: "waiting_approval",
+          },
+        },
+      };
+    };
+    capsulesRouteDeps.approveInstallableAppPlanRun = async (input) => {
+      calls.push({ kind: "approve-plan", input });
+      return {
+        status: 200,
+        body: {
+          run: {
+            id: input.runId,
+            workspaceId: input.workspaceId,
+            capsuleId: "cap_1",
+            type: "plan",
+            status: "succeeded",
+          },
+        },
+      };
+    };
     const app = createApp();
     const source = {
       git_url: "https://github.com/acme/app.git",
@@ -155,6 +185,16 @@ describe("Capsule routes on canonical Takosumi records", () => {
       operatorEnv,
     );
     const plan = (await planResponse.json()) as Record<string, unknown>;
+    const planStatusResponse = await app.request(
+      "/spaces/me/capsules/git-url/plans/run_plan",
+      {},
+      operatorEnv,
+    );
+    const approvalResponse = await app.request(
+      "/spaces/me/capsules/git-url/plans/run_plan/approve",
+      { method: "POST" },
+      operatorEnv,
+    );
     const applyResponse = await app.request(
       "/spaces/me/capsules/git-url/apply",
       {
@@ -165,6 +205,8 @@ describe("Capsule routes on canonical Takosumi records", () => {
       operatorEnv,
     );
     expect(planResponse.status).toBe(201);
+    expect(planStatusResponse.status).toBe(200);
+    expect(approvalResponse.status).toBe(200);
     expect(applyResponse.status).toBe(202);
     expect(calls).toEqual([
       {
@@ -175,6 +217,14 @@ describe("Capsule routes on canonical Takosumi records", () => {
           ref: "v1",
           modulePath: "modules/app",
         },
+      },
+      {
+        kind: "read-plan",
+        input: { workspaceId: "ws_operator", runId: "run_plan" },
+      },
+      {
+        kind: "approve-plan",
+        input: { workspaceId: "ws_operator", runId: "run_plan" },
       },
       {
         kind: "apply",
@@ -440,7 +490,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
   });
 
   test("operator automation refuses spaces it is not bound to", async () => {
-    // The operator token is deployment-wide, so an editor in an unbound space
+    // The operator token is deployment-wide, so a caller in an unbound space
     // must not reach the shared Takosumi Workspace at all — listing it is how
     // the "belongs to this space" check itself is answered.
     authorize("space-other");

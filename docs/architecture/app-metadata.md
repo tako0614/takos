@@ -4,7 +4,7 @@
 > どちらが持つか。
 
 Takos にアプリを 1 つ追加すると、そのアプリの実体は Takosumi が **Capsule** (Git URL から取り込むアプリ/イン
-フラの 1 単位。[Takosumi のモデル](https://takosumi.com/docs/reference/model) 参照) として記録し、install / plan / apply の実行記録
+フラの 1 単位。[Takosumi のモデル](https://takosumi.com/docs/concepts/) 参照) として記録し、install / plan / apply の実行記録
 (**Capsule -> Run -> StateVersion -> Output**) を残します。provider の許可範囲、認証情報、state backend、
 workload placement は **ProviderConnection / ProviderBinding / policy** が所有します。一方で、
 アプリの宣言メタデータは Takosumi の service-side Interface が所有し、Takos はその認可済み view を launcher や
@@ -51,7 +51,7 @@ open-with 選択、chat / agent / memory / Workspace に紐づく product state 
 store ではなく、認可済み UI Interface の read-only view です。
 
 Interface の実体、Output mapping、binding、lifecycle は service-side の Takosumi が所有します。アプリの
-repository は v2.1 [`/.well-known/takosumi.json`](../../.well-known/takosumi.json) の `interfaces[]` で、launcher
+repository は v2.1 [`/.well-known/takosumi.json`](https://github.com/tako0614/takos/blob/main/.well-known/takosumi.json) の `interfaces[]` で、launcher
 など app-owned な Interface の宣言案と Output mapping を提案できます。Takosumi は exact source snapshot を
 レビューして DB-owned `InstallConfig.interfaceBlueprints` に compile し、成功した Apply 後に host-owned
 Interface へ materialize します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
@@ -99,5 +99,5 @@ Takos の resource authority は `deploy/product-resources.json` です。Takosu
 - [内部トラスト境界](./internal-trust-boundaries.md)
 - [システムアーキテクチャ](./system-architecture.md)
 - [Capsule の runtime Interface](./capsule-runtime-projection.md)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi のモデル](https://takosumi.com/docs/reference/model)
+- [Takosumi の考え方](https://takosumi.com/docs/concepts/)
+- [Takosumi のモデル](https://takosumi.com/docs/concepts/)

@@ -3,9 +3,9 @@
  *
  * AppsPage reads deployed UI surfaces. This fetches the Takos product facade for
  * the current Space and surfaces Capsules that are not yet finished/active.
- * It is deliberately FAIL-SOFT and self-contained: it never imports the
- * Takosumi dashboard client, so a missing account-plane session or any error
- * just hides the section instead of hijacking the product page.
+ * It is self-contained and never imports the Takosumi dashboard client. Load
+ * failures stay non-blocking, but are returned to the Apps page so it does not
+ * misrepresent an unknown inventory as an empty Workspace.
  */
 import { type Accessor, createResource } from "solid-js";
 
@@ -48,6 +48,17 @@ const INFLIGHT_STATUSES = new Set([
   "stale",
   "error",
   "failed",
+  "uninstalling",
+]);
+
+const PENDING_STATUSES = new Set([
+  "pending",
+  "queued",
+  "installing",
+  "planning",
+  "applying",
+  "in_progress",
+  "uninstalling",
 ]);
 
 const ACTIVE_STATUSES = new Set(["active", "deployed", "ready"]);
@@ -131,23 +142,31 @@ export function parseCapsulesResponse(
   body: unknown,
 ): readonly WorkspaceCapsule[] {
   const record = readRecord(body);
-  const rows = Array.isArray(record?.capsules) ? record.capsules : [];
+  if (!record || !Array.isArray(record.capsules)) {
+    throw new TypeError("Invalid Capsule inventory response");
+  }
+  const rows = record.capsules;
   const out: WorkspaceCapsule[] = [];
   for (const row of rows) {
     const item = readRecord(row);
-    if (!item) continue;
+    if (!item) throw new TypeError("Invalid Capsule inventory record");
     const id = readString(item.capsule_id);
     const name = capsuleName(item);
     const rawStatus = readString(item.status) ?? "unknown";
     const freshness = readString(item.freshness);
-    if (!id || !name || !rawStatus) continue;
+    if (!id || !name || !rawStatus) {
+      throw new TypeError("Invalid Capsule inventory record");
+    }
     const sourceUrl = readNestedString(item, ["source", "url"]);
+    if (item.services !== undefined && !Array.isArray(item.services)) {
+      throw new TypeError("Invalid Capsule services response");
+    }
     const services = Array.isArray(item.services)
-      ? item.services
-          .map(parseService)
-          .filter(
-            (service): service is CapsuleServiceSummary => service !== null,
-          )
+      ? item.services.map((service) => {
+          const parsed = parseService(service);
+          if (!parsed) throw new TypeError("Invalid Capsule service record");
+          return parsed;
+        })
       : [];
     out.push({
       id,
@@ -172,39 +191,68 @@ export function isInflightCapsule(
   return INFLIGHT_STATUSES.has(capsule.status.toLowerCase());
 }
 
-async function fetchCapsules(
+export function isPendingCapsule(
+  capsule: Pick<WorkspaceCapsule, "status">,
+): boolean {
+  return PENDING_STATUSES.has(capsule.status.toLowerCase());
+}
+
+type FetchLike = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export async function loadWorkspaceCapsules(
   spaceId: string,
+  fetchImpl: FetchLike = fetch,
 ): Promise<readonly WorkspaceCapsule[]> {
   if (!spaceId) return [];
-  let res: Response;
-  try {
-    res = await fetch(
-      `/api/spaces/${encodeURIComponent(spaceId)}/capsules`,
-      { headers: { accept: "application/json" }, credentials: "include" },
-    );
-  } catch {
-    return []; // network / offline: hide the section, never throw.
-  }
-  // No account-plane session (401), no config (503), or any non-2xx: fail soft.
-  if (!res.ok) return [];
-  return parseCapsulesResponse(
-    await res.json().catch(() => undefined),
+  const res = await fetchImpl(
+    `/api/spaces/${encodeURIComponent(spaceId)}/capsules`,
+    { headers: { accept: "application/json" }, credentials: "include" },
   );
+  const body = await res.json().catch(() => undefined);
+  if (!res.ok) {
+    const record = readRecord(body);
+    const error = readRecord(record?.error);
+    throw new Error(
+      readString(error?.message) ??
+        readString(record?.error) ??
+        `Capsule inventory request failed (${res.status})`,
+    );
+  }
+  return parseCapsulesResponse(body);
 }
 
 export function useWorkspaceCapsules(spaceId: Accessor<string | null>): {
   readonly capsules: Accessor<readonly WorkspaceCapsule[]>;
   readonly loading: Accessor<boolean>;
+  readonly error: Accessor<string | null>;
   /** Re-fetch Capsules while a Run is in flight. */
   readonly refetch: () => void;
 } {
   const [resource, { refetch }] = createResource(
     () => spaceId() ?? "",
-    fetchCapsules,
+    async (id) => {
+      try {
+        return {
+          capsules: await loadWorkspaceCapsules(id),
+          error: null,
+        };
+      } catch (error) {
+        return {
+          capsules: [] as readonly WorkspaceCapsule[],
+          error: error instanceof Error
+            ? error.message
+            : "Failed to load Capsule inventory",
+        };
+      }
+    },
   );
   return {
-    capsules: () => resource() ?? [],
+    capsules: () => resource()?.capsules ?? [],
     loading: () => resource.loading,
+    error: () => resource()?.error ?? null,
     refetch: () => void refetch(),
   };
 }
@@ -216,15 +264,20 @@ export function useInflightCapsules(spaceId: Accessor<string | null>): {
 } {
   const [resource] = createResource(
     () => spaceId() ?? "",
-    async (id) =>
-      (await fetchCapsules(id))
-        .filter(isInflightCapsule)
-        .map((capsule) => ({
-          id: capsule.id,
-          name: capsule.name,
-          status: capsule.status,
-          environment: capsule.environment,
-        })),
+    async (id) => {
+      try {
+        return (await loadWorkspaceCapsules(id))
+          .filter(isInflightCapsule)
+          .map((capsule) => ({
+            id: capsule.id,
+            name: capsule.name,
+            status: capsule.status,
+            environment: capsule.environment,
+          }));
+      } catch {
+        return [];
+      }
+    },
   );
   return {
     capsules: () => resource() ?? [],

@@ -1,0 +1,42 @@
+export const MONACO_EDITOR_CHUNK_BUDGET = 20_000;
+
+export const MONACO_BASIC_LANGUAGES = [
+  "bat",
+  "cpp",
+  "csharp",
+  "css",
+  "dart",
+  "dockerfile",
+  "go",
+  "graphql",
+  "html",
+  "ini",
+  "java",
+  "javascript",
+  "kotlin",
+  "less",
+  "lua",
+  "markdown",
+  "perl",
+  "php",
+  "powershell",
+  "python",
+  "r",
+  "ruby",
+  "rust",
+  "scss",
+  "shell",
+  "sql",
+  "swift",
+  "typescript",
+  "xml",
+  "yaml",
+] as const;
+
+export const MONACO_STORAGE_LANGUAGE_IDS = new Set<string>([
+  ...MONACO_BASIC_LANGUAGES,
+  "c",
+  "diff",
+  "json",
+  "plaintext",
+]);

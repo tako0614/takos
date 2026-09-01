@@ -35,6 +35,7 @@ const BASE_TYPE_BY_NUMBER: Record<number, GitObjectType> = {
 const ALL_TYPES: readonly GitObjectType[] = ["blob", "tree", "commit", "tag"];
 
 const TEXT_DECODER = new TextDecoder();
+type PackReaderHashObject = typeof hashObject;
 
 export interface UnpackedObject {
   readonly type: GitObjectType;
@@ -67,6 +68,7 @@ interface PackEntry {
 interface ResolvedObject {
   readonly type: GitObjectType;
   readonly content: Uint8Array;
+  readonly sha: string;
 }
 
 function bytesToHexLocal(bytes: Uint8Array): string {
@@ -226,9 +228,10 @@ function validateHeader(pack: Uint8Array): number {
 async function typeOfExternalBase(
   content: Uint8Array,
   sha: string,
+  hashObjectImpl: PackReaderHashObject,
 ): Promise<GitObjectType> {
   for (const type of ALL_TYPES) {
-    if ((await hashObject(type, content)) === sha) return type;
+    if ((await hashObjectImpl(type, content)) === sha) return type;
   }
   throw new Error(`pack: external base content does not match sha ${sha}`);
 }
@@ -239,9 +242,10 @@ async function typeOfExternalBase(
  * reconstructed against their bases, chaining as needed; thin-pack bases are
  * fetched via `opts.resolveExternalBase`.
  */
-export async function readPack(
+async function readPackImpl(
   pack: Uint8Array,
   opts?: ReadPackOptions,
+  hashObjectImpl: PackReaderHashObject = hashObject,
 ): Promise<UnpackedObject[]> {
   const count = validateHeader(pack);
 
@@ -303,7 +307,8 @@ export async function readPack(
     const e = entries[i];
     const baseType = BASE_TYPE_BY_NUMBER[e.typeNum];
     if (baseType !== undefined) {
-      const sha = await hashObject(baseType, e.payload);
+      const sha = await hashObjectImpl(baseType, e.payload);
+      resolved[i] = { type: baseType, content: e.payload, sha };
       if (!shaToIndex.has(sha)) shaToIndex.set(sha, i);
     }
   }
@@ -319,8 +324,10 @@ export async function readPack(
     if (!content) {
       throw new Error(`pack: ref-delta base ${sha} could not be resolved`);
     }
-    const type = await typeOfExternalBase(content, sha);
-    const obj: ResolvedObject = { type, content };
+    const type = await typeOfExternalBase(content, sha, hashObjectImpl);
+    // `typeOfExternalBase` verifies the content against the requested sha
+    // before we carry that identity forward on the resolved object.
+    const obj: ResolvedObject = { type, content, sha };
     externalCache.set(sha, obj);
     return obj;
   }
@@ -338,16 +345,21 @@ export async function readPack(
 
     const baseType = BASE_TYPE_BY_NUMBER[e.typeNum];
     if (baseType !== undefined) {
-      result = { type: baseType, content: e.payload };
+      // Full entries are populated, hashed, and indexed during the
+      // sequential pre-index pass above.
+      result = resolved[index]!;
     } else if (e.typeNum === OBJ_OFS_DELTA) {
       const baseIndex = byOffset.get(e.baseOffset);
       if (baseIndex === undefined) {
         throw new Error("pack: ofs-delta base offset not found");
       }
       const base = await resolveEntry(baseIndex);
+      const content = applyDelta(base.content, e.payload);
+      const sha = await hashObjectImpl(base.type, content);
       result = {
         type: base.type,
-        content: applyDelta(base.content, e.payload),
+        content,
+        sha,
       };
     } else {
       // REF_DELTA
@@ -356,27 +368,44 @@ export async function readPack(
         baseIndex !== undefined && baseIndex !== index
           ? await resolveEntry(baseIndex)
           : await resolveExternal(e.baseSha);
+      const content = applyDelta(base.content, e.payload);
+      const sha = await hashObjectImpl(base.type, content);
       result = {
         type: base.type,
-        content: applyDelta(base.content, e.payload),
+        content,
+        sha,
       };
     }
 
     resolving[index] = 0;
     resolved[index] = result;
     // Make this object available as a base for later in-pack ref-deltas.
-    const sha = await hashObject(result.type, result.content);
-    if (!shaToIndex.has(sha)) shaToIndex.set(sha, index);
+    if (!shaToIndex.has(result.sha)) shaToIndex.set(result.sha, index);
     return result;
   }
 
   const objects: UnpackedObject[] = [];
   for (let i = 0; i < entries.length; i++) {
     const obj = await resolveEntry(i);
-    const sha = await hashObject(obj.type, obj.content);
-    objects.push({ type: obj.type, content: obj.content, sha });
+    objects.push({ type: obj.type, content: obj.content, sha: obj.sha });
   }
   return objects;
+}
+
+export async function readPack(
+  pack: Uint8Array,
+  opts?: ReadPackOptions,
+): Promise<UnpackedObject[]> {
+  return readPackImpl(pack, opts, hashObject);
+}
+
+/** @internal Test-only dependency seam; not part of the package API. */
+export async function __readPackForTesting(
+  pack: Uint8Array,
+  opts: ReadPackOptions | undefined,
+  hashObjectImpl: PackReaderHashObject,
+): Promise<UnpackedObject[]> {
+  return readPackImpl(pack, opts, hashObjectImpl);
 }
 
 /** Decode a raw git object's `"<type> <size>\0"` header (test/debug helper). */

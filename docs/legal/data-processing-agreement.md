@@ -41,7 +41,7 @@ contract, billing, and DPA signature purposes, and is fixed for the life of the
 DPA.
 
 `Capsule owner` means the operational owner of a specific Takos Capsule under
-that Takosumi Account (per Space). The Capsule owner
+that Takosumi Account. The Capsule owner
 acts as Customer's **delegated agent** for app-local configuration and data
 subject request handling, but is not itself the DPA signatory.
 
@@ -55,7 +55,7 @@ Customer to a different Takosumi Account (e.g., Capsule export to a
 separate takosumi instance owned by a different account) requires a separate
 contract assignment, not a Capsule lifecycle event.
 
-For Customer Personal Data processed through Takos spaces, repositories,
+For Customer Personal Data processed through Takos Workspaces, repositories,
 deployments, agent runs, support requests, and customer-managed applications:
 
 | Party                              | Default role                                                                                                        |
@@ -93,7 +93,7 @@ data protection law, unless legally prohibited.
 | Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence                                                                  |
 | Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata                                                              |
 | Frequency          | Continuous while Customer uses Takos                                                                                                                                                                                  |
-| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                                                                     |
+| Data subjects      | Customer account holders, operators, support contacts, application end users, and people whose data Customer submits to Takos                                                                                        |
 
 ## 4. Personal Data Categories
 
@@ -102,8 +102,9 @@ feature:
 
 - account identity data: name, email address, avatar, pairwise OIDC subject
   (per-installation, issued by Takosumi Accounts), authentication metadata
-- workspace and access data: organization, space, role, membership, invitation,
-  API token, session, and audit metadata
+- workspace and access data: private Workspace identifiers and settings,
+  Principal isolation records, API token, session, and audit metadata; legacy
+  role, membership, or invitation rows may remain only during data migration
 - repository and deployment data: repository metadata, commit metadata, source
   artifacts, deployment records, environment variable names, build logs, and
   runtime logs

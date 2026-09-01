@@ -9,8 +9,6 @@ import {
   confirmUpload,
   createFileRecord,
   createFileWithContent,
-  FILE_URL_EXPIRY_SECONDS,
-  getStorageItem,
   MAX_FILE_SIZE,
   StorageError,
   uploadPendingFileContent,
@@ -21,7 +19,23 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { handleStorageError, requireOAuthScope } from "./storage-operations.ts";
+import { bodyLimit } from "../../middleware/body-size.ts";
+import {
+  MAX_STORAGE_ID_CHARACTERS,
+  MAX_STORAGE_MIME_TYPE_CHARACTERS,
+  MAX_STORAGE_NAME_CHARACTERS,
+  MAX_STORAGE_PATH_CHARACTERS,
+} from "../../../shared/types/index.ts";
 
+const storageIdSchema = z.string().min(1).max(MAX_STORAGE_ID_CHARACTERS);
+const storageMimeTypeSchema = z.string().min(1).max(
+  MAX_STORAGE_MIME_TYPE_CHARACTERS,
+);
+
+export const storageUploadBodyLimit = bodyLimit({
+  maxSize: MAX_FILE_SIZE,
+  message: `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+});
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Create file with content ---
@@ -31,10 +45,10 @@ const app = new Hono<AuthenticatedRouteEnv>()
     zValidator(
       "json",
       z.object({
-        path: z.string(),
+        path: z.string().min(1).max(MAX_STORAGE_PATH_CHARACTERS),
         content: z.string(),
-        mime_type: z.string().optional(),
-      }),
+        mime_type: storageMimeTypeSchema.optional(),
+      }).strict(),
     ),
     async (c) => {
       const user = c.get("user");
@@ -44,8 +58,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       if (!c.env.GIT_OBJECTS) {
@@ -77,11 +90,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
     zValidator(
       "json",
       z.object({
-        name: z.string(),
-        parent_path: z.string().optional(),
-        size: z.number(),
-        mime_type: z.string().optional(),
-      }),
+        name: z.string().min(1).max(MAX_STORAGE_NAME_CHARACTERS),
+        parent_path: z.string().max(MAX_STORAGE_PATH_CHARACTERS).optional(),
+        size: z.number().int().nonnegative().max(MAX_FILE_SIZE),
+        mime_type: storageMimeTypeSchema.optional(),
+      }).strict(),
     ),
     async (c) => {
       const user = c.get("user");
@@ -91,8 +104,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       const body = c.req.valid("json");
@@ -100,7 +112,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       if (!body.name) {
         throw new BadRequestError("Name is required");
       }
-      if (typeof body.size !== "number" || body.size <= 0) {
+      if (typeof body.size !== "number" || body.size < 0) {
         throw new BadRequestError("Valid file size is required");
       }
       if (body.size > MAX_FILE_SIZE) {
@@ -114,7 +126,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const { file, r2Key } = await createFileRecord(
+        const { file, expiresAt } = await createFileRecord(
           c.env.DB,
           access.space.id,
           user.id,
@@ -130,13 +142,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
           `/api/spaces/${spaceId}/storage/upload/${file.id}`,
           c.req.url,
         ).toString();
-        const expiresAt = new Date(Date.now() + FILE_URL_EXPIRY_SECONDS * 1000)
-          .toISOString();
-
         return c.json({
           file_id: file.id,
           upload_url: uploadUrl,
-          r2_key: r2Key,
           expires_at: expiresAt,
         }, 201);
       } catch (err) {
@@ -148,6 +156,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .put(
     "/:spaceId/storage/upload/:fileId",
     requireOAuthScope("files:write"),
+    storageUploadBodyLimit,
     async (c) => {
       const user = c.get("user");
       const spaceId = c.req.param("spaceId");
@@ -157,8 +166,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       if (!c.env.GIT_OBJECTS) {
@@ -166,13 +174,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const fileRecord = await getStorageItem(
-          c.env.DB,
-          access.space.id,
-          fileId,
-        );
-        const declaredSize = fileRecord?.size ?? 0;
-
         // Reject oversized uploads from the Content-Length header before
         // buffering the whole body into memory (the post-read size check would
         // otherwise let an authenticated caller force a large allocation).
@@ -191,7 +192,6 @@ const app = new Hono<AuthenticatedRouteEnv>()
           access.space.id,
           fileId,
           body,
-          declaredSize,
           c.req.header("Content-Type") ?? undefined,
         );
         return c.body(null, 204);
@@ -207,9 +207,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
     zValidator(
       "json",
       z.object({
-        file_id: z.string(),
+        file_id: storageIdSchema,
         sha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
-      }),
+      }).strict(),
     ),
     async (c) => {
       const user = c.get("user");
@@ -219,8 +219,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         c,
         spaceId,
         user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
+        "Workspace not found",
       );
 
       const body = c.req.valid("json");

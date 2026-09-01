@@ -15,9 +15,11 @@ import {
   resolveFeaturedAppInstallConfig,
 } from "../../application/services/source/featured-app-catalog.ts";
 import {
+  approveInstallableAppPlanRun,
   applyInstallableAppCapsule,
   applyInstallableAppRevision,
   deleteInstallableAppCapsule,
+  getInstallableAppPlanRun,
   planInstallableAppCapsule,
   planInstallableAppRevision,
   type InstallableAppRevisionOperation,
@@ -73,6 +75,8 @@ export const capsulesRouteDeps = {
   deleteInstallableAppCapsule,
   planInstallableAppCapsule,
   applyInstallableAppCapsule,
+  getInstallableAppPlanRun,
+  approveInstallableAppPlanRun,
   planInstallableAppRevision,
   applyInstallableAppRevision,
   listInstallableAppCapsulesWithServices,
@@ -414,7 +418,8 @@ function callerAccountsConfig(
 /**
  * Operator automation is one static token bound to one Takosumi Workspace for
  * the whole deployment, so it carries no per-space authority: without this gate
- * an editor in *any* local space drives the Capsules of every other space, and
+ * a caller in *any* local Workspace drives the Capsules of every other
+ * Workspace, and
  * `assertCapsuleBelongsToSpace()` cannot catch it because it lists that
  * same shared Workspace. The deployment therefore has to name the one space the
  * automation Workspace belongs to (`TAKOS_APP_INSTALL_SPACE_ID`, id or slug);
@@ -572,6 +577,31 @@ async function listInstallableAppCapsulesWithServicesForRoute(
   );
 }
 
+async function installableAppPlanRunForRoute(
+  c: Context<SpaceAccessRouteEnv>,
+  spaceId: string,
+  runId: string,
+  action: "read" | "approve",
+): Promise<InstallableAppUpstreamResponse> {
+  const caller = await resolveAccountsCaller(c);
+  const operator = caller ? null : operatorRouteConfig(c);
+  const workspaceId = caller
+    ? accountsCallerWorkspaceId(caller, spaceId)
+    : operator!.workspaceId;
+  const installConfig = caller
+    ? callerInstallConfig(c, caller)
+    : operator!.installConfig;
+  if (!installConfig) {
+    throw new ServiceUnavailableError(
+      "Takosumi canonical Capsule API is not configured",
+    );
+  }
+  const input = { workspaceId, runId };
+  return action === "approve"
+    ? await capsulesRouteDeps.approveInstallableAppPlanRun(input, installConfig)
+    : await capsulesRouteDeps.getInstallableAppPlanRun(input, installConfig);
+}
+
 function findFeaturedAppEntry(
   entries: FeaturedAppCatalogEntry[],
   appId: string,
@@ -669,7 +699,7 @@ const capsulesRouter = new Hono<SpaceAccessRouteEnv>();
 
 capsulesRouter.get(
   "/spaces/:spaceId/capsules",
-  spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const upstream = await listInstallableAppCapsulesWithServicesForRoute(
@@ -682,7 +712,7 @@ capsulesRouter.get(
 
 capsulesRouter.get(
   "/spaces/:spaceId/capsules/:capsuleId/services",
-  spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const capsuleId = readString(c.req.param("capsuleId"));
@@ -701,7 +731,7 @@ capsulesRouter.get(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/plan",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -742,9 +772,37 @@ capsulesRouter.post(
   },
 );
 
+capsulesRouter.get(
+  "/spaces/:spaceId/capsules/git-url/plans/:runId",
+  spaceAccess(),
+  async (c) => {
+    const { space } = c.get("access");
+    const runId = readString(c.req.param("runId"));
+    if (!runId) throw new BadRequestError("run_id is required");
+    return jsonFromUpstream(
+      c,
+      await installableAppPlanRunForRoute(c, space.id, runId, "read"),
+    );
+  },
+);
+
+capsulesRouter.post(
+  "/spaces/:spaceId/capsules/git-url/plans/:runId/approve",
+  spaceAccess(),
+  async (c) => {
+    const { space } = c.get("access");
+    const runId = readString(c.req.param("runId"));
+    if (!runId) throw new BadRequestError("run_id is required");
+    return jsonFromUpstream(
+      c,
+      await installableAppPlanRunForRoute(c, space.id, runId, "approve"),
+    );
+  },
+);
+
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -786,7 +844,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/revision/plan",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -839,7 +897,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/git-url/revision/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -884,7 +942,7 @@ capsulesRouter.post(
 
 capsulesRouter.post(
   "/spaces/:spaceId/capsules/apply",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
@@ -957,7 +1015,7 @@ capsulesRouter.post(
 
 capsulesRouter.delete(
   "/spaces/:spaceId/capsules/:capsuleId",
-  spaceAccess({ roles: ["owner", "admin", "editor"] }),
+  spaceAccess(),
   async (c) => {
     const { space } = c.get("access");
     const capsuleId = readString(c.req.param("capsuleId"));

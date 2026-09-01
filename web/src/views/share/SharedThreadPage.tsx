@@ -6,28 +6,16 @@ import { Input } from "../../components/ui/Input.tsx";
 import { Button } from "../../components/ui/Button.tsx";
 import { MessageBubble } from "../chat/MessageBubble.tsx";
 import type { Message } from "../../types/index.ts";
-
-type SharedThreadPayload = {
-  token: string;
-  share: {
-    mode: "public" | "password";
-    expires_at: string | null;
-    created_at: string;
-  };
-  thread: {
-    id: string;
-    title: string | null;
-    created_at: string;
-    updated_at: string;
-  };
-  messages: Array<{
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    sequence: number;
-    created_at: string;
-  }>;
-};
+import {
+  DEFAULT_PUBLIC_THREAD_SHARE_PAGE_SIZE,
+  MAX_THREAD_SHARE_PASSWORD_CHARACTERS,
+} from "takos-api-contract/thread-share";
+import {
+  appendSharedThreadPage,
+  parseSharedThreadError,
+  parseSharedThreadPayload,
+  type SharedThreadPayload,
+} from "./shared-thread-response.ts";
 
 function formatIso(iso: string): string {
   const d = new Date(iso);
@@ -42,6 +30,9 @@ export function SharedThreadPage(props: { token: string }) {
   const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [data, setData] = createSignal<SharedThreadPayload | null>(null);
+  const [loadingMore, setLoadingMore] = createSignal(false);
+  const [accessPassword, setAccessPassword] = createSignal<string | null>(null);
+  let requestSequence = 0;
 
   const mappedMessages = createMemo((): Message[] => {
     const d = data();
@@ -53,83 +44,134 @@ export function SharedThreadPage(props: { token: string }) {
       content: m.content,
       metadata: "",
       created_at: m.created_at,
-      sequence: 0,
+      sequence: m.sequence,
     }));
   });
 
-  const loadShare = async () => {
-    setLoading(true);
-    setError(null);
-    setRequiresPassword(false);
-    try {
-      const res = await rpc.public["thread-shares"][":token"].$get({
-        param: { token: props.token },
+  const responseErrorMessage = (status: number, value: unknown): string => {
+    const parsed = parseSharedThreadError(value);
+    if (status === 403 || parsed.invalidPassword) {
+      return t("invalidSharePassword");
+    }
+    if (status === 429 || parsed.code === "RATE_LIMITED") {
+      return t("sharePasswordRateLimited", {
+        seconds: parsed.retryAfter ?? 60,
       });
+    }
+    return (
+      parsed.message ||
+      (status === 404 ? t("shareNotAvailable") : t("operationFailed"))
+    );
+  };
+
+  const loadPage = async (
+    token: string,
+    offset: number,
+    passwordForAccess: string | null,
+    replace: boolean,
+  ) => {
+    const requestId = ++requestSequence;
+    if (replace) setLoading(true);
+    else setLoadingMore(true);
+    setError(null);
+    try {
+      const res =
+        passwordForAccess === null
+          ? await rpc.public["thread-shares"][":token"].$get({
+              param: { token },
+              query: {
+                limit: DEFAULT_PUBLIC_THREAD_SHARE_PAGE_SIZE,
+                offset,
+              },
+            })
+          : await rpc.public["thread-shares"][":token"].access.$post({
+              param: { token },
+              json: {
+                password: passwordForAccess,
+                limit: DEFAULT_PUBLIC_THREAD_SHARE_PAGE_SIZE,
+                offset,
+              },
+            });
+      const body = await res.json().catch(() => null);
+      if (requestId !== requestSequence) return;
       if (res.status === 401) {
-        const body = await res.json().catch(() => ({})) as {
-          requires_password?: boolean;
-          error?: string;
-        };
-        if (body.requires_password) {
+        const parsed = parseSharedThreadError(body);
+        if (parsed.requiresPassword) {
           setRequiresPassword(true);
-          setData(null);
+          if (replace) setData(null);
           return;
         }
-        setError(body.error || t("operationFailed"));
-        setData(null);
+        setError(responseErrorMessage(res.status, body));
+        if (replace) setData(null);
         return;
       }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || t("notFound"));
-        setData(null);
+        if (res.status === 403) setRequiresPassword(true);
+        setError(responseErrorMessage(res.status, body));
+        if (replace) setData(null);
         return;
       }
-      const payload = await res.json() as SharedThreadPayload;
-      setData(payload);
+      const payload = parseSharedThreadPayload(body, {
+        token,
+        limit: DEFAULT_PUBLIC_THREAD_SHARE_PAGE_SIZE,
+        offset,
+      });
+      if (replace) {
+        setData(payload);
+      } else {
+        setData((current) =>
+          current ? appendSharedThreadPage(current, payload) : payload,
+        );
+      }
+      setRequiresPassword(false);
+      if (passwordForAccess !== null) {
+        setAccessPassword(passwordForAccess);
+        setPassword("");
+      }
     } catch (err) {
+      if (requestId !== requestSequence) return;
       setError(err instanceof Error ? err.message : t("failedToLoadShares"));
-      setData(null);
+      if (replace) setData(null);
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence) {
+        if (replace) setLoading(false);
+        else setLoadingMore(false);
+      }
     }
+  };
+
+  const loadShare = async (token = props.token) => {
+    await loadPage(token, 0, null, true);
   };
 
   const unlock = async () => {
     const pw = password();
     if (!pw.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await rpc.public["thread-shares"][":token"].access.$post({
-        param: { token: props.token },
-        json: { password: pw },
-      });
-      if (res.status === 401) {
-        setRequiresPassword(true);
-        setError(null);
-        return;
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || t("operationFailed"));
-        return;
-      }
-      const payload = await res.json() as SharedThreadPayload;
-      setData(payload);
-      setRequiresPassword(false);
-      setPassword("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("operationFailed"));
-    } finally {
-      setLoading(false);
-    }
+    await loadPage(props.token, 0, pw, true);
   };
 
   createEffect(() => {
-    loadShare();
+    const token = props.token;
+    requestSequence += 1;
+    setData(null);
+    setError(null);
+    setRequiresPassword(false);
+    setAccessPassword(null);
+    setPassword("");
+    void loadShare(token);
   });
+
+  const loadMore = async () => {
+    const current = data();
+    const nextOffset = current?.page.next_offset;
+    if (!current || typeof nextOffset !== "number" || loadingMore()) return;
+    await loadPage(
+      props.token,
+      nextOffset,
+      current.share.mode === "password" ? accessPassword() : null,
+      false,
+    );
+  };
 
   const renderContent = () => {
     if (loading() && !data() && !requiresPassword()) {
@@ -161,11 +203,15 @@ export function SharedThreadPage(props: { token: string }) {
             <div class="mt-5 space-y-3">
               <Input
                 type="password"
+                name="shared-thread-password"
+                autocomplete="current-password"
+                aria-label={t("sharePasswordLabel")}
+                maxlength={MAX_THREAD_SHARE_PASSWORD_CHARACTERS}
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
-                placeholder={t("password")}
+                placeholder={t("sharePasswordLabel")}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") unlock();
+                  if (e.key === "Enter") void unlock();
                 }}
               />
               <Button
@@ -179,7 +225,7 @@ export function SharedThreadPage(props: { token: string }) {
               </Button>
               <Button
                 variant="ghost"
-                onClick={loadShare}
+                onClick={() => void loadShare()}
                 disabled={loading()}
                 class="w-full"
               >
@@ -188,7 +234,10 @@ export function SharedThreadPage(props: { token: string }) {
             </div>
 
             {error() && (
-              <div class="mt-4 text-sm text-red-600 dark:text-red-400">
+              <div
+                role="alert"
+                class="mt-4 text-sm text-red-600 dark:text-red-400"
+              >
                 {error()}
               </div>
             )}
@@ -212,7 +261,7 @@ export function SharedThreadPage(props: { token: string }) {
               {error() || t("shareNotAvailable")}
             </p>
             <div class="mt-4">
-              <Button variant="secondary" onClick={loadShare}>
+              <Button variant="secondary" onClick={() => void loadShare()}>
                 {t("refresh")}
               </Button>
             </div>
@@ -245,7 +294,10 @@ export function SharedThreadPage(props: { token: string }) {
               </span>
             </div>
             {error() && (
-              <div class="mt-3 text-sm text-red-600 dark:text-red-400">
+              <div
+                role="alert"
+                class="mt-3 text-sm text-red-600 dark:text-red-400"
+              >
                 {error()}
               </div>
             )}
@@ -253,19 +305,36 @@ export function SharedThreadPage(props: { token: string }) {
         </div>
 
         <div class="max-w-4xl mx-auto">
-          {mappedMessages().length === 0
-            ? (
-              <div class="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                {t("noMessages")}
-              </div>
-            )
-            : (
-              mappedMessages().map((m) => (
-                <MessageBubble
-                  message={m}
-                />
-              ))
-            )}
+          {shareData.page.message_data_truncated && (
+            <div
+              role="status"
+              class="mx-4 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              {t("sharedMessageDataTruncated")}
+            </div>
+          )}
+          {mappedMessages().length === 0 ? (
+            <div class="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+              {t("noMessages")}
+            </div>
+          ) : (
+            mappedMessages().map((m) => <MessageBubble message={m} />)
+          )}
+          {shareData.page.has_more && (
+            <div class="flex justify-center px-4 py-6">
+              <Button
+                variant="secondary"
+                onClick={() => void loadMore()}
+                disabled={
+                  loadingMore() ||
+                  (shareData.share.mode === "password" && !accessPassword())
+                }
+                isLoading={loadingMore()}
+              >
+                {t("loadMore")}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );

@@ -34,7 +34,7 @@ const PERSISTED_ACTIVITY_TYPES: ReadonlySet<ChatTimelineEventType> = new Set([
   "run.failed",
 ]);
 
-export function isPersistentRunActivityEntry(
+function isPersistentRunActivityEntry(
   entry: ChatTimelineEntry,
 ): boolean {
   return PERSISTED_ACTIVITY_TYPES.has(entry.type);

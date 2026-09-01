@@ -34,6 +34,7 @@ export const storage = {
   createNewFolder: "新規フォルダを作成",
   folderName: "フォルダ名",
   newName: "新しい名前",
+  destinationPath: "移動先のパス",
   renameTitle: "名前を変更",
   failedToCreateFolder: "フォルダの作成に失敗しました",
   failedToLoadFiles: "ファイルの読み込みに失敗しました",

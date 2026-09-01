@@ -131,9 +131,8 @@ export function resolveAccountsBearer<TVariables extends object>(
 
 /**
  * Same pipeline as {@link resolveAccountsBearer} but with an explicit
- * `Authorization` header string. Git Smart HTTP authenticates with HTTP Basic
- * (`password` = access token), so the git route decodes Basic → `Bearer
- * <token>` and reuses this single-sourced verification path.
+ * `Authorization` header string. Keeping header extraction separate lets the
+ * ordinary request path reuse the single-sourced bearer verification logic.
  */
 export async function resolveAccountsBearerFromHeader<
   TVariables extends object,

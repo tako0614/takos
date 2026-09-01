@@ -38,3 +38,23 @@ test("withTimeout - aborts factory requests on timeout", async () => {
   );
   assertEquals(aborted, true);
 });
+
+test("withTimeout - keeps TimeoutError when abort rejects the request", async () => {
+  await assertRejects(
+    () =>
+      withTimeout(
+        (signal) =>
+          new Promise<string>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => reject(new DOMException("signal is aborted", "AbortError")),
+              { once: true },
+            );
+          }),
+        10,
+        "Timed out",
+      ),
+    TimeoutError,
+    "Timed out",
+  );
+});

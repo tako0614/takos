@@ -13,6 +13,8 @@ import type {
   LocalObjectStoreBinding,
   LocalObjectStoreMultipartUpload,
 } from "./in-memory-r2.ts";
+import { toBuffer } from "./object-store-body.ts";
+import { normalizeHttpMetadata } from "./object-store-metadata.ts";
 import { readJsonFile, writeJsonFile } from "./persistent-shared.ts";
 
 type BucketRecord = {
@@ -63,16 +65,6 @@ function decodeBase64(value: string): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function normalizeHttpMetadata(
-  metadata?: Record<string, string> | Headers,
-): Record<string, string> {
-  if (!metadata) return {};
-  if (metadata instanceof Headers) {
-    return Object.fromEntries(metadata.entries());
-  }
-  return { ...metadata };
-}
-
 function isBucketState(
   raw: BucketState | LegacyBucketState,
 ): raw is BucketState {
@@ -116,22 +108,6 @@ function normalizeBucketState(
 function toPartEtag(bytes: ArrayBuffer): string {
   const digest = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
   return `"${digest}"`;
-}
-
-async function toBuffer(
-  value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
-): Promise<ArrayBuffer> {
-  if (value === null) return new ArrayBuffer(0);
-  if (typeof value === "string") return new TextEncoder().encode(value).buffer;
-  if (value instanceof ArrayBuffer) return value;
-  if (ArrayBuffer.isView(value)) {
-    return value.buffer.slice(
-      value.byteOffset,
-      value.byteOffset + value.byteLength,
-    ) as ArrayBuffer;
-  }
-  if (value instanceof Blob) return value.arrayBuffer();
-  return new Response(value).arrayBuffer();
 }
 
 function createObjectStoreObject(

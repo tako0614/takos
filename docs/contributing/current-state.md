@@ -1,6 +1,6 @@
 # Takos Product Current State
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+Capsule と Run の流れは [デプロイ管理の概要](/operator/) にあります。
 
 ## Current Flow
 
@@ -12,11 +12,11 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` and `deploy/opentofu/takoform` are peer adapters. Takosumi runs either ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence.
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 ## Canonical Layout
 
-- `src/worker`: Takos Worker source owner and Hono route composition, including the migration-only worker-native Git Smart HTTP endpoint (read-only clone/fetch from the R2 object store). Push and collaborative hosting belong to an installed standalone `takos-git` Capsule.
+- `src/worker`: Takos Worker source owner and Hono route composition, including the fail-closed quarantine for its built-in migration-only Git Smart HTTP route. Existing repository metadata / R2 objects remain preserved pending an explicit migration, but the route does not advertise or serve clone/fetch/push. Git transport and collaborative hosting belong to an installed standalone `takos-git` Capsule.
 - `web`: browser UI.
 - `containers/agent`: agent execution container.
 - `deploy/cloudflare` and the peer adapters under `deploy/opentofu`: product deploy artifacts. Cloudflare-specific runtime materialization stays inside the direct Cloudflare adapter.
@@ -56,8 +56,8 @@ A Capsule points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, a
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi model](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)
 
 ## Portable Verification Boundary
 

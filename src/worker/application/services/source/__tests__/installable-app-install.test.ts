@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  approveInstallableAppPlanRun,
   applyInstallableAppCapsule,
   applyInstallableAppRevision,
   deleteInstallableAppCapsule,
+  getInstallableAppPlanRun,
   listInstallableAppCapsuleServices,
   listInstallableAppCapsules,
   listInstallableAppCapsulesWithServices,
@@ -160,6 +162,69 @@ describe("canonical Capsule install client", () => {
         config,
       ),
     ).rejects.toThrow("another Capsule");
+  });
+
+  test("reads and approves only a Workspace-fenced canonical plan Run", async () => {
+    const seen: string[] = [];
+    const config = {
+      controlUrl: "https://operator.test/control",
+      fetch: async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
+        const method = init?.method ?? "GET";
+        seen.push(`${method} ${url.pathname}`);
+        return json({
+          run: {
+            id: "run_plan",
+            workspaceId: "ws_owner",
+            capsuleId: "cap_1",
+            type: "plan",
+            status: method === "POST" ? "succeeded" : "waiting_approval",
+          },
+        });
+      },
+    };
+    const input = { workspaceId: "ws_owner", runId: "run_plan" };
+    expect((await getInstallableAppPlanRun(input, config)).body?.run)
+      .toMatchObject({ status: "waiting_approval" });
+    expect((await approveInstallableAppPlanRun(input, config)).body?.run)
+      .toMatchObject({ status: "succeeded" });
+    expect(seen).toEqual([
+      "GET /control/api/v1/runs/run_plan",
+      "POST /control/api/v1/runs/run_plan/approve",
+    ]);
+  });
+
+  test("rejects plan Run readback from another Workspace or identity", async () => {
+    const input = { workspaceId: "ws_owner", runId: "run_plan" };
+    for (const run of [
+      {
+        id: "run_plan",
+        workspaceId: "ws_other",
+        type: "plan",
+        status: "succeeded",
+      },
+      {
+        id: "run_other",
+        workspaceId: "ws_owner",
+        type: "plan",
+        status: "succeeded",
+      },
+      {
+        id: "run_plan",
+        workspaceId: "ws_owner",
+        type: "apply",
+        status: "succeeded",
+      },
+    ]) {
+      await expect(
+        getInstallableAppPlanRun(input, {
+          controlUrl: "https://operator.test",
+          fetch: async () => json({ run }),
+        }),
+      ).rejects.toThrow();
+    }
   });
 
   test("uses Source sync for upgrade and StateVersion rollback-plan for rollback", async () => {

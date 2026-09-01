@@ -1,18 +1,16 @@
 import type { Hono } from "hono";
 import type { SpaceAccessRouteEnv } from "./route-auth.ts";
-import { spaceAccess } from "./route-auth.ts";
 import {
-  SKILL_CREATE_ROLES,
-  SKILL_DELETE_ROLES,
-  SKILL_GET_ROLES,
-  SKILL_LIST_ROLES,
-  SKILL_TOGGLE_ROLES,
-  SKILL_UPDATE_ROLES,
-} from "./skills-deps.ts";
+  ConflictError,
+  NotFoundError,
+  spaceAccess,
+} from "./route-auth.ts";
 import {
   createSkill,
+  deleteSkill,
   deleteSkillByName,
   formatSkill,
+  getSkill,
   listSkills,
   updateSkill,
   updateSkillByName,
@@ -135,28 +133,44 @@ async function patchSkillByIdHandler(c: SkillsContext) {
   const skill = await requireSkillById(c, getSkillIdParam(c));
   const enabled = body.enabled !== undefined ? body.enabled : skill.enabled;
 
-  await updateSkillEnabled(c.env.DB, skill.id, enabled);
+  await updateSkillEnabled(
+    c.env.DB,
+    c.get("access").space.id,
+    skill.id,
+    enabled,
+  );
   return c.json({ success: true, enabled });
 }
 
 async function deleteSkillByNameHandler(c: SkillsContext) {
   const skillName = getSkillNameParam(c);
   await requireSkillByName(c, skillName);
-  await deleteSkillByName(
+  const deleted = await deleteSkillByName(
     c.env.DB,
     c.get("access").space.id,
     skillName,
+    c.get("user").id,
   );
+  if (!deleted) {
+    throw new ConflictError("Skill changed while it was being deleted");
+  }
   return c.json({ success: true });
 }
 
 async function deleteSkillByIdHandler(c: SkillsContext) {
-  const skill = await requireSkillById(c, getSkillIdParam(c));
-  await deleteSkillByName(
+  const skillId = getSkillIdParam(c);
+  const deleted = await deleteSkill(
     c.env.DB,
     c.get("access").space.id,
-    skill.name,
+    skillId,
+    c.get("user").id,
   );
+  if (!deleted) {
+    if (await getSkill(c.env.DB, c.get("access").space.id, skillId)) {
+      throw new ConflictError("Skill changed while it was being deleted");
+    }
+    throw new NotFoundError("Skill not found");
+  }
   return c.json({ success: true });
 }
 
@@ -164,72 +178,65 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
   skills
     .get(
       "/spaces/:spaceId/skills",
-      spaceAccess({ roles: SKILL_LIST_ROLES }),
+      spaceAccess(),
       listSkillsHandler,
     )
     .post(
       "/spaces/:spaceId/skills",
       spaceAccess({
-        roles: SKILL_CREATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       createSkillHandler,
     )
     .get(
       "/spaces/:spaceId/skills/id/:skillId",
-      spaceAccess({ roles: SKILL_GET_ROLES }),
+      spaceAccess(),
       getSkillByIdHandler,
     )
     .put(
       "/spaces/:spaceId/skills/id/:skillId",
       spaceAccess({
-        roles: SKILL_UPDATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       updateSkillByIdHandler,
     )
     .patch(
       "/spaces/:spaceId/skills/id/:skillId",
       spaceAccess({
-        roles: SKILL_TOGGLE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       patchSkillByIdHandler,
     )
     .delete(
       "/spaces/:spaceId/skills/id/:skillId",
       spaceAccess({
-        roles: SKILL_DELETE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       deleteSkillByIdHandler,
     )
     .get(
       "/spaces/:spaceId/skills/:skillName",
-      spaceAccess({ roles: SKILL_GET_ROLES }),
+      spaceAccess(),
       getSkillByNameHandler,
     )
     .put(
       "/spaces/:spaceId/skills/:skillName",
       spaceAccess({
-        roles: SKILL_UPDATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       updateSkillByNameHandler,
     )
     .patch(
       "/spaces/:spaceId/skills/:skillName",
       spaceAccess({
-        roles: SKILL_TOGGLE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       patchSkillByNameHandler,
     )
     .delete(
       "/spaces/:spaceId/skills/:skillName",
       spaceAccess({
-        roles: SKILL_DELETE_ROLES,
-        message: "Workspace not found or insufficient permissions",
+        message: "Workspace not found",
       }),
       deleteSkillByNameHandler,
     );

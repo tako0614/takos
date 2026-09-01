@@ -6,6 +6,12 @@ import type {
   MemoryFormState,
   ReminderFormState,
 } from "../../hooks/useMemoryData.ts";
+import {
+  MAX_MEMORY_CATEGORY_CHARACTERS,
+  MAX_MEMORY_CONTENT_CHARACTERS,
+  MAX_REMINDER_CONTENT_CHARACTERS,
+  MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
+} from "takos-api-contract/shared/types";
 
 export interface MemoryCreateFormProps {
   memoryForm: MemoryFormState;
@@ -13,15 +19,19 @@ export interface MemoryCreateFormProps {
   onSubmit: (e: Event & { currentTarget: HTMLFormElement }) => void;
   onClose: () => void;
   getTypeIcon: (type: Memory["type"]) => string;
+  editing?: boolean;
 }
 
 export function MemoryCreateForm(props: MemoryCreateFormProps) {
   const { t } = useI18n();
+  const requestClose = () => {
+    if (!props.memoryForm.saving) props.onClose();
+  };
 
   return (
     <div
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={props.onClose}
+      onClick={requestClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="memory-page-create-modal-title"
@@ -35,12 +45,13 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
             id="memory-page-create-modal-title"
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
-            {t("createMemory")}
+            {props.editing ? t("editMemory") : t("createMemory")}
           </h3>
           <button
             type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-            onClick={props.onClose}
+            onClick={requestClose}
+            disabled={props.memoryForm.saving}
             aria-label={t("close")}
           >
             <Icons.X />
@@ -49,10 +60,15 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
         <form onSubmit={props.onSubmit}>
           <div class="p-6 flex flex-col gap-4">
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-content"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("memoryContent")}
               </label>
               <textarea
+                id="memory-page-content"
+                name="memory-content"
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
                 placeholder={t("memoryContentPlaceholder")}
                 value={props.memoryForm.content}
@@ -62,15 +78,24 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
                     content: e.currentTarget.value,
                   }))}
                 rows={4}
+                maxLength={MAX_MEMORY_CONTENT_CHARACTERS}
+                autocomplete="off"
+                disabled={props.memoryForm.saving}
                 required
                 autofocus
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-type"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("memoryType")}
               </label>
               <select
+                id="memory-page-type"
+                name="memory-type"
+                disabled={props.editing || props.memoryForm.saving}
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.memoryForm.type}
                 onChange={(e) =>
@@ -91,14 +116,22 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
               </select>
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-category"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("memoryCategory")}
               </label>
               <input
                 type="text"
+                id="memory-page-category"
+                name="memory-category"
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 placeholder={t("memoryCategoryPlaceholder")}
                 value={props.memoryForm.category}
+                maxLength={MAX_MEMORY_CATEGORY_CHARACTERS}
+                autocomplete="off"
+                disabled={props.memoryForm.saving}
                 onInput={(e) =>
                   props.onFormChange((prev) => ({
                     ...prev,
@@ -111,7 +144,8 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
             <button
               type="button"
               class="px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-              onClick={props.onClose}
+              onClick={requestClose}
+              disabled={props.memoryForm.saving}
             >
               {t("cancel")}
             </button>
@@ -121,7 +155,11 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
               disabled={props.memoryForm.saving ||
                 !props.memoryForm.content.trim()}
             >
-              {props.memoryForm.saving ? t("saving") : t("create")}
+              {props.memoryForm.saving
+                ? t("saving")
+                : props.editing
+                ? t("save")
+                : t("create")}
             </button>
           </div>
         </form>
@@ -136,15 +174,19 @@ export interface ReminderCreateFormProps {
   onSubmit: (e: Event & { currentTarget: HTMLFormElement }) => void;
   onClose: () => void;
   getTriggerIcon: (type: Reminder["trigger_type"]) => string;
+  editing?: boolean;
 }
 
 export function ReminderCreateForm(props: ReminderCreateFormProps) {
   const { t } = useI18n();
+  const requestClose = () => {
+    if (!props.reminderForm.saving) props.onClose();
+  };
 
   return (
     <div
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={props.onClose}
+      onClick={requestClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="memory-page-reminder-modal-title"
@@ -158,12 +200,13 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
             id="memory-page-reminder-modal-title"
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
-            {t("createReminder")}
+            {props.editing ? t("editReminder") : t("createReminder")}
           </h3>
           <button
             type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-            onClick={props.onClose}
+            onClick={requestClose}
+            disabled={props.reminderForm.saving}
             aria-label={t("close")}
           >
             <Icons.X />
@@ -172,10 +215,15 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
         <form onSubmit={props.onSubmit}>
           <div class="p-6 flex flex-col gap-4">
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-reminder-content"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("reminderContent")}
               </label>
               <textarea
+                id="memory-page-reminder-content"
+                name="reminder-content"
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
                 placeholder={t("reminderContentPlaceholder")}
                 value={props.reminderForm.content}
@@ -185,15 +233,24 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
                     content: e.currentTarget.value,
                   }))}
                 rows={3}
+                maxLength={MAX_REMINDER_CONTENT_CHARACTERS}
+                autocomplete="off"
+                disabled={props.reminderForm.saving}
                 required
                 autofocus
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-reminder-trigger-type"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("triggerType")}
               </label>
               <select
+                id="memory-page-reminder-trigger-type"
+                name="reminder-trigger-type"
+                disabled={props.editing || props.reminderForm.saving}
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.reminderForm.triggerType}
                 onChange={(e) =>
@@ -215,16 +272,24 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               </select>
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-reminder-trigger-value"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("triggerValue")}
               </label>
               <input
                 type="text"
+                id="memory-page-reminder-trigger-value"
+                name="reminder-trigger-value"
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 placeholder={props.reminderForm.triggerType === "time"
                   ? t("triggerValueTimePlaceholder")
                   : t("triggerValueConditionPlaceholder")}
                 value={props.reminderForm.triggerValue}
+                maxLength={MAX_REMINDER_TRIGGER_VALUE_CHARACTERS}
+                autocomplete="off"
+                disabled={props.reminderForm.saving}
                 onInput={(e) =>
                   props.onFormChange((prev) => ({
                     ...prev,
@@ -234,10 +299,16 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for="memory-page-reminder-priority"
+                class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              >
                 {t("priority")}
               </label>
               <select
+                id="memory-page-reminder-priority"
+                name="reminder-priority"
+                disabled={props.reminderForm.saving}
                 class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.reminderForm.priority}
                 onChange={(e) =>
@@ -249,6 +320,7 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
                 <option value="low">{t("priorityLow")}</option>
                 <option value="normal">{t("priorityNormal")}</option>
                 <option value="high">{t("priorityHigh")}</option>
+                <option value="critical">{t("priorityCritical")}</option>
               </select>
             </div>
           </div>
@@ -256,7 +328,8 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
             <button
               type="button"
               class="px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-              onClick={props.onClose}
+              onClick={requestClose}
+              disabled={props.reminderForm.saving}
             >
               {t("cancel")}
             </button>
@@ -267,7 +340,11 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
                 !props.reminderForm.content.trim() ||
                 !props.reminderForm.triggerValue.trim()}
             >
-              {props.reminderForm.saving ? t("saving") : t("create")}
+              {props.reminderForm.saving
+                ? t("saving")
+                : props.editing
+                ? t("save")
+                : t("create")}
             </button>
           </div>
         </form>

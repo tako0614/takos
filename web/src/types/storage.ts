@@ -15,8 +15,5 @@ export interface DirectoryEntry {
 
 export type StorageFileType = SpaceStorageFileType;
 
-/**
- * Frontend StorageFile: omits the internal `r2_key` field from the backend
- * SpaceStorageFile since it's not exposed via the API.
- */
-export type StorageFile = Omit<SpaceStorageFile, "r2_key">;
+/** Public Storage file projection; object-store keys never cross this type. */
+export type StorageFile = SpaceStorageFile;

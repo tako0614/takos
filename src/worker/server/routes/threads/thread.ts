@@ -11,21 +11,36 @@ import {
   updateThreadStatus,
 } from "../../../application/services/threads/thread-service.ts";
 import { exportThread } from "../../../application/services/threads/thread-export.ts";
-import { getPlatformServices } from "../../../platform/accessors.ts";
 import { buildThreadUpdates, requireThreadAccess } from "./helpers.ts";
+import { MAX_CLIENT_THREAD_TITLE_CHARACTERS } from "../../../shared/utils/client-thread.ts";
+import { THREAD_EXPORT_FORMATS } from "../../../../contracts/public/thread-export.ts";
+import { InMemoryRateLimiter } from "../../../shared/utils/rate-limiter.ts";
 
 type ThreadsRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
-const threadUpdateSchema = z.object({
-  title: z.string().optional(),
+export const threadUpdateSchema = z.object({
+  title: z.string().trim().max(MAX_CLIENT_THREAD_TITLE_CHARACTERS).optional(),
   locale: z.enum(["ja", "en"]).nullable().optional(),
-  status: z.enum(["active", "archived", "deleted"]).optional(),
   context_window: z.number().int().min(20).max(200).optional(),
-});
+}).strict();
 
-const threadExportQuerySchema = z.object({
-  format: z.string().optional(),
-  include_internal: z.string().optional(),
+export const threadExportQuerySchema = z
+  .object({
+    format: z.enum(THREAD_EXPORT_FORMATS).default("markdown"),
+    include_internal: z.enum(["0", "1"]).default("0"),
+  })
+  .strict();
+
+export const threadExportLimiter = new InMemoryRateLimiter({
+  maxRequests: 12,
+  windowMs: 60_000,
+  keyGenerator: (c) => {
+    const user = (c.get as (key: "user") => { id?: string } | undefined)(
+      "user",
+    );
+    return `${user?.id || "unknown"}:${c.req.param("id")}`;
+  },
+  message: "Too many Thread export attempts.",
 });
 
 export function registerThreadCrudRoutes(app: ThreadsRouter) {
@@ -38,7 +53,6 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
 
     return c.json({
       thread: access.thread,
-      role: access.role,
     });
   });
 
@@ -49,11 +63,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
       const user = c.get("user");
       const threadId = c.req.param("id");
       requireThreadAccess(
-        await checkThreadAccess(c.env.DB, threadId, user.id, [
-          "owner",
-          "admin",
-          "editor",
-        ]),
+        await checkThreadAccess(c.env.DB, threadId, user.id),
       );
 
       const thread = await updateThread(
@@ -61,6 +71,9 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
         threadId,
         buildThreadUpdates(c.req.valid("json")),
       );
+      if (!thread) {
+        throw new NotFoundError("Thread");
+      }
 
       return c.json({ thread });
     },
@@ -70,54 +83,50 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
-    await deleteThread(c.env, c.env.DB, threadId);
-    return c.json({ success: true });
+    await deleteThread(c.env, c.env.DB, threadId, user.id);
+    return c.json({ success: true, thread_id: threadId, status: "deleted" });
   });
 
   app.post("/threads/:id/archive", async (c) => {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
-    await updateThreadStatus(c.env.DB, threadId, "archived");
-    return c.json({ success: true });
+    const thread = await updateThreadStatus(c.env.DB, threadId, "archived");
+    if (!thread) {
+      throw new NotFoundError("Thread");
+    }
+    return c.json({ success: true, thread_id: thread.id, status: thread.status });
   });
 
   app.post("/threads/:id/unarchive", async (c) => {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await checkThreadAccess(c.env.DB, threadId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
-    await updateThreadStatus(c.env.DB, threadId, "active");
-    return c.json({ success: true });
+    const thread = await updateThreadStatus(c.env.DB, threadId, "active");
+    if (!thread) {
+      throw new NotFoundError("Thread");
+    }
+    return c.json({ success: true, thread_id: thread.id, status: thread.status });
   });
 
   app.get(
     "/threads/:id/export",
+    threadExportLimiter.middleware(),
     zValidator("query", threadExportQuerySchema),
     async (c) => {
       const user = c.get("user");
       const threadId = c.req.param("id");
       const exportQuery = c.req.valid("query");
-      const format = (exportQuery.format || "markdown").toLowerCase();
+      const format = exportQuery.format;
       const includeInternal = exportQuery.include_internal === "1";
       const access = requireThreadAccess(
         await checkThreadAccess(c.env.DB, threadId, user.id),
@@ -125,10 +134,10 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
 
       const response = await exportThread({
         db: c.env.DB,
-        renderPdf: getPlatformServices(c).documents.renderPdf,
+        offload: c.env.TAKOS_OFFLOAD,
         threadId,
         includeInternal,
-        includeInternalRolesAllowed: ["owner", "admin"].includes(access.role),
+        includeInternalAuthorized: true,
         format,
       });
       if (!response) {

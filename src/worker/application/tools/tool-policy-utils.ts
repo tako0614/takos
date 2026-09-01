@@ -1,4 +1,3 @@
-import type { SpaceRole } from "../../shared/types/index.ts";
 import type { ToolDefinition } from "./tool-definitions.ts";
 import type {
   SpaceOperationId,
@@ -50,41 +49,6 @@ export function applyCustomToolPolicyMetadata(
   tools: ToolDefinition[],
 ): ToolDefinition[] {
   return tools.map(applyToolPolicyMetadata);
-}
-
-export function canRoleAccessOperation(
-  role: SpaceRole,
-  operationId: SpaceOperationId,
-): boolean {
-  return getSpaceOperationPolicy(operationId).allowed_roles.includes(role);
-}
-
-export function canRoleAccessTool(
-  role: SpaceRole,
-  tool: ToolDefinition,
-): boolean {
-  const metadata = getToolPolicyMetadata(tool);
-
-  if (metadata.tool_class === "space_mapped") {
-    if (!metadata.operation_id) return false;
-    return canRoleAccessOperation(role, metadata.operation_id);
-  }
-
-  if (metadata.tool_class === "composite") {
-    return (metadata.composed_operations || []).every((operationId) =>
-      canRoleAccessOperation(role, operationId)
-    );
-  }
-
-  return true;
-}
-
-export function filterToolsForRole(
-  tools: ToolDefinition[],
-  role?: SpaceRole,
-): ToolDefinition[] {
-  if (!role) return tools;
-  return tools.filter((tool) => canRoleAccessTool(role, tool));
 }
 
 export function isToolAllowedForAgent(toolName: string): boolean {

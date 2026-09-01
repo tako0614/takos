@@ -1,16 +1,26 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type {
-  Env,
-  MemoryType,
-  ReminderStatus,
+import type { Env } from "../../../shared/types/index.ts";
+import {
+  MAX_MEMORY_CATEGORY_CHARACTERS,
+  MAX_MEMORY_CONTENT_CHARACTERS,
+  MAX_MEMORY_REFERENCE_CHARACTERS,
+  MAX_MEMORY_SEARCH_QUERY_CHARACTERS,
+  MAX_MEMORY_SUMMARY_CHARACTERS,
+  MAX_MEMORY_TAG_CHARACTERS,
+  MAX_MEMORY_TAG_ITEMS,
+  MAX_MEMORY_TAGS_CHARACTERS,
+  MAX_MEMORY_TIMESTAMP_CHARACTERS,
+  MAX_REMINDER_CONTENT_CHARACTERS,
+  MAX_REMINDER_CONTEXT_CHARACTERS,
+  MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
 } from "../../../shared/types/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 import { type BaseVariables, requireSpaceAccess } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import {
   AuthorizationError,
-  BadRequestError,
+  ConflictError,
   InternalError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
@@ -30,21 +40,119 @@ import {
   updateMemory,
   updateReminder,
 } from "../../../application/services/memory/index.ts";
-
-
+import {
+  findAgentResourceTombstone,
+  runAgentResourceDeletionOutboxBatch,
+} from "../../../application/services/agent/resource-deletion.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 const VALID_MEMORY_TYPES = ["episode", "semantic", "procedural"] as const;
+const VALID_REMINDER_STATUSES = [
+  "pending",
+  "triggered",
+  "completed",
+  "dismissed",
+] as const;
+const VALID_REMINDER_TRIGGER_TYPES = [
+  "time",
+  "condition",
+  "context",
+] as const;
+const VALID_REMINDER_PRIORITIES = [
+  "low",
+  "normal",
+  "high",
+  "critical",
+] as const;
+const paginationValueSchema = z.string().regex(/^\d{1,10}$/).optional();
+const nonBlankString = (maxCharacters: number, message: string) =>
+  z.string().max(maxCharacters).refine((value) => value.trim().length > 0, {
+    message,
+  });
+const timestampSchema = z.string().max(MAX_MEMORY_TIMESTAMP_CHARACTERS)
+  .datetime({ offset: true });
+const memoryTagsSchema = z.array(
+  nonBlankString(MAX_MEMORY_TAG_CHARACTERS, "tag is required"),
+).max(MAX_MEMORY_TAG_ITEMS).refine(
+  (tags) => JSON.stringify(tags).length <= MAX_MEMORY_TAGS_CHARACTERS,
+  `tags must serialize to at most ${MAX_MEMORY_TAGS_CHARACTERS} characters`,
+);
 
-function validateMemoryType(value: string | undefined): MemoryType | undefined {
-  if (value === undefined || value === "") return undefined;
-  if (!VALID_MEMORY_TYPES.includes(value as MemoryType)) {
-    throw new BadRequestError(
-      `Invalid memory type: ${value}. Must be one of: ${
-        VALID_MEMORY_TYPES.join(", ")
-      }`,
-    );
-  }
-  return value as MemoryType;
-}
+export const memoryListQuerySchema = z.object({
+  type: z.enum(VALID_MEMORY_TYPES).optional(),
+  category: z.string().max(MAX_MEMORY_CATEGORY_CHARACTERS).optional(),
+  limit: paginationValueSchema,
+  offset: paginationValueSchema,
+}).strict();
+
+export const memorySearchQuerySchema = z.object({
+  q: z.string().max(MAX_MEMORY_SEARCH_QUERY_CHARACTERS).optional(),
+  type: z.enum(VALID_MEMORY_TYPES).optional(),
+  limit: paginationValueSchema,
+}).strict();
+
+export const memoryCreateSchema = z.object({
+  type: z.enum(VALID_MEMORY_TYPES),
+  content: nonBlankString(
+    MAX_MEMORY_CONTENT_CHARACTERS,
+    "content is required",
+  ),
+  category: z.string().max(MAX_MEMORY_CATEGORY_CHARACTERS).optional(),
+  summary: z.string().max(MAX_MEMORY_SUMMARY_CHARACTERS).optional(),
+  importance: z.number().min(0).max(1).optional(),
+  tags: memoryTagsSchema.optional(),
+  occurred_at: timestampSchema.optional(),
+  expires_at: timestampSchema.optional(),
+  thread_id: z.string().max(MAX_MEMORY_REFERENCE_CHARACTERS).optional(),
+}).strict();
+
+export const memoryPatchSchema = z.object({
+  content: nonBlankString(
+    MAX_MEMORY_CONTENT_CHARACTERS,
+    "content is required",
+  ).optional(),
+  summary: z.string().max(MAX_MEMORY_SUMMARY_CHARACTERS).nullable().optional(),
+  importance: z.number().min(0).max(1).optional(),
+  category: z.string().max(MAX_MEMORY_CATEGORY_CHARACTERS).nullable()
+    .optional(),
+  tags: memoryTagsSchema.nullable().optional(),
+  expires_at: timestampSchema.nullable().optional(),
+}).strict().refine(
+  (body) => Object.keys(body).length > 0,
+  "At least one Memory field is required",
+);
+
+export const reminderListQuerySchema = z.object({
+  status: z.enum(VALID_REMINDER_STATUSES).optional(),
+  limit: paginationValueSchema,
+}).strict();
+
+export const reminderCreateSchema = z.object({
+  content: nonBlankString(
+    MAX_REMINDER_CONTENT_CHARACTERS,
+    "content is required",
+  ),
+  context: z.string().max(MAX_REMINDER_CONTEXT_CHARACTERS).optional(),
+  trigger_type: z.enum(VALID_REMINDER_TRIGGER_TYPES),
+  trigger_value: z.string().max(MAX_REMINDER_TRIGGER_VALUE_CHARACTERS)
+    .optional(),
+  priority: z.enum(VALID_REMINDER_PRIORITIES).optional(),
+}).strict();
+
+export const reminderPatchSchema = z.object({
+  content: nonBlankString(
+    MAX_REMINDER_CONTENT_CHARACTERS,
+    "content is required",
+  ).optional(),
+  context: z.string().max(MAX_REMINDER_CONTEXT_CHARACTERS).nullable()
+    .optional(),
+  trigger_value: z.string().max(MAX_REMINDER_TRIGGER_VALUE_CHARACTERS)
+    .nullable().optional(),
+  status: z.enum(VALID_REMINDER_STATUSES).optional(),
+  priority: z.enum(VALID_REMINDER_PRIORITIES).optional(),
+}).strict().refine(
+  (body) => Object.keys(body).length > 0,
+  "At least one Reminder field is required",
+);
 
 // ==================== Memories ====================
 
@@ -54,12 +162,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/spaces/:spaceId/memories",
     zValidator(
       "query",
-      z.object({
-        type: z.string().optional(),
-        category: z.string().optional(),
-        limit: z.string().optional(),
-        offset: z.string().optional(),
-      }),
+      memoryListQuerySchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -72,7 +175,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       );
 
       const validatedQuery = c.req.valid("query");
-      const type = validateMemoryType(validatedQuery.type);
+      const type = validatedQuery.type;
       const category = validatedQuery.category;
       const { limit, offset } = parsePagination(validatedQuery, {
         limit: 50,
@@ -98,12 +201,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/spaces/:spaceId/memories/search",
     zValidator(
       "query",
-      z.object({
-        q: z.string().max(1000, "Search query must be under 1000 characters")
-          .optional(),
-        type: z.string().optional(),
-        limit: z.string().optional(),
-      }),
+      memorySearchQuerySchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -117,7 +215,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       const validatedQuery = c.req.valid("query");
       const query = (validatedQuery.q || "").trim();
-      const type = validateMemoryType(validatedQuery.type);
+      const type = validatedQuery.type;
       const { limit } = parsePagination(validatedQuery, { maxLimit: 100 });
 
       const memoriesResult = await searchMemories(
@@ -159,18 +257,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/spaces/:spaceId/memories",
     zValidator(
       "json",
-      z.object({
-        type: z.enum(["episode", "semantic", "procedural"]),
-        content: z.string().min(1, "content is required"),
-        category: z.string().optional(),
-        source: z.string().optional(),
-        summary: z.string().optional(),
-        importance: z.number().optional(),
-        tags: z.array(z.string()).optional(),
-        occurred_at: z.string().optional(),
-        expires_at: z.string().optional(),
-        thread_id: z.string().optional(),
-      }),
+      memoryCreateSchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -198,6 +285,9 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         expiresAt: body.expires_at || null,
       });
 
+      if (!memory) {
+        throw new InternalError("Failed to create memory");
+      }
       return c.json(memory, 201);
     },
   )
@@ -206,14 +296,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/memories/:id",
     zValidator(
       "json",
-      z.object({
-        content: z.string().optional(),
-        summary: z.string().optional(),
-        importance: z.number().optional(),
-        category: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        expires_at: z.string().nullish(),
-      }),
+      memoryPatchSchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -228,7 +311,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         c.env.DB,
         memory.space_id,
         user.id,
-        ["owner", "admin", "editor"],
       );
       if (!access) {
         throw new AuthorizationError();
@@ -236,15 +318,23 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       const body = c.req.valid("json");
 
-      const updated = await updateMemory(c.env.DB, memoryId, {
-        content: body.content,
-        summary: body.summary,
-        importance: body.importance,
-        category: body.category,
-        tags: body.tags,
-        expiresAt: body.expires_at,
-      });
+      const updated = await updateMemory(
+        c.env.DB,
+        memory.space_id,
+        memoryId,
+        {
+          content: body.content,
+          summary: body.summary,
+          importance: body.importance,
+          category: body.category,
+          tags: body.tags,
+          expiresAt: body.expires_at,
+        },
+      );
 
+      if (!updated) {
+        throw new InternalError("Failed to update memory");
+      }
       return c.json(updated);
     },
   )
@@ -254,21 +344,51 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const memoryId = c.req.param("id");
 
     const memory = await getMemoryById(c.env.DB, memoryId);
-    if (!memory) {
+    const existingDeletion = memory ? null : await findAgentResourceTombstone(
+      c.env.DB,
+      "explicit_memory",
+      memoryId,
+    );
+    if (!memory && !existingDeletion) {
       throw new NotFoundError("Memory");
     }
 
     const access = await checkSpaceAccess(
       c.env.DB,
-      memory.space_id,
+      memory?.space_id ?? existingDeletion!.accountId,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();
     }
 
-    await deleteMemory(c.env.DB, memoryId);
+    const deletion = existingDeletion ?? await deleteMemory(
+      c.env.DB,
+      memory!.space_id,
+      memoryId,
+      user.id,
+    );
+    if (!deletion) {
+      throw new ConflictError("Memory changed while it was being deleted");
+    }
+    const tombstoneId = "tombstoneId" in deletion
+      ? deletion.tombstoneId
+      : deletion.id;
+    const cleanup = runAgentResourceDeletionOutboxBatch(c.env, {
+      ids: [tombstoneId],
+      limit: 1,
+    }).catch((error) => {
+      logWarn("Deferred Agent resource cleanup failed after Memory deletion", {
+        module: "memory_routes",
+        tombstoneId,
+        detail: error,
+      });
+    });
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === "function") {
+      c.executionCtx.waitUntil(cleanup);
+    } else {
+      await cleanup;
+    }
 
     return c.json({ success: true });
   })
@@ -279,10 +399,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/spaces/:spaceId/reminders",
     zValidator(
       "query",
-      z.object({
-        status: z.string().optional(),
-        limit: z.string().optional(),
-      }),
+      reminderListQuerySchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -295,7 +412,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       );
 
       const validatedQuery = c.req.valid("query");
-      const status = validatedQuery.status as ReminderStatus | undefined;
+      const status = validatedQuery.status;
       const { limit } = parsePagination(validatedQuery, {
         limit: 50,
         maxLimit: 100,
@@ -339,13 +456,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/spaces/:spaceId/reminders",
     zValidator(
       "json",
-      z.object({
-        content: z.string().min(1, "content is required"),
-        context: z.string().optional(),
-        trigger_type: z.enum(["time", "condition", "context"]),
-        trigger_value: z.string().optional(),
-        priority: z.enum(["low", "normal", "high", "critical"]).optional(),
-      }),
+      reminderCreateSchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -380,14 +491,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     "/reminders/:id",
     zValidator(
       "json",
-      z.object({
-        content: z.string().optional(),
-        context: z.string().optional(),
-        trigger_value: z.string().optional(),
-        status: z.enum(["pending", "triggered", "completed", "dismissed"])
-          .optional(),
-        priority: z.enum(["low", "normal", "high", "critical"]).optional(),
-      }),
+      reminderPatchSchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -405,7 +509,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         c.env.DB,
         reminder.space_id,
         user.id,
-        ["owner", "admin", "editor"],
       );
       if (!access) {
         throw new AuthorizationError();
@@ -415,6 +518,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       const updated = await updateReminder(
         c.env.DB,
+        reminder.space_id,
         reminderId,
         {
           content: body.content,
@@ -425,6 +529,9 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         },
       );
 
+      if (!updated) {
+        throw new InternalError("Failed to update reminder");
+      }
       return c.json(updated);
     },
   )
@@ -445,13 +552,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.env.DB,
       reminder.space_id,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();
     }
 
-    await deleteReminder(c.env.DB, reminderId);
+    await deleteReminder(c.env.DB, reminder.space_id, reminderId);
 
     return c.json({ success: true });
   })
@@ -472,7 +578,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       c.env.DB,
       reminder.space_id,
       user.id,
-      ["owner", "admin", "editor"],
     );
     if (!access) {
       throw new AuthorizationError();
@@ -480,8 +585,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const updated = await triggerReminder(
       c.env.DB,
+      reminder.space_id,
       reminderId,
     );
+
+    if (!updated) {
+      throw new InternalError("Failed to trigger reminder");
+    }
 
     return c.json(updated);
   });

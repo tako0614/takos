@@ -1,8 +1,14 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import process from 'node:process';
+import {
+  MONACO_BASIC_LANGUAGES,
+  MONACO_EDITOR_CHUNK_BUDGET,
+} from './monaco-language-contract.ts';
+
+const monacoBasicLanguages = new Set<string>(MONACO_BASIC_LANGUAGES);
 
 const secureDompurifyModule = resolve(
   __dirname,
@@ -40,12 +46,87 @@ function monacoSecureDompurifyPlugin() {
   };
 }
 
+function monacoBundleBoundaryPlugin(): Plugin {
+  return {
+    name: 'takos-monaco-bundle-boundary',
+    generateBundle(_options, bundle) {
+      let editorChunkSize: number | null = null;
+
+      for (const output of Object.values(bundle)) {
+        if (output.type !== 'chunk' || !output.modules) continue;
+        for (const moduleId of Object.keys(output.modules)) {
+          const normalizedId = moduleId.replaceAll('\\', '/');
+          if (normalizedId.endsWith('/web/src/lib/MonacoEditor.tsx')) {
+            editorChunkSize = new TextEncoder().encode(output.code ?? '').length;
+          }
+          if (
+            normalizedId.endsWith(
+              '/monaco-editor/esm/vs/editor/editor.main.js',
+            )
+          ) {
+            throw new Error(
+              'Storage Monaco must use the scoped editor API, not the package root',
+            );
+          }
+          const language = normalizedId.match(
+            /\/monaco-editor\/esm\/vs\/basic-languages\/([^/]+)\//u,
+          )?.[1];
+          if (language && !monacoBasicLanguages.has(language)) {
+            throw new Error(
+              `Storage Monaco bundled unsupported language: ${language}`,
+            );
+          }
+        }
+      }
+
+      if (editorChunkSize === null) {
+        throw new Error('Storage Monaco editor chunk was not emitted');
+      }
+      if (editorChunkSize > MONACO_EDITOR_CHUNK_BUDGET) {
+        throw new Error(
+          `Storage Monaco editor chunk exceeds ${MONACO_EDITOR_CHUNK_BUDGET} bytes: ${editorChunkSize}`,
+        );
+      }
+
+      const visited = new Set<string>();
+      const inspectInitialChunk = (fileName: string) => {
+        if (visited.has(fileName)) return;
+        visited.add(fileName);
+        const output = bundle[fileName];
+        if (output?.type !== 'chunk' || !output.modules) return;
+        const monacoModule = Object.keys(output.modules).find((moduleId) =>
+          moduleId.replaceAll('\\', '/').includes('/monaco-editor/'),
+        );
+        if (monacoModule) {
+          throw new Error(
+            `Public bootstrap statically reaches Monaco through ${monacoModule}`,
+          );
+        }
+        for (const importedFile of output.imports ?? []) {
+          inspectInitialChunk(importedFile);
+        }
+      };
+
+      for (const output of Object.values(bundle)) {
+        if (output.type === 'chunk' && output.isEntry) {
+          inspectInitialChunk(output.fileName);
+        }
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const isDebugBuild = mode === 'staging-debug';
   const webTarget = process.env.TAKOS_WORKER_API_URL ?? 'http://localhost:8787';
 
   return {
-    plugins: [monacoSecureDompurifyPlugin(), solid(), tailwindcss()],
+    plugins: [
+      monacoSecureDompurifyPlugin(),
+      monacoBundleBoundaryPlugin(),
+      solid(),
+      tailwindcss(),
+    ],
     root: resolve(__dirname),
     resolve: {
       alias: {
@@ -60,6 +141,18 @@ export default defineConfig(({ mode }) => {
         'takos-api-contract/rpc-types': resolve(
           __dirname,
           '../src/contracts/public/rpc-types.ts',
+        ),
+        'takos-api-contract/chat-message': resolve(
+          __dirname,
+          '../src/contracts/public/chat-message.ts',
+        ),
+        'takos-api-contract/chat-thread': resolve(
+          __dirname,
+          '../src/contracts/public/chat-thread.ts',
+        ),
+        'takos-api-contract/chat-history': resolve(
+          __dirname,
+          '../src/contracts/public/chat-history.ts',
         ),
         '@takos/worker-platform-utils': resolve(
           __dirname,

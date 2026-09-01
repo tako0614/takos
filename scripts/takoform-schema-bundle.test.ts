@@ -4,10 +4,10 @@ import { join, resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
-  BUNDLE_RELATIVE_PATH,
-  MIGRATION_DIRECTORY,
   buildSchemaBundle,
+  BUNDLE_RELATIVE_PATH,
   generateSchemaBundle,
+  MIGRATION_DIRECTORY,
 } from "./generate-takoform-schema-bundle.ts";
 
 const root = resolve(import.meta.dir, "..");
@@ -37,20 +37,54 @@ describe("Takos portable relational schema bundle", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  test("pins the portable database to the exact tracked bundle bytes", async () => {
-    const bundle = await readFile(join(root, BUNDLE_RELATIVE_PATH));
+  test("pins the portable database to the same immutable release as the Worker", async () => {
     const moduleSource = await readFile(
       join(root, "deploy/opentofu/takoform/main.tf"),
       "utf8",
     );
-    const digest = createHash("sha256").update(bundle).digest("hex");
+    const workerReleaseTag = variableDefault(
+      moduleSource,
+      "worker_release_tag",
+    );
+    const schemaUrl = variableDefault(moduleSource, "database_schema_url");
+    const schemaDigest = variableDefault(
+      moduleSource,
+      "database_schema_sha256",
+    );
+    const parsedUrl = new URL(schemaUrl);
 
-    expect(moduleSource).toContain(`schema_sha256 = "${digest}"`);
+    expect(parsedUrl.protocol).toBe("https:");
+    expect(parsedUrl.username).toBe("");
+    expect(parsedUrl.password).toBe("");
+    expect(parsedUrl.search).toBe("");
+    expect(parsedUrl.hash).toBe("");
+    expect(parsedUrl.pathname).toContain(`/${workerReleaseTag}/`);
+    expect(parsedUrl.pathname).toEndWith(
+      "/deploy/opentofu/takoform/migrations/schema-bundle.json",
+    );
+    expect(schemaDigest).toMatch(/^[a-f0-9]{64}$/u);
     expect(moduleSource).toContain(
-      '/deploy/takoform/migrations/schema-bundle.json"',
+      "schema_url    = trimspace(var.database_schema_url)",
+    );
+    expect(moduleSource).toContain(
+      "schema_sha256 = trimspace(var.database_schema_sha256)",
+    );
+    expect(moduleSource).toContain(
+      'format("/%s/", trimspace(var.worker_release_tag))',
     );
     expect(moduleSource).toContain(
       'schema_format = "takosumi.resource-migrations"',
     );
   });
 });
+
+function variableDefault(source: string, name: string): string {
+  const marker = `variable "${name}" {`;
+  const start = source.indexOf(marker);
+  if (start < 0) throw new Error(`Missing OpenTofu variable: ${name}`);
+  const next = source.indexOf('\nvariable "', start + marker.length);
+  const block = source.slice(start, next < 0 ? source.length : next);
+  const match = block.match(/\bdefault\s*=\s*"([^"]+)"/u);
+  if (!match?.[1]) throw new Error(`Missing OpenTofu default: ${name}`);
+  return match[1];
+}

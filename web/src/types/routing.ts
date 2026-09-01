@@ -3,6 +3,7 @@ export type View =
   | "login"
   | "home"
   | "profile"
+  | "notifications"
   | "memory"
   | "apps"
   | "connections"

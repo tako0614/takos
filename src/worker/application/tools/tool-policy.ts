@@ -22,7 +22,7 @@ export interface ToolPolicyMetadata {
   sensitive_read_policy?: SensitiveReadPolicy;
 }
 
-// Every tool in the static Takos catalog is agent-safe after role/capability
+// Every tool in the static Takos catalog is agent-safe after capability
 // policy is applied. Storage, computer, Git, and deploy tools are owned by
 // installed Capsules or Takosumi and therefore never enter this deny-list.
 export const AGENT_DISABLED_CUSTOM_TOOLS = [] as const;
@@ -37,10 +37,7 @@ export { SPACE_OPERATION_POLICIES } from "./tool-policy-space-operations.ts";
 export {
   applyCustomToolPolicyMetadata,
   applyToolPolicyMetadata,
-  canRoleAccessOperation,
-  canRoleAccessTool,
   filterAgentAllowedToolNames,
-  filterToolsForRole,
   getSpaceOperationPolicy,
   getToolPolicyMetadata,
   isToolAllowedForAgent,

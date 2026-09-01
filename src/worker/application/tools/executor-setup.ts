@@ -6,21 +6,46 @@ import type {
 } from "../../shared/types/bindings.ts";
 import { createToolResolver, type ToolResolverOptions } from "./resolver.ts";
 import { resolveAllowedCapabilities } from "../services/platform/capabilities.ts";
-import { logWarn } from "../../shared/utils/logger.ts";
 import { ToolExecutor } from "./executor.ts";
 import { buildPerRunCapabilityRegistry } from "./executor-utils.ts";
-import {
-  buildCustomSkillDescriptor,
-  buildSkillDescriptor,
-} from "./descriptor-builder.ts";
+import { buildPinnedSkillDescriptor } from "./descriptor-builder.ts";
 import type { CapabilityDescriptor } from "./capability-types.ts";
 import type { ToolDefinition } from "./tool-definitions.ts";
+import { evaluateSkillAvailability } from "../services/agent/skill-resolution.ts";
 import {
-  listLocalizedManagedSkills,
-  resolveSkillLocale,
-} from "../services/agent/managed-skills.ts";
-import { listEnabledCustomSkillContext } from "../services/source/skills.ts";
-import { getSpaceLocale } from "../services/identity/locale.ts";
+  activatePinnedSkillInstructions,
+  activatePinnedSkillResource,
+  type ActivatedSkillManual,
+  type ActivatedSkillResource,
+  loadPinnedSkillPlan,
+  type SkillManualIdentity,
+  type SkillResourceIdentity,
+} from "../services/agent/skill-revisions.ts";
+import { listMcpServers } from "../services/platform/mcp.ts";
+import { listSkillTemplates } from "../services/agent/skill-templates.ts";
+import type { RunExecutionAuthority } from "../services/runs/run-authority.ts";
+import type { StandardCapabilityId } from "../services/platform/capabilities.ts";
+import {
+  activateToolDescriptors,
+  type ActivatedToolDescriptor,
+} from "./tool-descriptor-revisions.ts";
+import { loadRunExecutionAuthority } from "../services/runs/run-authority.ts";
+
+export interface ToolExecutorSetupOptions extends ToolResolverOptions {
+  /** Immutable upper bound accepted with the Run. */
+  runAuthority?: RunExecutionAuthority;
+}
+
+export function selectEffectiveRunCapabilities(
+  liveAllowed: ReadonlySet<StandardCapabilityId>,
+  frozenCapabilities?: readonly StandardCapabilityId[],
+): Set<StandardCapabilityId> {
+  return frozenCapabilities
+    ? new Set(frozenCapabilities.filter((capability) =>
+      liveAllowed.has(capability)
+    ))
+    : new Set(liveAllowed);
+}
 
 export function collectSideEffectToolNames(
   tools: readonly Pick<ToolDefinition, "name" | "side_effects">[],
@@ -38,20 +63,34 @@ export async function createToolExecutor(
   threadId: string,
   runId: string,
   userId: string,
-  options?: ToolResolverOptions,
+  options?: ToolExecutorSetupOptions,
   toolExecutionTimeoutMs?: number,
   runAbortSignal?: AbortSignal,
 ): Promise<ToolExecutor> {
-  const { ctx, allowed } = await resolveAllowedCapabilities({
+  const { allowed: liveAllowed } = await resolveAllowedCapabilities({
     db,
     spaceId,
     userId,
   });
+  if (
+    options?.runAuthority &&
+    (options.runAuthority.runId !== runId ||
+      options.runAuthority.workspaceId !== spaceId ||
+      options.runAuthority.threadId !== threadId)
+  ) {
+    throw new Error("Run authority does not match the tool execution context");
+  }
+  const frozenCapabilities = options?.runAuthority?.capabilities;
+  const allowed = selectEffectiveRunCapabilities(
+    liveAllowed,
+    frozenCapabilities,
+  );
+
+  const { runAuthority: _runAuthority, ...resolverOptions } = options ?? {};
 
   const resolver = await createToolResolver(db, spaceId, env, {
-    ...options,
+    ...resolverOptions,
     mcpExposureContext: {
-      role: ctx.role,
       capabilities: Array.from(allowed),
     },
   });
@@ -61,7 +100,7 @@ export async function createToolExecutor(
     threadId,
     runId,
     userId,
-    role: ctx.role,
+    ...(options?.runAuthority ? { runAuthority: options.runAuthority } : {}),
     capabilities: Array.from(allowed),
     env,
     db,
@@ -85,46 +124,92 @@ export async function createToolExecutor(
   );
   const internalContext = context as ToolContext & {
     _toolExecutor?: Pick<ToolExecutor, "execute">;
+    _activateSkillManuals?: (
+      manuals: readonly SkillManualIdentity[],
+      toolCallId: string,
+    ) => Promise<ActivatedSkillManual[]>;
+    _activateSkillResource?: (
+      resource: SkillResourceIdentity,
+      toolCallId: string,
+    ) => Promise<ActivatedSkillResource>;
+    _activateToolDescriptors?: (
+      toolNames: readonly string[],
+      toolCallId: string,
+    ) => Promise<ActivatedToolDescriptor[]>;
   };
   internalContext.capabilityRegistry = buildPerRunCapabilityRegistry(
     executor,
-    await loadManualCapabilityDescriptors(db, spaceId),
+    await loadManualCapabilityDescriptors(
+      db,
+      options?.runAuthority,
+      executor.getAvailableTools().map((tool) => tool.name),
+    ),
   );
   internalContext._toolExecutor = executor;
+  const runAuthority = options?.runAuthority;
+  if (runAuthority) {
+    internalContext._activateSkillManuals = async (manuals, toolCallId) =>
+      (await activatePinnedSkillInstructions({
+        db,
+        authority: await loadRunExecutionAuthority({ db, runId }),
+        activationEventId: `tool_call:${toolCallId}`,
+        manuals,
+      })).manuals;
+    internalContext._activateSkillResource = async (resource, toolCallId) =>
+      (await activatePinnedSkillResource({
+        db,
+        authority: await loadRunExecutionAuthority({ db, runId }),
+        activationEventId: `tool_call:${toolCallId}`,
+        resource,
+      })).resource;
+    internalContext._activateToolDescriptors = async (toolNames, toolCallId) => {
+      const byName = new Map(
+        executor.getAvailableTools().map((tool) => [tool.name, tool]),
+      );
+      const tools = toolNames.map((name) => byName.get(name));
+      if (tools.some((tool) => tool === undefined)) {
+        throw new Error("Tool descriptor activation target is unavailable");
+      }
+      return (await activateToolDescriptors({
+        db,
+        authority: await loadRunExecutionAuthority({ db, runId }),
+        activationEventId: `tool_call:${toolCallId}:descriptor`,
+        tools: tools.filter((tool): tool is ToolDefinition => tool !== undefined),
+      })).descriptors;
+    };
+  }
 
   return executor;
 }
 
 async function loadManualCapabilityDescriptors(
   db: SqlDatabaseBinding,
-  spaceId: string,
+  runAuthority: RunExecutionAuthority | undefined,
+  availableToolNames: string[],
 ): Promise<CapabilityDescriptor[]> {
-  try {
-    const locale = resolveSkillLocale({
-      preferredLocale: await getSpaceLocale(db, spaceId),
+  if (!runAuthority) return [];
+  const plan = await loadPinnedSkillPlan({ db, authority: runAuthority });
+  if (!plan) return [];
+  const availableMcpServerNames = (await listMcpServers(
+    db,
+    runAuthority.workspaceId,
+  )).filter((server) => server.enabled).map((server) => server.name);
+  const availableTemplateIds = listSkillTemplates().map((template) =>
+    template.id
+  );
+  return plan.skillRevisions.map(({ skill, resources }) => {
+    const availability = evaluateSkillAvailability(skill, {
+      availableToolNames,
+      availableMcpServerNames,
+      availableTemplateIds,
     });
-    const managedManuals =
-      listLocalizedManagedSkills(locale).map(buildSkillDescriptor);
-    const customManuals = (
-      await listEnabledCustomSkillContext(db, spaceId)
-    ).map((skill) =>
-      buildCustomSkillDescriptor({
-        id: skill.id,
-        name: skill.name,
-        description: skill.description,
-        instructions: skill.instructions,
-        triggers: skill.triggers,
-        category: skill.category,
-        activation_tags: skill.activation_tags,
-        execution_contract: skill.execution_contract,
-      }),
+    return buildPinnedSkillDescriptor(
+      {
+        ...skill,
+        availability: availability.availability,
+        availability_reasons: availability.availability_reasons,
+      },
+      resources.map((resource) => resource.manifest),
     );
-    return [...managedManuals, ...customManuals];
-  } catch (error) {
-    logWarn("Failed to load manual descriptors for toolbox", {
-      module: "tools/executor",
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
+  });
 }

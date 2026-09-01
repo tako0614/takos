@@ -1,36 +1,59 @@
 # OIDC 設定
 
-**Takos は provider-neutral な resource contract を持つ OpenTofu-native AI workspace distribution です。** Self-host では外部 Takosumi
-Accounts plane が OIDC issuer になります。Takosumi は Takos distribution を Capsule として扱い、
-**Capsule -> Run -> StateVersion -> Output** という run ledger を記録します。OIDC client 設定そのものは account-plane policy であり、Takosumi Accounts plane が所有します。
+Takos にサインインする方法を決める設定です。Takos 自身はパスワードもアカウントも
+持たず、運営者が選んだ OIDC issuer に本人確認を任せます。Keycloak、Authentik、
+Auth0 などの一般的な OIDC issuer をそのまま使えます。Takosumi Accounts を使う場合
+も、Takos から見れば issuer の一つです。
 
-## Current Flow
+## 前提
 
-1. Takos の OpenTofu Capsule (`deploy/opentofu/takoform` または `deploy/opentofu/cloudflare`) を install して **Capsule** を作る。前者は選択した Form host、後者は接続した Cloudflare account に同じ product contract を materialize する。
-2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
-3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateVersion** と **Output** を記録する。
-4. ProviderConnection が credential reference を保持し、ProviderBinding が module の使う provider (+ optional alias) ごとに explicit ProviderConnection を解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。
-5. OIDC clients, billing, domains, dashboard などの account-plane policy は Takosumi Accounts plane が所有する。
+- Takos を動かす公開 URL が決まっていること
+- issuer 側で Authorization Code Flow のクライアントを作れること
+- issuer が `<issuer>/.well-known/openid-configuration` を返せること
 
-## Takos Boundary
+## 設定手順
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) for the applied OpenTofu Capsule, while Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) used by the module, and policy resolves provider allowlists and state handling. Takosumi Accounts plane が OIDC / billing / dashboard などの account-plane policy を所有する。
+1. issuer 側でクライアントを作り、リダイレクト URI に
+   `https://<Takos の公開 URL>/auth/oidc/callback` を登録します。
+2. 発行された client ID と、必要なら client secret を控えます。
+3. Takos に次の環境変数を設定します。
 
-## OpenTofu Module Shape
+   | 変数 | 必須 | 内容 |
+   | --- | --- | --- |
+   | `OIDC_ISSUER_URL` | 必須 | issuer のベース URL。ここから discovery 文書を取得します |
+   | `OIDC_CLIENT_ID` | 必須 | issuer が発行したクライアント ID |
+   | `OIDC_CLIENT_SECRET` | 任意 | confidential client のときだけ設定します |
+   | `OIDC_REDIRECT_URI` | 必須 | 手順 1 で登録した URI と完全に同じ文字列 |
+   | `ENCRYPTION_KEY` | 必須 | セッションと委任トークンの暗号化に使います |
 
-Takosumi に渡す install 対象は OpenTofu Capsule です。module metadata は Git URL / ref / commit / module path と well-known OpenTofu outputs から解決する。
+4. Takos を再起動し、サインインを試します。
 
-```hcl
-module "takos" {
-  source = "github.com/tako0614/takos//deploy/opentofu/takoform"
-}
-```
+要求する scope は Takos が決めます。単体で使う場合は `openid profile email`
+です。Takosumi Accounts と連携する構成では、委任に必要な scope を追加します。
 
-adapter を選ぶと、typed Runs を経て StateVersion と Output が更新され、非機密な endpoint は Output として記録される。Takos product routes は別の product-local deployment surface を露出せず、Takosumi deploy control plane の run ledger を信頼する。
+## 確認
 
-## References
+- `<issuer>/.well-known/openid-configuration` がブラウザから開けること
+- サインイン後に元の画面へ戻ること
+- 同じ人が二重に登録されていないこと
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+## つまずきやすいところ
+
+- **リダイレクト URI は文字列が完全一致する必要があります。** ローカル用と本番用を
+  混ぜたり、末尾のスラッシュが違うだけでも失敗します。
+- **issuer を変えると別人になります。** Takos は `(issuer, sub)` の組で本人を決めます。
+  メールアドレスが同じでも、issuer か `sub` が変わると別のプロフィールになります。
+- **`ENCRYPTION_KEY` を設定していないと委任トークンが平文で残ります。** ログや
+  OpenTofu state に出さないよう、設定してから運用を始めてください。
+
+ローカル開発では issuer に `http://127.0.0.1:8792`、クライアント ID に
+`local-oidc-client` を使う既定値が入ります。本番ではこの既定値に依存しないで
+ください。
+
+## 関連
+
+- [アカウントモデル](/operator/account-model) — `(issuer, sub)` の扱いと運営者チェックリスト
+- [環境と変数](/deploy/environment)
+- [セルフホストの概要](/deploy/)
+- [トラブルシューティング](/deploy/troubleshooting)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

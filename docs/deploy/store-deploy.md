@@ -41,7 +41,7 @@ Store / Source 画面が持たないもの:
 - provider credential
 - secret output
 - state backend
-- policy decision の正本
+- policy decision の正本 (正とする情報)
 - deploy 実行そのもの
 
 これらは Takosumi control plane、Connections、policy、operator secret store の責務です。
@@ -67,7 +67,7 @@ production install は tag または commit SHA に pin します。`main` / `la
 ## Install detail
 
 Workspace ユーザーは install 詳細で Source / Capsule / Run / StateVersion / Output / Activity を確認します。
-Workspace ユーザー向けの主導線では、この台帳を最初の説明にしません。
+Workspace ユーザー向けの主導線では、この履歴を最初の説明にしません。
 
 ## 関連ページ
 

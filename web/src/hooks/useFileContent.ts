@@ -1,6 +1,10 @@
 import { type Accessor, createSignal } from "solid-js";
 import { getErrorMessage } from "../lib/errors.ts";
 import { useI18n } from "../store/i18n.ts";
+import {
+  parseStorageContentResponse,
+  parseStorageFileMutationResponse,
+} from "./storage-response.ts";
 
 interface UseFileContentReturn {
   content: () => string | null;
@@ -13,7 +17,8 @@ interface UseFileContentReturn {
 }
 
 export function useFileContent(
-  spaceId: Accessor<string>,
+  spaceIdentifier: Accessor<string>,
+  spaceRecordId: Accessor<string>,
 ): UseFileContentReturn {
   const { t } = useI18n();
   const [content, setContent] = createSignal<string | null>(null);
@@ -21,9 +26,12 @@ export function useFileContent(
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  let loadVersion = 0;
 
   const loadContent = async (fileId: string) => {
-    const currentSpaceId = spaceId();
+    const currentSpaceIdentifier = spaceIdentifier();
+    const currentSpaceRecordId = spaceRecordId();
+    const version = ++loadVersion;
     setLoading(true);
     setError(null);
     setContent(null);
@@ -31,7 +39,7 @@ export function useFileContent(
 
     try {
       const res = await fetch(
-        `/api/spaces/${encodeURIComponent(currentSpaceId)}/storage/${
+        `/api/spaces/${encodeURIComponent(currentSpaceIdentifier)}/storage/${
           encodeURIComponent(fileId)
         }/content`,
       );
@@ -39,16 +47,22 @@ export function useFileContent(
         const data = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(data.error || t("failedToLoadFileContent"));
       }
-      const data = await res.json() as {
-        content: string;
-        encoding: "utf-8" | "base64";
-      };
+      const data = parseStorageContentResponse(await res.json(), {
+        spaceId: currentSpaceRecordId,
+        fileId,
+      });
+      if (
+        version !== loadVersion ||
+        spaceIdentifier() !== currentSpaceIdentifier ||
+        spaceRecordId() !== currentSpaceRecordId
+      ) return;
       setContent(data.content);
       setEncoding(data.encoding);
     } catch (err) {
+      if (version !== loadVersion) return;
       setError(getErrorMessage(err, t("failedToLoadFileContent")));
     } finally {
-      setLoading(false);
+      if (version === loadVersion) setLoading(false);
     }
   };
 
@@ -56,13 +70,15 @@ export function useFileContent(
     fileId: string,
     newContent: string,
   ): Promise<boolean> => {
-    const currentSpaceId = spaceId();
+    if (saving()) return false;
+    const currentSpaceIdentifier = spaceIdentifier();
+    const currentSpaceRecordId = spaceRecordId();
     setSaving(true);
     setError(null);
 
     try {
       const res = await fetch(
-        `/api/spaces/${encodeURIComponent(currentSpaceId)}/storage/${
+        `/api/spaces/${encodeURIComponent(currentSpaceIdentifier)}/storage/${
           encodeURIComponent(fileId)
         }/content`,
         {
@@ -75,6 +91,14 @@ export function useFileContent(
         const data = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(data.error || t("failedToSaveFile"));
       }
+      parseStorageFileMutationResponse(await res.json(), {
+        spaceId: currentSpaceRecordId,
+        id: fileId,
+      });
+      if (
+        spaceIdentifier() !== currentSpaceIdentifier ||
+        spaceRecordId() !== currentSpaceRecordId
+      ) return false;
       setContent(newContent);
       return true;
     } catch (err) {

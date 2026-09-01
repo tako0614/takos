@@ -1,5 +1,26 @@
 import type { RunStatus } from "./runs.ts";
 
+export const DEFAULT_AGENT_TYPE = "default";
+export const MAX_AGENT_TASK_TITLE_CHARACTERS = 240;
+export const MAX_AGENT_TASK_DESCRIPTION_CHARACTERS = 4_000;
+export const MAX_AGENT_TASK_MODEL_CHARACTERS = 128;
+export const MAX_AGENT_TASK_REFERENCE_CHARACTERS = 128;
+export const MAX_AGENT_TASK_PLAN_BYTES = 64 * 1_024;
+export const AGENT_TYPES = [
+  DEFAULT_AGENT_TYPE,
+  "assistant",
+  "planner",
+  "researcher",
+  "implementer",
+  "reviewer",
+] as const;
+export type AgentType = (typeof AGENT_TYPES)[number];
+
+export function isAgentType(value: unknown): value is AgentType {
+  return typeof value === "string" &&
+    (AGENT_TYPES as readonly string[]).includes(value);
+}
+
 export type AgentTaskStatus =
   | "planned"
   | "in_progress"

@@ -39,7 +39,7 @@ import {
   buildAgentExecutorProxyConfig,
 } from "./executor-proxy-config.ts";
 
-import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
+import { constantTimeEqualsString } from "../../shared/utils/constant-time.ts";
 import { logError } from "../../shared/utils/logger.ts";
 import {
   errorJsonResponse,
@@ -152,16 +152,21 @@ export async function readBoundedAgentControlJson(
 /**
  * Read the protocol advertised by a successfully started container image.
  * Missing/invalid fields deliberately remain v1-compatible during a rolling
- * deployment; only the exact v2 contract upgrades the reserved token.
+ * deployment; only known contracts upgrade the reserved token.
  */
 export function runtimeProtocolVersionFromStartResult(result: {
   ok: boolean;
   body: string;
-}): 2 | undefined {
+}): 2 | 3 | 4 | 5 | undefined {
   if (!result.ok) return undefined;
   try {
     const payload = JSON.parse(result.body) as Record<string, unknown>;
-    return payload.runtimeProtocolVersion === 2 ? 2 : undefined;
+    return payload.runtimeProtocolVersion === 2 ||
+        payload.runtimeProtocolVersion === 3 ||
+        payload.runtimeProtocolVersion === 4 ||
+        payload.runtimeProtocolVersion === 5
+      ? payload.runtimeProtocolVersion
+      : undefined;
   } catch {
     return undefined;
   }
@@ -172,7 +177,7 @@ export function upgradeProxyTokenRuntimeProtocol(
   tokens: Map<string, ProxyTokenInfo>,
   token: string,
   expected: Pick<ProxyTokenInfo, "runId" | "serviceId" | "leaseVersion">,
-  version: 2,
+  version: 2 | 3 | 4 | 5,
 ): boolean {
   const info = tokens.get(token);
   if (
@@ -458,7 +463,7 @@ function createExecutorContainerClass(
           controlConfig,
         );
         const negotiatedVersion = runtimeProtocolVersionFromStartResult(result);
-        if (negotiatedVersion === 2) {
+        if (negotiatedVersion !== undefined) {
           await this.doState.blockConcurrencyWhile(async () => {
             const tokens = await this.loadTokenMap();
             if (
@@ -1062,6 +1067,11 @@ export default {
         // token has no version metadata. serviceId still fences that legacy
         // token, while an attacker cannot claim a newer version in the body.
         delete body.leaseVersion;
+      }
+      if (typeof tokenInfo.runtimeProtocolVersion === "number") {
+        body.runtimeProtocolVersion = tokenInfo.runtimeProtocolVersion;
+      } else {
+        delete body.runtimeProtocolVersion;
       }
       if (typeof body.workerId === "string") {
         body.workerId = tokenInfo.serviceId;

@@ -91,6 +91,53 @@ function createDeps(
         hasMore: false,
       };
     },
+    runPendingStorageUploadGcBatch: async (db, bucket, options) => {
+      calls.push("storage-upload");
+      assertEquals(db, env.DB);
+      assertEquals(bucket, env.GIT_OBJECTS);
+      assertEquals(options, {
+        maxAgeMs: 24 * 60 * 60 * 1000,
+        maxRecords: 100,
+      });
+      return {
+        scanned: 0,
+        recovered: 0,
+        deleted: 0,
+        hasMore: false,
+      };
+    },
+    pruneWorkspaceDeletionReceipts: async (db, options) => {
+      calls.push("workspace-deletion-receipts");
+      assertEquals(db, env.DB);
+      assertEquals(options, {
+        maxAgeMs: 30 * 24 * 60 * 60 * 1000,
+        limit: 100,
+      });
+      return {
+        cutoff: "2026-01-01T00:00:00.000Z",
+        selected: 0,
+        deleted: 0,
+        hasMore: false,
+      };
+    },
+    retireDeletedThreadTurnProjectionsBatch: async (db, options) => {
+      calls.push("turn-projection-retirement");
+      assertEquals(db, env.DB);
+      assertEquals(options, { limit: 25 });
+      return { selected: 0, retired: 0, remaining: false };
+    },
+    runAgentResourceDeletionOutboxBatch: async (bindings, options) => {
+      calls.push("agent-resource-deletion");
+      assertEquals(bindings, env);
+      assertEquals(options, { limit: 50 });
+      return {
+        selected: 0,
+        claimed: 0,
+        completed: 0,
+        retrying: 0,
+        failed: 0,
+      };
+    },
     logInfo: () => {},
     ...overrides,
   };
@@ -110,9 +157,13 @@ test("runScheduledFamilyMaintenance includes workflow artifact GC in the hourly 
   );
 
   assertEquals(calls, [
+    "turn-projection-retirement",
+    "agent-resource-deletion",
+    "workspace-deletion-receipts",
     "push-retention",
     "cleanup",
     "snapshot",
+    "storage-upload",
     "orphan",
     "artifact",
   ]);
@@ -138,9 +189,13 @@ test("runScheduledFamilyMaintenance keeps hourly jobs running after workflow art
   );
 
   assertEquals(calls, [
+    "turn-projection-retirement",
+    "agent-resource-deletion",
+    "workspace-deletion-receipts",
     "push-retention",
     "cleanup",
     "snapshot",
+    "storage-upload",
     "orphan",
     "artifact",
   ]);
@@ -171,13 +226,91 @@ test("runScheduledFamilyMaintenance isolates notification pusher retention failu
   );
 
   assertEquals(calls, [
+    "turn-projection-retirement",
+    "agent-resource-deletion",
+    "workspace-deletion-receipts",
     "push-retention",
     "cleanup",
     "snapshot",
+    "storage-upload",
     "orphan",
     "artifact",
   ]);
   assertEquals(errors, [
     { job: "notification-pusher-retention", error: "retention failed" },
+  ]);
+});
+
+test("runScheduledFamilyMaintenance isolates Agent deletion outbox failures", async () => {
+  const env = createTestEnv();
+  const calls: string[] = [];
+  const errors: Array<{ job: string; error: string }> = [];
+
+  await runScheduledFamilyMaintenance(
+    env,
+    "0 * * * *",
+    errors,
+    {},
+    createDeps(env, calls, {
+      runAgentResourceDeletionOutboxBatch: async () => {
+        calls.push("agent-resource-deletion");
+        throw new Error("deletion outbox unavailable");
+      },
+    }),
+  );
+
+  assertEquals(calls, [
+    "turn-projection-retirement",
+    "agent-resource-deletion",
+    "workspace-deletion-receipts",
+    "push-retention",
+    "cleanup",
+    "snapshot",
+    "storage-upload",
+    "orphan",
+    "artifact",
+  ]);
+  assertEquals(errors, [
+    {
+      job: "agent-resource-deletion-outbox",
+      error: "deletion outbox unavailable",
+    },
+  ]);
+});
+
+test("runScheduledFamilyMaintenance isolates TurnProjection retirement failures", async () => {
+  const env = createTestEnv();
+  const calls: string[] = [];
+  const errors: Array<{ job: string; error: string }> = [];
+
+  await runScheduledFamilyMaintenance(
+    env,
+    "0 * * * *",
+    errors,
+    {},
+    createDeps(env, calls, {
+      retireDeletedThreadTurnProjectionsBatch: async () => {
+        calls.push("turn-projection-retirement");
+        throw new Error("projection retirement unavailable");
+      },
+    }),
+  );
+
+  assertEquals(calls, [
+    "turn-projection-retirement",
+    "agent-resource-deletion",
+    "workspace-deletion-receipts",
+    "push-retention",
+    "cleanup",
+    "snapshot",
+    "storage-upload",
+    "orphan",
+    "artifact",
+  ]);
+  assertEquals(errors, [
+    {
+      job: "deleted-thread-turn-projection-retirement",
+      error: "projection retirement unavailable",
+    },
   ]);
 });

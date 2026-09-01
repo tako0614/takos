@@ -27,7 +27,7 @@ import type { LocalFetch } from "./runtime-types.ts";
 // Web / Dispatch fetch factories
 // ---------------------------------------------------------------------------
 
-export async function createLocalWebFetch(): Promise<LocalFetch> {
+async function createLocalWebFetchImpl(): Promise<LocalFetch> {
   const env = await loadLocalWebEnv();
   const { createWebWorker } = await import("../web.ts");
   const webWorker = createWebWorker(buildNodeWebPlatform);
@@ -35,12 +35,12 @@ export async function createLocalWebFetch(): Promise<LocalFetch> {
     webWorker.fetch(request, env, executionContext);
 }
 
+export async function createLocalWebFetch(): Promise<LocalFetch> {
+  return createLocalWebFetchImpl();
+}
+
 export async function createLocalWebFetchForTests(): Promise<LocalFetch> {
-  const env = await loadLocalWebEnv();
-  const { createWebWorker } = await import("../web.ts");
-  const webWorker = createWebWorker(buildNodeWebPlatform);
-  return (request, executionContext = createLocalExecutionContext()) =>
-    webWorker.fetch(request, env, executionContext);
+  return createLocalWebFetchImpl();
 }
 
 export async function createLocalDispatchFetchForTests(): Promise<LocalFetch> {

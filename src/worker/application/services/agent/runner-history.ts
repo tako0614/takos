@@ -8,11 +8,14 @@
 import type { Env, RunStatus } from "../../../shared/types/index.ts";
 import type { AgentMessage, AgentUsage, ToolCall } from "./agent-models.ts";
 import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { resolveHistoryTokenBudget } from "./model-catalog.ts";
 import { estimateTokens } from "./prompt-budget.ts";
-import { readMessageFromR2 } from "../offload/messages.ts";
+import {
+  MAX_AGENT_MESSAGE_HYDRATION_BYTES,
+  readOffloadedMessageRecord,
+} from "../offload/messages.ts";
 import {
   buildThreadContextSystemMessage,
   queryRelevantThreadMessages,
@@ -292,6 +295,16 @@ export interface ConversationHistoryDeps {
   runId: string;
   spaceId: string;
   aiModel: string;
+  /**
+   * Exact immutable RunContext inputs. When present, history is canonical SQL
+   * transcript only: no mutable summary/vector projection and no R2-dependent
+   * full-body substitution may change the provider input for this Run.
+   */
+  pinnedContext?: {
+    transcriptCutSequence: number;
+    parentRunId: string | null;
+    runInputJson: string;
+  };
 }
 
 function appendAttachmentContext(
@@ -327,21 +340,39 @@ function appendAttachmentContext(
 export async function buildConversationHistory(
   deps: ConversationHistoryDeps,
 ): Promise<AgentMessage[]> {
-  const { db: dbBinding, env, threadId, runId, spaceId, aiModel } = deps;
+  const {
+    db: dbBinding,
+    env,
+    threadId,
+    runId,
+    spaceId,
+    aiModel,
+    pinnedContext,
+  } = deps;
   const db = getDb(dbBinding);
   const startedAt = Date.now();
+
+  if (
+    pinnedContext &&
+    (!Number.isSafeInteger(pinnedContext.transcriptCutSequence) ||
+      pinnedContext.transcriptCutSequence < -1)
+  ) {
+    throw new TypeError("Invalid pinned transcript cut");
+  }
 
   let threadSummary: string | null = null;
   let threadKeyPointsJson = "[]";
 
-  const thread = await db
-    .select({
-      summary: threads.summary,
-      keyPoints: threads.keyPoints,
-    })
-    .from(threads)
-    .where(eq(threads.id, threadId))
-    .get();
+  const thread = pinnedContext
+    ? null
+    : await db
+      .select({
+        summary: threads.summary,
+        keyPoints: threads.keyPoints,
+      })
+      .from(threads)
+      .where(eq(threads.id, threadId))
+      .get();
 
   if (thread) {
     threadSummary = thread.summary ?? null;
@@ -367,38 +398,56 @@ export async function buildConversationHistory(
       sequence: messages.sequence,
     })
     .from(messages)
-    .where(eq(messages.threadId, threadId))
+    .where(
+      pinnedContext
+        ? and(
+          eq(messages.threadId, threadId),
+          lte(messages.sequence, pinnedContext.transcriptCutSequence),
+        )
+        : eq(messages.threadId, threadId),
+    )
     .orderBy(desc(messages.sequence))
     .limit(MAX_FETCH)
     .all();
 
   rows.reverse(); // chronological
 
-  // Hydrate offloaded message payloads from object store (best-effort).
-  if (env.TAKOS_OFFLOAD) {
+  // Hydrate the newest offloaded payloads first under one bounded aggregate.
+  // Older records retain their SQL previews and are normally trimmed by the
+  // token budget below.
+  if (env.TAKOS_OFFLOAD && !pinnedContext) {
     const bucket = env.TAKOS_OFFLOAD;
     const candidates = rows
-      .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<{
-      idx: number;
-      key: string;
-    }>;
-
-    const concurrency = 20;
+      .map((message, index) => ({ index, key: message.r2Key }))
+      .filter((candidate): candidate is { index: number; key: string } =>
+        typeof candidate.key === "string" && candidate.key.length > 0
+      )
+      .reverse();
+    let remainingBytes = MAX_AGENT_MESSAGE_HYDRATION_BYTES;
+    const concurrency = 4;
     for (let i = 0; i < candidates.length; i += concurrency) {
+      if (remainingBytes <= 0) break;
       const batch = candidates.slice(i, i + concurrency);
-      await Promise.all(
-        batch.map(async ({ idx, key }) => {
-          const persisted = await readMessageFromR2(bucket, key);
-          if (!persisted) return;
-          if (persisted.id !== rows[idx].id) return;
-          if (persisted.thread_id !== threadId) return;
-          rows[idx].content = persisted.content;
-          rows[idx].toolCalls = persisted.tool_calls;
-          rows[idx].toolCallId = persisted.tool_call_id;
-          rows[idx].metadata = persisted.metadata;
-        }),
+      const records = await Promise.all(
+        batch.map(({ key }) => readOffloadedMessageRecord(bucket, key)),
       );
+      for (let index = 0; index < batch.length; index++) {
+        const candidate = batch[index];
+        const record = records[index];
+        const row = rows[candidate.index];
+        if (
+          !record || record.size > remainingBytes ||
+          record.message.id !== row.id ||
+          record.message.thread_id !== threadId
+        ) {
+          continue;
+        }
+        remainingBytes -= record.size;
+        row.content = record.message.content;
+        row.toolCalls = record.message.tool_calls;
+        row.toolCallId = record.message.tool_call_id;
+        row.metadata = record.message.metadata;
+      }
     }
   }
 
@@ -410,15 +459,16 @@ export async function buildConversationHistory(
 
   for (const msg of rows) {
     excludeSequences.add(msg.sequence);
+    const attachments = msg.role === "user"
+      ? parseMessageAttachmentRefs(msg.metadata, threadId)
+      : [];
     if (msg.role === "user") {
       lastUserQuery = appendAttachmentContext(
         msg.content,
-        parseMessageAttachmentRefs(msg.metadata),
+        attachments,
       );
     }
 
-    const attachments =
-      msg.role === "user" ? parseMessageAttachmentRefs(msg.metadata) : [];
     const agentMsg: AgentMessage = {
       role: msg.role as AgentMessage["role"],
       content: appendAttachmentContext(msg.content, attachments),
@@ -479,44 +529,51 @@ export async function buildConversationHistory(
     trimmed.length > 0 ? trimmed[0].sequence : undefined;
 
   let retrieved: Awaited<ReturnType<typeof queryRelevantThreadMessages>> = [];
-  try {
-    retrieved = await queryRelevantThreadMessages({
-      env,
-      spaceId,
-      threadId,
-      query: lastUserQuery,
-      topK: THREAD_RETRIEVAL_TOP_K,
-      minScore: THREAD_RETRIEVAL_MIN_SCORE,
-      beforeSequence: oldestRecentSequence,
-      excludeSequences,
-    });
-  } catch (err) {
-    logWarn(`Vector search failed for thread ${threadId}`, {
-      module: "thread_context",
-      detail: err,
-    });
-  }
+  if (!pinnedContext) {
+    try {
+      retrieved = await queryRelevantThreadMessages({
+        env,
+        spaceId,
+        threadId,
+        query: lastUserQuery,
+        topK: THREAD_RETRIEVAL_TOP_K,
+        minScore: THREAD_RETRIEVAL_MIN_SCORE,
+        beforeSequence: oldestRecentSequence,
+        excludeSequences,
+      });
+    } catch (err) {
+      logWarn(`Vector search failed for thread ${threadId}`, {
+        module: "thread_context",
+        detail: err,
+      });
+    }
 
-  const contextMsg = buildThreadContextSystemMessage({
-    summary: threadSummary,
-    keyPointsJson: threadKeyPointsJson,
-    retrieved,
-    maxChars: THREAD_CONTEXT_MAX_CHARS,
-  });
-  if (contextMsg) {
-    agentMessages.unshift(contextMsg);
+    const contextMsg = buildThreadContextSystemMessage({
+      summary: threadSummary,
+      keyPointsJson: threadKeyPointsJson,
+      retrieved,
+      maxChars: THREAD_CONTEXT_MAX_CHARS,
+    });
+    if (contextMsg) {
+      agentMessages.unshift(contextMsg);
+    }
   }
 
   // For sub-agent runs: prefer the structured delegation packet over broad parent history inheritance.
   try {
-    const runRow = await db
-      .select({
-        parentRunId: runs.parentRunId,
-        input: runs.input,
-      })
-      .from(runs)
-      .where(eq(runs.id, runId))
-      .get();
+    const runRow = pinnedContext
+      ? {
+        parentRunId: pinnedContext.parentRunId,
+        input: pinnedContext.runInputJson,
+      }
+      : await db
+        .select({
+          parentRunId: runs.parentRunId,
+          input: runs.input,
+        })
+        .from(runs)
+        .where(eq(runs.id, runId))
+        .get();
     if (runRow?.parentRunId) {
       const delegationPacket = getDelegationPacketFromRunInput(runRow.input);
       if (delegationPacket) {

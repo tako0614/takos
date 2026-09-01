@@ -21,6 +21,17 @@ import {
 } from "../lib/spaces.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import type { RouteState, Space, Thread } from "../types/index.ts";
+import {
+  parseChatThreadActionResponse,
+  parseChatThreadInventoryResponse,
+} from "../hooks/chat-thread-response.ts";
+import {
+  applyThreadLifecycleToInventory,
+  mapWithConcurrency,
+  selectThreadInventorySpaces,
+  THREAD_INVENTORY_CONCURRENCY,
+  type ThreadNavigationState,
+} from "../lib/thread-navigation.ts";
 
 export const mobileNavDrawerId = "mobile-navigation-drawer";
 
@@ -36,12 +47,16 @@ interface NavigationContextValue {
   setShowMobileNavDrawer: Setter<boolean>;
   mobileNavDrawerId: string;
   threadsBySpace: Record<string, Thread[]>;
+  threadInventoryTruncatedBySpace: Record<string, boolean>;
+  threadInventoryFailedBySpace: Record<string, boolean>;
+  threadInventoryLoading: boolean;
   setThreadsBySpace: Setter<Record<string, Thread[]>>;
   allThreads: Thread[];
-  fetchAllThreads: (spaces?: Space[]) => Promise<void>;
+  retryThreadInventory: () => Promise<void>;
   handleNewThread: () => void;
   handleDeleteThread: (threadId: string) => Promise<void>;
-  toggleArchiveThread: (thread: Thread) => Promise<void>;
+  toggleArchiveThread: (thread: Thread) => Promise<boolean>;
+  isThreadActionPending: (threadId: string) => boolean;
   handleNewThreadCreated: (spaceId: string, thread: Thread) => void;
   handleSelectThread: (thread: Thread) => void;
   navigateToChat: (spaceId?: string, threadId?: string) => void;
@@ -59,28 +74,51 @@ const NavigationContext = createContext<NavigationContextValue>();
 
 async function fetchThreadsBySpace(
   spaces: Space[],
-): Promise<Record<string, Thread[]>> {
+): Promise<ThreadNavigationState> {
   if (spaces.length === 0) {
-    return {};
+    return {
+      threadsBySpace: {},
+      truncatedBySpace: {},
+      failedBySpace: {},
+    };
   }
 
-  const entries = await Promise.all(
-    spaces.map(async (space) => {
+  const entries = await mapWithConcurrency(
+    spaces,
+    THREAD_INVENTORY_CONCURRENCY,
+    async (space) => {
       const identifier = getSpaceIdentifier(space);
       try {
         const response = await rpc.spaces[":spaceId"].threads.$get({
           param: { spaceId: identifier },
           query: { status: "active" },
         });
-        const data = await rpcJson<{ threads: Thread[] }>(response);
-        return [identifier, data.threads] as const;
+        const page = parseChatThreadInventoryResponse(
+          await rpcJson<unknown>(response),
+          space.id,
+        );
+        return [identifier, page, false] as const;
       } catch {
-        return [identifier, [] as Thread[]] as const;
+        return [
+          identifier,
+          { threads: [] as Thread[], truncated: false },
+          true,
+        ] as const;
       }
-    }),
+    },
   );
 
-  return Object.fromEntries(entries);
+  return {
+    threadsBySpace: Object.fromEntries(
+      entries.map(([identifier, page]) => [identifier, page.threads]),
+    ),
+    truncatedBySpace: Object.fromEntries(
+      entries.map(([identifier, page]) => [identifier, page.truncated]),
+    ),
+    failedBySpace: Object.fromEntries(
+      entries.map(([identifier, , failed]) => [identifier, failed]),
+    ),
+  };
 }
 
 export const NavigationProvider: ParentComponent = (props) => {
@@ -96,21 +134,68 @@ export const NavigationProvider: ParentComponent = (props) => {
   >(null);
   const [showMobileNavDrawerSignal, setShowMobileNavDrawerSignal] =
     createSignal(false);
+  const [pendingThreadActionIds, setPendingThreadActionIds] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
 
-  const threadSource = createMemo(() =>
-    auth.authState === "authenticated"
-      ? auth.spaces.map((space) => getSpaceIdentifier(space)).join("|")
-      : ""
+  const beginThreadAction = (threadId: string): boolean => {
+    if (pendingThreadActionIds().has(threadId)) return false;
+    setPendingThreadActionIds((current) => {
+      const next = new Set(current);
+      next.add(threadId);
+      return next;
+    });
+    return true;
+  };
+
+  const endThreadAction = (threadId: string) => {
+    setPendingThreadActionIds((current) => {
+      const next = new Set(current);
+      next.delete(threadId);
+      return next;
+    });
+  };
+
+  const personalLabel = createMemo(() => t("personal"));
+  const preferredSpace = createMemo(() =>
+    getPersonalSpace(auth.spaces, personalLabel()) || auth.spaces[0] ||
+    undefined
   );
+  const preferredSpaceId = createMemo(() => {
+    const space = preferredSpace();
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
+  const routeSpace = createMemo(() => {
+    const route = router.route;
+    if (!route.spaceId) return undefined;
+    return findSpaceByIdentifier(
+      auth.spaces,
+      route.spaceId,
+      personalLabel(),
+    );
+  });
+  const routeSpaceId = createMemo(() => {
+    const space = routeSpace();
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
+  const targetThreadSpaces = createMemo(() => {
+    if (auth.authState !== "authenticated") return [] as Space[];
+    return selectThreadInventorySpaces(
+      preferredSpace(),
+      routeSpace() ?? undefined,
+      sidebarSpaceSignal() ?? undefined,
+    );
+  });
   const [threadsBySpaceSignal, threadControls] = createResource(
-    threadSource,
-    async (key) => {
-      if (!key) {
-        return {};
-      }
-      return await fetchThreadsBySpace(auth.spaces);
+    targetThreadSpaces,
+    fetchThreadsBySpace,
+    {
+      initialValue: {
+        threadsBySpace: {},
+        truncatedBySpace: {},
+        failedBySpace: {},
+      } as ThreadNavigationState,
     },
-    { initialValue: {} as Record<string, Thread[]> },
   );
 
   createEffect(() => {
@@ -125,25 +210,6 @@ export const NavigationProvider: ParentComponent = (props) => {
     setShowMobileNavDrawerSignal(false);
   });
 
-  const personalLabel = createMemo(() => t("personal"));
-  const preferredSpace = createMemo(() =>
-    getPersonalSpace(auth.spaces, personalLabel()) || auth.spaces[0] ||
-    undefined
-  );
-  const preferredSpaceId = createMemo(() => {
-    const space = preferredSpace();
-    return space ? getSpaceIdentifier(space) : undefined;
-  });
-  const routeSpaceId = createMemo(() => {
-    const route = router.route;
-    if (!route.spaceId) return undefined;
-    const space = findSpaceByIdentifier(
-      auth.spaces,
-      route.spaceId,
-      personalLabel(),
-    );
-    return space ? getSpaceIdentifier(space) : undefined;
-  });
   const selectedSpaceId = createMemo(() => {
     const route = router.route;
     return route.spaceId ? routeSpaceId() ?? null : preferredSpaceId() ?? null;
@@ -153,7 +219,7 @@ export const NavigationProvider: ParentComponent = (props) => {
     return Boolean(route.spaceId) && !routeSpaceId() && !auth.spacesLoaded;
   });
   const allThreads = createMemo(() =>
-    Object.values(threadsBySpaceSignal() ?? {}).flat()
+    Object.values(threadsBySpaceSignal().threadsBySpace).flat()
   );
 
   const mutateSidebarSpace: Setter<Space | null> = (next) => {
@@ -171,15 +237,15 @@ export const NavigationProvider: ParentComponent = (props) => {
   };
 
   const setThreadsBySpace: Setter<Record<string, Thread[]>> = (next) => {
-    const current = threadsBySpaceSignal() ?? {};
+    const state = threadsBySpaceSignal();
+    const current = state.threadsBySpace;
     const value = typeof next === "function" ? next(current) : next;
-    threadControls.mutate(() => value);
+    threadControls.mutate(() => ({ ...state, threadsBySpace: value }));
     return value;
   };
 
-  const fetchAllThreads = async (spaces?: Space[]) => {
-    const next = await fetchThreadsBySpace(spaces ?? auth.spaces);
-    threadControls.mutate(() => next);
+  const retryThreadInventory = async () => {
+    await threadControls.refetch();
   };
 
   const navigateToChat = (spaceId?: string, threadId?: string) => {
@@ -256,64 +322,97 @@ export const NavigationProvider: ParentComponent = (props) => {
   };
 
   const handleDeleteThread = async (threadId: string) => {
-    const confirmed = await confirm({
-      title: t("confirmDelete"),
-      message: t("confirmDeleteThread"),
-      confirmText: t("delete"),
-      danger: true,
-    });
-    if (!confirmed) return;
+    if (!beginThreadAction(threadId)) return;
 
     try {
+      const confirmed = await confirm({
+        title: t("confirmDelete"),
+        message: t("confirmDeleteThread"),
+        confirmText: t("delete"),
+        danger: true,
+      });
+      if (!confirmed) return;
+
       const response = await rpc.threads[":id"].$delete({
         param: { id: threadId },
       });
-      await rpcJson(response);
-      setThreadsBySpace((previous) => {
-        const next: Record<string, Thread[]> = {};
-        for (const key of Object.keys(previous)) {
-          next[key] = previous[key].filter((thread) => thread.id !== threadId);
-        }
-        return next;
+      parseChatThreadActionResponse(await rpcJson<unknown>(response), {
+        threadId,
+        status: "deleted",
       });
+      const deletedThread = allThreads().find((thread) =>
+        thread.id === threadId
+      );
+      if (deletedThread) {
+        threadControls.mutate((current) =>
+          applyThreadLifecycleToInventory(
+            current,
+            deletedThread,
+            "deleted",
+          )
+        );
+      }
       if (router.route.threadId === threadId) {
         navigateToChat(selectedSpaceId() ?? undefined);
       }
       toast.showToast("success", t("deleted"));
     } catch {
       toast.showToast("error", t("failedToDelete"));
+    } finally {
+      endThreadAction(threadId);
     }
   };
 
-  const toggleArchiveThread = async (thread: Thread) => {
+  const toggleArchiveThread = async (thread: Thread): Promise<boolean> => {
+    if (!beginThreadAction(thread.id)) return false;
     try {
       const archive = thread.status !== "archived";
+      const expectedStatus = archive ? "archived" : "active";
       const response = await (archive
         ? rpc.threads[":id"].archive.$post({ param: { id: thread.id } })
         : rpc.threads[":id"].unarchive.$post({ param: { id: thread.id } }));
-      await rpcJson(response);
-      await fetchAllThreads();
+      parseChatThreadActionResponse(await rpcJson<unknown>(response), {
+        threadId: thread.id,
+        status: expectedStatus,
+      });
+      const space = auth.spaces.find((candidate) =>
+        candidate.id === thread.space_id
+      );
+      threadControls.mutate((current) =>
+        applyThreadLifecycleToInventory(
+          current,
+          thread,
+          expectedStatus,
+          space ? getSpaceIdentifier(space) : undefined,
+        )
+      );
+      if (archive && router.route.threadId === thread.id) {
+        navigateToChat(selectedSpaceId() ?? undefined);
+      }
       toast.showToast(
         "success",
         archive ? t("archiveThread") : t("unarchiveThread"),
       );
+      return true;
     } catch (error) {
       toast.showToast(
         "error",
         error instanceof Error ? error.message : t("failedToSave"),
       );
+      return false;
+    } finally {
+      endThreadAction(thread.id);
     }
   };
 
   const handleNewThreadCreated = (spaceId: string, thread: Thread) => {
-    setThreadsBySpace((previous) => ({
-      ...previous,
-      [spaceId]: [thread, ...(previous[spaceId] ?? [])],
-    }));
+    threadControls.mutate((current) =>
+      applyThreadLifecycleToInventory(current, thread, "active", spaceId)
+    );
   };
 
   const handleSelectThread = (thread: Thread) => {
-    const threadMap = threadsBySpaceSignal() ?? {};
+    const threadMap = threadsBySpaceSignal().threadsBySpace;
     for (const [spaceId, threads] of Object.entries(threadMap)) {
       if (threads.some((candidate) => candidate.id === thread.id)) {
         navigateToChat(spaceId, thread.id);
@@ -352,16 +451,27 @@ export const NavigationProvider: ParentComponent = (props) => {
     setShowMobileNavDrawer: mutateShowMobileNavDrawer,
     mobileNavDrawerId,
     get threadsBySpace() {
-      return threadsBySpaceSignal() ?? {};
+      return threadsBySpaceSignal().threadsBySpace;
+    },
+    get threadInventoryTruncatedBySpace() {
+      return threadsBySpaceSignal().truncatedBySpace;
+    },
+    get threadInventoryFailedBySpace() {
+      return threadsBySpaceSignal().failedBySpace;
+    },
+    get threadInventoryLoading() {
+      return threadsBySpaceSignal.loading;
     },
     setThreadsBySpace,
     get allThreads() {
       return allThreads();
     },
-    fetchAllThreads,
+    retryThreadInventory,
     handleNewThread,
     handleDeleteThread,
     toggleArchiveThread,
+    isThreadActionPending: (threadId) =>
+      pendingThreadActionIds().has(threadId),
     handleNewThreadCreated,
     handleSelectThread,
     navigateToChat,

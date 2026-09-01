@@ -1,7 +1,7 @@
 # Privacy Rights and Lawful Bases
 
 > このページでわかること: Takos Web / API で扱う data subject rights
-> handler、Cookie / localStorage の consent 境界、GDPR / CCPA 対応の法的根拠。
+> handler、Cookie / localStorage の利用境界、GDPR / CCPA 対応の法的根拠。
 
 | Field         | Value                                                   |
 | ------------- | ------------------------------------------------------- |
@@ -75,20 +75,26 @@ handling として同じ processing inventory に紐づけます。
 | Usage metering and billing handoff     | app-local usage events / rollups, Accounts billing handoff metadata                              | Contract performance; legal obligation       |
 | Security monitoring and abuse response | audit logs, revocation records, moderation / incident metadata                                   | Legitimate interests; legal obligation       |
 | Product reliability                    | error logs, performance metadata, aggregate usage                                                | Legitimate interests                         |
-| Optional preferences                   | cookie consent state, language, theme, local UI preferences                                      | Consent or user-requested preference storage |
+| Optional preferences                   | language, theme, local file-handler preferences                                                   | Contract performance or legitimate interests |
 
-## Cookie Consent
+## Cookie and Local Storage
 
-Takos Web uses essential session cookies for login. The web app does not use ad
-tracking or analytics cookies. A cookie consent banner records whether the user
-allows preference storage for language, theme, and device-local UI choices.
+Takos Web uses essential session and security cookies for login. The current
+web app does not use advertising or analytics cookies, so it does not show a
+cookie confirmation dialog or keep a separate consent record. Language, theme,
+and file-handler choices are stored only as device-local UI preferences and are
+not used as tracking identifiers.
 
-| Storage                             | Purpose                     | Consent requirement                   |
-| ----------------------------------- | --------------------------- | ------------------------------------- |
-| `__Host-tp_session` cookie          | Authenticated session       | Essential; no opt-out while logged in |
-| `takos-cookie-consent` localStorage | Consent record              | Required to remember consent choice   |
-| `takos-lang` and theme localStorage | User-selected UI preference | Optional preference storage           |
-| Analytics / advertising cookies     | Not used                    | Disabled                              |
+| Storage                                                        | Purpose                              | Current behavior                      |
+| -------------------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| `__Host-tp_session` cookie                                     | Authenticated session                | Essential; no opt-out while logged in |
+| OIDC `state` / `nonce` cookies                                 | Login-flow integrity and CSRF defense | Essential and short-lived             |
+| `takos-lang`, `takos-theme`, `takos:default-file-handlers`     | Device-local UI preferences          | Stored locally; browser-clearable     |
+| Analytics / advertising cookies                                | Not used                             | Disabled                              |
+
+An operator that adds non-essential storage or tracking must review this
+inventory and provide any notice or choice required for that deployment before
+enabling it.
 
 ## Operational Requirements
 

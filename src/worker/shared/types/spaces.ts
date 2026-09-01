@@ -1,6 +1,13 @@
-export type SpaceRole = "owner" | "admin" | "editor" | "viewer";
 export type SpaceKind = "user" | "team" | "system";
 export type SecurityPosture = "standard" | "restricted_egress";
+
+export const MAX_SPACE_ID_CHARACTERS = 128;
+export const MAX_SPACE_SLUG_CHARACTERS = 32;
+export const MAX_SPACE_NAME_CHARACTERS = 120;
+export const MAX_SPACE_DESCRIPTION_CHARACTERS = 2_000;
+export const MAX_SPACE_PRINCIPAL_ID_CHARACTERS = 128;
+export const MAX_SPACE_TIMESTAMP_CHARACTERS = 64;
+export const MAX_SPACES_PER_RESPONSE = 10_000;
 
 export interface Space {
   id: string;
@@ -18,12 +25,4 @@ export interface Space {
   security_posture?: SecurityPosture;
   created_at: string;
   updated_at: string;
-}
-
-export interface SpaceMembership {
-  id: string;
-  space_id: string;
-  principal_id: string;
-  role: SpaceRole;
-  created_at: string;
 }

@@ -1,6 +1,8 @@
 # Takos をセルフホストする
 
-Takos はTakoform対応hostまたは自分のCloudflareアカウントへ配置できます。このリポジトリの `deploy/opentofu/takoform` と `deploy/opentofu/cloudflare` が、同じproduct resource contractをそれぞれのproviderへ写します。
+TakosはTakoform対応hostまたは自分のCloudflare accountへ配置できます。この
+リポジトリの`deploy/opentofu/takoform`と`deploy/opentofu/cloudflare`が、同じ
+product resource contractをそれぞれのtargetへ写します。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
@@ -18,17 +20,22 @@ Takos はTakoform対応hostまたは自分のCloudflareアカウントへ配置�
 
 OpenTofu はリソースと Worker に渡す binding を作ります。Worker のコードは、この binding を使って起動します。
 
-## Takosumi は必須か
+## Takosumi integrationはoptional
 
-OpenTofu モジュール自体は標準的な IaC です。運用者が自分の方法で `tofu plan` / `tofu apply` を実行できます。
+OpenTofu module自体は標準的なIaCで、運用者が自分の方法で`tofu plan` / `tofu
+apply`を実行できます。その場合もChat、agent、Memory、app-local Workspaceは
+動きます。
 
-Takosumi を使うと、Git ソース、確認済み plan、apply の結果、output、監査記録を一つの管理画面と API で扱えます。Takos 自体は、これらのデプロイ制御を実装しません。
+Takosumiを接続すると、Git source、確認済みplan、apply結果、state、output、audit、
+shared Capsule state、Interfaceを一つのauthorityで扱えます。未接続時にTakosが
+それらの代替ledgerを持つのではなく、その共有機能だけがunavailableになります。
 
 ## 必要なもの
 
 - OpenTofu 1.5 以降
 - 選択したTakoform hostへの接続、またはCloudflare direct用のアカウントと必要な権限
-- Takosumi Accounts の URL、issuer、OIDC client
+- operator-selected OIDC issuerとclient
+- shared control-plane機能を使う場合はTakosumi URL
 - Takos の公開 URL
 - Worker artifact をアップロードする手順
 - 本番用の secret を保管する仕組み
@@ -37,22 +44,18 @@ secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しない�
 
 ## 基本の流れ
 
-1. このリポジトリを tag または commit に固定する
-2. 選んだadapterの変数を確認する。Cloudflare directでは `deploy/opentofu/cloudflare/opentofu.tfvars.example` を参考にする
-3. `tofu init` と `tofu plan` を実行する
+1. このリポジトリをtagまたはcommitに固定する
+2. 選んだadapterの変数を確認する
+3. `tofu init`と`tofu plan`を実行する
 4. 作成・変更・削除と料金を確認する
-5. 確認した plan を apply する
-6. 同じ commit の Worker artifact を app-owned materializer で反映する
-7. 公開 URL、ログイン、Chat、エージェント実行を確認する
+5. 確認したplanをapplyする
+6. 同じcommitのWorker artifactをapp-owned materializerで反映する
+7. 公開URL、OIDC login、Chat、エージェント実行を確認する
 
-Cloudflareへ直接配置する例:
-
-```sh
-cd deploy/opentofu/cloudflare
-tofu init
-tofu plan -var-file=opentofu.tfvars
-tofu apply
-```
+Takosumiを使う場合は同じmoduleをSource/Capsuleとして登録し、plan/applyとevidenceを
+Takosumi Runとして管理します。local product integrationでは
+`takosumi-dev-server`を使えますが、そこでのsimulationはinfrastructure evidence
+ではありません。
 
 実際の入力名は [環境と変数](/deploy/environment) を参照してください。Worker の公開は [デプロイ手順](/deploy/deploy) に分けています。
 Takosumi lifecycle action との正確な境界は

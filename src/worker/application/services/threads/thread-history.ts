@@ -4,31 +4,34 @@ import {
   getDb,
   runEvents,
   runs,
-  sessions,
 } from "../../../infra/db/index.ts";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   AgentTask,
   ArtifactType,
   Env,
-  Run,
   RunStatus,
   ThreadHistoryArtifactSummary,
   ThreadHistoryChildRunSummary,
   ThreadHistoryEvent,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
+  ThreadHistoryRunSummary,
   ThreadHistoryTaskContext,
+  ThreadHistoryTruncation,
 } from "../../../shared/types/index.ts";
-import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
-import {
-  isValidOpaqueId,
-  textDate,
-  textDateNullable,
-} from "../../../shared/utils/db-guards.ts";
+import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 import { listThreadMessages } from "./thread-service.ts";
-import { logError } from "../../../shared/utils/logger.ts";
 import { chunkForInClause } from "../../../shared/utils/in-clause.ts";
+import {
+  CHAT_HISTORY_TRUNCATED_EVENT_DATA,
+  MAX_CHAT_HISTORY_ARTIFACTS,
+  MAX_CHAT_HISTORY_EVENT_DATA_CHARACTERS,
+  MAX_CHAT_HISTORY_EVENTS,
+  MAX_CHAT_HISTORY_RUNS,
+  MAX_CHAT_HISTORY_TELEMETRY_CHARACTERS,
+} from "takos-api-contract/chat-history";
+import { RUN_EVENT_TRUNCATED_DATA } from "../offload/run-events.ts";
 
 /**
  * Defensive cap on how many runs a single thread-history read loads from the
@@ -38,18 +41,15 @@ import { chunkForInClause } from "../../../shared/utils/in-clause.ts";
  * every open. Newest-first ordering means the cap keeps the most recent runs,
  * which is what the history view surfaces.
  */
-const MAX_THREAD_HISTORY_RUNS = 500;
-
-type PendingSessionDiffSummary = {
-  sessionId: string;
-  sessionStatus: string;
-  git_mode: boolean;
-} | null;
+export const MAX_THREAD_HISTORY_RUNS = MAX_CHAT_HISTORY_RUNS;
 
 type HistoryTaskRow = {
   id: string;
+  spaceId: string;
+  threadId: string | null;
   title: string;
   status: string;
+  terminalReason: string | null;
   priority: string;
   updatedAt: string | Date;
 };
@@ -71,16 +71,52 @@ type RunHistoryEventRow = {
   createdAt: string | Date;
 };
 
+const EVENT_QUERY_PAGE_ROWS = 128;
+
 type HistoryRunSnapshot = {
   id: string;
   status: string;
-  run: Run;
+  run: ThreadHistoryRunSummary;
 };
+
+type HistoryRunRow = {
+  id: string;
+  threadId: string;
+  accountId: string;
+  sessionId: string | null;
+  parentRunId: string | null;
+  childThreadId: string | null;
+  rootThreadId: string | null;
+  rootRunId: string | null;
+  agentType: string;
+  model: string | null;
+  status: string;
+  startedAt: string | Date | null;
+  completedAt: string | Date | null;
+  createdAt: string | Date;
+};
+
+const HISTORY_RUN_SELECTION = {
+  id: runs.id,
+  threadId: runs.threadId,
+  accountId: runs.accountId,
+  sessionId: runs.sessionId,
+  parentRunId: runs.parentRunId,
+  childThreadId: runs.childThreadId,
+  rootThreadId: runs.rootThreadId,
+  rootRunId: runs.rootRunId,
+  agentType: runs.agentType,
+  model: runs.model,
+  status: runs.status,
+  terminalReason: runs.terminalReason,
+  startedAt: runs.startedAt,
+  completedAt: runs.completedAt,
+  createdAt: runs.createdAt,
+} as const;
 
 export const threadHistoryDeps = {
   getDb,
   listThreadMessages,
-  logError,
 };
 
 const AGENT_TASK_STATUSES = new Set<AgentTask["status"]>([
@@ -89,6 +125,7 @@ const AGENT_TASK_STATUSES = new Set<AgentTask["status"]>([
   "blocked",
   "completed",
   "cancelled",
+  "failed",
 ]);
 const AGENT_TASK_PRIORITIES = new Set<AgentTask["priority"]>([
   "low",
@@ -105,7 +142,7 @@ function isAgentTaskPriority(value: string): value is AgentTask["priority"] {
   return AGENT_TASK_PRIORITIES.has(value as AgentTask["priority"]);
 }
 
-function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
+function toHistoryRunSnapshot(row: HistoryRunRow): HistoryRunSnapshot {
   const rootThreadId = row.rootThreadId ?? row.threadId;
   const rootRunId = row.rootRunId ?? row.id;
   return {
@@ -123,14 +160,10 @@ function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
       agent_type: row.agentType,
       model: row.model ?? null,
       status: row.status as RunStatus,
-      input: row.input,
-      output: row.output ?? null,
-      error: row.error ?? null,
-      usage: row.usage,
-      worker_id: row.serviceId ?? null,
-      worker_heartbeat: row.serviceHeartbeat
-        ? textDateNullable(row.serviceHeartbeat)
-        : null,
+      terminal_reason: row.terminalReason as
+        | "context_revoked"
+        | "context_invalid"
+        | null,
       started_at: row.startedAt ? textDateNullable(row.startedAt) : null,
       completed_at: row.completedAt ? textDateNullable(row.completedAt) : null,
       created_at: textDate(row.createdAt),
@@ -174,17 +207,20 @@ function toHistoryArtifact(
 }
 
 function toHistoryEvent(row: RunHistoryEventRow): ThreadHistoryEvent {
+  const dataTruncated = row.data === RUN_EVENT_TRUNCATED_DATA ||
+    row.data.length > MAX_CHAT_HISTORY_EVENT_DATA_CHARACTERS;
   return {
     id: row.id,
     run_id: row.runId,
     type: row.type,
-    data: row.data,
+    data: dataTruncated ? CHAT_HISTORY_TRUNCATED_EVENT_DATA : row.data,
+    data_truncated: dataTruncated,
     created_at: textDate(row.createdAt),
   };
 }
 
 function runHasAncestorInThread(
-  run: Run,
+  run: ThreadHistoryRunSummary,
   threadId: string,
   runsById: Map<string, { parent_run_id: string | null; thread_id: string }>,
 ): boolean {
@@ -228,7 +264,9 @@ function findThreadAnchorRunId(
   return threadRunsOldestFirst[0]?.id ?? null;
 }
 
-function toChildRunSummary(run: Run): ThreadHistoryChildRunSummary {
+function toChildRunSummary(
+  run: ThreadHistoryRunSummary,
+): ThreadHistoryChildRunSummary {
   return {
     run_id: run.id,
     thread_id: run.thread_id,
@@ -265,69 +303,24 @@ function buildThreadHistoryFocus(
   };
 }
 
-async function getPendingSessionDiff(
-  env: Env,
-  completedRunSessionIdsNewestFirst: string[],
-): Promise<PendingSessionDiffSummary> {
-  const candidateIds = completedRunSessionIdsNewestFirst.filter((id) =>
-    isValidOpaqueId(id)
-  );
-  if (candidateIds.length === 0) {
-    return null;
-  }
-
-  try {
-    const db = threadHistoryDeps.getDb(env.DB);
-    // Single (chunked) lookup instead of one SELECT per completed run; pick the
-    // first non-discarded session in newest-first run order.
-    const rows = await Promise.all(
-      chunkForInClause(candidateIds).map((chunk) =>
-        db.select({
-          id: sessions.id,
-          status: sessions.status,
-          repoId: sessions.repoId,
-        }).from(sessions).where(inArray(sessions.id, chunk)).all()
-      ),
-    ).then((batches) => batches.flat());
-    const byId = new Map(rows.map((row) => [row.id, row]));
-
-    for (const sessionId of completedRunSessionIdsNewestFirst) {
-      const session = byId.get(sessionId);
-      if (session && session.status !== "discarded") {
-        return {
-          sessionId: session.id,
-          sessionStatus: session.status,
-          git_mode: !!session.repoId,
-        };
-      }
-    }
-  } catch (err) {
-    threadHistoryDeps.logError(
-      "Failed to get session info for thread history",
-      err,
-      {
-        module: "services/threads/threads/thread-history",
-      },
-    );
-  }
-
-  return null;
-}
-
 async function getThreadHistoryTaskContext(
   env: Env,
   threadId: string,
+  spaceId: string,
 ): Promise<ThreadHistoryTaskContext | null> {
   const db = threadHistoryDeps.getDb(env.DB);
   const taskRows: HistoryTaskRow[] = await db.select({
     id: agentTasks.id,
+    spaceId: agentTasks.accountId,
+    threadId: agentTasks.threadId,
     title: agentTasks.title,
     status: agentTasks.status,
     priority: agentTasks.priority,
     updatedAt: agentTasks.updatedAt,
-  }).from(agentTasks).where(eq(agentTasks.threadId, threadId)).orderBy(
-    desc(agentTasks.updatedAt),
-  ).limit(5).all();
+  }).from(agentTasks).where(and(
+    eq(agentTasks.threadId, threadId),
+    eq(agentTasks.accountId, spaceId),
+  )).orderBy(desc(agentTasks.updatedAt)).limit(5).all();
 
   if (taskRows.length === 0) {
     return null;
@@ -345,6 +338,8 @@ async function getThreadHistoryTaskContext(
   }
   return {
     id: preferred.id,
+    space_id: preferred.spaceId,
+    thread_id: preferred.threadId ?? threadId,
     title: preferred.title,
     status: preferred.status,
     priority: preferred.priority,
@@ -357,8 +352,10 @@ export async function getThreadHistory(
   options: {
     limit: number;
     offset: number;
+    spaceId: string;
     includeMessages?: boolean;
     rootRunId?: string | null;
+    latest?: boolean;
   },
 ): Promise<{
   messages: Awaited<ReturnType<typeof listThreadMessages>>["messages"];
@@ -368,38 +365,54 @@ export async function getThreadHistory(
   runs: ThreadHistoryRunNode[];
   focus: ThreadHistoryFocus;
   activeRun: ThreadHistoryRunNode["run"] | null;
-  pendingSessionDiff: PendingSessionDiffSummary;
   taskContext: ThreadHistoryTaskContext | null;
+  truncation: ThreadHistoryTruncation;
 }> {
   const includeMessages = options.includeMessages !== false;
   const rootRunId = options.rootRunId?.trim() || null;
-  const { messages, total } = includeMessages
+  const messagePage = includeMessages
     ? await threadHistoryDeps.listThreadMessages(
       env,
       env.DB,
       threadId,
       options.limit,
       options.offset,
+      { latest: options.latest },
     )
-    : { messages: [], total: 0 };
+    : {
+      messages: [],
+      total: 0,
+      offset: options.offset,
+      messageDataTruncated: false,
+    };
   const db = threadHistoryDeps.getDb(env.DB);
 
-  const threadRunRows = await db.select().from(runs)
-    .where(eq(runs.threadId, threadId))
+  const rawThreadRunRows = await db.select(HISTORY_RUN_SELECTION).from(runs)
+    .where(and(
+      eq(runs.threadId, threadId),
+      eq(runs.accountId, options.spaceId),
+    ))
     .orderBy(desc(runs.createdAt), desc(runs.id))
-    .limit(MAX_THREAD_HISTORY_RUNS)
+    .limit(MAX_THREAD_HISTORY_RUNS + 1)
     .all();
+  const threadRunsTruncated = rawThreadRunRows.length > MAX_THREAD_HISTORY_RUNS;
+  const threadRunRows = rawThreadRunRows.slice(0, MAX_THREAD_HISTORY_RUNS);
   const threadRunsNewestFirst = threadRunRows.map((row) =>
     toHistoryRunSnapshot(row)
   );
   const effectiveRootThreadId = threadRunsNewestFirst[0]?.run.root_thread_id ??
     threadId;
 
-  const allRootRunRows = await db.select().from(runs)
-    .where(eq(runs.rootThreadId, effectiveRootThreadId))
+  const rawRootRunRows = await db.select(HISTORY_RUN_SELECTION).from(runs)
+    .where(and(
+      eq(runs.rootThreadId, effectiveRootThreadId),
+      eq(runs.accountId, options.spaceId),
+    ))
     .orderBy(desc(runs.createdAt), desc(runs.id))
-    .limit(MAX_THREAD_HISTORY_RUNS)
+    .limit(MAX_THREAD_HISTORY_RUNS + 1)
     .all();
+  const rootRunsTruncated = rawRootRunRows.length > MAX_THREAD_HISTORY_RUNS;
+  const allRootRunRows = rawRootRunRows.slice(0, MAX_THREAD_HISTORY_RUNS);
   const allRunsNewestFirst = allRootRunRows.map((row) =>
     toHistoryRunSnapshot(row)
   );
@@ -428,12 +441,20 @@ export async function getThreadHistory(
   // tree) must be split into ≤90-id batches or a normal history read 500s. Each
   // runId falls entirely within one batch, so per-run event/artifact ordering is
   // preserved when the batches are concatenated and grouped by run_id below.
-  const artifactRowsPromise: Promise<RunHistoryArtifactRow[]> = runIds.length ===
-      0
-    ? Promise.resolve([])
-    : Promise.all(
-      chunkForInClause(runIds).map((chunk) =>
-        db.select({
+  const loadArtifactRows = async (): Promise<{
+    rows: RunHistoryArtifactRow[];
+    truncated: boolean;
+  }> => {
+    const rows: RunHistoryArtifactRow[] = [];
+    for (const chunk of chunkForInClause(runIds)) {
+      const remaining = MAX_CHAT_HISTORY_ARTIFACTS + 1 - rows.length;
+      if (remaining <= 0) {
+        return {
+          rows: rows.slice(0, MAX_CHAT_HISTORY_ARTIFACTS),
+          truncated: true,
+        };
+      }
+      const batch = await db.select({
           id: artifacts.id,
           runId: artifacts.runId,
           type: artifacts.type,
@@ -441,57 +462,121 @@ export async function getThreadHistory(
           fileId: artifacts.fileId,
           createdAt: artifacts.createdAt,
         }).from(artifacts).where(inArray(artifacts.runId, chunk)).orderBy(
-          asc(artifacts.createdAt),
-          asc(artifacts.id),
-        ).all()
-      ),
-    ).then((batches) => batches.flat());
-  const eventRowsPromise: Promise<RunHistoryEventRow[]> = runIds.length === 0
-    ? Promise.resolve([])
-    : Promise.all(
-      chunkForInClause(runIds).map((chunk) =>
-        db.select({
+          desc(artifacts.createdAt),
+          desc(artifacts.id),
+        ).limit(remaining).all();
+      rows.push(...batch);
+      if (rows.length > MAX_CHAT_HISTORY_ARTIFACTS) {
+        return {
+          rows: rows.slice(0, MAX_CHAT_HISTORY_ARTIFACTS),
+          truncated: true,
+        };
+      }
+    }
+    return { rows, truncated: false };
+  };
+
+  const loadEvents = async (): Promise<{
+    events: ThreadHistoryEvent[];
+    truncated: boolean;
+    dataTruncated: boolean;
+  }> => {
+    const events: ThreadHistoryEvent[] = [];
+    let eventCharacters = 0;
+    let dataTruncated = false;
+
+    for (const chunk of chunkForInClause(runIds)) {
+      let offset = 0;
+      if (events.length === MAX_CHAT_HISTORY_EVENTS) {
+        const overflow = await db.select({ id: runEvents.id })
+          .from(runEvents)
+          .where(inArray(runEvents.runId, chunk))
+          .limit(1)
+          .all();
+        if (overflow.length > 0) {
+          return { events, truncated: true, dataTruncated };
+        }
+        continue;
+      }
+      while (events.length < MAX_CHAT_HISTORY_EVENTS) {
+        const remaining = MAX_CHAT_HISTORY_EVENTS + 1 - events.length;
+        const pageLimit = Math.min(EVENT_QUERY_PAGE_ROWS, remaining);
+        const batch: RunHistoryEventRow[] = await db.select({
           id: runEvents.id,
           runId: runEvents.runId,
           type: runEvents.type,
-          data: runEvents.data,
+          data: sql<string>`substr(${runEvents.data}, 1, ${
+            MAX_CHAT_HISTORY_EVENT_DATA_CHARACTERS + 1
+          })`,
           createdAt: runEvents.createdAt,
         }).from(runEvents).where(inArray(runEvents.runId, chunk)).orderBy(
-          asc(runEvents.createdAt),
-          asc(runEvents.id),
-        ).all()
-      ),
-    ).then((batches) => batches.flat());
+          desc(runEvents.createdAt),
+          desc(runEvents.id),
+        ).limit(pageLimit).offset(offset).all();
+        if (batch.length === 0) break;
 
-  const [artifactRows, eventRows, taskContext, pendingSessionDiff] =
-    await Promise.all([
-      artifactRowsPromise,
-      eventRowsPromise,
-      getThreadHistoryTaskContext(env, threadId),
-      getPendingSessionDiff(
-        env,
-        runsNewestFirst.flatMap((row) =>
-          row.run.status === "completed" && row.run.session_id
-            ? [row.run.session_id]
-            : []
-        ),
-      ),
+        for (const row of batch) {
+          if (events.length === MAX_CHAT_HISTORY_EVENTS) {
+            return { events, truncated: true, dataTruncated };
+          }
+          const event = toHistoryEvent(row);
+          const nextCharacters = eventCharacters + event.type.length +
+            event.data.length;
+          if (nextCharacters > MAX_CHAT_HISTORY_TELEMETRY_CHARACTERS) {
+            return { events, truncated: true, dataTruncated };
+          }
+          dataTruncated ||= event.data_truncated;
+          eventCharacters = nextCharacters;
+          events.push(event);
+        }
+
+        offset += batch.length;
+        if (batch.length < pageLimit) break;
+        if (events.length === MAX_CHAT_HISTORY_EVENTS) {
+          const overflow = await db.select({ id: runEvents.id })
+            .from(runEvents)
+            .where(inArray(runEvents.runId, chunk))
+            .limit(1)
+            .offset(offset)
+            .all();
+          if (overflow.length > 0) {
+            return { events, truncated: true, dataTruncated };
+          }
+          break;
+        }
+      }
+    }
+    return { events, truncated: false, dataTruncated };
+  };
+
+  const [artifactResult, eventResult, taskContext] = await Promise.all([
+      loadArtifactRows(),
+      loadEvents(),
+      getThreadHistoryTaskContext(env, threadId, options.spaceId),
     ]);
 
   const artifactsByRunId = new Map<string, ThreadHistoryArtifactSummary[]>();
-  for (const row of artifactRows) {
+  for (const row of artifactResult.rows) {
     const artifact = toHistoryArtifact(row);
     const list = artifactsByRunId.get(artifact.run_id) ?? [];
     list.push(artifact);
     artifactsByRunId.set(artifact.run_id, list);
   }
+  for (const list of artifactsByRunId.values()) {
+    list.sort((left, right) =>
+      left.created_at.localeCompare(right.created_at) ||
+      left.id.localeCompare(right.id)
+    );
+  }
 
   const eventsByRunId = new Map<string, ThreadHistoryEvent[]>();
-  for (const row of eventRows) {
-    const event = toHistoryEvent(row);
+  for (const event of eventResult.events) {
     const list = eventsByRunId.get(event.run_id) ?? [];
     list.push(event);
     eventsByRunId.set(event.run_id, list);
+  }
+  for (const list of eventsByRunId.values()) {
+    list.sort((left, right) => left.id - right.id);
   }
 
   const childRunsByParentId = new Map<string, ThreadHistoryChildRunSummary[]>();
@@ -551,16 +636,23 @@ export async function getThreadHistory(
     row.run.status === "pending" || row.run.status === "queued" ||
     row.run.status === "running"
   ))?.run ?? null;
+  const truncation: ThreadHistoryTruncation = {
+    message_data: messagePage.messageDataTruncated,
+    runs: threadRunsTruncated || rootRunsTruncated,
+    artifacts: artifactResult.truncated,
+    events: eventResult.truncated,
+    event_data: eventResult.dataTruncated,
+  };
 
   return {
-    messages,
-    total,
+    messages: messagePage.messages,
+    total: messagePage.total,
     limit: options.limit,
-    offset: options.offset,
+    offset: messagePage.offset,
     runs: runNodes,
     focus,
     activeRun,
-    pendingSessionDiff,
     taskContext,
+    truncation,
   };
 }

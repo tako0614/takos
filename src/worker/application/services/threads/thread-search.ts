@@ -1,6 +1,8 @@
-import { getDb, messages, threads } from "../../../infra/db/index.ts";
+import { accounts, getDb, messages, threads } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import {
+  buildThreadMessageVectorId,
+  parseThreadMessageVectorReference,
   queryRelevantThreadMessages,
   THREAD_MESSAGE_VECTOR_KIND,
 } from "../agent/index.ts";
@@ -13,6 +15,8 @@ export const threadSearchDeps = {
   queryRelevantThreadMessages,
   logWarn,
 };
+
+export type ThreadSearchType = "all" | "keyword" | "semantic";
 
 function buildSnippet(
   content: string,
@@ -46,7 +50,7 @@ export async function searchSpaceThreads(options: {
   env: Env;
   spaceId: string;
   query: string;
-  type: string;
+  type: ThreadSearchType;
   limit: number;
   offset: number;
 }) {
@@ -81,84 +85,87 @@ export async function searchSpaceThreads(options: {
       const queryEmbedding = embed?.data?.[0];
       if (queryEmbedding) {
         const search = await vectorize.query(queryEmbedding, {
-          topK: Math.max(10, limit * 2),
+          // returnMetadata="all" is capped at 50 by Vectorize. Keep the
+          // query within that platform boundary before it reaches production.
+          topK: Math.min(50, Math.max(10, limit * 2)),
           filter: { kind: THREAD_MESSAGE_VECTOR_KIND, spaceId },
           returnMetadata: "all",
         }) as {
           matches: Array<{ id: string; score: number; metadata?: unknown }>;
         };
 
-        const matches = (search.matches || []).filter((match) =>
-          typeof match.score === "number"
-        );
-        const threadIds = Array.from(
+        const matches = (search.matches || [])
+          .map((match) =>
+            parseThreadMessageVectorReference(match, { spaceId })
+          )
+          .filter((match) => match !== null);
+        const messageIds = Array.from(
           new Set(
-            matches
-              .map((match) =>
-                (match.metadata as { threadId?: string })?.threadId
-              )
-              .filter((value: unknown): value is string =>
-                typeof value === "string" && value.length > 0
-              ),
+            matches.map((match) => match.messageId),
           ),
         );
-        const threadRows = threadIds.length > 0
+        const canonicalRows = messageIds.length > 0
           ? await db.select({
-            id: threads.id,
-            title: threads.title,
-            status: threads.status,
-            createdAt: threads.createdAt,
-            updatedAt: threads.updatedAt,
-          }).from(threads)
+            messageId: messages.id,
+            messageThreadId: messages.threadId,
+            messageRole: messages.role,
+            messageContent: messages.content,
+            messageSequence: messages.sequence,
+            messageCreatedAt: messages.createdAt,
+            threadId: threads.id,
+            threadTitle: threads.title,
+            threadStatus: threads.status,
+            threadCreatedAt: threads.createdAt,
+            threadUpdatedAt: threads.updatedAt,
+          }).from(messages)
+            .innerJoin(threads, eq(messages.threadId, threads.id))
+            .innerJoin(accounts, eq(threads.accountId, accounts.id))
             .where(
               and(
-                inArray(threads.id, threadIds),
+                inArray(messages.id, messageIds),
                 eq(threads.accountId, spaceId),
+                ne(threads.status, "deleted"),
+                eq(accounts.status, "active"),
+                inArray(messages.role, ["user", "assistant", "tool"]),
               ),
             )
             .all()
           : [];
-        const threadMap = new Map(
-          threadRows.map((thread) => [thread.id, thread]),
+        const messageMap = new Map(
+          canonicalRows.map((row) => [row.messageId, row]),
         );
 
         for (const match of matches) {
-          const meta = (match.metadata || {}) as Record<string, unknown>;
-          const threadId = typeof meta.threadId === "string"
-            ? meta.threadId
-            : "";
-          const messageId = typeof meta.messageId === "string"
-            ? meta.messageId
-            : "";
-          const sequence = typeof meta.sequence === "number"
-            ? meta.sequence
-            : typeof meta.sequence === "string"
-            ? Number.parseInt(meta.sequence, 10)
-            : NaN;
-          if (!threadId || !messageId || !Number.isFinite(sequence)) continue;
-
-          const thread = threadMap.get(threadId);
-          if (!thread || thread.status === "deleted") continue;
+          const row = messageMap.get(match.messageId);
+          if (
+            !row || row.messageThreadId !== match.threadId ||
+            row.messageSequence !== match.sequence ||
+            match.id !== buildThreadMessageVectorId(
+              spaceId,
+              row.messageThreadId,
+              row.messageSequence,
+            )
+          ) {
+            continue;
+          }
 
           results.push({
             kind: "semantic",
             score: match.score,
             thread: {
-              id: thread.id,
-              title: thread.title,
-              status: thread.status as ThreadStatus,
-              created_at: thread.createdAt,
-              updated_at: thread.updatedAt,
+              id: row.threadId,
+              title: row.threadTitle,
+              status: row.threadStatus as ThreadStatus,
+              created_at: row.threadCreatedAt,
+              updated_at: row.threadUpdatedAt,
             },
             message: {
-              id: messageId,
-              sequence,
-              role: typeof meta.role === "string" ? meta.role : "unknown",
-              created_at: typeof meta.createdAt === "string"
-                ? meta.createdAt
-                : "",
+              id: row.messageId,
+              sequence: row.messageSequence,
+              role: row.messageRole,
+              created_at: row.messageCreatedAt,
             },
-            snippet: typeof meta.content === "string" ? meta.content : "",
+            snippet: buildSnippet(row.messageContent, "").snippet,
             match: null,
           });
 
@@ -174,62 +181,49 @@ export async function searchSpaceThreads(options: {
   }
 
   if (type === "keyword" || type === "all") {
-    // Find threads in the space that are not deleted
-    const spaceThreads = await db.select({
-      id: threads.id,
-      title: threads.title,
-      status: threads.status,
-      createdAt: threads.createdAt,
-      updatedAt: threads.updatedAt,
-    }).from(threads)
-      .where(and(eq(threads.accountId, spaceId), ne(threads.status, "deleted")))
+    const messageRows = await db.select({
+      messageId: messages.id,
+      messageRole: messages.role,
+      messageContent: messages.content,
+      messageSequence: messages.sequence,
+      messageCreatedAt: messages.createdAt,
+      threadId: threads.id,
+      threadTitle: threads.title,
+      threadStatus: threads.status,
+      threadCreatedAt: threads.createdAt,
+      threadUpdatedAt: threads.updatedAt,
+    }).from(messages)
+      .innerJoin(threads, eq(messages.threadId, threads.id))
+      .where(and(
+        eq(threads.accountId, spaceId),
+        ne(threads.status, "deleted"),
+        sql`instr(lower(${messages.content}), lower(${query})) > 0`,
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit)
+      .offset(offset)
       .all();
 
-    if (spaceThreads.length > 0) {
-      const threadIds = spaceThreads.map((t) => t.id);
-      const threadMap = new Map(spaceThreads.map((t) => [t.id, t]));
-
-      const messageRows = await db.select({
-        id: messages.id,
-        role: messages.role,
-        content: messages.content,
-        sequence: messages.sequence,
-        createdAt: messages.createdAt,
-        threadId: messages.threadId,
-      }).from(messages)
-        .where(and(
-          inArray(messages.threadId, threadIds),
-          sql`instr(lower(${messages.content}), lower(${query})) > 0`,
-        ))
-        .orderBy(desc(messages.createdAt))
-        .limit(limit)
-        .offset(offset)
-        .all();
-
-      for (const message of messageRows) {
-        const thread = threadMap.get(message.threadId);
-        if (!thread) continue;
-
-        const snippet = buildSnippet(message.content, query);
-        results.push({
-          kind: "keyword",
-          thread: {
-            id: thread.id,
-            title: thread.title,
-            status: thread.status as ThreadStatus,
-            created_at: thread.createdAt,
-            updated_at: thread.updatedAt,
-          },
-          message: {
-            id: message.id,
-            sequence: message.sequence,
-            role: message.role,
-            created_at: message.createdAt,
-          },
-          snippet: snippet.snippet,
-          match: snippet.match,
-        });
-      }
+    for (const row of messageRows) {
+      const snippet = buildSnippet(row.messageContent, query);
+      results.push({
+        kind: "keyword",
+        thread: {
+          id: row.threadId,
+          title: row.threadTitle,
+          status: row.threadStatus as ThreadStatus,
+          created_at: row.threadCreatedAt,
+          updated_at: row.threadUpdatedAt,
+        },
+        message: {
+          id: row.messageId,
+          sequence: row.messageSequence,
+          role: row.messageRole,
+          created_at: row.messageCreatedAt,
+        },
+        snippet: snippet.snippet,
+        match: snippet.match,
+      });
     }
   }
 
@@ -256,7 +250,7 @@ export async function searchThreadMessages(options: {
   spaceId: string;
   threadId: string;
   query: string;
-  type: string;
+  type: ThreadSearchType;
   limit: number;
   offset: number;
 }) {

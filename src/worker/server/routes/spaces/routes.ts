@@ -33,13 +33,82 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { threads } from "../../../infra/db/schema.ts";
 import {
   BadRequestError,
+  ConflictError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  MAX_SPACE_DESCRIPTION_CHARACTERS,
+  MAX_SPACE_NAME_CHARACTERS,
+} from "../../../shared/types/index.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import {
+  CLIENT_OPERATION_ID_PATTERN,
+} from "../../../shared/utils/client-operation-id.ts";
+import { InMemoryRateLimiter } from "../../../shared/utils/rate-limiter.ts";
 
 const VALID_SECURITY_POSTURES = ["standard", "restricted_egress"] as const;
 const VALID_MODEL_BACKENDS = ["openai", "anthropic", "google"] as const;
 type ModelBackend = (typeof VALID_MODEL_BACKENDS)[number];
+
+const workspaceNameSchema = z.string().trim().min(1).max(
+  MAX_SPACE_NAME_CHARACTERS,
+);
+const workspaceExportQuerySchema = z.object({
+  limit: z.string().regex(/^[1-9]\d{0,3}$/).optional(),
+  offset: z.string().regex(/^(0|[1-9]\d{0,9})$/).optional(),
+}).strict();
+
+export const workspaceCreateSchema = z
+  .object({
+    name: workspaceNameSchema,
+    description: z.string().trim().max(MAX_SPACE_DESCRIPTION_CHARACTERS)
+      .optional(),
+    installFeaturedApps: z.boolean().optional(),
+    idempotency_key: z.string().regex(CLIENT_OPERATION_ID_PATTERN),
+  })
+  .strict();
+
+export const workspaceCreateLimiter = new InMemoryRateLimiter({
+  maxRequests: 10,
+  windowMs: 60_000,
+  keyGenerator: (c) => {
+    const user = (c.get as (key: "user") => { id?: string } | undefined)(
+      "user",
+    );
+    return user?.id || "unknown";
+  },
+  message: "Too many Workspace creation attempts.",
+});
+
+export const workspaceDeleteSchema = z.object({
+  workspace_name: workspaceNameSchema,
+  idempotency_key: z.string().regex(CLIENT_OPERATION_ID_PATTERN),
+}).strict();
+
+export const workspaceDeleteLimiter = new InMemoryRateLimiter({
+  maxRequests: 10,
+  windowMs: 60_000,
+  keyGenerator: (c) => {
+    const user = (c.get as (key: "user") => { id?: string } | undefined)(
+      "user",
+    );
+    return user?.id || "unknown";
+  },
+  message: "Too many Workspace deletion attempts.",
+});
+
+export const workspacePatchSchema = z
+  .object({
+    name: workspaceNameSchema.optional(),
+    description: z.string().trim().max(MAX_SPACE_DESCRIPTION_CHARACTERS)
+      .nullable().optional(),
+    ai_model: z.string().trim().min(1).max(256).optional(),
+    ai_provider: z.string().trim().min(1).max(32).optional(),
+    model_backend: z.string().trim().min(1).max(32).optional(),
+    security_posture: z.enum(VALID_SECURITY_POSTURES).optional(),
+  })
+  .strict();
 
 function normalizeModelBackendInput(
   modelBackend?: string | null,
@@ -142,14 +211,10 @@ export default new Hono<AuthenticatedRouteEnv>()
   })
   .post(
     "/",
+    workspaceCreateLimiter.middleware(),
     zValidator(
       "json",
-      z.object({
-        name: z.string(),
-        id: z.string().optional(),
-        description: z.string().optional(),
-        installFeaturedApps: z.boolean().optional(),
-      }),
+      workspaceCreateSchema,
     ),
     async (c) => {
       const user = c.get("user");
@@ -165,7 +230,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           user.id,
           body.name.trim(),
           {
-            id: body.id,
+            idempotencyKey: body.idempotency_key,
             description: body.description,
             installFeaturedApps: body.installFeaturedApps ?? false,
           },
@@ -173,6 +238,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
         return c.json({ space: toWorkspaceResponse(workspace) }, 201);
       } catch (err) {
+        if (err instanceof ConflictError) throw err;
         const message =
           err instanceof Error ? err.message : "Failed to create space";
         throw new BadRequestError(message);
@@ -190,72 +256,80 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     return c.json({
       space: toWorkspaceResponse(access.space),
-      role: access.membership.role,
     });
   })
   .get("/:spaceId", spaceAccess(), async (c) => {
-    const { space, membership } = c.get("access");
-
-    return c.json({
-      space: toWorkspaceResponse(space),
-      role: membership.role,
-    });
-  })
-  .get("/:spaceId/export", spaceAccess(), async (c) => {
     const { space } = c.get("access");
 
-    const db = getDb(c.env.DB);
-
-    const threadRows = await db
-      .select({
-        id: threads.id,
-        title: threads.title,
-        status: threads.status,
-        updatedAt: threads.updatedAt,
-      })
-      .from(threads)
-      .where(
-        and(eq(threads.accountId, space.id), ne(threads.status, "deleted")),
-      )
-      .orderBy(desc(threads.updatedAt))
-      .all();
-
-    const exportedAt = new Date().toISOString();
-
     return c.json({
       space: toWorkspaceResponse(space),
-      exported_at: exportedAt,
-      threads: threadRows.map((thread) => ({
-        id: thread.id,
-        title: thread.title,
-        status: thread.status,
-        updated_at: thread.updatedAt,
-        export_url: `/api/threads/${thread.id}/export`,
-        method: "GET" as const,
-        formats: ["markdown", "json", "pdf"] as const,
-      })),
-      counts: {
-        threads: threadRows.length,
-      },
     });
   })
+  .get(
+    "/:spaceId/export",
+    spaceAccess(),
+    zValidator("query", workspaceExportQuerySchema),
+    async (c) => {
+      const { space } = c.get("access");
+      const { limit, offset } = parsePagination(c.req.valid("query"), {
+        limit: 100,
+        maxLimit: 100,
+      });
+
+      const db = getDb(c.env.DB);
+
+      const threadPage = await db
+        .select({
+          id: threads.id,
+          title: threads.title,
+          status: threads.status,
+          updatedAt: threads.updatedAt,
+        })
+        .from(threads)
+        .where(
+          and(eq(threads.accountId, space.id), ne(threads.status, "deleted")),
+        )
+        .orderBy(desc(threads.updatedAt))
+        .limit(limit + 1)
+        .offset(offset)
+        .all();
+      const hasMore = threadPage.length > limit;
+      const threadRows = threadPage.slice(0, limit);
+
+      const exportedAt = new Date().toISOString();
+
+      return c.json({
+        space: toWorkspaceResponse(space),
+        exported_at: exportedAt,
+        threads: threadRows.map((thread) => ({
+          id: thread.id,
+          title: thread.title,
+          status: thread.status,
+          updated_at: thread.updatedAt,
+          export_url: `/api/threads/${thread.id}/export`,
+          method: "GET" as const,
+          formats: ["markdown", "json"] as const,
+        })),
+        counts: {
+          threads: threadRows.length,
+        },
+        pagination: {
+          limit,
+          offset,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + threadRows.length : null,
+        },
+      });
+    },
+  )
   .patch(
     "/:spaceId",
     spaceAccess({
-      roles: ["owner", "admin"],
-      message: "Space not found or insufficient permissions",
+      message: "Workspace not found",
     }),
     zValidator(
       "json",
-      z
-        .object({
-          name: z.string().optional(),
-          ai_model: z.string().optional(),
-          ai_provider: z.string().optional(),
-          model_backend: z.string().optional(),
-          security_posture: z.enum(VALID_SECURITY_POSTURES).optional(),
-        })
-        .strict(),
+      workspacePatchSchema,
     ),
     async (c) => {
       const { space } = c.get("access");
@@ -267,6 +341,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       const updates: {
         name?: string;
+        description?: string | null;
         ai_model?: string;
         model_backend?: string;
         security_posture?: "standard" | "restricted_egress";
@@ -274,6 +349,10 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       if (body.name && body.name.trim().length > 0) {
         updates.name = body.name.trim();
+      }
+
+      if (body.description !== undefined) {
+        updates.description = body.description;
       }
 
       if (body.ai_model) {
@@ -340,8 +419,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .patch(
     "/:spaceId/model",
     spaceAccess({
-      roles: ["owner", "admin"],
-      message: "Space not found or insufficient permissions",
+      message: "Workspace not found",
     }),
     zValidator(
       "json",
@@ -402,16 +480,22 @@ export default new Hono<AuthenticatedRouteEnv>()
   )
   .delete(
     "/:spaceId",
-    spaceAccess({
-      roles: ["owner"],
-      message: "Space not found or insufficient permissions",
-    }),
+    workspaceDeleteLimiter.middleware(),
+    zValidator("json", workspaceDeleteSchema),
     async (c) => {
-      const { space } = c.get("access");
+      const user = c.get("user");
+      const body = c.req.valid("json");
+      const receipt = await deleteWorkspace(
+        c.env,
+        user.id,
+        c.req.param("spaceId"),
+        {
+          workspaceName: body.workspace_name,
+          idempotencyKey: body.idempotency_key,
+        },
+      );
 
-      await deleteWorkspace(c.env, space.id);
-
-      return c.json({ success: true });
+      return c.json({ success: true, ...receipt });
     },
   )
   .get("/:spaceId/sidebar-items", spaceAccess(), async (c) => {

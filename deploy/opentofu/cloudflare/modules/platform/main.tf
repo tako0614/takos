@@ -29,8 +29,8 @@ terraform {
 #
 # Running this module through Takosumi adds the Workspace / Project / Capsule /
 # Run / StateVersion / Output ledger, policy decisions, audit trail, and
-# dashboard. Takos has no architectural privilege there: it is one plain
-# OpenTofu module app.
+# dashboard. Direct OpenTofu execution remains supported for standalone Takos;
+# it does not create a second Takosumi-compatible control-plane ledger.
 
 locals {
   name                 = var.project_name

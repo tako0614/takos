@@ -136,12 +136,6 @@ export function isFeaturedAppCatalogInvalidError(
   return error instanceof FeaturedAppCatalogInvalidError;
 }
 
-export function isFeaturedAppCatalogConfigError(
-  error: unknown,
-): boolean {
-  return error instanceof FeaturedAppCatalogInvalidError;
-}
-
 export function hasFeaturedAppCatalogEnvOverride(
   env: FeaturedAppCatalogEnv,
 ): boolean {

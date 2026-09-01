@@ -34,6 +34,8 @@ export const agent = {
   taskPriority: "優先度",
   taskAgentType: "エージェント種別",
   taskModel: "モデル",
+  taskModelDefault: "Workspace の既定モデル",
+  taskModelDefaultCurrent: "Workspace の既定モデル（{model}）",
   taskDueDate: "期限",
   taskDueLabel: "期限",
   taskAgentLabel: "エージェント",
@@ -81,16 +83,20 @@ export const agent = {
 
   // Model Settings
   modelBackend: "モデルバックエンド",
+  modelSelection: "既定モデル",
   saveModelSettings: "モデル設定を保存",
   modelSettingsSaved: "モデル設定を保存しました",
   modelSettingsFailed: "モデル設定の保存に失敗しました",
   tokenLimitLabel: "会話履歴トークン上限",
   tokenLimitValue: "{count}k トークン",
+  workspaceReadOnly: "この Workspace は読み取り専用です。",
 
   // Skills / Agent tabs
   skills: "スキル",
   memory: "メモリ",
   model: "モデル",
+  modelCatalogLoading: "モデルを読み込み中...",
+  modelCatalogUnavailable: "モデルを読み込めません",
   work: "ワーク",
   noSkills: "スキルがありません",
   skillsEmptyHint: "カスタムスキルを作成してエージェントの機能を拡張できます",
@@ -104,6 +110,9 @@ export const agent = {
   skillDescriptionPlaceholder: "このスキルの説明...",
   skillInstructions: "指示",
   skillInstructionsPlaceholder: "AIへの指示をマークダウンで記述...",
+  skillInstructionsBytes: "{count} / {limit} バイト",
+  skillInstructionsTooLarge:
+    "指示は {count} バイトです。上限は {limit} バイトです。",
   skillTriggers: "トリガー（任意）",
   skillTriggersPlaceholder: "キーワード1, キーワード2",
   skillTriggersHint: "カンマ区切りで入力",
@@ -123,12 +132,20 @@ export const agent = {
   skillDurableOutputs: "永続出力",
   skillOutputModes: "出力モード",
   skillRequiredMcpServers: "必須MCPサーバー",
-  skillTemplateIds: "テンプレートID",
+  skillTemplateIds: "オンデマンド資料",
+  skillResources: "オンデマンド資料",
+  skillResourcesHint:
+    "{count} / {limit} 件を選択中。Agentは必要になった資料だけを読み込みます。",
+  skillResourcesEmpty: "現在選択できる資料はありません。",
+  skillResourceUnavailable:
+    "この資料は現在のカタログにありません。チェックを外すと削除できます。",
+  skillResourcesTooMany: "オンデマンド資料は最大{limit}件まで選択できます。",
+  skillResourcesDuplicate: "同じオンデマンド資料を重複して選択できません。",
   skillContractTools: "ツール",
   skillContractOutputs: "出力",
   skillContractModes: "モード",
   skillContractMcp: "MCP",
-  skillContractTemplates: "テンプレート",
+  skillContractTemplates: "資料",
   managed: "管理対象",
   none: "なし",
   skillEnabled: "有効",
@@ -169,6 +186,8 @@ export const agent = {
   memoryCategory: "カテゴリ（任意）",
   memoryCategoryPlaceholder: "プロジェクト, 好み, etc.",
   memoryCreated: "メモリを作成しました",
+  editMemory: "メモリを編集",
+  memoryUpdated: "メモリを更新しました",
 
   // Reminder Creation
   createReminder: "リマインダーを作成",
@@ -184,4 +203,6 @@ export const agent = {
   priorityHigh: "高",
   priorityCritical: "重大",
   reminderCreated: "リマインダーを作成しました",
+  editReminder: "リマインダーを編集",
+  reminderUpdated: "リマインダーを更新しました",
 } as const;

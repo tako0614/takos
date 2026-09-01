@@ -9,6 +9,7 @@ import {
   UI_SURFACE_INTERFACE_TYPE,
   UI_SURFACE_OPEN_PERMISSION,
 } from "takosumi-contract";
+import { asRecord as readRecord } from "../../../shared/utils/guards.ts";
 import {
   takosumiSessionApiUrl,
   takosumiWorkspaceUiSurfacesPath,
@@ -52,12 +53,6 @@ const MAX_INTERFACE_ACCESS_TOKEN_LENGTH = 8_192;
 const MAX_UI_SURFACE_PAGES = 64;
 const MAX_UI_SURFACE_TOTAL_BYTES = 8 * 1024 * 1024;
 const MAX_UI_SURFACE_ITEMS = 512;
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 function readString(value: unknown): string | null {
   if (typeof value !== "string") return null;

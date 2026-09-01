@@ -19,6 +19,7 @@ import {
   UI_SURFACE_INTERFACE_VERSION,
   UI_SURFACE_OPEN_PERMISSION,
 } from "takosumi-contract";
+import { asRecord as readRecord } from "../../../shared/utils/guards.ts";
 
 /**
  * Takos launcher/service presentation derived from authorized Takosumi
@@ -65,12 +66,6 @@ function readyService(
     secret_configured: false,
     token_expires_at: null,
   };
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function readString(value: unknown): string | null {

@@ -7,11 +7,11 @@ Takos は Takosumi に Capsule / Run / StateVersion / Output として deploy �
 credential、runtime-agent runtime handler、ProviderConnection / ProviderBinding / policy で解決する provider
 allowlist は Takosumi deploy-control plane の ProviderConnection / ProviderBinding / policy の責務です。
 
-## Source of truth
+## 正とする情報
 
 - `../takosumi` は Takosumi public contract、OpenTofu-native deploy control
   API、Capsule / Run / StateVersion / Output の run
-  ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を消費する。
+  ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を読み込む。
 - `takos/deploy/cloudflare` と `takos/deploy/opentofu/cloudflare` は direct
   Cloudflare adapter の artifact を所有する。`takos/deploy/opentofu/takoform`
   は同じ中立resource contractをTakoform対応hostへ写す。

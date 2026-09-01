@@ -6,7 +6,12 @@ adapter, not a second Takos architecture and not a Takosumi-only execution
 path.
 
 The Worker archive and relational schema bundle are pinned to immutable public
-Takos bytes. The only container is the bounded `takos-agent` execution service;
+Takos bytes from the same `worker_release_tag`. The default pins belong to the
+published `v0.12.0` release; regenerating the tracked source bundle does not
+silently move those release defaults. When selecting another Worker release,
+set `database_schema_url` and `database_schema_sha256` to that release's exact
+bundle as one change. The module rejects a schema URL that does not contain the
+selected release tag. The only container is the bounded `takos-agent` execution service;
 shell, desktop, browser, Git Actions, and general-purpose compute are not hidden
 Takos infrastructure. Those capabilities come from separately installed apps
 such as `takos-computer` or from an explicit external runtime adapter.

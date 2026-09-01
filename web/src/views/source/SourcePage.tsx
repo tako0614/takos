@@ -1,35 +1,54 @@
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
-import { useToast } from "../../store/toast.ts";
-import { CreateRepoModal } from "../shared/repos/CreateRepoModal.tsx";
 import type { Space } from "../../types/index.ts";
 import { GitUrlInstallModal } from "./GitUrlInstallModal.tsx";
 import { AppsPage } from "../apps/AppsPage.tsx";
-import { rpc, rpcJson } from "../../lib/rpc.ts";
+import { resolveSourceSpaceId } from "./source-page-state.ts";
 
 interface SourcePageProps {
   spaces: Space[];
   isAuthenticated: boolean;
   onRequireLogin: () => void;
+  selectedSpaceId?: string;
+  storeTab?: "discover" | "installed";
+  onStoreStateChange?: (
+    storeTab: "discover" | "installed",
+    spaceId?: string,
+  ) => void;
 }
 
 /**
  * "Apps / Install" surface. Two tabs: the installed-apps launcher, and the
  * Store catalog — browse listings from one or more TCS store servers and install
- * a Capsule into this Space. Manual Git-URL install + create-repo stay available.
+ * a Capsule into this Space. Manual Git-URL install stays available; repository
+ * hosting and creation belong to an installed takos-git Capsule.
  */
 export function SourcePage(props: SourcePageProps) {
   const i18n = useI18n();
   const t = i18n.t;
-  const { showToast } = useToast();
-  const [tab, setTab] = createSignal<"installed" | "store">("installed");
+  const [tab, setTab] = createSignal<"installed" | "store">(
+    props.storeTab === "installed" ? "installed" : "store",
+  );
   const [showGitUrlInstallModal, setShowGitUrlInstallModal] =
     createSignal(false);
-  const [showCreateModal, setShowCreateModal] = createSignal(false);
+  const [appsRefreshKey, setAppsRefreshKey] = createSignal(0);
 
-  const spaceId = () => props.spaces[0]?.id ?? null;
+  const spaceId = () =>
+    resolveSourceSpaceId(props.spaces, props.selectedSpaceId);
   const ja = () => i18n.lang === "ja";
+
+  createEffect(() => {
+    setTab(props.storeTab === "installed" ? "installed" : "store");
+  });
+
+  const selectTab = (next: "installed" | "store") => {
+    setTab(next);
+    props.onStoreStateChange?.(
+      next === "installed" ? "installed" : "discover",
+      spaceId() ?? undefined,
+    );
+  };
 
   const requireAuth = (): boolean => {
     if (!props.isAuthenticated) {
@@ -37,28 +56,6 @@ export function SourcePage(props: SourcePageProps) {
       return false;
     }
     return true;
-  };
-
-  const createRepo = async (
-    name: string,
-    description: string,
-    visibility: "public" | "private",
-  ) => {
-    const id = spaceId();
-    if (!id) return;
-    try {
-      const res = await rpc.spaces[":spaceId"].repos.$post({
-        param: { spaceId: id },
-        json: { name, description, visibility },
-      });
-      await rpcJson(res);
-      setShowCreateModal(false);
-    } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error && err.message ? err.message : t("failedToCreate"),
-      );
-    }
   };
 
   const tabBtn = (key: "installed" | "store", label: string) => (
@@ -69,7 +66,7 @@ export function SourcePage(props: SourcePageProps) {
           ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
           : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
       }`}
-      onClick={() => setTab(key)}
+      onClick={() => selectTab(key)}
     >
       {label}
     </button>
@@ -93,17 +90,6 @@ export function SourcePage(props: SourcePageProps) {
               }}
             >
               <Icons.Download class="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              title={t("newRepository")}
-              aria-label={t("newRepository")}
-              class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-              onClick={() => {
-                if (requireAuth()) setShowCreateModal(true);
-              }}
-            >
-              <Icons.Plus class="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -178,7 +164,7 @@ export function SourcePage(props: SourcePageProps) {
                       <button
                         type="button"
                         class="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                        onClick={() => setTab("installed")}
+                        onClick={() => selectTab("installed")}
                       >
                         <Icons.Grid class="h-4 w-4" />
                         {ja() ? "インストール済みを見る" : "View installed"}
@@ -201,25 +187,24 @@ export function SourcePage(props: SourcePageProps) {
             {(id) => (
               <AppsPage
                 spaceId={id()}
-                onNavigateToStore={() => setTab("store")}
+                refreshKey={appsRefreshKey()}
+                onNavigateToStore={() => selectTab("store")}
               />
             )}
           </Show>
         </Show>
       </div>
 
-      {showCreateModal() && (
-        <CreateRepoModal
-          onClose={() => setShowCreateModal(false)}
-          onCreate={createRepo}
-        />
-      )}
-
       {showGitUrlInstallModal() && (
         <GitUrlInstallModal
           isOpen={showGitUrlInstallModal()}
           spaceId={spaceId()}
           onClose={() => setShowGitUrlInstallModal(false)}
+          onApplied={(appliedSpaceId) => {
+            if (appliedSpaceId !== spaceId()) return;
+            setAppsRefreshKey((current) => current + 1);
+            selectTab("installed");
+          }}
         />
       )}
     </div>

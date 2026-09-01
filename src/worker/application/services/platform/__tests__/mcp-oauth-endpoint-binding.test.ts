@@ -247,6 +247,20 @@ test("OAuth callback preserves an explicit zero-second token expiry", async () =
   expect(rows[0].oauthTokenExpiresAt).toBe(new Date(now).toISOString());
 });
 
+test("OAuth callback preserves an existing server's disabled state", async () => {
+  const existing = row({ enabled: false });
+  const rows = [existing];
+  const db = endpointDb(rows);
+  const { env } = oauthEnv(db);
+
+  await completeMcpOAuthFlow(db, env, completionParams());
+
+  expect(existing.enabled).toBe(false);
+  expect(await decryptedAccessToken(env, existing)).toBe(
+    "access-for-connector",
+  );
+});
+
 test("OAuth callback rejects a pre-existing same-name different endpoint before token exchange", async () => {
   const existing = row({ url: "https://connector-a.example/mcp" });
   const rows = [existing];

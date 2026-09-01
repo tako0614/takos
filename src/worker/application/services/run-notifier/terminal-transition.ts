@@ -24,6 +24,7 @@ export interface ControlTerminalTransitionInput {
   usage?: Record<string, unknown>;
   error?: string | null;
   output?: string | null;
+  terminalReason?: "context_revoked" | "context_invalid" | null;
   eventType: string;
   terminalEvent: Record<string, unknown>;
 }
@@ -91,6 +92,10 @@ function buildStatements(
   if (Object.hasOwn(input, "usage")) {
     setClauses.push('"usage" = ?');
     updateArgs.push(JSON.stringify(input.usage ?? {}));
+  }
+  if (Object.hasOwn(input, "terminalReason")) {
+    setClauses.push('"terminal_reason" = ?');
+    updateArgs.push(input.terminalReason ?? null);
   }
 
   const where = [

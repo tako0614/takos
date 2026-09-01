@@ -65,7 +65,7 @@ counsel and replace all placeholder fields before publishing to end users.
 | セキュリティ監視・不正対策     | 正当な利益・法令遵守 (Art. 6(1)(f)/(c)) |
 | プロダクト信頼性向上           | 正当な利益 (Art. 6(1)(f))               |
 | マーケティング (newsletter 等) | 同意 (Art. 6(1)(a))                     |
-| Cookie / UI 個人設定の保存     | 同意 (Art. 6(1)(a))                     |
+| 認証 Cookie / UI 個人設定       | 契約履行・正当な利益 (Art. 6(1)(b)/(f)) |
 
 APPI (個人情報の保護に関する法律) のもとでは、上記目的に対応する第 17 条 (利用目的の特定)
 および第 18 条 (利用目的の通知・公表) の要件を満たします。

@@ -21,7 +21,7 @@ managed service として影響する場合は Takos security intake が受け�
 
 In scope:
 
-- Takos Web / API (`takos`), including worker-native Git Smart HTTP (read-only clone/fetch served from the R2 object store)
+- Takos Web / API (`takos`), including the quarantined built-in Git compatibility route and its preserved legacy repository metadata / R2 objects
 - Agent runtime profile (`takos/containers/agent`)
 - Takosumi Accounts (`takosumi.identity.oidc` / `takosumi.billing.usage`) —
   identity / billing / Capsule owner; OIDC issuer, opaque launch token

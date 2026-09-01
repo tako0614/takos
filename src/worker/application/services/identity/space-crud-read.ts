@@ -1,4 +1,4 @@
-import { desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { accountMemberships, accounts } from "../../../infra/db/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { Env, Space } from "../../../shared/types/index.ts";
@@ -27,7 +27,12 @@ async function loadCanonicalSpaceByIdOrSlug(
   return drizzle
     .select()
     .from(accounts)
-    .where(or(eq(accounts.id, idOrSlug), eq(accounts.slug, idOrSlug)))
+    .where(
+      and(
+        eq(accounts.status, "active"),
+        or(eq(accounts.id, idOrSlug), eq(accounts.slug, idOrSlug)),
+      ),
+    )
     .limit(1)
     .get();
 }
@@ -52,7 +57,6 @@ export async function listWorkspacesForUser(
 
   const memberships = await drizzle
     .select({
-      memberRole: accountMemberships.role,
       spaceId: accounts.id,
       spaceType: accounts.type,
       spaceName: accounts.name,
@@ -65,7 +69,21 @@ export async function listWorkspacesForUser(
     })
     .from(accountMemberships)
     .innerJoin(accounts, eq(accounts.id, accountMemberships.accountId))
-    .where(eq(accountMemberships.memberId, principalId))
+    // Preserve the legacy membership schema as migration compatibility while
+    // exposing only Workspaces personally owned by this principal.
+    .where(and(
+      eq(accountMemberships.memberId, principalId),
+      eq(accountMemberships.role, "owner"),
+      eq(accountMemberships.status, "active"),
+      eq(accounts.status, "active"),
+      or(
+        eq(accounts.ownerAccountId, principalId),
+        and(
+          eq(accounts.type, "user"),
+          eq(accounts.id, principalId),
+        ),
+      ),
+    ))
     .orderBy(desc(accounts.updatedAt))
     .all();
 

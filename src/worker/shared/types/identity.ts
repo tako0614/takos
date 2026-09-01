@@ -5,6 +5,13 @@ export type PrincipalKind =
   | "system"
   | "tenant_worker";
 
+export const MAX_USER_USERNAME_CHARACTERS = 128;
+export const MAX_USER_NAME_CHARACTERS = 256;
+export const MAX_USER_EMAIL_CHARACTERS = 320;
+export const MAX_USER_PICTURE_URL_CHARACTERS = 2_048;
+export const MAX_USER_MODEL_ID_CHARACTERS = 128;
+export const MAX_USER_SETTINGS_MODELS = 100;
+
 export interface Principal {
   id: string;
   type: PrincipalKind;

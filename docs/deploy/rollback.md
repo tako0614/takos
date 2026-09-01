@@ -1,6 +1,6 @@
 # ロールバック
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+Capsule と Run の流れは [デプロイ管理の概要](/operator/) にあります。
 
 ## Current Flow
 
@@ -12,7 +12,7 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and the audit trail. Takosumi Accounts plane owns account-plane policy, billing, OIDC, and the dashboard.
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 ## API Shape
 
@@ -35,5 +35,5 @@ retained successful StateVersion を基準に、新しい reviewed Run / StateVe
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi model](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

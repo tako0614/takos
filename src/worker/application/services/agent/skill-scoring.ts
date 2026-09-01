@@ -23,14 +23,7 @@ import { getDelegationPacketFromRunInput } from "./delegation.ts";
 
 export const CONVERSATION_WINDOW = 8;
 export const MESSAGE_RECENCY_WEIGHTS = [
-  1.3,
-  1.1,
-  0.95,
-  0.8,
-  0.6,
-  0.45,
-  0.35,
-  0.25,
+  1.3, 1.1, 0.95, 0.8, 0.6, 0.45, 0.35, 0.25,
 ];
 
 const MAX_SELECTED_SKILLS_PER_RUN = 8;
@@ -133,11 +126,11 @@ export function getContextSegments(
       weight: 0.9,
     });
   }
-  for (
-    const [index, keyPoint] of (input.threadKeyPoints ?? []).map((item) =>
-      item.trim()
-    ).filter(Boolean).slice(0, 8).entries()
-  ) {
+  for (const [index, keyPoint] of (input.threadKeyPoints ?? [])
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .entries()) {
     segments.push({
       label: `thread key point ${index + 1}`,
       text: keyPoint,
@@ -192,10 +185,9 @@ export function getContextSegments(
         weight: 0.9,
       });
     }
-    for (
-      const [index, item] of delegation.acceptance_criteria.slice(0, 4)
-        .entries()
-    ) {
+    for (const [index, item] of delegation.acceptance_criteria
+      .slice(0, 4)
+      .entries()) {
       segments.push({
         label: `delegation acceptance ${index + 1}`,
         text: item,
@@ -206,6 +198,8 @@ export function getContextSegments(
 
   return segments;
 }
+
+type ContextSegment = ReturnType<typeof getContextSegments>[number];
 
 // ── Category and output-mode keyword maps ───────────────────────────────
 
@@ -306,11 +300,11 @@ export function getOutputModeKeywords(): Record<string, string[]> {
 
 // ── Scoring ─────────────────────────────────────────────────────────────
 
-export function scoreSkill(
+function scoreSkillForSegments(
   skill: SkillContext,
   input: SkillResolutionContext,
+  segments: readonly ContextSegment[],
 ): SkillSelection | null {
-  const segments = getContextSegments(input);
   if (segments.length === 0) {
     return null;
   }
@@ -338,9 +332,10 @@ export function scoreSkill(
       }
     }
 
-    for (
-      const toolName of skill.execution_contract.preferred_tools.slice(0, 8)
-    ) {
+    for (const toolName of skill.execution_contract.preferred_tools.slice(
+      0,
+      8,
+    )) {
       if (matchesPhrase(segment.text, toolName)) {
         score += 3 * segment.weight;
         reasons.add(`${segment.label} referenced preferred tool "${toolName}"`);
@@ -352,7 +347,7 @@ export function scoreSkill(
     const categoryHints = getCategoryKeywords()[skill.category] ?? [];
     if (
       segments.some((segment) =>
-        categoryHints.some((term) => matchesPhrase(segment.text, term))
+        categoryHints.some((term) => matchesPhrase(segment.text, term)),
       )
     ) {
       score += 6;
@@ -364,7 +359,7 @@ export function scoreSkill(
     const outputHints = getOutputModeKeywords()[outputMode] ?? [];
     if (
       segments.some((segment) =>
-        outputHints.some((term) => matchesPhrase(segment.text, term))
+        outputHints.some((term) => matchesPhrase(segment.text, term)),
       )
     ) {
       score += 4;
@@ -403,16 +398,24 @@ export function scoreSkill(
       availability_reasons: [...skill.availability_reasons],
       metadata: skill.metadata
         ? {
-          ...skill.metadata,
-          execution_contract: skill.metadata.execution_contract
-            ? cloneExecutionContract(skill.metadata.execution_contract)
-            : undefined,
-        }
+            ...skill.metadata,
+            execution_contract: skill.metadata.execution_contract
+              ? cloneExecutionContract(skill.metadata.execution_contract)
+              : undefined,
+          }
         : undefined,
     },
     score,
     reasons: [...reasons].slice(0, 8),
   };
+}
+
+export function scoreSkill(
+  skill: SkillContext,
+  input: SkillResolutionContext,
+): SkillSelection | null {
+  const segments = getContextSegments(input);
+  return scoreSkillForSegments(skill, input, segments);
 }
 
 // ── Selection ───────────────────────────────────────────────────────────
@@ -421,9 +424,20 @@ export function selectRelevantSkills(
   skills: SkillContext[],
   input: SkillResolutionContext,
 ): SkillSelection[] {
-  return skills
-    .filter((skill) => skill.availability !== "unavailable")
-    .map((skill) => scoreSkill(skill, input))
+  const availableSkills = skills.filter(
+    (skill) => skill.availability !== "unavailable",
+  );
+  if (availableSkills.length === 0) {
+    return [];
+  }
+
+  const segments = getContextSegments(input);
+  if (segments.length === 0) {
+    return [];
+  }
+
+  return availableSkills
+    .map((skill) => scoreSkillForSegments(skill, input, segments))
     .filter((entry): entry is SkillSelection => Boolean(entry))
     .sort((a, b) => {
       if (b.score !== a.score) {

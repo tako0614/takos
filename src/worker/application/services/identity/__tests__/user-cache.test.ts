@@ -7,6 +7,7 @@ import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 
 type AccountRow = {
   id: string;
+  type: string;
   email: string | null;
   name: string;
   slug: string;
@@ -57,6 +58,7 @@ function restoreDeps() {
 test("getCachedUser rejects non-active account rows", async () => {
   const fixture = createContext({
     id: "user-1",
+    type: "user",
     email: "user@example.com",
     name: "User",
     slug: "user",
@@ -84,6 +86,7 @@ test("getCachedUser rejects non-active account rows", async () => {
 test("getCachedUser returns active account rows", async () => {
   const fixture = createContext({
     id: "user-1",
+    type: "user",
     email: "user@example.com",
     name: "User",
     slug: "user",
@@ -103,6 +106,34 @@ test("getCachedUser returns active account rows", async () => {
 
     assertEquals(result?.id, "user-1");
     assertEquals(fixture.cachedUser?.id, "user-1");
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("getCachedUser rejects active non-user account rows", async () => {
+  const fixture = createContext({
+    id: "workspace-1",
+    type: "team",
+    email: null,
+    name: "Workspace",
+    slug: "workspace",
+    status: "active",
+    bio: null,
+    picture: null,
+    trustTier: "normal",
+    setupCompleted: true,
+    createdAt: "2026-05-07T00:00:00.000Z",
+    updatedAt: "2026-05-07T00:00:00.000Z",
+  });
+  userCacheDeps.getDb =
+    (() => fixture.db) as unknown as typeof userCacheDeps.getDb;
+
+  try {
+    const result = await getCachedUser(fixture.context, "workspace-1");
+
+    assertEquals(result, null);
+    assertEquals(fixture.cachedUser, undefined);
   } finally {
     restoreDeps();
   }

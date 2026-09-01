@@ -1,5 +1,19 @@
 export type MemoryType = "episode" | "semantic" | "procedural";
 
+export const MAX_MEMORY_RECORDS_PER_PAGE = 100;
+export const MAX_MEMORY_REFERENCE_CHARACTERS = 128;
+export const MAX_MEMORY_SEARCH_QUERY_CHARACTERS = 1_000;
+export const MAX_MEMORY_CONTENT_CHARACTERS = 100_000;
+export const MAX_MEMORY_CATEGORY_CHARACTERS = 1_000;
+export const MAX_MEMORY_SUMMARY_CHARACTERS = 100_000;
+export const MAX_MEMORY_TAG_CHARACTERS = 1_000;
+export const MAX_MEMORY_TAG_ITEMS = 100;
+export const MAX_MEMORY_TAGS_CHARACTERS = 100_000;
+export const MAX_MEMORY_TIMESTAMP_CHARACTERS = 64;
+export const MAX_REMINDER_CONTENT_CHARACTERS = 100_000;
+export const MAX_REMINDER_CONTEXT_CHARACTERS = 100_000;
+export const MAX_REMINDER_TRIGGER_VALUE_CHARACTERS = 100_000;
+
 export interface Memory {
   id: string;
   space_id: string;

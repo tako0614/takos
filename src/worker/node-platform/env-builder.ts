@@ -93,9 +93,11 @@ import { resolveRuntimeHostBinding } from "./resolvers/runtime-host-resolver.ts"
 // ---------------------------------------------------------------------------
 
 export const LOCAL_DEV_DEFAULTS = {
-  OIDC_ISSUER_URL: `http://${DEFAULT_LOCAL_DOMAINS.admin}:${DEFAULT_LOCAL_PORTS.web}`,
+  TAKOSUMI_ACCOUNTS_URL: "http://127.0.0.1:8792",
+  OIDC_ISSUER_URL: "http://127.0.0.1:8792",
   OIDC_CLIENT_ID: "local-oidc-client",
-  OIDC_CLIENT_SECRET: "local-oidc-secret",
+  OIDC_REDIRECT_URI:
+    `http://${DEFAULT_LOCAL_DOMAINS.admin}:${DEFAULT_LOCAL_PORTS.web}/auth/oidc/callback`,
   PLATFORM_PRIVATE_KEY: "local-platform-private-key",
   PLATFORM_PUBLIC_KEY: "local-platform-public-key",
   ENCRYPTION_KEY: "local-encryption-key",
@@ -221,10 +223,13 @@ function optionalJsonArrayEnv(name: string): string | undefined {
 }
 
 function buildBaseConfig(isLocal: boolean) {
+  const environment =
+    optionalEnv("ENVIRONMENT") ?? (isLocal ? "development" : "production");
+  const useLocalDevDefaults = isLocal && environment !== "production";
   return {
     ADMIN_DOMAIN:
       optionalEnv("ADMIN_DOMAIN") ??
-      (isLocal ? DEFAULT_LOCAL_DOMAINS.admin : ""),
+      (useLocalDevDefaults ? DEFAULT_LOCAL_DOMAINS.admin : ""),
     AUTH_PUBLIC_BASE_URL: optionalEnv("AUTH_PUBLIC_BASE_URL"),
     TAKOS_MCP_OAUTH_PREREGISTRATIONS_JSON: optionalEnv(
       "TAKOS_MCP_OAUTH_PREREGISTRATIONS_JSON",
@@ -232,29 +237,33 @@ function buildBaseConfig(isLocal: boolean) {
     TAKOS_INTERNAL_API_URL: optionalEnv("TAKOS_INTERNAL_API_URL"),
     TENANT_BASE_DOMAIN:
       optionalEnv("TENANT_BASE_DOMAIN") ??
-      (isLocal ? DEFAULT_LOCAL_DOMAINS.tenantBase : ""),
+      (useLocalDevDefaults ? DEFAULT_LOCAL_DOMAINS.tenantBase : ""),
     OIDC_ISSUER_URL:
       optionalEnv("OIDC_ISSUER_URL") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_ISSUER_URL : ""),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.OIDC_ISSUER_URL : ""),
     OIDC_DISCOVERY_URL: optionalEnv("OIDC_DISCOVERY_URL"),
     TAKOSUMI_ACCOUNTS_INTERNAL_URL: optionalEnv(
       "TAKOSUMI_ACCOUNTS_INTERNAL_URL",
     ),
-    TAKOSUMI_ACCOUNTS_URL: optionalEnv("TAKOSUMI_ACCOUNTS_URL"),
+    TAKOSUMI_ACCOUNTS_URL:
+      optionalEnv("TAKOSUMI_ACCOUNTS_URL") ??
+      (useLocalDevDefaults
+        ? LOCAL_DEV_DEFAULTS.TAKOSUMI_ACCOUNTS_URL
+        : undefined),
     TAKOSUMI_ACCOUNTS_TOKEN: optionalEnv("TAKOSUMI_ACCOUNTS_TOKEN"),
     OIDC_CLIENT_ID:
       optionalEnv("OIDC_CLIENT_ID") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID : ""),
-    OIDC_CLIENT_SECRET:
-      optionalEnv("OIDC_CLIENT_SECRET") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET : ""),
-    OIDC_REDIRECT_URI: optionalEnv("OIDC_REDIRECT_URI"),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID : ""),
+    OIDC_CLIENT_SECRET: optionalEnv("OIDC_CLIENT_SECRET"),
+    OIDC_REDIRECT_URI:
+      optionalEnv("OIDC_REDIRECT_URI") ??
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.OIDC_REDIRECT_URI : ""),
     PLATFORM_PRIVATE_KEY:
       optionalEnv("PLATFORM_PRIVATE_KEY") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PRIVATE_KEY : ""),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.PLATFORM_PRIVATE_KEY : ""),
     PLATFORM_PUBLIC_KEY:
       optionalEnv("PLATFORM_PUBLIC_KEY") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PUBLIC_KEY : ""),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.PLATFORM_PUBLIC_KEY : ""),
     CF_ACCOUNT_ID: optionalEnv("CF_ACCOUNT_ID"),
     CF_API_TOKEN: optionalEnv("CF_API_TOKEN"),
     CF_ZONE_ID: optionalEnv("CF_ZONE_ID"),
@@ -264,14 +273,13 @@ function buildBaseConfig(isLocal: boolean) {
     WFP_DISPATCH_NAMESPACE: optionalEnv("WFP_DISPATCH_NAMESPACE"),
     ENCRYPTION_KEY:
       optionalEnv("ENCRYPTION_KEY") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY : ""),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY : ""),
     TAKOS_AGENT_START_TOKEN:
       optionalEnv("TAKOS_AGENT_START_TOKEN") ??
-      (isLocal ? LOCAL_DEV_DEFAULTS.TAKOS_AGENT_START_TOKEN : ""),
+      (useLocalDevDefaults ? LOCAL_DEV_DEFAULTS.TAKOS_AGENT_START_TOKEN : ""),
     SERVICE_INTERNAL_JWT_ISSUER:
       optionalEnv("SERVICE_INTERNAL_JWT_ISSUER") ?? "takos-node",
-    ENVIRONMENT:
-      optionalEnv("ENVIRONMENT") ?? (isLocal ? "development" : "production"),
+    ENVIRONMENT: environment,
     TAKOS_FEATURED_APP_CATALOG_JSON: optionalJsonArrayEnv(
       "TAKOS_FEATURED_APP_CATALOG_JSON",
     ),
@@ -350,9 +358,9 @@ function assertSelfHostedProductionConfig(config: BaseConfig): void {
     LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID,
   );
   requireExplicit(
-    "OIDC_CLIENT_SECRET",
-    config.OIDC_CLIENT_SECRET,
-    LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET,
+    "OIDC_REDIRECT_URI",
+    config.OIDC_REDIRECT_URI,
+    LOCAL_DEV_DEFAULTS.OIDC_REDIRECT_URI,
   );
   requireExplicit(
     "PLATFORM_PRIVATE_KEY",

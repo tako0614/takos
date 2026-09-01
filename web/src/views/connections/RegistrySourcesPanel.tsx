@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import { Badge, Button, Input } from "../../components/ui/index.ts";
 import type {
   McpRegistrySource,
@@ -21,6 +21,9 @@ import {
 type CustomSourceKind = Exclude<McpRegistrySourceKind, "official">;
 
 interface RegistrySourcesPanelProps {
+  scopeKey: string;
+  disabled?: boolean;
+  acquireMutation?: () => (() => void) | null;
   sources: McpRegistrySource[];
   loading: boolean;
   error: string | null;
@@ -98,20 +101,42 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
     ...EMPTY_DRAFT,
   });
   const [mutationId, setMutationId] = createSignal<string | null>(null);
+  let activeScopeKey = props.scopeKey;
+  let mutationEpoch = 0;
+
+  createEffect(() => {
+    const nextScopeKey = props.scopeKey;
+    if (nextScopeKey === activeScopeKey) return;
+    activeScopeKey = nextScopeKey;
+    mutationEpoch += 1;
+    setMutationId(null);
+    setAddOpen(false);
+    setAddDraft({ ...EMPTY_DRAFT });
+    setEditingId(null);
+    setEditDraft({ ...EMPTY_DRAFT });
+  });
 
   const createInput = () => toSourceInput(addDraft());
   const editInput = () => toSourceInput(editDraft());
+  const acquireMutation = () =>
+    props.acquireMutation ? props.acquireMutation() : () => undefined;
 
   const handleCreate = async () => {
+    if (props.disabled || mutationId() !== null) return;
     const input = createInput();
     if (!input) return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const epoch = mutationEpoch;
     setMutationId("create");
     try {
       await props.onCreate(input);
+      if (epoch !== mutationEpoch) return;
       setAddDraft({ ...EMPTY_DRAFT });
       setAddOpen(false);
       showToast("success", t("registrySourceCreated"));
     } catch (cause) {
+      if (epoch !== mutationEpoch) return;
       showToast(
         "error",
         cause instanceof Error && cause.message
@@ -119,12 +144,17 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
           : t("registrySourceCreateFailed"),
       );
     } finally {
-      setMutationId(null);
+      if (epoch === mutationEpoch) setMutationId(null);
+      releaseMutation();
     }
   };
 
   const beginEdit = (source: McpRegistrySource) => {
-    if (source.read_only || source.source_kind === "official") return;
+    if (
+      props.disabled ||
+      source.read_only ||
+      source.source_kind === "official"
+    ) return;
     setEditingId(source.id);
     setEditDraft({
       name: source.name,
@@ -139,14 +169,20 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
   };
 
   const handleUpdate = async (sourceId: string) => {
+    if (props.disabled || mutationId() !== null) return;
     const input = editInput();
     if (!input) return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const epoch = mutationEpoch;
     setMutationId(sourceId);
     try {
       await props.onUpdate(sourceId, input);
+      if (epoch !== mutationEpoch) return;
       setEditingId(null);
       showToast("success", t("registrySourceUpdated"));
     } catch (cause) {
+      if (epoch !== mutationEpoch) return;
       showToast(
         "error",
         cause instanceof Error && cause.message
@@ -154,15 +190,21 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
           : t("registrySourceUpdateFailed"),
       );
     } finally {
-      setMutationId(null);
+      if (epoch === mutationEpoch) setMutationId(null);
+      releaseMutation();
     }
   };
 
   const handleToggle = async (source: McpRegistrySource) => {
+    if (props.disabled || mutationId() !== null) return;
     if (source.read_only && source.source_kind !== "official") return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const epoch = mutationEpoch;
     setMutationId(source.id);
     try {
       await props.onUpdate(source.id, { enabled: !source.enabled });
+      if (epoch !== mutationEpoch) return;
       showToast(
         "success",
         source.enabled
@@ -170,6 +212,7 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
           : t("registrySourceEnabled"),
       );
     } catch (cause) {
+      if (epoch !== mutationEpoch) return;
       showToast(
         "error",
         cause instanceof Error && cause.message
@@ -177,12 +220,16 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
           : t("registrySourceUpdateFailed"),
       );
     } finally {
-      setMutationId(null);
+      if (epoch === mutationEpoch) setMutationId(null);
+      releaseMutation();
     }
   };
 
   const handleDelete = async (source: McpRegistrySource) => {
+    if (props.disabled || mutationId() !== null) return;
     if (source.read_only) return;
+    const targetScopeKey = props.scopeKey;
+    const targetEpoch = mutationEpoch;
     const accepted = await confirm({
       title: t("registrySourceDelete"),
       message: t("registrySourceDeleteConfirm", { name: source.name }),
@@ -190,12 +237,27 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
       cancelText: t("cancel"),
       danger: true,
     });
-    if (!accepted) return;
+    const currentSource = props.sources.find((entry) => entry.id === source.id);
+    if (
+      !accepted ||
+      props.disabled ||
+      targetScopeKey !== props.scopeKey ||
+      targetEpoch !== mutationEpoch ||
+      !currentSource ||
+      currentSource.read_only ||
+      currentSource.name !== source.name ||
+      currentSource.base_url !== source.base_url
+    ) return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const epoch = mutationEpoch;
     setMutationId(source.id);
     try {
       await props.onDelete(source.id);
+      if (epoch !== mutationEpoch) return;
       showToast("success", t("registrySourceDeleted"));
     } catch (cause) {
+      if (epoch !== mutationEpoch) return;
       showToast(
         "error",
         cause instanceof Error && cause.message
@@ -203,7 +265,8 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
           : t("registrySourceDeleteFailed"),
       );
     } finally {
-      setMutationId(null);
+      if (epoch === mutationEpoch) setMutationId(null);
+      releaseMutation();
     }
   };
 
@@ -223,10 +286,17 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
               size="sm"
               leftIcon={<Icons.RefreshCw class="h-4 w-4" />}
               onClick={() => void props.onRefresh()}
+              disabled={
+                props.disabled || props.loading || mutationId() !== null
+              }
             >
               {t("refresh")}
             </Button>
-            <Button size="sm" onClick={() => setAddOpen((value) => !value)}>
+            <Button
+              size="sm"
+              disabled={props.disabled || mutationId() !== null}
+              onClick={() => setAddOpen((value) => !value)}
+            >
               {t("registrySourceAdd")}
             </Button>
           </div>
@@ -237,11 +307,17 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
             <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t("registrySourceAdd")}
             </h3>
-            <SourceFields draft={addDraft()} onChange={setAddDraft} />
+            <SourceFields
+              draft={addDraft()}
+              onChange={setAddDraft}
+              fieldPrefix="registry-source-create"
+              disabled={props.disabled || mutationId() === "create"}
+            />
             <div class="mt-3 flex justify-end gap-2">
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={props.disabled || mutationId() === "create"}
                 onClick={() => setAddOpen(false)}
               >
                 {t("cancel")}
@@ -249,7 +325,7 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
               <Button
                 size="sm"
                 isLoading={mutationId() === "create"}
-                disabled={!createInput()}
+                disabled={props.disabled || !createInput()}
                 onClick={() => void handleCreate()}
               >
                 {t("add")}
@@ -266,8 +342,19 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
         </Show>
 
         <Show when={!props.loading && props.error}>
-          <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-            {props.error}
+          <div
+            role="alert"
+            class="mt-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+          >
+            <span>{props.error}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void props.onRefresh()}
+              disabled={props.disabled}
+            >
+              {t("retry")}
+            </Button>
           </div>
         </Show>
 
@@ -280,18 +367,24 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
                   fallback={
                     <SourceSummary
                       source={source}
-                      busy={mutationId() === source.id}
+                      busy={props.disabled || mutationId() === source.id}
                       onEdit={() => beginEdit(source)}
                       onToggle={() => void handleToggle(source)}
                       onDelete={() => void handleDelete(source)}
                     />
                   }
                 >
-                  <SourceFields draft={editDraft()} onChange={setEditDraft} />
+                  <SourceFields
+                    draft={editDraft()}
+                    onChange={setEditDraft}
+                    fieldPrefix={`registry-source-${source.id}`}
+                    disabled={props.disabled || mutationId() === source.id}
+                  />
                   <div class="mt-3 flex justify-end gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={props.disabled || mutationId() === source.id}
                       onClick={() => setEditingId(null)}
                     >
                       {t("cancel")}
@@ -299,7 +392,7 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
                     <Button
                       size="sm"
                       isLoading={mutationId() === source.id}
-                      disabled={!editInput()}
+                      disabled={props.disabled || !editInput()}
                       onClick={() => void handleUpdate(source.id)}
                     >
                       {t("save")}
@@ -318,6 +411,8 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
 function SourceFields(props: {
   draft: SourceDraft;
   onChange: (draft: SourceDraft) => void;
+  fieldPrefix: string;
+  disabled: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -327,6 +422,8 @@ function SourceFields(props: {
           {t("registrySourceName")}
         </span>
         <Input
+          name={`${props.fieldPrefix}-name`}
+          disabled={props.disabled}
           value={props.draft.name}
           onInput={(event) =>
             props.onChange({ ...props.draft, name: event.currentTarget.value })
@@ -338,6 +435,8 @@ function SourceFields(props: {
           {t("registrySourceAuthentication")}
         </span>
         <select
+          name={`${props.fieldPrefix}-authentication`}
+          disabled={props.disabled}
           value={props.draft.auth_type}
           onChange={(event) =>
             props.onChange({
@@ -362,6 +461,8 @@ function SourceFields(props: {
             {t("registrySourceAuthHeaderName")}
           </span>
           <Input
+            name={`${props.fieldPrefix}-header-name`}
+            disabled={props.disabled}
             value={props.draft.auth_header_name}
             onInput={(event) =>
               props.onChange({
@@ -378,6 +479,8 @@ function SourceFields(props: {
             {t("registrySourceCredential")}
           </span>
           <Input
+            name={`${props.fieldPrefix}-credential`}
+            disabled={props.disabled}
             type="password"
             autocomplete="new-password"
             value={props.draft.auth_secret}
@@ -400,6 +503,8 @@ function SourceFields(props: {
           {t("registrySourceBaseUrl")}
         </span>
         <Input
+          name={`${props.fieldPrefix}-base-url`}
+          disabled={props.disabled}
           type="url"
           value={props.draft.base_url}
           placeholder="https://registry.example.com"
@@ -416,6 +521,8 @@ function SourceFields(props: {
           {t("registrySourceKind")}
         </span>
         <select
+          name={`${props.fieldPrefix}-kind`}
+          disabled={props.disabled}
           value={props.draft.source_kind}
           onChange={(event) =>
             props.onChange({
@@ -437,6 +544,8 @@ function SourceFields(props: {
           {t("registrySourcePriority")}
         </span>
         <Input
+          name={`${props.fieldPrefix}-priority`}
+          disabled={props.disabled}
           type="number"
           min="-1000"
           max="1000"

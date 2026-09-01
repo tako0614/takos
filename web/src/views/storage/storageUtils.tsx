@@ -2,6 +2,7 @@ import type { JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { TranslationKey } from "../../store/i18n.ts";
 import type { StorageFile } from "../../types/index.ts";
+import { getFileExtension } from "./file-extension.ts";
 import { interfaceFileHandlerOpenUrlHasIdPathTemplate } from "./fileHandlerUrls.ts";
 
 export interface FileHandler {
@@ -38,12 +39,6 @@ const IMAGE_EXTENSIONS = new Set([
   ".bmp",
   ".avif",
 ]);
-
-function getFileExtension(fileName: string): string {
-  const lastDot = fileName.lastIndexOf(".");
-  if (lastDot === -1 || lastDot === fileName.length - 1) return "";
-  return fileName.slice(lastDot).toLowerCase();
-}
 
 function handlerMatchesFile(h: FileHandler, file: StorageFile): boolean {
   const ext = getFileExtension(file.name);

@@ -1,11 +1,13 @@
-import { createSignal, type Setter } from "solid-js";
+import { type Accessor, createSignal, type Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import type {
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
+  ThreadHistoryRunSummary,
   ThreadHistoryTaskContext,
+  ThreadHistoryTruncation,
 } from "../types/index.ts";
 import type {
   ChatRunArtifactMap,
@@ -19,6 +21,7 @@ import {
   summarizeEvent,
   type WebSocketEventPayload,
 } from "../views/chat/timeline.ts";
+import { parseChatRunDetailResponse } from "./chat-run-response.ts";
 
 // Re-export from wsEventHandlers for consumers that import from this module
 export {
@@ -46,17 +49,38 @@ export const EMPTY_STREAMING: ChatStreamingState = {
   currentMessage: null,
 };
 
+export const EMPTY_HISTORY_TRUNCATION: ThreadHistoryTruncation = {
+  message_data: false,
+  runs: false,
+  artifacts: false,
+  events: false,
+  event_data: false,
+};
+
+export function mergeHistoryTruncation(
+  current: ThreadHistoryTruncation,
+  incoming: ThreadHistoryTruncation,
+): ThreadHistoryTruncation {
+  return {
+    message_data: current.message_data || incoming.message_data,
+    runs: current.runs || incoming.runs,
+    artifacts: current.artifacts || incoming.artifacts,
+    events: current.events || incoming.events,
+    event_data: current.event_data || incoming.event_data,
+  };
+}
+
 export interface UseWsMessageProcessorOptions {
+  threadId: Accessor<string>;
+  spaceRecordId: Accessor<string>;
+  currentRunIdRef: MutableRefObject<string | null>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  isMountedRef: MutableRefObject<boolean>;
   fetchMessages: (showError?: boolean) => Promise<void>;
-  setError: (value: string | null) => void;
-  fetchSessionDiff: (sessionId: string) => Promise<void>;
 }
 
 export interface UseWsMessageProcessorResult {
-  currentRun: Run | null;
-  setCurrentRun: Setter<Run | null>;
+  currentRun: ThreadHistoryRunSummary | null;
+  setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
   isLoading: boolean;
   setIsLoading: Setter<boolean>;
   streaming: ChatStreamingState;
@@ -68,16 +92,19 @@ export interface UseWsMessageProcessorResult {
   artifactsByRunId: ChatRunArtifactMap;
   historyFocus: ThreadHistoryFocus | null;
   taskContext: ThreadHistoryTaskContext | null;
+  historyTruncation: ThreadHistoryTruncation;
   resetTimeline: () => void;
   applyHistorySnapshot: (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }) => void;
   mergeHistorySnapshot: (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }) => void;
   upsertRunMeta: (run: Partial<Run> & { id: string }) => void;
   appendTimelineEntry: (
@@ -106,13 +133,15 @@ export interface UseWsMessageProcessorResult {
 }
 
 export function useWsMessageProcessor({
+  threadId,
+  spaceRecordId,
+  currentRunIdRef,
   t,
-  isMountedRef: _isMountedRef,
   fetchMessages,
-  setError: _setError,
-  fetchSessionDiff,
 }: UseWsMessageProcessorOptions): UseWsMessageProcessorResult {
-  const [currentRun, setCurrentRun] = createSignal<Run | null>(null);
+  const [currentRun, setCurrentRun] = createSignal<
+    ThreadHistoryRunSummary | null
+  >(null);
   const [isLoading, setIsLoading] = createSignal(false);
   const [streaming, setStreaming] = createSignal<ChatStreamingState>(
     EMPTY_STREAMING,
@@ -130,6 +159,9 @@ export function useWsMessageProcessor({
   const [taskContext, setTaskContext] = createSignal<
     ThreadHistoryTaskContext | null
   >(null);
+  const [historyTruncation, setHistoryTruncation] = createSignal(
+    EMPTY_HISTORY_TRUNCATION,
+  );
 
   const runEventCursorRef: MutableRefObject<Map<string, number>> = {
     current: new Map(),
@@ -162,12 +194,14 @@ export function useWsMessageProcessor({
     setArtifactsByRunId({});
     setHistoryFocus(null);
     setTaskContext(null);
+    setHistoryTruncation(EMPTY_HISTORY_TRUNCATION);
   };
 
   const applyHistorySnapshot = (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }): void => {
     runEventCursorRef.current = new Map();
     runMetaRef.current = {};
@@ -218,12 +252,14 @@ export function useWsMessageProcessor({
     setTimelineEntries(nextTimelineEntries);
     setHistoryFocus(snapshot.focus);
     setTaskContext(snapshot.taskContext);
+    setHistoryTruncation(snapshot.truncation);
   };
 
   const mergeHistorySnapshot = (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
+    truncation: ThreadHistoryTruncation;
   }): void => {
     const nextRunMeta: ChatRunMetaMap = { ...runMetaRef.current };
     const nextArtifacts: ChatRunArtifactMap = { ...artifactsByRunId() };
@@ -283,6 +319,9 @@ export function useWsMessageProcessor({
     if (snapshot.taskContext) {
       setTaskContext(snapshot.taskContext);
     }
+    setHistoryTruncation((current) =>
+      mergeHistoryTruncation(current, snapshot.truncation)
+    );
   };
 
   const upsertRunMeta = (run: Partial<Run> & { id: string }) => {
@@ -378,16 +417,24 @@ export function useWsMessageProcessor({
     runId: string,
     refreshMessages = true,
   ): Promise<boolean> => {
+    const targetThreadId = threadId();
+    const targetSpaceId = spaceRecordId();
+    const isCurrentTarget = () =>
+      currentRunIdRef.current === runId && threadId() === targetThreadId &&
+      spaceRecordId() === targetSpaceId;
+    if (!isCurrentTarget()) return false;
     try {
       const res = await rpcPath(rpc, "runs", ":id").$get({
         param: { id: runId },
       });
-      const data = await rpcJson<{ run: Run }>(res);
-      const status = data.run?.status;
-      if (data.run) {
-        upsertRunMeta(data.run);
-      }
-      const isActive = !!status && ACTIVE_RUN_STATUSES.has(status);
+      const run = parseChatRunDetailResponse(await rpcJson<unknown>(res), {
+        runId,
+        threadId: targetThreadId,
+        spaceId: targetSpaceId,
+      });
+      if (!isCurrentTarget()) return false;
+      upsertRunMeta(run);
+      const isActive = ACTIVE_RUN_STATUSES.has(run.status);
 
       if (!isActive) {
         setIsLoading(false);
@@ -396,16 +443,15 @@ export function useWsMessageProcessor({
         // Note: closeWebSocket is called by the caller (connection manager)
         // after verifyRunStatus returns false
         fetchMessages();
-        const sessionId = data.run?.session_id ?? undefined;
-        if (sessionId) {
-          fetchSessionDiff(sessionId);
-        }
       } else if (refreshMessages) {
         fetchMessages();
       }
       return isActive;
     } catch {
-      return false;
+      // A transient or malformed status response is not evidence that the Run
+      // ended. Preserve the last verified active state and let the transport
+      // or next watchdog tick retry instead of closing a healthy connection.
+      return isCurrentTarget();
     }
   };
 
@@ -438,6 +484,9 @@ export function useWsMessageProcessor({
     },
     get taskContext() {
       return taskContext();
+    },
+    get historyTruncation() {
+      return historyTruncation();
     },
     resetTimeline,
     applyHistorySnapshot,

@@ -1,11 +1,13 @@
 import { createSignal } from "solid-js";
 import { getErrorMessage } from "../lib/errors.ts";
+import { createClientOperationId } from "../lib/client-operation-id.ts";
 
 interface UseCreateSpaceFormOptions {
   onCreate: (
     name: string,
     description: string,
     installFeaturedApps: boolean,
+    operationId: string,
   ) => Promise<void>;
   nameRequiredMessage: string;
   failedToCreateMessage: string;
@@ -21,6 +23,10 @@ export function useCreateSpaceForm({
   const [installFeaturedApps, setInstallFeaturedApps] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  let pendingOperation: {
+    draft: string;
+    id: string;
+  } | null = null;
 
   const clearError = () => setError(null);
 
@@ -30,12 +36,11 @@ export function useCreateSpaceForm({
     setInstallFeaturedApps(false);
     setLoading(false);
     setError(null);
+    pendingOperation = null;
   };
 
-  const handleSubmit = async (
-    e: Event & { currentTarget: HTMLFormElement },
-  ) => {
-    e.preventDefault();
+  const submit = async () => {
+    if (loading()) return;
     if (!name().trim()) {
       setError(nameRequiredMessage);
       return;
@@ -43,13 +48,36 @@ export function useCreateSpaceForm({
 
     setLoading(true);
     setError(null);
+    const normalizedName = name().trim();
+    const normalizedDescription = description().trim();
+    const draft = JSON.stringify([
+      normalizedName,
+      normalizedDescription,
+      installFeaturedApps(),
+    ]);
+    if (!pendingOperation || pendingOperation.draft !== draft) {
+      pendingOperation = { draft, id: createClientOperationId() };
+    }
     try {
-      await onCreate(name(), description(), installFeaturedApps());
+      await onCreate(
+        normalizedName,
+        normalizedDescription,
+        installFeaturedApps(),
+        pendingOperation.id,
+      );
+      pendingOperation = null;
     } catch (err: unknown) {
       setError(getErrorMessage(err, failedToCreateMessage));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (
+    e: Event & { currentTarget: HTMLFormElement },
+  ) => {
+    e.preventDefault();
+    await submit();
   };
 
   return {
@@ -63,6 +91,7 @@ export function useCreateSpaceForm({
     error,
     clearError,
     resetForm,
+    submit,
     handleSubmit,
   };
 }

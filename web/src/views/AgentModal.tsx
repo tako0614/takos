@@ -11,6 +11,7 @@ type AgentTab = "skills" | "memory" | "model" | "work";
 
 export interface AgentModalProps {
   spaceId: string;
+  spaceRecordId: string;
   onClose: () => void;
 }
 
@@ -119,10 +120,30 @@ export function AgentModal(props: AgentModalProps) {
           id={`agent-tabpanel-${activeTab()}`}
           aria-labelledby={`agent-tab-${activeTab()}`}
         >
-          {activeTab() === "skills" && <SkillsTab spaceId={props.spaceId} />}
-          {activeTab() === "memory" && <MemoryTab spaceId={props.spaceId} />}
-          {activeTab() === "model" && <ModelTab spaceId={props.spaceId} />}
-          {activeTab() === "work" && <WorkTab spaceId={props.spaceId} />}
+          {activeTab() === "skills" && (
+            <SkillsTab
+              spaceId={props.spaceId}
+              canEdit={true}
+              canDelete={true}
+            />
+          )}
+          {activeTab() === "memory" && (
+            <MemoryTab
+              spaceId={props.spaceId}
+              spaceRecordId={props.spaceRecordId}
+              canEdit={true}
+            />
+          )}
+          {activeTab() === "model" && (
+            <ModelTab spaceId={props.spaceId} canManage={true} />
+          )}
+          {activeTab() === "work" && (
+            <WorkTab
+              spaceId={props.spaceId}
+              canEdit={true}
+              canDelete={true}
+            />
+          )}
         </div>
       </div>
     </div>

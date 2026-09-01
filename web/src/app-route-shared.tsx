@@ -1,17 +1,28 @@
-import { createMemo, type JSX, Match, Suspense, Switch } from "solid-js";
+import {
+  createMemo,
+  type JSX,
+  lazy,
+  Match,
+  Suspense,
+  Switch,
+} from "solid-js";
 import { useLocation } from "@solidjs/router";
 import { LoadingScreen } from "./components/common/LoadingScreen.tsx";
 import { Button } from "./components/ui/Button.tsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.tsx";
 import { useAuth } from "./hooks/useAuth.tsx";
 import { buildPath } from "./hooks/router-state.ts";
-import { rpc } from "./lib/rpc.ts";
 import { useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
 import type { RouteState } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
 import { LoginPage } from "./views/app/AuthViews.tsx";
-import { AuthenticatedLayout } from "./components/layout/AuthenticatedLayout.tsx";
+
+const AuthenticatedLayout = lazy(() =>
+  import("./components/layout/AuthenticatedLayout.tsx").then((module) => ({
+    default: module.AuthenticatedLayout,
+  })),
+);
 
 export function BootstrapErrorScreen(props: {
   title: string;
@@ -92,13 +103,6 @@ export function useCanonicalHref(nextRoute: () => RouteState | null) {
 }
 
 export async function completeSetup(auth: ReturnType<typeof useAuth>) {
-  try {
-    await rpc.me.settings.$patch({
-      json: { setup_completed: true, auto_update_enabled: true },
-    });
-  } catch {
-    // ignored
-  }
   await auth.fetchUser();
 }
 

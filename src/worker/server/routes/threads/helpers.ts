@@ -1,5 +1,4 @@
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
-import type { ThreadStatus } from "../../../shared/types/index.ts";
 import type { ThreadShareMode } from "../../../application/services/threads/thread-shares.ts";
 import { requireFound } from "../validation-utils.ts";
 import type { checkThreadAccess } from "../../../application/services/threads/thread-service.ts";
@@ -7,7 +6,6 @@ import type { checkThreadAccess } from "../../../application/services/threads/th
 type ThreadUpdateInput = {
   title?: string;
   locale?: "ja" | "en" | null;
-  status?: ThreadStatus;
   context_window?: number;
 };
 
@@ -28,7 +26,6 @@ export function buildThreadUpdates(body: ThreadUpdateInput) {
   const updates: {
     title?: string | null;
     locale?: "ja" | "en" | null;
-    status?: ThreadStatus;
     context_window?: number;
   } = {};
 
@@ -38,10 +35,6 @@ export function buildThreadUpdates(body: ThreadUpdateInput) {
 
   if (body.locale !== undefined) {
     updates.locale = body.locale;
-  }
-
-  if (body.status) {
-    updates.status = body.status;
   }
 
   if (body.context_window !== undefined) {
@@ -56,9 +49,14 @@ export function buildThreadUpdates(body: ThreadUpdateInput) {
 }
 
 export function resolveThreadShareInput(body: ThreadShareInput) {
-  const mode: ThreadShareMode = body.mode === "password"
-    ? "password"
-    : "public";
+  if (
+    body.mode !== undefined &&
+    body.mode !== "public" &&
+    body.mode !== "password"
+  ) {
+    throw new BadRequestError("mode must be public or password");
+  }
+  const mode: ThreadShareMode = body.mode ?? "public";
 
   let expiresAt: string | null = null;
   if (body.expires_at) {
@@ -68,8 +66,7 @@ export function resolveThreadShareInput(body: ThreadShareInput) {
     if (!Number.isFinite(days) || days <= 0 || days > 365) {
       throw new BadRequestError("expires_in_days must be between 1 and 365");
     }
-    expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-      .toISOString();
+    expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   }
 
   return {

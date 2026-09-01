@@ -11,7 +11,12 @@ import { tmpdir } from "node:os";
 import { zlibSync } from "fflate";
 
 import { inflateRawAt, inflateZlibAt } from "../inflate-raw.ts";
-import { applyDelta, readPack, type UnpackedObject } from "../pack-reader.ts";
+import {
+  __readPackForTesting,
+  applyDelta,
+  readPack,
+  type UnpackedObject,
+} from "../pack-reader.ts";
 import { concatBytes, hexToBytes, sha1 } from "../sha1.ts";
 import { hashObject } from "../object.ts";
 import { deflate } from "../object-store.ts";
@@ -97,6 +102,45 @@ async function buildPack(inputs: PackInput[]): Promise<Uint8Array> {
   const body = concatBytes(...chunks);
   const trailer = hexToBytes(await sha1(body));
   return concatBytes(body, trailer);
+}
+
+/** Encode an OFS_DELTA negative offset using Git's +1 continuation rule. */
+function encodeOfsDeltaOffset(distance: number): Uint8Array {
+  if (!Number.isSafeInteger(distance) || distance <= 0) {
+    throw new Error("ofs-delta distance must be a positive safe integer");
+  }
+  const bytes = [distance & 0x7f];
+  let value = Math.floor(distance / 128);
+  while (value > 0) {
+    value -= 1;
+    bytes.unshift(0x80 | (value & 0x7f));
+    value = Math.floor(value / 128);
+  }
+  return new Uint8Array(bytes);
+}
+
+/** Build a deterministic two-entry pack containing one full blob and one OFS delta. */
+async function buildOfsDeltaPack(
+  base: Uint8Array,
+  delta: Uint8Array,
+): Promise<Uint8Array> {
+  const header = new Uint8Array(12);
+  header.set([0x50, 0x41, 0x43, 0x4b], 0); // "PACK"
+  new DataView(header.buffer).setUint32(4, 2, false);
+  new DataView(header.buffer).setUint32(8, 2, false);
+
+  const baseEntry = concatBytes(
+    encodePackObjectHeader(3, base.length),
+    await deflate(base),
+  );
+  const deltaStart = 12 + baseEntry.length;
+  const deltaEntry = concatBytes(
+    encodePackObjectHeader(6, delta.length),
+    encodeOfsDeltaOffset(deltaStart - 12),
+    await deflate(delta),
+  );
+  const body = concatBytes(header, baseEntry, deltaEntry);
+  return concatBytes(body, hexToBytes(await sha1(body)));
 }
 
 /** Encode a git delta (little-endian size varints + copy/insert opcodes). */
@@ -266,6 +310,78 @@ test("readPack rejects bad magic and version", async () => {
   await assertRejects(() => readPack(wrongVersion), "version");
 });
 
+test("readPack hashes each full entry once and preserves duplicate output", async () => {
+  const first = new TextEncoder().encode("duplicate full object\n");
+  const second = new TextEncoder().encode("distinct full object\n");
+  const firstSha = await hashObject("blob", first);
+  const secondSha = await hashObject("blob", second);
+  const pack = await buildPack([
+    { kind: "full", type: 3, content: first },
+    { kind: "full", type: 3, content: first },
+    { kind: "full", type: 3, content: second },
+  ]);
+
+  let hashCalls = 0;
+  const hashObjectWithCount = async (
+    type: Parameters<typeof hashObject>[0],
+    content: Uint8Array,
+  ) => {
+    hashCalls++;
+    return hashObject(type, content);
+  };
+  const objects = await __readPackForTesting(pack, undefined, hashObjectWithCount);
+  assertEquals(hashCalls, 3);
+  assertEquals(objects.length, 3);
+  assertEquals(objects.map((object) => object.sha), [
+    firstSha,
+    firstSha,
+    secondSha,
+  ]);
+  assertEquals(
+    objects.map((object) => new TextDecoder().decode(object.content)),
+    [
+      "duplicate full object\n",
+      "duplicate full object\n",
+      "distinct full object\n",
+    ],
+  );
+});
+
+test("readPack hashes an OFS delta once and preserves file order", async () => {
+  const base = new TextEncoder().encode("ofs delta base content\n");
+  const target = new TextEncoder().encode("ofs delta target content\n");
+  const delta = encodeDelta(base.length, target.length, [
+    { insert: new TextEncoder().encode("ofs delta target ") },
+    { copy: { offset: 15, size: base.length - 15 } },
+  ]);
+  const pack = await buildOfsDeltaPack(base, delta);
+  const baseSha = await hashObject("blob", base);
+  const targetSha = await hashObject("blob", target);
+
+  let hashCalls = 0;
+  const hashObjectWithCount = async (
+    type: Parameters<typeof hashObject>[0],
+    content: Uint8Array,
+  ) => {
+    hashCalls++;
+    return hashObject(type, content);
+  };
+  const objects = await __readPackForTesting(
+    pack,
+    undefined,
+    hashObjectWithCount,
+  );
+
+  const entryCount = 2;
+  assertEquals(hashCalls, entryCount);
+  assertEquals(objects.map((object) => object.sha), [baseSha, targetSha]);
+  assertEquals(objects.map((object) => object.type), ["blob", "blob"]);
+  assertEquals(
+    objects.map((object) => new TextDecoder().decode(object.content)),
+    ["ofs delta base content\n", "ofs delta target content\n"],
+  );
+});
+
 // --- hand-built REF_DELTA, chains, and thin packs --------------------------
 
 test("readPack resolves an in-pack REF_DELTA", async () => {
@@ -315,7 +431,20 @@ test("readPack resolves a delta-on-delta chain", async () => {
     { kind: "ref", baseSha: midSha, delta: delta2 },
   ]);
 
-  const objects = await readPack(pack);
+  let hashCalls = 0;
+  const hashObjectWithCount = async (
+    type: Parameters<typeof hashObject>[0],
+    content: Uint8Array,
+  ) => {
+    hashCalls++;
+    return hashObject(type, content);
+  };
+  const objects = await __readPackForTesting(
+    pack,
+    undefined,
+    hashObjectWithCount,
+  );
+  assertEquals(hashCalls, 3);
   assertEquals(objects.length, 3);
   const finalObj = objects.find(
     (o) => new TextDecoder().decode(o.content) === finalStr,
@@ -350,6 +479,53 @@ test("readPack resolves a thin-pack REF_DELTA via resolveExternalBase", async ()
   assertEquals(objects[0].type, "blob");
   assertEquals(new TextDecoder().decode(objects[0].content), targetStr);
   assertEquals(objects[0].sha, await hashObject("blob", objects[0].content));
+});
+
+test("readPack counts thin external type attempts in order", async () => {
+  const base = new TextEncoder().encode("thin external tag base\n");
+  const target = new TextEncoder().encode("thin external tag target\n");
+  const baseSha = await hashObject("tag", base);
+  const targetSha = await hashObject("tag", target);
+  const delta = encodeDelta(base.length, target.length, [
+    { insert: new TextEncoder().encode("thin external tag target") },
+    { copy: { offset: 22, size: 1 } },
+  ]);
+  const pack = await buildPack([{ kind: "ref", baseSha, delta }]);
+
+  let hashCalls = 0;
+  const hashTypes: Parameters<typeof hashObject>[0][] = [];
+  const resolverCalls: string[] = [];
+  const hashObjectWithCount = async (
+    type: Parameters<typeof hashObject>[0],
+    content: Uint8Array,
+  ) => {
+    hashCalls++;
+    hashTypes.push(type);
+    return hashObject(type, content);
+  };
+  const objects = await __readPackForTesting(
+    pack,
+    {
+      resolveExternalBase: async (sha) => {
+        resolverCalls.push(sha);
+        return sha === baseSha ? base : null;
+      },
+    },
+    hashObjectWithCount,
+  );
+
+  const entryCount = 1;
+  const externalTypeAttempts = 4;
+  assertEquals(hashCalls, entryCount + externalTypeAttempts);
+  assertEquals(hashTypes, ["blob", "tree", "commit", "tag", "tag"]);
+  assertEquals(resolverCalls, [baseSha]);
+  assertEquals(objects.length, 1);
+  assertEquals(objects[0].type, "tag");
+  assertEquals(objects[0].sha, targetSha);
+  assertEquals(
+    new TextDecoder().decode(objects[0].content),
+    "thin external tag target\n",
+  );
 });
 
 test("readPack throws on a thin pack with no resolver", async () => {

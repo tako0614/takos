@@ -195,10 +195,13 @@ export async function apiJson<T>(
       if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
       }
+      const requestSignal = init?.signal
+        ? AbortSignal.any([signal, init.signal])
+        : signal;
       return fetch(path, {
         ...init,
         headers,
-        signal,
+        signal: requestSignal,
       });
     },
     timeoutMs,

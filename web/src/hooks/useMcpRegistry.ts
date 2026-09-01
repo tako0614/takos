@@ -9,6 +9,12 @@ import type {
   McpRegistrySourceKind,
   McpServerCardDiscoveryResult,
 } from "../types/index.ts";
+import {
+  parseMcpRegistrySearchResult,
+  parseMcpRegistrySource,
+  parseMcpRegistrySources,
+  parseMcpServerCardDiscovery,
+} from "../views/connections/mcp-registry-response.ts";
 
 interface UseMcpRegistryOptions {
   spaceId: Accessor<string>;
@@ -35,6 +41,7 @@ interface ApiEnvelope<T> {
 async function parseApiResponse<T>(
   response: Response,
   fallbackMessage: string,
+  parse: (value: unknown) => T,
 ): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as Partial<
     ApiEnvelope<T>
@@ -42,7 +49,11 @@ async function parseApiResponse<T>(
   if (!response.ok || body.data === undefined) {
     throw new Error(getErrorMessage(body.error, fallbackMessage));
   }
-  return body.data;
+  try {
+    return parse(body.data);
+  } catch {
+    throw new Error(fallbackMessage);
+  }
 }
 
 async function ensureApiSuccess(
@@ -98,6 +109,7 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
       const nextSources = await parseApiResponse<McpRegistrySource[]>(
         response,
         t("registrySourcesFetchFailed"),
+        parseMcpRegistrySources,
       );
       if (!claim.won()) return;
       setSources(nextSources);
@@ -136,6 +148,7 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
       const result = await parseApiResponse<McpRegistrySearchResult>(
         response,
         t("registrySearchFailed"),
+        parseMcpRegistrySearchResult,
       );
       if (!claim.won()) return null;
       setSearchResult(result);
@@ -168,6 +181,7 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
       const discovered = await parseApiResponse<McpServerCardDiscoveryResult>(
         response,
         t("serverCardDiscoveryFailed"),
+        parseMcpServerCardDiscovery,
       );
       if (!claim.won()) return null;
       const result: McpRegistrySearchResult = {
@@ -224,8 +238,9 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
     const source = await parseApiResponse<McpRegistrySource>(
       response,
       t("registrySourceCreateFailed"),
+      parseMcpRegistrySource,
     );
-    await refreshSources();
+    if (targetSpaceId === currentSpaceId()) await refreshSources();
     return source;
   };
 
@@ -249,8 +264,9 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
     const source = await parseApiResponse<McpRegistrySource>(
       response,
       t("registrySourceUpdateFailed"),
+      parseMcpRegistrySource,
     );
-    await refreshSources();
+    if (targetSpaceId === currentSpaceId()) await refreshSources();
     return source;
   };
 
@@ -265,7 +281,7 @@ export function useMcpRegistry({ spaceId }: UseMcpRegistryOptions) {
       { method: "DELETE" },
     );
     await ensureApiSuccess(response, t("registrySourceDeleteFailed"));
-    await refreshSources();
+    if (targetSpaceId === currentSpaceId()) await refreshSources();
   };
 
   return {

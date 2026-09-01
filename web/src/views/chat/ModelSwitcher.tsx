@@ -1,52 +1,77 @@
 import { For, Show } from "solid-js";
-import {
-  getModelLabel,
-  MODEL_OPTIONS,
-  type ModelSelectOption,
-} from "../../lib/modelCatalog.ts";
+import { getModelLabel, type ModelSelectOption } from "../../lib/modelCatalog.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ModelSwitcherProps {
   selectedModel: string;
   models?: readonly ModelSelectOption[];
   isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onModelChange?: (model: string) => void;
 }
 
 export function ModelSwitcher(props: ModelSwitcherProps) {
-  const models = () => (props.models?.length ? props.models : MODEL_OPTIONS);
+  const { t } = useI18n();
+  const models = () => props.models ?? [];
   return (
     <Show
       when={props.onModelChange}
       fallback={
         <span class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-          {getModelLabel(props.selectedModel)}
+          {getModelLabel(models(), props.selectedModel)}
         </span>
       }
     >
-      <div class="relative">
-        <select
-          value={props.selectedModel}
-          onInput={(e) => props.onModelChange!(e.currentTarget.value)}
-          disabled={props.isLoading ?? false}
-          class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <For each={models()}>
-            {(opt) => (
-              <option
-                value={opt.id}
-                disabled={opt.disabled}
-                class="bg-white dark:bg-zinc-900 text-base font-normal"
-              >
-                {opt.label}
-              </option>
-            )}
-          </For>
-        </select>
-        <div class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500 dark:text-zinc-400">
-          <Icons.ChevronDown class="w-4 h-4" />
+      <Show
+        when={!props.hasError}
+        fallback={
+          <div
+            role="alert"
+            class="flex min-w-0 items-center gap-2 text-xs font-medium text-red-600 dark:text-red-400"
+          >
+            <span class="truncate">{t("modelCatalogUnavailable")}</span>
+            <button
+              type="button"
+              class="shrink-0 rounded-md border border-red-200 dark:border-red-800 px-2 py-1 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-50"
+              disabled={props.isLoading || !props.onRetry}
+              onClick={() => props.onRetry?.()}
+            >
+              {props.isLoading ? t("loading") : t("retry")}
+            </button>
+          </div>
+        }
+      >
+        <div class="relative">
+          <select
+            name="chat-model"
+            aria-label={t("model")}
+            value={props.selectedModel}
+            onInput={(e) => props.onModelChange!(e.currentTarget.value)}
+            disabled={props.isLoading || models().length === 0}
+            class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Show when={models().length === 0}>
+              <option value="">{t("modelCatalogLoading")}</option>
+            </Show>
+            <For each={models()}>
+              {(opt) => (
+                <option
+                  value={opt.id}
+                  disabled={opt.disabled}
+                  class="bg-white dark:bg-zinc-900 text-base font-normal"
+                >
+                  {opt.label}
+                </option>
+              )}
+            </For>
+          </select>
+          <div class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500 dark:text-zinc-400">
+            <Icons.ChevronDown class="w-4 h-4" />
+          </div>
         </div>
-      </div>
+      </Show>
     </Show>
   );
 }

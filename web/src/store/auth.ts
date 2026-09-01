@@ -1,7 +1,12 @@
 import { rpcJson } from "../lib/rpc.ts";
 import { getErrorMessage } from "../lib/errors.ts";
 import { withTimeout } from "../lib/withTimeout.ts";
-import { normalizeSpaces } from "../lib/spaces.ts";
+import { parseSpacesResponse } from "../lib/space-response.ts";
+import {
+  parseCurrentUserResponse,
+  parseLogoutResponse,
+  parseUserSettingsResponse,
+} from "../lib/auth-response.ts";
 import { getTranslation } from "../i18n.ts";
 import { detectLanguage } from "../lib/locale.ts";
 import type { TranslationKey, TranslationParams } from "./i18n.ts";
@@ -12,6 +17,7 @@ export type AuthState = "loading" | "login" | "authenticated";
 export type FetchSpacesOptions = {
   notifyOnError?: boolean;
   throwOnError?: boolean;
+  fallbackSpaces?: readonly Space[];
 };
 
 export type AuthActionDeps = {
@@ -29,6 +35,7 @@ export interface AuthSnapshot {
 }
 
 const AUTH_BOOT_TIMEOUT_MS = 10000;
+let logoutRequest: Promise<void> | null = null;
 
 export const INITIAL_AUTH_SNAPSHOT: AuthSnapshot = {
   authState: "loading",
@@ -69,48 +76,31 @@ async function readApiErrorMessage(
   return fallback;
 }
 
-function buildVirtualPersonalSpace(currentUser: User): Space {
-  const timestamp = new Date().toISOString();
-  return {
-    id: currentUser.username,
-    name: currentUser.name || currentUser.username,
-    slug: currentUser.username,
-    description: null,
-    kind: "user",
-    is_personal: true,
-    owner_principal_id: currentUser.username,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-}
-
-export async function fetchUserSettings(): Promise<UserSettings | null> {
+export async function fetchUserSettings(
+  fallback: UserSettings | null = null,
+): Promise<UserSettings | null> {
   try {
     const res = await fetchApi("/api/me/settings");
-    return await rpcJson<UserSettings>(res);
+    return parseUserSettingsResponse(await rpcJson<unknown>(res));
   } catch {
-    return null;
+    return fallback;
   }
 }
 
 export async function fetchSpaces(
   deps: AuthActionDeps,
-  currentUser?: User | null,
+  _currentUser?: User | null,
   options?: FetchSpacesOptions,
 ): Promise<Space[]> {
-  const { notifyOnError = true, throwOnError = false } = options ?? {};
+  const {
+    notifyOnError = true,
+    throwOnError = false,
+    fallbackSpaces,
+  } = options ?? {};
 
   try {
     const res = await fetchApi("/api/spaces");
-    const data = await rpcJson<{ spaces: Space[] }>(res);
-    let allSpaces = normalizeSpaces(data.spaces || []);
-
-    const hasPersonal = allSpaces.some((space) => space.kind === "user");
-    if (!hasPersonal && currentUser) {
-      allSpaces = [buildVirtualPersonalSpace(currentUser), ...allSpaces];
-    }
-
-    return allSpaces;
+    return parseSpacesResponse(await rpcJson<unknown>(res));
   } catch (error) {
     if (notifyOnError) {
       deps.showToast(
@@ -121,10 +111,7 @@ export async function fetchSpaces(
     if (throwOnError) {
       throw error;
     }
-    if (currentUser) {
-      return [buildVirtualPersonalSpace(currentUser)];
-    }
-    return [];
+    return fallbackSpaces ? [...fallbackSpaces] : [];
   }
 }
 
@@ -136,9 +123,12 @@ export async function loadAuthSnapshot(
   try {
     const res = await fetchApi("/api/me");
     if (res.ok) {
-      const user = await rpcJson<User>(res);
+      const user = parseCurrentUserResponse(await rpcJson<unknown>(res));
       const [spaces, userSettings] = await Promise.all([
-        fetchSpaces(deps, user),
+        fetchSpaces(deps, user, {
+          notifyOnError: false,
+          throwOnError: true,
+        }),
         fetchUserSettings(),
       ]);
 
@@ -171,8 +161,31 @@ export async function loadAuthSnapshot(
   }
 }
 
-export async function handleLogout(): Promise<void> {
-  await fetch("/auth/logout", { method: "POST" });
+async function performLogout(): Promise<void> {
+  const response = await withTimeout(
+    (signal) =>
+      fetch("/auth/logout", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        signal,
+      }),
+    AUTH_BOOT_TIMEOUT_MS,
+    getTranslation(detectLanguage(), "requestTimedOut"),
+  );
+  if (!response.ok) {
+    throw new Error(getTranslation(detectLanguage(), "failedToLogout"));
+  }
+  parseLogoutResponse(await response.json());
+}
+
+export function handleLogout(): Promise<void> {
+  if (logoutRequest) return logoutRequest;
+  const request = performLogout();
+  logoutRequest = request;
+  void request.finally(() => {
+    if (logoutRequest === request) logoutRequest = null;
+  }).catch(() => undefined);
+  return request;
 }
 
 export function redirectToLogin(returnTo?: string): void {

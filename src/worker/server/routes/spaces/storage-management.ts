@@ -12,6 +12,7 @@ import {
   moveAndRenameStorageItem,
   moveStorageItem,
   renameStorageItem,
+  StorageError,
 } from "../../../application/services/source/space-storage.ts";
 import type { StorageFileResponse } from "../../../application/services/source/space-storage.ts";
 import {
@@ -34,6 +35,30 @@ import {
   FILE_HANDLER_INTERFACE_TYPE,
   FILE_HANDLER_OPEN_PERMISSION,
 } from "takosumi-contract";
+import {
+  MAX_STORAGE_ERROR_CHARACTERS,
+  MAX_STORAGE_ID_CHARACTERS,
+  MAX_STORAGE_MIME_TYPE_CHARACTERS,
+  MAX_STORAGE_NAME_CHARACTERS,
+  MAX_STORAGE_PATH_CHARACTERS,
+} from "../../../shared/types/index.ts";
+
+const storageIdSchema = z.string().min(1).max(MAX_STORAGE_ID_CHARACTERS);
+const storageNameSchema = z.string().min(1).max(MAX_STORAGE_NAME_CHARACTERS);
+const storagePathSchema = z.string().max(MAX_STORAGE_PATH_CHARACTERS);
+const storageIdsSchema = z.array(storageIdSchema)
+  .min(1)
+  .max(MAX_BULK_OPERATION_ITEMS)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: "file_ids must be unique",
+  });
+
+function bulkStorageErrorMessage(err: unknown, fallback: string): string {
+  return (err instanceof StorageError ? err.message : fallback).slice(
+    0,
+    MAX_STORAGE_ERROR_CHARACTERS,
+  );
+}
 
 export const storageManagementRouteDeps = {
   listStorageFiles,
@@ -88,9 +113,9 @@ const app = new Hono<SpaceAccessRouteEnv>()
     zValidator(
       "query",
       z.object({
-        mime: z.string().optional(),
-        ext: z.string().optional(),
-      }),
+        mime: z.string().max(MAX_STORAGE_MIME_TYPE_CHARACTERS).optional(),
+        ext: z.string().max(MAX_STORAGE_NAME_CHARACTERS).optional(),
+      }).strict(),
     ),
     async (c) => {
       const { mime, ext } = c.req.valid("query");
@@ -179,7 +204,10 @@ const app = new Hono<SpaceAccessRouteEnv>()
     "/:spaceId/storage",
     requireOAuthScope("files:read"),
     spaceAccess(),
-    zValidator("query", z.object({ path: z.string().optional() })),
+    zValidator(
+      "query",
+      z.object({ path: storagePathSchema.optional() }).strict(),
+    ),
     async (c) => {
       const { path: queryPath } = c.req.valid("query");
       const path = queryPath || "/";
@@ -199,10 +227,13 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/folders",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
-      z.object({ name: z.string(), parent_path: z.string().optional() }),
+      z.object({
+        name: storageNameSchema,
+        parent_path: storagePathSchema.optional(),
+      }).strict(),
     ),
     async (c) => {
       const user = c.get("user");
@@ -255,7 +286,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .delete(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     async (c) => {
       const fileId = c.req.param("fileId");
 
@@ -282,6 +313,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
 
         return c.json({
           success: true,
+          file_id: fileId,
           deleted_count: r2KeysToDelete.length + 1,
         });
       } catch (err) {
@@ -293,13 +325,13 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .patch(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({
-        name: z.string().optional(),
-        parent_path: z.string().optional(),
-      }),
+        name: storageNameSchema.optional(),
+        parent_path: storagePathSchema.optional(),
+      }).strict(),
     ),
     async (c) => {
       const fileId = c.req.param("fileId");
@@ -355,8 +387,11 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-delete",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
-    zValidator("json", z.object({ file_ids: z.array(z.string()) })),
+    spaceAccess(),
+    zValidator(
+      "json",
+      z.object({ file_ids: storageIdsSchema }).strict(),
+    ),
     async (c) => {
       const access = c.get("access");
 
@@ -392,6 +427,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
         return c.json({
           success: true,
           deleted_count: bulkDeleteResult.deletedCount,
+          deleted_ids: bulkDeleteResult.deletedIds,
           error_count: bulkDeleteResult.failedIds.length,
           failed_ids: bulkDeleteResult.failedIds,
         });
@@ -404,10 +440,13 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-move",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
-      z.object({ file_ids: z.array(z.string()), parent_path: z.string() }),
+      z.object({
+        file_ids: storageIdsSchema,
+        parent_path: storagePathSchema,
+      }).strict(),
     ),
     async (c) => {
       const access = c.get("access");
@@ -440,7 +479,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
         } catch (err) {
           errors.push({
             file_id: fileId,
-            error: err instanceof Error ? err.message : "Failed to move",
+            error: bulkStorageErrorMessage(err, "Failed to move"),
           });
         }
       }
@@ -457,12 +496,23 @@ const app = new Hono<SpaceAccessRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-rename",
     requireOAuthScope("files:write"),
-    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    spaceAccess(),
     zValidator(
       "json",
       z.object({
-        renames: z.array(z.object({ file_id: z.string(), name: z.string() })),
-      }),
+        renames: z.array(z.object({
+          file_id: storageIdSchema,
+          name: storageNameSchema,
+        }).strict())
+          .min(1)
+          .max(MAX_BULK_OPERATION_ITEMS)
+          .refine(
+            (renames) =>
+              new Set(renames.map((rename) => rename.file_id)).size ===
+                renames.length,
+            { message: "rename file_ids must be unique" },
+          ),
+      }).strict(),
     ),
     async (c) => {
       const access = c.get("access");
@@ -499,7 +549,7 @@ const app = new Hono<SpaceAccessRouteEnv>()
         } catch (err) {
           errors.push({
             file_id: item.file_id,
-            error: err instanceof Error ? err.message : "Failed to rename",
+            error: bulkStorageErrorMessage(err, "Failed to rename"),
           });
         }
       }

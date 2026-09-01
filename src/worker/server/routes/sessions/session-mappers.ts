@@ -7,11 +7,6 @@ export type SessionContext = Context<
   { Bindings: Env; Variables: BaseVariables }
 >;
 
-export type JwtHeartbeatPayload = {
-  session_id?: string;
-  space_id?: string;
-};
-
 export function toSessionSnakeCase(dbSession: {
   id: string;
   accountId: string;

@@ -2,13 +2,34 @@ import type { Accessor, Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import { truncateByCodepoint } from "../lib/format.ts";
-import type { Message, Run } from "../types/index.ts";
+import type { Message, ThreadHistoryRunSummary } from "../types/index.ts";
 import type { ChatAttachmentMetadata } from "../views/chat/messageMetadata.ts";
 import { buildChatMessageMetadata } from "../views/chat/messageMetadata.ts";
 import { buildChatAttachmentPath } from "./useChatAttachments.ts";
+import {
+  chatRunIdForOperation,
+  createChatOperationId,
+  isActiveChatRun,
+  isSameChatDraft,
+  shouldRetryChatRun,
+} from "./chat-operation-id.ts";
+import { MAX_CHAT_MESSAGE_CHARACTERS } from "./chat-limits.ts";
+import { parseChatMessageMutationResponse } from "./chat-message-response.ts";
+import { parseChatThreadResponse } from "./chat-thread-response.ts";
+import {
+  type ChatRunCreationSummary,
+  parseChatRunCreateResponse,
+} from "./chat-run-response.ts";
+import {
+  browserSessionStorage,
+  type McpConfirmationRunGrant,
+  peekMcpConfirmationRunGrant,
+  removeMcpConfirmationRunGrant,
+} from "./mcp-confirmation-run-grants.ts";
 
 export interface UseChatMessagesOptions {
   threadId: Accessor<string>;
+  spaceRecordId: Accessor<string>;
   lang: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   input: Accessor<string>;
@@ -26,9 +47,9 @@ export interface UseChatMessagesOptions {
   lastEventIdRef: { current: number };
   resetStreamingState: () => void;
   setIsLoading: Setter<boolean>;
-  setCurrentRun: Setter<Run | null>;
+  setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
   startWebSocket: (runId: string) => void;
-  syncThreadAfterSendFailure: () => Promise<void>;
+  syncThreadAfterSendFailure: () => Promise<ThreadHistoryRunSummary | null>;
   // From useMessagePolling
   messagesCountRef: { current: number };
   abortPendingFetch: () => void;
@@ -44,8 +65,20 @@ export interface UseChatMessagesResult {
   sendMessage: () => Promise<void>;
 }
 
+interface ChatSendOperation {
+  id: string;
+  runIdempotencyKey: string;
+  threadId: string;
+  input: string;
+  files: File[];
+  uploadedAttachments?: ChatAttachmentMetadata[];
+  message?: Message;
+  confirmationGrant?: McpConfirmationRunGrant;
+}
+
 export function useChatMessages({
   threadId,
+  spaceRecordId,
   lang,
   t,
   input,
@@ -70,8 +103,11 @@ export function useChatMessages({
   setError,
   uploadChatAttachments,
 }: UseChatMessagesOptions): UseChatMessagesResult {
+  let retryOperation: ChatSendOperation | null = null;
+
   const sendMessage = async () => {
     const currentThreadId = threadId();
+    const currentSpaceRecordId = spaceRecordId();
     const currentInput = input();
     const currentAttachedFiles = attachedFiles();
     const currentSelectedModel = selectedModel();
@@ -80,10 +116,42 @@ export function useChatMessages({
     if ((!trimmedInput && currentAttachedFiles.length === 0) || isLoading()) {
       return;
     }
+    if (currentInput.length > MAX_CHAT_MESSAGE_CHARACTERS) {
+      setError(t("chatMessageTooLong", { count: MAX_CHAT_MESSAGE_CHARACTERS }));
+      return;
+    }
+    if (!currentSelectedModel) {
+      setError(t("modelCatalogUnavailable"));
+      return;
+    }
+    setError(null);
 
     const isFirstMessageInThread = messagesCountRef.current === 0;
     const draftInput = currentInput;
     const draftFiles = currentAttachedFiles;
+    const reusableOperation = retryOperation?.threadId === currentThreadId &&
+        isSameChatDraft(
+          { input: retryOperation.input, files: retryOperation.files },
+          { input: draftInput, files: draftFiles },
+        )
+      ? retryOperation
+      : null;
+    const operation = reusableOperation ?? {
+      id: createChatOperationId(),
+      runIdempotencyKey: "",
+      threadId: currentThreadId,
+      input: draftInput,
+      files: draftFiles,
+      confirmationGrant: peekMcpConfirmationRunGrant(
+        browserSessionStorage(),
+        currentSpaceRecordId,
+        currentThreadId,
+      ) ?? undefined,
+    };
+    if (!operation.runIdempotencyKey) {
+      operation.runIdempotencyKey = operation.id;
+    }
+    retryOperation = operation;
     const optimisticAttachments: ChatAttachmentMetadata[] = draftFiles.map((
       file,
     ) => ({
@@ -102,8 +170,8 @@ export function useChatMessages({
     setAttachedFiles([]);
     setIsLoading(true);
 
-    const tempUserMessage: Message = {
-      id: `temp-${Date.now()}`,
+    const tempUserMessage: Message | null = operation.message ? null : {
+      id: `temp-${operation.id}`,
       thread_id: currentThreadId,
       role: "user",
       content: trimmedInput,
@@ -113,11 +181,15 @@ export function useChatMessages({
       created_at: new Date().toISOString(),
       sequence: 0,
     };
-    setMessages((prev) => [...prev, tempUserMessage]);
+    if (tempUserMessage) {
+      setMessages((prev) => [...prev, tempUserMessage]);
+    }
 
     let userMessagePersisted = false;
     try {
-      const uploadedAttachments = await uploadChatAttachments(draftFiles);
+      const uploadedAttachments = operation.uploadedAttachments ??
+        await uploadChatAttachments(draftFiles);
+      operation.uploadedAttachments = uploadedAttachments;
       const msgRes = await rpc.threads[":id"].messages.$post({
         param: { id: currentThreadId },
         json: {
@@ -126,17 +198,29 @@ export function useChatMessages({
           metadata: uploadedAttachments.length > 0
             ? { attachments: uploadedAttachments }
             : undefined,
+          idempotency_key: operation.id,
         },
       });
       if (msgRes.ok) {
         userMessagePersisted = true;
       }
-      const msgData = await rpcJson<{ message: Message }>(msgRes);
+      const persistedMessage = parseChatMessageMutationResponse(
+        await rpcJson<unknown>(msgRes),
+        currentThreadId,
+      );
+      operation.message = persistedMessage;
 
       if (isCurrentThread()) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempUserMessage.id ? msgData.message : m))
-        );
+        setMessages((prev) => {
+          if (tempUserMessage) {
+            return prev.map((message) =>
+              message.id === tempUserMessage.id ? persistedMessage : message
+            );
+          }
+          return prev.some((message) => message.id === persistedMessage.id)
+            ? prev
+            : [...prev, persistedMessage];
+        });
       }
 
       if (isFirstMessageInThread) {
@@ -148,7 +232,13 @@ export function useChatMessages({
             param: { id: currentThreadId },
             json: { title },
           });
-          await rpcJson(titleRes);
+          const updatedThread = parseChatThreadResponse(
+            await rpcJson<unknown>(titleRes),
+            { spaceId: currentSpaceRecordId, threadId: currentThreadId },
+          );
+          if (updatedThread.title !== title) {
+            throw new TypeError("Mismatched Chat Thread title response");
+          }
           if (isCurrentThread()) {
             onUpdateTitle(title);
           }
@@ -157,21 +247,63 @@ export function useChatMessages({
         }
       }
 
-      const runRes = await rpcPath(rpc, "threads", ":threadId", "runs").$post({
-        param: { threadId: currentThreadId },
-        json: {
-          agent_type: "default",
-          model: currentSelectedModel,
-          input: { locale: lang },
-        },
-      });
-      const runData = await rpcJson<{ run: Run }>(runRes);
+      const requestRun = async (
+        idempotencyKey: string,
+      ): Promise<ChatRunCreationSummary> => {
+        const runRes = await rpcPath(rpc, "threads", ":threadId", "runs")
+          .$post({
+            param: { threadId: currentThreadId },
+            json: {
+              agent_type: "default",
+              model: currentSelectedModel,
+              input: { locale: lang },
+              idempotency_key: idempotencyKey,
+              confirmation_grant_id: operation.confirmationGrant
+                ?.confirmationGrantId,
+            },
+          });
+        return parseChatRunCreateResponse(
+          await rpcJson<unknown>(runRes),
+          {
+            runId: chatRunIdForOperation(idempotencyKey),
+            threadId: currentThreadId,
+            spaceId: currentSpaceRecordId,
+            agentType: "default",
+          },
+        ).run;
+      };
+
+      let run = await requestRun(operation.runIdempotencyKey);
+      if (shouldRetryChatRun(run.status)) {
+        // The prior request definitely reached a terminal failure. Preserve
+        // the canonical user message, but create a fresh idempotent Run
+        // attempt. Active/completed replays are never duplicated.
+        operation.runIdempotencyKey = createChatOperationId();
+        run = await requestRun(operation.runIdempotencyKey);
+      }
+      if (operation.confirmationGrant) {
+        removeMcpConfirmationRunGrant(
+          browserSessionStorage(),
+          operation.confirmationGrant,
+        );
+        operation.confirmationGrant = undefined;
+      }
       if (!isCurrentThread()) {
         return;
       }
 
-      setCurrentRun(runData.run);
-      startWebSocket(runData.run.id);
+      if (shouldRetryChatRun(run.status)) {
+        throw new Error(run.error || t("networkError"));
+      }
+
+      setCurrentRun(run);
+      if (isActiveChatRun(run.status)) {
+        startWebSocket(run.id);
+      } else {
+        setIsLoading(false);
+        await syncThreadAfterSendFailure();
+      }
+      retryOperation = null;
     } catch (err) {
       if (!isCurrentThread()) {
         return;
@@ -184,7 +316,11 @@ export function useChatMessages({
         // restore the composer so the user can resend immediately.
         // Restoring input + files is the implicit "retry button" — the user
         // sees their text back in the composer with the existing send button.
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
+        if (tempUserMessage) {
+          setMessages((prev) =>
+            prev.filter((message) => message.id !== tempUserMessage.id)
+          );
+        }
         setInput(draftInput);
         setAttachedFiles(draftFiles);
       } else {
@@ -196,11 +332,19 @@ export function useChatMessages({
         // We intentionally do not remove the bubble: removing it makes the
         // user think their message was lost, when in fact it is persisted
         // and only the agent run failed to start.
-        setInput(draftInput);
-        setAttachedFiles(draftFiles);
         // Refresh server state so the temp bubble is replaced by the real
         // persisted message (if `syncThreadAfterSendFailure` reconciles).
-        await syncThreadAfterSendFailure();
+        const recoveredRun = await syncThreadAfterSendFailure();
+        if (
+          recoveredRun?.id ===
+            chatRunIdForOperation(operation.runIdempotencyKey)
+        ) {
+          retryOperation = null;
+          setError(null);
+          return;
+        }
+        setInput(draftInput);
+        setAttachedFiles(draftFiles);
       }
       setError(err instanceof Error ? err.message : t("networkError"));
     }

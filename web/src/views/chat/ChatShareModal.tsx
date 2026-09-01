@@ -5,7 +5,12 @@ import { Modal } from "../../components/ui/Modal.tsx";
 import { Button } from "../../components/ui/Button.tsx";
 import { Input } from "../../components/ui/Input.tsx";
 import { Icons } from "../../lib/Icons.tsx";
+import { formatDateTime } from "../../lib/format.ts";
 import type { ThreadShare } from "../../hooks/useChatSharing.ts";
+import {
+  MAX_THREAD_SHARE_PASSWORD_CHARACTERS,
+  MIN_THREAD_SHARE_PASSWORD_CHARACTERS,
+} from "takos-api-contract/thread-share";
 
 export interface ChatShareModalProps {
   isOpen: boolean;
@@ -20,6 +25,7 @@ export interface ChatShareModalProps {
   onShareExpiresInDaysChange: (v: string) => void;
   shareError: string | null;
   creatingShare: boolean;
+  revokingShareId: string | null;
   onFetchShares: () => void;
   onCreateShare: () => void;
   onRevokeShare: (shareId: string) => void;
@@ -28,6 +34,8 @@ export interface ChatShareModalProps {
 export function ChatShareModal(props: ChatShareModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
+  const mutationBusy = () =>
+    props.creatingShare || props.revokingShareId !== null;
 
   return (
     <Modal
@@ -43,11 +51,15 @@ export function ChatShareModal(props: ChatShareModalProps) {
               {t("shareMode")}
             </div>
             <select
+              name="thread-share-mode"
+              aria-label={t("shareMode")}
               value={props.shareMode}
               onInput={(e) =>
                 props.onShareModeChange(
                   e.currentTarget.value === "password" ? "password" : "public",
-                )}
+                )
+              }
+              disabled={mutationBusy()}
               class="w-full min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
             >
               <option value="public">{t("sharePublic")}</option>
@@ -59,11 +71,19 @@ export function ChatShareModal(props: ChatShareModalProps) {
               {t("shareExpiresDays")}
             </div>
             <Input
+              name="thread-share-expiry-days"
+              aria-label={t("shareExpiresDays")}
+              type="number"
+              min="1"
+              max="365"
+              step="1"
               value={props.shareExpiresInDays}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
-                props.onShareExpiresInDaysChange(e.currentTarget.value)}
+                props.onShareExpiresInDaysChange(e.currentTarget.value)
+              }
               placeholder={t("shareExpiresDaysPlaceholder")}
               inputmode="numeric"
+              disabled={mutationBusy()}
             />
           </div>
           <div class="space-y-1">
@@ -72,19 +92,29 @@ export function ChatShareModal(props: ChatShareModalProps) {
             </div>
             <Input
               type="password"
+              name="thread-share-password"
+              aria-label={t("sharePasswordLabel")}
+              autocomplete="new-password"
+              maxlength={MAX_THREAD_SHARE_PASSWORD_CHARACTERS}
               value={props.sharePassword}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
-                props.onSharePasswordChange(e.currentTarget.value)}
-              placeholder={props.shareMode === "password"
-                ? t("sharePasswordPlaceholder")
-                : `(${t("optional")})`}
-              disabled={props.shareMode !== "password"}
+                props.onSharePasswordChange(e.currentTarget.value)
+              }
+              placeholder={
+                props.shareMode === "password"
+                  ? t("sharePasswordPlaceholder")
+                  : `(${t("optional")})`
+              }
+              disabled={props.shareMode !== "password" || mutationBusy()}
             />
           </div>
         </div>
 
         <Show when={props.shareError}>
-          <div class="text-sm text-red-600 dark:text-red-400">
+          <div
+            role="alert"
+            class="text-sm text-red-600 dark:text-red-400"
+          >
             {props.shareError}
           </div>
         </Show>
@@ -93,7 +123,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
           <Button
             variant="secondary"
             onClick={props.onFetchShares}
-            disabled={props.sharesLoading}
+            disabled={props.sharesLoading || mutationBusy()}
             leftIcon={
               <Icons.Refresh
                 class={"w-4 h-4 " + (props.sharesLoading ? "animate-spin" : "")}
@@ -105,9 +135,12 @@ export function ChatShareModal(props: ChatShareModalProps) {
           <Button
             variant="primary"
             onClick={props.onCreateShare}
-            disabled={props.creatingShare ||
+            disabled={
+              mutationBusy() ||
               (props.shareMode === "password" &&
-                props.sharePassword.trim().length < 8)}
+                props.sharePassword.trim().length <
+                  MIN_THREAD_SHARE_PASSWORD_CHARACTERS)
+            }
             isLoading={props.creatingShare}
             leftIcon={<Icons.Link class="w-4 h-4" />}
           >
@@ -131,7 +164,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
           <Show
             when={props.shares.length > 0}
             fallback={
-              <Show when={!props.sharesLoading}>
+              <Show when={!props.sharesLoading && !props.shareError}>
                 <div class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
                   {t("noShareLinks")}
                 </div>
@@ -158,19 +191,21 @@ export function ChatShareModal(props: ChatShareModalProps) {
                       </div>
                       <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                         {s.expires_at
-                          ? t("shareExpiresAt", { date: s.expires_at })
+                          ? t("shareExpiresAt", {
+                              date: formatDateTime(s.expires_at),
+                            })
                           : t("shareNoExpiry")}
                         {s.last_accessed_at
-                          ? ` \u00B7 ${
-                            t("shareLastAccessed", { date: s.last_accessed_at })
-                          }`
+                          ? ` \u00B7 ${t("shareLastAccessed", {
+                              date: formatDateTime(s.last_accessed_at),
+                            })}`
                           : ""}
                       </div>
                     </div>
                     <div class="flex items-center gap-1">
                       <button
                         type="button"
-                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center"
+                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(s.share_url);
@@ -179,19 +214,26 @@ export function ChatShareModal(props: ChatShareModalProps) {
                             showToast("error", t("failedToCopy"));
                           }
                         }}
-                        disabled={!!s.revoked_at}
+                        disabled={!!s.revoked_at || mutationBusy()}
+                        aria-label={t("copy")}
                         title={t("copy")}
                       >
                         <Icons.Copy class="w-4 h-4" />
                       </button>
                       <button
                         type="button"
-                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center"
+                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => props.onRevokeShare(s.id)}
-                        disabled={!!s.revoked_at}
+                        disabled={!!s.revoked_at || mutationBusy()}
+                        aria-label={t("revoke")}
                         title={t("revoke")}
                       >
-                        <Icons.Trash class="w-4 h-4" />
+                        <Show
+                          when={props.revokingShareId === s.id}
+                          fallback={<Icons.Trash class="w-4 h-4" />}
+                        >
+                          <Icons.Loader class="w-4 h-4 animate-spin" />
+                        </Show>
                       </button>
                     </div>
                   </div>

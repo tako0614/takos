@@ -10,7 +10,7 @@ import {
   getDb,
   type SqlDatabaseLike,
 } from "../../../infra/db/index.ts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 /** Resolve a user principal id; the account id is the canonical value. */
 export async function resolveUserPrincipalId(
@@ -19,7 +19,11 @@ export async function resolveUserPrincipalId(
 ): Promise<string | null> {
   const drizzle = getDb(db);
   const row = await drizzle.select({ id: accounts.id }).from(accounts).where(
-    eq(accounts.id, userId),
+    and(
+      eq(accounts.id, userId),
+      eq(accounts.type, "user"),
+      eq(accounts.status, "active"),
+    ),
   ).get();
   return row?.id || null;
 }
@@ -31,6 +35,6 @@ export async function resolveActorPrincipalId(
 ): Promise<string | null> {
   const drizzle = getDb(db);
   const account = await drizzle.select({ id: accounts.id }).from(accounts)
-    .where(eq(accounts.id, actorId)).get();
+    .where(and(eq(accounts.id, actorId), eq(accounts.status, "active"))).get();
   return account?.id || null;
 }

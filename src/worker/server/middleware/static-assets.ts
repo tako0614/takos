@@ -61,7 +61,8 @@ export const staticAssetsMiddleware: MiddlewareHandler<{
     path.startsWith("/oauth/") ||
     path.startsWith("/v1/") ||
     path.startsWith("/.well-known/") ||
-    path.startsWith("/__takosumi/")
+    path.startsWith("/__takosumi/") ||
+    path.startsWith("/git/")
   ) {
     return next();
   }

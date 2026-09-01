@@ -1,5 +1,5 @@
 import type { Setter } from "solid-js";
-import type { Run } from "../types/index.ts";
+import type { Run, ThreadHistoryRunSummary } from "../types/index.ts";
 import type { WebSocketEventPayload } from "../views/chat/timeline.ts";
 import {
   parseTimelineEventId,
@@ -76,7 +76,7 @@ export interface EventHandlerContext {
   handleRunCompletedRef: MutableRefObject<
     (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
   >;
-  setCurrentRun: Setter<Run | null>;
+  setCurrentRun: Setter<ThreadHistoryRunSummary | null>;
   setStreaming: Setter<
     import("../views/chat/chat-types.ts").ChatStreamingState
   >;

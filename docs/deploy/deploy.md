@@ -16,8 +16,7 @@ records the run ledger as **Capsule** plus
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and audit trail for the distribution lifecycle. The Takosumi Accounts plane owns account /
-billing / OIDC / dashboard for the worker distribution.
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 ## API Shape
 
@@ -39,5 +38,5 @@ ledger instead of introducing a separate deploy shortcut.
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi model](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

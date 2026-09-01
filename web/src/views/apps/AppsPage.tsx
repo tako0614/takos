@@ -3,6 +3,7 @@ import {
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   Show,
 } from "solid-js";
@@ -24,11 +25,13 @@ import {
   type CapsuleServiceSummary,
   type WorkspaceCapsule,
   isInflightCapsule,
+  isPendingCapsule,
   useWorkspaceCapsules,
 } from "./inflight-installs.ts";
 
 export interface AppsPageProps {
   spaceId: string;
+  refreshKey?: number;
   onNavigateToStore?: () => void;
 }
 
@@ -38,6 +41,11 @@ const INFLIGHT_STATUS_LABEL: Record<string, TranslationKey> = {
   stale: "installStatusStale",
   error: "installStatusError",
   failed: "installStatusFailed",
+  queued: "appStatusQueued",
+  planning: "appStatusInProgress",
+  applying: "appStatusInProgress",
+  in_progress: "appStatusInProgress",
+  uninstalling: "installStatusUninstalling",
 };
 
 const INFLIGHT_POLL_INTERVAL_MS = 5000;
@@ -50,12 +58,45 @@ export function AppsPage(props: AppsPageProps) {
   );
   // Takosumi Capsule projections are the install/deployment truth. This stays
   // fail-soft so a workspace without Accounts config keeps the plain launcher.
-  const { capsules, refetch: refetchCapsules } = useWorkspaceCapsules(
+  const {
+    capsules,
+    loading: capsulesLoading,
+    error: capsulesError,
+    refetch: refetchCapsules,
+  } = useWorkspaceCapsules(
     () => props.spaceId,
   );
-  const inflightCapsules = createMemo(() =>
-    capsules().filter(isInflightCapsule),
+  const [pendingRemovalIds, setPendingRemovalIds] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
+  const effectiveCapsules = createMemo(() =>
+    capsules().map((capsule) =>
+      pendingRemovalIds().has(capsule.id)
+        ? { ...capsule, status: "uninstalling", services: [] }
+        : capsule
+    )
   );
+  const inflightCapsules = createMemo(() =>
+    effectiveCapsules().filter(isInflightCapsule),
+  );
+
+  createEffect(() => {
+    const currentIds = new Set(capsules().map((capsule) => capsule.id));
+    const currentPending = pendingRemovalIds();
+    if ([...currentPending].every((id) => currentIds.has(id))) return;
+    setPendingRemovalIds(
+      new Set([...currentPending].filter((id) => currentIds.has(id))),
+    );
+  });
+
+  createEffect(on(
+    () => props.refreshKey,
+    () => {
+      refetchCapsules();
+      void fetchApps();
+    },
+    { defer: true },
+  ));
 
   // Poll while installs are in flight so "installing" rows resolve without a
   // manual reload; the interval stops as soon as nothing is pending.
@@ -68,9 +109,9 @@ export function AppsPage(props: AppsPageProps) {
     onCleanup(() => clearInterval(timer));
   });
   const workspaceCapsules = createMemo(() =>
-    capsules().filter(
+    effectiveCapsules().filter(
       (capsule) =>
-        capsule.services.length > 0 || !isInflightCapsule(capsule),
+        capsule.services.length > 0 || !isPendingCapsule(capsule),
     ),
   );
 
@@ -78,17 +119,20 @@ export function AppsPage(props: AppsPageProps) {
   const hasApps = () => appsCount() > 0;
   const capsulesCount = () => workspaceCapsules().length;
   const hasCapsules = () => capsulesCount() > 0;
-  const loadingState = () => loading() && !hasApps();
-  const errorMessage = () => error();
+  const loadingState = () =>
+    (loading() || capsulesLoading()) && !hasApps() && !hasCapsules();
+  const errorMessage = () => error() ?? capsulesError();
 
   const inflightStatusLabel = (status: string) => {
-    const key = INFLIGHT_STATUS_LABEL[status];
+    const key = INFLIGHT_STATUS_LABEL[status.toLowerCase()];
     return key ? t(key) : status;
   };
-  const inflightStatusClass = (status: string) =>
-    status === "error"
+  const inflightStatusClass = (status: string) => {
+    const normalized = status.toLowerCase();
+    return normalized === "error" || normalized === "failed"
       ? "text-red-600 dark:text-red-400 font-medium"
       : "text-zinc-500 dark:text-zinc-400";
+  };
 
   return (
     <div class="flex h-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900">
@@ -129,12 +173,18 @@ export function AppsPage(props: AppsPageProps) {
           </div>
 
           <Show when={errorMessage()}>
-            <div class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div
+              role="alert"
+              class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
+            >
               <p class="min-w-0 flex-1">{errorMessage()}</p>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => void fetchApps()}
+                onClick={() => {
+                  void fetchApps();
+                  refetchCapsules();
+                }}
               >
                 {t("retry")}
               </Button>
@@ -311,7 +361,10 @@ export function AppsPage(props: AppsPageProps) {
               t={t}
               lang={i18n.lang}
               spaceId={props.spaceId}
-              onRemoved={() => {
+              onUninstallStarted={(capsuleId) => {
+                setPendingRemovalIds((current) =>
+                  new Set([...current, capsuleId])
+                );
                 refetchCapsules();
                 void fetchApps();
               }}
@@ -336,7 +389,7 @@ function CapsulesSection(props: {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   lang: string;
   spaceId: string;
-  onRemoved: () => void;
+  onUninstallStarted: (capsuleId: string) => void;
 }) {
   const totalServices = () =>
     props.capsules.reduce(
@@ -375,7 +428,7 @@ function CapsulesSection(props: {
               t={props.t}
               lang={props.lang}
               spaceId={props.spaceId}
-              onRemoved={props.onRemoved}
+              onUninstallStarted={props.onUninstallStarted}
             />
           )}
         </For>
@@ -389,7 +442,7 @@ function CapsuleCard(props: {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   lang: string;
   spaceId: string;
-  onRemoved: () => void;
+  onUninstallStarted: (capsuleId: string) => void;
 }) {
   const { confirm } = useConfirmDialog();
   const { showToast } = useToast();
@@ -426,8 +479,8 @@ function CapsuleCard(props: {
         },
       );
       await rpcJson(res);
-      showToast("success", props.t("uninstalledItem", { name }));
-      props.onRemoved();
+      showToast("success", props.t("uninstallStartedItem", { name }));
+      props.onUninstallStarted(props.capsule.id);
     } catch (err) {
       showToast(
         "error",
@@ -510,7 +563,9 @@ function CapsuleCard(props: {
             >
               <Icons.Loader class="h-4 w-4 animate-spin" />
             </Show>
-            {props.t("uninstall")}
+            {uninstalling()
+              ? props.t("installStatusUninstalling")
+              : props.t("uninstall")}
           </button>
           <Show when={primaryHref()}>
             {(href) => (

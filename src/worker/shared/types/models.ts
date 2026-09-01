@@ -8,4 +8,5 @@ export * from "./agent-tasks.ts";
 export * from "./artifacts.ts";
 export * from "./thread-history.ts";
 export * from "./memories.ts";
+export * from "./mcp-tool-confirmations.ts";
 export * from "./repositories.ts";

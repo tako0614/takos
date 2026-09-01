@@ -8,15 +8,16 @@
 // - runScheduledFamilyMaintenance: the core fanout used by both the
 //   POST /internal/scheduled HTTP route and Workers cron triggers
 import type { Env } from "../../../shared/types/index.ts";
-import {
-  cleanupDeadSessions,
-  runSnapshotGcBatch,
-} from "./index.ts";
+import { cleanupDeadSessions, runSnapshotGcBatch } from "./index.ts";
 import { runR2OrphanedObjectGcBatch } from "../r2/orphaned-object-gc.ts";
 import { runWorkflowArtifactGcBatch } from "../execution/workflow-storage.ts";
 import { processFeaturedAppPreinstallJobs } from "../source/featured-app-catalog.ts";
 import { pruneStaleNotificationPushers } from "../notifications/mobile-push-delivery.ts";
+import { runPendingStorageUploadGcBatch } from "../source/space-storage-cleanup.ts";
 import { logInfo } from "../../../shared/utils/logger.ts";
+import { pruneWorkspaceDeletionReceipts } from "../identity/space-crud-write.ts";
+import { runAgentResourceDeletionOutboxBatch } from "../agent/resource-deletion.ts";
+import { retireDeletedThreadTurnProjectionsBatch } from "../agent/memory-projection.ts";
 
 // Cron schedule classifiers.
 //
@@ -46,6 +47,12 @@ export type ScheduledFamilyMaintenanceDeps = {
   runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
   processFeaturedAppPreinstallJobs: typeof processFeaturedAppPreinstallJobs;
   pruneStaleNotificationPushers: typeof pruneStaleNotificationPushers;
+  runPendingStorageUploadGcBatch: typeof runPendingStorageUploadGcBatch;
+  pruneWorkspaceDeletionReceipts: typeof pruneWorkspaceDeletionReceipts;
+  runAgentResourceDeletionOutboxBatch:
+    typeof runAgentResourceDeletionOutboxBatch;
+  retireDeletedThreadTurnProjectionsBatch:
+    typeof retireDeletedThreadTurnProjectionsBatch;
   logInfo: typeof logInfo;
 };
 
@@ -56,6 +63,10 @@ const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
   runWorkflowArtifactGcBatch,
   processFeaturedAppPreinstallJobs,
   pruneStaleNotificationPushers,
+  runPendingStorageUploadGcBatch,
+  pruneWorkspaceDeletionReceipts,
+  runAgentResourceDeletionOutboxBatch,
+  retireDeletedThreadTurnProjectionsBatch,
   logInfo,
 };
 
@@ -96,6 +107,66 @@ export async function runScheduledFamilyMaintenance(
   }
 
   if (runHourlyJobs) {
+    try {
+      const retirement =
+        await deps.retireDeletedThreadTurnProjectionsBatch(env.DB, {
+          limit: 25,
+        });
+      if (
+        logSuccesses &&
+        (retirement.retired > 0 || retirement.remaining)
+      ) {
+        deps.logInfo("Deleted Thread TurnProjection retirement completed", {
+          module: "cron",
+          ...{ cron, ...retirement },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "deleted-thread-turn-projection-retirement",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const deletionSummary = await deps.runAgentResourceDeletionOutboxBatch(
+        env,
+        { limit: 50 },
+      );
+      if (
+        logSuccesses &&
+        (deletionSummary.completed > 0 || deletionSummary.failed > 0)
+      ) {
+        deps.logInfo("Agent resource deletion outbox batch completed", {
+          module: "cron",
+          ...{ cron, ...deletionSummary },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "agent-resource-deletion-outbox",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const deletionReceipts = await deps.pruneWorkspaceDeletionReceipts(
+        env.DB,
+        { maxAgeMs: 30 * 24 * 60 * 60 * 1000, limit: 100 },
+      );
+      if (logSuccesses && deletionReceipts.deleted > 0) {
+        deps.logInfo("Workspace deletion receipt retention completed", {
+          module: "cron",
+          ...{ cron, ...deletionReceipts },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "workspace-deletion-receipt-retention",
+        error: toScheduledError(error),
+      });
+    }
+
     try {
       const pushRetention = await deps.pruneStaleNotificationPushers(env);
       if (logSuccesses && pushRetention.deleted > 0) {
@@ -149,6 +220,29 @@ export async function runScheduledFamilyMaintenance(
     } catch (error) {
       errors.push({
         job: "snapshot-gc",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const uploadGcSummary = await deps.runPendingStorageUploadGcBatch(
+        env.DB,
+        env.GIT_OBJECTS,
+        { maxAgeMs: 24 * 60 * 60 * 1000, maxRecords: 100 },
+      );
+
+      if (
+        logSuccesses &&
+        (uploadGcSummary.recovered > 0 || uploadGcSummary.deleted > 0)
+      ) {
+        deps.logInfo("pending Storage upload GC batch completed", {
+          module: "cron",
+          ...{ cron, ...uploadGcSummary },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "storage-pending-upload-gc",
         error: toScheduledError(error),
       });
     }

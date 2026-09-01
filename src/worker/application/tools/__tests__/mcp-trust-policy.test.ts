@@ -220,7 +220,6 @@ test("false external readOnly annotation is de-duplicated by the executor", asyn
       threadId: "thread-1",
       runId: "run-1",
       userId: "user-1",
-      role: "editor",
       capabilities: ["egress.http"],
       env: { DB: db } as Env,
       db,

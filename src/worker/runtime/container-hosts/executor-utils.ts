@@ -80,7 +80,9 @@ export interface ProxyTokenInfo {
   leaseVersion?: number;
   /**
    * Agent control protocol minted with this token. Version 2 requires the
-   * atomic `complete-run` terminal path. Missing means a rollout-era v1 token.
+   * atomic `complete-run` terminal path; version 3 additionally requires the
+   * exact-authority model-call begin ledger; version 4 requires descriptor-
+   * first immutable Skill activation. Missing means a rollout-era v1 token.
    */
   runtimeProtocolVersion?: number;
   /**
@@ -438,11 +440,13 @@ export const CONTROL_RPC_ENDPOINTS: readonly ControlRpcEndpoint[] = [
   { name: "run-fail", scope: "run-lifecycle" },
   { name: "run-reset", scope: "run-lifecycle" },
   { name: "run-config", scope: "run-lifecycle" },
+  { name: "run-model-input", scope: "run-lifecycle" },
   { name: "is-cancelled", scope: "run-lifecycle" },
   { name: "update-run-status", scope: "run-lifecycle" },
   { name: "complete-run", scope: "run-lifecycle" },
   { name: "engine-checkpoint-load", scope: "run-lifecycle" },
   { name: "engine-checkpoint-save", scope: "run-lifecycle" },
+  { name: "model-call-begin", scope: "run-lifecycle" },
   { name: "run-event", scope: "run-lifecycle" },
   { name: "run-usage", scope: "run-lifecycle" },
   // conversation / session / messages
@@ -451,8 +455,6 @@ export const CONTROL_RPC_ENDPOINTS: readonly ControlRpcEndpoint[] = [
   // memory
   // skills
   { name: "skill-runtime-context", scope: "skills" },
-  { name: "skill-catalog", scope: "skills" },
-  { name: "skill-plan", scope: "skills" },
   // tools
   { name: "tool-catalog", scope: "tools" },
   { name: "tool-execute", scope: "tools" },

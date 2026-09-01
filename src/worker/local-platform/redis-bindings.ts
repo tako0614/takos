@@ -7,6 +7,7 @@ import type {
 import type { MessageQueueBinding } from "../shared/types/bindings.ts";
 import type { LocalQueue, LocalQueueRecord } from "./queue-runtime.ts";
 import { logWarn } from "../shared/utils/logger.ts";
+import { cloneRecord, normalizeHostname } from "./routing-record.ts";
 
 type QueueRecord<T = unknown> = LocalQueueRecord<T>;
 
@@ -22,14 +23,6 @@ type RedisClientState = {
 
 let redisClientState: RedisClientState | null = null;
 let redisClientFactory: RedisClientFactory = createClient;
-
-function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase();
-}
-
-function cloneRecord(record: RoutingRecord | null): RoutingRecord | null {
-  return record ? JSON.parse(JSON.stringify(record)) as RoutingRecord : null;
-}
 
 async function closeRedisClient(client: RedisClient): Promise<void> {
   const typedClient = client as RedisClient & {

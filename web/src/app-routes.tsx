@@ -12,11 +12,10 @@ import { getSpaceIdentifier } from "./lib/spaces.ts";
 import { useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
 import { buildStorageNavigationState } from "./views/storage/storage-page-state.ts";
-import type { RouteState, Thread, UserSettings } from "./types/index.ts";
+import type { RouteState, Thread } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
 import { isHomeEntryPath } from "./lib/home-entry-path.ts";
 import { LoginPage } from "./views/app/AuthViews.tsx";
-import { AuthenticatedLayout } from "./components/layout/AuthenticatedLayout.tsx";
 import {
   AuthLoadingGate,
   completeSetup,
@@ -32,6 +31,11 @@ import {
 const SourcePage = lazy(() =>
   import("./views/source/SourcePage.tsx").then((module) => ({
     default: module.SourcePage,
+  })),
+);
+const AuthenticatedLayout = lazy(() =>
+  import("./components/layout/AuthenticatedLayout.tsx").then((module) => ({
+    default: module.AuthenticatedLayout,
   })),
 );
 const ChatPage = lazy(() =>
@@ -67,6 +71,11 @@ const SettingsView = lazy(() =>
 const MemoryPage = lazy(() =>
   import("./views/MemoryPage.tsx").then((module) => ({
     default: module.MemoryPage,
+  })),
+);
+const NotificationsPage = lazy(() =>
+  import("./views/notifications/NotificationsPage.tsx").then((module) => ({
+    default: module.NotificationsPage,
   })),
 );
 const LegalPage = lazy(() =>
@@ -144,6 +153,7 @@ function NotFoundPage() {
 function StoreRoute() {
   const auth = useAuth();
   const currentPath = useCurrentPath();
+  const navigation = useNavigation();
 
   return (
     <Switch
@@ -153,6 +163,7 @@ function StoreRoute() {
             spaces={[]}
             isAuthenticated={false}
             onRequireLogin={() => auth.redirectToLogin(currentPath())}
+            storeTab={navigation.route.storeTab}
           />
         </RouteSurface>
       }
@@ -167,6 +178,10 @@ function StoreRoute() {
               spaces={auth.spaces}
               isAuthenticated
               onRequireLogin={() => auth.redirectToLogin(currentPath())}
+              selectedSpaceId={navigation.route.spaceId}
+              storeTab={navigation.route.storeTab}
+              onStoreStateChange={(storeTab, spaceId) =>
+                navigation.navigate({ view: "store", storeTab, spaceId })}
             />
           </RouteSurface>
         </AuthenticatedLayout>
@@ -235,6 +250,7 @@ function ChatRoute() {
               });
             }}
             onNewThreadCreated={navigation.handleNewThreadCreated}
+            onToggleArchiveThread={navigation.toggleArchiveThread}
           />
         </RouteSurface>
       </Match>
@@ -338,7 +354,12 @@ function AppsRoute() {
           <RouteSurface>
             <AppsPage
               spaceId={spaceId()}
-              onNavigateToStore={() => navigation.navigate({ view: "store" })}
+              onNavigateToStore={() =>
+                navigation.navigate({
+                  view: "store",
+                  storeTab: "discover",
+                  spaceId: spaceId(),
+                })}
             />
           </RouteSurface>
         )}
@@ -433,11 +454,17 @@ function SpaceSettingsRoute() {
           <SpaceSettingsPage
             spaces={auth.spaces}
             initialSpaceId={selectedSpaceId()}
-            onSpaceDeleted={() => {
-              void auth.fetchSpaces(auth.user);
+            onSpaceDeleted={async () => {
+              await auth.fetchSpaces(auth.user, {
+                notifyOnError: false,
+                throwOnError: true,
+              });
             }}
-            onSpaceUpdated={() => {
-              void auth.fetchSpaces(auth.user);
+            onSpaceUpdated={async () => {
+              await auth.fetchSpaces(auth.user, {
+                notifyOnError: false,
+                throwOnError: true,
+              });
             }}
           />
         </RouteSurface>
@@ -454,12 +481,16 @@ function SettingsRoute() {
     <RouteSurface>
       <SettingsView
         user={auth.user}
-        userSettings={auth.userSettings}
-        onSettingsChange={(settings: UserSettings) =>
-          auth.setUserSettings(settings)
-        }
         onBack={() => navigation.navigateToPreferredChat()}
       />
+    </RouteSurface>
+  );
+}
+
+function NotificationsRoute() {
+  return (
+    <RouteSurface>
+      <NotificationsPage />
     </RouteSurface>
   );
 }
@@ -467,18 +498,16 @@ function SettingsRoute() {
 function MemoryRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
-  const preferredSpaceId = createMemo(() => {
-    const space = navigation.preferredSpace;
-    return space ? getSpaceIdentifier(space) : undefined;
-  });
+  const preferredSpace = createMemo(() => navigation.preferredSpace);
 
   return (
     <Switch>
-      <Match when={preferredSpaceId()}>
-        {(spaceId) => (
+      <Match when={preferredSpace()}>
+        {(space) => (
           <RouteSurface>
             <MemoryPage
-              spaceId={spaceId()}
+              spaceId={getSpaceIdentifier(space())}
+              spaceRecordId={space().id}
               onBack={navigation.navigateToPreferredChat}
             />
           </RouteSurface>
@@ -537,6 +566,7 @@ const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   storage: StorageRoute,
   apps: AppsRoute,
   connections: ConnectionsRoute,
+  notifications: NotificationsRoute,
   memory: MemoryRoute,
   settings: SettingsRoute,
   "space-settings": SpaceSettingsRoute,

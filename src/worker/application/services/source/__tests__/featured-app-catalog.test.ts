@@ -45,14 +45,6 @@ function tableName(table: unknown): string | null {
   }
 }
 
-function objectRecord(value: unknown, field: string): Record<string, unknown> {
-  assert(
-    value != null && typeof value === "object" && !Array.isArray(value),
-    `${field} must be an object`,
-  );
-  return value as Record<string, unknown>;
-}
-
 function canonicalFeaturedInstallResponse(
   input: string | URL | Request,
   init?: RequestInit,
@@ -1889,6 +1881,83 @@ test("clearFeaturedAppCatalogEntries invalidates the cache before reseeding empt
     assertEquals(cached.catalog.configured, false);
     assertEquals(cached.catalog.entries, []);
     assertEquals(cached.key === "STALE-CLEAR", false);
+  } finally {
+    clearFeaturedAppCatalogCache();
+    featuredAppCatalogDeps.getDb = originalGetDb;
+  }
+});
+
+test("featured app status keeps only the ten newest stable job errors", async () => {
+  const originalGetDb = featuredAppCatalogDeps.getDb;
+  clearFeaturedAppCatalogCache();
+  const jobRow = (id: string, updatedAt: string | null) => ({
+    id,
+    spaceId: `space-${id}`,
+    status: "failed",
+    attempts: 1,
+    nextAttemptAt: null,
+    lockedAt: null,
+    lastError: `error-${id}`,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt,
+  });
+  const timestamp = (minute: number) =>
+    `2026-01-01T00:${String(minute).padStart(2, "0")}:00.000Z`;
+  const jobRows = [
+    jobRow("tie-first", timestamp(12)),
+    ...Array.from({ length: 11 }, (_, index) =>
+      jobRow(`job-${index + 1}`, timestamp(index + 1))
+    ),
+    jobRow("tie-second", timestamp(12)),
+    jobRow("cutoff-tie", timestamp(4)),
+    jobRow("null-timestamp", null),
+    jobRow("empty-timestamp", ""),
+  ];
+  const db = {
+    select: () => ({
+      from: (table: unknown) => ({
+        all: async () =>
+          tableName(table) === "featured_app_preinstall_jobs" ? jobRows : [],
+      }),
+    }),
+  };
+  featuredAppCatalogDeps.getDb = (() => db) as any;
+
+  try {
+    const status = await getFeaturedAppReconcileStatus(
+      makeEnv({
+        TAKOS_FEATURED_APPS_PREINSTALL: "true",
+        TAKOS_FEATURED_APP_CATALOG_JSON: JSON.stringify([
+          {
+            name: "operator-docs",
+            title: "Docs",
+            repositoryUrl: "https://example.com/operator-docs.git",
+            ref: "main",
+            refType: "branch",
+            preinstall: true,
+          },
+        ]),
+      }),
+    );
+
+    assertEquals(
+      status.jobs.lastErrors.map((entry) => entry.id),
+      [
+        "tie-first",
+        "tie-second",
+        "job-11",
+        "job-10",
+        "job-9",
+        "job-8",
+        "job-7",
+        "job-6",
+        "job-5",
+        "job-4",
+      ],
+    );
+    assertEquals(status.jobs.total, jobRows.length);
+    assertEquals(status.jobs.latestUpdatedAt, timestamp(12));
+    assertEquals(status.jobs.byStatus.failed, jobRows.length);
   } finally {
     clearFeaturedAppCatalogCache();
     featuredAppCatalogDeps.getDb = originalGetDb;

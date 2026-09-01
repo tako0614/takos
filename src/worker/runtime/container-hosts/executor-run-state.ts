@@ -20,7 +20,8 @@ import {
   ok,
   readRunServiceId,
 } from "./executor-utils.ts";
-import { resolveSpaceRole } from "../../application/services/platform/capabilities.ts";
+import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
+import { readRunInputCapsuleContext } from "../../shared/utils/run-input.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,82 +46,7 @@ export type RunBootstrapCapsuleContext = Pick<
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-export function readRunBootstrapCapsuleContext(
-  input: string | null | undefined,
-): RunBootstrapCapsuleContext {
-  const parsed = parseRunInputObject(input);
-  if (!parsed) return {};
-
-  const capsuleId = readStringValue(parsed, ["capsule_id"]);
-  const runtimeNamespace =
-    readStringValue(parsed, [
-      "runtimeNamespace",
-      "runtime_namespace",
-      "runtimeTargetId",
-      "runtime_target_id",
-    ]) ??
-    readNestedStringValue(parsed, ["runtime", "namespace"]) ??
-    readNestedStringValue(parsed, ["runtime", "targetId"]) ??
-    readNestedStringValue(parsed, ["runtimeBinding", "targetId"]) ??
-    readNestedStringValue(parsed, ["runtimeBinding", "target_id"]);
-
-  return {
-    ...(capsuleId ? { capsuleId } : {}),
-    ...(runtimeNamespace ? { runtimeNamespace } : {}),
-  };
-}
-
-function parseRunInputObject(
-  input: string | null | undefined,
-): Record<string, unknown> | null {
-  if (!input) return null;
-  try {
-    const parsed = JSON.parse(input) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function readStringValue(
-  source: Record<string, unknown>,
-  keys: readonly string[],
-): string | undefined {
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function readNestedStringValue(
-  source: Record<string, unknown>,
-  path: readonly string[],
-): string | undefined {
-  let current: unknown = source;
-  for (const segment of path) {
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      Array.isArray(current)
-    ) {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return typeof current === "string" && current.trim()
-    ? current.trim()
-    : undefined;
-}
+export const readRunBootstrapCapsuleContext = readRunInputCapsuleContext;
 
 export async function resolveExecutionUserIdForRun(
   env: Pick<Env, "DB">,
@@ -174,16 +100,13 @@ export async function resolveExecutionUserIdForRun(
 
 /**
  * Revalidate the requester represented by a durable Run against current
- * Workspace membership. Queued runs and long-lived containers must not retain
- * the viewer fallback after the requester is removed or suspended.
+ * private Workspace ownership. Queued runs and long-lived containers must not
+ * retain authority after the owner proof is removed or suspended.
  */
 export async function assertRunExecutionAccess(
   env: Pick<Env, "DB">,
   runId: string,
-): Promise<{
-  userId: string;
-  role: NonNullable<Awaited<ReturnType<typeof resolveSpaceRole>>>;
-}> {
+): Promise<{ userId: string }> {
   const db = getDb(env.DB);
   const run = await db
     .select({ accountId: runs.accountId })
@@ -192,13 +115,13 @@ export async function assertRunExecutionAccess(
     .get();
   if (!run) throw new NotFoundError(`Run ${runId}`);
   const userId = await resolveExecutionUserIdForRun(env, runId);
-  const role = await resolveSpaceRole(env.DB, run.accountId, userId);
-  if (!role) {
+  const access = await checkSpaceAccess(env.DB, run.accountId, userId);
+  if (!access) {
     throw new AuthorizationError(
       `Run requester ${userId} no longer has access to account ${run.accountId}`,
     );
   }
-  return { userId, role };
+  return { userId };
 }
 
 export async function getRunBootstrap(

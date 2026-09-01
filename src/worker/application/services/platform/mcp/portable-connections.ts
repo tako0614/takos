@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   getDb,
   mcpServers,
@@ -15,92 +14,45 @@ import {
   updateMcpRegistrySource,
 } from "./registry-sources.ts";
 import { registerExternalMcpServer, updateMcpServer } from "./crud.ts";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
+import {
+  BadRequestError,
+  PayloadTooLargeError,
+  ServiceUnavailableError,
+} from "@takos/worker-platform-utils/errors";
+import {
+  MAX_MCP_CONNECTIONS,
+  MAX_MCP_CONNECTIONS_DOCUMENT_BYTES,
+  MAX_MCP_CONNECTIONS_REGISTRY_SOURCES,
+  MAX_MCP_CONNECTION_TOOL_POLICIES,
+  MCP_CONNECTIONS_EXPORT_FORMAT,
+  MCP_CONNECTIONS_EXPORT_VERSION,
+  parseMcpConnectionsDocument,
+  type McpConnectionsDocument,
+} from "../../../../../contracts/public/mcp-connections.ts";
 
-export const MCP_CONNECTIONS_EXPORT_FORMAT = "takos.mcp.connections";
-export const MCP_CONNECTIONS_EXPORT_VERSION = 1;
+export type McpConnectionsExport = McpConnectionsDocument;
 
-const exportedToolSchema = z.object({
-  name: z.string().min(1).max(256),
-  schema_hash: z.string().regex(/^[a-f0-9]{64}$/),
-  enabled: z.boolean(),
-  invocation_policy: z.enum(["automatic", "confirm_each_time"]),
-});
+const encoder = new TextEncoder();
 
-const exportedConnectionSchema = z.object({
-  name: z.string().min(1).max(64),
-  url: z.string().min(1).max(2048),
-  transport: z.literal("streamable-http"),
-  enabled: z.boolean(),
-  scope: z.string().max(4096).nullable(),
-  tools: z.array(exportedToolSchema).max(2048),
-});
-
-const exportedRegistrySourceSchema = z
-  .object({
-    kind: z.enum(["official", "organization", "community", "custom"]),
-    name: z.string().min(1).max(120),
-    base_url: z.string().min(1).max(2048),
-    enabled: z.boolean(),
-    priority: z.number().int().min(-1000).max(1000),
-    auth_type: z.enum(["none", "bearer", "header"]),
-    auth_header_name: z.string().min(1).max(128).nullable(),
-    credential_required: z.boolean(),
-  })
-  .superRefine((source, context) => {
-    if (
-      source.kind === "official" &&
-      (source.base_url !== "https://registry.modelcontextprotocol.io" ||
-        source.auth_type !== "none")
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["base_url"],
-        message: "Official Registry source metadata is not portable",
-      });
-    }
-    const valid =
-      (source.auth_type === "none" &&
-        source.auth_header_name === null &&
-        !source.credential_required) ||
-      (source.auth_type === "bearer" &&
-        source.auth_header_name === null &&
-        source.credential_required) ||
-      (source.auth_type === "header" &&
-        source.auth_header_name !== null &&
-        source.credential_required);
-    if (!valid) {
-      context.addIssue({
-        code: "custom",
-        message: "Registry authentication metadata is inconsistent",
-      });
-    }
-  });
-
-export const mcpConnectionsExportSchema = z
-  .object({
-    format: z.literal(MCP_CONNECTIONS_EXPORT_FORMAT),
-    version: z.literal(MCP_CONNECTIONS_EXPORT_VERSION),
-    exported_at: z.string().datetime(),
-    registry_sources: z.array(exportedRegistrySourceSchema).max(17),
-    connections: z.array(exportedConnectionSchema).max(32),
-  })
-  .strict()
-  .superRefine((document, context) => {
-    const toolCount = document.connections.reduce(
-      (count, connection) => count + connection.tools.length,
-      0,
-    );
-    if (toolCount > 2048) {
-      context.addIssue({
-        code: "custom",
-        path: ["connections"],
-        message: "Connections import contains too many tool policies",
-      });
-    }
-  });
-
-export type McpConnectionsExport = z.infer<typeof mcpConnectionsExportSchema>;
+function assistedConnectionsExportError(
+  reason:
+    | "connection_count"
+    | "registry_source_count"
+    | "tool_policy_count"
+    | "document_bytes",
+): PayloadTooLargeError {
+  return new PayloadTooLargeError(
+    "This Connections export requires assisted processing",
+    {
+      assisted_processing: true,
+      reason,
+      max_connections: MAX_MCP_CONNECTIONS,
+      max_registry_sources: MAX_MCP_CONNECTIONS_REGISTRY_SOURCES,
+      max_tool_policies: MAX_MCP_CONNECTION_TOOL_POLICIES,
+      max_document_bytes: MAX_MCP_CONNECTIONS_DOCUMENT_BYTES,
+    },
+  );
+}
 
 export async function exportMcpConnections(
   dbBinding: SqlDatabaseLike,
@@ -116,39 +68,56 @@ export async function exportMcpConnections(
         eq(mcpServers.sourceType, "external"),
       ),
     )
+    .orderBy(asc(mcpServers.name), asc(mcpServers.id))
+    .limit(MAX_MCP_CONNECTIONS + 1)
     .all();
+  if (servers.length > MAX_MCP_CONNECTIONS) {
+    throw assistedConnectionsExportError("connection_count");
+  }
   const registrySources = await listMcpRegistrySources(dbBinding, accountId);
-  const connections = await Promise.all(
-    servers.map(async (server) => {
-      const policies = await db
-        .select()
-        .from(mcpToolPolicies)
-        .where(
-          and(
-            eq(mcpToolPolicies.accountId, accountId),
-            eq(mcpToolPolicies.serverId, server.id),
+  if (registrySources.length > MAX_MCP_CONNECTIONS_REGISTRY_SOURCES) {
+    throw assistedConnectionsExportError("registry_source_count");
+  }
+  const policies = servers.length === 0
+    ? []
+    : await db
+      .select()
+      .from(mcpToolPolicies)
+      .where(
+        and(
+          eq(mcpToolPolicies.accountId, accountId),
+          inArray(
+            mcpToolPolicies.serverId,
+            servers.map((server) => server.id),
           ),
-        )
-        .all();
-      return {
-        name: server.name,
-        url: server.url,
-        transport: "streamable-http" as const,
-        enabled: server.enabled,
-        scope: server.oauthScope ?? null,
-        tools: policies.map((policy) => ({
-          name: policy.toolName,
-          schema_hash: policy.schemaHash,
-          enabled: policy.enabled,
-          invocation_policy:
-            policy.invocationPolicy === "automatic"
-              ? ("automatic" as const)
-              : ("confirm_each_time" as const),
-        })),
-      };
-    }),
-  );
-  return {
+        ),
+      )
+      .orderBy(asc(mcpToolPolicies.serverId), asc(mcpToolPolicies.toolName))
+      .limit(MAX_MCP_CONNECTION_TOOL_POLICIES + 1)
+      .all();
+  if (policies.length > MAX_MCP_CONNECTION_TOOL_POLICIES) {
+    throw assistedConnectionsExportError("tool_policy_count");
+  }
+  const policiesByServer = new Map<string, typeof policies>();
+  for (const policy of policies) {
+    const current = policiesByServer.get(policy.serverId) ?? [];
+    current.push(policy);
+    policiesByServer.set(policy.serverId, current);
+  }
+  const connections = servers.map((server) => ({
+    name: server.name,
+    url: server.url,
+    transport: "streamable-http" as const,
+    enabled: server.enabled,
+    scope: server.oauthScope ?? null,
+    tools: (policiesByServer.get(server.id) ?? []).map((policy) => ({
+      name: policy.toolName,
+      schema_hash: policy.schemaHash,
+      enabled: policy.enabled,
+      invocation_policy: policy.invocationPolicy,
+    })),
+  }));
+  const candidate = {
     format: MCP_CONNECTIONS_EXPORT_FORMAT,
     version: MCP_CONNECTIONS_EXPORT_VERSION,
     exported_at: new Date().toISOString(),
@@ -164,6 +133,21 @@ export async function exportMcpConnections(
     })),
     connections,
   };
+  let document: McpConnectionsExport;
+  try {
+    document = parseMcpConnectionsDocument(candidate);
+  } catch {
+    throw new ServiceUnavailableError(
+      "Connections export contains invalid stored metadata",
+    );
+  }
+  if (
+    encoder.encode(JSON.stringify(document, null, 2)).byteLength >
+      MAX_MCP_CONNECTIONS_DOCUMENT_BYTES
+  ) {
+    throw assistedConnectionsExportError("document_bytes");
+  }
+  return document;
 }
 
 export interface McpConnectionsImportResult {
@@ -297,13 +281,14 @@ export async function importMcpConnections(
     document: unknown;
   },
 ): Promise<McpConnectionsImportResult> {
-  const validated = mcpConnectionsExportSchema.safeParse(params.document);
-  if (!validated.success) {
+  let parsed: McpConnectionsExport;
+  try {
+    parsed = parseMcpConnectionsDocument(params.document);
+  } catch {
     throw new BadRequestError(
       "Connections import does not match takos.mcp.connections version 1",
     );
   }
-  const parsed = validated.data;
   const registrySources = await importRegistrySources(
     dbBinding,
     env,

@@ -38,12 +38,14 @@ export function getServiceRegistry(env: object) {
   }
   return {
     get(name: string, options?: { deploymentId?: string }) {
-      return (dispatcher as {
-        get(
-          name: string,
-          options?: { deploymentId?: string },
-        ): PlatformServiceBinding;
-      }).get(name, options);
+      return (
+        dispatcher as {
+          get(
+            name: string,
+            options?: { deploymentId?: string },
+          ): PlatformServiceBinding;
+        }
+      ).get(name, options);
     },
   };
 }
@@ -75,7 +77,6 @@ type PlatformServiceInputs = {
   hosts?: PlatformServices["hosts"];
   ai?: PlatformServices["ai"];
   assets?: PlatformServices["assets"];
-  documents?: PlatformServices["documents"];
   serviceRegistry?: {
     get(
       name: string,
@@ -129,10 +130,12 @@ export function createRoutingService(options: {
     pathname: string,
     method: string,
   ) => {
-    return selectDeploymentTarget(target, pathname, method)?.routeRef ??
+    return (
+      selectDeploymentTarget(target, pathname, method)?.routeRef ??
       (target.type === "http-endpoint-set"
         ? selectRouteRefFromHttpEndpointSet(target.endpoints, pathname, method)
-        : selectRouteRefFromRoutingTarget(target));
+        : selectRouteRefFromRoutingTarget(target))
+    );
   };
 
   return {
@@ -159,7 +162,6 @@ export function createPlatformServices(
     hosts: input.hosts ?? {},
     ai: input.ai ?? {},
     assets: input.assets ?? {},
-    documents: input.documents ?? {},
     serviceRegistry: input.serviceRegistry,
     sseNotifier: input.sseNotifier,
   };
@@ -208,7 +210,10 @@ export function buildPlatformFromEnv<TBindings extends object>(
     platformPrivateKey: getString(bindings, "PLATFORM_PRIVATE_KEY"),
     platformPublicKey: getString(bindings, "PLATFORM_PUBLIC_KEY"),
     encryptionKey: getString(bindings, "ENCRYPTION_KEY"),
-    serviceInternalJwtIssuer: getString(bindings, "SERVICE_INTERNAL_JWT_ISSUER"),
+    serviceInternalJwtIssuer: getString(
+      bindings,
+      "SERVICE_INTERNAL_JWT_ISSUER",
+    ),
   });
 
   const services = createPlatformServices({
@@ -224,8 +229,7 @@ export function buildPlatformFromEnv<TBindings extends object>(
     sqlBinding: bindings.DB as Env["DB"] | undefined,
     routingStore: bindings.ROUTING_STORE as Env["ROUTING_STORE"] | undefined,
     hostnameRouting: bindings.HOSTNAME_ROUTING as
-      | Env["HOSTNAME_ROUTING"]
-      | undefined,
+      Env["HOSTNAME_ROUTING"] | undefined,
     queues: {
       runs: bindings.RUN_QUEUE as Env["RUN_QUEUE"] | undefined,
       index: bindings.INDEX_QUEUE as Env["INDEX_QUEUE"] | undefined,
@@ -234,20 +238,19 @@ export function buildPlatformFromEnv<TBindings extends object>(
       gitObjects: bindings.GIT_OBJECTS as Env["GIT_OBJECTS"] | undefined,
       offload: bindings.TAKOS_OFFLOAD as Env["TAKOS_OFFLOAD"] | undefined,
       tenantSource: bindings.TENANT_SOURCE as Env["TENANT_SOURCE"] | undefined,
-      workerBundles: bindings.WORKER_BUNDLES as Env["WORKER_BUNDLES"] | undefined,
+      workerBundles: bindings.WORKER_BUNDLES as
+        Env["WORKER_BUNDLES"] | undefined,
       tenantBuilds: bindings.TENANT_BUILDS as Env["TENANT_BUILDS"] | undefined,
     },
     notifications: {
       runNotifier: bindings.RUN_NOTIFIER as Env["RUN_NOTIFIER"] | undefined,
       sessionStore: bindings.SESSION_DO as Env["SESSION_DO"] | undefined,
       notificationNotifier: bindings.NOTIFICATION_NOTIFIER as
-        | Env["NOTIFICATION_NOTIFIER"]
-        | undefined,
+        Env["NOTIFICATION_NOTIFIER"] | undefined,
     },
     locks: {
       rateLimiter: bindings.RATE_LIMITER_DO as
-        | Env["RATE_LIMITER_DO"]
-        | undefined,
+        Env["RATE_LIMITER_DO"] | undefined,
     },
     hosts: {
       runtimeHost: options.runtimeHost,
@@ -263,7 +266,6 @@ export function buildPlatformFromEnv<TBindings extends object>(
     assets: {
       binding: bindings.ASSETS as PlatformServiceBinding | undefined,
     },
-    documents: {},
     serviceRegistry: getServiceRegistry(bindings),
     sseNotifier: options.sseNotifier,
   });

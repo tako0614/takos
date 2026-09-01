@@ -2,6 +2,10 @@ import { rpc, rpcJson } from "../lib/rpc.ts";
 import type { Accessor } from "solid-js";
 import type { ChatAttachmentMetadata } from "../views/chat/messageMetadata.ts";
 import { useI18n } from "../store/i18n.ts";
+import {
+  parseStorageFileMutationResponse,
+  parseStorageUploadUrlResponse,
+} from "./storage-response.ts";
 
 /**
  * Strict allowlist pattern: [a-zA-Z0-9._-]+ only.
@@ -51,6 +55,7 @@ export function buildChatAttachmentPath(
 
 export interface UseChatAttachmentsOptions {
   spaceId: Accessor<string>;
+  spaceRecordId: Accessor<string>;
   threadId: Accessor<string>;
 }
 
@@ -66,6 +71,7 @@ export interface UseChatAttachmentsResult {
 
 export function useChatAttachments({
   spaceId,
+  spaceRecordId,
   threadId,
 }: UseChatAttachmentsOptions): UseChatAttachmentsResult {
   const { t } = useI18n();
@@ -107,6 +113,7 @@ export function useChatAttachments({
     if (selectedFiles.length === 0) return [];
 
     const currentSpaceId = spaceId();
+    const currentSpaceRecordId = spaceRecordId();
     const currentThreadId = threadId();
     const attachmentRoot = "/chat-attachments";
     const threadFolder = `${attachmentRoot}/${currentThreadId}`;
@@ -139,12 +146,12 @@ export function useChatAttachments({
         );
       }
 
-      const uploadData = await rpcJson<{
-        file_id: string;
-        upload_url: string;
-      }>(uploadRes);
+      const uploadData = parseStorageUploadUrlResponse(
+        await rpcJson<unknown>(uploadRes),
+        currentSpaceId,
+      );
 
-      const blobRes = await fetch(uploadData.upload_url, {
+      const blobRes = await fetch(uploadData.uploadUrl, {
         method: "PUT",
         body: file,
         headers: {
@@ -159,7 +166,7 @@ export function useChatAttachments({
       const confirmRes = await rpc.spaces[":spaceId"].storage["confirm-upload"]
         .$post({
           param: { spaceId: currentSpaceId },
-          json: { file_id: uploadData.file_id },
+          json: { file_id: uploadData.fileId },
         });
 
       if (!confirmRes.ok) {
@@ -172,22 +179,21 @@ export function useChatAttachments({
         );
       }
 
-      const confirmData = await rpcJson<{
-        file: {
-          id: string;
-          path: string;
-          name: string;
-          mime_type: string | null;
-          size: number;
-        };
-      }>(confirmRes);
+      const confirmedFile = parseStorageFileMutationResponse(
+        await rpcJson<unknown>(confirmRes),
+        {
+          spaceId: currentSpaceRecordId,
+          id: uploadData.fileId,
+          parentPath: threadFolder,
+        },
+      );
 
       uploaded.push({
-        file_id: confirmData.file.id,
-        path: confirmData.file.path,
-        name: confirmData.file.name,
-        mime_type: confirmData.file.mime_type,
-        size: confirmData.file.size,
+        file_id: confirmedFile.id,
+        path: confirmedFile.path,
+        name: confirmedFile.name,
+        mime_type: confirmedFile.mime_type,
+        size: confirmedFile.size,
       });
     }
 

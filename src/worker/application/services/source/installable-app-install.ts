@@ -14,6 +14,7 @@ import {
   takosumiCapsulePath,
   takosumiCapsulePlanPath,
   takosumiRunApplyPath,
+  takosumiRunApprovePath,
   takosumiRunPath,
   takosumiSessionApiUrl,
   takosumiSourcePath,
@@ -85,6 +86,11 @@ export type InstallableAppPlanInput = InstallableAppSourceInput & {
 export type InstallableAppApplyInput = {
   workspaceId: string;
   expected: Record<string, unknown>;
+};
+
+export type InstallableAppPlanRunInput = {
+  workspaceId: string;
+  runId: string;
 };
 
 export type InstallableAppRevisionOperation = "upgrade" | "rollback";
@@ -596,6 +602,52 @@ export async function applyInstallableAppCapsule(
     { method: "POST", body: "{}" },
     config,
   );
+}
+
+function requirePlanRunForWorkspace(
+  response: InstallableAppUpstreamResponse,
+  input: InstallableAppPlanRunInput,
+): InstallableAppUpstreamResponse {
+  if (response.status >= 400) return response;
+  const run = readRecord(response.body?.run);
+  if (!run) throw new Error("canonical plan response is missing run");
+  if (readString(run.id) !== input.runId) {
+    throw new Error("canonical plan response returned another Run");
+  }
+  if (readString(run.workspaceId) !== input.workspaceId) {
+    throw new Error("canonical plan Run belongs to another Workspace");
+  }
+  const type = readString(run.type);
+  if (type !== "plan" && type !== "destroy_plan") {
+    throw new Error("canonical Run is not a reviewable plan");
+  }
+  return response;
+}
+
+export async function getInstallableAppPlanRun(
+  input: InstallableAppPlanRunInput,
+  config: InstallableAppInstallConfig,
+): Promise<InstallableAppUpstreamResponse> {
+  const response = await fetchControlJson(
+    requireControlUrl(config),
+    takosumiRunPath(input.runId),
+    { method: "GET" },
+    config,
+  );
+  return requirePlanRunForWorkspace(response, input);
+}
+
+export async function approveInstallableAppPlanRun(
+  input: InstallableAppPlanRunInput,
+  config: InstallableAppInstallConfig,
+): Promise<InstallableAppUpstreamResponse> {
+  const response = await fetchControlJson(
+    requireControlUrl(config),
+    takosumiRunApprovePath(input.runId),
+    { method: "POST", body: JSON.stringify({ reason: "Approved in Takos" }) },
+    config,
+  );
+  return requirePlanRunForWorkspace(response, input);
 }
 
 async function getCanonicalCapsule(

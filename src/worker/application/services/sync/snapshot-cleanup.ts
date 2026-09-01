@@ -69,12 +69,62 @@ export async function cleanupPendingSnapshots(
 const MAX_DAG_DEPTH = 10_000;
 const BATCH_SIZE = 1000;
 
-export async function getReachableSnapshots(
-  env: Env,
+type ReachableSnapshotRow = Readonly<{
+  id: string;
+  parentIds: readonly string[];
+}>;
+
+type ReachableSnapshotBatchCache = Map<
+  string,
+  readonly ReachableSnapshotRow[]
+>;
+
+/**
+ * Load (or replay) one exact traversal batch. The cache key includes the full
+ * ordered ID list, including duplicates, so cached results preserve the row
+ * order returned by the original SQL query without changing batch semantics.
+ */
+async function loadSnapshotBatch(
+  db: ReturnType<typeof resolveDb>,
+  spaceId: string,
+  batchIds: readonly string[],
+  cache: ReachableSnapshotBatchCache,
+): Promise<readonly ReachableSnapshotRow[]> {
+  const cacheKey = JSON.stringify(batchIds);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const snapshotRows = await db.select({
+    id: snapshots.id,
+    parentIds: snapshots.parentIds,
+  })
+    .from(snapshots)
+    .where(
+      and(
+        eq(snapshots.accountId, spaceId),
+        inArray(snapshots.id, batchIds),
+      ),
+    )
+    .all();
+
+  const parsedRows = Object.freeze(
+    snapshotRows.map((snapshot) =>
+      Object.freeze({
+        id: snapshot.id,
+        parentIds: Object.freeze(parseParentIds(snapshot.parentIds)),
+      }),
+    ),
+  );
+  cache.set(cacheKey, parsedRows);
+  return parsedRows;
+}
+
+async function getReachableSnapshotsForHead(
+  db: ReturnType<typeof resolveDb>,
   spaceId: string,
   headSnapshotId: string,
+  cache: ReachableSnapshotBatchCache,
 ): Promise<Set<string>> {
-  const db = resolveDb(env.DB);
   const reachable = new Set<string>();
   let toFetch = [headSnapshotId];
 
@@ -95,27 +145,18 @@ export async function getReachableSnapshots(
     const batchIds = idsToFetch.slice(0, BATCH_SIZE);
     iterations += batchIds.length;
 
-    const snapshotRows = await db.select({
-      id: snapshots.id,
-      parentIds: snapshots.parentIds,
-    })
-      .from(snapshots)
-      .where(
-        and(
-          eq(snapshots.accountId, spaceId),
-          inArray(snapshots.id, batchIds),
-        ),
-      )
-      .all();
+    const snapshotRows = await loadSnapshotBatch(
+      db,
+      spaceId,
+      batchIds,
+      cache,
+    );
 
     const nextToFetch: string[] = [];
-
     for (const snapshot of snapshotRows) {
       reachable.add(snapshot.id);
 
-      const parentIds = parseParentIds(snapshot.parentIds);
-
-      for (const parentId of parentIds) {
+      for (const parentId of snapshot.parentIds) {
         if (!reachable.has(parentId)) {
           nextToFetch.push(parentId);
         }
@@ -126,6 +167,43 @@ export async function getReachableSnapshots(
   }
 
   return reachable;
+}
+
+/**
+ * Get all snapshots reachable from multiple heads (DAG traversal).
+ *
+ * Heads are processed in input order. Each invocation has its own depth
+ * accounting, while an immutable cache replays only an identical ordered
+ * batch for a later head.
+ */
+export async function getReachableSnapshotsForHeads(
+  env: Env,
+  spaceId: string,
+  headSnapshotIds: readonly string[],
+): Promise<Set<string>> {
+  const db = resolveDb(env.DB);
+  const cache: ReachableSnapshotBatchCache = new Map();
+  const reachable = new Set<string>();
+
+  for (const headSnapshotId of headSnapshotIds) {
+    const reached = await getReachableSnapshotsForHead(
+      db,
+      spaceId,
+      headSnapshotId,
+      cache,
+    );
+    reached.forEach((id) => reachable.add(id));
+  }
+
+  return reachable;
+}
+
+export async function getReachableSnapshots(
+  env: Env,
+  spaceId: string,
+  headSnapshotId: string,
+): Promise<Set<string>> {
+  return getReachableSnapshotsForHeads(env, spaceId, [headSnapshotId]);
 }
 
 /**
@@ -255,11 +333,11 @@ export async function runGC(
     }
   }
 
-  const reachable = new Set<string>();
-  for (const headId of headIds) {
-    const reached = await getReachableSnapshots(env, spaceId, headId);
-    reached.forEach((id) => reachable.add(id));
-  }
+  const reachable = await getReachableSnapshotsForHeads(
+    env,
+    spaceId,
+    headIds,
+  );
 
   // 5. Delete merged/discarded sessions
   await db.delete(sessions)

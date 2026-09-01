@@ -32,6 +32,8 @@ CREATE TABLE account_storage_files (
   mime_type TEXT,
   r2_key TEXT,
   sha256 TEXT,
+  upload_state TEXT NOT NULL DEFAULT 'ready',
+  upload_expires_at TEXT,
   uploaded_by_account_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -84,7 +86,6 @@ function toolContext(input: {
     threadId: input.threadId,
     runId: "run-1",
     userId: "user-1",
-    role: "editor",
     capabilities: [],
     env: input.env,
     db: input.db,
@@ -129,7 +130,6 @@ test("chat attachment upload is rendered in history and readable only through it
       spaceId,
       file.id,
       bytes.buffer,
-      bytes.byteLength,
       "text/plain",
     );
     const confirmed = await confirmUpload(db, bucket, spaceId, file.id);
@@ -211,7 +211,6 @@ test("chat attachment tool rejects a generic workspace file even when message me
       spaceId,
       file.id,
       bytes.buffer,
-      bytes.byteLength,
       "text/plain",
     );
     await createMessage(env, db, thread, {
@@ -227,7 +226,9 @@ test("chat attachment tool rejects a generic workspace file even when message me
         { file_id: file.id },
         toolContext({ db, env, spaceId, threadId: thread.id }),
       ),
-    ).rejects.toThrow("not a Takos chat attachment");
+    ).rejects.toThrow(
+      "not referenced by a user message in the current thread",
+    );
   } finally {
     client.close();
   }

@@ -15,6 +15,7 @@ export type AppRouteComponentKey =
   | "storage"
   | "apps"
   | "connections"
+  | "notifications"
   | "memory"
   | "settings"
   | "space-settings"
@@ -33,6 +34,7 @@ export interface AppRouteSchema {
 
 const SIMPLE_TOP_LEVEL_VIEWS = {
   memory: "memory",
+  notifications: "notifications",
 } as const satisfies Partial<Record<string, View>>;
 
 const LEGAL_PAGE_TO_PATH = new Map<string, string>([
@@ -44,14 +46,6 @@ const LEGAL_PAGE_TO_PATH = new Map<string, string>([
 
 export function normalizeStoreTab(value?: string): "discover" | "installed" {
   return value === "installed" ? "installed" : "discover";
-}
-
-export function parsePositiveRouteInt(
-  value: string | null | undefined,
-): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 export function getRouteParentPath(path: string): string {
@@ -112,6 +106,11 @@ function applyRouteSearchParams(route: RouteState, search: string): RouteState {
     return connectionServer ? { ...route, connectionServer } : route;
   }
 
+  if (route.view === "store") {
+    const spaceId = params.get("space")?.trim() || undefined;
+    return spaceId ? { ...route, spaceId } : route;
+  }
+
   return route;
 }
 
@@ -124,10 +123,12 @@ function buildSharePath(state: RouteState): string {
 }
 
 function buildStorePath(state: RouteState): string {
-  if (state.storeTab && state.storeTab !== "discover") {
-    return `/store/${state.storeTab}`;
-  }
-  return "/store";
+  const pathname = state.storeTab && state.storeTab !== "discover"
+    ? `/store/${state.storeTab}`
+    : "/store";
+  const params = new URLSearchParams();
+  if (state.spaceId) params.set("space", state.spaceId);
+  return appendSearchParams(pathname, params);
 }
 
 function buildChatPath(state: RouteState): string {
@@ -268,6 +269,19 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
       return view ? { view } : undefined;
     },
     build: (state) => (state.view === "memory" ? "/memory" : undefined),
+  },
+  {
+    key: "notifications",
+    componentKey: "notifications",
+    componentPatterns: ["/notifications"],
+    placement: "protected",
+    match: (parts) => {
+      const view =
+        SIMPLE_TOP_LEVEL_VIEWS[parts[0] as keyof typeof SIMPLE_TOP_LEVEL_VIEWS];
+      return view === "notifications" ? { view } : undefined;
+    },
+    build: (state) =>
+      state.view === "notifications" ? "/notifications" : undefined,
   },
   {
     key: "store",

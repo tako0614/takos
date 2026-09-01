@@ -36,6 +36,10 @@ export function takosumiRunPath(runId: string): string {
   return `${TAKOSUMI_SESSION_API_PREFIX}/runs/${segment(runId)}`;
 }
 
+export function takosumiRunApprovePath(runId: string): string {
+  return `${takosumiRunPath(runId)}/approve`;
+}
+
 export function takosumiSourcesPath(): string {
   return `${TAKOSUMI_SESSION_API_PREFIX}/sources`;
 }

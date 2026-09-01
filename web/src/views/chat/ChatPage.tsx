@@ -20,6 +20,12 @@ import {
   type MessageSequenceLookupPage,
   resolveMessageSequenceById,
 } from "./message-sequence-resolver.ts";
+import { parseChatMessagesResponse } from "../../hooks/chat-message-response.ts";
+import {
+  createChatOperationId,
+  isSameChatDraft,
+} from "../../hooks/chat-operation-id.ts";
+import { parseChatThreadResponse } from "../../hooks/chat-thread-response.ts";
 
 interface ChatPageProps {
   spaces: Space[];
@@ -31,6 +37,7 @@ interface ChatPageProps {
   onThreadChange?: (threadId: string | undefined) => void;
   onUpdateThread?: (threadId: string, updates: Partial<Thread>) => void;
   onNewThreadCreated?: (spaceId: string, thread: Thread) => void;
+  onToggleArchiveThread?: (thread: Thread) => Promise<boolean>;
 }
 
 export function ChatPage(props: ChatPageProps) {
@@ -64,6 +71,13 @@ export function ChatPage(props: ChatPageProps) {
   const [focusRunId, setFocusRunId] = createSignal<string | null>(
     props.initialRunId ?? null,
   );
+  let threadCreationOperation: {
+    id: string;
+    spaceId: string;
+    model: string;
+    input: string;
+    files: File[];
+  } | null = null;
 
   const activeChatBundle = createMemo(() => {
     const thread = selectedThread();
@@ -81,8 +95,8 @@ export function ChatPage(props: ChatPageProps) {
       return;
     }
     if (props.spaces.length > 0 && !selectedSpaceId()) {
-      const ws = getPersonalSpace(props.spaces, t("personal")) ||
-        props.spaces[0];
+      const ws =
+        getPersonalSpace(props.spaces, t("personal")) || props.spaces[0];
       const identifier = getSpaceIdentifier(ws);
       setSelectedSpaceId(identifier);
       props.onSpaceChange?.(identifier);
@@ -96,22 +110,10 @@ export function ChatPage(props: ChatPageProps) {
       <ModelSwitcher
         selectedModel={modelSelection.selectedModel()}
         models={modelSelection.availableModels()}
-        isLoading={false}
-        onModelChange={async (model) => {
-          modelSelection.setSelectedModel(model);
-          const spaceId = selectedSpaceId();
-          if (spaceId) {
-            try {
-              const res = await rpc.spaces[":spaceId"].model.$patch({
-                param: { spaceId },
-                json: { model } as Record<string, string>,
-              });
-              await rpcJson(res);
-            } catch {
-              // non-fatal
-            }
-          }
-        }}
+        isLoading={modelSelection.isLoading()}
+        hasError={modelSelection.hasError()}
+        onRetry={() => void modelSelection.fetchSpaceModels()}
+        onModelChange={modelSelection.setSelectedModel}
       />,
     );
     onCleanup(() => mobileHeader.setHeaderContent(null));
@@ -119,20 +121,26 @@ export function ChatPage(props: ChatPageProps) {
 
   createEffect(() => {
     const currentThreadId = props.initialThreadId;
+    const currentSpaceRecordId = selectedSpace()?.id;
     let cancelled = false;
-    if (currentThreadId) {
+    if (currentThreadId && currentSpaceRecordId) {
       setSelectedThread((prev) => (prev?.id === currentThreadId ? prev : null));
       const fetchThread = async () => {
         try {
           const res = await rpc.threads[":id"].$get({
             param: { id: currentThreadId },
           });
-          const data = await rpcJson<{ thread: Thread }>(res);
+          const thread = parseChatThreadResponse(
+            await rpcJson<unknown>(res),
+            { spaceId: currentSpaceRecordId, threadId: currentThreadId },
+          );
           if (cancelled) return;
-          setSelectedThread(data.thread);
+          setSelectedThread(thread);
         } catch {
           if (cancelled) return;
           setSelectedThread(null);
+          showToast("error", t("failedToLoad"));
+          props.onThreadChange?.(undefined);
         }
       };
       fetchThread();
@@ -174,7 +182,12 @@ export function ChatPage(props: ChatPageProps) {
               offset: String(offset),
             },
           });
-          return await rpcJson<MessageSequenceLookupPage>(res);
+          const page = parseChatMessagesResponse(
+            await rpcJson<unknown>(res),
+            currentThreadId,
+            { limit, offset },
+          );
+          return page satisfies MessageSequenceLookupPage;
         },
       });
 
@@ -209,44 +222,94 @@ export function ChatPage(props: ChatPageProps) {
     sequence: number,
   ) => {
     try {
+      const currentSpaceRecordId = selectedSpace()?.id;
+      if (!currentSpaceRecordId) return false;
       const res = await rpc.threads[":id"].$get({ param: { id: threadId } });
-      const data = await rpcJson<{ thread: Thread }>(res);
-      const thread = data.thread;
+      const thread = parseChatThreadResponse(
+        await rpcJson<unknown>(res),
+        { spaceId: currentSpaceRecordId, threadId },
+      );
       setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
       setJumpToMessageId(messageId);
       setJumpToMessageSequence(sequence);
+      return true;
     } catch (err) {
       showToast(
         "error",
         err instanceof Error ? err.message : t("failedToLoad"),
       );
+      return false;
     }
   };
 
   // Called by WelcomeView when user sends a message
   const handleCreateThread = async (message: string, files?: File[]) => {
     const spaceId = selectedSpaceId();
-    if (!spaceId) return;
+    const currentSpaceRecordId = selectedSpace()?.id;
+    if (!spaceId || !currentSpaceRecordId || !modelSelection.isReady()) {
+      return false;
+    }
+    const model = modelSelection.selectedModel();
+    const draft = { input: message, files: files ?? [] };
+    if (
+      !threadCreationOperation ||
+      threadCreationOperation.spaceId !== spaceId ||
+      threadCreationOperation.model !== model ||
+      !isSameChatDraft(threadCreationOperation, draft)
+    ) {
+      threadCreationOperation = {
+        id: createChatOperationId(),
+        spaceId,
+        model,
+        ...draft,
+      };
+    }
+    const operationId = threadCreationOperation.id;
     try {
       const res = await rpc.spaces[":spaceId"].threads.$post({
         param: { spaceId },
-        json: { title: message.slice(0, 60), locale: lang },
+        json: {
+          title: message.slice(0, 60),
+          locale: lang,
+          idempotency_key: operationId,
+        },
       });
-      const data = await rpcJson<{ thread: Thread }>(res);
-      const thread = data.thread;
+      const thread = parseChatThreadResponse(
+        await rpcJson<unknown>(res),
+        { spaceId: currentSpaceRecordId },
+      );
       props.onNewThreadCreated?.(spaceId, thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
       setPendingModel(modelSelection.selectedModel());
       setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
+      threadCreationOperation = null;
+      return true;
     } catch (err) {
       showToast(
         "error",
         err instanceof Error ? err.message : t("failedToCreate"),
       );
+      return false;
     }
+  };
+
+  const unarchiveSelectedThread = async (): Promise<boolean> => {
+    const thread = selectedThread();
+    if (
+      !thread || thread.status !== "archived" ||
+      !props.onToggleArchiveThread
+    ) {
+      return false;
+    }
+    const accepted = await props.onToggleArchiveThread(thread);
+    if (!accepted) return false;
+    const activeThread: Thread = { ...thread, status: "active" };
+    setSelectedThread(activeThread);
+    props.onUpdateThread?.(thread.id, { status: "active" });
+    return true;
   };
 
   return (
@@ -267,27 +330,15 @@ export function ChatPage(props: ChatPageProps) {
                 <>
                   <ChatHeader
                     selectedModel={modelSelection.selectedModel()}
-                    isLoading={false}
-                    onModelChange={async (model) => {
-                      modelSelection.setSelectedModel(model);
-                      const spaceId = selectedSpaceId();
-                      if (spaceId) {
-                        try {
-                          const res = await rpc.spaces[":spaceId"].model.$patch(
-                            {
-                              param: { spaceId },
-                              json: { model } as Record<string, string>,
-                            },
-                          );
-                          await rpcJson(res);
-                        } catch {
-                          // non-fatal
-                        }
-                      }
-                    }}
+                    models={modelSelection.availableModels()}
+                    isLoading={modelSelection.isLoading()}
+                    hasError={modelSelection.hasError()}
+                    onRetry={() => void modelSelection.fetchSpaceModels()}
+                    onModelChange={modelSelection.setSelectedModel}
                   />
                   <WelcomeView
                     space={space()}
+                    canSend={modelSelection.isReady()}
                     onNewChat={() => {
                       props.onSpaceChange?.(getSpaceIdentifier(space()));
                     }}
@@ -302,6 +353,7 @@ export function ChatPage(props: ChatPageProps) {
             <ChatView
               thread={bundle().thread}
               spaceId={getSpaceIdentifier(bundle().space)}
+              spaceRecordId={bundle().space.id}
               jumpToMessageId={jumpToMessageId()}
               jumpToMessageSequence={jumpToMessageSequence()}
               focusRunId={focusRunId()}
@@ -312,9 +364,14 @@ export function ChatPage(props: ChatPageProps) {
               onRunFocusHandled={() => {
                 setFocusRunId(null);
               }}
-              onOpenSearch={selectedSpaceId()
-                ? () => setShowSearchModal(true)
-                : undefined}
+              onOpenSearch={
+                selectedSpaceId() ? () => setShowSearchModal(true) : undefined
+              }
+              onUnarchive={
+                bundle().thread.status === "archived"
+                  ? unarchiveSelectedThread
+                  : undefined
+              }
               initialMessage={pendingMessage() ?? undefined}
               initialFiles={pendingFiles() ?? undefined}
               initialModel={pendingModel() ?? undefined}
@@ -324,7 +381,7 @@ export function ChatPage(props: ChatPageProps) {
                 setPendingModel(null);
               }}
               onUpdateTitle={(title) => {
-                setSelectedThread((prev) => prev ? { ...prev, title } : prev);
+                setSelectedThread((prev) => (prev ? { ...prev, title } : prev));
                 const thread = selectedThread();
                 if (thread) {
                   props.onUpdateThread?.(thread.id, { title });

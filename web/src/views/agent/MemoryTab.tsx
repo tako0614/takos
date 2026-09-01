@@ -6,7 +6,11 @@ import { useMemoryData } from "../../hooks/useMemoryData.ts";
 import { MemoryList } from "./MemoryList.tsx";
 import { ReminderList } from "./ReminderList.tsx";
 
-export function MemoryTab(props: { spaceId: string }) {
+export function MemoryTab(props: {
+  spaceId: string;
+  spaceRecordId: string;
+  canEdit: boolean;
+}) {
   const { t } = useI18n();
   const [showReminders, setShowReminders] = createSignal(false);
 
@@ -14,15 +18,25 @@ export function MemoryTab(props: { spaceId: string }) {
     memories,
     reminders,
     loading,
+    remindersLoading,
+    memoryError,
+    reminderError,
+    fetchMemories,
+    fetchReminders,
     deleteMemory,
     deleteReminder,
     createMemory,
     createReminder,
+    updateMemory,
+    updateReminder,
     savingMemory,
     savingReminder,
     getTypeIcon,
     getTypeLabel,
-  } = useMemoryData(() => props.spaceId);
+  } = useMemoryData(() => props.spaceId, () => props.spaceRecordId);
+
+  const selectedError = () =>
+    showReminders() ? reminderError() : memoryError();
 
   return (
     <Show
@@ -75,26 +89,81 @@ export function MemoryTab(props: { spaceId: string }) {
           </div>
         </div>
 
-        {!showReminders()
-          ? (
-            <MemoryList
-              memories={memories()}
-              onDelete={deleteMemory}
-              onCreateMemory={(data) =>
-                createMemory({ ...data, source: "user" })}
-              savingMemory={savingMemory()}
-              getTypeIcon={getTypeIcon}
-              getTypeLabel={getTypeLabel}
-            />
-          )
-          : (
-            <ReminderList
-              reminders={reminders()}
-              onDelete={deleteReminder}
-              onCreateReminder={createReminder}
-              savingReminder={savingReminder()}
-            />
+        <Show when={selectedError()}>
+          {(message) => (
+            <div
+              role="alert"
+              style={{
+                display: "flex",
+                "align-items": "center",
+                "justify-content": "space-between",
+                gap: "0.75rem",
+                padding: "0.75rem 1rem",
+                border: "1px solid var(--color-error)",
+                "border-radius": "var(--radius-md)",
+                color: "var(--color-error)",
+              }}
+            >
+              <span>{message()}</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  showReminders()
+                    ? void fetchReminders()
+                    : void fetchMemories()}
+              >
+                {t("retry")}
+              </Button>
+            </div>
           )}
+        </Show>
+
+        <Show
+          when={
+            (showReminders() ? reminders().length : memories().length) > 0 ||
+            !selectedError()
+          }
+        >
+          <Show
+            when={!showReminders() || !remindersLoading()}
+            fallback={
+              <div
+                style={{
+                  display: "flex",
+                  "justify-content": "center",
+                  padding: "3rem 0",
+                }}
+              >
+                <Icons.Loader class="w-5 h-5 animate-spin" />
+              </div>
+            }
+          >
+            {!showReminders()
+              ? (
+              <MemoryList
+                memories={memories()}
+                onDelete={deleteMemory}
+                onCreateMemory={createMemory}
+                onUpdateMemory={updateMemory}
+                savingMemory={savingMemory()}
+                canEdit={props.canEdit}
+                getTypeIcon={getTypeIcon}
+                getTypeLabel={getTypeLabel}
+              />
+            )
+              : (
+              <ReminderList
+                reminders={reminders()}
+                onDelete={deleteReminder}
+                onCreateReminder={createReminder}
+                onUpdateReminder={updateReminder}
+                savingReminder={savingReminder()}
+                canEdit={props.canEdit}
+              />
+              )}
+          </Show>
+        </Show>
       </div>
     </Show>
   );

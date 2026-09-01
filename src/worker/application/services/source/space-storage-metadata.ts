@@ -271,6 +271,8 @@ export async function updateStoredFileMetadata(
     size?: number;
     sha256?: string;
     mimeType?: string;
+    uploadState?: "pending" | "uploading" | "ready";
+    uploadExpiresAt?: string | null;
   },
 ): Promise<StorageFileResponse> {
   const db = getStorageDb(d1);
@@ -278,6 +280,10 @@ export async function updateStoredFileMetadata(
     ...(typeof updates.size === "number" ? { size: updates.size } : {}),
     ...(updates.sha256 ? { sha256: updates.sha256 } : {}),
     ...(updates.mimeType ? { mimeType: updates.mimeType } : {}),
+    ...(updates.uploadState ? { uploadState: updates.uploadState } : {}),
+    ...(updates.uploadExpiresAt !== undefined
+      ? { uploadExpiresAt: updates.uploadExpiresAt }
+      : {}),
     updatedAt: new Date().toISOString(),
   }).where(
     and(

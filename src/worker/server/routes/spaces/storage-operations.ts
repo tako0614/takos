@@ -7,7 +7,6 @@ import {
   BadGatewayError,
   BadRequestError,
   ConflictError,
-  InternalError,
   NotFoundError,
   PayloadTooLargeError,
 } from "@takos/worker-platform-utils/errors";
@@ -16,13 +15,24 @@ import { MAX_BULK_OPERATION_ITEMS } from "../../../shared/config/limits.ts";
 export { MAX_BULK_OPERATION_ITEMS };
 
 export const storageBulkLimiter = RateLimiters.sensitive();
+export const storageArchiveLimiter = RateLimiters.sensitive();
 
-export const INLINE_SAFE_MIME_PREFIXES = [
-  "image/",
-  "audio/",
-  "video/",
-  "application/pdf",
-];
+const INLINE_SAFE_RASTER_IMAGE_MIME_TYPES = new Set([
+  "image/avif",
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/x-icon",
+]);
+
+export function isStorageMimeTypeSafeForInline(contentType: string): boolean {
+  const essence = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return essence === "text/plain" ||
+    INLINE_SAFE_RASTER_IMAGE_MIME_TYPES.has(essence) ||
+    essence.startsWith("audio/") || essence.startsWith("video/");
+}
 
 export function requireOAuthScope(
   scope: string,
@@ -60,6 +70,7 @@ export function handleStorageError(_c: Context, err: unknown): never {
         throw new BadRequestError(err.message);
     }
   }
-  const message = err instanceof Error ? err.message : "Internal error";
-  throw new InternalError(message);
+  // Preserve unknown exceptions for the global handler. It logs the original
+  // server-side and publishes only the generic correlation-id response.
+  throw err;
 }

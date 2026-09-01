@@ -22,7 +22,9 @@ Takos applies rate limits at two layers:
    request flooding and abusive replay.
 2. **Per-route limiter (`InMemoryRateLimiter` / `RateLimiters`)**: applied
    only to a small set of endpoints with specific cost / abuse profiles
-   (today: `routes/index`, `routes/public-share`, `routes/spaces/storage-operations`).
+   (today: `routes/index`, `routes/public-share`,
+   `routes/spaces/storage-operations`, and authenticated conversation
+   creation, Agent Task creation, and LLM-backed Agent Task planning).
 
 Other auth-adjacent and high-cost mutation endpoints currently rely on the
 operator-tier limiter only. The most security-relevant ones are annotated
@@ -34,8 +36,6 @@ configuration can find them quickly:
 - `POST /api/auth/setup-username` (`server/routes/auth-api.ts`)
 - `GET  /auth/oidc/login` (`server/routes/auth/oidc.ts`)
 - `GET  /auth/oidc/callback` (`server/routes/auth/oidc.ts`)
-- `POST /spaces/:spaceId/threads` (`server/routes/threads/space.ts`)
-
 If you operate Takos without an upstream CDN / WAF limiter, treat these
 endpoints as the highest priority for a self-hosted limiter (e.g. an Nginx
 `limit_req` zone keyed on client IP + cookie).

@@ -1,5 +1,9 @@
 import { test } from "bun:test";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
+import * as schema from "../../../../infra/db/schema.ts";
+import { validateCustomSkillMetadata } from "../../agent/managed-skills.ts";
 
 import { assertEquals, assertNotEquals } from "@takos/test/assert";
 
@@ -222,6 +226,27 @@ test("parseSkillMetadata - parses valid JSON metadata", () => {
   assertEquals(result.category, "research");
 });
 
+test("custom Skill resource manifests reject overflow and duplicate template ids", () => {
+  const overflow = validateCustomSkillMetadata({
+    execution_contract: {
+      template_ids: Array.from({ length: 9 }, (_, index) => `template-${index}`),
+    },
+  });
+  assertEquals(
+    overflow.fieldErrors["execution_contract.template_ids"],
+    "template_ids must contain at most 8 resources",
+  );
+  const duplicate = validateCustomSkillMetadata({
+    execution_contract: {
+      template_ids: ["research-brief", "research-brief"],
+    },
+  });
+  assertEquals(
+    duplicate.fieldErrors["execution_contract.template_ids"],
+    "template_ids must not contain duplicates",
+  );
+});
+
 test("formatSkill - formats a skill row", () => {
   const skill = createSkillRow();
 
@@ -358,25 +383,98 @@ test("updateSkill - returns null when skill not found", async () => {
 });
 
 test("deleteSkill - deletes skill by id", async () => {
-  const { db, prepared } = createFakeSqlDatabase();
+  const client = createClient({ url: ":memory:" });
+  try {
+    await client.executeMultiple(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE accounts (id TEXT PRIMARY KEY NOT NULL);
+      CREATE TABLE skills (
+        id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT NOT NULL REFERENCES accounts(id),
+        name TEXT NOT NULL,
+        description TEXT,
+        instructions TEXT NOT NULL,
+        triggers TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE agent_resource_tombstones (
+        id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        resource_kind TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        source_digest TEXT NOT NULL,
+        deleted_by_account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+        deleted_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (account_id, resource_kind, resource_id)
+      );
+      CREATE TABLE agent_resource_deletion_outbox (
+        id TEXT PRIMARY KEY NOT NULL REFERENCES agent_resource_tombstones(id)
+          ON DELETE CASCADE,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        resource_kind TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        vector_ids TEXT NOT NULL DEFAULT '[]',
+        offload_object_keys TEXT NOT NULL DEFAULT '[]',
+        delivery_status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        claim_token TEXT,
+        claimed_at TEXT,
+        next_attempt_at TEXT,
+        completed_at TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (account_id, resource_kind, resource_id)
+      );
+      INSERT INTO accounts (id) VALUES ('ws-1'), ('user-1');
+      INSERT INTO skills (
+        id, account_id, name, description, instructions, triggers, metadata,
+        enabled, created_at, updated_at
+      ) VALUES (
+        's1', 'ws-1', 'my-skill', 'A skill', 'Do this', 'hello,world',
+        '{}', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'
+      );
+    `);
+    const db = drizzle(client, { schema }) as unknown as SqlDatabaseBinding;
+    const deleted = await deleteSkill(db, "ws-1", "s1", "user-1");
+    assertNotEquals(deleted, null);
 
-  await deleteSkill(db, "s1");
-  assertEquals(
-    prepared.some((record) =>
-      record.sql.includes("delete") && record.sql.includes("skills")
-    ),
-    true,
-  );
+    const rows = await client.execute(`
+      SELECT t.resource_kind, t.resource_id, t.deleted_by_account_id,
+             o.delivery_status
+      FROM agent_resource_tombstones t
+      JOIN agent_resource_deletion_outbox o ON o.id = t.id
+    `);
+    assertEquals(rows.rows.length, 1);
+    assertEquals(rows.rows[0]?.resource_kind, "skill_revision");
+    assertEquals(rows.rows[0]?.deleted_by_account_id, "user-1");
+    assertEquals(rows.rows[0]?.delivery_status, "pending");
+    assertEquals(
+      Number((await client.execute("SELECT COUNT(*) AS count FROM skills"))
+        .rows[0]?.count),
+      0,
+    );
+
+    const retry = await deleteSkill(db, "ws-1", "s1", "user-1");
+    assertEquals(retry, deleted);
+  } finally {
+    client.close();
+  }
 });
 
 test("updateSkillEnabled - returns the new enabled state", async () => {
   const { db, prepared } = createFakeSqlDatabase();
 
-  const result = await updateSkillEnabled(db, "s1", false);
+  const result = await updateSkillEnabled(db, "ws-1", "s1", false);
   assertEquals(result, false);
   assertEquals(
     prepared.some((record) =>
-      record.sql.includes("update") && record.sql.includes("skills")
+      record.sql.includes("update") && record.sql.includes("skills") &&
+      record.args.includes("ws-1") && record.args.includes("s1")
     ),
     true,
   );

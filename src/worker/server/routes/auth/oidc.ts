@@ -58,6 +58,7 @@ const ALLOWED_ID_TOKEN_ALGORITHMS = new Set([
   "ES256",
   "EdDSA",
 ]);
+const BASIC_OIDC_SCOPES = ["openid", "profile", "email"] as const;
 
 type OidcDiscoveryDocument = {
   authorization_endpoint: string;
@@ -163,7 +164,9 @@ authOidcRouter.get("/oidc/login", async (c) => {
   authorizationUrl.searchParams.set("redirect_uri", redirectUri);
   authorizationUrl.searchParams.set(
     "scope",
-    TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
+    (hasTakosumiAccountsIntegration(c.env)
+      ? TAKOS_ACCOUNTS_OAUTH_SCOPES
+      : BASIC_OIDC_SCOPES).join(" "),
   );
   authorizationUrl.searchParams.set("state", state);
   authorizationUrl.searchParams.set("nonce", nonce);
@@ -399,24 +402,26 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     );
   }
 
-  try {
-    await storeAccountsDelegation({
-      db: dbBinding,
-      encryptionKey: c.env.ENCRYPTION_KEY ?? "",
-      identityId,
-      tokens,
-      fallbackScope: TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
-      workspaceId: delegatedWorkspaceId(userInfo),
-    });
-  } catch (error) {
-    logError("OIDC delegated token storage failed", error, {
-      module: "routes/auth/oidc",
-    });
-    return oidcErrorResponse(
-      "OIDC Error",
-      "Account authorization could not be stored.",
-      500,
-    );
+  if (hasTakosumiAccountsIntegration(c.env)) {
+    try {
+      await storeAccountsDelegation({
+        db: dbBinding,
+        encryptionKey: c.env.ENCRYPTION_KEY ?? "",
+        identityId,
+        tokens,
+        fallbackScope: TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
+        workspaceId: delegatedWorkspaceId(userInfo),
+      });
+    } catch (error) {
+      logError("OIDC delegated token storage failed", error, {
+        module: "routes/auth/oidc",
+      });
+      return oidcErrorResponse(
+        "OIDC Error",
+        "Account authorization could not be stored.",
+        500,
+      );
+    }
   }
 
   const session = await createSession(sessionStore, user.id);
@@ -447,6 +452,13 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     headers: successHeaders,
   });
 });
+
+function hasTakosumiAccountsIntegration(env: OptionalAuthRouteEnv["Bindings"]): boolean {
+  return Boolean(
+    env.TAKOSUMI_ACCOUNTS_INTERNAL_URL?.trim() ||
+      env.TAKOSUMI_ACCOUNTS_URL?.trim(),
+  );
+}
 
 function oidcErrorResponse(
   title: string,

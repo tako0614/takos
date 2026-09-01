@@ -269,10 +269,20 @@ function parseVersion(version: string): [number, number, number] {
 }
 
 function collectInstalledToolOccurrences(): InstalledToolOccurrence[] {
-  return collectNodeModules(
-    resolve(repoRoot, "node_modules"),
-    "node_modules",
-    new Set(),
+  return retainLogicalToolOccurrences(
+    collectNodeModules(
+      resolve(repoRoot, "node_modules"),
+      "node_modules",
+      new Set(),
+    ),
+  );
+}
+
+export function retainLogicalToolOccurrences(
+  occurrences: InstalledToolOccurrence[],
+): InstalledToolOccurrence[] {
+  return occurrences.filter(
+    (occurrence) => !occurrence.path.includes("node_modules/.bun/"),
   );
 }
 
@@ -366,7 +376,7 @@ function validateProductionSanitizerBundle(): string[] {
     .filter((name) => name.endsWith(".js"))
     .map((name) => readFileSync(resolve(assetPath, name), "utf8"))
     .join("\n");
-  const proof = "takos.monaco-dompurify@3.4.12";
+  const proof = "takos.monaco-dompurify@3.4.13";
   const proofCount = javascript.split(proof).length - 1;
   if (proofCount !== 1) {
     return [

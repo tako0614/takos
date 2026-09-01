@@ -10,6 +10,7 @@ import {
   responseGuidelinesMarkdown,
   toolRuntimeRulesMarkdown,
 } from "./prompt-assets.generated.ts";
+import type { AgentType } from "../../../shared/types/agent-tasks.ts";
 
 const TOOL_RUNTIME_RULES = toolRuntimeRulesMarkdown.trim();
 const RESPONSE_GUIDELINES = responseGuidelinesMarkdown.trim();
@@ -20,7 +21,7 @@ const DEFAULT_CORE_PROMPT = [
   RESPONSE_GUIDELINES,
 ].join("\n\n");
 
-const SYSTEM_PROMPTS: Record<string, string> = {
+const SYSTEM_PROMPTS: Record<AgentType, string> = {
   default: [
     DEFAULT_CORE_PROMPT,
     modeDefaultMarkdown.trim(),

@@ -33,6 +33,8 @@ export const agent = {
   taskPriority: "Priority",
   taskAgentType: "Agent Type",
   taskModel: "Model",
+  taskModelDefault: "Workspace default",
+  taskModelDefaultCurrent: "Workspace default ({model})",
   taskDueDate: "Due Date",
   taskDueLabel: "Due",
   taskAgentLabel: "Agent",
@@ -81,16 +83,20 @@ export const agent = {
 
   // Model Settings
   modelBackend: "Model Backend",
+  modelSelection: "Default model",
   saveModelSettings: "Save Model Settings",
   modelSettingsSaved: "Model settings saved",
   modelSettingsFailed: "Failed to save model settings",
   tokenLimitLabel: "History token budget",
   tokenLimitValue: "{count}k tokens",
+  workspaceReadOnly: "You have read-only access to this Workspace.",
 
   // Skills / Agent tabs
   skills: "Skills",
   memory: "Memory",
   model: "Model",
+  modelCatalogLoading: "Loading models...",
+  modelCatalogUnavailable: "Models unavailable",
   work: "Work",
   noSkills: "No skills yet",
   skillsEmptyHint: "Create custom skills to extend your agent's capabilities",
@@ -104,6 +110,9 @@ export const agent = {
   skillDescriptionPlaceholder: "Description of this skill...",
   skillInstructions: "Instructions",
   skillInstructionsPlaceholder: "Write instructions for AI in markdown...",
+  skillInstructionsBytes: "{count} / {limit} bytes",
+  skillInstructionsTooLarge:
+    "Instructions use {count} bytes; the limit is {limit} bytes.",
   skillTriggers: "Triggers (optional)",
   skillTriggersPlaceholder: "keyword1, keyword2",
   skillTriggersHint: "Comma-separated",
@@ -123,12 +132,21 @@ export const agent = {
   skillDurableOutputs: "Durable Outputs",
   skillOutputModes: "Output Modes",
   skillRequiredMcpServers: "Required MCP Servers",
-  skillTemplateIds: "Template IDs",
+  skillTemplateIds: "On-demand resources",
+  skillResources: "On-demand resources",
+  skillResourcesHint:
+    "{count} / {limit} selected. The agent loads only the resources it needs.",
+  skillResourcesEmpty: "No resources are currently available.",
+  skillResourceUnavailable:
+    "This resource is no longer in the catalog. Clear it to remove the reference.",
+  skillResourcesTooMany: "Select no more than {limit} on-demand resources.",
+  skillResourcesDuplicate:
+    "The same on-demand resource cannot be selected twice.",
   skillContractTools: "tools",
   skillContractOutputs: "outputs",
   skillContractModes: "modes",
   skillContractMcp: "mcp",
-  skillContractTemplates: "templates",
+  skillContractTemplates: "resources",
   managed: "managed",
   none: "none",
   skillEnabled: "Enabled",
@@ -169,6 +187,8 @@ export const agent = {
   memoryCategory: "Category (optional)",
   memoryCategoryPlaceholder: "project, preference, etc.",
   memoryCreated: "Memory created",
+  editMemory: "Edit Memory",
+  memoryUpdated: "Memory updated",
 
   // Reminder Creation
   createReminder: "Create Reminder",
@@ -184,4 +204,6 @@ export const agent = {
   priorityHigh: "High",
   priorityCritical: "Critical",
   reminderCreated: "Reminder created",
+  editReminder: "Edit Reminder",
+  reminderUpdated: "Reminder updated",
 } as const;

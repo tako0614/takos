@@ -21,6 +21,7 @@ import {
   writingDraftEnMarkdown,
   writingDraftJaMarkdown,
 } from "./prompt-assets.generated.ts";
+import { MAX_CUSTOM_SKILL_RESOURCES } from "../../../shared/types/skills.ts";
 
 interface ManagedSkillLocaleContent {
   name: string;
@@ -443,7 +444,7 @@ export function normalizeCustomSkillMetadata(
   const templateIds = Array.isArray(executionRaw.template_ids)
     ? executionRaw.template_ids.map((item) => String(item).trim()).filter(
       Boolean,
-    ).slice(0, 20)
+    ).slice(0, MAX_CUSTOM_SKILL_RESOURCES)
     : [];
 
   return {
@@ -552,6 +553,17 @@ export function validateCustomSkillMetadata(
     ) {
       fieldErrors["execution_contract.template_ids"] =
         "template_ids must be an array of strings";
+    } else if (Array.isArray(executionRaw.template_ids)) {
+      const templateIds = executionRaw.template_ids.map((item) =>
+        String(item).trim()
+      ).filter(Boolean);
+      if (templateIds.length > MAX_CUSTOM_SKILL_RESOURCES) {
+        fieldErrors["execution_contract.template_ids"] =
+          `template_ids must contain at most ${MAX_CUSTOM_SKILL_RESOURCES} resources`;
+      } else if (new Set(templateIds).size !== templateIds.length) {
+        fieldErrors["execution_contract.template_ids"] =
+          "template_ids must not contain duplicates";
+      }
     }
   }
 

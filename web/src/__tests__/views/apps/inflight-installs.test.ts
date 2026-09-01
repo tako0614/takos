@@ -1,7 +1,9 @@
 import { deepStrictEqual as assertEquals } from "node:assert/strict";
-import { test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
   isInflightCapsule,
+  isPendingCapsule,
+  loadWorkspaceCapsules,
   parseCapsulesResponse,
 } from "../../../views/apps/inflight-installs.ts";
 
@@ -73,4 +75,26 @@ test("Capsules - folds stale active records into attention state", () => {
 
   assertEquals(rows[0]?.status, "stale");
   assertEquals(isInflightCapsule(rows[0]!), true);
+  assertEquals(isPendingCapsule(rows[0]!), false);
+});
+
+test("Capsules - distinguishes active work from actionable failures", () => {
+  assertEquals(isPendingCapsule({ status: "installing" }), true);
+  assertEquals(isPendingCapsule({ status: "uninstalling" }), true);
+  assertEquals(isPendingCapsule({ status: "failed" }), false);
+  assertEquals(isInflightCapsule({ status: "failed" }), true);
+});
+
+test("Capsules - rejects malformed success and exposes request failures", async () => {
+  expect(() => parseCapsulesResponse({})).toThrow(TypeError);
+  expect(() =>
+    parseCapsulesResponse({ capsules: [{ capsule_id: "cap-1" }] })
+  ).toThrow(TypeError);
+
+  await expect(loadWorkspaceCapsules("space-1", async () =>
+    Response.json(
+      { error: { message: "Capsule inventory unavailable" } },
+      { status: 503 },
+    )
+  )).rejects.toThrow("Capsule inventory unavailable");
 });

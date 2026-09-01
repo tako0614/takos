@@ -13,7 +13,9 @@ use takos_agent_engine::tools::executor::{
 use takos_agent_engine::{EngineError, Result};
 use tokio_util::sync::CancellationToken;
 
-use crate::control_rpc::{ControlRpcClient, RpcToolResult, ToolDefinition};
+use crate::control_rpc::{
+    ControlRpcClient, RpcToolResult, RunAuthorityAttestation, ToolDefinition,
+};
 
 pub const UNCERTAIN_SIDE_EFFECT_FATAL_ERROR: &str =
     "side-effect outcome is uncertain; verify remote state before issuing a new operation; automatic replay is blocked";
@@ -28,6 +30,7 @@ const TOOL_ALLOWLIST_ENV_KEY: &str = "TAKOS_AGENT_TOOL_ALLOWLIST";
 #[derive(Clone)]
 pub struct CompositeToolExecutor {
     client: ControlRpcClient,
+    run_authority: Arc<Mutex<RunAuthorityAttestation>>,
     remote_tools: Arc<Vec<ToolDefinition>>,
     tool_call_sequence: Arc<AtomicU64>,
     cancellation_token: Option<CancellationToken>,
@@ -35,9 +38,14 @@ pub struct CompositeToolExecutor {
 }
 
 impl CompositeToolExecutor {
-    pub fn new(client: ControlRpcClient, remote_tools: Vec<ToolDefinition>) -> Self {
+    pub fn new(
+        client: ControlRpcClient,
+        run_authority: RunAuthorityAttestation,
+        remote_tools: Vec<ToolDefinition>,
+    ) -> Self {
         Self {
             client,
+            run_authority: Arc::new(Mutex::new(run_authority)),
             remote_tools: Arc::new(remote_tools),
             tool_call_sequence: Arc::new(AtomicU64::new(1)),
             cancellation_token: None,
@@ -75,6 +83,63 @@ impl CompositeToolExecutor {
         if fatal_error.is_none() {
             *fatal_error = Some(error);
         }
+    }
+
+    pub(crate) fn current_run_authority(&self) -> RunAuthorityAttestation {
+        self.run_authority
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    // The feature-gated mock-LLM library target compiles this module without
+    // the production `main` composition that consumes the shared handle.
+    #[cfg_attr(feature = "mock-llm", allow(dead_code))]
+    pub(crate) fn run_authority_handle(&self) -> Arc<Mutex<RunAuthorityAttestation>> {
+        self.run_authority.clone()
+    }
+
+    fn accept_run_authority(
+        &self,
+        sent: &RunAuthorityAttestation,
+        received: Option<&RunAuthorityAttestation>,
+    ) -> Result<()> {
+        let received = received.ok_or_else(|| {
+            EngineError::Tool("tool response omitted Run authority attestation".to_string())
+        })?;
+        if !received.is_valid()
+            || received.run_grant_digest != sent.run_grant_digest
+            || received.context_revision < sent.context_revision
+            || (received.context_revision == sent.context_revision
+                && received.context_digest != sent.context_digest)
+        {
+            return Err(EngineError::Tool(
+                "tool response carried an invalid Run authority transition".to_string(),
+            ));
+        }
+        let mut current = self
+            .run_authority
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if received.run_grant_digest != current.run_grant_digest {
+            return Err(EngineError::Tool(
+                "tool response changed the RunGrant identity".to_string(),
+            ));
+        }
+        if received.context_revision < current.context_revision {
+            // A parallel tool response may arrive after another response has
+            // already advanced the shared revision. Never downgrade it.
+            return Ok(());
+        }
+        if received.context_revision == current.context_revision
+            && received.context_digest != current.context_digest
+        {
+            return Err(EngineError::Tool(
+                "tool responses disagreed on one RunContext revision".to_string(),
+            ));
+        }
+        *current = received.clone();
+        Ok(())
     }
 
     async fn execute_call(
@@ -199,7 +264,9 @@ impl CompositeToolExecutor {
         // cancellation token so an executor lease loss or a cancelled run
         // aborts the in-flight request future instead of waiting for the HTTP
         // timeout. When no token is wired (test paths) we simply await.
+        let sent_run_authority = self.current_run_authority();
         let execute_future = self.client.tool_execute(
+            &sent_run_authority,
             tool_call_id,
             tool_name,
             tool_arguments.clone(),
@@ -258,6 +325,7 @@ impl CompositeToolExecutor {
                 return Err(EngineError::Tool(error));
             }
         };
+        self.accept_run_authority(&sent_run_authority, rpc_result.run_authority.as_ref())?;
 
         if rpc_result.outcome_uncertain {
             // Persist a fixed, bounded reason. The Worker-owned operation ledger
@@ -470,7 +538,9 @@ mod tests {
         stable_tool_call_id, tool_result_event, truncate_summary, CompositeToolExecutor,
         EVENT_PREVIEW_BYTES,
     };
-    use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition};
+    use crate::control_rpc::{
+        ControlRpcClient, RunAuthorityAttestation, StartPayload, ToolDefinition,
+    };
     use serde_json::json;
     use takos_agent_engine::model::ToolCallRequest;
     use takos_agent_engine::tools::executor::{ToolExecutionKind, ToolExecutor};
@@ -491,6 +561,36 @@ mod tests {
         .expect("control RPC client should build for test")
     }
 
+    fn valid_authority(revision: u32, digest_byte: char) -> RunAuthorityAttestation {
+        RunAuthorityAttestation {
+            context_revision: revision,
+            context_digest: format!("sha256:{}", digest_byte.to_string().repeat(64)),
+            run_grant_digest: format!("sha256:{}", "b".repeat(64)),
+        }
+    }
+
+    #[test]
+    fn tool_executor_advances_authority_monotonically_without_downgrade() {
+        let revision_one = valid_authority(1, 'a');
+        let revision_two = valid_authority(2, 'c');
+        let executor = CompositeToolExecutor::new(test_client(), revision_one.clone(), Vec::new());
+
+        executor
+            .accept_run_authority(&revision_one, Some(&revision_two))
+            .expect("a verified progressive revision should advance");
+        assert_eq!(executor.current_run_authority(), revision_two);
+
+        executor
+            .accept_run_authority(&revision_one, Some(&revision_one))
+            .expect("a late parallel response must not downgrade authority");
+        assert_eq!(executor.current_run_authority().context_revision, 2);
+
+        let conflicting = valid_authority(2, 'd');
+        assert!(executor
+            .accept_run_authority(&revision_one, Some(&conflicting))
+            .is_err());
+    }
+
     #[test]
     fn truncate_summary_preserves_utf8_boundaries() {
         let source = "ソフトウェア資産を repo と app として取得・作成・変更・公開する。".repeat(20);
@@ -503,6 +603,7 @@ mod tests {
     fn exposed_tools_mirror_remote_catalog_without_injecting_local_tools() {
         let executor = CompositeToolExecutor::new(
             test_client(),
+            RunAuthorityAttestation::default(),
             vec![
                 ToolDefinition {
                     name: "skill_list".to_string(),
@@ -536,6 +637,7 @@ mod tests {
     fn remote_execution_policy_fails_closed_and_allows_explicit_read_only() {
         let executor = CompositeToolExecutor::new(
             test_client(),
+            RunAuthorityAttestation::default(),
             vec![
                 ToolDefinition {
                     name: "safe_read".to_string(),
@@ -627,8 +729,12 @@ mod tests {
     #[test]
     fn uncertain_remote_outcome_preserves_the_lease_for_terminal_commit() {
         let token = tokio_util::sync::CancellationToken::new();
-        let executor = CompositeToolExecutor::new(test_client(), Vec::new())
-            .with_cancellation_token(token.clone());
+        let executor = CompositeToolExecutor::new(
+            test_client(),
+            RunAuthorityAttestation::default(),
+            Vec::new(),
+        )
+        .with_cancellation_token(token.clone());
 
         executor.fail_run_for_uncertain_outcome("remote outcome unknown".to_string());
 
@@ -652,6 +758,11 @@ mod tests {
                     "output": "",
                     "error": "Automatic replay is blocked until remote state is verified",
                     "outcome_uncertain": true,
+                    "runAuthority": {
+                        "contextRevision": 1,
+                        "contextDigest": format!("sha256:{}", "a".repeat(64)),
+                        "runGrantDigest": format!("sha256:{}", "b".repeat(64)),
+                    },
                 }));
             }
             Json(json!({ "success": true }))
@@ -680,8 +791,16 @@ mod tests {
         })
         .expect("control RPC client");
         let token = tokio_util::sync::CancellationToken::new();
-        let executor =
-            CompositeToolExecutor::new(client, Vec::new()).with_cancellation_token(token.clone());
+        let executor = CompositeToolExecutor::new(
+            client,
+            RunAuthorityAttestation {
+                context_revision: 1,
+                context_digest: format!("sha256:{}", "a".repeat(64)),
+                run_grant_digest: format!("sha256:{}", "b".repeat(64)),
+            },
+            Vec::new(),
+        )
+        .with_cancellation_token(token.clone());
 
         let error = executor
             .execute_remote_tool("call-uncertain", "publish", &json!({}), None)
@@ -752,6 +871,7 @@ mod tests {
                 output: "ok".to_string(),
                 error: Some("boom".to_string()),
                 outcome_uncertain: false,
+                run_authority: None,
             },
         )
         .expect("matching tool result correlation");
@@ -769,6 +889,7 @@ mod tests {
             output: "ok".to_string(),
             error: Some("boom".to_string()),
             outcome_uncertain: false,
+            run_authority: None,
         };
         let (output, error) = rpc_tool_result_output_and_error(&rpc);
 
@@ -786,6 +907,7 @@ mod tests {
                 output: "ok".to_string(),
                 error: None,
                 outcome_uncertain: false,
+                run_authority: None,
             },
         )
         .expect_err("the Worker must echo the requested tool call id");
@@ -803,6 +925,7 @@ mod tests {
                 output: String::new(),
                 error: Some("remote outcome unknown".to_string()),
                 outcome_uncertain: true,
+                run_authority: None,
             },
         )
         .expect_err("an uncertain side effect must fail the Run");

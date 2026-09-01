@@ -74,7 +74,7 @@ const requiredDocs = [
       '/api/me/privacy/deletion-requests',
       'Export Redaction Rules',
       'Lawful Bases',
-      'Cookie Consent',
+      'Cookie and Local Storage',
       '__Host-tp_session',
       'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
       'https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf',
@@ -99,7 +99,7 @@ const requiredDocs = [
       'First-party License Inventory',
       'REUSE / SPDX Baseline',
       'takosumi-private',
-      'bun run check:license-compliance',
+      'bun run check',
       'AGPL-3.0-only',
       'GPL-3.0-only',
       'MIT',
@@ -121,7 +121,7 @@ const requiredDocs = [
     path: 'docs/legal/soc2-readiness.md',
     expected: [
       'Vendor Management',
-      'Sub-processor list is published before GA',
+      'Sub-processor list is published before the provider begins new production processing of Customer Personal Data.',
     ],
   },
 ];
@@ -174,6 +174,12 @@ function validateTextIncludes(path: string, expectedValues: readonly string[]): 
 function includesExpected(text: string, expected: string): boolean {
   if (text.includes(expected)) return true;
 
+  // Markdown wrapping is presentation, not a semantic change. Keep marker
+  // checks stable when prose is reflowed by the formatter.
+  if (normalizeWhitespace(text).includes(normalizeWhitespace(expected))) {
+    return true;
+  }
+
   const lastReviewedPrefix = 'Last reviewed | ';
   if (expected.startsWith(lastReviewedPrefix)) {
     const date = escapeRegex(expected.slice(lastReviewedPrefix.length));
@@ -182,6 +188,10 @@ function includesExpected(text: string, expected: string): boolean {
   }
 
   return false;
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function escapeRegex(value: string): string {

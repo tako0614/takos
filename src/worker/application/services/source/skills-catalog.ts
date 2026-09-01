@@ -11,6 +11,7 @@ import {
   toSkillCatalogEntry,
 } from "./skills-shared.ts";
 import { applySkillAvailability, type SkillContext } from "../agent/skills.ts";
+import { listSkillTemplateDescriptors } from "../agent/skill-templates.ts";
 import {
   getSkill,
   getSkillByName,
@@ -95,6 +96,14 @@ export async function listManagedSkillsCatalog(
   );
   return {
     locale,
+    resource_templates: listSkillTemplateDescriptors(locale).map((
+      resource,
+    ) => ({
+      id: resource.id,
+      title: resource.title,
+      description: resource.description,
+      media_type: resource.mediaType,
+    })),
     skills: managedSkills.map((skill) => ({
       ...toSkillCatalogEntry(skill),
       editable: false,

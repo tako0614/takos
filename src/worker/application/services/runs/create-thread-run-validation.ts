@@ -1,8 +1,10 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import {
   DEFAULT_MODEL_ID,
+  isModelSelectable,
   normalizeModelId,
   resolveExecutionModel,
+  resolveModelCatalog,
 } from "../agent/index.ts";
 import type { AiEnv } from "../../../shared/types/env.ts";
 const MAX_RUN_NESTING_DEPTH = 5;
@@ -137,4 +139,36 @@ export async function resolveRunModel(
     spaceModel?.aiModel ||
     createThreadRunValidationDeps.defaultModelId;
   return resolveExecutionModel(env, validateModel(resolvedModel));
+}
+
+/**
+ * Resolve an explicit public/tool-selected model only when the current
+ * operator catalog still marks it selectable. Internal recovery callers use
+ * resolveRunModel directly so legacy rows continue to freeze to current
+ * policy instead of becoming permanently un-runnable.
+ */
+export async function resolveSelectableRunModel(
+  db: SqlDatabaseBinding,
+  spaceId: string,
+  requestedModel: string | undefined,
+  env: AiEnv & {
+    OIDC_ISSUER_URL?: string;
+    OIDC_CLIENT_ID?: string;
+    ENCRYPTION_KEY?: string;
+    TAKOSUMI_ACCOUNTS_URL?: string;
+    TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
+  } = {},
+): Promise<string | null> {
+  if (requestedModel === undefined) {
+    return await resolveRunModel(db, spaceId, undefined, env);
+  }
+
+  const normalized = createThreadRunValidationDeps.normalizeModelId(
+    requestedModel,
+  );
+  if (!normalized || normalized === "local-smoke") return null;
+
+  const catalog = await resolveModelCatalog(env);
+  if (!isModelSelectable(catalog, normalized)) return null;
+  return resolveExecutionModel(env, normalized);
 }

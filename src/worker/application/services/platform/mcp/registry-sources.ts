@@ -26,6 +26,7 @@ import {
   getMcpEndpointUrlOptions,
 } from "./validation.ts";
 import { decryptToken, encryptToken } from "./crypto.ts";
+import { createMcpRegistryCandidateAccumulator } from "./candidate-aggregation.ts";
 
 export const OFFICIAL_MCP_REGISTRY_SOURCE_ID = "official-mcp-registry";
 export const OFFICIAL_MCP_REGISTRY_BASE_URL =
@@ -1160,7 +1161,7 @@ export async function searchMcpRegistrySources(
     },
   );
 
-  const candidateMap = new Map<string, McpRegistrySearchCandidate>();
+  const candidateAccumulator = createMcpRegistryCandidateAccumulator();
   const sourceResults: McpRegistrySearchResult["sourceResults"] = [];
   const sourceFailures: McpRegistrySearchFailure[] = [];
   for (const outcome of outcomes) {
@@ -1189,42 +1190,11 @@ export async function searchMcpRegistrySources(
       ),
     });
     for (const candidate of outcome.candidates) {
-      const candidateKey =
-        candidate.url ?? `package:${candidate.name}@${candidate.version}`;
-      const existing = candidateMap.get(candidateKey);
-      if (!existing) {
-        candidateMap.set(candidateKey, candidate);
-        continue;
-      }
-      for (const provenance of candidate.provenance) {
-        if (
-          !existing.provenance.some(
-            (item) =>
-              item.sourceId === provenance.sourceId &&
-              item.serverName === provenance.serverName &&
-              item.serverVersion === provenance.serverVersion,
-          )
-        ) {
-          existing.provenance.push(provenance);
-        }
-      }
-      existing.requiresConfiguration ||= candidate.requiresConfiguration;
-      for (const packageEntry of candidate.packages) {
-        if (
-          !existing.packages.some(
-            (entry) =>
-              entry.registryType === packageEntry.registryType &&
-              entry.identifier === packageEntry.identifier &&
-              entry.version === packageEntry.version,
-          )
-        ) {
-          existing.packages.push(packageEntry);
-        }
-      }
+      candidateAccumulator.add(candidate);
     }
   }
 
-  const candidates = [...candidateMap.values()];
+  const candidates = candidateAccumulator.values();
   for (const candidate of candidates) {
     candidate.provenance.sort(
       (a, b) =>

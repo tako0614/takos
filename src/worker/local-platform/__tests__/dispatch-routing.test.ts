@@ -65,7 +65,6 @@ function createPlatform(
       hosts: {},
       ai: {},
       assets: {},
-      documents: {},
       serviceRegistry,
     },
   };
@@ -84,29 +83,35 @@ test("dispatch routes service-ref deployments through the registry with deployme
   let registryCall: { name: string; deploymentId?: string } | null = null;
   const target: RoutingTarget = {
     type: "deployments",
-    deployments: [{
-      routeRef: "worker-demo",
-      deploymentId: "deployment-v2",
-      weight: 100,
-      status: "active",
-    }],
+    deployments: [
+      {
+        routeRef: "worker-demo",
+        deploymentId: "deployment-v2",
+        weight: 100,
+        status: "active",
+      },
+    ],
   };
   const worker = createDispatchWorker((bindings) =>
-    createPlatform(bindings, { target, tombstone: false, source: "store" }, {
-      get(name, options) {
-        registryCall = { name, deploymentId: options?.deploymentId };
-        return {
-          async fetch(request: Request) {
-            return Response.json({
-              worker: request.headers.get("X-Tenant-Worker"),
-              deployment: request.headers.get("X-Tenant-Deployment"),
-              internal: request.headers.get("X-Takos-Internal-Marker"),
-              legacyInternal: request.headers.get("X-Takos-Internal"),
-            });
-          },
-        };
+    createPlatform(
+      bindings,
+      { target, tombstone: false, source: "store" },
+      {
+        get(name, options) {
+          registryCall = { name, deploymentId: options?.deploymentId };
+          return {
+            async fetch(request: Request) {
+              return Response.json({
+                worker: request.headers.get("X-Tenant-Worker"),
+                deployment: request.headers.get("X-Tenant-Deployment"),
+                internal: request.headers.get("X-Takos-Internal-Marker"),
+                legacyInternal: request.headers.get("X-Takos-Internal"),
+              });
+            },
+          };
+        },
       },
-    })
+    ),
   );
 
   const response = await worker.fetch(
@@ -133,30 +138,36 @@ test("dispatch retries Cloudflare WFP service lookup without deploymentId", asyn
   const calls: Array<{ name: string; deploymentId?: string }> = [];
   const target: RoutingTarget = {
     type: "deployments",
-    deployments: [{
-      routeRef: "worker-demo",
-      deploymentId: "deployment-v2",
-      weight: 100,
-      status: "active",
-    }],
+    deployments: [
+      {
+        routeRef: "worker-demo",
+        deploymentId: "deployment-v2",
+        weight: 100,
+        status: "active",
+      },
+    ],
   };
   const worker = createDispatchWorker((bindings) =>
-    createPlatform(bindings, { target, tombstone: false, source: "store" }, {
-      get(name, options) {
-        calls.push({ name, deploymentId: options?.deploymentId });
-        if (options?.deploymentId) {
-          throw new TypeError("No such worker parameter: deploymentId");
-        }
-        return {
-          async fetch(request: Request) {
-            return Response.json({
-              worker: request.headers.get("X-Tenant-Worker"),
-              deployment: request.headers.get("X-Tenant-Deployment"),
-            });
-          },
-        };
+    createPlatform(
+      bindings,
+      { target, tombstone: false, source: "store" },
+      {
+        get(name, options) {
+          calls.push({ name, deploymentId: options?.deploymentId });
+          if (options?.deploymentId) {
+            throw new TypeError("No such worker parameter: deploymentId");
+          }
+          return {
+            async fetch(request: Request) {
+              return Response.json({
+                worker: request.headers.get("X-Tenant-Worker"),
+                deployment: request.headers.get("X-Tenant-Deployment"),
+              });
+            },
+          };
+        },
       },
-    })
+    ),
   );
 
   const response = await worker.fetch(
@@ -180,32 +191,32 @@ test("dispatch forwards http-url targets without tenant-internal headers", async
   const env = createDispatchEnv();
   const target: RoutingTarget = {
     type: "http-endpoint-set",
-    endpoints: [{
-      name: "container",
-      routes: [{ pathPrefix: "/api" }],
-      target: {
-        kind: "http-url",
-        baseUrl: "https://container.example/base/",
+    endpoints: [
+      {
+        name: "container",
+        routes: [{ pathPrefix: "/api" }],
+        target: {
+          kind: "http-url",
+          baseUrl: "https://container.example/base/",
+        },
       },
-    }],
+    ],
   };
-  const fetchSpy = stub(
-    globalThis,
-    "fetch",
-    (async (input: RequestInfo | URL) => {
-      const request = input instanceof Request ? input : new Request(input);
-      assertEquals(request.url, "https://container.example/base/api/run?x=1");
-      assertEquals(request.headers.get("X-Forwarded-Host"), "tenant.local");
-      assertEquals(request.headers.get("X-Tenant-Endpoint"), "container");
-      assertEquals(request.headers.get("X-Tenant-Worker"), null);
-      assertEquals(request.headers.get("X-Tenant-Deployment"), null);
-      assertEquals(request.headers.get("X-Takos-Internal"), null);
-      assertEquals(request.headers.get("X-Takos-Internal-Marker"), null);
-      return new Response("ok");
-    }) as typeof globalThis.fetch,
-  );
+  const fetchSpy = stub(globalThis, "fetch", (async (
+    input: RequestInfo | URL,
+  ) => {
+    const request = input instanceof Request ? input : new Request(input);
+    assertEquals(request.url, "https://container.example/base/api/run?x=1");
+    assertEquals(request.headers.get("X-Forwarded-Host"), "tenant.local");
+    assertEquals(request.headers.get("X-Tenant-Endpoint"), "container");
+    assertEquals(request.headers.get("X-Tenant-Worker"), null);
+    assertEquals(request.headers.get("X-Tenant-Deployment"), null);
+    assertEquals(request.headers.get("X-Takos-Internal"), null);
+    assertEquals(request.headers.get("X-Takos-Internal-Marker"), null);
+    return new Response("ok");
+  }) as typeof globalThis.fetch);
   const worker = createDispatchWorker((bindings) =>
-    createPlatform(bindings, { target, tombstone: false, source: "store" })
+    createPlatform(bindings, { target, tombstone: false, source: "store" }),
   );
 
   try {

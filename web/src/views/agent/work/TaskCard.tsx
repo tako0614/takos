@@ -4,6 +4,7 @@ import type { TranslationKey } from "../../../i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 import type { AgentTask } from "../../../types/index.ts";
 import {
+  canStartAgentTask,
   getPriorityClasses,
   getStatusClasses,
   parsePlan,
@@ -15,6 +16,8 @@ interface TaskCardProps {
   isPlanning: boolean;
   isStarting: boolean;
   isDeleting: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   onStart: (task: AgentTask) => void;
   onPlan: (taskId: string) => void;
   onOpenChat: (task: AgentTask) => void;
@@ -37,9 +40,7 @@ export function TaskCard(props: TaskCardProps) {
       )
       : null
   );
-  const canStartTask = createMemo(() =>
-    props.task.status !== "completed" && props.task.status !== "cancelled"
-  );
+  const canStartTask = createMemo(() => canStartAgentTask(props.task));
   const canCompleteTask = createMemo(() =>
     props.task.status !== "completed" && props.task.status !== "cancelled"
   );
@@ -140,7 +141,7 @@ export function TaskCard(props: TaskCardProps) {
           })()}
         </div>
         <div class="flex flex-wrap gap-2">
-          {canStartTask() && (
+          {props.canEdit && canStartTask() && (
             <button
               type="button"
               class="px-3 min-h-[44px] text-xs font-medium rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -153,7 +154,7 @@ export function TaskCard(props: TaskCardProps) {
               {t("taskStart")}
             </button>
           )}
-          {!props.task.plan && (
+          {props.canEdit && !props.task.plan && (
             <button
               type="button"
               class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-800 dark:text-zinc-200 hover:border-zinc-900/60 dark:hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
@@ -176,7 +177,7 @@ export function TaskCard(props: TaskCardProps) {
               {t("taskResumeChat")}
             </button>
           )}
-          {canCompleteTask() && (
+          {props.canEdit && canCompleteTask() && (
             <button
               type="button"
               class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-800 dark:text-zinc-200 hover:border-zinc-900/60 dark:hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors flex items-center gap-1"
@@ -186,22 +187,28 @@ export function TaskCard(props: TaskCardProps) {
               {t("taskComplete")}
             </button>
           )}
-          <button
-            type="button"
-            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-            onClick={() => props.onEdit(props.task)}
-          >
-            {t("edit")}
-          </button>
-          <button
-            type="button"
-            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
-            onClick={() => props.onDelete(props.task.id)}
-            disabled={props.isDeleting}
-          >
-            {props.isDeleting && <Icons.Loader class="w-4 h-4 animate-spin" />}
-            {t("delete")}
-          </button>
+          {props.canEdit && (
+            <button
+              type="button"
+              class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              onClick={() => props.onEdit(props.task)}
+            >
+              {t("edit")}
+            </button>
+          )}
+          {props.canDelete && (
+            <button
+              type="button"
+              class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+              onClick={() => props.onDelete(props.task.id)}
+              disabled={props.isDeleting}
+            >
+              {props.isDeleting && (
+                <Icons.Loader class="w-4 h-4 animate-spin" />
+              )}
+              {t("delete")}
+            </button>
+          )}
         </div>
       </div>
     </div>

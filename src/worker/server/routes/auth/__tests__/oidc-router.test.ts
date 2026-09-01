@@ -1,4 +1,4 @@
-import { test } from "bun:test";
+import { expect, test } from "bun:test";
 import { RUN_INTEGRATION_TESTS } from "@takos/test/integration";
 import { Hono } from "hono";
 import * as jose from "jose";
@@ -90,6 +90,7 @@ function createEnv(
     oidcClientId?: string;
     oidcClientSecret?: string;
     oidcRedirectUri?: string;
+    takosumiAccountsUrl?: string | null;
     includeSessionStore?: boolean;
     sqlBinding?: unknown;
     createdSessions?: CreatedSession[];
@@ -102,6 +103,9 @@ function createEnv(
       : createSessionStore(states, input.createdSessions);
   return {
     ENCRYPTION_KEY: "test-oidc-delegation-encryption-key",
+    TAKOSUMI_ACCOUNTS_URL: input.takosumiAccountsUrl === null
+      ? undefined
+      : input.takosumiAccountsUrl ?? "https://accounts.example.test",
     PLATFORM: {
       config: {
         adminDomain: "takos.example.test",
@@ -1039,6 +1043,32 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
       redirect.searchParams.get("code_challenge"),
       await generateCodeChallenge(stored.code_verifier, "S256"),
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("standalone OIDC login requests only generic identity scopes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(Response.json({
+    issuer: "https://identity.example.test",
+    authorization_endpoint: "https://identity.example.test/oauth/authorize",
+    token_endpoint: "https://identity.example.test/oauth/token",
+    jwks_uri: "https://identity.example.test/oauth/jwks",
+  }))) as typeof fetch;
+  try {
+    const response = await createApp().fetch(
+      new Request("https://takos.example.test/auth/oidc/login"),
+      createEnv({
+        oidcIssuerUrl: "https://identity.example.test",
+        oidcClientId: "takos-standalone",
+        oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
+        takosumiAccountsUrl: null,
+      }),
+    );
+    expect(response.status).toBe(302);
+    expect(new URL(response.headers.get("location")!).searchParams.get("scope"))
+      .toBe("openid profile email");
   } finally {
     globalThis.fetch = originalFetch;
   }

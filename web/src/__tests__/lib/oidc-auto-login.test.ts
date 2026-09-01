@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   claimOidcAutoLoginAttempt,
+  markExplicitLogout,
   type SessionStorageLike,
 } from "../../lib/oidc-auto-login.ts";
 
@@ -32,5 +33,13 @@ describe("claimOidcAutoLoginAttempt", () => {
 
     expect(claimOidcAutoLoginAttempt(unavailable)).toBe(true);
     expect(claimOidcAutoLoginAttempt(undefined)).toBe(true);
+  });
+
+  it("keeps explicit logout on the visible Login surface", () => {
+    const storage = memoryStorage();
+    markExplicitLogout(storage);
+
+    expect(claimOidcAutoLoginAttempt(storage)).toBe(false);
+    expect(claimOidcAutoLoginAttempt(undefined)).toBe(false);
   });
 });

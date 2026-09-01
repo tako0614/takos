@@ -13,8 +13,6 @@ export const auth = {
   continue: "Continue",
 
   // Initial Setup
-  autoUpdateSettings: "Auto Update",
-  autoUpdateHint: "Automatically apply updates",
 
   // Shared action labels
   copied: "Copied",

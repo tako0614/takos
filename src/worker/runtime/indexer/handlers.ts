@@ -18,6 +18,7 @@ import { createEmbeddingsService } from "../../application/services/execution/em
 import { createInfoUnitIndexer } from "../../application/services/source/info-units.ts";
 import { indexThreadContext } from "../../application/services/agent/index.ts";
 import { buildMemoryPaths } from "../../application/services/memory-graph/path-builder.ts";
+import { materializeSemanticTurnProjection } from "../../application/services/agent/memory-projection.ts";
 import { recordAppUsage } from "../../application/services/app-usage/usage-recorder.ts";
 import { generateId } from "../../shared/utils/index.ts";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
@@ -115,6 +116,11 @@ export async function handleInfoUnit(
       retryable: false,
     };
   }
+  await materializeSemanticTurnProjection({
+    env,
+    workspaceId: spaceId,
+    runId: targetId,
+  });
   await indexer.indexRun(spaceId, targetId);
   return PROCESSED;
 }

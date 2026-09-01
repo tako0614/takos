@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { bodyLimit as honoBodyLimit } from "hono/body-limit";
+import { RAW_STORAGE_UPLOAD_PATHS } from "./raw-body-routes.ts";
 
 type BodySizeLimitOptions = {
   maxSize: number;
@@ -42,13 +43,14 @@ export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
       return;
     }
 
-    await honoMiddleware(c, next);
+    return await honoMiddleware(c, next);
   };
 }
 
 export const generalApiBodyLimit = bodyLimit({
   maxSize: 1 * 1024 * 1024, // 1MB
   message: "Request body exceeds maximum allowed size of 1MB",
+  skipPaths: RAW_STORAGE_UPLOAD_PATHS,
 });
 
 export const searchBodyLimit = bodyLimit({

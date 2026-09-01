@@ -44,7 +44,6 @@ export const source = {
 
   // Source Page
   sourceTitle: "Source",
-  newRepository: "New repository",
   installFromGitUrl: "Install from Git URL",
   gitUrlLabel: "Git URL",
   gitRefLabel: "Ref",
@@ -53,6 +52,15 @@ export const source = {
   installApp: "Install",
   installPlanFailed: "Failed to create install plan",
   gitUrlInstallQueued: "{name} install started",
+  gitUrlInstallQueuedRefreshFailed:
+    "{name} install started, but the installed Apps list could not be refreshed. Refresh Apps to see its current status.",
+  capsulePlanAdd: "Add",
+  capsulePlanChange: "Change",
+  capsulePlanDestroy: "Destroy",
+  capsulePlanMoreResources: "+{count} more resources",
+  capsulePlanRequiresApproval:
+    "Takosumi requires a recorded approval for this plan. Installing will record that approval before apply.",
+  capsulePlanEnded: "The install plan ended with status {status}.",
   unknownApp: "Unknown app",
   runtimeModeLabel: "Runtime mode",
   bindingsLabel: "Bindings",
@@ -139,6 +147,7 @@ export const source = {
   updateApp: "Update",
   updatingApp: "Updating...",
   uninstalledItem: "{name} uninstalled",
+  uninstallStartedItem: "Uninstall started for {name}",
   uninstallConfirmTitle: "Uninstall this app?",
   uninstallConfirmMessage:
     'Uninstalling "{name}" tears down its running Capsule and worker. This cannot be undone.',

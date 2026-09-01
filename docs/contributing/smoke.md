@@ -4,7 +4,7 @@
 > production authorityを持たない local smoke。
 
 Takos product の smoke は `takos/` で実行します。Takosumi kernel の in-process
-deploy lifecycle は `takosumi/` 側の test と local-substrate smoke が正本です。
+deploy lifecycle は `takosumi/` 側の test と local-実行基盤 smoke が正本 (正とする情報)です。
 
 ## Product smoke
 

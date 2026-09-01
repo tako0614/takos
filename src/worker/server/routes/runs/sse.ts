@@ -1,10 +1,16 @@
 import { Hono } from "hono";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
-import { NotFoundError } from "@takos/worker-platform-utils/errors";
+import {
+  BadRequestError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
 import { checkRunAccess } from "./access.ts";
 import { getPlatformServices } from "../../../platform/accessors.ts";
-import { createRunObservationSseStream } from "./observation.ts";
+import {
+  createRunObservationSseStream,
+  parseRunReplayCursor,
+} from "./observation.ts";
 
 type RunSseRouteEnv = { Bindings: Env; Variables: BaseVariables };
 
@@ -33,12 +39,9 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
     // Parse Last-Event-ID from header or query parameter
     const lastEventIdRaw = c.req.header("Last-Event-ID") ??
       c.req.query("last_event_id");
-    let lastEventId: number | undefined;
-    if (lastEventIdRaw) {
-      const parsed = parseInt(lastEventIdRaw, 10);
-      if (Number.isFinite(parsed) && parsed >= 0) {
-        lastEventId = parsed;
-      }
+    const lastEventId = parseRunReplayCursor(lastEventIdRaw);
+    if (lastEventId === null) {
+      throw new BadRequestError("Invalid last_event_id");
     }
 
     if (!sseNotifier) {
@@ -46,7 +49,7 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
         c.env,
         runId,
         access.run.status,
-        lastEventId ?? 0,
+        lastEventId,
       );
 
       return new Response(stream, {

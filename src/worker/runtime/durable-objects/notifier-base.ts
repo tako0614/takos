@@ -493,8 +493,16 @@ export abstract class NotifierBase {
         return jsonResponse({ success: false, error: "Invalid type" }, 400);
       }
 
-      const serializedData = JSON.stringify(input.data);
-      if (serializedData.length >= 1_048_576) {
+      let serializedData: string | undefined;
+      try {
+        serializedData = JSON.stringify(input.data);
+      } catch {
+        return jsonResponse({ success: false, error: "Invalid data" }, 400);
+      }
+      if (
+        serializedData === undefined ||
+        new TextEncoder().encode(serializedData).byteLength >= 1_048_576
+      ) {
         return jsonResponse({ success: false, error: "Data too large" }, 400);
       }
 

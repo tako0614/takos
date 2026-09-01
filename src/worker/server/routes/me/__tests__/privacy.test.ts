@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 import type { Env, User } from "../../../../shared/types/index.ts";
+import { PrivacyExportCapacityError } from "../../../../application/services/identity/privacy-rights.ts";
 import privacy, { privacyRouteDeps } from "../privacy.ts";
 import type { BaseVariables } from "../../route-auth.ts";
 
@@ -131,6 +132,29 @@ test("privacy export endpoint returns attachment JSON without token secrets", as
   }
 });
 
+test("oversized privacy export fails closed with an assisted path", async () => {
+  privacyRouteDeps.buildDataSubjectExport = async () => {
+    throw new PrivacyExportCapacityError("messages");
+  };
+
+  try {
+    const response = await createApp().request("/privacy/export", {}, {
+      DB: {},
+    } as unknown as Env);
+    const body = await response.json() as Record<string, unknown>;
+    assertEquals(response.status, 413);
+    assertEquals(body, {
+      error: "This export requires assisted processing",
+      code: "privacy_export_requires_assistance",
+      collection: "messages",
+      contact: "privacy@takos.jp",
+    });
+    assertEquals(response.headers.get("content-disposition"), null);
+  } finally {
+    restoreDeps();
+  }
+});
+
 test("privacy deletion request revokes current session and clears cookie", async () => {
   const calls: string[] = [];
   privacyRouteDeps.requestAccountDeletion = async () => {
@@ -170,6 +194,72 @@ test("privacy deletion request revokes current session and clears cookie", async
     assertEquals(response.status, 202);
     assertEquals(body.account_status, "pending_deletion");
     assertEquals(calls, ["request", "revocation", "delete-session"]);
+    assertStringIncludes(
+      response.headers.get("set-cookie") ?? "",
+      "__Host-tp_session=;",
+    );
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("privacy deletion rejects malformed or ambiguous bodies before mutation", async () => {
+  let calls = 0;
+  privacyRouteDeps.requestAccountDeletion = async () => {
+    calls += 1;
+    throw new Error("must not run");
+  };
+
+  try {
+    for (const body of [
+      "{broken",
+      JSON.stringify({ reason: 123 }),
+      JSON.stringify({ reason: "close", confirm: true }),
+      JSON.stringify({ reason: " " }),
+      JSON.stringify({ reason: "x".repeat(1001) }),
+    ]) {
+      const response = await createApp().request(
+        "/privacy/deletion-requests",
+        { method: "POST", body },
+        { DB: {} } as unknown as Env,
+      );
+      assertEquals(response.status, 400);
+    }
+    assertEquals(calls, 0);
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("accepted privacy deletion stays accepted when stale-session cleanup fails", async () => {
+  privacyRouteDeps.requestAccountDeletion = async () => ({
+    request_id: "dsr_1",
+    status: "pending",
+    requested_at: "2026-05-07T00:00:00.000Z",
+    account_status: "pending_deletion",
+    revoked: { auth_sessions: 1 },
+  });
+  privacyRouteDeps.getSessionIdFromCookie = () => "session_1234567890";
+  privacyRouteDeps.recordSessionRevocation = async () => {
+    throw new Error("revocation store unavailable");
+  };
+  privacyRouteDeps.deleteSession = async () => {
+    throw new Error("session store unavailable");
+  };
+  privacyRouteDeps.getPlatformServices = () =>
+    ({ notifications: { sessionStore: {} } }) as ReturnType<
+      typeof privacyRouteDeps.getPlatformServices
+    >;
+  privacyRouteDeps.clearSessionCookie = () =>
+    "__Host-tp_session=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0";
+
+  try {
+    const response = await createApp().request("/privacy/deletion-requests", {
+      method: "POST",
+      headers: { Cookie: "__Host-tp_session=session_1234567890" },
+      body: JSON.stringify({ reason: "close account" }),
+    }, { DB: {} } as unknown as Env);
+    assertEquals(response.status, 202);
     assertStringIncludes(
       response.headers.get("set-cookie") ?? "",
       "__Host-tp_session=;",

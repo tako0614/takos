@@ -8,6 +8,7 @@ export interface SidebarCallbacks {
   onNavigateApps: () => void;
   onNavigateConnections: () => void;
   onNavigateMemory: () => void;
+  onNavigateNotifications: () => void;
   onNavigateStore: () => void;
   onOpenSearch: () => void;
   // Space navigation
@@ -22,12 +23,14 @@ export interface SidebarCallbacks {
   onOpenSpaceSettings: (spaceId: string) => void;
   // Thread actions
   onSelectThread: (thread: Thread) => void;
-  onDeleteThread: (threadId: string) => void;
-  onToggleArchiveThread: (thread: Thread) => void;
+  onDeleteThread: (threadId: string) => Promise<void>;
+  onToggleArchiveThread: (thread: Thread) => Promise<boolean>;
+  isThreadActionPending: (threadId: string) => boolean;
+  onRetryThreads: () => void;
   // Profile / settings
   onOpenAgentModal: () => void;
   onOpenSettings: () => void;
-  onLogout: () => void;
+  onLogout: () => Promise<void>;
 }
 
 export const SidebarContext = createContext<SidebarCallbacks>();

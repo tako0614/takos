@@ -56,7 +56,6 @@ export class CapabilityRegistry {
       [(d) => d.tags.join(" "), 30],
       [(d) => (d.triggers ?? []).join(" "), 40],
       [(d) => d.summary, 20],
-      [(d) => d.instructions ?? "", 10],
       [(d) => (d.recommended_tools ?? []).join(" "), 15],
       [(d) => searchableKindAliases(d), 25],
     ];

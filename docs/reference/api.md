@@ -57,11 +57,14 @@ Current public/product API markers:
 - `/_takosumi/launch`
 - `/git/:owner/:repo.git/info/refs`
 
-`/git/:owner/:repo.git/*` は既存 repository の clone / fetch 用 read-only
-compatibility endpoint です。`git-receive-pack` は拒否されます。repository writes、
-pull request、review、release などの collaborative hosting API は Takos Worker に
-mount せず、installed `takos-git` の `source.git.smart_http` /
-`source.git.hosting` Interface を利用します。
+Takos Worker 内蔵の `/git/:owner/:repo.git/*` migration compatibility は
+fail-closed で quarantine されています。`git-upload-pack` の advertisement と POST は
+repository lookup / auth / request body / object store に触れる前に `503`、
+`git_compatibility_quarantined`、`Cache-Control: no-store` を返します。
+`git-receive-pack` は `403` です。既存 repository metadata / R2 objects は明示的な
+migration まで保持されますが、この route から clone / fetch / push は提供しません。
+Git transport と collaborative hosting には installed `takos-git` の
+`source.git.smart_http` / `source.git.hosting` Interface を利用します。
 
 ## Deploy authority
 
@@ -80,4 +83,4 @@ provider credential、plan、apply、destroy の authority は持ちません。
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [Takosumi の考え方](https://takosumi.com/docs/concepts/)

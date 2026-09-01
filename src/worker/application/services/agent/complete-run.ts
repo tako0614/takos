@@ -18,6 +18,7 @@ import {
 } from "../offload/messages.ts";
 import { buildTerminalIndexOutboxStatements } from "../run-notifier/index-outbox.ts";
 import { buildRunNotificationOutboxStatements } from "../notifications/run-outbox.ts";
+import type { RunAuthorityAttestation } from "../runs/run-authority.ts";
 
 export type CompleteRunStatus = "completed" | "failed";
 
@@ -42,6 +43,10 @@ export interface CompleteRunStorage {
   offloadBucket?: ObjectStoreBinding;
   /** Checkpoint pointer observed immediately before this terminal CAS. */
   expectedEngineCheckpoint?: string | null;
+  /** Exact RunContext authority under which this terminal outcome was made. */
+  expectedRunAuthority?: RunAuthorityAttestation;
+  /** Current protocol completions must prove an exact-authority model call. */
+  requireModelCallAuthorityForCompletion?: boolean;
 }
 
 export interface CompleteRunResult {
@@ -232,6 +237,8 @@ function buildCompleteRunStatements(
   completionKey: string,
   completedAt: string,
   expectedEngineCheckpoint: string | null | undefined,
+  expectedRunAuthority: RunAuthorityAttestation | undefined,
+  requireModelCallAuthorityForCompletion: boolean,
 ): SqlPreparedStatementBinding[] {
   const usage = JSON.stringify(input.usage);
   const output = input.output ?? null;
@@ -258,6 +265,45 @@ function buildCompleteRunStatements(
   } else if (expectedEngineCheckpoint !== undefined) {
     updateConditions.push('"engine_checkpoint" = ?');
     updateArgs.push(expectedEngineCheckpoint);
+  }
+  if (expectedRunAuthority) {
+    updateConditions.push('"current_context_revision" = ?');
+    updateArgs.push(expectedRunAuthority.contextRevision);
+    updateConditions.push(
+      `EXISTS (
+        SELECT 1 FROM "run_context_revisions" rc
+        WHERE rc."run_id" = "runs"."id"
+          AND rc."revision" = ?
+          AND rc."digest" = ?
+          AND rc."run_grant_digest" = ?
+      )`,
+    );
+    updateArgs.push(
+      expectedRunAuthority.contextRevision,
+      expectedRunAuthority.contextDigest,
+      expectedRunAuthority.runGrantDigest,
+    );
+  }
+  if (requireModelCallAuthorityForCompletion && input.status === "completed") {
+    if (!expectedRunAuthority) {
+      throw new Error(
+        "model-call authority completion requires exact Run authority",
+      );
+    }
+    updateConditions.push(
+      `EXISTS (
+        SELECT 1 FROM "run_model_calls" rmc
+        WHERE rmc."run_id" = "runs"."id"
+          AND rmc."context_revision" = ?
+          AND rmc."context_digest" = ?
+          AND rmc."run_grant_digest" = ?
+      )`,
+    );
+    updateArgs.push(
+      expectedRunAuthority.contextRevision,
+      expectedRunAuthority.contextDigest,
+      expectedRunAuthority.runGrantDigest,
+    );
   }
   const statements: SqlPreparedStatementBinding[] = [
     factory
@@ -416,6 +462,8 @@ async function executeAtomicBatch(
   completionKey: string,
   completedAt: string,
   expectedEngineCheckpoint: string | null | undefined,
+  expectedRunAuthority: RunAuthorityAttestation | undefined,
+  requireModelCallAuthorityForCompletion: boolean,
 ): Promise<SqlResultBinding<Record<string, unknown>>[]> {
   if (db.withTransaction) {
     return await db.withTransaction(
@@ -428,6 +476,8 @@ async function executeAtomicBatch(
             completionKey,
             completedAt,
             expectedEngineCheckpoint,
+            expectedRunAuthority,
+            requireModelCallAuthorityForCompletion,
           ),
         ),
     );
@@ -444,6 +494,8 @@ async function executeAtomicBatch(
       completionKey,
       completedAt,
       expectedEngineCheckpoint,
+      expectedRunAuthority,
+      requireModelCallAuthorityForCompletion,
     ),
   );
 }
@@ -485,6 +537,8 @@ export async function completeRunAtomically(
       completionKey,
       completedAt,
       storage.expectedEngineCheckpoint,
+      storage.expectedRunAuthority,
+      storage.requireModelCallAuthorityForCompletion ?? false,
     );
   } catch (error) {
     // A transport error may be commit-ambiguous. Never delete staged objects

@@ -6,6 +6,8 @@ import type { AgentTask, AgentTaskPriority } from "../../../types/index.ts";
 import {
   type EditableAgentTaskStatus,
   type ModelSelectOption,
+  MAX_AGENT_TASK_DESCRIPTION_CHARACTERS,
+  MAX_AGENT_TASK_TITLE_CHARACTERS,
   PRIORITY_OPTIONS,
   STATUS_ORDER,
 } from "./task-work-types.ts";
@@ -31,6 +33,7 @@ interface TaskFormProps {
   dueAt: string;
   setDueAt: (value: string) => void;
   availableModels: ModelSelectOption[];
+  workspaceModel?: string;
   saving: boolean;
   error: string | null;
   onSubmit: (e: Event & { currentTarget: HTMLFormElement }) => void;
@@ -70,37 +73,54 @@ export function TaskForm(props: TaskFormProps) {
         </button>
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        <label
+          for="agent-task-title"
+          class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+        >
           {t("taskTitle")}
         </label>
         <input
           type="text"
+          id="agent-task-title"
+          name="agent-task-title"
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
           placeholder={t("taskTitlePlaceholder")}
           value={props.title}
           onInput={(e) => props.setTitle(e.currentTarget.value)}
           autofocus
           required
+          maxLength={MAX_AGENT_TASK_TITLE_CHARACTERS}
         />
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        <label
+          for="agent-task-description"
+          class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+        >
           {t("taskDescription")}
         </label>
         <textarea
+          id="agent-task-description"
+          name="agent-task-description"
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 resize-y min-h-[140px]"
           placeholder={t("taskDescriptionPlaceholder")}
           value={props.description}
           onInput={(e) => props.setDescription(e.currentTarget.value)}
           rows={5}
+          maxLength={MAX_AGENT_TASK_DESCRIPTION_CHARACTERS}
         />
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for="agent-task-status"
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("taskStatus")}
           </label>
           <select
+            id="agent-task-status"
+            name="agent-task-status"
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={props.status}
             onChange={(e) =>
@@ -114,10 +134,15 @@ export function TaskForm(props: TaskFormProps) {
           </select>
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for="agent-task-priority"
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("taskPriority")}
           </label>
           <select
+            id="agent-task-priority"
+            name="agent-task-priority"
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={props.priority}
             onChange={(e) =>
@@ -133,10 +158,15 @@ export function TaskForm(props: TaskFormProps) {
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for="agent-task-type"
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("taskAgentType")}
           </label>
           <select
+            id="agent-task-type"
+            name="agent-task-type"
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={props.agentType}
             onChange={(e) => props.setAgentType(e.currentTarget.value)}
@@ -149,16 +179,26 @@ export function TaskForm(props: TaskFormProps) {
           </select>
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for="agent-task-model"
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("taskModel")}
           </label>
           <select
+            id="agent-task-model"
+            name="agent-task-model"
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={props.model}
             onChange={(e) => props.setModel(e.currentTarget.value)}
           >
+            <option value="">
+              {props.workspaceModel
+                ? t("taskModelDefaultCurrent", { model: props.workspaceModel })
+                : t("taskModelDefault")}
+            </option>
             {props.availableModels.map((option) => (
-              <option value={option.id}>
+              <option value={option.id} disabled={option.disabled}>
                 {option.label}
               </option>
             ))}
@@ -166,19 +206,24 @@ export function TaskForm(props: TaskFormProps) {
         </div>
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        <label
+          for="agent-task-due-at"
+          class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+        >
           {t("taskDueDate")}
         </label>
         <input
           type="date"
+          id="agent-task-due-at"
+          name="agent-task-due-at"
           class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
           value={props.dueAt}
           onInput={(e) => props.setDueAt(e.currentTarget.value)}
           min={getLocalDateInputMin()}
-          aria-describedby="due-date-hint"
+          aria-describedby="agent-task-due-at-hint"
         />
         <span
-          id="due-date-hint"
+          id="agent-task-due-at-hint"
           class="text-xs text-zinc-500 dark:text-zinc-400"
         >
           {t("taskDueDateHint")}

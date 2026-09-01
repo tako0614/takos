@@ -5,9 +5,10 @@
 Takos の product 境界は **単一の Takos distribution worker** です。self-host / hosted distribution では Takos product
 surface をこの worker が提供し、Takosumi Accounts、Takosumi deploy-control、dashboard、OpenTofu runner は外部 Takosumi
 control plane が提供します。
-`takos-agent` は別 product ではなく、Takos product 内で使う container capability です。Git ホスティングは
-worker-native で、`takos-worker` が read-only Smart HTTP clone/fetch を R2 object store から配信します
-(push は Takos repository API 経由)。
+`takos-agent` は別 product ではなく、Takos product 内で使う container capability です。Takos Worker
+内蔵の migration-only Git Smart HTTP は fail-closed で quarantine されています。`takos-worker` は明示的な
+migration まで既存 repository metadata / R2 objects を保持しますが、ref/object の広告・配信は行いません。
+clone / fetch / push と collaborative hosting は installed `takos-git` が所有します。
 
 local Compose は実装と smoke を扱いやすくするため、Takosumi control-plane source を `takosumi` dev sidecar process として
 起動します。これは product の split-service 境界ではありません。
@@ -35,7 +36,7 @@ test harnesses, not product services.
 - `takosumi` in Compose is a dev sidecar for the Takosumi control-plane source. Production/self-host composition uses
   an external Takosumi control-plane origin/API operated by the self-hoster or operator. The Takos Worker does not mount
   Accounts, deploy-control, dashboard, or OpenTofu runner handlers in-process.
-- Git Smart HTTP (read-only clone/fetch) is served worker-native by `takos-worker` from the R2 object store. Repository writes go through the Takos repository API, not Git Smart HTTP.
+- The built-in migration-only Git Smart HTTP route is quarantined fail-closed. `takos-worker` preserves existing repository metadata and R2 objects pending an explicit migration, but does not advertise refs or serve clone/fetch/push. Installed `takos-git` owns Git transport and collaborative hosting.
 - `takos-agent` executes agent workload and calls the configured control-plane/runtime endpoints for local smoke.
 
 The local env names `TAKOSUMI_INTERNAL_URL`, `TAKOS_AGENT_INTERNAL_URL`,
@@ -44,8 +45,9 @@ Do not treat them as hosted product subdomains or as a reason to reintroduce spl
 
 ## Ownership Rules
 
-- Takos owns the product surface: chat, agent, memory, Workspace, app launcher, worker-native Git and agent-container UX, and the first-party
-  Takos Capsule output projection profile.
+- Takos owns the product surface: chat, agent, memory, Workspace, app launcher, agent-container UX, the first-party
+  Takos Capsule output projection profile, and the quarantine/preservation boundary for legacy built-in Git data. Installed `takos-git`
+  owns clone, fetch, push, and collaborative hosting.
 - Takosumi owns its OpenTofu control-plane Workspace, Project, Capsule, Source, ProviderConnection, ProviderBinding,
   OpenTofu Run, StateVersion, Output, policy, audit, provider resolver, Capsule output projection standard, and Accounts
   plane. Takos conversation Thread / agent Run remain Takos product state; the two Run ledgers are not interchangeable.

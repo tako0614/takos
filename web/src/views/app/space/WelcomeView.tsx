@@ -3,11 +3,14 @@ import { type TranslationKey, useI18n } from "../../../store/i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 import { useFileAttachment } from "../../../hooks/useFileAttachment.ts";
 import type { Space } from "../../../types/index.ts";
+import { submitWelcomeDraft } from "./welcome-submission.ts";
+import { MAX_CHAT_MESSAGE_CHARACTERS } from "../../../hooks/chat-limits.ts";
 
 interface WelcomeViewProps {
   space?: Space;
   onNewChat?: (message?: string) => void;
-  onCreateThread?: (message: string, files?: File[]) => void;
+  onCreateThread?: (message: string, files?: File[]) => Promise<boolean>;
+  canSend?: boolean;
 }
 
 export function WelcomeView(props: WelcomeViewProps) {
@@ -15,6 +18,7 @@ export function WelcomeView(props: WelcomeViewProps) {
   const [input, setInput] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [isComposing, setIsComposing] = createSignal(false);
+  const [isSending, setIsSending] = createSignal(false);
   let textareaRef: HTMLTextAreaElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
   const fileAttachments = useFileAttachment({
@@ -28,7 +32,7 @@ export function WelcomeView(props: WelcomeViewProps) {
   // Object URLs for image thumbnails
   const objectUrls = createMemo(() => {
     return fileAttachments.attachedFiles.map((file) =>
-      file.type.startsWith("image/") ? URL.createObjectURL(file) : null
+      file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
     );
   });
 
@@ -38,21 +42,24 @@ export function WelcomeView(props: WelcomeViewProps) {
     }
   });
 
-  const handleSend = () => {
-    const trimmed = input().trim();
-    const attachedFiles = fileAttachments.attachedFiles;
-    if (!trimmed && attachedFiles.length === 0) return;
-    if (props.onCreateThread) {
-      props.onCreateThread(
-        trimmed,
-        attachedFiles.length > 0 ? attachedFiles : undefined,
-      );
-    } else {
-      props.onNewChat?.(trimmed);
-    }
-    setInput("");
-    if (textareaRef) {
-      textareaRef.style.height = "auto";
+  const handleSend = async () => {
+    if (isSending() || props.canSend === false) return;
+    setIsSending(true);
+    setError(null);
+    try {
+      const submitted = await submitWelcomeDraft({
+        message: input(),
+        files: fileAttachments.attachedFiles,
+        createThread: props.onCreateThread,
+        onNewChat: props.onNewChat,
+      });
+      if (!submitted) return;
+      setInput("");
+      if (textareaRef) {
+        textareaRef.style.height = "auto";
+      }
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -76,9 +83,10 @@ export function WelcomeView(props: WelcomeViewProps) {
       if (item.kind === "file") {
         const file = item.getAsFile();
         if (file) {
-          const name = file.name && file.name !== "image.png"
-            ? file.name
-            : `pasted-${Date.now()}.png`;
+          const name =
+            file.name && file.name !== "image.png"
+              ? file.name
+              : `pasted-${Date.now()}.png`;
           pastedFiles.push(new File([file], name, { type: file.type }));
         }
       }
@@ -105,18 +113,18 @@ export function WelcomeView(props: WelcomeViewProps) {
             <div class="flex flex-wrap gap-2 px-4 pt-3">
               {fileAttachments.attachedFiles.map((file, index) => (
                 <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-700 dark:text-zinc-300">
-                  {objectUrls()[index]
-                    ? (
-                      <img
-                        src={objectUrls()[index]!}
-                        alt={t("imagePreview")}
-                        class="w-10 h-10 rounded object-cover flex-shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    )
-                    : <Icons.File class="w-4 h-4 flex-shrink-0" />}
+                  {objectUrls()[index] ? (
+                    <img
+                      src={objectUrls()[index]!}
+                      alt={t("imagePreview")}
+                      class="w-10 h-10 rounded object-cover flex-shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <Icons.File class="w-4 h-4 flex-shrink-0" />
+                  )}
                   <span class="max-w-32 truncate">{file.name}</span>
                   <button
                     type="button"
@@ -139,9 +147,11 @@ export function WelcomeView(props: WelcomeViewProps) {
           {/* Textarea */}
           <textarea
             ref={textareaRef}
+            name="welcome-message"
             class="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none min-h-[80px]"
             placeholder={t("inputPlaceholder")}
             value={input()}
+            maxLength={MAX_CHAT_MESSAGE_CHARACTERS}
             onInput={handleChange}
             onPaste={handlePaste}
             onCompositionStart={() => setIsComposing(true)}
@@ -155,19 +165,22 @@ export function WelcomeView(props: WelcomeViewProps) {
               }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                void handleSend();
               }
             }}
             rows={3}
+            disabled={isSending()}
           />
 
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
+            name="welcome-attachments"
             multiple
             style={{ display: "none" }}
             onChange={fileAttachments.handleFileSelect}
+            disabled={isSending()}
           />
 
           {/* Bottom toolbar */}
@@ -178,6 +191,8 @@ export function WelcomeView(props: WelcomeViewProps) {
                 class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 title={t("attachFile")}
                 onClick={() => fileInputRef?.click()}
+                disabled={isSending()}
+                aria-label={t("attachFile")}
               >
                 <Icons.Plus class="w-4 h-4" />
               </button>
@@ -185,13 +200,20 @@ export function WelcomeView(props: WelcomeViewProps) {
             <button
               type="button"
               class="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              onClick={handleSend}
-              disabled={!input().trim() &&
-                fileAttachments.attachedFiles.length === 0}
-              title={t("send")}
-              aria-label={t("send")}
+              onClick={() => void handleSend()}
+              disabled={
+                isSending() ||
+                props.canSend === false ||
+                (!input().trim() && fileAttachments.attachedFiles.length === 0)
+              }
+              title={isSending() ? t("creating") : t("send")}
+              aria-label={isSending() ? t("creating") : t("send")}
             >
-              <Icons.Send class="w-4 h-4" />
+              {isSending() ? (
+                <Icons.Loader class="w-4 h-4 animate-spin" />
+              ) : (
+                <Icons.Send class="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>

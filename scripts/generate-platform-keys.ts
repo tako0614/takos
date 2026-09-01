@@ -3,9 +3,9 @@
 /**
  * Generate the Takos product worker's deployment secrets for an environment.
  *
- * Takos is a self-hostable unified worker: you deploy it onto your own infra
- * and it runs its own embedded accounts plane (its origin is its own OIDC
- * issuer). These are that worker's signing / encryption / internal-RPC secrets.
+ * Takos is a self-hostable product worker and an OIDC client/resource server;
+ * it does not embed an Accounts issuer. These are its local signing,
+ * encryption, confidential-client (when used), and internal-RPC secrets.
  *
  * Produces six secret files under `.secrets/<env>/` relative to the current
  * working directory (override with `--output=<dir>`):

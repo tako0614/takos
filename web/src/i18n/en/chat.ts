@@ -1,4 +1,6 @@
 export const chat = {
+  chatMessageTooLong: "Message is too long (maximum {count} characters)",
+  tooManyChatAttachments: "You can attach up to {count} files",
   // Chat
   chat: "Chat",
   threads: "Threads",
@@ -9,12 +11,15 @@ export const chat = {
   startConversation: "Send a message to start the conversation",
   messageInputPlaceholder: "Message...",
   searchThreadsAndMessages: "Search threads and messages...",
+  olderThreadsSearch: "Older chats are available in search",
   typeToSearch: "Type to search\u2026",
   searchFailed: "Search failed",
   untitled: "Untitled",
   searchTypeAll: "All",
   searchTypeKeyword: "Keyword",
   searchTypeSemantic: "Semantic",
+  semanticSearchUnavailable:
+    "Semantic search is not available on this Takos host. Try keyword search.",
   inputHint: "Shift + Enter for new line",
 
   // Welcome
@@ -67,23 +72,26 @@ export const chat = {
   toolStatus_deploying: "Deploying…",
   toolStatus_memory: "Updating memory…",
 
-  // Session Diff
-  fileChanges: "File Changes",
-
-  // Session diff / merge
-  alreadyMerged: "Already merged",
-  merging: "Merging...",
-  merge: "Merge",
-
   // Chat View
   messageNotLoaded: "Message not loaded in current view",
   failedToLoadMessages: "Failed to load messages",
+  historyTruncated:
+    "This long conversation is showing the newest available run activity. Some older or oversized activity details were omitted.",
   runLabel: "Run {id}",
   failedToSaveTier: "Failed to save tier",
   failedToLoadShares: "Failed to load shares",
   failedToCreateShare: "Failed to create share",
   failedToRevoke: "Failed to revoke",
+  confirmRevokeShare:
+    "Revoke this link? Anyone using it will immediately lose access.",
   exportFailed: "Export failed",
+  threadExportDescription:
+    "Downloads a complete direct export. Very large conversations require assisted processing instead of a partial file.",
+  threadExportPreparing: "Preparing the complete export…",
+  threadExportRequiresAssistance:
+    "This conversation is too large for a direct export. Assisted export processing is required.",
+  threadExportUnavailable:
+    "The complete conversation data is temporarily unavailable. Try exporting again later.",
   failedToCopy: "Failed to copy",
   shareMode: "Mode",
   sharePublic: "Public",

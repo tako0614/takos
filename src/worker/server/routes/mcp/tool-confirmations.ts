@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   decideMcpToolConfirmation,
-  listPendingMcpToolConfirmations,
+  listActionableMcpToolConfirmations,
 } from "../../../application/services/platform/mcp/tool-confirmation.ts";
-import { getSpaceOperationPolicy } from "../../../application/tools/tool-policy.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
+import { MAX_MCP_TOOL_CONFIRMATIONS_PER_RESPONSE } from "../../../shared/types/mcp-tool-confirmations.ts";
 
 const decisionSchema = z
   .object({
@@ -14,24 +14,23 @@ const decisionSchema = z
   })
   .strict();
 
-// A confirmation authorizes only this user's exact pending invocation; it
-// does not mutate the Workspace connection or tool policy. Any role that may
-// read/use the Workspace MCP catalog can decide its own confirmation.
-const MCP_INVOKE_ROLES =
-  getSpaceOperationPolicy("mcp_server.list").allowed_roles;
+// A confirmation authorizes only this owner's exact pending invocation; it
+// does not mutate the Workspace connection or tool policy.
 
 const routes = new Hono<SpaceAccessRouteEnv>();
 
 routes.get(
   "/tool-confirmations",
-  spaceAccess({ roles: MCP_INVOKE_ROLES }),
+  spaceAccess(),
   async (c) => {
-    const records = await listPendingMcpToolConfirmations(c.env.DB, c.env, {
+    const records = await listActionableMcpToolConfirmations(c.env.DB, c.env, {
       accountId: c.get("spaceId"),
       userId: c.get("user").id,
     });
     return c.json({
-      data: records.map((record) => ({
+      data: records.slice(0, MAX_MCP_TOOL_CONFIRMATIONS_PER_RESPONSE).map((
+        record,
+      ) => ({
         id: record.id,
         server_id: record.serverId,
         server_name: record.serverName,
@@ -44,22 +43,30 @@ routes.get(
         expires_at: record.expiresAt,
         created_at: record.createdAt,
       })),
+      truncated: records.length > MAX_MCP_TOOL_CONFIRMATIONS_PER_RESPONSE,
     });
   },
 );
 
 routes.post(
   "/tool-confirmations/:id/decision",
-  spaceAccess({ roles: MCP_INVOKE_ROLES }),
+  spaceAccess(),
   zValidator("json", decisionSchema),
   async (c) => {
-    const status = await decideMcpToolConfirmation(c.env.DB, {
+    const decision = await decideMcpToolConfirmation(c.env.DB, {
       accountId: c.get("spaceId"),
       userId: c.get("user").id,
       confirmationId: c.req.param("id"),
       decision: c.req.valid("json").decision,
     });
-    return c.json({ data: { status } });
+    return c.json({
+      data: decision.status === "denied" ? { status: decision.status } : {
+        status: decision.status,
+        confirmation_grant_id: decision.confirmationGrantId,
+        requested_thread_id: decision.requestedThreadId,
+        expires_at: decision.expiresAt,
+      },
+    });
   },
 );
 

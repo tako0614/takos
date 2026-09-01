@@ -20,6 +20,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
   const { t } = useI18n();
   const { onOpenSettings, onLogout } = useSidebarCallbacks();
   const [showProfileMenu, setShowProfileMenu] = createSignal(false);
+  const [loggingOut, setLoggingOut] = createSignal(false);
 
   createEffect(() => {
     if (!showProfileMenu()) return;
@@ -68,8 +69,9 @@ export function ProfileMenu(props: ProfileMenuProps) {
           {(picture) => (
             <img
               src={picture()}
-              alt={(props.user?.name || props.user?.username || "") +
-                "'s avatar"}
+              alt={t("avatarAlt", {
+                name: props.user?.name || props.user?.username || "-",
+              })}
               class="w-5 h-5 rounded-full object-cover shrink-0"
             />
           )}
@@ -136,15 +138,29 @@ export function ProfileMenu(props: ProfileMenuProps) {
           </a>
           <button
             type="button"
-            class={PROFILE_MENU_BTN}
+            class={`${PROFILE_MENU_BTN} disabled:cursor-wait disabled:opacity-60`}
             role="menuitem"
-            onClick={() => {
-              setShowProfileMenu(false);
-              onLogout();
+            disabled={loggingOut()}
+            onClick={async () => {
+              if (loggingOut()) return;
+              setLoggingOut(true);
+              try {
+                await onLogout();
+                setShowProfileMenu(false);
+              } catch {
+                // The owning layout reports the failure and keeps the session.
+              } finally {
+                setLoggingOut(false);
+              }
             }}
           >
-            <Icons.X class="w-4 h-4" />
-            <span>{t("logout")}</span>
+            <Show
+              when={loggingOut()}
+              fallback={<Icons.X class="w-4 h-4" />}
+            >
+              <Icons.Loader class="w-4 h-4 animate-spin" />
+            </Show>
+            <span>{loggingOut() ? t("loggingOut") : t("logout")}</span>
           </button>
         </div>
       </Show>

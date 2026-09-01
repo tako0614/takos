@@ -20,16 +20,27 @@ test("run SSE polling stream emits buffered events and closes on terminal status
               run_id: "run-123",
               type: "run.started",
               data: '{"status":"running"}',
+              data_truncated: false,
               created_at: "2026-01-01T00:00:00.000Z",
             },
           ],
           runStatus: "running",
+          truncation: {
+            events: false,
+            event_data: false,
+            archive: false,
+          },
         };
       }
 
       return {
         events: [],
         runStatus: "completed",
+        truncation: {
+          events: false,
+          event_data: false,
+          archive: false,
+        },
       };
     },
     0,
@@ -58,10 +69,16 @@ test("run SSE polling stream closes after emitting a terminal event", async () =
             run_id: "run-123",
             type: "completed",
             data: '{"status":"completed"}',
+            data_truncated: false,
             created_at: "2026-01-01T00:00:01.000Z",
           },
         ],
         runStatus: "completed",
+        truncation: {
+          events: false,
+          event_data: false,
+          archive: false,
+        },
       };
     },
     0,
@@ -73,4 +90,59 @@ test("run SSE polling stream closes after emitting a terminal event", async () =
   assertStringIncludes(text, "id: 9");
   assertStringIncludes(text, "event: completed");
   assertStringIncludes(JSON.stringify(observedCursor), "[0]");
+});
+
+test("run SSE polling drains every bounded page before closing a completed Run", async () => {
+  const observedCursor: number[] = [];
+  let callCount = 0;
+  const stream = createPollingRunObservationStream(
+    async (afterEventId) => {
+      observedCursor.push(afterEventId);
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          events: [{
+            id: 2_000,
+            event_id: "2000",
+            run_id: "run-123",
+            type: "message",
+            data: '{"page":1}',
+            data_truncated: false,
+            created_at: "2026-01-01T00:00:01.000Z",
+          }],
+          runStatus: "completed",
+          truncation: {
+            events: true,
+            event_data: false,
+            archive: false,
+          },
+        };
+      }
+      return {
+        events: [{
+          id: 2_001,
+          event_id: "2001",
+          run_id: "run-123",
+          type: "completed",
+          data: '{"status":"completed"}',
+          data_truncated: false,
+          created_at: "2026-01-01T00:00:02.000Z",
+        }],
+        runStatus: "completed",
+        truncation: {
+          events: false,
+          event_data: false,
+          archive: false,
+        },
+      };
+    },
+    0,
+    { pollIntervalMs: 0, heartbeatIntervalMs: 0 },
+  );
+
+  const text = await new Response(stream).text();
+
+  assertStringIncludes(text, "id: 2000");
+  assertStringIncludes(text, "id: 2001");
+  assertStringIncludes(JSON.stringify(observedCursor), "[0,2000]");
 });

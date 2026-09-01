@@ -5,7 +5,6 @@ import type {
   ToolDefinition,
 } from "./tool-definitions.ts";
 import type { Env } from "../../shared/types/index.ts";
-import type { SpaceRole } from "../../shared/types/index.ts";
 import {
   CUSTOM_TOOLS,
   getCustomHandler,
@@ -19,7 +18,6 @@ import { logWarn } from "../../shared/utils/logger.ts";
 export interface ToolResolverOptions {
   disabledCustomTools?: string[];
   mcpExposureContext?: {
-    role?: SpaceRole;
     capabilities?: string[];
   };
   runtimeMcpInterfaces?: RuntimeMcpInterfaceConfig;

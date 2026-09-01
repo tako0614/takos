@@ -9,12 +9,41 @@ import type { Env } from "../../../../shared/types/index.ts";
 import {
   exportMcpConnections,
   importMcpConnections,
-  mcpConnectionsExportSchema,
 } from "../mcp/portable-connections.ts";
+import {
+  MAX_MCP_CONNECTIONS,
+  parseMcpConnectionsDocument,
+} from "../../../../../contracts/public/mcp-connections.ts";
 
 async function freshDb(): Promise<{ client: Client; db: Database }> {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(`
+    CREATE TABLE mcp_oauth_pending (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      server_name TEXT NOT NULL,
+      server_url TEXT NOT NULL,
+      state TEXT NOT NULL UNIQUE,
+      code_verifier TEXT NOT NULL,
+      issuer_url TEXT NOT NULL,
+      authorization_endpoint TEXT,
+      authorization_url TEXT,
+      token_endpoint TEXT NOT NULL,
+      redirect_uri TEXT,
+      resource_uri TEXT,
+      resource_metadata_url TEXT,
+      oauth_client_id TEXT,
+      oauth_client_secret TEXT,
+      oauth_client_id_issued_at INTEGER,
+      oauth_client_secret_expires_at INTEGER,
+      registration_mode TEXT,
+      token_endpoint_auth_method TEXT,
+      initiator_user_id TEXT,
+      browser_nonce TEXT,
+      scope TEXT,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE mcp_servers (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -136,7 +165,7 @@ test("portable Connections export contains endpoints and policy intent but no cr
     });
 
     const exported = await exportMcpConnections(db, "workspace_1");
-    expect(mcpConnectionsExportSchema.safeParse(exported).success).toBe(true);
+    expect(parseMcpConnectionsDocument(exported)).toEqual(exported);
     expect(exported.connections).toMatchObject([
       {
         name: "docs",
@@ -215,6 +244,121 @@ test("portable import keeps credential-bearing Registry sources disabled until r
   }
 });
 
+test("portable OAuth import stages disabled tool policy before authorization completes", async () => {
+  const { client, db } = await freshDb();
+  try {
+    const env = {
+      DB: db,
+      ENVIRONMENT: "production",
+      ADMIN_DOMAIN: "takos.example",
+      AUTH_PUBLIC_BASE_URL: "https://takos.example",
+      ENCRYPTION_KEY: "portable-import-oauth-test-key",
+      TAKOS_EGRESS: {
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(input.toString());
+          if (url.href === "https://connector.example/mcp") {
+            return new Response(null, {
+              status: 401,
+              headers: {
+                "WWW-Authenticate":
+                  'Bearer resource_metadata="https://connector.example/.well-known/oauth-protected-resource/mcp", scope="docs.read"',
+              },
+            });
+          }
+          if (
+            url.href ===
+            "https://connector.example/.well-known/oauth-protected-resource/mcp"
+          ) {
+            return Response.json({
+              resource: "https://connector.example/mcp",
+              authorization_servers: ["https://auth.example/"],
+              scopes_supported: ["docs.read"],
+            });
+          }
+          if (
+            url.href ===
+            "https://auth.example/.well-known/oauth-authorization-server"
+          ) {
+            return Response.json({
+              issuer: "https://auth.example/",
+              authorization_endpoint: "https://auth.example/authorize",
+              token_endpoint: "https://auth.example/token",
+              response_types_supported: ["code"],
+              code_challenge_methods_supported: ["S256"],
+              authorization_response_iss_parameter_supported: true,
+              client_id_metadata_document_supported: true,
+            });
+          }
+          throw new Error(
+            `Unexpected OAuth import request: ${init?.method ?? "GET"} ${url}`,
+          );
+        },
+      },
+    } as unknown as Env;
+
+    const result = await importMcpConnections(
+      db as unknown as SqlDatabaseBinding,
+      env,
+      {
+        accountId: "workspace_oauth",
+        userId: "user_oauth",
+        document: {
+          format: "takos.mcp.connections",
+          version: 1,
+          exported_at: "2026-07-11T00:00:00.000Z",
+          registry_sources: [],
+          connections: [
+            {
+              name: "docs",
+              url: "https://connector.example/mcp",
+              transport: "streamable-http",
+              enabled: false,
+              scope: "docs.read",
+              tools: [
+                {
+                  name: "docs.read",
+                  schema_hash: "a".repeat(64),
+                  enabled: true,
+                  invocation_policy: "confirm_each_time",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    );
+
+    expect(result.connections).toMatchObject([
+      {
+        name: "docs",
+        status: "pending_oauth",
+        toolPoliciesRequireReview: 1,
+      },
+    ]);
+    const servers = await client.execute(
+      "SELECT id, auth_mode, enabled FROM mcp_servers WHERE account_id = 'workspace_oauth'",
+    );
+    expect(servers.rows).toHaveLength(1);
+    expect(servers.rows[0]).toMatchObject({
+      auth_mode: "oauth_pkce",
+      enabled: 0,
+    });
+    const policies = await client.execute(
+      "SELECT server_id, tool_name, enabled, reviewed_at FROM mcp_tool_policies WHERE account_id = 'workspace_oauth'",
+    );
+    expect(policies.rows).toMatchObject([
+      {
+        server_id: servers.rows[0].id,
+        tool_name: "docs.read",
+        enabled: 0,
+        reviewed_at: null,
+      },
+    ]);
+  } finally {
+    client.close();
+  }
+});
+
 test("portable format rejects extensions and inconsistent Registry auth metadata", () => {
   const base = {
     format: "takos.mcp.connections",
@@ -223,11 +367,68 @@ test("portable format rejects extensions and inconsistent Registry auth metadata
     registry_sources: [],
     connections: [],
   };
-  expect(
-    mcpConnectionsExportSchema.safeParse({ ...base, unexpected: true }).success,
-  ).toBe(false);
-  expect(
-    mcpConnectionsExportSchema.safeParse({
+  expect(() =>
+    parseMcpConnectionsDocument({ ...base, unexpected: true })
+  ).toThrow("Invalid MCP Connections document");
+  expect(() =>
+    parseMcpConnectionsDocument({
+      ...base,
+      connections: [
+        {
+          name: "docs",
+          url: "https://connector.example/mcp",
+          transport: "streamable-http",
+          enabled: true,
+          scope: null,
+          tools: [],
+          unexpected: true,
+        },
+      ],
+    })
+  ).toThrow("Invalid MCP Connections connection");
+  expect(() =>
+    parseMcpConnectionsDocument({
+      ...base,
+      connections: [
+        {
+          name: "docs",
+          url: "https://connector.example/mcp",
+          transport: "streamable-http",
+          enabled: true,
+          scope: null,
+          tools: [
+            {
+              name: "search",
+              schema_hash: "a".repeat(64),
+              enabled: false,
+              invocation_policy: "confirm_each_time",
+              unexpected: true,
+            },
+          ],
+        },
+      ],
+    })
+  ).toThrow("Invalid MCP Connections tool policy");
+  expect(() =>
+    parseMcpConnectionsDocument({
+      ...base,
+      registry_sources: [
+        {
+          kind: "custom",
+          name: "Registry",
+          base_url: "https://registry.example",
+          enabled: true,
+          priority: 0,
+          auth_type: "none",
+          auth_header_name: null,
+          credential_required: false,
+          unexpected: true,
+        },
+      ],
+    })
+  ).toThrow("Invalid MCP Connections Registry source");
+  expect(() =>
+    parseMcpConnectionsDocument({
       ...base,
       registry_sources: [
         {
@@ -241,6 +442,40 @@ test("portable format rejects extensions and inconsistent Registry auth metadata
           credential_required: true,
         },
       ],
-    }).success,
-  ).toBe(false);
+    })
+  ).toThrow("Inconsistent MCP Connections Registry source");
+});
+
+test("portable export refuses an inventory that cannot be re-imported directly", async () => {
+  const { client, db } = await freshDb();
+  try {
+    const now = "2026-07-11T00:00:00.000Z";
+    for (let index = 0; index <= MAX_MCP_CONNECTIONS; index++) {
+      await client.execute({
+        sql: `INSERT INTO mcp_servers (
+          id, account_id, name, url, source_type, auth_mode,
+          enabled, created_at, updated_at
+        ) VALUES (?, 'workspace_large', ?, ?, 'external', 'none', 1, ?, ?)`,
+        args: [
+          `server_${index}`,
+          `server-${String(index).padStart(2, "0")}`,
+          `https://connector-${index}.example/mcp`,
+          now,
+          now,
+        ],
+      });
+    }
+
+    await expect(exportMcpConnections(db, "workspace_large")).rejects
+      .toMatchObject({
+        statusCode: 413,
+        details: {
+          assisted_processing: true,
+          reason: "connection_count",
+          max_connections: MAX_MCP_CONNECTIONS,
+        },
+      });
+  } finally {
+    client.close();
+  }
 });

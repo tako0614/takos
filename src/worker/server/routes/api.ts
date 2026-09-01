@@ -5,9 +5,9 @@ import {
   generalApiBodyLimit,
   searchBodyLimit,
 } from "../middleware/body-size.ts";
+import { RAW_STORAGE_UPLOAD_PATHS } from "../middleware/raw-body-routes.ts";
 import { validateApiOpaqueRouteParams } from "../middleware/param-validation.ts";
 import spacesBase from "./spaces/routes.ts";
-import spacesMembers from "./spaces/members.ts";
 import spacesStorage from "./spaces/storage.ts";
 import spacesTools from "./spaces/tools.ts";
 import threads from "./threads.ts";
@@ -200,6 +200,7 @@ export function createApiRouter({
         "multipart/form-data",
       ],
       allowEmptyBody: true,
+      skipPaths: RAW_STORAGE_UPLOAD_PATHS,
     }),
   );
 
@@ -316,7 +317,6 @@ export function createApiRouter({
   apiRouter.route("/setup", setup);
   apiRouter.route("/me", me);
   apiRouter.route("/spaces", spacesBase);
-  apiRouter.route("/spaces", spacesMembers);
   apiRouter.route("/spaces", spacesStorage);
   apiRouter.route("/spaces", spacesTools);
   apiRouter.route("/shortcuts", shortcuts);

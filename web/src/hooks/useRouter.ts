@@ -15,7 +15,7 @@ export {
   shouldPushHistory,
 } from "./router-state.ts";
 
-export function useRouteState() {
+function useRouteState() {
   const location = useLocation();
   return createMemo<RouteState>(() =>
     parseRoute(location.pathname, location.search)

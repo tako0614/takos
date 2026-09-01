@@ -95,7 +95,7 @@ output "mcp_url" {
 ```
 
 Interface の実体と認可は service-side の設定に置かれます。`/v1/interfaces` から直接作ることも、apply 成功後に
-`InstallConfig.interfaceBlueprints` から一度 materialize することもできます。app-owned launcher など plain
+`InstallConfig.interfaceBlueprints` から一度反映することもできます。app-owned launcher など plain
 Capsule の宣言案は、repository manifest v2 の `interfaces[]` から Takosumi が検証して同じ blueprint へ compile
 できます。repository manifest は実行権限ではなく、Output 名から Interface を推測する fallback もありません。
 Form-backed Resource は、verified な Takoform Form Definition の `interfaces[]` descriptor から portable な宣言を
@@ -168,7 +168,7 @@ Takosumi Interface の envelope、宣言の generation と一致する observed 
 | ファイルを開くハンドラー     | `interface.file.handler` / `1` | 宣言された `inputs.openUrl`; `status.resolvedInputs.openUrl`; 少なくとも 1 つの有効な `document.mimeTypes` または `document.extensions`; 任意の `document.display.title` | `file.open`; `none`                                      |
 
 `document.display` の正規キーは `title` / `description` / `icon` / `category` /
-`sortOrder`(すべて任意)で、正本は Takosumi spec の Display Metadata Contract です。
+`sortOrder`(すべて任意)で、正本 (正とする情報)は Takosumi spec の Display Metadata Contract です。
 `display.icon` は「credential 情報を含まない絶対 HTTPS URL」「surface の解決済み
 runtime URL の origin 基準で解決する先頭 `/` パス(例: `/icons/app.svg`)」
 「16 文字以内で `/` `.` `:` を含まない emoji glyph」の 3 形式のみを受け付けます。

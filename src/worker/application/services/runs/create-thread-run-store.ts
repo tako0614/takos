@@ -2,12 +2,23 @@ import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { Run } from "../../../shared/types/index.ts";
 import {
-  accountMemberships,
   accounts,
   getDb,
+  mcpConfirmationRunGrants,
+  runContextRevisions,
+  runGrants,
   runs,
 } from "../../../infra/db/index.ts";
-import { and, count, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+} from "drizzle-orm";
 import { resolveActorPrincipalId } from "../identity/principals.ts";
 import { isInvalidArrayBufferError } from "../../../shared/utils/db-guards.ts";
 import {
@@ -18,6 +29,8 @@ import {
   type SpaceModelLookup,
 } from "./run-serialization.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import type { BaseRunAuthority } from "./run-authority.ts";
+import type { PreparedMcpConfirmationRunGrant } from "../platform/mcp/tool-confirmation.ts";
 
 const TOP_LEVEL_RUN_RATE_LIMIT = {
   maxRunsPerMinute: 30,
@@ -44,6 +57,8 @@ type CreatePendingRunParams = {
   model: string;
   input: string;
   createdAt: string;
+  authority: BaseRunAuthority;
+  confirmationGrant?: PreparedMcpConfirmationRunGrant | null;
 };
 
 type UpdateRunStatusParams = {
@@ -86,7 +101,7 @@ function readCount(row: D1CountRow | null | undefined): number {
 
 async function checkRunRateLimitsFallback(
   db: SqlDatabaseBinding,
-  actorId: string,
+  principalId: string,
   spaceId: string,
   kind: RunRateLimitKind,
   clock: Clock = systemClock,
@@ -105,13 +120,14 @@ async function checkRunRateLimitsFallback(
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
-        SELECT account_id
-        FROM account_memberships
-        WHERE member_id = ?
+        SELECT id
+        FROM accounts
+        WHERE status = 'active'
+          AND (owner_account_id = ? OR (type = 'user' AND id = ?))
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
-    `).bind(actorId, oneMinuteAgo).first<D1CountRow>(),
+    `).bind(principalId, principalId, oneMinuteAgo).first<D1CountRow>(),
     );
 
     if (minuteCount >= rateLimit.maxRunsPerMinute) {
@@ -128,13 +144,14 @@ async function checkRunRateLimitsFallback(
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
-        SELECT account_id
-        FROM account_memberships
-        WHERE member_id = ?
+        SELECT id
+        FROM accounts
+        WHERE status = 'active'
+          AND (owner_account_id = ? OR (type = 'user' AND id = ?))
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
-    `).bind(actorId, oneHourAgo).first<D1CountRow>(),
+    `).bind(principalId, principalId, oneHourAgo).first<D1CountRow>(),
     );
 
     if (hourCount >= rateLimit.maxRunsPerHour) {
@@ -309,6 +326,7 @@ async function getRunResponseFallback(
       agent_type AS agentType,
       model,
       status,
+      current_context_revision,
       input,
       output,
       error,
@@ -365,11 +383,81 @@ export async function getRunResponse(
   );
 }
 
+export type RunCreationIdentity = {
+  id: string;
+  threadId: string;
+  spaceId: string;
+  requesterAccountId: string | null;
+  parentRunId: string | null;
+  agentType: string;
+  model: string | null;
+  input: string;
+  confirmationGrantId: string | null;
+};
+
+async function getRunCreationIdentityFallback(
+  db: SqlDatabaseBinding,
+  runId: string,
+): Promise<RunCreationIdentity | null> {
+  return await db.prepare(`
+    SELECT
+      id,
+      thread_id AS threadId,
+      account_id AS spaceId,
+      requester_account_id AS requesterAccountId,
+      parent_run_id AS parentRunId,
+      agent_type AS agentType,
+      model,
+      input,
+      (
+        SELECT confirmation_id
+        FROM mcp_confirmation_run_grants
+        WHERE run_id = runs.id
+        LIMIT 1
+      ) AS confirmationGrantId
+    FROM runs
+    WHERE id = ?
+    LIMIT 1
+  `).bind(runId).first<RunCreationIdentity>();
+}
+
+/** Immutable fields that define whether an idempotent Run is the same request. */
+export async function getRunCreationIdentity(
+  dbBinding: SqlDatabaseBinding,
+  runId: string,
+): Promise<RunCreationIdentity | null> {
+  const db = getDb(dbBinding);
+  return withDrizzleInvalidArrayBufferFallback(
+    "run creation identity lookup",
+    async () => {
+      const row = await db.select({
+        id: runs.id,
+        threadId: runs.threadId,
+        spaceId: runs.accountId,
+        requesterAccountId: runs.requesterAccountId,
+        parentRunId: runs.parentRunId,
+        agentType: runs.agentType,
+        model: runs.model,
+        input: runs.input,
+        confirmationGrantId: mcpConfirmationRunGrants.confirmationId,
+      }).from(runs)
+        .leftJoin(
+          mcpConfirmationRunGrants,
+          eq(mcpConfirmationRunGrants.runId, runs.id),
+        )
+        .where(eq(runs.id, runId))
+        .get();
+      return row ?? null;
+    },
+    () => getRunCreationIdentityFallback(dbBinding, runId),
+  );
+}
+
 async function createPendingRunFallback(
   db: SqlDatabaseBinding,
   params: CreatePendingRunParams,
 ): Promise<void> {
-  await db.prepare(`
+  const runInsert = db.prepare(`
     INSERT INTO runs (
       id,
       thread_id,
@@ -383,10 +471,11 @@ async function createPendingRunFallback(
       agent_type,
       model,
       status,
+      current_context_revision,
       input,
       usage,
       created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'pending', ?, '{}', ?)
+    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, '{}', ?)
   `).bind(
     params.runId,
     params.threadId,
@@ -400,18 +489,137 @@ async function createPendingRunFallback(
     params.model,
     params.input,
     params.createdAt,
-  ).run();
+  );
+  const grant = params.authority.grant;
+  const grantInsert = db.prepare(`
+    INSERT INTO run_grants (
+      run_id,
+      format_version,
+      principal_id,
+      workspace_id,
+      parent_run_id,
+      parent_grant_digest,
+      enforcement_mode,
+      grant_json,
+      digest,
+      created_at
+    ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    grant.runId,
+    grant.principalId,
+    grant.workspaceId,
+    grant.parentRunId,
+    grant.parentGrantDigest,
+    grant.enforcementMode,
+    grant.grantJson,
+    grant.digest,
+    grant.createdAt,
+  );
+  const context = params.authority.context;
+  const contextInsert = db.prepare(`
+    INSERT INTO run_context_revisions (
+      run_id,
+      revision,
+      parent_revision,
+      activation_event_id,
+      activation_event_key,
+      format_version,
+      principal_id,
+      workspace_id,
+      thread_id,
+      transcript_cut_sequence,
+      agent_profile_revision,
+      model_revision,
+      system_prompt_revision,
+      run_grant_digest,
+      record_mode,
+      context_json,
+      digest,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    context.runId,
+    context.revision,
+    context.parentRevision,
+    context.activationEventId,
+    context.activationEventKey,
+    context.principalId,
+    context.workspaceId,
+    context.threadId,
+    context.transcriptCutSequence,
+    context.agentProfileRevision,
+    context.modelRevision,
+    context.systemPromptRevision,
+    context.runGrantDigest,
+    context.recordMode,
+    context.contextJson,
+    context.digest,
+    context.createdAt,
+  );
+
+  const confirmationGrantInsert = params.confirmationGrant
+    ? db.prepare(`
+      INSERT INTO mcp_confirmation_run_grants (
+        confirmation_id,
+        run_id,
+        principal_id,
+        workspace_id,
+        thread_id,
+        run_context_revision,
+        run_context_digest,
+        run_grant_digest,
+        origin_identity_hash,
+        consumed_tool_call_id,
+        consumed_at,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, NULL, NULL, ?)
+    `).bind(
+      params.confirmationGrant.confirmationId,
+      params.runId,
+      params.confirmationGrant.principalId,
+      params.spaceId,
+      params.threadId,
+      context.digest,
+      grant.digest,
+      params.confirmationGrant.originIdentityHash,
+      params.createdAt,
+    )
+    : null;
+
+  // D1 batch is the atomic commit boundary. A Run without its base grant and
+  // revision (or vice versa) must never become visible.
+  await db.batch(
+    confirmationGrantInsert
+      ? [runInsert, grantInsert, contextInsert, confirmationGrantInsert]
+      : [runInsert, grantInsert, contextInsert],
+  );
 }
 
 export async function createPendingRun(
   dbBinding: SqlDatabaseBinding,
   params: CreatePendingRunParams,
 ): Promise<void> {
+  const confirmationGrantIds = params.authority.grant.confirmationGrantIds;
+  if (
+    confirmationGrantIds.length !== (params.confirmationGrant ? 1 : 0) ||
+    (params.confirmationGrant &&
+      (confirmationGrantIds[0] !== params.confirmationGrant.confirmationId ||
+        params.confirmationGrant.principalId !==
+          params.authority.grant.principalId ||
+        params.confirmationGrant.workspaceId !== params.spaceId ||
+        params.confirmationGrant.threadId !== params.threadId))
+  ) {
+    throw new Error(
+      "MCP confirmation claim does not match the compiled Run authority",
+    );
+  }
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
     "run create",
     async () => {
-      await db.insert(runs).values({
+      const grant = params.authority.grant;
+      const context = params.authority.context;
+      const runInsert = db.insert(runs).values({
         id: params.runId,
         threadId: params.threadId,
         accountId: params.spaceId,
@@ -424,10 +632,70 @@ export async function createPendingRun(
         agentType: params.agentType,
         model: params.model,
         status: "pending",
+        currentContextRevision: 1,
         input: params.input,
         usage: "{}",
         createdAt: params.createdAt,
       });
+      const grantInsert = db.insert(runGrants).values({
+        runId: grant.runId,
+        formatVersion: 1,
+        principalId: grant.principalId,
+        workspaceId: grant.workspaceId,
+        parentRunId: grant.parentRunId,
+        parentGrantDigest: grant.parentGrantDigest,
+        enforcementMode: grant.enforcementMode,
+        grantJson: grant.grantJson,
+        digest: grant.digest,
+        createdAt: grant.createdAt,
+      });
+      const contextInsert = db.insert(runContextRevisions).values({
+        runId: context.runId,
+        revision: context.revision,
+        parentRevision: context.parentRevision,
+        activationEventId: context.activationEventId,
+        activationEventKey: context.activationEventKey,
+        formatVersion: 1,
+        principalId: context.principalId,
+        workspaceId: context.workspaceId,
+        threadId: context.threadId,
+        transcriptCutSequence: context.transcriptCutSequence,
+        agentProfileRevision: context.agentProfileRevision,
+        modelRevision: context.modelRevision,
+        systemPromptRevision: context.systemPromptRevision,
+        runGrantDigest: context.runGrantDigest,
+        recordMode: context.recordMode,
+        contextJson: context.contextJson,
+        digest: context.digest,
+        createdAt: context.createdAt,
+      });
+      if (params.confirmationGrant) {
+        await db.batch([
+          runInsert,
+          grantInsert,
+          contextInsert,
+          db.insert(mcpConfirmationRunGrants).values({
+            confirmationId: params.confirmationGrant.confirmationId,
+            runId: params.runId,
+            principalId: params.confirmationGrant.principalId,
+            workspaceId: params.spaceId,
+            threadId: params.threadId,
+            runContextRevision: 1,
+            runContextDigest: context.digest,
+            runGrantDigest: grant.digest,
+            originIdentityHash: params.confirmationGrant.originIdentityHash,
+            consumedToolCallId: null,
+            consumedAt: null,
+            createdAt: params.createdAt,
+          }),
+        ]);
+        return;
+      }
+      await db.batch([
+        runInsert,
+        grantInsert,
+        contextInsert,
+      ]);
     },
     () => createPendingRunFallback(dbBinding, params),
   );
@@ -483,25 +751,24 @@ export async function checkRunRateLimits(
   const nowMs = clock.now();
   const oneMinuteAgo = new Date(nowMs - 60 * 1000).toISOString();
   const oneHourAgo = new Date(nowMs - 60 * 60 * 1000).toISOString();
+  const principalId = await resolveActorPrincipalId(dbBinding, actorId) ??
+    actorId;
   try {
-    let userSpaces = await db.select({
-      accountId: accountMemberships.accountId,
+    const userSpaces = await db.select({
+      accountId: accounts.id,
     })
-      .from(accountMemberships)
-      .where(eq(accountMemberships.memberId, actorId))
+      .from(accounts)
+      .where(and(
+        eq(accounts.status, "active"),
+        or(
+          eq(accounts.ownerAccountId, principalId),
+          and(
+            eq(accounts.type, "user"),
+            eq(accounts.id, principalId),
+          ),
+        ),
+      ))
       .all();
-
-    if (userSpaces.length === 0) {
-      const principalId = await resolveActorPrincipalId(dbBinding, actorId);
-      if (principalId && principalId !== actorId) {
-        userSpaces = await db.select({
-          accountId: accountMemberships.accountId,
-        })
-          .from(accountMemberships)
-          .where(eq(accountMemberships.memberId, principalId))
-          .all();
-      }
-    }
 
     const userSpaceIds = userSpaces.map((workspace) => workspace.accountId);
 
@@ -568,6 +835,12 @@ export async function checkRunRateLimits(
     if (!isInvalidArrayBufferError(error)) {
       throw error;
     }
-    return checkRunRateLimitsFallback(dbBinding, actorId, spaceId, kind, clock);
+    return checkRunRateLimitsFallback(
+      dbBinding,
+      principalId,
+      spaceId,
+      kind,
+      clock,
+    );
   }
 }

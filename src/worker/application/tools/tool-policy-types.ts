@@ -1,5 +1,3 @@
-import type { SpaceRole } from "../../shared/types/index.ts";
-
 export type ToolClass = "space_mapped" | "agent_native" | "composite";
 export type SensitiveReadPolicy = "none" | "masked" | "write_only";
 
@@ -40,6 +38,5 @@ export type SpaceOperationId =
 export interface SpaceOperationPolicy {
   id: SpaceOperationId;
   user_surface: string;
-  allowed_roles: SpaceRole[];
   sensitive_read_policy: SensitiveReadPolicy;
 }

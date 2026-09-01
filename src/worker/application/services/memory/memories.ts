@@ -8,9 +8,23 @@ import type {
   ReminderTriggerType,
 } from "../../../shared/types/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
-import { getDb, memories, reminders } from "../../../infra/db/index.ts";
+import { stringifyCanonicalJson } from "../../../shared/utils/canonical-json.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import {
+  agentResourceDeletionOutbox,
+  agentResourceTombstones,
+  getDb,
+  memories,
+  reminders,
+} from "../../../infra/db/index.ts";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { textDate } from "../../../shared/utils/db-guards.ts";
+import {
+  assertMemoryImportance,
+  DEFAULT_MEMORY_IMPORTANCE,
+} from "./importance.ts";
+import { prepareAgentResourceDeletion } from "../agent/resource-deletion.ts";
+import type { RunContextResourceReference } from "../runs/run-authority.ts";
 
 export const MEMORY_TYPES: readonly string[] = [
   "episode",
@@ -100,6 +114,51 @@ function toMemoryApi(m: {
   };
 }
 
+/**
+ * Canonical semantic revision of one ExplicitMemory.
+ *
+ * Access counters are operational telemetry and deliberately excluded: a read
+ * must not manufacture a new content revision or invalidate a pinned digest.
+ * The returned object is used only as digest input and is never copied into a
+ * RunContext or deletion tombstone.
+ */
+export function explicitMemoryResourceSnapshot(memory: Memory) {
+  return {
+    schemaVersion: 1,
+    resourceKind: "explicit_memory",
+    id: memory.id,
+    workspaceId: memory.space_id,
+    authorAccountId: memory.user_id,
+    threadId: memory.thread_id,
+    type: memory.type,
+    category: memory.category,
+    content: memory.content,
+    summary: memory.summary,
+    importance: memory.importance,
+    tags: memory.tags,
+    occurredAt: memory.occurred_at,
+    expiresAt: memory.expires_at,
+    createdAt: memory.created_at,
+    updatedAt: memory.updated_at,
+  };
+}
+
+export async function explicitMemoryResourceReference(
+  memory: Memory,
+): Promise<RunContextResourceReference> {
+  const canonical = stringifyCanonicalJson(
+    explicitMemoryResourceSnapshot(memory),
+  );
+  if (canonical === undefined) {
+    throw new TypeError("ExplicitMemory revision is not serializable");
+  }
+  return {
+    resourceKind: "explicit_memory",
+    resourceId: memory.id,
+    resourceDigest: `sha256:${await computeSHA256(canonical)}`,
+  };
+}
+
 function toReminderApi(r: {
   id: string;
   accountId: string;
@@ -177,7 +236,9 @@ export async function bumpMemoryAccess(
     .set({
       accessCount: sql`${memories.accessCount} + 1`,
       lastAccessedAt: timestamp,
-      updatedAt: timestamp,
+      // `timestamps.updatedAt` has a Drizzle $onUpdateFn; explicitly retain the
+      // semantic revision timestamp for this telemetry-only mutation.
+      updatedAt: sql`${memories.updatedAt}`,
     })
     .where(inArray(memories.id, memoryIds));
 }
@@ -227,6 +288,20 @@ export async function getMemoryById(
   return toMemoryApi(memory);
 }
 
+async function getMemoryByIdInSpace(
+  dbBinding: Env["DB"],
+  spaceId: string,
+  memoryId: string,
+): Promise<Memory | null> {
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const memory = await db.select().from(memories)
+    .where(
+      and(eq(memories.id, memoryId), eq(memories.accountId, spaceId)),
+    )
+    .get();
+  return memory ? toMemoryApi(memory) : null;
+}
+
 export async function createMemory(
   dbBinding: Env["DB"],
   input: {
@@ -243,6 +318,9 @@ export async function createMemory(
     expiresAt?: string | null;
   },
 ): Promise<Memory | null> {
+  const importance = assertMemoryImportance(
+    input.importance ?? DEFAULT_MEMORY_IMPORTANCE,
+  );
   const db = memoryServiceDeps.getDb(dbBinding);
   const timestamp = memoryServiceDeps.now();
   const id = memoryServiceDeps.generateId();
@@ -256,7 +334,7 @@ export async function createMemory(
     category: input.category || null,
     content: input.content,
     summary: input.summary || null,
-    importance: input.importance ?? 0.5,
+    importance,
     tags: input.tags ? JSON.stringify(input.tags) : null,
     occurredAt: input.occurredAt || timestamp,
     expiresAt: input.expiresAt || null,
@@ -269,23 +347,27 @@ export async function createMemory(
 
 export async function updateMemory(
   dbBinding: Env["DB"],
+  spaceId: string,
   memoryId: string,
   updates: {
     content?: string;
-    summary?: string;
+    summary?: string | null;
     importance?: number;
-    category?: string;
+    category?: string | null;
     tags?: string[] | null;
     expiresAt?: string | null;
   },
 ): Promise<Memory | null> {
+  const importance = updates.importance === undefined
+    ? undefined
+    : assertMemoryImportance(updates.importance);
   const db = memoryServiceDeps.getDb(dbBinding);
   const timestamp = memoryServiceDeps.now();
 
   const data: Record<string, unknown> = { updatedAt: timestamp };
   if (updates.content !== undefined) data.content = updates.content;
   if (updates.summary !== undefined) data.summary = updates.summary;
-  if (updates.importance !== undefined) data.importance = updates.importance;
+  if (importance !== undefined) data.importance = importance;
   if (updates.category !== undefined) data.category = updates.category;
   if (updates.tags !== undefined) {
     data.tags = updates.tags ? JSON.stringify(updates.tags) : null;
@@ -294,15 +376,116 @@ export async function updateMemory(
 
   await db.update(memories)
     .set(data)
-    .where(eq(memories.id, memoryId));
+    .where(
+      and(eq(memories.id, memoryId), eq(memories.accountId, spaceId)),
+    );
 
-  return getMemoryById(dbBinding, memoryId);
+  return getMemoryByIdInSpace(dbBinding, spaceId, memoryId);
 }
 
-export async function deleteMemory(dbBinding: Env["DB"], memoryId: string) {
+export async function deleteMemory(
+  dbBinding: Env["DB"],
+  spaceId: string,
+  memoryId: string,
+  deletedByAccountId: string,
+): Promise<{ tombstoneId: string } | null> {
   const db = memoryServiceDeps.getDb(dbBinding);
+  const memory = await db.select({
+    id: memories.id,
+    accountId: memories.accountId,
+    authorAccountId: memories.authorAccountId,
+    threadId: memories.threadId,
+    type: memories.type,
+    category: memories.category,
+    content: memories.content,
+    summary: memories.summary,
+    importance: memories.importance,
+    tags: memories.tags,
+    occurredAt: memories.occurredAt,
+    expiresAt: memories.expiresAt,
+    lastAccessedAt: memories.lastAccessedAt,
+    accessCount: memories.accessCount,
+    createdAt: memories.createdAt,
+    updatedAt: memories.updatedAt,
+  }).from(memories).where(and(
+    eq(memories.id, memoryId),
+    eq(memories.accountId, spaceId),
+  )).get();
+  if (!memory) return null;
 
-  await db.delete(memories).where(eq(memories.id, memoryId));
+  const deletedAt = memoryServiceDeps.now();
+  const deletion = await prepareAgentResourceDeletion({
+    accountId: spaceId,
+    resourceKind: "explicit_memory",
+    resourceId: memoryId,
+    source: explicitMemoryResourceSnapshot(toMemoryApi(memory)),
+    deletedByAccountId,
+    deletedAt,
+  });
+  const exactSource = and(
+    eq(memories.id, memoryId),
+    eq(memories.accountId, spaceId),
+    eq(memories.updatedAt, textDate(memory.updatedAt)),
+  );
+  const tombstoneInsert = db.insert(agentResourceTombstones).select(
+    db.select({
+      id: sql<string>`${deletion.id}`.as("id"),
+      accountId: memories.accountId,
+      resourceKind: sql<string>`${deletion.resourceKind}`.as("resource_kind"),
+      resourceId: memories.id,
+      sourceDigest: sql<string>`${deletion.sourceDigest}`.as("source_digest"),
+      deletedByAccountId: sql<string>`${deletion.deletedByAccountId}`.as(
+        "deleted_by_account_id",
+      ),
+      deletedAt: sql<string>`${deletion.deletedAt}`.as("deleted_at"),
+      createdAt: sql<string>`${deletion.deletedAt}`.as("created_at"),
+    }).from(memories).where(exactSource),
+  ).onConflictDoNothing();
+  const outboxInsert = db.insert(agentResourceDeletionOutbox).select(
+    db.select({
+      id: agentResourceTombstones.id,
+      accountId: agentResourceTombstones.accountId,
+      resourceKind: agentResourceTombstones.resourceKind,
+      resourceId: agentResourceTombstones.resourceId,
+      vectorIds: sql<string>`${deletion.vectorIdsJson}`.as("vector_ids"),
+      offloadObjectKeys: sql<string>`${deletion.offloadObjectKeysJson}`.as(
+        "offload_object_keys",
+      ),
+      deliveryStatus: sql<string>`'pending'`.as("delivery_status"),
+      attempts: sql<number>`0`.as("attempts"),
+      claimToken: sql<string | null>`NULL`.as("claim_token"),
+      claimedAt: sql<string | null>`NULL`.as("claimed_at"),
+      nextAttemptAt: sql<string | null>`NULL`.as("next_attempt_at"),
+      completedAt: sql<string | null>`NULL`.as("completed_at"),
+      lastError: sql<string | null>`NULL`.as("last_error"),
+      createdAt: agentResourceTombstones.createdAt,
+      updatedAt: agentResourceTombstones.createdAt,
+    }).from(agentResourceTombstones).where(
+      eq(agentResourceTombstones.id, deletion.id),
+    ),
+  ).onConflictDoNothing();
+  await db.batch([
+    tombstoneInsert,
+    outboxInsert,
+    db.delete(memories).where(exactSource),
+  ]);
+
+  const [remaining, tombstone] = await Promise.all([
+    db.select({ id: memories.id }).from(memories).where(and(
+      eq(memories.id, memoryId),
+      eq(memories.accountId, spaceId),
+    )).get(),
+    db.select({ id: agentResourceTombstones.id })
+      .from(agentResourceTombstones)
+      .where(and(
+        eq(agentResourceTombstones.id, deletion.id),
+        eq(agentResourceTombstones.accountId, spaceId),
+        eq(agentResourceTombstones.resourceKind, "explicit_memory"),
+        eq(agentResourceTombstones.resourceId, memoryId),
+      )).get(),
+  ]);
+  if (remaining || !tombstone) return null;
+  return { tombstoneId: tombstone.id };
 }
 
 export async function listReminders(
@@ -341,6 +524,20 @@ export async function getReminderById(
   return toReminderApi(reminder);
 }
 
+async function getReminderByIdInSpace(
+  dbBinding: Env["DB"],
+  spaceId: string,
+  reminderId: string,
+): Promise<Reminder | null> {
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const reminder = await db.select().from(reminders)
+    .where(
+      and(eq(reminders.id, reminderId), eq(reminders.accountId, spaceId)),
+    )
+    .get();
+  return reminder ? toReminderApi(reminder) : null;
+}
+
 export async function createReminder(
   dbBinding: Env["DB"],
   input: {
@@ -376,11 +573,12 @@ export async function createReminder(
 
 export async function updateReminder(
   dbBinding: Env["DB"],
+  spaceId: string,
   reminderId: string,
   updates: {
     content?: string;
-    context?: string;
-    triggerValue?: string;
+    context?: string | null;
+    triggerValue?: string | null;
     status?: ReminderStatus;
     priority?: ReminderPriority;
   },
@@ -402,19 +600,28 @@ export async function updateReminder(
 
   await db.update(reminders)
     .set(data)
-    .where(eq(reminders.id, reminderId));
+    .where(
+      and(eq(reminders.id, reminderId), eq(reminders.accountId, spaceId)),
+    );
 
-  return getReminderById(dbBinding, reminderId);
+  return getReminderByIdInSpace(dbBinding, spaceId, reminderId);
 }
 
-export async function deleteReminder(dbBinding: Env["DB"], reminderId: string) {
+export async function deleteReminder(
+  dbBinding: Env["DB"],
+  spaceId: string,
+  reminderId: string,
+) {
   const db = memoryServiceDeps.getDb(dbBinding);
 
-  await db.delete(reminders).where(eq(reminders.id, reminderId));
+  await db.delete(reminders).where(
+    and(eq(reminders.id, reminderId), eq(reminders.accountId, spaceId)),
+  );
 }
 
 export async function triggerReminder(
   dbBinding: Env["DB"],
+  spaceId: string,
   reminderId: string,
 ): Promise<Reminder | null> {
   const db = memoryServiceDeps.getDb(dbBinding);
@@ -426,7 +633,9 @@ export async function triggerReminder(
       triggeredAt: timestamp,
       updatedAt: timestamp,
     })
-    .where(eq(reminders.id, reminderId));
+    .where(
+      and(eq(reminders.id, reminderId), eq(reminders.accountId, spaceId)),
+    );
 
-  return getReminderById(dbBinding, reminderId);
+  return getReminderByIdInSpace(dbBinding, spaceId, reminderId);
 }

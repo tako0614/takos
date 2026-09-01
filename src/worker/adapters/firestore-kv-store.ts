@@ -10,6 +10,7 @@
 
 import type { KvStoreBinding } from "../shared/types/bindings.ts";
 import { Buffer } from "node:buffer";
+import { coerceValue } from "./kv-store-shared.ts";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -59,27 +60,6 @@ function serializeValue(
     }
     return new TextDecoder().decode(combined);
   })();
-}
-
-function coerceValue(raw: string, type?: string): unknown {
-  switch (type) {
-    case "json":
-      return JSON.parse(raw);
-    case "arrayBuffer":
-      return new TextEncoder().encode(raw).buffer;
-    case "stream": {
-      const bytes = new TextEncoder().encode(raw);
-      return new ReadableStream({
-        start(controller) {
-          controller.enqueue(bytes);
-          controller.close();
-        },
-      });
-    }
-    case "text":
-    default:
-      return raw;
-  }
 }
 
 // ---------------------------------------------------------------------------

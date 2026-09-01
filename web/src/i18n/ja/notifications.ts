@@ -1,0 +1,20 @@
+export const notifications = {
+  notifications: "通知",
+  notificationsTitle: "通知",
+  notificationsEmpty: "新しい通知はありません",
+  notificationsEmptyHint: "エージェントやワークスペースの更新がここに表示されます。",
+  notificationsLoadFailed: "通知を読み込めませんでした。",
+  notificationMarkReadFailed: "通知を既読にできませんでした。",
+  notificationMarkAllReadFailed: "通知を一括で既読にできませんでした。",
+  notificationMarkAllRead: "すべて既読にする",
+  notificationUnreadCount: "未読 {count} 件",
+  notificationOpen: "{title} を開く",
+  notificationMarkRead: "{title} を既読にする",
+  notificationRunCompletedTitle: "エージェントの応答が完了しました",
+  notificationRunCompletedBody: "会話を開いて応答を確認できます。",
+  notificationRunFailedTitle: "エージェントの実行に失敗しました",
+  notificationRunFailedBody: "会話を開いてエラーを確認してください。",
+  notificationLegacyWorkspaceTitle: "旧 Workspace 通知",
+  notificationLegacyWorkspaceBody:
+    "Takos が現在は対応していない、以前の共同利用モデルから届いた通知です。",
+} as const;

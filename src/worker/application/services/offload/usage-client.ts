@@ -30,5 +30,13 @@ export async function emitRunUsageEvent(
       metadata: input.metadata,
     }),
   });
-  await stub.fetch(request);
+  const response = await stub.fetch(request);
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Run usage event rejected: ${response.status}${
+        detail ? ` ${detail.slice(0, 512)}` : ""
+      }`,
+    );
+  }
 }

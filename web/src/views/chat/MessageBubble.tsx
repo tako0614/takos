@@ -5,8 +5,12 @@ import { Icons } from "../../lib/Icons.tsx";
 import { MarkdownRenderer } from "./MarkdownRenderer.tsx";
 import { PersistedToolCalls } from "./Tooling.tsx";
 import { useI18n } from "../../store/i18n.ts";
-import { parseChatMessageMetadata } from "./messageMetadata.ts";
+import {
+  isChatAttachmentInlineImageMimeType,
+  parseChatMessageMetadata,
+} from "./messageMetadata.ts";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard.ts";
+import { buildStorageDownloadUrl } from "../../hooks/storage-response.ts";
 
 interface MessageBubbleProps {
   message: Message;
@@ -15,14 +19,13 @@ interface MessageBubbleProps {
 }
 
 /**
- * NOTE: `attachment.mime_type` arrives from message metadata and originates
- * from the client at upload time. It is UNTRUSTED for security decisions.
+ * NOTE: `attachment.mime_type` arrives from persisted message metadata. It is
+ * still UNTRUSTED runtime input for security decisions.
  *
- * The server MUST re-derive / re-check the MIME type when streaming the
- * download (e.g. via magic-byte sniffing or by trusting only the stored
- * object metadata it produced itself). The client only uses `mime_type`
- * for layout hints (e.g. rendering an `<img>` vs an `<AttachmentChip>`),
- * never for authorization.
+ * The Worker re-projects attachment metadata from the exact ready Storage row
+ * before persistence and re-checks response headers when streaming bytes. The
+ * client still treats the projection as untrusted runtime input and limits
+ * image layout to the same passive raster allowlist.
  *
  * Likewise, the `<img>` `src` points at the authenticated download endpoint
  * and the browser will fall back to the chip on `onError`, so a mislabelled
@@ -47,8 +50,10 @@ function AttachmentImage(props: {
       fallback={<AttachmentChip attachment={props.attachment} />}
     >
       {(() => {
-        const src =
-          `/api/spaces/${encodeURIComponent(props.spaceId)}/storage/download/${encodeURIComponent(props.attachment.file_id ?? "")}`;
+        const src = buildStorageDownloadUrl(
+          props.spaceId,
+          props.attachment.file_id ?? "",
+        );
         return (
           <a href={src} target="_blank" rel="noopener noreferrer" class="block">
             <img
@@ -97,18 +102,18 @@ export function MessageBubble(props: MessageBubbleProps) {
   const isUser = () => props.message.role === "user";
 
   const parsed = createMemo(() => {
-    const meta = parseChatMessageMetadata(props.message.metadata);
+    const meta = parseChatMessageMetadata(
+      props.message.metadata,
+      props.message.thread_id,
+    );
     return {
       attachments: meta.attachments,
       toolExecutions: isUser() ? [] as ToolExecution[] : meta.toolExecutions,
     };
   });
 
-  // `mime_type` is client-supplied metadata (see AttachmentImage docblock).
-  // It is fine to use for layout/display branching, but the server must
-  // re-check MIME type when serving the actual bytes.
   const isImage = (att: { mime_type?: string | null }) =>
-    att.mime_type?.startsWith("image/");
+    isChatAttachmentInlineImageMimeType(att.mime_type);
 
   return (
     <Show

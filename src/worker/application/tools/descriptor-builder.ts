@@ -3,8 +3,8 @@ import type {
   CapabilityDescriptor,
   CapabilityNamespace,
 } from "./capability-types.ts";
-import type { LocalizedManagedSkill } from "../services/agent/managed-skills.ts";
-import type { SkillExecutionContract } from "../services/agent/skill-contracts.ts";
+import type { SkillContext } from "../services/agent/skill-resolution.ts";
+import type { SkillResourceManifestEntry } from "../services/agent/skill-revisions.ts";
 
 /** Derive tags from a tool's category + namespace metadata. */
 function deriveToolTags(tool: ToolDefinition): string[] {
@@ -40,7 +40,6 @@ export function buildToolDescriptor(
     family,
     risk_level,
     side_effects,
-    required_roles: tool.required_roles,
     required_capabilities: tool.required_capabilities,
     source: "custom",
     discoverable: true,
@@ -48,65 +47,27 @@ export function buildToolDescriptor(
   };
 }
 
-/** Convert a LocalizedManagedSkill to a CapabilityDescriptor. */
-export function buildSkillDescriptor(
-  skill: LocalizedManagedSkill,
+/**
+ * Convert one exact Run-pinned Skill revision to a descriptor.
+ *
+ * Instructions deliberately do not cross this seam. `toolbox describe`
+ * activates the logical identity through the immutable Skill-plan module and
+ * returns content only after the next RunContext revision commits.
+ */
+export function buildPinnedSkillDescriptor(
+  skill: SkillContext,
+  resourceManifest: readonly SkillResourceManifestEntry[] = [],
 ): CapabilityDescriptor {
   return {
-    id: `skill:${skill.id}`,
+    id: `skill:${skill.source}:${skill.id}`,
     kind: "skill",
     namespace: categoryToNamespace(skill.category),
     name: skill.name ?? skill.id,
     summary: skill.description ?? "",
-    instructions: skill.instructions,
     recommended_tools: [...skill.execution_contract.preferred_tools],
     output_modes: [...skill.execution_contract.output_modes],
     durable_output_hints: [...skill.execution_contract.durable_output_hints],
-    tags: [
-      "manual",
-      "workflow",
-      "guide",
-      "instructions",
-      "取説",
-      "手順",
-      skill.category,
-      ...skill.activation_tags,
-      ...skill.execution_contract.preferred_tools,
-      ...(skill.triggers ?? []).slice(0, 5),
-    ],
-    triggers: skill.triggers ?? [],
-    family: `skill.${skill.category}`,
-    risk_level: "none",
-    side_effects: false,
-    source: "managed_skill",
-    discoverable: true,
-    selectable: false,
-  };
-}
-
-/** Convert a custom skill row (minimal shape) to a CapabilityDescriptor. */
-export function buildCustomSkillDescriptor(skill: {
-  id: string;
-  name: string;
-  description: string;
-  instructions?: string;
-  triggers?: string[];
-  category?: string;
-  activation_tags?: string[];
-  execution_contract?: SkillExecutionContract;
-}): CapabilityDescriptor {
-  const triggers = skill.triggers ?? [];
-  const contract = skill.execution_contract;
-  return {
-    id: `skill:${skill.id}`,
-    kind: "skill",
-    namespace: categoryToNamespace(skill.category),
-    name: skill.name,
-    summary: skill.description,
-    instructions: skill.instructions,
-    recommended_tools: [...(contract?.preferred_tools ?? [])],
-    output_modes: [...(contract?.output_modes ?? [])],
-    durable_output_hints: [...(contract?.durable_output_hints ?? [])],
+    resource_manifest: resourceManifest.map((resource) => ({ ...resource })),
     tags: [
       "manual",
       "workflow",
@@ -115,17 +76,23 @@ export function buildCustomSkillDescriptor(skill: {
       "取説",
       "手順",
       skill.category ?? "custom",
-      ...(skill.activation_tags ?? []),
-      ...(contract?.preferred_tools ?? []),
-      ...triggers.slice(0, 5),
+      ...skill.activation_tags,
+      ...skill.execution_contract.preferred_tools,
+      ...(skill.triggers ?? []).slice(0, 5),
     ],
-    triggers,
+    triggers: skill.triggers ?? [],
     family: `skill.${skill.category ?? "custom"}`,
     risk_level: "none",
     side_effects: false,
-    source: "custom_skill",
+    source: skill.source === "managed" ? "managed_skill" : "custom_skill",
     discoverable: true,
     selectable: false,
+    manual_identity: {
+      source: skill.source,
+      skill_id: skill.id,
+    },
+    availability: skill.availability,
+    availability_reasons: [...skill.availability_reasons],
   };
 }
 

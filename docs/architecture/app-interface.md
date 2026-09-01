@@ -165,4 +165,4 @@ Capsule を再 apply しなくても、その revision を観測できます。�
 - [Capsule の runtime Interface](./capsule-runtime-projection)
 - [OpenTofu Output と runtime Interface](/deploy/runtime-interfaces)
 - [MCP サーバー](/apps/mcp)
-- [Takosumi Deploy-Control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi Deploy-Control API](https://takosumi.com/docs/reference/api)

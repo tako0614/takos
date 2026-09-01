@@ -2,7 +2,6 @@
 import { spawnSync } from "node:child_process";
 import {
   cp,
-  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -205,11 +204,6 @@ async function walkFiles(directory: string): Promise<string[]> {
     else throw new Error(`Release assets may not contain links: ${path}`);
   }
   return output.sort();
-}
-
-async function assertRegularFile(path: string, label: string) {
-  const entry = await lstat(path);
-  if (!entry.isFile()) throw new Error(`${label} is missing at ${path}`);
 }
 
 async function assertDirectory(path: string, label: string) {

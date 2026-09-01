@@ -10,56 +10,6 @@ import { and, eq } from "drizzle-orm";
 import { decodeBlobContent } from "../../../shared/utils/unified-diff.ts";
 import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 
-function getCommitData(bucket: takosGit.GitBucket, sha: string) {
-  return takosGit.getCommitData(bucket, sha);
-}
-
-function putBlob(bucket: takosGit.GitBucket, blob: Uint8Array) {
-  return takosGit.putBlob(bucket, blob);
-}
-
-function mergeTrees3Way(
-  bucket: takosGit.GitBucket,
-  baseTree: string,
-  localTree: string,
-  incomingTree: string,
-) {
-  return takosGit.mergeTrees3Way(
-    bucket,
-    baseTree,
-    localTree,
-    incomingTree,
-  );
-}
-
-function flattenTree(bucket: takosGit.GitBucket, treeSha: string) {
-  return takosGit.flattenTree(bucket, treeSha);
-}
-
-function buildTreeFromPaths(
-  bucket: takosGit.GitBucket,
-  files: Array<{ path: string; sha: string; mode?: string }>,
-) {
-  return takosGit.buildTreeFromPaths(
-    bucket,
-    files,
-  );
-}
-
-function createCommit(
-  db: SqlDatabaseBinding,
-  bucket: takosGit.GitBucket,
-  repoId: string,
-  params: Parameters<typeof takosGit.createCommit>[3],
-) {
-  return takosGit.createCommit(
-    db,
-    bucket,
-    repoId,
-    params,
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -163,9 +113,9 @@ export async function resolveConflictsAndMerge(
   }
 
   const [baseCommit, localCommit, incomingCommit] = await Promise.all([
-    getCommitData(bucket, mergeBase),
-    getCommitData(bucket, baseSha),
-    getCommitData(bucket, headSha),
+    takosGit.getCommitData(bucket, mergeBase),
+    takosGit.getCommitData(bucket, baseSha),
+    takosGit.getCommitData(bucket, headSha),
   ]);
 
   if (!baseCommit || !localCommit || !incomingCommit) {
@@ -180,22 +130,22 @@ export async function resolveConflictsAndMerge(
       treeChanges.push({ path: resolution.path, sha: null, mode: "100644" });
     } else {
       const blob = new TextEncoder().encode(resolution.content);
-      const sha = await putBlob(bucket, blob);
+      const sha = await takosGit.putBlob(bucket, blob);
       treeChanges.push({ path: resolution.path, sha, mode: "100644" });
     }
   }
 
   // Perform three-way merge and gather all file entries
-  const mergeResult = await mergeTrees3Way(
+  const mergeResult = await takosGit.mergeTrees3Way(
     bucket,
     baseCommit.tree,
     localCommit.tree,
     incomingCommit.tree,
   );
   const [baseFiles, localFiles, incomingFiles] = await Promise.all([
-    flattenTree(bucket, baseCommit.tree),
-    flattenTree(bucket, localCommit.tree),
-    flattenTree(bucket, incomingCommit.tree),
+    takosGit.flattenTree(bucket, baseCommit.tree),
+    takosGit.flattenTree(bucket, localCommit.tree),
+    takosGit.flattenTree(bucket, incomingCommit.tree),
   ]);
 
   const conflictPaths = new Set(mergeResult.conflicts.map((cf) => cf.path));
@@ -232,13 +182,13 @@ export async function resolveConflictsAndMerge(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([path, entry]) => ({ path, sha: entry.sha, mode: entry.mode }));
 
-  const treeOid = await buildTreeFromPaths(bucket, mergedFileList);
+  const treeOid = await takosGit.buildTreeFromPaths(bucket, mergedFileList);
 
   const timestamp = new Date().toISOString();
   const signature = buildUserSignature(user, timestamp);
   const message = params.commitMessage ||
     `Merge branch '${headBranch}' into ${baseBranch} (conflicts resolved)`;
-  const commit = await createCommit(dbBinding, bucket, repoId, {
+  const commit = await takosGit.createCommit(dbBinding, bucket, repoId, {
     tree: treeOid,
     parents: [baseSha, headSha],
     message,
@@ -321,16 +271,16 @@ export async function checkConflicts(
   }
 
   const [baseCommit, localCommit, incomingCommit] = await Promise.all([
-    getCommitData(bucket, mergeBase),
-    getCommitData(bucket, baseBranch.commit_sha),
-    getCommitData(bucket, headBranch.commit_sha),
+    takosGit.getCommitData(bucket, mergeBase),
+    takosGit.getCommitData(bucket, baseBranch.commit_sha),
+    takosGit.getCommitData(bucket, headBranch.commit_sha),
   ]);
 
   if (!baseCommit || !localCommit || !incomingCommit) {
     throw new ConflictCheckError(500, "Failed to load commits");
   }
 
-  const mergeResult = await mergeTrees3Way(
+  const mergeResult = await takosGit.mergeTrees3Way(
     bucket,
     baseCommit.tree,
     localCommit.tree,

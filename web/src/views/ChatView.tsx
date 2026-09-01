@@ -8,7 +8,6 @@ import type {
   Run,
   Thread,
 } from "../types/index.ts";
-import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
 import { Icons } from "../lib/Icons.tsx";
 import { ChatErrorBanner } from "./chat/ChatErrorBanner.tsx";
@@ -51,6 +50,7 @@ const RUN_STATUS_LABEL_KEYS: Record<Run["status"], TranslationKey> = {
 export interface ChatViewProps {
   thread: Thread;
   spaceId: string;
+  spaceRecordId: string;
   onUpdateTitle: (title: string) => void;
   jumpToMessageId?: string | null;
   jumpToMessageSequence?: number | null;
@@ -58,6 +58,7 @@ export interface ChatViewProps {
   onJumpHandled?: () => void;
   onRunFocusHandled?: () => void;
   onOpenSearch?: () => void;
+  onUnarchive?: () => Promise<boolean>;
   initialMessage?: string;
   initialFiles?: File[];
   onInitialMessageSent?: () => void;
@@ -70,6 +71,7 @@ export function ChatView(props: ChatViewProps) {
   const mobileHeader = useMobileHeader();
   const threadId = () => props.thread.id;
   const spaceId = () => props.spaceId;
+  const spaceRecordId = () => props.spaceRecordId;
   const initialMessage = () => props.initialMessage;
   const initialFiles = () => props.initialFiles;
   const initialModel = () => props.initialModel;
@@ -77,11 +79,17 @@ export function ChatView(props: ChatViewProps) {
   const jumpMessageSequence = () => props.jumpToMessageSequence;
   const focusRunId = () => props.focusRunId;
   const currentTaskContext = () => taskContext();
+  const archived = () => props.thread.status === "archived";
+  const [unarchiving, setUnarchiving] = createSignal(false);
 
   const {
     selectedModel,
     availableModels,
     setSelectedModel,
+    modelsLoading,
+    modelsHaveError,
+    modelIsReady,
+    retryModels,
     messages,
     input,
     setInput,
@@ -90,10 +98,7 @@ export function ChatView(props: ChatViewProps) {
     timelineEntries,
     runMetaById,
     taskContext,
-    sessionDiff,
-    dismissSessionDiff,
-    isMerging,
-    handleMerge,
+    historyTruncation,
     isCancelling,
     handleCancel,
     error,
@@ -107,13 +112,17 @@ export function ChatView(props: ChatViewProps) {
   } = useChatSession({
     threadId,
     spaceId,
+    spaceRecordId,
     onUpdateTitle: props.onUpdateTitle,
     initialMessage,
     initialModel,
     focusSequence: jumpMessageSequence,
   });
 
-  const sharing = useChatSharing(threadId);
+  const sharing = useChatSharing(threadId, spaceRecordId);
+  const historyIsTruncated = createMemo(() =>
+    Object.values(historyTruncation()).some(Boolean),
+  );
   let focusedRunPanelRef: HTMLDivElement | undefined;
 
   const focusedRunMeta = createMemo(() =>
@@ -138,10 +147,12 @@ export function ChatView(props: ChatViewProps) {
     const currentMessage = initialMessage();
     const currentFiles = initialFiles() ?? [];
     const currentThreadId = threadId();
+    const currentModelIsReady = modelIsReady();
     if (!currentMessage) {
       setPendingSendWithFiles(false);
       return;
     }
+    if (!currentModelIsReady) return;
     if (initialSendThreadId === currentThreadId) {
       return;
     }
@@ -241,17 +252,8 @@ export function ChatView(props: ChatViewProps) {
     scrollIntoView();
   });
 
-  const handleModelChange = async (model: string) => {
+  const handleModelChange = (model: string) => {
     setSelectedModel(model);
-    try {
-      const res = await rpc.spaces[":spaceId"].model.$patch({
-        param: { spaceId: spaceId() },
-        json: { model } as Record<string, string>,
-      });
-      await rpcJson(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("failedToSaveTier"));
-    }
   };
 
   createEffect(() => {
@@ -263,7 +265,9 @@ export function ChatView(props: ChatViewProps) {
         <ModelSwitcher
           selectedModel={selectedModel()}
           models={availableModels()}
-          isLoading={isLoading()}
+          isLoading={modelsLoading()}
+          hasError={modelsHaveError()}
+          onRetry={() => void retryModels()}
           onModelChange={handleModelChange}
         />
         <div class="ml-auto">{headerActions()}</div>
@@ -277,6 +281,7 @@ export function ChatView(props: ChatViewProps) {
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (archived()) return;
     setIsDragOver(true);
   };
   const handleDragLeave = (e: DragEvent) => {
@@ -288,7 +293,18 @@ export function ChatView(props: ChatViewProps) {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
+    if (archived()) return;
     if (e.dataTransfer?.files) addFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const handleUnarchive = async () => {
+    if (!props.onUnarchive || unarchiving()) return;
+    setUnarchiving(true);
+    try {
+      await props.onUnarchive();
+    } finally {
+      setUnarchiving(false);
+    }
   };
 
   const iconBtnClass =
@@ -352,10 +368,38 @@ export function ChatView(props: ChatViewProps) {
       <ChatHeader
         selectedModel={selectedModel()}
         models={availableModels()}
-        isLoading={isLoading()}
+        isLoading={modelsLoading()}
+        hasError={modelsHaveError()}
+        onRetry={() => void retryModels()}
         onModelChange={handleModelChange}
         actions={headerActions()}
       />
+
+      <Show when={archived()}>
+        <div class="px-4 pb-3" role="status">
+          <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <span>{t("archivedThreadNotice")}</span>
+            <Show when={props.onUnarchive}>
+              <button
+                type="button"
+                class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-amber-400 px-3 font-medium hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-700 dark:hover:bg-amber-900/40"
+                onClick={() => void handleUnarchive()}
+                disabled={unarchiving()}
+              >
+                <Show
+                  when={!unarchiving()}
+                  fallback={<Icons.Loader class="h-4 w-4 animate-spin" />}
+                >
+                  <Icons.Refresh class="h-4 w-4" />
+                </Show>
+                {unarchiving()
+                  ? t("unarchivingThread")
+                  : t("unarchiveThread")}
+              </button>
+            </Show>
+          </div>
+        </div>
+      </Show>
 
       <Show when={currentTaskContext()}>
         {(taskContext) => (
@@ -373,6 +417,14 @@ export function ChatView(props: ChatViewProps) {
             </div>
           </div>
         )}
+      </Show>
+
+      <Show when={historyIsTruncated()}>
+        <div class="px-4 pb-3" role="status">
+          <div class="mx-auto max-w-3xl rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            {t("historyTruncated")}
+          </div>
+        </div>
       </Show>
 
       <Show when={focusRunId()}>
@@ -464,10 +516,6 @@ export function ChatView(props: ChatViewProps) {
             timelineEntries={timelineEntries()}
             runMetaById={runMetaById()}
             isLoading={isLoading()}
-            sessionDiff={sessionDiff()}
-            onMerge={handleMerge}
-            isMerging={isMerging()}
-            onDismissDiff={dismissSessionDiff}
             emptyText={t("startConversation")}
             messagesEndRef={messagesEndRef}
             spaceId={props.spaceId}
@@ -485,11 +533,15 @@ export function ChatView(props: ChatViewProps) {
             onRemoveFile={removeAttachedFile}
             onSend={sendMessage}
             isLoading={isLoading()}
+            sendBlocked={!modelIsReady() || archived()}
+            interactionDisabled={archived()}
             isCancelling={isCancelling()}
             onCancel={handleCancel}
             attachLabel={t("attachFile")}
-            placeholder={t("messageInputPlaceholder")}
-            inputHint={t("inputHint")}
+            placeholder={archived()
+              ? t("archivedThreadNotice")
+              : t("messageInputPlaceholder")}
+            inputHint={archived() ? t("archivedThreadNotice") : t("inputHint")}
             onFilePaste={addFiles}
             isDragOver={isDragOver()}
           />
@@ -509,6 +561,7 @@ export function ChatView(props: ChatViewProps) {
         onShareExpiresInDaysChange={sharing.setShareExpiresInDays}
         shareError={sharing.shareError()}
         creatingShare={sharing.creatingShare()}
+        revokingShareId={sharing.revokingShareId()}
         onFetchShares={sharing.fetchShares}
         onCreateShare={sharing.createShare}
         onRevokeShare={sharing.revokeShare}
@@ -516,6 +569,7 @@ export function ChatView(props: ChatViewProps) {
       <ChatExportModal
         isOpen={sharing.showExportModal()}
         onClose={() => sharing.setShowExportModal(false)}
+        exportingFormat={sharing.exportingFormat()}
         onExport={sharing.downloadExport}
       />
     </div>

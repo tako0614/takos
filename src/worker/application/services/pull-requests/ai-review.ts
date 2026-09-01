@@ -28,18 +28,6 @@ import {
   formatUnifiedDiff,
 } from "../../../shared/utils/unified-diff.ts";
 
-function getCommitData(bucket: takosGit.GitBucket, sha: string) {
-  return takosGit.getCommitData(bucket, sha);
-}
-
-function flattenTree(bucket: takosGit.GitBucket, treeSha: string) {
-  return takosGit.flattenTree(bucket, treeSha);
-}
-
-function getBlob(bucket: takosGit.GitBucket, sha: string) {
-  return takosGit.getBlob(bucket, sha);
-}
-
 export type AiReviewResult = {
   review: PullRequestReview;
   comments: PullRequestComment[];
@@ -167,14 +155,14 @@ export async function buildPRDiffText(
     throw new Error("Ref not found");
   }
 
-  const baseCommit = await getCommitData(bucket, baseSha);
-  const headCommit = await getCommitData(bucket, headSha);
+  const baseCommit = await takosGit.getCommitData(bucket, baseSha);
+  const headCommit = await takosGit.getCommitData(bucket, headSha);
   if (!baseCommit || !headCommit) {
     throw new Error("Commit not found");
   }
 
-  const baseFiles = await flattenTree(bucket, baseCommit.tree);
-  const headFiles = await flattenTree(bucket, headCommit.tree);
+  const baseFiles = await takosGit.flattenTree(bucket, baseCommit.tree);
+  const headFiles = await takosGit.flattenTree(bucket, headCommit.tree);
   const baseMap = new Map(baseFiles.map((f) => [f.path, f.sha]));
   const headMap = new Map(headFiles.map((f) => [f.path, f.sha]));
 
@@ -209,7 +197,7 @@ export async function buildPRDiffText(
     let oldContent = "";
     let newContent = "";
     if (change.oldOid) {
-      const blob = await getBlob(bucket, change.oldOid);
+      const blob = await takosGit.getBlob(bucket, change.oldOid);
       if (blob) {
         const decoded = decodeBlobContent(blob);
         if (decoded.isBinary) {
@@ -220,7 +208,7 @@ export async function buildPRDiffText(
       }
     }
     if (change.newOid) {
-      const blob = await getBlob(bucket, change.newOid);
+      const blob = await takosGit.getBlob(bucket, change.newOid);
       if (blob) {
         const decoded = decodeBlobContent(blob);
         if (decoded.isBinary) {

@@ -3,6 +3,7 @@ import type { Context, MiddlewareHandler } from "hono";
 type ContentTypeOptions = {
   allowedTypes?: string[];
   allowEmptyBody?: boolean;
+  skipPaths?: RegExp[];
 };
 
 const DEFAULT_ALLOWED_TYPES = ["application/json"];
@@ -12,11 +13,17 @@ export function validateContentType(
 ): MiddlewareHandler {
   const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
   const allowEmptyBody = options.allowEmptyBody ?? true;
+  const skipPaths = options.skipPaths;
 
   return async (c: Context, next): Promise<Response | void> => {
     const method = c.req.method;
 
     if (!["POST", "PUT", "PATCH"].includes(method)) {
+      await next();
+      return;
+    }
+
+    if (skipPaths?.some((pattern) => pattern.test(c.req.path))) {
       await next();
       return;
     }

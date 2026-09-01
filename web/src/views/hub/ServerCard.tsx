@@ -28,10 +28,13 @@ function endpointHostname(url: string): string {
 }
 
 export function ServerCard(props: {
+  scopeKey: string;
+  disabled?: boolean;
+  acquireMutation?: () => (() => void) | null;
   server: McpServerRecord;
-  onToggle: () => void;
-  onDelete: () => void;
-  onReauthorize?: () => void;
+  onToggle: () => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
+  onReauthorize?: () => Promise<unknown>;
   fetchServerTools: (serverId: string) => Promise<McpServerTool[]>;
   updateServerToolPolicy: (
     serverId: string,
@@ -53,51 +56,116 @@ export function ServerCard(props: {
   const [updatingToolName, setUpdatingToolName] = createSignal<string | null>(
     null,
   );
-  let previousServerId = props.server.id;
+  const [serverAction, setServerAction] = createSignal<
+    "toggle" | "delete" | "reauthorize" | null
+  >(null);
+  const cardIdentity = () =>
+    [
+      props.scopeKey,
+      props.server.id,
+      props.server.url,
+      props.server.source_type,
+      props.server.authorization_status,
+    ].join("\u0000");
+  let previousCardIdentity = cardIdentity();
+  let cardGeneration = 0;
+  let toolsRequestGeneration = 0;
+
+  const captureCard = () => ({
+    identity: cardIdentity(),
+    generation: cardGeneration,
+  });
+  const isCurrentCard = (target: ReturnType<typeof captureCard>) =>
+    target.identity === cardIdentity() &&
+    target.generation === cardGeneration;
+  const acquireMutation = () =>
+    props.acquireMutation ? props.acquireMutation() : () => undefined;
 
   createEffect(() => {
-    const nextServerId = props.server.id;
-    if (nextServerId === previousServerId) return;
-    previousServerId = nextServerId;
+    const nextIdentity = cardIdentity();
+    if (nextIdentity === previousCardIdentity) return;
+    previousCardIdentity = nextIdentity;
+    cardGeneration += 1;
+    toolsRequestGeneration += 1;
     setExpanded(false);
     setTools(null);
+    setToolsLoading(false);
     setToolsError(null);
     setToolPolicyError(null);
     setUpdatingToolName(null);
+    setServerAction(null);
   });
 
-  const handleToggleExpand = async () => {
-    if (!expanded() && tools() === null && !toolsLoading()) {
-      setToolsLoading(true);
-      setToolsError(null);
-      try {
-        const result = await props.fetchServerTools(props.server.id);
-        setTools(result);
-      } catch (err) {
-        setToolsError(
-          err instanceof Error ? err.message : t("mcpFetchToolsFailed"),
-        );
-      } finally {
-        setToolsLoading(false);
-      }
+  const runServerAction = async (
+    action: "toggle" | "delete" | "reauthorize",
+    operation: () => Promise<unknown>,
+  ) => {
+    if (
+      props.disabled ||
+      serverAction() !== null ||
+      updatingToolName() !== null ||
+      toolsLoading()
+    ) return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const target = captureCard();
+    setServerAction(action);
+    try {
+      await operation();
+    } finally {
+      if (isCurrentCard(target)) setServerAction(null);
+      releaseMutation();
     }
-    setExpanded((prev) => !prev);
   };
 
-  const handleRefreshTools = async () => {
+  const loadTools = async () => {
+    if (
+      props.disabled ||
+      serverAction() !== null ||
+      updatingToolName() !== null
+    ) return;
+    const target = captureCard();
+    const serverId = props.server.id;
+    const requestGeneration = ++toolsRequestGeneration;
     setToolsLoading(true);
     setToolsError(null);
-    setToolPolicyError(null);
     try {
-      const result = await props.fetchServerTools(props.server.id);
+      const result = await props.fetchServerTools(serverId);
+      if (
+        !isCurrentCard(target) ||
+        requestGeneration !== toolsRequestGeneration
+      ) return;
       setTools(result);
     } catch (err) {
+      if (
+        !isCurrentCard(target) ||
+        requestGeneration !== toolsRequestGeneration
+      ) return;
       setToolsError(
         err instanceof Error ? err.message : t("mcpFetchToolsFailed"),
       );
     } finally {
-      setToolsLoading(false);
+      if (
+        isCurrentCard(target) &&
+        requestGeneration === toolsRequestGeneration
+      ) {
+        setToolsLoading(false);
+      }
     }
+  };
+
+  const handleToggleExpand = () => {
+    if (props.disabled) return;
+    const nextExpanded = !expanded();
+    setExpanded(nextExpanded);
+    if (nextExpanded && tools() === null && !toolsLoading()) {
+      void loadTools();
+    }
+  };
+
+  const handleRefreshTools = async () => {
+    setToolPolicyError(null);
+    await loadTools();
   };
 
   const handleToolPolicyUpdate = async (
@@ -105,18 +173,29 @@ export function ServerCard(props: {
     enabled: boolean,
     invocationPolicy = tool.invocation_policy,
   ) => {
-    if (updatingToolName() !== null || !canUpdateToolPolicy(props.server, tool))
+    if (
+      props.disabled ||
+      serverAction() !== null ||
+      toolsLoading() ||
+      updatingToolName() !== null ||
+      !canUpdateToolPolicy(props.server, tool)
+    )
       return;
+    const releaseMutation = acquireMutation();
+    if (!releaseMutation) return;
+    const target = captureCard();
+    const serverId = props.server.id;
     setUpdatingToolName(tool.name);
     setToolPolicyError(null);
     try {
       const updated = await props.updateServerToolPolicy(
-        props.server.id,
+        serverId,
         tool.name,
         enabled,
         tool.schema_hash,
         invocationPolicy,
       );
+      if (!isCurrentCard(target)) return;
       setTools(
         (current) =>
           current?.map((entry) =>
@@ -124,13 +203,15 @@ export function ServerCard(props: {
           ) ?? null,
       );
     } catch (error) {
+      if (!isCurrentCard(target)) return;
       setToolPolicyError(
         error instanceof Error && error.message
           ? error.message
           : t("failedToUpdateMcpToolPolicy"),
       );
     } finally {
-      setUpdatingToolName(null);
+      if (isCurrentCard(target)) setUpdatingToolName(null);
+      releaseMutation();
     }
   };
 
@@ -208,6 +289,11 @@ export function ServerCard(props: {
           <button
             type="button"
             onClick={handleToggleExpand}
+            disabled={
+              props.disabled ||
+              serverAction() !== null ||
+              updatingToolName() !== null
+            }
             class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
             title={t("mcpServerTools")}
             aria-label={t("mcpServerTools")}
@@ -223,13 +309,23 @@ export function ServerCard(props: {
           <Show when={props.server.source_type !== "publication"}>
             <button
               type="button"
-              onClick={props.onToggle}
+              onClick={() =>
+                void runServerAction("toggle", props.onToggle)
+              }
+              disabled={
+                props.disabled ||
+                serverAction() !== null ||
+                updatingToolName() !== null ||
+                toolsLoading()
+              }
               class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
               title={props.server.enabled ? t("disable") : t("enable")}
               aria-label={props.server.enabled ? t("disable") : t("enable")}
               aria-pressed={props.server.enabled}
             >
-              {props.server.enabled ? (
+              {serverAction() === "toggle" ? (
+                <Icons.Loader class="h-5 w-5 animate-spin text-zinc-400" />
+              ) : props.server.enabled ? (
                 <Icons.ToggleOn class="w-6 h-6 text-emerald-500" />
               ) : (
                 <Icons.ToggleOff class="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
@@ -237,7 +333,20 @@ export function ServerCard(props: {
             </button>
           </Show>
           {props.server.managed ? null : (
-            <Button variant="ghost" size="sm" onClick={props.onDelete}>
+            <Button
+              variant="ghost"
+              size="sm"
+              isLoading={serverAction() === "delete"}
+              disabled={
+                props.disabled ||
+                serverAction() !== null ||
+                updatingToolName() !== null ||
+                toolsLoading()
+              }
+              onClick={() =>
+                void runServerAction("delete", props.onDelete)
+              }
+            >
               {t("remove")}
             </Button>
           )}
@@ -254,7 +363,12 @@ export function ServerCard(props: {
             <button
               type="button"
               onClick={handleRefreshTools}
-              disabled={toolsLoading()}
+              disabled={
+                toolsLoading() ||
+                props.disabled ||
+                updatingToolName() !== null ||
+                serverAction() !== null
+              }
               class="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 dark:text-zinc-500 disabled:opacity-50"
               title={t("mcpRefreshTools")}
               aria-label={t("mcpRefreshTools")}
@@ -272,12 +386,13 @@ export function ServerCard(props: {
           )}
 
           {toolsError() && (
-            <div class="flex items-center gap-2">
+            <div role="alert" class="flex items-center gap-2">
               <p class="text-xs text-red-500">{toolsError()}</p>
               <button
                 type="button"
                 onClick={handleRefreshTools}
-                class="text-xs text-blue-500 hover:underline"
+                disabled={toolsLoading() || props.disabled}
+                class="text-xs text-blue-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("retry")}
               </button>
@@ -285,7 +400,9 @@ export function ServerCard(props: {
           )}
 
           {toolPolicyError() && (
-            <p class="mb-2 text-xs text-red-500">{toolPolicyError()}</p>
+            <p role="alert" class="mb-2 text-xs text-red-500">
+              {toolPolicyError()}
+            </p>
           )}
 
           {(status() === "token_expired" || status() === "no_token") &&
@@ -294,10 +411,25 @@ export function ServerCard(props: {
                 <p class="text-xs text-amber-500">{t("mcpReauthorize")}</p>
                 <button
                   type="button"
-                  onClick={() => props.onReauthorize?.()}
-                  class="text-xs text-blue-500 hover:underline"
+                  disabled={
+                    props.disabled ||
+                    serverAction() !== null ||
+                    updatingToolName() !== null ||
+                    toolsLoading()
+                  }
+                  onClick={() =>
+                    props.onReauthorize
+                      ? void runServerAction(
+                          "reauthorize",
+                          props.onReauthorize,
+                        )
+                      : undefined
+                  }
+                  class="text-xs text-blue-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("mcpReauthorizeAction")}
+                  {serverAction() === "reauthorize"
+                    ? t("loading")
+                    : t("mcpReauthorizeAction")}
                 </button>
               </div>
             )}
@@ -432,7 +564,11 @@ export function ServerCard(props: {
                             <select
                               value={tool.invocation_policy}
                               disabled={
-                                updatingToolName() !== null || !tool.enabled
+                                props.disabled ||
+                                serverAction() !== null ||
+                                toolsLoading() ||
+                                updatingToolName() !== null ||
+                                !tool.enabled
                               }
                               aria-label={t("mcpToolInvocationPolicy")}
                               class="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
@@ -456,7 +592,12 @@ export function ServerCard(props: {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                disabled={updatingToolName() !== null}
+                                disabled={
+                                  props.disabled ||
+                                  serverAction() !== null ||
+                                  toolsLoading() ||
+                                  updatingToolName() !== null
+                                }
                                 onClick={() =>
                                   void handleToolPolicyUpdate(tool, false)
                                 }
@@ -466,7 +607,12 @@ export function ServerCard(props: {
                             </Show>
                             <button
                               type="button"
-                              disabled={updatingToolName() !== null}
+                              disabled={
+                                props.disabled ||
+                                serverAction() !== null ||
+                                toolsLoading() ||
+                                updatingToolName() !== null
+                              }
                               onClick={() =>
                                 void handleToolPolicyUpdate(tool, !tool.enabled)
                               }

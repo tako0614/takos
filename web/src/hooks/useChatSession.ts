@@ -10,10 +10,9 @@ import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import type {
   Message,
-  Run,
   ThreadHistoryFocus,
-  ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
+  ThreadHistoryTruncation,
 } from "../types/index.ts";
 import type {
   ChatRunArtifactMap,
@@ -22,10 +21,7 @@ import type {
   ChatTimelineEntry,
 } from "../views/chat/chat-types.ts";
 import { useMessagePolling } from "./useMessagePolling.ts";
-import {
-  type SessionDiffState,
-  useWebSocketConnection,
-} from "./useWebSocketConnection.ts";
+import { useWebSocketConnection } from "./useWebSocketConnection.ts";
 import { useFileAttachment } from "./useFileAttachment.ts";
 import { useChatModelSelection } from "./useChatModelSelection.ts";
 import { useChatAttachments } from "./useChatAttachments.ts";
@@ -34,12 +30,13 @@ import {
   type ChatSessionInitState,
   nextChatSessionInitState,
 } from "./chat-session-init.ts";
-
-export type { SessionDiffState } from "./useWebSocketConnection.ts";
+import { mergeInitialHistoryMessages } from "./chat-history-merge.ts";
+import { parseChatHistoryResponse } from "./chat-history-response.ts";
 
 export interface UseChatSessionOptions {
   threadId: Accessor<string>;
   spaceId: Accessor<string>;
+  spaceRecordId: Accessor<string>;
   onUpdateTitle: (title: string) => void;
   initialMessage?: Accessor<string | undefined>;
   initialModel?: Accessor<string | undefined>;
@@ -52,6 +49,10 @@ export interface UseChatSessionResult {
   >;
   selectedModel: Accessor<string>;
   setSelectedModel: (model: string) => void;
+  modelsLoading: Accessor<boolean>;
+  modelsHaveError: Accessor<boolean>;
+  modelIsReady: Accessor<boolean>;
+  retryModels: () => Promise<void>;
   messages: Accessor<Message[]>;
   input: Accessor<string>;
   setInput: (value: string) => void;
@@ -62,10 +63,7 @@ export interface UseChatSessionResult {
   artifactsByRunId: Accessor<ChatRunArtifactMap>;
   historyFocus: Accessor<ThreadHistoryFocus | null>;
   taskContext: Accessor<ThreadHistoryTaskContext | null>;
-  sessionDiff: Accessor<SessionDiffState | null>;
-  dismissSessionDiff: () => void;
-  isMerging: Accessor<boolean>;
-  handleMerge: () => Promise<void>;
+  historyTruncation: Accessor<ThreadHistoryTruncation>;
   isCancelling: Accessor<boolean>;
   handleCancel: () => Promise<void>;
   error: Accessor<string | null>;
@@ -81,6 +79,7 @@ export interface UseChatSessionResult {
 export function useChatSession({
   threadId,
   spaceId,
+  spaceRecordId,
   onUpdateTitle,
   initialMessage,
   initialModel,
@@ -103,6 +102,7 @@ export function useChatSession({
 
   const ws = useWebSocketConnection({
     threadId,
+    spaceRecordId,
     t,
     isMountedRef: polling.isMountedRef,
     fetchMessages: polling.fetchMessages,
@@ -121,11 +121,13 @@ export function useChatSession({
 
   const attachments = useChatAttachments({
     spaceId,
+    spaceRecordId,
     threadId,
   });
 
   const messaging = useChatMessages({
     threadId,
+    spaceRecordId,
     lang,
     t,
     input,
@@ -165,6 +167,7 @@ export function useChatSession({
     const currentThreadId = currentInitState.threadId;
     const currentFocusSequence = currentInitState.focusSequence;
     const currentInitialMessage = untrack(() => initialMessage?.() ?? "");
+    const currentSpaceRecordId = spaceRecordId();
 
     polling.isMountedRef.current = true;
 
@@ -172,8 +175,8 @@ export function useChatSession({
     ws.closeWebSocket();
     ws.currentRunIdRef.current = null;
     ws.lastEventIdRef.current = 0;
-    ws.setSessionDiff(null);
     polling.setMessages([]);
+    polling.setMessageDataTruncated(false);
     ws.setIsLoading(false);
     ws.setCurrentRun(null);
     ws.setIsCancelling(false);
@@ -195,29 +198,36 @@ export function useChatSession({
           : 0;
         const res = await rpc.threads[":id"].history.$get({
           param: { id: currentThreadId },
-          query: { limit: String(limit), offset: String(offset) },
+          query: {
+            limit: String(limit),
+            offset: String(offset),
+            latest: currentFocusSequence == null ? "1" : "0",
+          },
         });
-        const data = await rpcJson<{
-          messages: Message[];
-          runs: ThreadHistoryRunNode[];
-          focus: ThreadHistoryFocus | null;
-          activeRun: Run | null;
-          pendingSessionDiff: {
-            sessionId: string;
-            sessionStatus: string;
-            git_mode: boolean;
-          } | null;
-          taskContext: ThreadHistoryTaskContext | null;
-        }>(res);
+        const data = parseChatHistoryResponse(
+          await rpcJson<unknown>(res),
+          {
+            spaceId: currentSpaceRecordId,
+            threadId: currentThreadId,
+            limit,
+            offset,
+            includeMessages: true,
+            latest: currentFocusSequence == null,
+          },
+        );
 
         if (!polling.isMountedRef.current) return;
         if (threadId() !== currentThreadId) return;
+        if (spaceRecordId() !== currentSpaceRecordId) return;
 
-        polling.setMessages(data.messages);
+        polling.setMessages((current) =>
+          mergeInitialHistoryMessages(data.messages, current)
+        );
         ws.applyHistorySnapshot({
           runs: data.runs || [],
           focus: data.focus,
           taskContext: data.taskContext,
+          truncation: data.truncation,
         });
 
         if (data.activeRun) {
@@ -226,7 +236,6 @@ export function useChatSession({
           ws.startWebSocket(data.activeRun.id);
         }
 
-        void ws.loadPendingSessionDiff(data.pendingSessionDiff);
       } catch {
         if (!polling.isMountedRef.current) return;
         if (threadId() !== currentThreadId) return;
@@ -322,8 +331,11 @@ export function useChatSession({
   const artifactsByRunId = () => ws.artifactsByRunId;
   const historyFocus = () => ws.historyFocus;
   const taskContext = () => ws.taskContext;
-  const sessionDiff = () => ws.sessionDiff;
-  const isMerging = () => ws.isMerging;
+  const historyTruncation = (): ThreadHistoryTruncation => ({
+    ...ws.historyTruncation,
+    message_data: ws.historyTruncation.message_data ||
+      polling.messageDataTruncated,
+  });
   const isCancelling = () => ws.isCancelling;
   const error = () => polling.error;
   const attachedFiles = () => files.attachedFiles;
@@ -332,6 +344,10 @@ export function useChatSession({
     availableModels,
     selectedModel,
     setSelectedModel: modelSelection.setSelectedModel,
+    modelsLoading: modelSelection.isLoading,
+    modelsHaveError: modelSelection.hasError,
+    modelIsReady: modelSelection.isReady,
+    retryModels: modelSelection.fetchSpaceModels,
     messages,
     input,
     setInput,
@@ -342,10 +358,7 @@ export function useChatSession({
     artifactsByRunId,
     historyFocus,
     taskContext,
-    sessionDiff,
-    dismissSessionDiff: ws.dismissSessionDiff,
-    isMerging,
-    handleMerge: ws.handleMerge,
+    historyTruncation,
     isCancelling,
     handleCancel: ws.handleCancel,
     error,

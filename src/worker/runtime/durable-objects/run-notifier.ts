@@ -4,19 +4,24 @@ import type {
   SqlDatabaseBinding,
 } from "../../shared/types/bindings.ts";
 import type { Env } from "../../shared/types/index.ts";
-import { accountMemberships, getDb, runs } from "../../infra/db/index.ts";
-import { and, eq } from "drizzle-orm";
+import { getDb, runs } from "../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
 import type { PersistedRunEvent } from "../../application/services/offload/run-events.ts";
 import { RUN_TERMINAL_EVENT_TYPES } from "../../application/services/run-notifier/index.ts";
 import type { RunTerminalEventType } from "../../application/services/run-notifier/run-events-contract.ts";
 import {
+  RUN_EVENT_TRUNCATED_DATA,
   RUN_EVENT_SEGMENT_SIZE,
   segmentIndexForEventId,
+  serializeRunEventData,
   writeRunEventSegmentToR2,
 } from "../../application/services/offload/run-events.ts";
 import type { PersistedUsageEvent } from "../../application/services/offload/usage-events.ts";
 import {
+  MAX_USAGE_EVENT_METADATA_BYTES,
   USAGE_EVENT_SEGMENT_SIZE,
+  writeUsageEventArchiveManifestToR2,
   writeUsageEventSegmentToR2,
 } from "../../application/services/offload/usage-events.ts";
 import { logWarn } from "../../shared/utils/logger.ts";
@@ -45,6 +50,9 @@ export class RunNotifierDO extends NotifierBase {
   private usageSegmentIndex = 1;
   private usageSegmentBuffer: PersistedUsageEvent[] = [];
   private usageLastFlushedSegmentIndex = 0;
+  private usageEventCount = 0;
+  private usageArchiveCompleted = false;
+  private runTerminalObserved = false;
   private emitDedupKeys = new Map<string, number>();
 
   /**
@@ -77,6 +85,9 @@ export class RunNotifierDO extends NotifierBase {
       usageSegmentIndex?: number;
       usageSegmentBuffer?: PersistedUsageEvent[];
       usageLastFlushedSegmentIndex?: number;
+      usageEventCount?: number;
+      usageArchiveCompleted?: boolean;
+      runTerminalObserved?: boolean;
       emitDedupKeys?: Array<[string, number]>;
     }>("bufferState");
     if (stored) {
@@ -93,6 +104,18 @@ export class RunNotifierDO extends NotifierBase {
         this.usageSegmentBuffer;
       this.usageLastFlushedSegmentIndex = stored.usageLastFlushedSegmentIndex ??
         this.usageLastFlushedSegmentIndex;
+      this.usageEventCount = stored.usageEventCount ??
+        Math.max(
+          0,
+          (this.usageSegmentIndex - 1) * USAGE_EVENT_SEGMENT_SIZE +
+            this.usageSegmentBuffer.length,
+        );
+      this.usageArchiveCompleted = stored.usageArchiveCompleted ?? false;
+      this.runTerminalObserved = stored.runTerminalObserved ?? false;
+      this.usageSegmentIndex = Math.max(
+        this.usageSegmentIndex,
+        this.usageLastFlushedSegmentIndex + 1,
+      );
       this.emitDedupKeys = new Map(stored.emitDedupKeys ?? []);
     }
   }
@@ -108,6 +131,9 @@ export class RunNotifierDO extends NotifierBase {
       usageSegmentIndex: this.usageSegmentIndex,
       usageSegmentBuffer: this.usageSegmentBuffer,
       usageLastFlushedSegmentIndex: this.usageLastFlushedSegmentIndex,
+      usageEventCount: this.usageEventCount,
+      usageArchiveCompleted: this.usageArchiveCompleted,
+      runTerminalObserved: this.runTerminalObserved,
       emitDedupKeys: Array.from(this.emitDedupKeys.entries()),
     });
   }
@@ -137,16 +163,8 @@ export class RunNotifierDO extends NotifierBase {
       if (!run) {
         return { reject: new Response("Not Found", { status: 404 }) };
       }
-      const membership = await db.select({ id: accountMemberships.id })
-        .from(accountMemberships)
-        .where(
-          and(
-            eq(accountMemberships.accountId, run.accountId),
-            eq(accountMemberships.memberId, userId),
-          ),
-        )
-        .get();
-      if (!membership) {
+      const access = await checkSpaceAccess(this.db, run.accountId, userId);
+      if (!access) {
         return { reject: new Response("Forbidden", { status: 403 }) };
       }
     }
@@ -227,9 +245,34 @@ export class RunNotifierDO extends NotifierBase {
         return jsonResponse({ success: false, error: "Invalid runId" }, 400);
       }
     }
+    // Intermediate RPC events are already capped at 64 KiB, but terminal and
+    // complete-run notification paths can carry larger message/output data.
+    // Keep the realtime ring and archive finite by replacing only the opaque
+    // event payload; the canonical Message/Run rows retain the full result.
+    if (serializeRunEventData(input.data).truncated) {
+      input.data = JSON.parse(RUN_EVENT_TRUNCATED_DATA);
+    }
     this.cleanupEmitDedupKeys(Date.now());
     const dedupKey = this.readDedupKey(input);
     if (dedupKey && this.emitDedupKeys.has(dedupKey)) {
+      if (
+        RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType) &&
+        this.runTerminalObserved && !this.usageArchiveCompleted
+      ) {
+        try {
+          await this.finalizeUsageArchive(new Date().toISOString());
+          await this.persistState();
+        } catch (error) {
+          logWarn("Usage archive retry failed", {
+            module: "runnotifierdo",
+            detail: error,
+          });
+          return jsonResponse(
+            { success: false, error: "Usage archive incomplete" },
+            503,
+          );
+        }
+      }
       return jsonResponse({ success: true, duplicate: true });
     }
     return null;
@@ -271,26 +314,20 @@ export class RunNotifierDO extends NotifierBase {
       });
     }
 
-    // Flush usage buffer on terminal events
+    // Flush every bounded usage segment, then publish the manifest last. The
+    // billing reader accepts auxiliary meters only when this manifest proves
+    // the complete archive cardinality.
     if (RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType)) {
-      if (this.usageSegmentBuffer.length > 0) {
-        try {
-          await this.flushUsageSegment(
-            this.usageSegmentIndex,
-            this.usageSegmentBuffer,
-          );
-          this.usageSegmentBuffer = [];
-          this.usageSegmentIndex = this.usageSegmentIndex + 1;
-        } catch (err) {
-          logWarn("Usage segment flush on terminal event failed", {
-            module: "runnotifierdo",
-            detail: err,
-          });
-          this.usageSegmentBuffer = this.enforceSegmentBufferCap(
-            this.usageSegmentBuffer,
-            "usageSegmentBuffer",
-          );
-        }
+      this.runTerminalObserved = true;
+      try {
+        await this.finalizeUsageArchive(emittedAt);
+      } catch (err) {
+        logWarn("Usage archive finalization failed", {
+          module: "runnotifierdo",
+          detail: err,
+        });
+        this.usageArchiveCompleted = false;
+        throw err;
       }
     }
 
@@ -437,12 +474,7 @@ export class RunNotifierDO extends NotifierBase {
    * private method via type laundering.
    */
   stringifyPersistedData(value: unknown): string {
-    if (typeof value === "string") return value;
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
+    return serializeRunEventData(value).data;
   }
 
   private isSegmentBoundaryOrTerminal(eventId: number, type: string): boolean {
@@ -493,6 +525,36 @@ export class RunNotifierDO extends NotifierBase {
     );
   }
 
+  private async flushPendingUsageSegments(flushPartial: boolean): Promise<void> {
+    while (
+      this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE ||
+      (flushPartial && this.usageSegmentBuffer.length > 0)
+    ) {
+      const segment = this.usageSegmentBuffer.slice(
+        0,
+        USAGE_EVENT_SEGMENT_SIZE,
+      );
+      await this.flushUsageSegment(this.usageSegmentIndex, segment);
+      this.usageSegmentBuffer = this.usageSegmentBuffer.slice(segment.length);
+      this.usageSegmentIndex += 1;
+    }
+  }
+
+  private async finalizeUsageArchive(completedAt: string): Promise<void> {
+    if (!this.offloadBucket || !this.runId) return;
+    await this.flushPendingUsageSegments(true);
+    await writeUsageEventArchiveManifestToR2(
+      this.offloadBucket,
+      this.runId,
+      {
+        segmentCount: this.usageLastFlushedSegmentIndex,
+        eventCount: this.usageEventCount,
+        completedAt,
+      },
+    );
+    this.usageArchiveCompleted = true;
+  }
+
   private async persistLastEventId(eventId: number): Promise<void> {
     if (!this.runId) return;
     try {
@@ -520,55 +582,131 @@ export class RunNotifierDO extends NotifierBase {
     metadata?: unknown;
   }): Promise<Response> {
     return this.state.blockConcurrencyWhile(async () => {
+      if (!this.offloadBucket) {
+        return jsonResponse(
+          { success: false, error: "Usage archive unavailable" },
+          503,
+        );
+      }
+      const inputRunId = typeof input.runId === "string"
+        ? input.runId.trim()
+        : "";
       if (
-        !this.runId && typeof input.runId === "string" && input.runId.trim()
+        !inputRunId || inputRunId.length > 64 ||
+        !/^[A-Za-z0-9_-]+$/u.test(inputRunId) ||
+        (this.runId !== null && this.runId !== inputRunId)
       ) {
-        this.runId = input.runId.trim();
+        return jsonResponse({ success: false, error: "Invalid runId" }, 400);
+      }
+      if (this.runTerminalObserved || this.usageArchiveCompleted) {
+        return jsonResponse(
+          { success: false, error: "Usage archive already completed" },
+          409,
+        );
+      }
+
+      // A full segment that could not be offloaded was already acknowledged
+      // and persisted by the preceding request. Retry that bounded segment
+      // before accepting another event so an R2 outage cannot grow DO state
+      // without limit or make a failed response ambiguous for the new event.
+      if (this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE) {
+        try {
+          await this.flushPendingUsageSegments(false);
+        } catch (err) {
+          logWarn("Usage segment backpressure", {
+            module: "runnotifierdo",
+            detail: err,
+          });
+          return jsonResponse(
+            { success: false, error: "Usage archive unavailable" },
+            503,
+          );
+        }
       }
 
       const meterType = typeof input.meter_type === "string"
         ? input.meter_type.trim()
         : "";
-      const units = typeof input.units === "number"
-        ? input.units
-        : parseFloat(String(input.units ?? ""));
+      const units = input.units;
 
-      if (!meterType) {
+      if (!meterType || new TextEncoder().encode(meterType).byteLength > 128) {
         return jsonResponse({
           success: false,
           error: "meter_type is required",
-        });
+        }, 400);
       }
 
-      if (!Number.isFinite(units) || units <= 0) {
+      if (
+        typeof units !== "number" || !Number.isFinite(units) || units <= 0 ||
+        units > Number.MAX_SAFE_INTEGER
+      ) {
         return jsonResponse({
           success: false,
           error: "units must be positive",
-        });
+        }, 400);
       }
 
-      const metadataStr = input.metadata === undefined
+      const referenceType = input.reference_type === undefined
         ? null
-        : this.stringifyPersistedData(input.metadata);
+        : typeof input.reference_type === "string"
+          ? input.reference_type.trim()
+          : null;
+      if (
+        input.reference_type !== undefined &&
+        (!referenceType ||
+          new TextEncoder().encode(referenceType).byteLength > 128)
+      ) {
+        return jsonResponse({
+          success: false,
+          error: "reference_type is invalid",
+        }, 400);
+      }
+      let metadataStr: string | null = null;
+      if (input.metadata !== undefined) {
+        if (
+          !input.metadata || typeof input.metadata !== "object" ||
+          Array.isArray(input.metadata)
+        ) {
+          return jsonResponse(
+            { success: false, error: "metadata is invalid" },
+            400,
+          );
+        }
+        try {
+          metadataStr = JSON.stringify(input.metadata);
+        } catch {
+          return jsonResponse(
+            { success: false, error: "metadata is invalid" },
+            400,
+          );
+        }
+        if (
+          new TextEncoder().encode(metadataStr).byteLength >
+            MAX_USAGE_EVENT_METADATA_BYTES
+        ) {
+          return jsonResponse(
+            { success: false, error: "metadata is too large" },
+            413,
+          );
+        }
+      }
+
+      // Bind the DO identity only after the complete event is valid. A bad
+      // internal request must not poison an otherwise unused notifier.
+      if (!this.runId) this.runId = inputRunId;
 
       this.usageSegmentBuffer.push({
         meter_type: meterType,
         units,
-        reference_type: typeof input.reference_type === "string"
-          ? input.reference_type
-          : null,
+        reference_type: referenceType,
         metadata: metadataStr,
         created_at: new Date().toISOString(),
       });
+      this.usageEventCount += 1;
 
       if (this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE) {
         try {
-          await this.flushUsageSegment(
-            this.usageSegmentIndex,
-            this.usageSegmentBuffer,
-          );
-          this.usageSegmentBuffer = [];
-          this.usageSegmentIndex = this.usageSegmentIndex + 1;
+          await this.flushPendingUsageSegments(false);
         } catch (err) {
           logWarn("Usage segment flush failed", {
             module: "runnotifierdo",

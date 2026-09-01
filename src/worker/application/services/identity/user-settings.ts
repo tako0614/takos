@@ -6,6 +6,7 @@ import {
 import { eq } from "drizzle-orm";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import { DEFAULT_MODEL_ID, SUPPORTED_MODEL_IDS } from "../agent/index.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 export interface UserSettingsRow {
   userId: string;
@@ -21,6 +22,7 @@ export interface UserSettingsRow {
 export const AI_MODELS = SUPPORTED_MODEL_IDS;
 export type AIModel = (typeof AI_MODELS)[number];
 export const DEFAULT_AI_MODEL: AIModel = DEFAULT_MODEL_ID as AIModel;
+const ACTIVITY_VISIBILITIES = new Set(["public", "followers", "private"]);
 
 export async function getUserSettings(
   db: SqlDatabaseLike,
@@ -133,6 +135,18 @@ export async function updateUserSettings(
   if (!isValidOpaqueId(userId)) {
     return null;
   }
+  if (
+    (updates.setup_completed !== undefined &&
+      typeof updates.setup_completed !== "boolean") ||
+    (updates.auto_update_enabled !== undefined &&
+      typeof updates.auto_update_enabled !== "boolean") ||
+    (updates.private_account !== undefined &&
+      typeof updates.private_account !== "boolean") ||
+    (updates.activity_visibility !== undefined &&
+      !ACTIVITY_VISIBILITIES.has(updates.activity_visibility))
+  ) {
+    throw new BadRequestError("Invalid user settings update");
+  }
 
   await ensureUserSettings(db, userId);
 
@@ -163,11 +177,15 @@ export async function updateUserSettings(
 }
 
 export function formatUserSettingsResponse(settings: UserSettingsRow | null) {
+  const activityVisibility = settings?.activityVisibility;
   return {
     setup_completed: !!settings?.setupCompleted,
     auto_update_enabled: !!settings?.autoUpdateEnabled,
     private_account: !!settings?.privateAccount,
-    activity_visibility: settings?.activityVisibility || "public",
+    activity_visibility: activityVisibility &&
+        ACTIVITY_VISIBILITIES.has(activityVisibility)
+      ? activityVisibility
+      : "public",
     ai_model: settings?.aiModel || DEFAULT_AI_MODEL,
     available_models: AI_MODELS,
   };

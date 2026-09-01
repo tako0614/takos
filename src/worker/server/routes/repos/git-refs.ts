@@ -6,7 +6,6 @@ import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
 import { toGitBucket } from "./routes.ts";
 import {
-  AuthorizationError,
   BadRequestError,
   ConflictError,
   InternalError,
@@ -16,6 +15,7 @@ import {
 import { logError } from "../../../shared/utils/logger.ts";
 import {
   getCommitSha,
+  requireRepoAdmin,
   requireRepoRead,
   requireRepoWrite,
   sigTimestampToIso,
@@ -216,11 +216,7 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const branchName = c.req.param("branchName");
 
-    const repoAccess = await requireRepoRead(c.env, repoId, user.id);
-
-    if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
-      throw new AuthorizationError("Admin access required");
-    }
+    await requireRepoAdmin(c.env, repoId, user.id);
     if (!gitStore.isValidRefName(branchName)) {
       throw new BadRequestError("Invalid branch name");
     }
@@ -242,11 +238,7 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const branchName = c.req.param("branchName");
 
-    const repoAccess = await requireRepoRead(c.env, repoId, user.id);
-
-    if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
-      throw new AuthorizationError("Admin access required");
-    }
+    await requireRepoAdmin(c.env, repoId, user.id);
     if (!gitStore.isValidRefName(branchName)) {
       throw new BadRequestError("Invalid branch name");
     }

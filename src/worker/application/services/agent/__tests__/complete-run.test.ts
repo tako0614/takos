@@ -178,6 +178,95 @@ test("D1 path commits run, chunked transcript, and event in one bounded batch", 
   );
 });
 
+test("terminal CAS binds the outcome to one exact RunContext attestation", async () => {
+  let captured: CapturedStatement[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return capturedStatement(queryText);
+    },
+    async batch(statements: CapturedStatement[]) {
+      captured = statements;
+      return statements.map((_statement, index) =>
+        index === 0 ? sqlResult(1) : sqlResult(0)
+      );
+    },
+  };
+  const authority = {
+    contextRevision: 3,
+    contextDigest:
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    runGrantDigest:
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  };
+
+  const result = await completeRunAtomically(
+    db as never,
+    completeInput({ messages: [] }),
+    { expectedRunAuthority: authority },
+  );
+  assertEquals(result.committed, true);
+  assertEquals(
+    captured[0].queryText.includes('"current_context_revision" = ?'),
+    true,
+  );
+  assertEquals(
+    captured[0].queryText.includes('FROM "run_context_revisions"'),
+    true,
+  );
+  assertEquals(captured[0].boundValues.includes(3), true);
+  assertEquals(
+    captured[0].boundValues.includes(authority.contextDigest),
+    true,
+  );
+  assertEquals(
+    captured[0].boundValues.includes(authority.runGrantDigest),
+    true,
+  );
+});
+
+test("current runtime completion proves a model call under the exact current revision", async () => {
+  let captured: CapturedStatement[] = [];
+  const db = {
+    prepare(queryText: string) {
+      return capturedStatement(queryText);
+    },
+    async batch(statements: CapturedStatement[]) {
+      captured = statements;
+      return statements.map((_statement, index) =>
+        index === 0 ? sqlResult(1) : sqlResult(0)
+      );
+    },
+  };
+  const authority = {
+    contextRevision: 4,
+    contextDigest:
+      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    runGrantDigest:
+      "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  };
+
+  const result = await completeRunAtomically(
+    db as never,
+    completeInput({ messages: [] }),
+    {
+      expectedRunAuthority: authority,
+      requireModelCallAuthorityForCompletion: true,
+    },
+  );
+  assertEquals(result.committed, true);
+  assertEquals(
+    captured[0].queryText.includes('FROM "run_model_calls" rmc'),
+    true,
+  );
+  assertEquals(
+    captured[0].queryText.includes('rmc."context_revision" = ?'),
+    true,
+  );
+  assertEquals(captured[0].boundValues.includes(4), true);
+  assertEquals(captured[0].boundValues.includes(authority.contextDigest), true);
+  assertEquals(captured[0].boundValues.includes(authority.runGrantDigest), true);
+});
+
 test("Postgres path uses the dedicated transaction and never outer sequential batch", async () => {
   let transactionCalls = 0;
   let outerBatchCalls = 0;
@@ -336,7 +425,9 @@ test("maximum transcript stays below D1 query and parameter limits", async () =>
 });
 
 test("large tool results are staged in TAKOS_OFFLOAD before the atomic SQL batch", async () => {
-  const largeResult = "x".repeat(3 * 1024 * 1024);
+  // Keep the direct service fixture inside complete-run's 512 KiB per-message
+  // contract while remaining large enough to require object-store offload.
+  const largeResult = "x".repeat(400 * 1024);
   let captured: CapturedStatement[] = [];
   let objectKey = "";
   let objectPayload = "";
@@ -567,7 +658,22 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
         transcript_sequence_start INTEGER,
         engine_checkpoint TEXT,
         engine_checkpoint_updated_at TEXT,
+        current_context_revision INTEGER,
         completed_at TEXT
+      );
+      CREATE TABLE run_context_revisions (
+        run_id TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        digest TEXT NOT NULL,
+        run_grant_digest TEXT NOT NULL,
+        PRIMARY KEY (run_id, revision)
+      );
+      CREATE TABLE run_model_calls (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL,
+        context_revision INTEGER NOT NULL,
+        context_digest TEXT NOT NULL,
+        run_grant_digest TEXT NOT NULL
       );
       CREATE TABLE threads (
         id TEXT PRIMARY KEY,
@@ -733,6 +839,88 @@ test("D1-compatible SQLite executes the atomic transcript SQL shape", async () =
       "SELECT COUNT(*) AS count FROM run_notification_outbox",
     );
     assertEquals(Number(retryNotificationOutbox.rows[0].count), 1);
+
+    const authority = {
+      contextRevision: 2,
+      contextDigest:
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      runGrantDigest:
+        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    };
+    await client.execute({
+      sql: "INSERT INTO threads (id, next_message_sequence) VALUES (?, 0)",
+      args: ["thread-model-authority"],
+    });
+    await client.execute({
+      sql: `INSERT INTO runs
+        (id, account_id, requester_account_id, thread_id, status, service_id,
+         lease_version, current_context_revision)
+        VALUES (?, ?, ?, ?, 'running', ?, ?, ?)`,
+      args: [
+        "run-model-authority",
+        "account-1",
+        "user-1",
+        "thread-model-authority",
+        "service-1",
+        7,
+        authority.contextRevision,
+      ],
+    });
+    await client.execute({
+      sql: `INSERT INTO run_context_revisions
+        (run_id, revision, digest, run_grant_digest)
+        VALUES (?, ?, ?, ?)`,
+      args: [
+        "run-model-authority",
+        authority.contextRevision,
+        authority.contextDigest,
+        authority.runGrantDigest,
+      ],
+    });
+    const modelFencedInput = completeInput({
+      runId: "run-model-authority",
+      threadId: "thread-model-authority",
+      messages: [],
+      terminalEvent: {
+        status: "completed",
+        run: {
+          id: "run-model-authority",
+          session_id: "session-model-authority",
+        },
+        output: "done",
+      },
+    });
+    const withoutModelCall = await completeRunAtomically(
+      db as never,
+      modelFencedInput,
+      {
+        expectedRunAuthority: authority,
+        requireModelCallAuthorityForCompletion: true,
+      },
+    );
+    assertEquals(withoutModelCall.committed, false);
+    assertEquals(withoutModelCall.leaseLost, true);
+    await client.execute({
+      sql: `INSERT INTO run_model_calls
+        (id, run_id, context_revision, context_digest, run_grant_digest)
+        VALUES (?, ?, ?, ?, ?)`,
+      args: [
+        `rmc_${"c".repeat(64)}`,
+        "run-model-authority",
+        authority.contextRevision,
+        authority.contextDigest,
+        authority.runGrantDigest,
+      ],
+    });
+    const withModelCall = await completeRunAtomically(
+      db as never,
+      modelFencedInput,
+      {
+        expectedRunAuthority: authority,
+        requireModelCallAuthorityForCompletion: true,
+      },
+    );
+    assertEquals(withModelCall.committed, true);
   } finally {
     client.close();
   }

@@ -15,8 +15,7 @@ generic information such as Git URL, ref, commit, tag, and well-known OpenTofu o
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions for the Takos distribution and app Capsules. The account plane owns account,
-billing, OIDC, and dashboard.
+Takos と Takosumi の分担は [Takos の概念](/platform/) にあります。
 
 ## API Shape
 
@@ -37,5 +36,5 @@ Apply requests reference the reviewed `plan` type Run returned by the plan step.
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi の考え方](https://takosumi.com/docs/concepts/)
+- [Takosumi API リファレンス](https://takosumi.com/docs/reference/api)

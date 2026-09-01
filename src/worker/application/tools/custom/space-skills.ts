@@ -391,7 +391,7 @@ export const skillToggleHandler: ToolHandler = async (args, context) => {
   if (!existing) {
     throw new Error(`Skill not found: ${skillId}`);
   }
-  await updateSkillEnabled(context.db, skillId, enabled);
+  await updateSkillEnabled(context.db, context.spaceId, skillId, enabled);
 
   return JSON.stringify(
     {
@@ -414,7 +414,15 @@ export const skillDeleteHandler: ToolHandler = async (args, context) => {
   if (!existing) {
     throw new Error(`Skill not found: ${skillId}`);
   }
-  await deleteSkillByName(context.db, context.spaceId, existing.name);
+  const deleted = await deleteSkillByName(
+    context.db,
+    context.spaceId,
+    existing.name,
+    context.userId,
+  );
+  if (!deleted) {
+    throw new Error("Skill changed while it was being deleted; retry");
+  }
 
   return JSON.stringify(
     {

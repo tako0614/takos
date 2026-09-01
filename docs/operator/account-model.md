@@ -2,22 +2,29 @@
 
 > このページでわかること: Takos のアカウント・認証の所有権がどこにあるか。
 
-Takos product routes は OIDC consumer であり、credential issuer / billing owner にはなりません。外部 Takosumi
-Accounts plane が OIDC issuer と client projection を所有し、Takos はその subject から
-app-local profile / session を作ります。
+Takos product routesはOIDC consumerであり、credential issuer / billing ownerには
+なりません。operator-selected issuerのsubjectからapp-local profile / sessionを
+作ります。Takosumi integrationを使う場合はTakosumi Accountsがissuerとdelegated
+control-plane authorizationを所有します。
+
+Takos の product model は一人用です。一つの `(issuer, sub)` は一つの app-local
+Principal になり、その Principal が用途別の private Workspace を複数持ちます。
+一つの deployment が複数 Principal を収容してもよいですが、Takos Workspace に
+member、invite、role、ownership transfer はなく、Principal 間で共有しません。
 
 ## 所有権の一覧
 
 | 対象                                 | 管理元                                           |
 | ------------------------------------ | ------------------------------------------------ |
-| account / credential / upstream IdP  | Takosumi Accounts plane                 |
-| billing / Capsule Run ledger        | Takosumi Accounts / deploy-control      |
-| OIDC issuer / client registration    | Takosumi Accounts plane                 |
+| account / credential / upstream IdP  | operator-selected OIDC issuer                    |
+| billing / Capsule Run ledger         | Takosumi integration（接続時のみ）              |
+| OIDC issuer / client registration    | operator-selected issuer（Takosumiも選択可能）   |
 | Takos の app-local profile / session | Takos app                                        |
 | dedicated runtime mode / source pin  | Capsule + operator-private runtime evidence       |
 
-Keycloak / Authentik / Auth0 などを使う場合も、Takos product runtime へ直接 issuer として渡しません。Takosumi Accounts
-plane の upstream IdP として接続し、Takos runtime の `OIDC_ISSUER_URL` は Takosumi Accounts issuer を指します。
+Keycloak / Authentik / Auth0などのgeneric OIDC issuerをTakosへ直接設定できます。
+shared Capsule stateやInterfaceが必要ならTakosumi Accountsをissuer/control APIとして
+接続します。どちらの場合もTakos自身はissuerを実装しません。
 
 ## OIDC Identity Resolution
 
@@ -34,31 +41,36 @@ snapshotとして扱い、identity ownership は `(issuer, sub)` だけで決め
 
 ## Capsule API delegation
 
-Takosumi Accounts の dynamic OIDC client は、必要な Capsule が宣言した scope だけを許可します。Takos は
-`offline_access` / `capsules:read` / `capsules:write` を要求し、access/refresh token と UserInfo の親 Workspace binding を
-app-local DB に暗号化保存します。app launcher の server-to-server call はこのユーザー委任tokenを使い、Accounts側でも
-scope、subject、Workspaceを再検証します。token、Workspace binding、client secretをOpenTofu stateやOutputへ保存しません。
+standalone loginは`openid profile email`だけを要求します。Takosumi integrationを
+構成した場合だけ`offline_access` / `capsules:read` / `capsules:write`も要求し、
+access/refresh tokenとUserInfoの親Workspace bindingをapp-local DBに暗号化保存します。
+app launcherのserver-to-server callはこの委任tokenを使い、Accounts側でもscope、
+subject、Workspaceを再検証します。token、Workspace binding、client secretを
+OpenTofu stateやOutputへ保存しません。
 
 Takos内のWorkspaceはTakos productのデータ境界です。親Takosumi Workspaceと同じIDであるとは仮定せず、ローカル
 Workspaceを作るたびにTakosumi Workspaceを増やしません。
 
+現行DBの`accounts.type = team`と`account_memberships`はschema移行まで残す互換表現です。
+public modelではなく、Workspace rowのownerとactiveな互換owner rowの両方がPrincipal
+と一致した場合だけauthorizationに使います。non-owner、suspended、owner偽装のlegacy
+membership rowは一覧にもauthorizationにも使いません。
+
 ## オペレーターチェックリスト
 
-- Takosumi Accounts plane の issuer が `OIDC_ISSUER_URL` の `/.well-known/openid-configuration` で解決できること
-- `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` が binding material
-  (`identity.oidc`) から発行・注入されること
-- dynamic client が `openid profile email offline_access capsules:read capsules:write` を許可し、UserInfo が単一の親
-  Workspace binding を返すこと
+- 選択したissuerが`OIDC_ISSUER_URL`の`/.well-known/openid-configuration`で解決できること
+- `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / optional `OIDC_CLIENT_SECRET` /
+  `OIDC_REDIRECT_URI`が正しいclient metadataであること
+- Takosumi接続時だけdelegation scopeと単一の親Workspace bindingを確認すること
 - `ENCRYPTION_KEY` が設定され、委任tokenの平文がlog、OpenTofu state、Outputに出ないこと
 
-automation credential は Takosumi Accounts が発行する bearer / PAT を使います。発行 / 失効 / rotation は Takosumi
-Accounts が所有し、Takos app 自体は credential issuer を持ちません (Takos app の `personal_access_tokens` surface
-は提供しません)。
+Takosumi automation credentialはTakosumi Accountsが発行するbearer / PATを使います。
+Takos app自体はcredential issuerを持ちません。
 
 ## Dedicated Runtime
 
 public install 導線では、dedicated runtime も最初から Capsule / Run ledger 経由で作成します。既に動いている dedicated
-runtime を後から台帳に採用する作業は、公開 contract ではなく private operator evidence shaping です。この公開 docs では
+runtime を後から履歴に採用する作業は、公開 contract ではなく private operator evidence shaping です。この公開 docs では
 手順化しません。
 
 ## 検証
@@ -84,5 +96,5 @@ bun run docs:build
 
 rollback は backup を使った短期復旧に限定します。OIDC identity の state は `auth_identities` を正とします。
 
-- deploy を戻す場合も Takosumi Accounts issuer / Capsule Run ledger は維持する
+- Takosumi接続構成でdeployを戻す場合もAccounts issuer / Capsule Run ledgerは維持する
 - user merge を取り消す場合は `auth_identities` の対象 row を削除し、次回 login で verified email linking をやり直す

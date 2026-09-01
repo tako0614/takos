@@ -25,9 +25,9 @@ export function encodeBlob(content: Uint8Array): Uint8Array {
   return concatBytes(header, content);
 }
 
-export function encodeTree(entries: TreeEntry[]): Uint8Array {
-  // Sort entries: git sorts by treating directory names as if they end with '/'
-  const sorted = [...entries].sort((a, b) => {
+// Git sorts by treating directory names as if they end with '/'.
+function sortedTreeEntries(entries: readonly TreeEntry[]): TreeEntry[] {
+  return [...entries].sort((a, b) => {
     const aName = a.mode === "40000" || a.mode === "040000"
       ? a.name + "/"
       : a.name;
@@ -36,6 +36,10 @@ export function encodeTree(entries: TreeEntry[]): Uint8Array {
       : b.name;
     return aName < bName ? -1 : aName > bName ? 1 : 0;
   });
+}
+
+export function encodeTree(entries: TreeEntry[]): Uint8Array {
+  const sorted = sortedTreeEntries(entries);
 
   const parts: Uint8Array[] = [];
   for (const entry of sorted) {
@@ -52,15 +56,7 @@ export function encodeTree(entries: TreeEntry[]): Uint8Array {
 }
 
 export function encodeTreeContent(entries: TreeEntry[]): Uint8Array {
-  const sorted = [...entries].sort((a, b) => {
-    const aName = a.mode === "40000" || a.mode === "040000"
-      ? a.name + "/"
-      : a.name;
-    const bName = b.mode === "40000" || b.mode === "040000"
-      ? b.name + "/"
-      : b.name;
-    return aName < bName ? -1 : aName > bName ? 1 : 0;
-  });
+  const sorted = sortedTreeEntries(entries);
 
   const parts: Uint8Array[] = [];
   for (const entry of sorted) {

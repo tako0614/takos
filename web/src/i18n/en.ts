@@ -7,6 +7,7 @@ import { repository } from "./en/repository.ts";
 import { source } from "./en/source.ts";
 import { storage } from "./en/storage.ts";
 import { tools } from "./en/tools.ts";
+import { notifications } from "./en/notifications.ts";
 
 export const en = {
   ...common,
@@ -18,4 +19,5 @@ export const en = {
   ...source,
   ...storage,
   ...tools,
+  ...notifications,
 } as const;

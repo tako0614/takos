@@ -1,9 +1,13 @@
 import { getDb } from "../../../infra/db/index.ts";
 import { runEvents } from "../../../infra/db/schema.ts";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import type { Env, RunStatus } from "../../../shared/types/index.ts";
 import type { PersistedRunEvent } from "../../../application/services/offload/run-events.ts";
-import { getRunEventsAfterFromR2 } from "../../../application/services/offload/run-events.ts";
+import {
+  getRunEventsAfterPageFromR2,
+  MAX_PERSISTED_RUN_EVENT_DATA_BYTES,
+  RUN_EVENT_TRUNCATED_DATA,
+} from "../../../application/services/offload/run-events.ts";
 import { deriveTerminalStatusFromRunEvent } from "../../../application/services/run-notifier/index.ts";
 import { isRunTerminalStatus } from "../../../application/services/run-notifier/run-events-contract.ts";
 
@@ -17,26 +21,51 @@ export type FormattedRunEvent = {
   run_id: string;
   type: string;
   data: string;
+  data_truncated: boolean;
   created_at: string;
 };
 
 export type RunObservation = {
   events: FormattedRunEvent[];
   runStatus: RunStatus;
+  truncation: {
+    events: boolean;
+    event_data: boolean;
+    archive: boolean;
+  };
 };
 
 const SSE_POLL_INTERVAL_MS = 1000;
 const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 const sseEncoder = new TextEncoder();
+const observationEncoder = new TextEncoder();
 
-function stringifyPersistedData(value: unknown): string {
-  if (typeof value === "string") return value;
+export function parseRunReplayCursor(
+  value: string | null | undefined,
+): number | null {
+  if (value === null || value === undefined || value === "") return 0;
+  if (!/^\d+$/u.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function boundedPersistedData(value: unknown): string {
+  let serialized: string;
   try {
-    return JSON.stringify(value);
+    serialized = typeof value === "string" ? value : JSON.stringify(value);
   } catch {
-    // Circular references or non-serializable values -- coerce to string
-    return String(value);
+    return RUN_EVENT_TRUNCATED_DATA;
   }
+  if (observationEncoder.encode(serialized).byteLength >
+      MAX_PERSISTED_RUN_EVENT_DATA_BYTES) {
+    return RUN_EVENT_TRUNCATED_DATA;
+  }
+  try {
+    JSON.parse(serialized);
+  } catch {
+    return RUN_EVENT_TRUNCATED_DATA;
+  }
+  return serialized;
 }
 
 function formatRunEvents(
@@ -49,6 +78,7 @@ function formatRunEvents(
     run_id: runId,
     type: e.type,
     data: e.data,
+    data_truncated: e.data === RUN_EVENT_TRUNCATED_DATA,
     created_at: e.created_at,
   }));
 }
@@ -74,7 +104,7 @@ async function getNotifierBufferedEvents(
   env: Env,
   runId: string,
   afterEventId: number,
-): Promise<PersistedRunEvent[]> {
+): Promise<{ events: PersistedRunEvent[]; archiveTruncated: boolean }> {
   const namespace = env.RUN_NOTIFIER;
   const id = namespace.idFromName(runId);
   const stub = namespace.get(id);
@@ -82,7 +112,7 @@ async function getNotifierBufferedEvents(
     stub,
     new Request(`https://internal.do/events?after=${afterEventId}`, {}),
   );
-  if (!res.ok) return [];
+  if (!res.ok) return { events: [], archiveTruncated: false };
   const json = await res.json() as {
     events?: Array<
       {
@@ -95,53 +125,77 @@ async function getNotifierBufferedEvents(
     >;
   };
   const events = Array.isArray(json.events) ? json.events : [];
-  return events
-    .filter((e) => typeof e?.id === "number" && Number.isFinite(e.id))
-    .map((e) => ({
-      event_id: e.id,
-      type: e.type,
-      data: stringifyPersistedData(e.data),
-      created_at: new Date(e.timestamp).toISOString(),
-    }));
+  let archiveTruncated = events.length > 100;
+  const projected: PersistedRunEvent[] = [];
+  for (const event of events.slice(0, 100)) {
+    if (
+      typeof event?.id !== "number" || !Number.isSafeInteger(event.id) ||
+      event.id <= afterEventId || typeof event.type !== "string" ||
+      event.type.length === 0 || event.type.length > 256 ||
+      typeof event.timestamp !== "number" ||
+      !Number.isFinite(event.timestamp)
+    ) {
+      archiveTruncated = true;
+      continue;
+    }
+    const createdAt = new Date(event.timestamp);
+    if (!Number.isFinite(createdAt.getTime())) {
+      archiveTruncated = true;
+      continue;
+    }
+    projected.push({
+      event_id: event.id,
+      type: event.type,
+      data: boundedPersistedData(event.data),
+      created_at: createdAt.toISOString(),
+    });
+  }
+  return { events: projected, archiveTruncated };
 }
 
 async function fetchRunEventsAfter(
   env: Env,
   runId: string,
   afterEventId: number,
-): Promise<PersistedRunEvent[]> {
+): Promise<{
+  events: PersistedRunEvent[];
+  eventsTruncated: boolean;
+  archiveTruncated: boolean;
+}> {
   const byId = new Map<number, PersistedRunEvent>();
+  let eventsTruncated = false;
+  let archiveTruncated = false;
 
-  // Always read from SQL store as the durable fallback
+  // SQL is authoritative for non-offloaded events and always retains the
+  // terminal event. Fetch one sentinel row past the public page size so a
+  // completed Run can continue replaying before the SSE stream closes.
   const db = getDb(env.DB);
   const d1Result = await db.select({
     id: runEvents.id,
     runId: runEvents.runId,
     type: runEvents.type,
-    data: runEvents.data,
+    data: sql<string>`substr(${runEvents.data}, 1, ${
+      MAX_PERSISTED_RUN_EVENT_DATA_BYTES + 1
+    })`,
     createdAt: runEvents.createdAt,
   }).from(runEvents).where(
     and(eq(runEvents.runId, runId), gt(runEvents.id, afterEventId)),
-  ).orderBy(asc(runEvents.id)).all();
+  ).orderBy(asc(runEvents.id)).limit(MAX_EVENTS_PER_RESPONSE + 1).all();
+  eventsTruncated ||= d1Result.length > MAX_EVENTS_PER_RESPONSE;
 
-  for (const e of d1Result) {
-    byId.set(e.id, {
-      event_id: e.id,
-      type: e.type,
-      data: e.data,
-      created_at: textDate(e.createdAt),
-    });
-  }
-
-  // Merge with object store offload segments and DO ring buffer (if available)
+  // Object storage is the replay authority for intermediate events when
+  // offload is enabled. It is read as a bounded direct segment page rather
+  // than by scanning every key under the Run prefix.
   if (env.TAKOS_OFFLOAD) {
-    const r2Events = await getRunEventsAfterFromR2(
+    const r2Page = await getRunEventsAfterPageFromR2(
       env.TAKOS_OFFLOAD,
       runId,
       afterEventId,
       MAX_EVENTS_PER_RESPONSE,
     );
-    for (const e of r2Events) byId.set(e.event_id, e);
+    eventsTruncated ||= r2Page.hasMore;
+    archiveTruncated ||= r2Page.archiveTruncated;
+    for (const event of r2Page.events) byId.set(event.event_id, event);
 
     try {
       const buffered = await getNotifierBufferedEvents(
@@ -149,13 +203,36 @@ async function fetchRunEventsAfter(
         runId,
         afterEventId,
       );
-      for (const e of buffered) byId.set(e.event_id, e);
+      archiveTruncated ||= buffered.archiveTruncated;
+      for (const event of buffered.events) {
+        byId.set(event.event_id, event);
+      }
     } catch {
       // DO buffer unavailable — SQL store and object store data is sufficient
     }
   }
 
-  return Array.from(byId.values()).sort((a, b) => a.event_id - b.event_id);
+  // Durable SQL evidence wins an event-id collision with a cache/archive
+  // source (notably a terminal event whose global SQL id advanced the DO
+  // counter). Never allow a stale ring entry to mask the committed outcome.
+  for (const event of d1Result.slice(0, MAX_EVENTS_PER_RESPONSE)) {
+    byId.set(event.id, {
+      event_id: event.id,
+      type: event.type,
+      data: boundedPersistedData(event.data),
+      created_at: textDate(event.createdAt),
+    });
+  }
+
+  const sorted = Array.from(byId.values()).sort((left, right) =>
+    left.event_id - right.event_id
+  );
+  eventsTruncated ||= sorted.length > MAX_EVENTS_PER_RESPONSE;
+  return {
+    events: sorted.slice(0, MAX_EVENTS_PER_RESPONSE),
+    eventsTruncated,
+    archiveTruncated,
+  };
 }
 
 export async function loadRunObservation(
@@ -164,13 +241,20 @@ export async function loadRunObservation(
   fallbackStatus: RunStatus,
   lastEventId: number,
 ): Promise<RunObservation> {
-  const persistedEvents = await fetchRunEventsAfter(env, runId, lastEventId);
+  const page = await fetchRunEventsAfter(env, runId, lastEventId);
   return {
-    events: formatRunEvents(persistedEvents, runId),
+    events: formatRunEvents(page.events, runId),
     runStatus: deriveRunStatusFromTimelineEvents(
       fallbackStatus,
-      persistedEvents,
+      page.events,
     ),
+    truncation: {
+      events: page.eventsTruncated,
+      event_data: page.events.some((event) =>
+        event.data === RUN_EVENT_TRUNCATED_DATA
+      ),
+      archive: page.archiveTruncated,
+    },
   };
 }
 
@@ -241,7 +325,10 @@ export function createPollingRunObservationStream(
               controller.enqueue(formatRunSseEvent(event));
             }
             lastHeartbeatAt = Date.now();
-            if (isRunTerminalStatus(observation.runStatus)) {
+            if (
+              isRunTerminalStatus(observation.runStatus) &&
+              !observation.truncation.events
+            ) {
               close();
               return;
             }

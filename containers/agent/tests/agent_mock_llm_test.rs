@@ -35,7 +35,9 @@ use axum::extract::State;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde_json::{json, Value};
-use takos_agent::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition};
+use takos_agent::control_rpc::{
+    ControlRpcClient, RunAuthorityAttestation, StartPayload, ToolDefinition,
+};
 use takos_agent::engine_support::{build_engine_deps, UsageTracker};
 use takos_agent::model::TakosModelRunner;
 use takos_agent::tool_bridge::CompositeToolExecutor;
@@ -701,7 +703,8 @@ async fn stateless_engine_does_not_build_a_remote_ephemeral_embedding_index() {
         control_rpc_token: "control-token".to_string(),
     })
     .expect("control RPC client should build for test wiring");
-    let tool_executor = CompositeToolExecutor::new(client, Vec::new());
+    let tool_executor =
+        CompositeToolExecutor::new(client, RunAuthorityAttestation::default(), Vec::new());
     let deps = build_engine_deps(
         model_runner,
         tool_executor,

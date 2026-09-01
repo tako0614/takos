@@ -11,6 +11,8 @@ import type {
   ObjectStoreObject,
   ObjectStoreObjectBody,
 } from "../shared/types/bindings.ts";
+import { normalizeHttpMetadata } from "./object-store-metadata.ts";
+import { toBuffer } from "./object-store-body.ts";
 
 export type LocalObjectStoreMultipartUpload = {
   key: string;
@@ -45,32 +47,6 @@ export type LocalObjectStoreBinding =
       uploadId: string,
     ): LocalObjectStoreMultipartUpload;
   };
-
-async function toBuffer(
-  value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
-): Promise<ArrayBuffer> {
-  if (value === null) return new ArrayBuffer(0);
-  if (typeof value === "string") return new TextEncoder().encode(value).buffer;
-  if (value instanceof ArrayBuffer) return value;
-  if (ArrayBuffer.isView(value)) {
-    return value.buffer.slice(
-      value.byteOffset,
-      value.byteOffset + value.byteLength,
-    ) as ArrayBuffer;
-  }
-  if (value instanceof Blob) return value.arrayBuffer();
-  return new Response(value).arrayBuffer();
-}
-
-function normalizeHttpMetadata(
-  metadata?: Record<string, string> | Headers,
-): Record<string, string> {
-  if (!metadata) return {};
-  if (metadata instanceof Headers) {
-    return Object.fromEntries(metadata.entries());
-  }
-  return { ...metadata };
-}
 
 function createObjectStoreObject(
   key: string,

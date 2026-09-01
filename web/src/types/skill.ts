@@ -45,3 +45,10 @@ export interface ManagedSkill {
     template_ids?: string[];
   };
 }
+
+export interface SkillResourceTemplate {
+  id: string;
+  title: string;
+  description: string;
+  media_type: "text/markdown";
+}

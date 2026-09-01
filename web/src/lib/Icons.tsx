@@ -127,13 +127,6 @@ export const Icons = {
       <line x1="6" y1="6" x2="18" y2="18" />
     </>,
   ),
-  Globe: strokeIcon(
-    <>
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </>,
-  ),
   Sparkles: strokeIcon(
     <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />,
   ),
@@ -216,26 +209,11 @@ export const Icons = {
   Play: strokeIcon(
     <polygon points="5 3 19 12 5 21 5 3" />,
   ),
-  GitMerge: strokeIcon(
-    <>
-      <circle cx="18" cy="18" r="3" />
-      <circle cx="6" cy="6" r="3" />
-      <path d="M6 21V9a9 9 0 0 0 9 9" />
-    </>,
-  ),
   AlertTriangle: strokeIcon(
     <>
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
-    </>,
-  ),
-  GitBranch: strokeIcon(
-    <>
-      <line x1="6" y1="3" x2="6" y2="15" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <path d="M18 9a9 9 0 0 1-9 9" />
     </>,
   ),
   Lock: strokeIcon(
@@ -246,12 +224,6 @@ export const Icons = {
   ),
   Star: strokeIcon(
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
-  ),
-  TrendingUp: strokeIcon(
-    <>
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-      <polyline points="17 6 23 6 23 12" />
-    </>,
   ),
   Database: strokeIcon(
     <>
@@ -289,24 +261,12 @@ export const Icons = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </>,
   ),
-  Clock: strokeIcon(
-    <>
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </>,
-  ),
   Package: strokeIcon(
     <>
       <path d="m7.5 4.27 9 5.15" />
       <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
       <path d="m3.3 7 8.7 5 8.7-5" />
       <path d="M12 22V12" />
-    </>,
-  ),
-  Terminal: strokeIcon(
-    <>
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" y1="19" x2="20" y2="19" />
     </>,
   ),
   Menu: strokeIcon(
@@ -328,44 +288,11 @@ export const Icons = {
       <circle cx="12" cy="12" r="3" />
     </>,
   ),
-  EyeOff: strokeIcon(
-    <>
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </>,
-  ),
   Info: strokeIcon(
     <>
       <circle cx="12" cy="12" r="10" />
       <line x1="12" y1="16" x2="12" y2="12" />
       <line x1="12" y1="8" x2="12.01" y2="8" />
-    </>,
-  ),
-  GitCommit: strokeIcon(
-    <>
-      <circle cx="12" cy="12" r="4" />
-      <line x1="1.05" y1="12" x2="7" y2="12" />
-      <line x1="17.01" y1="12" x2="22.96" y2="12" />
-    </>,
-  ),
-  GitPullRequest: strokeIcon(
-    <>
-      <circle cx="18" cy="18" r="3" />
-      <circle cx="6" cy="6" r="3" />
-      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
-      <line x1="6" y1="9" x2="6" y2="21" />
-    </>,
-  ),
-  Tag: strokeIcon(
-    <>
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-      <line x1="7" y1="7" x2="7.01" y2="7" />
-    </>,
-  ),
-  Inbox: strokeIcon(
-    <>
-      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </>,
   ),
   Archive: strokeIcon(
@@ -377,19 +304,6 @@ export const Icons = {
   ),
   Wrench: strokeIcon(
     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />,
-  ),
-  ShoppingBag: strokeIcon(
-    <>
-      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <path d="M16 10a4 4 0 0 1-8 0" />
-    </>,
-  ),
-  ArrowRight: strokeIcon(
-    <>
-      <line x1="5" y1="12" x2="19" y2="12" />
-      <polyline points="12 5 19 12 12 19" />
-    </>,
   ),
   RefreshCw: strokeIcon(
     <>
@@ -428,19 +342,6 @@ export const Icons = {
       <line x1="9" y1="14" x2="15" y2="14" />
     </>,
   ),
-  Wand: strokeIcon(
-    <>
-      <path d="M15 4V2" />
-      <path d="M15 16v-2" />
-      <path d="M8 9h2" />
-      <path d="M20 9h2" />
-      <path d="M17.8 11.8 19 13" />
-      <path d="M15 9h.01" />
-      <path d="M17.8 6.2 19 5" />
-      <path d="m3 21 9-9" />
-      <path d="M12.2 6.2 11 5" />
-    </>,
-  ),
   ToggleOn: createIcon(
     <>
       <rect width="44" height="24" rx="12" fill="currentColor" opacity="0.2" />
@@ -454,22 +355,6 @@ export const Icons = {
       <circle cx="12" cy="12" r="8" fill="currentColor" />
     </>,
     { viewBox: "0 0 44 24", fill: "none", "aria-hidden": true },
-  ),
-  ToggleOnFilled: createIcon(
-    <path
-      fill-rule="evenodd"
-      d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm10 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
-      clip-rule="evenodd"
-    />,
-    { fill: "currentColor" },
-  ),
-  ToggleOffFilled: createIcon(
-    <path
-      fill-rule="evenodd"
-      d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
-      clip-rule="evenodd"
-    />,
-    { fill: "currentColor" },
   ),
 };
 

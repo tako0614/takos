@@ -14,6 +14,10 @@ import {
   Textarea,
 } from "../../components/ui/index.ts";
 import type { Reminder } from "../../types/index.ts";
+import {
+  MAX_REMINDER_CONTENT_CHARACTERS,
+  MAX_REMINDER_TRIGGER_VALUE_CHARACTERS,
+} from "takos-api-contract/shared/types";
 
 function getTriggerIcon(type: Reminder["trigger_type"]) {
   switch (type) {
@@ -77,11 +81,23 @@ export function ReminderList(props: {
     trigger_type: Reminder["trigger_type"];
     trigger_value: string;
     priority: Reminder["priority"];
-  }) => Promise<void>;
+  }) => Promise<boolean>;
+  onUpdateReminder: (
+    id: string,
+    data: {
+      content: string;
+      trigger_value: string;
+      priority: Reminder["priority"];
+    },
+  ) => Promise<boolean>;
   savingReminder: boolean;
+  canEdit: boolean;
 }) {
   const { t } = useI18n();
   const [showCreateReminder, setShowCreateReminder] = createSignal(false);
+  const [editingReminderId, setEditingReminderId] = createSignal<string | null>(
+    null,
+  );
 
   const [reminderContent, setReminderContent] = createSignal("");
   const [triggerType, setTriggerType] = createSignal<Reminder["trigger_type"]>(
@@ -94,16 +110,47 @@ export function ReminderList(props: {
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
-    if (!reminderContent().trim() || !triggerValue().trim()) return;
-    await props.onCreateReminder({
-      content: reminderContent().trim(),
-      trigger_type: triggerType(),
-      trigger_value: triggerValue().trim(),
-      priority: priority(),
-    });
+    if (
+      !props.canEdit || !reminderContent().trim() || !triggerValue().trim()
+    ) return;
+    const currentId = editingReminderId();
+    const saved = currentId
+      ? await props.onUpdateReminder(currentId, {
+        content: reminderContent().trim(),
+        trigger_value: triggerValue().trim(),
+        priority: priority(),
+      })
+      : await props.onCreateReminder({
+        content: reminderContent().trim(),
+        trigger_type: triggerType(),
+        trigger_value: triggerValue().trim(),
+        priority: priority(),
+      });
+    if (!saved) return;
     setReminderContent("");
     setTriggerValue("");
+    setEditingReminderId(null);
     setShowCreateReminder(false);
+  };
+
+  const openCreateReminder = () => {
+    if (!props.canEdit) return;
+    setEditingReminderId(null);
+    setReminderContent("");
+    setTriggerType("time");
+    setTriggerValue("");
+    setPriority("normal");
+    setShowCreateReminder(true);
+  };
+
+  const openEditReminder = (reminder: Reminder) => {
+    if (!props.canEdit) return;
+    setEditingReminderId(reminder.id);
+    setReminderContent(reminder.content);
+    setTriggerType(reminder.trigger_type);
+    setTriggerValue(reminder.trigger_value ?? "");
+    setPriority(reminder.priority);
+    setShowCreateReminder(true);
   };
 
   return (
@@ -197,38 +244,56 @@ export function ReminderList(props: {
                   >
                     {new Date(reminder.created_at).toLocaleDateString()}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => props.onDelete(reminder.id)}
-                    title={t("delete")}
-                    style={{ color: "var(--color-text-tertiary)" }}
-                  >
-                    <Icons.Trash />
-                  </Button>
+                  {props.canEdit && (
+                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEditReminder(reminder)}
+                      title={t("editReminder")}
+                      aria-label={t("editReminder")}
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      <Icons.Edit />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => props.onDelete(reminder.id)}
+                      title={t("delete")}
+                      style={{ color: "var(--color-text-tertiary)" }}
+                    >
+                      <Icons.Trash />
+                    </Button>
+                  </div>
+                  )}
                 </div>
               </Card>
             ))
           )}
       </div>
 
-      <Button
-        variant="secondary"
-        leftIcon={<Icons.Plus />}
-        onClick={() => setShowCreateReminder(true)}
-        style={{
-          width: "100%",
-          "margin-top": "0.5rem",
-          border: "2px dashed var(--color-border-primary)",
-        }}
-      >
-        {t("createReminder")}
-      </Button>
+      {props.canEdit && (
+        <Button
+          variant="secondary"
+          leftIcon={<Icons.Plus />}
+          onClick={openCreateReminder}
+          style={{
+            width: "100%",
+            "margin-top": "0.5rem",
+            border: "2px dashed var(--color-border-primary)",
+          }}
+        >
+          {t("createReminder")}
+        </Button>
+      )}
 
       <Modal
-        isOpen={showCreateReminder()}
-        onClose={() => setShowCreateReminder(false)}
-        title={t("createReminder")}
+        isOpen={props.canEdit && showCreateReminder()}
+        onClose={() => {
+          if (!props.savingReminder) setShowCreateReminder(false);
+        }}
+        title={editingReminderId() ? t("editReminder") : t("createReminder")}
       >
         <form onSubmit={handleCreateReminder}>
           <div
@@ -242,6 +307,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for="agent-reminder-content"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -251,10 +317,15 @@ export function ReminderList(props: {
                 {t("reminderContent")}
               </label>
               <Textarea
+                id="agent-reminder-content"
+                name="agent-reminder-content"
                 placeholder={t("reminderContentPlaceholder")}
                 value={reminderContent()}
                 onInput={(e) => setReminderContent(e.currentTarget.value)}
                 rows={3}
+                maxLength={MAX_REMINDER_CONTENT_CHARACTERS}
+                autocomplete="off"
+                disabled={props.savingReminder}
                 required
                 autofocus
               />
@@ -267,6 +338,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for="agent-reminder-trigger-type"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -276,6 +348,10 @@ export function ReminderList(props: {
                 {t("triggerType")}
               </label>
               <Select
+                id="agent-reminder-trigger-type"
+                name="agent-reminder-trigger-type"
+                aria-label={t("triggerType")}
+                disabled={editingReminderId() !== null || props.savingReminder}
                 value={triggerType()}
                 onChange={(value) =>
                   setTriggerType(value as Reminder["trigger_type"])}
@@ -307,6 +383,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for="agent-reminder-trigger-value"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -316,10 +393,15 @@ export function ReminderList(props: {
                 {t("triggerValue")}
               </label>
               <Input
+                id="agent-reminder-trigger-value"
+                name="agent-reminder-trigger-value"
                 placeholder={triggerType() === "time"
                   ? t("triggerValueTimePlaceholder")
                   : t("triggerValueConditionPlaceholder")}
                 value={triggerValue()}
+                maxLength={MAX_REMINDER_TRIGGER_VALUE_CHARACTERS}
+                autocomplete="off"
+                disabled={props.savingReminder}
                 onInput={(e) => setTriggerValue(e.currentTarget.value)}
                 required
               />
@@ -332,6 +414,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for="agent-reminder-priority"
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -341,6 +424,10 @@ export function ReminderList(props: {
                 {t("priority")}
               </label>
               <Select
+                id="agent-reminder-priority"
+                name="agent-reminder-priority"
+                aria-label={t("priority")}
+                disabled={props.savingReminder}
                 value={priority()}
                 onChange={(value) => setPriority(value as Reminder["priority"])}
                 options={[
@@ -356,7 +443,10 @@ export function ReminderList(props: {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setShowCreateReminder(false)}
+              disabled={props.savingReminder}
+              onClick={() => {
+                if (!props.savingReminder) setShowCreateReminder(false);
+              }}
             >
               {t("cancel")}
             </Button>
@@ -366,7 +456,7 @@ export function ReminderList(props: {
               isLoading={props.savingReminder}
               disabled={!reminderContent().trim() || !triggerValue().trim()}
             >
-              {t("create")}
+              {editingReminderId() ? t("save") : t("create")}
             </Button>
           </ModalFooter>
         </form>
