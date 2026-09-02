@@ -82,6 +82,7 @@ export {
   BadGatewayError,
   // HTTP エラー
   BadRequestError,
+  CapabilityUnavailableError,
   ConflictError,
   type ErrorCode,
   // エラーコード

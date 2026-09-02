@@ -77,6 +77,10 @@ export default defineConfig({
           { text: "ルートとドメイン", link: "/deploy/routes" },
           { text: "環境と変数", link: "/deploy/environment" },
           { text: "ランタイムシークレット", link: "/deploy/runtime-secrets" },
+          {
+            text: "スキーマ自動適用と縮退モード",
+            link: "/deploy/runtime-schema-and-capabilities",
+          },
           { text: "デプロイ手順", link: "/deploy/deploy" },
           {
             text: "Release artifact publication",
@@ -106,6 +110,10 @@ export default defineConfig({
           },
           { text: "App Metadata", link: "/architecture/app-metadata" },
           { text: "Runtime / Agent", link: "/architecture/runtime-service" },
+          {
+            text: "Internal Trust Boundaries",
+            link: "/architecture/internal-trust-boundaries",
+          },
           { text: "Diagrams", link: "/architecture/diagrams" },
         ],
       },
@@ -119,6 +127,30 @@ export default defineConfig({
           {
             text: "Overview",
             link: "/legal/",
+          },
+          {
+            text: "Terms of Service",
+            link: "/legal/terms-of-service",
+          },
+          {
+            text: "Privacy Policy",
+            link: "/legal/privacy-policy",
+          },
+          {
+            text: "Acceptable Use Policy",
+            link: "/legal/acceptable-use-policy",
+          },
+          {
+            text: "Cookie Policy",
+            link: "/legal/cookie-policy",
+          },
+          {
+            text: "Service Level Agreement",
+            link: "/legal/sla",
+          },
+          {
+            text: "Status Page",
+            link: "/legal/status-page",
           },
           {
             text: "Data Processing Agreement",
@@ -157,12 +189,13 @@ export default defineConfig({
       {
         text: "プラットフォーム",
         items: [
+          { text: "概要", link: "/platform/" },
           { text: "Space", link: "/platform/spaces" },
           { text: "Threads and Runs", link: "/platform/threads-and-runs" },
           { text: "Upgrade / Export", link: "/platform/upgrade-export" },
           { text: "Git URL から install", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
-          { text: "Bundled Apps", link: "/platform/default-apps" },
+          { text: "Bundled Apps", link: "/platform/featured-apps" },
           {
             text: "Resource Governance",
             link: "/platform/resource-governance",
@@ -184,6 +217,7 @@ export default defineConfig({
       {
         text: "サンプル",
         items: [
+          { text: "概要", link: "/examples/" },
           { text: "シンプルな Worker", link: "/examples/simple-worker" },
           { text: "Worker + DB", link: "/examples/worker-with-db" },
           {
