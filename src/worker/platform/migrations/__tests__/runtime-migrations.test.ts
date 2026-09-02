@@ -517,3 +517,66 @@ describe("the embedded migration set", () => {
     expect(again.applied).toBe(EMBEDDED_MIGRATIONS.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Non-SQLite catalogs
+// ---------------------------------------------------------------------------
+
+describe("the legacy-ledger probe on a database without sqlite_master", () => {
+  test("falls back to information_schema instead of failing the deployment", async () => {
+    // The node self-host profile can be Postgres, where `sqlite_master` does
+    // not exist. The probe must not turn that into a failed schema.
+    const seen: string[] = [];
+    const results = new Map<string, Record<string, unknown>[]>();
+    const stub = {
+      prepare(query: string) {
+        const statement = {
+          bind: () => statement,
+          async first() {
+            seen.push(query);
+            if (query.includes("sqlite_master")) {
+              throw new Error('relation "sqlite_master" does not exist');
+            }
+            return (results.get(query) ?? [])[0] ?? null;
+          },
+          async run() {
+            seen.push(query);
+            return { results: [], success: true as const, meta: {} };
+          },
+          async all() {
+            seen.push(query);
+            return {
+              results: results.get(query) ?? [],
+              success: true as const,
+              meta: {},
+            };
+          },
+          async raw() {
+            return [];
+          },
+        };
+        return statement as unknown as ReturnType<
+          SqlDatabaseBinding["prepare"]
+        >;
+      },
+      async batch() {
+        return [];
+      },
+      async exec() {
+        return { count: 0, duration: 0 };
+      },
+      withSession() {
+        throw new Error("not used");
+      },
+      async dump() {
+        return new ArrayBuffer(0);
+      },
+    } as unknown as SqlDatabaseBinding;
+
+    const status = await runPendingMigrations(stub, { migrations: [] });
+    expect(status.state).toBe("ready");
+    expect(seen.some((query) => query.includes("information_schema"))).toBe(
+      true,
+    );
+  });
+});

@@ -162,17 +162,35 @@ export async function ensureMigrationTables(
   await db.prepare(LOCK_DDL).run();
 }
 
+/**
+ * Does this database already have `name`?
+ *
+ * `sqlite_master` is the D1 answer. The node self-host profile can be Postgres,
+ * where that relation does not exist and the probe throws; falling back to
+ * `information_schema` keeps a status read from failing the whole deployment
+ * just because it could not look for a legacy ledger.
+ */
 async function tableExists(
   db: SqlDatabaseBinding,
   name: string,
 ): Promise<boolean> {
-  const row = await db
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-    )
-    .bind(name)
-    .first<{ name: string }>();
-  return row !== null;
+  try {
+    const row = await db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+      )
+      .bind(name)
+      .first<{ name: string }>();
+    return row !== null;
+  } catch {
+    const row = await db
+      .prepare(
+        "SELECT table_name FROM information_schema.tables WHERE table_name = ? LIMIT 1",
+      )
+      .bind(name)
+      .first<{ table_name: string }>();
+    return row !== null;
+  }
 }
 
 // ---------------------------------------------------------------------------

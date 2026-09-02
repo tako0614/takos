@@ -775,8 +775,16 @@ export function createWebWorker(
       // into a fresh isolate drives the migration runner; later ones read a
       // memoized answer. A pending or failed schema answers 503 with a retry
       // hint rather than a "no such table" error from inside a query.
-      const schemaBlock = await guardRequestSchema(bindings.DB, url.pathname);
-      if (schemaBlock) return schemaBlock;
+      //
+      // The node self-host platform is excluded: it applies its own schema,
+      // through its own dialect rewrite, when it opens the database
+      // (`local-platform/persistent-d1.ts`). Running a second, SQLite-only
+      // applier over an already-converged Postgres database would only be able
+      // to fail.
+      if (platform.source !== "node") {
+        const schemaBlock = await guardRequestSchema(bindings.DB, url.pathname);
+        if (schemaBlock) return schemaBlock;
+      }
 
       // Defensive host gate: this worker is intended for the admin domain only,
       // plus service-binding internal calls.
@@ -806,13 +814,18 @@ export function createWebWorker(
 
       // A deployment with no traffic yet still converges its schema: the cron
       // is the second trigger, so an operator does not have to send a request
-      // to finish an install.
-      const schema = await convergeSchemaInBackground(bindings.DB);
-      if (schema.state !== "ready") {
-        errors.push({
-          job: "runtime-schema-migration",
-          error: `schema ${schema.state}${schema.error ? `: ${schema.error}` : ""}`,
-        });
+      // to finish an install. Node self-host converges at database open
+      // instead — see the note in fetch().
+      if (platform.source !== "node") {
+        const schema = await convergeSchemaInBackground(bindings.DB);
+        if (schema.state !== "ready") {
+          errors.push({
+            job: "runtime-schema-migration",
+            error: `schema ${schema.state}${
+              schema.error ? `: ${schema.error}` : ""
+            }`,
+          });
+        }
       }
 
       await runScheduledFamilyMaintenance(bindings, cron, errors, {
