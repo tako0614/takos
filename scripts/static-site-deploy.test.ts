@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 
 import {
   discoverBuildOutput,
+  immutableDeploymentUrl,
   mutatesTarget,
   parseStaticSiteArgs,
   runStaticSiteRecorded,
@@ -519,6 +520,11 @@ test("integration may publish a dirty worktree as a preview branch", async () =>
   const root = await fixtureRoot(TAKOS_SITE_DEFINITION, files);
   const { runtime, fetched } = fakeRuntime({
     clean: false,
+    deployStdout: [
+      "✨ Deployment alias URL: https://integration.takos-landing.pages.dev",
+      `✨ Deployment complete! Take a peek over at ${NEW_URL}`,
+      "",
+    ].join("\n"),
     served: {
       [`${NEW_URL}/`]: files["index.html"],
       [`${NEW_URL}/en/`]: files["en/index.html"],
@@ -691,6 +697,27 @@ test("a stale docs page after publication is a post-condition failure, not a ret
     exitCode: 4,
     message: expect.stringContaining("https://docs.takos.jp/deploy/"),
   });
+});
+
+test("the readback follows the immutable deployment, not the branch alias", () => {
+  // A branch publication prints both. The alias moves; the hash does not.
+  expect(
+    immutableDeploymentUrl(
+      [
+        "✨ Deployment alias URL: https://integration.takos-landing.pages.dev",
+        `✨ Deployment complete! Take a peek over at ${NEW_URL}`,
+      ].join("\n"),
+      "takos-landing",
+    ),
+  ).toBe(NEW_URL);
+  expect(immutableDeploymentUrl("nothing here", "takos-landing")).toBeNull();
+  // No hash-shaped URL at all: take what wrangler gave rather than inventing one.
+  expect(
+    immutableDeploymentUrl(
+      "https://integration.takos-landing.pages.dev",
+      "takos-landing",
+    ),
+  ).toBe("https://integration.takos-landing.pages.dev");
 });
 
 test("an upload that prints no deployment URL is indeterminate, not a failure to publish", async () => {
