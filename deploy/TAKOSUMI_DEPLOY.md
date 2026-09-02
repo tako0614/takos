@@ -7,6 +7,13 @@ contract. The current product-graph OpenTofu adapter is
 off by default, so ordinary production provider applies leave unsupported gaps
 unresolved until a reviewed disposable E2E mode is selected.
 
+The relational schema is not one of those gaps. The Worker embeds its migration
+set and applies it at runtime under a leased lock, gating traffic with `503`
+until the database has converged, so wrangler, OpenTofu, Takosumi BYOC, and
+self-host installs all reach the same schema with no Apply-time migration step
+and no bridge involvement. `docs/deploy/runtime-schema-and-capabilities.md`
+describes the ledger, the lock, and the reduced capability modes.
+
 Takos does not own a deployment control plane. It does not inject provider
 credentials, execute production plan/apply/destroy, publish Takosumi releases,
 or maintain a second Resource/Run ledger.
@@ -18,7 +25,10 @@ An operator registers the Git source and installs
 Takosumi. The former `deploy/opentofu/takoform` Provider 1.x projection is not a
 current install option because it cannot represent the product graph. For the
 Cloudflare gaps that remain outside the ordinary provider path, use the
-explicitly reviewed bridge modes documented in `docs/deploy/index.md`.
+explicitly reviewed bridge modes documented in `docs/deploy/index.md`. Those
+modes now gate only Vectorize index creation, the container-enabled Durable
+Object bootstrap, and Container application reconciliation; the bridge never
+reads or writes D1.
 Takosumi owns the normal Capsule
 plan/apply flow, including:
 

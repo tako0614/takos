@@ -1,6 +1,6 @@
 # Takos をセルフホストする
 
-Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractのgraphを宣言します。Cloudflare provider がまだ表現できない一部の gap は通常の production provider path だけでは反映されず、明示的に reviewed bridge を選んだ disposable E2E でだけ補われます。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
+Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractのgraphを宣言します。D1 の schema は install path に関係なく Worker が実行時に適用するので、deploy 側に migration 手順はありません ([スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities))。Cloudflare provider がまだ表現できない残りの gap は通常の production provider path だけでは反映されず、明示的に reviewed bridge を選んだ disposable E2E でだけ補われます。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
@@ -18,10 +18,19 @@ Cloudflare adapterは次の論理リソースをWorkers、D1、R2、KV、Queues�
 
 OpenTofu はリソースと Worker に渡す binding を作ります。Worker のコードは、この binding を使って起動します。
 
+### スキーマは実行時に収束する
+
+D1 の schema は bridge の責務ではありません。Worker が bundle に埋め込んだ migration set を
+lease 付き lock の下で自分で適用し、収束するまで 503 を返します。wrangler、OpenTofu、
+Takosumi BYOC、self-host のどの install path でも同じ schema に到達します。apply の前後に
+migration step はありません。詳細は
+[スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities) を参照してください。
+
 ### Cloudflare provider gap bridge
 
-Cloudflare provider がまだ表現できない Vectorize、D1 migration、container-enabled Durable Object、Container
-application の反映には、Takos が所有する補助 bridge があります。`cloudflare_provider_gap_bridge_mode` は既定値が
+Cloudflare provider がまだ表現できない Vectorize index、container-enabled Durable Object の bootstrap、
+Container application の反映には、Takos が所有する補助 bridge があります。
+`cloudflare_provider_gap_bridge_mode` は既定値が
 `off` で、通常の install や production provider path では bridge は実行されません。検証用の `staging` は
 `environment = "staging"` と併せて、また disposable production E2E 用の `disposable-production` は
 `environment = "production"` と併せて明示的に選んだ場合だけ有効になります。
@@ -30,7 +39,8 @@ application の反映には、Takos が所有する補助 bridge があります
 `cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"` を完全一致で指定します。
 `off` と `staging` では acknowledgement を空欄にしてください。bridge は一般の production deploy を有効にする
 ためのものではなく、Container image は immutable digest のまま、destroy 時は所有を証明できる Container application
-と Vectorize index だけを削除します。D1 migration の巻き戻しは行いません。
+と Vectorize index だけを削除します。bridge は D1 を読み書きしないので、durable な product data を触ることも、
+巻き戻すこともありません。
 
 ### ランタイムシークレット
 
@@ -107,6 +117,7 @@ Workspace に追加するアプリも、Git リポジトリにある OpenTofu �
 
 - [環境と変数](/deploy/environment)
 - [ランタイムシークレット](/deploy/runtime-secrets)
+- [スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities)
 - [デプロイ手順](/deploy/deploy)
 - [ルートとドメイン](/deploy/routes)
 - [ロールバック](/deploy/rollback)

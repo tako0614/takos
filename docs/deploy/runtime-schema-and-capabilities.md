@@ -1,9 +1,10 @@
 # スキーマ自動適用と縮退モード
 
 Cloudflare provider は D1 migration の実行、Vectorize index、Container application
-を表現できません。Takos が所有する bridge はこの gap を埋めますが、既定では動かず、
-使い捨て環境向けの mode でしか有効になりません
-([セルフホスト](/deploy/) の「Cloudflare provider gap bridge」を参照)。
+を表現できません。Vectorize index と Container application は、既定では動かず使い捨て環境
+向けの mode でしか有効にならない Takos 所有の bridge が補います
+([セルフホスト](/deploy/) の「Cloudflare provider gap bridge」を参照)。D1 migration は
+bridge の責務ではなくなり、どの install path でも Worker 自身が適用します。
 
 そのため Takos Worker は次の二つを自分で引き受けます。
 
@@ -19,9 +20,9 @@ Worker は `db/migrations-control/migrations` の SQL を bundle に埋め込ん
 `bun run generate:migration-set` が生成し、`bun run check` が drift を検査します)。
 
 - 最初の request と cron 実行が、未適用の migration を順番に適用します。
-- 適用済みの記録は `_takos_opentofu_migrations` に入ります。これは
-  OpenTofu bridge が使う table と同じ名前・同じ列・同じ `sha256:<hex>` checksum です。
-  bridge が適用済みの database は、そのまま「適用済み」と認識されます。
+- 適用済みの記録は `_takos_opentofu_migrations` に入ります。これは、かつて OpenTofu bridge が
+  使っていた table と同じ名前・同じ列・同じ `sha256:<hex>` checksum です。bridge が適用済みの
+  database も、そのまま「適用済み」と認識されます。
 - 過去の install path の記録も取り込みます。`d1_migrations`
   (`wrangler d1 migrations apply`) と `_takos_self_host_migrations` (self-host node
   platform) に記録がある database は、その分を再適用しません。
