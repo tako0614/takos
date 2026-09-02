@@ -36,7 +36,6 @@ output "bridge_path_digests" {
   description = "Content-bound digests prove child-module paths resolve to the app module root."
   value = {
     worker_artifact          = module.app.worker_artifact_digest
-    migration_set            = module.app.migration_set_digest
     container_desired_config = module.app.container_desired_config_digest
     bridge_helper            = module.app.bridge_helper_digest
   }

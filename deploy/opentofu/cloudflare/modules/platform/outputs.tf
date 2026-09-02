@@ -152,11 +152,6 @@ output "container_rendered_input_digest" {
   value       = local.container_rendered_input_digest
 }
 
-output "migration_set_digest" {
-  description = "Stable digest of the D1 migration set used by the optional provider-gap bridge."
-  value       = local.migration_set_digest
-}
-
 output "bridge_helper_digest" {
   description = "Stable digest of the optional provider-gap bridge executable."
   value       = local.bridge_helper_digest

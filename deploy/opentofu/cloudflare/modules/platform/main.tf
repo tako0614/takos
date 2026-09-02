@@ -128,8 +128,6 @@ locals {
   worker_module_file_path            = "${local.app_module_root}/${local.worker_module_path}"
   worker_assets_directory            = var.plan_mode ? "fixtures/assets" : ".takos-build/assets"
   worker_assets_directory_path       = "${local.app_module_root}/${local.worker_assets_directory}"
-  migration_set_path                 = var.plan_mode ? "fixtures/migrations" : ".takos-build/migrations"
-  migration_set_directory_path       = "${local.app_module_root}/${local.migration_set_path}"
   container_desired_config_path      = var.plan_mode ? "fixtures/container-desired.json" : ".takos-build/container-desired.json"
   container_desired_config_file_path = "${local.app_module_root}/${local.container_desired_config_path}"
   bridge_helper_path                 = var.plan_mode ? "fixtures/takos-cloudflare-opentofu-bridge.ts" : ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts"
@@ -288,9 +286,6 @@ locals {
     ["worker/index.js:${filesha256(local.worker_module_file_path)}"],
     [for file in sort(tolist(fileset(local.worker_assets_directory_path, "**"))) : "assets/${file}:${filesha256("${local.worker_assets_directory_path}/${file}")}"]
   ))) : "bridge-disabled"
-  migration_set_digest = local.provider_gap_bridge_enabled ? sha256(join("|", [
-    for file in sort(tolist(fileset(local.migration_set_directory_path, "**/*.sql"))) : "${file}:${filesha256("${local.migration_set_directory_path}/${file}")}"
-  ])) : "bridge-disabled"
   container_desired_config_digest = local.provider_gap_bridge_enabled ? filesha256(local.container_desired_config_file_path) : "bridge-disabled"
   container_rendered_input_digest = local.provider_gap_bridge_enabled ? sha256(jsonencode({
     template_digest = local.container_desired_config_digest
@@ -309,7 +304,6 @@ locals {
   product_resource_digest         = sha256(jsonencode(local.product_resource_names))
   bridge_triggers = {
     account_id               = var.account_id
-    d1_database_id           = cloudflare_d1_database.this["db"].id
     provider_gap_bridge_mode = var.cloudflare_provider_gap_bridge_mode
     bridge_acknowledgement   = local.bridge_acknowledgement_digest
     helper                   = local.bridge_helper_digest
@@ -319,7 +313,6 @@ locals {
     container_desired_config = local.container_desired_config_digest
     container_rendered_input = local.container_rendered_input_digest
     vector_desired_config    = local.vector_desired_config_digest
-    migration_set            = local.migration_set_digest
     product_resources        = local.product_resource_digest
   }
   # The capability preflight intentionally carries only activation metadata
@@ -341,11 +334,9 @@ locals {
       TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH                  = local.bridge_helper_path
       TAKOS_CLOUDFLARE_ACCOUNT_ID                          = var.account_id
       TAKOS_CLOUDFLARE_WORKER_NAME                         = local.service_runtime_name
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID                      = cloudflare_d1_database.this["db"].id
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME                   = local.vectorize.index_name
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS             = tostring(local.vectorize.dimensions)
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC                 = local.vectorize.metric
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH                  = local.migration_set_path
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH                  = local.worker_assets_directory
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH       = local.container_desired_config_path
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH                = local.worker_module_path
@@ -402,6 +393,11 @@ resource "cloudflare_queue" "this" {
   depends_on = [terraform_data.provider_gap_capability]
 }
 
+# The bridge modes gate exactly three imperative Cloudflare operations the
+# provider cannot express: Vectorize index creation, the container-enabled
+# Durable Object bootstrap upload, and Container application reconciliation.
+# D1 schema is no longer part of that set; the Worker applies its embedded
+# migration set at runtime, so no Apply-time step mutates durable data.
 resource "terraform_data" "provider_gap_contract" {
   input = {
     mode                   = var.cloudflare_provider_gap_bridge_mode
@@ -719,7 +715,7 @@ resource "terraform_data" "provider_gap_post" {
   }
 
   # The helper only removes provider-gap objects that can be proven to belong
-  # to this worker. It does not pretend to roll back D1 data or cron state.
+  # to this worker. It never reads or rolls back D1 data or cron state.
   provisioner "local-exec" {
     when        = destroy
     working_dir = self.input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR
