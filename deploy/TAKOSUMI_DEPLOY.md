@@ -27,12 +27,56 @@ plan/apply flow, including:
 - Run, StateVersion, Output, and AuditEvent records;
 - plan/apply/destroy authority and operator policy.
 
-Both modules receive ordinary OpenTofu variables. Secret values remain
+The module receives ordinary OpenTofu variables. Secret values remain
 operator-owned inputs and are materialized only inside the selected Takosumi
-runner. Cloudflare-specific runtime secrets are documented in
-`deploy/cloudflare/wrangler.toml` and are supplied with `wrangler secret put`,
-never through OpenTofu state or outputs. A `TAKOSUMI_ACCOUNTS_TOKEN` is
-optional and only needed for server-to-server Capsule calls.
+runner. A `TAKOSUMI_ACCOUNTS_TOKEN` is optional and only needed for
+server-to-server Capsule calls.
+
+## Runtime secrets
+
+The Takos Worker reads five runtime secrets: `ENCRYPTION_KEY`,
+`TAKOS_AGENT_START_TOKEN`, `TAKOS_INTERNAL_API_SECRET`, `PLATFORM_PRIVATE_KEY`,
+and `PLATFORM_PUBLIC_KEY`. `deploy/opentofu/cloudflare` names them and holds no
+value for any of them. A Takosumi Run persists OpenTofu state as a StateVersion,
+so a value minted inside the module would be a published secret. Runtime secrets
+are documented in `deploy/cloudflare/wrangler.toml` and are supplied with
+`wrangler secret put`, never through OpenTofu state or outputs.
+
+`.well-known/takosumi.json` is `takosumi.com/v2.4` and requests the three
+symmetric secrets as `secret.generated` requirements delivered to the exact
+runtime binding names. That is the only shape a repository may request: exactly
+32 bytes, hex-encoded, delivered to a binding. It fits `ENCRYPTION_KEY`
+(the Worker hex-decodes a 64-character value into a 32-byte PBKDF2 input),
+`TAKOS_AGENT_START_TOKEN`, and `TAKOS_INTERNAL_API_SECRET`, which are compared
+as opaque strings.
+
+`PLATFORM_PRIVATE_KEY` and `PLATFORM_PUBLIC_KEY` stay operator-supplied. The
+Worker imports the private key with `jose.importPKCS8(pem, "RS256")` to sign the
+short-lived runtime-service JWT, so the value is an RSA-2048 PKCS#8 PEM. No
+generated-secret shape expresses a key pair, the Worker has no deterministic
+derivation from seed bytes, and a repository manifest cannot request the host's
+operator-owned RSA key-pair material. Generate the pair with
+`bun run generate:keys` and load it with `wrangler secret put`.
+
+Whether a host mints the requested values depends on the host lane. Takosumi
+delivers manifest-requested generated secrets through a provider that declares
+the run-scoped sensitive input protocol in its CredentialRecipe; the upstream
+Cloudflare provider does not, so on this BYOC module the request is currently
+inert and all five values are operator-supplied. The requirement is declared
+anyway because it is the repository's statement of what the app needs, and it is
+satisfied without a manifest change on any host lane that can deliver it.
+
+The module binds the five names with the Cloudflare `inherit` binding type,
+which carries an existing value forward without sending it. A first install has
+no previous Worker version to inherit from, so the sequence is:
+
+1. apply with `runtime_secrets_provisioned = false`; the Worker serves `503` on
+   every path except `/health` until its secrets exist;
+2. load the five values with `wrangler secret put`;
+3. apply again with `runtime_secrets_provisioned = true`.
+
+After that, every later apply preserves the operator-owned values instead of
+publishing a Worker version that silently drops them.
 
 ## Optional Service Form projection
 
