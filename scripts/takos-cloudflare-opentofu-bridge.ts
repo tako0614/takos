@@ -7,8 +7,11 @@
  *   - Vectorize index creation/readback;
  *   - legacy Workers-script upload for container-enabled Durable Object
  *     migrations (the Versions endpoint does not currently enable them);
- *   - Container application image/capacity and Durable Object ownership;
- *   - D1 migrations.
+ *   - Container application image/capacity and Durable Object ownership.
+ *
+ * D1 schema is not a bridge responsibility.  The Worker applies its embedded
+ * migration set at runtime under a leased lock, so every install path
+ * converges on the same schema without an Apply-time imperative step.
  *
  * The bridge is opt-in and mode-gated.  A staging run may use the bridge for
  * smoke inputs only when the deployment environment is exactly `staging`; a
@@ -36,10 +39,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const MAXIMUM_RESPONSE_BYTES = 8 * 1024 * 1024;
-const MAXIMUM_MIGRATION_BYTES = 256 * 1024 * 1024;
-const D1_LEDGER_TABLE = "_takos_opentofu_migrations";
-const D1_IMPORT_POLL_LIMIT = 600;
-const DEFAULT_D1_IMPORT_POLL_DELAY_MS = 250;
+const MAXIMUM_ARTIFACT_BYTES = 256 * 1024 * 1024;
 const RECOVERY_STATE_FILE_NAME = "terraform.tfstate";
 const RECOVERY_STATE_RELATIVE_PATH = `../${RECOVERY_STATE_FILE_NAME}`;
 const RECOVERY_MODULE_DIRECTORY_NAME = "module";
@@ -82,8 +82,6 @@ export interface BridgeFetchOptions {
   readonly env?: Record<string, string | undefined>;
   readonly cwd?: string;
   readonly fetchImpl?: typeof fetch;
-  readonly importPollDelayMs?: number;
-  readonly importPollLimit?: number;
   readonly containersReadinessRetryAttempts?: number;
   readonly containersReadinessRetryDelayMs?: number;
   readonly containersReadinessDelay?: (delayMs: number) => Promise<void>;
@@ -95,7 +93,6 @@ export interface BridgeDigests {
   readonly bridgeActivationDigest: string;
   readonly durableObjectBootstrapDigest?: string;
   readonly helperDigest: string;
-  readonly migrationDigest: string;
   readonly workerArtifactDigest: string;
 }
 
@@ -111,7 +108,6 @@ export interface BridgeEvidence {
     readonly tag?: string;
   };
   readonly vector: { readonly status: "present" | "created" | "deleted" };
-  readonly d1: { readonly applied: readonly string[]; readonly pending: readonly string[] };
   readonly containers: {
     readonly reconciled: readonly string[];
     readonly deleted: readonly string[];
@@ -192,10 +188,6 @@ function sha256(bytes: Uint8Array): string {
 
 function digest(value: unknown): string {
   return `sha256:${sha256(new TextEncoder().encode(stableJson(value)))}`;
-}
-
-function md5(bytes: Uint8Array): string {
-  return createHash("md5").update(bytes).digest("hex");
 }
 
 function envValue(
@@ -419,11 +411,9 @@ interface BridgeConfig {
   readonly bridgeAcknowledgementDigest: string;
   readonly accountId: string;
   readonly workerName: string;
-  readonly d1DatabaseId: string;
   readonly vectorIndexName: string;
   readonly vectorDimensions: number;
   readonly vectorMetric: "cosine" | "euclidean" | "dot-product";
-  readonly migrationSetPath: string;
   readonly workerAssetsPath?: string;
   readonly durableObjectBootstrapPath?: string;
   readonly durableObjectLifecycle?: DurableObjectLifecycle;
@@ -432,8 +422,6 @@ interface BridgeConfig {
   readonly workerArtifactPath: string;
   readonly recoveryStatePath?: string;
   readonly containerImage?: string;
-  readonly importPollDelayMs: number;
-  readonly importPollLimit: number;
 }
 
 interface CapabilityPreflightConfig {
@@ -685,14 +673,6 @@ export async function parseBridgeConfig(
     ),
     "worker_name",
   );
-  const d1DatabaseId = stringValue(
-    envValue(
-      env,
-      ["TAKOS_CLOUDFLARE_D1_DATABASE_ID", "TAKOS_D1_DATABASE_ID", "d1_database_id"],
-      true,
-    ),
-    "d1_database_id",
-  );
   const vectorIndexName = stringValue(
     envValue(
       env,
@@ -732,20 +712,6 @@ export async function parseBridgeConfig(
   if (metric !== "cosine" && metric !== "euclidean" && metric !== "dot-product") {
     fail("vector_index_metric_invalid");
   }
-  const migrationSetPath = pathInput(
-    cwd,
-    envValue(
-      env,
-      [
-        "TAKOS_CLOUDFLARE_MIGRATION_SET_PATH",
-        "TAKOS_MIGRATION_SET_PATH",
-        "migration_set_path",
-      ],
-      true,
-    ),
-    "migration_set_path",
-    true,
-  )!;
   const workerArtifactPath = pathInput(
     cwd,
     envValue(
@@ -807,22 +773,6 @@ export async function parseBridgeConfig(
     "container_desired_config_path",
     needsContainers && containerDesiredConfigContent === undefined,
   );
-  const delay = Number(
-    envValue(env, ["TAKOS_D1_IMPORT_POLL_DELAY_MS", "d1_import_poll_delay_ms"], false) ??
-      options.importPollDelayMs ??
-      DEFAULT_D1_IMPORT_POLL_DELAY_MS,
-  );
-  const limit = Number(
-    envValue(env, ["TAKOS_D1_IMPORT_POLL_LIMIT", "d1_import_poll_limit"], false) ??
-      options.importPollLimit ??
-      D1_IMPORT_POLL_LIMIT,
-  );
-  if (!Number.isSafeInteger(delay) || delay < 0 || delay > 60_000) {
-    fail("d1_import_poll_delay_invalid");
-  }
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > D1_IMPORT_POLL_LIMIT) {
-    fail("d1_import_poll_limit_invalid");
-  }
   const containerImage = envValue(
     env,
     ["TAKOS_CONTAINER_IMAGE", "container_image"],
@@ -851,11 +801,9 @@ export async function parseBridgeConfig(
     bridgeAcknowledgementDigest: activation.acknowledgementDigest,
     accountId,
     workerName,
-    d1DatabaseId,
     vectorIndexName,
     vectorDimensions,
     vectorMetric: metric,
-    migrationSetPath,
     ...(workerAssetsPath === undefined ? {} : { workerAssetsPath }),
     ...(durableObjectBootstrapPath === undefined
       ? {}
@@ -870,51 +818,7 @@ export async function parseBridgeConfig(
     workerArtifactPath,
     ...(recoveryStatePath === undefined ? {} : { recoveryStatePath }),
     ...(containerImage === undefined ? {} : { containerImage }),
-    importPollDelayMs: delay,
-    importPollLimit: limit,
   };
-}
-
-export async function migrationFiles(path: string): Promise<readonly {
-  readonly name: string;
-  readonly sql: string;
-  readonly sha256: string;
-}[]> {
-  const metadata = await lstat(path).catch(() => fail("migration_set_missing"));
-  if (!metadata.isDirectory() || metadata.isSymbolicLink()) fail("migration_set_invalid");
-  const files: { name: string; sql: string; sha256: string }[] = [];
-  async function visit(directory: string): Promise<void> {
-    const entries = (await readdir(directory, { withFileTypes: true })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-    for (const entry of entries) {
-      const entryPath = join(directory, entry.name);
-      const entryStat = await lstat(entryPath);
-      if (entryStat.isSymbolicLink()) fail("migration_set_symlink");
-      if (entry.isDirectory()) {
-        await visit(entryPath);
-        continue;
-      }
-      if (!entry.isFile()) fail("migration_file_invalid");
-      if (!entry.name.endsWith(".sql")) continue;
-      if (!/^\d{4}_[^/]+\.sql$/u.test(relative(path, entryPath).split(sep).join("/"))) {
-        fail("migration_file_name_invalid");
-      }
-      if (entryStat.size === 0 || entryStat.size > MAXIMUM_MIGRATION_BYTES) {
-        fail("migration_file_size_invalid");
-      }
-      const bytes = await readFile(entryPath);
-      files.push({
-        name: relative(path, entryPath).split(sep).join("/"),
-        sql: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-        sha256: sha256(bytes),
-      });
-    }
-  }
-  await visit(path);
-  files.sort((a, b) => a.name.localeCompare(b.name));
-  if (files.length === 0) fail("migration_set_empty");
-  return files;
 }
 
 function containerRowsFromValue(
@@ -1045,7 +949,6 @@ type ContainersRequestContext = "default" | "delete-readback";
 function cloudflareApiSurface(path: string): string {
   if (path.includes("/containers/applications")) return "containers.applications";
   if (path.includes("/vectorize/")) return "vectorize.indexes";
-  if (path.includes("/d1/database")) return "d1.database";
   if (path.includes("/workers/scripts/")) return "workers.scripts";
   return "cloudflare.api";
 }
@@ -1122,7 +1025,7 @@ export function bridgeFailurePayload(
     : "bridge_failed";
   const safeDetail =
     safeCode === "cloudflare_api_error" &&
-    /^(?:GET|POST|PATCH|PUT|DELETE):(?:containers\.applications|vectorize\.indexes|d1\.database|workers\.scripts|cloudflare\.api):[1-5][0-9]{2}(?::(?:CF[0-9]{1,12}|[A-Z][A-Z0-9_]{1,127}))?$/u.test(
+    /^(?:GET|POST|PATCH|PUT|DELETE):(?:containers\.applications|vectorize\.indexes|workers\.scripts|cloudflare\.api):[1-5][0-9]{2}(?::(?:CF[0-9]{1,12}|[A-Z][A-Z0-9_]{1,127}))?$/u.test(
       detail ?? "",
     )
       ? detail
@@ -1359,88 +1262,6 @@ class CloudflareApi {
     }
     fail("cloudflare_request_failed");
   }
-
-  async d1Query(
-    databaseId: string,
-    sql: string,
-    params: readonly (string | number | null)[] = [],
-  ): Promise<readonly Record<string, unknown>[]> {
-    const body: JsonObject = { sql, ...(params.length === 0 ? {} : { params: [...params] }) };
-    const result = await this.request(
-      "POST",
-      `/accounts/${pathSegment(this.#accountId, "account_id")}/d1/database/${pathSegment(databaseId, "database_id")}/query`,
-      body,
-    );
-    const rows = Array.isArray(result) ? result[0] : result;
-    if (!plainObject(rows)) return [];
-    if (rows.success === false) fail("cloudflare_d1_query_failed");
-    if (!Array.isArray(rows.results)) return [];
-    return rows.results.filter((row): row is Record<string, unknown> => plainObject(row));
-  }
-
-  async d1Import(
-    databaseId: string,
-    bytes: Uint8Array,
-    delayMs: number,
-    pollLimit: number,
-  ): Promise<void> {
-    const path = `/accounts/${pathSegment(this.#accountId, "account_id")}/d1/database/${pathSegment(databaseId, "database_id")}/import`;
-    let result = await this.request("POST", path, { action: "init", etag: md5(bytes) });
-    if (!plainObject(result)) fail("cloudflare_d1_import_response_invalid");
-    const etag = md5(bytes);
-    if (result.upload_url !== undefined || result.filename !== undefined) {
-      if (typeof result.upload_url !== "string" || typeof result.filename !== "string") {
-        fail("cloudflare_d1_import_response_invalid");
-      }
-      let uploadUrl: URL;
-      try {
-        uploadUrl = new URL(result.upload_url);
-      } catch {
-        fail("cloudflare_d1_import_response_invalid");
-      }
-      if (
-        uploadUrl.protocol !== "https:" ||
-        !uploadUrl.hostname.endsWith(".r2.cloudflarestorage.com")
-      ) {
-        fail("cloudflare_d1_import_response_invalid");
-      }
-      let uploadResponse: Response;
-      try {
-        uploadResponse = await this.#fetch(uploadUrl, {
-          method: "PUT",
-          headers: { "content-length": String(bytes.byteLength) },
-          body: bytes,
-          signal: AbortSignal.timeout(30_000),
-        });
-      } catch {
-        fail("cloudflare_d1_import_upload_failed");
-      }
-      const uploadedEtag = (uploadResponse.headers.get("etag") ?? "")
-        .replace(/^W\//u, "")
-        .replace(/^"|"$/gu, "");
-      if (!uploadResponse.ok || uploadedEtag !== etag) fail("cloudflare_d1_import_upload_failed");
-      result = await this.request("POST", path, {
-        action: "ingest",
-        filename: result.filename,
-        etag,
-      });
-      if (!plainObject(result)) fail("cloudflare_d1_import_response_invalid");
-    }
-    for (let attempt = 0; attempt < pollLimit; attempt += 1) {
-      if (result.status === "complete") return;
-      if (result.status === "error") fail("cloudflare_d1_import_failed");
-      if (typeof result.at_bookmark !== "string" || result.at_bookmark === "") {
-        fail("cloudflare_d1_import_response_invalid");
-      }
-      if (delayMs > 0) await new Promise((resolvePromise) => setTimeout(resolvePromise, delayMs));
-      result = await this.request("POST", path, {
-        action: "poll",
-        current_bookmark: result.at_bookmark,
-      });
-      if (!plainObject(result)) fail("cloudflare_d1_import_response_invalid");
-    }
-    fail("cloudflare_d1_import_timeout");
-  }
 }
 
 interface WorkerEvidence {
@@ -1457,11 +1278,9 @@ const RECOVERY_STATE_INPUT_KEYS = [
   "TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH",
   "TAKOS_CLOUDFLARE_ACCOUNT_ID",
   "TAKOS_CLOUDFLARE_WORKER_NAME",
-  "TAKOS_CLOUDFLARE_D1_DATABASE_ID",
   "TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME",
   "TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS",
   "TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC",
-  "TAKOS_CLOUDFLARE_MIGRATION_SET_PATH",
   "TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH",
   "TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH",
   "TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH",
@@ -1751,7 +1570,6 @@ function recoveryWorkerEvidence(
     stateModuleWorkingDirectory !== config.cwd ||
     input.TAKOS_CLOUDFLARE_ACCOUNT_ID !== config.accountId ||
     input.TAKOS_CLOUDFLARE_WORKER_NAME !== config.workerName ||
-    input.TAKOS_CLOUDFLARE_D1_DATABASE_ID !== config.d1DatabaseId ||
     input.TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME !== config.vectorIndexName ||
     dimensions !== config.vectorDimensions ||
     input.TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC !== config.vectorMetric
@@ -2307,110 +2125,6 @@ async function reconcileContainers(
   return { names: reconciled, changed };
 }
 
-async function readLedger(
-  api: CloudflareApi,
-  config: BridgeConfig,
-  ensureTable = true,
-): Promise<readonly Record<string, unknown>[]> {
-  if (ensureTable) {
-    await api.d1Query(
-      config.d1DatabaseId,
-      `CREATE TABLE IF NOT EXISTS "${D1_LEDGER_TABLE}" (name TEXT PRIMARY KEY NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)`,
-    );
-  }
-  return api.d1Query(
-    config.d1DatabaseId,
-    `SELECT name, checksum FROM "${D1_LEDGER_TABLE}" ORDER BY name`,
-  );
-}
-
-function sqlLiteral(value: string): string {
-  return `'${value.replace(/'/gu, "''")}'`;
-}
-
-async function reconcileMigrations(
-  api: CloudflareApi,
-  config: BridgeConfig,
-  files: readonly { readonly name: string; readonly sql: string; readonly sha256: string }[],
-): Promise<{
-  readonly applied: readonly string[];
-  readonly pending: readonly string[];
-  readonly newlyApplied: readonly string[];
-}> {
-  const rows = await readLedger(api, config, true);
-  const byName = new Map<string, string>();
-  for (const row of rows) {
-    const name = stringValue(row.name, "migration_ledger_name");
-    const checksum = stringValue(row.checksum, "migration_ledger_checksum");
-    if (byName.has(name)) fail("migration_ledger_duplicate");
-    byName.set(name, checksum);
-  }
-  const knownNames = new Set(files.map((file) => file.name));
-  for (const name of byName.keys()) {
-    if (!knownNames.has(name)) fail("migration_ledger_unknown", name);
-  }
-  const applied: string[] = [];
-  const pending: string[] = [];
-  const newlyApplied: string[] = [];
-  let encounteredPending = false;
-  // Validate the complete ledger/order before importing any SQL.  Discovering
-  // a later already-applied migration after the first import would otherwise
-  // leave a partially reconciled database when we fail closed.
-  for (const file of files) {
-    const expected = `sha256:${file.sha256}`;
-    const actual = byName.get(file.name);
-    if (actual !== undefined) {
-      if (actual !== expected && actual !== file.sha256) fail("migration_checksum_drift", file.name);
-      if (encounteredPending) fail("migration_ledger_out_of_order", file.name);
-      applied.push(file.name);
-      continue;
-    }
-    encounteredPending = true;
-    pending.push(file.name);
-  }
-  for (const file of files) {
-    if (byName.has(file.name)) continue;
-    const expected = `sha256:${file.sha256}`;
-    const sql = `${file.sql.trimEnd()}\nINSERT INTO "${D1_LEDGER_TABLE}" (name, checksum, applied_at) VALUES (${sqlLiteral(file.name)}, ${sqlLiteral(expected)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));\n`;
-    await api.d1Import(
-      config.d1DatabaseId,
-      new TextEncoder().encode(sql),
-      config.importPollDelayMs,
-      config.importPollLimit,
-    );
-    applied.push(file.name);
-    newlyApplied.push(file.name);
-  }
-  return { applied, pending: [], newlyApplied };
-}
-
-async function verifyMigrations(
-  api: CloudflareApi,
-  config: BridgeConfig,
-  files: readonly { readonly name: string; readonly sha256: string }[],
-): Promise<{ readonly applied: readonly string[]; readonly pending: readonly string[] }> {
-  const rows = await readLedger(api, config, false);
-  const byName = new Map<string, string>();
-  for (const row of rows) {
-    const name = stringValue(row.name, "migration_ledger_name");
-    if (byName.has(name)) fail("migration_ledger_duplicate");
-    byName.set(name, stringValue(row.checksum, "migration_ledger_checksum"));
-  }
-  const knownNames = new Set(files.map((file) => file.name));
-  for (const name of byName.keys()) {
-    if (!knownNames.has(name)) fail("migration_ledger_unknown", name);
-  }
-  const applied: string[] = [];
-  const pending: string[] = [];
-  for (const file of files) {
-    const checksum = byName.get(file.name);
-    if (checksum === undefined) pending.push(file.name);
-    else if (checksum !== file.sha256 && checksum !== `sha256:${file.sha256}`) fail("migration_checksum_drift", file.name);
-    else applied.push(file.name);
-  }
-  return { applied, pending };
-}
-
 async function cleanup(
   api: CloudflareApi,
   config: BridgeConfig,
@@ -2496,7 +2210,7 @@ async function workerArtifactDigest(
   workerAssetsPath: string | undefined,
 ): Promise<string> {
   const workerDigest = sha256(
-    await readBounded(workerArtifactPath, MAXIMUM_MIGRATION_BYTES),
+    await readBounded(workerArtifactPath, MAXIMUM_ARTIFACT_BYTES),
   );
   if (workerAssetsPath === undefined) {
     // A pre-mode bridge state created before the asset boundary was added may
@@ -2523,7 +2237,7 @@ async function workerArtifactDigest(
         continue;
       }
       if (!child.isFile()) fail("worker_asset_file_invalid");
-      if (childMetadata.size > MAXIMUM_MIGRATION_BYTES) {
+      if (childMetadata.size > MAXIMUM_ARTIFACT_BYTES) {
         fail("worker_asset_file_too_large");
       }
       const digest = sha256(await readFile(childPath));
@@ -2640,7 +2354,7 @@ async function uploadDurableObjectBootstrap(
     fail("durable_object_bootstrap_config_missing");
   }
 
-  const bootstrap = await readBounded(bootstrapPath, MAXIMUM_MIGRATION_BYTES);
+  const bootstrap = await readBounded(bootstrapPath, MAXIMUM_ARTIFACT_BYTES);
   const moduleName = "durable-object-migration-bootstrap.js";
   const metadata = bootstrapMetadata(config, migrations, includeVectorBinding);
   const form = new FormData();
@@ -2702,13 +2416,11 @@ function capabilityPreflightEvidence(
       desiredDigest: preflightDigest,
       bridgeActivationDigest,
       helperDigest: notCheckedDigest,
-      migrationDigest: notCheckedDigest,
       workerArtifactDigest: notCheckedDigest,
     },
     changed: false,
     durableObjects: { status: "not-checked" },
     vector: { status: "present" },
-    d1: { applied: [], pending: [] },
     containers: { reconciled: [], deleted: [] },
   };
 }
@@ -2729,13 +2441,12 @@ export async function runBridge(
   }
   const config = await parseBridgeConfig(options, selectedPhase);
   const token = envValue(env, ["CLOUDFLARE_API_TOKEN"], true)!;
-  const [migrationSet, workerArtifactEvidence, bridgeDigest, bootstrapDigest] = await Promise.all([
-    migrationFiles(config.migrationSetPath),
+  const [workerArtifactEvidence, bridgeDigest, bootstrapDigest] = await Promise.all([
     workerArtifactDigest(config.workerArtifactPath, config.workerAssetsPath),
     helperDigest(options.helperPath ?? fileURLToPath(import.meta.url)),
     config.durableObjectBootstrapPath === undefined
       ? Promise.resolve(undefined)
-      : readBounded(config.durableObjectBootstrapPath, MAXIMUM_MIGRATION_BYTES)
+      : readBounded(config.durableObjectBootstrapPath, MAXIMUM_ARTIFACT_BYTES)
           .then((bytes) => `sha256:${sha256(bytes)}`),
   ]);
   const api = new CloudflareApi(config.accountId, token, fetchImpl, options);
@@ -2756,7 +2467,6 @@ export async function runBridge(
         : config.containerDesiredConfigPath === undefined
           ? []
           : await containerRows(config.containerDesiredConfigPath, env);
-  const migrationDigest = digest(migrationSet.map(({ name, sha256: checksum }) => ({ name, sha256: checksum })));
   const bridgeActivationDigest = digest({
     mode: config.bridgeMode,
     environment: config.bridgeEnvironment,
@@ -2765,7 +2475,6 @@ export async function runBridge(
   const desiredDigest = digest({
     accountId: config.accountId,
     workerName: config.workerName,
-    d1DatabaseId: config.d1DatabaseId,
     vector: {
       name: config.vectorIndexName,
       dimensions: config.vectorDimensions,
@@ -2786,7 +2495,6 @@ export async function runBridge(
       ? {}
       : { durableObjectBootstrapDigest: bootstrapDigest }),
     helperDigest: bridgeDigest,
-    migrationDigest,
     workerArtifactDigest: workerArtifactEvidence,
   };
   let vector: "present" | "created" | "deleted" = "present";
@@ -2794,10 +2502,6 @@ export async function runBridge(
     status: "present" | "migrated" | "not-checked";
     tag?: string;
   } = { status: "not-checked" };
-  let d1: { applied: readonly string[]; pending: readonly string[] } = {
-    applied: [],
-    pending: [],
-  };
   let reconciled: readonly string[] = [];
   let deleted: readonly string[] = [];
   let workerVersion: string | undefined;
@@ -2811,12 +2515,7 @@ export async function runBridge(
     };
     vector = await reconcileVector(api, config);
     await establishVectorOwnershipProof(api, config);
-    const migrationResult = await reconcileMigrations(api, config, migrationSet);
-    d1 = { applied: migrationResult.applied, pending: migrationResult.pending };
-    changed =
-      durableObjectResult.changed ||
-      vector === "created" ||
-      migrationResult.newlyApplied.length > 0;
+    changed = durableObjectResult.changed || vector === "created";
   } else {
     const worker = recoveryLiveWorker ??
       await workerEvidence(
@@ -2833,14 +2532,12 @@ export async function runBridge(
       // orphan an application and is therefore never accepted.
       const result = await reconcileContainers(api, config, worker, containerDesired);
       reconciled = result.names;
-      d1 = await verifyMigrations(api, config, migrationSet);
       const current = await readVector(api, config);
       if (!current || !vectorMatches(current, config)) fail("vector_index_verification_failed");
       changed = result.changed;
     } else if (selectedPhase === "verify") {
       const current = await readVector(api, config);
       if (!current || !vectorMatches(current, config)) fail("vector_index_verification_failed");
-      d1 = await verifyMigrations(api, config, migrationSet);
       for (const row of containerDesired) {
         const namespaceId = worker.namespaces.get(row.durableObjectClass);
         if (!namespaceId) fail("worker_namespace_for_container_missing", row.durableObjectClass);
@@ -2854,12 +2551,9 @@ export async function runBridge(
         reconciled = [...reconciled, row.name];
       }
     } else {
-      // Recovery cleanup is deliberately independent of the D1 migration
-      // ledger.  A failed pre-worker phase may have created Vectorize or
-      // Container resources before the ledger table existed, and a bare
-      // SELECT would prevent ownership-proven cleanup from reaching them.
-      // D1 is never rolled back here; leave its evidence empty rather than
-      // claiming a ledger read that was intentionally skipped.
+      // Recovery cleanup removes only the provider-gap objects this bridge
+      // can prove it owns.  Durable product data is never touched: the
+      // Worker owns its own schema and this phase never reads or writes D1.
       const result = await cleanup(api, config, worker, containerDesired);
       deleted = result.deletedContainers;
       vector = result.vectorDeleted ? "deleted" : "present";
@@ -2875,7 +2569,6 @@ export async function runBridge(
     changed,
     durableObjects,
     vector: { status: vector },
-    d1,
     containers: { reconciled, deleted },
     ...(workerVersion === undefined ? {} : { workerVersion }),
   };
