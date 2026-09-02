@@ -1,5 +1,5 @@
 {
-  "apiVersion": "takosumi.com/v2.3",
+  "apiVersion": "takosumi.com/v2.4",
   "kind": "Repository",
   "install": {
     "modules": {
@@ -46,6 +46,18 @@
             "helper": {
               "ja": "production または staging を指定します。Cloudflare provider-gap bridge を使う場合、mode と完全一致する環境を選びます。",
               "en": "Use production or staging. When the Cloudflare provider-gap bridge is enabled, the environment must exactly match its mode."
+            },
+            "advanced": true
+          },
+          {
+            "name": "runtime_secrets_provisioned",
+            "source": { "kind": "user" },
+            "type": "boolean",
+            "required": false,
+            "label": { "ja": "ランタイムシークレット設定済み", "en": "Runtime secrets provisioned" },
+            "helper": {
+              "ja": "ENCRYPTION_KEY、TAKOS_AGENT_START_TOKEN、TAKOS_INTERNAL_API_SECRET、PLATFORM_PRIVATE_KEY、PLATFORM_PUBLIC_KEY が対象 Worker に既に存在するときだけ true にします。module は値を保持せず inherit binding で引き継ぎます。初回 install は false のまま apply し、値を投入してから true で再 apply します。",
+              "en": "Set to true only when ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, and PLATFORM_PUBLIC_KEY already exist on the target Worker. The module holds no value and carries them forward with the inherit binding. Apply a first install with false, supply the values, then apply again with true."
             },
             "advanced": true
           },
@@ -101,6 +113,24 @@
           }
         ],
         "requires": [
+          {
+            "kind": "secret.generated",
+            "bytes": 32,
+            "encoding": "hex",
+            "deliver": { "bindings": { "value": "ENCRYPTION_KEY" } }
+          },
+          {
+            "kind": "secret.generated",
+            "bytes": 32,
+            "encoding": "hex",
+            "deliver": { "bindings": { "value": "TAKOS_AGENT_START_TOKEN" } }
+          },
+          {
+            "kind": "secret.generated",
+            "bytes": 32,
+            "encoding": "hex",
+            "deliver": { "bindings": { "value": "TAKOS_INTERNAL_API_SECRET" } }
+          },
           {
             "kind": "http.endpoint",
             "deliver": {

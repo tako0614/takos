@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 
+import { REQUIRED_RUNTIME_SECRET_NAMES } from "../../worker/shared/config/runtime-secrets.ts";
+
 const root = new URL("../../../", import.meta.url);
 const text = await readFile(new URL(".well-known/takosumi.json", root), "utf8");
 const manifest = JSON.parse(text) as RepositoryManifest;
@@ -21,6 +23,10 @@ const modules = {
     "utf8",
   ),
 };
+const platformModuleSource = await readFile(
+  new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
+  "utf8",
+);
 const retiredTakoformEntries = await readdir(
   new URL("deploy/opentofu/takoform/", root),
 );
@@ -31,7 +37,7 @@ test("Takos publishes repository install hints and service declarations", () => 
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v2.3");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2.4");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["modules"]);
   expect(Object.keys(manifest.install.modules)).toEqual([
@@ -307,6 +313,108 @@ test("manifest references real variables and only bounded presentation metadata"
   }
 });
 
+/**
+ * `secret.generated` is the only way a repository may ask the host to mint a
+ * runtime secret, and Takosumi accepts exactly one shape for it: 32 bytes, hex,
+ * delivered to a runtime binding name (`takosumi/contract/repository-manifest.ts`
+ * and `validateRequirement` in the install UX compiler). Any other shape is
+ * rejected at Capsule preflight rather than at install time, so pin it here.
+ */
+test("the manifest requests its symmetric runtime secrets as host-generated bindings", () => {
+  const module = manifest.install.modules["deploy/opentofu/cloudflare"];
+  const generated = module.requires.filter(
+    (requirement) => requirement.kind === "secret.generated",
+  );
+  expect(generated.length).toBeLessThanOrEqual(8);
+  expect(
+    generated.map((requirement) => requirement.deliver?.bindings?.value).sort(),
+  ).toEqual([
+    "ENCRYPTION_KEY",
+    "TAKOS_AGENT_START_TOKEN",
+    "TAKOS_INTERNAL_API_SECRET",
+  ]);
+  for (const requirement of generated) {
+    expect(Object.keys(requirement).sort()).toEqual([
+      "bytes",
+      "deliver",
+      "encoding",
+      "kind",
+    ]);
+    expect(requirement.bytes).toBe(32);
+    expect(requirement.encoding).toBe("hex");
+    expect(Object.keys(requirement.deliver ?? {})).toEqual(["bindings"]);
+    const binding = requirement.deliver?.bindings?.value ?? "";
+    expect(binding).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/u);
+    // Host-reserved runtime binding names a repository may never claim.
+    expect([
+      "TAKOFORM_ENDPOINT",
+      "TAKOFORM_SPACE",
+      "TAKOFORM_TOKEN",
+      "TAKOSUMI_CAPSULE_ID",
+      "TAKOSUMI_WORKSPACE_ID",
+      "TAKOSUMI_RUN_ID",
+    ]).not.toContain(binding);
+    expect(REQUIRED_RUNTIME_SECRET_NAMES as readonly string[]).toContain(binding);
+  }
+});
+
+test("no two requirements deliver to the same variable or binding", () => {
+  for (const module of Object.values(manifest.install.modules)) {
+    const delivered = module.requires.flatMap((requirement) =>
+      Object.values(
+        requirement.deliver?.variables ?? requirement.deliver?.bindings ?? {},
+      ),
+    );
+    expect(new Set(delivered).size).toBe(delivered.length);
+  }
+});
+
+/**
+ * A 32-byte hex secret cannot express an RSA key pair, so `PLATFORM_PRIVATE_KEY`
+ * and `PLATFORM_PUBLIC_KEY` stay operator-supplied. The OpenTofu module still
+ * has to name all five, because it binds them without holding a value.
+ */
+test("the OpenTofu module names every runtime secret, including the operator-supplied pair", () => {
+  const declared = platformModuleSource.match(
+    /runtime_secret_binding_names\s*=\s*\[([^\]]*)\]/u,
+  );
+  expect(declared).not.toBeNull();
+  const moduleBindings = Array.from(
+    declared![1]!.matchAll(/"([A-Z0-9_]+)"/gu),
+    (match) => match[1]!,
+  );
+  expect(moduleBindings.sort()).toEqual([...REQUIRED_RUNTIME_SECRET_NAMES].sort());
+  for (const module of Object.values(manifest.install.modules)) {
+    for (const requirement of module.requires) {
+      if (requirement.kind !== "secret.generated") continue;
+      expect(moduleBindings).toContain(requirement.deliver?.bindings?.value ?? "");
+    }
+  }
+  // The module may name a runtime secret; it may never mint or transmit one.
+  expect(platformModuleSource).not.toContain('resource "random_password"');
+  expect(platformModuleSource).not.toContain('resource "tls_private_key"');
+  expect(platformModuleSource).not.toContain('"secret_text"');
+});
+
+test("the manifest carries no secret value of its own", () => {
+  // A manifest is a public repository file: a requirement is a request, never
+  // a value. No string in it may look like resolved secret material.
+  expect(text).not.toMatch(/-----BEGIN [A-Z ]*PRIVATE KEY-----/u);
+  const suspicious: string[] = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(visit);
+    if (value && typeof value === "object") {
+      return Object.values(value as Record<string, unknown>).forEach(visit);
+    }
+    if (typeof value !== "string") return;
+    if (/^[0-9a-f]{32,}$/u.test(value) || /^[A-Za-z0-9+/]{40,}={0,2}$/u.test(value)) {
+      suspicious.push(value);
+    }
+  };
+  visit(manifest);
+  expect(suspicious).toEqual([]);
+});
+
 function variableBlock(source: string, name: string): string {
   const start = source.indexOf(`variable "${name}" {`);
   const next = source.indexOf("\nvariable ", start + 1);
@@ -356,9 +464,15 @@ interface RepositoryModule {
     callbackPath?: string;
     scopes?: string[];
     key?: string;
+    bytes?: number;
+    encoding?: string;
     interface?: { type: string; version: string };
     permissions?: string[];
     delivery?: { type?: string; variables?: Record<string, string> };
+    deliver?: {
+      variables?: Record<string, string>;
+      bindings?: Record<string, string>;
+    };
   }>;
   interfaces: Array<{
     key: string;
