@@ -272,9 +272,22 @@ async function createNodeSqliteClient(
   };
 }
 
-export async function createSqliteSqlDatabase(
+/**
+ * Keeps the underlying libSQL client reachable from the binding it backs, so
+ * the migrating factory can hand it to the table-shape repair helpers without
+ * re-opening the file or widening the public binding type.
+ */
+const sqliteClients = new WeakMap<ServerSqlDatabase, LibsqlClient>();
+
+/**
+ * Open the SQLite-backed SQL database binding without applying any schema.
+ *
+ * Separated from {@link createSqliteSqlDatabase} so the runtime migration
+ * runner can be exercised against this exact shim from an empty database, the
+ * way a fresh D1 arrives. Production callers want the migrating factory below.
+ */
+export async function openSqliteSqlDatabase(
   dbPath: string,
-  migrationsDir: string,
 ): Promise<ServerSqlDatabase> {
   await ensureParentDirectory(dbPath);
   let client: SqliteLikeClient;
@@ -292,8 +305,6 @@ export async function createSqliteSqlDatabase(
     client = await createNodeSqliteClient(dbPath);
   }
   const libsqlClient = client as LibsqlClient;
-  await ensureServerMigrations(libsqlClient, migrationsDir);
-  await ensureSqliteAccountsTableShape(libsqlClient);
 
   const runStatement = <T = Record<string, unknown>>(
     statement: SqlPreparedStatementBinding,
@@ -333,6 +344,21 @@ export async function createSqliteSqlDatabase(
     },
   };
 
+  sqliteClients.set(db, libsqlClient);
+  return db;
+}
+
+export async function createSqliteSqlDatabase(
+  dbPath: string,
+  migrationsDir: string,
+): Promise<ServerSqlDatabase> {
+  const db = await openSqliteSqlDatabase(dbPath);
+  const libsqlClient = sqliteClients.get(db);
+  if (!libsqlClient) {
+    throw new Error("SQLite SQL database was opened without a client handle");
+  }
+  await ensureServerMigrations(libsqlClient, migrationsDir);
+  await ensureSqliteAccountsTableShape(libsqlClient);
   return db;
 }
 
