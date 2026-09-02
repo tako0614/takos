@@ -17,10 +17,9 @@
 | Acceptable Use Policy template     | `/legal/acceptable-use-policy`         | Public-launch template; trust & safety owner review required                       |
 | Cookie Policy template             | `/legal/cookie-policy`                 | Public-launch template; matches Takos essential-cookie-only baseline               |
 | Service Level Agreement template   | `/legal/sla`                           | Public-launch template; availability targets and credit policy placeholders        |
-| Sub-processors public summary      | `/legal/sub-processors`                | Public-facing summary that points to the canonical `/legal/subprocessors` list     |
 | Status Page reference              | `/legal/status-page`                   | Public-launch reference to `[STATUS_PAGE_URL]` and incident classification         |
 | Data Processing Agreement template | `/legal/data-processing-agreement`     | Published template baseline; customer execution requires operator / legal approval |
-| Sub-processor list                 | `/legal/subprocessors`                 | Canonical published baseline; vendor review evidence is private                    |
+| Sub-processor list                 | `/legal/subprocessors`                 | Canonical published baseline; includes operator-boundary note; vendor review evidence is private |
 | Data residency policy              | `/legal/data-residency`                | Published policy; per-tenant enforcement evidence is private                       |
 | Privacy rights and lawful bases    | `/legal/privacy-rights`                | Published handler / consent / lawful-basis baseline                                |
 | Security disclosure policy         | `/legal/security-disclosure`           | Published policy; mailbox and encrypted-exchange evidence is private               |

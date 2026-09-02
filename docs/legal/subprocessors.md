@@ -28,6 +28,12 @@ store.
 > External sub-processors below are referenced by both planes only when the
 > relevant feature is enabled.
 
+## Operator Boundary
+
+Self-hosted, on-prem, or operator-managed Takosumi Accounts planes can have a
+different sub-processor set. Customers should verify the signed order form and
+DPA for the actual operator and environment.
+
 ## Core Providers
 
 | Provider                                       | Role                                                                             | Purpose                                                                                                        | Customer Personal Data categories                                                                                                                          | Location / region behavior                                                                                         | Official source                                                                                                                                          |
