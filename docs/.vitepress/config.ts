@@ -86,6 +86,7 @@ export default defineConfig({
             text: "Release artifact publication",
             link: "/deploy/release-artifact",
           },
+          { text: "本番デプロイレーン", link: "/deploy/production-lane" },
           { text: "複数サービス", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },

@@ -223,7 +223,7 @@ type PublicDescriptorIdentity = Readonly<{
   url: string;
 }>;
 
-type WorkerArtifactDescriptor = Readonly<{
+export type WorkerArtifactDescriptor = Readonly<{
   kind: "takos.worker-artifact@v3";
   app: "takos";
   commit: string;
@@ -978,7 +978,13 @@ async function assertPreparedReleaseDescriptor(
   }
 }
 
-function parseCanonicalWorkerArtifactDescriptor(
+/**
+ * The published release record for one Takos commit: the Worker archive's URL,
+ * exact size and SHA-256, and the digest-pinned agent images. Exported so the
+ * production lane can bind what it deploys to what was published rather than
+ * re-deriving a second, weaker schema.
+ */
+export function parseCanonicalWorkerArtifactDescriptor(
   bytes: Uint8Array,
 ): WorkerArtifactDescriptor {
   let text: string;
