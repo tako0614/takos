@@ -6,14 +6,6 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "= 5.19.1"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "= 3.9.0"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "= 4.3.0"
-    }
   }
 }
 
@@ -22,8 +14,6 @@ module "platform" {
 
   providers = {
     cloudflare = cloudflare
-    random     = random
-    tls        = tls
   }
 
   account_id        = var.cloudflare.account_id
@@ -36,6 +26,8 @@ module "platform" {
   workers_subdomain = try(var.cloudflare.workers_subdomain, null)
   zone_id           = try(var.cloudflare.zone_id, null)
   zone_name         = try(var.cloudflare.zone_name, null)
+
+  runtime_secrets_provisioned = var.runtime_secrets_provisioned
 
   cloudflare_provider_gap_bridge_mode            = var.cloudflare_provider_gap_bridge_mode
   cloudflare_provider_gap_bridge_acknowledgement = var.cloudflare_provider_gap_bridge_acknowledgement
