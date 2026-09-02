@@ -1,1 +1,0 @@
--- Portable plan fixture; real D1 migrations are supplied by the release build.

@@ -12,7 +12,15 @@ import {
 
 const root = resolve(import.meta.dir, "..");
 
-describe("Takos portable relational schema bundle", () => {
+describe("retained Provider 1.x schema bundle", () => {
+  test("is byte-identical to the single live derived migration set", async () => {
+    const bundle = await readFile(join(root, BUNDLE_RELATIVE_PATH));
+    const runtimeSet = await readFile(
+      join(root, "src/worker/platform/migrations/migration-set.generated.json"),
+    );
+    expect(bundle.equals(runtimeSet)).toBe(true);
+  });
+
   test("is an exact reproducible projection of the canonical migrations", async () => {
     const tracked = await readFile(join(root, BUNDLE_RELATIVE_PATH), "utf8");
     expect(tracked).toBe(await generateSchemaBundle(root));

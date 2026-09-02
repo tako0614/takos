@@ -1,3 +1,8 @@
+# The bridge modes gate three imperative Cloudflare operations the provider
+# cannot express: Vectorize index creation, the container-enabled Durable
+# Object bootstrap upload, and Container application reconciliation. D1 schema
+# is not among them, so an enabled bridge binds no migration-set digest and the
+# module ships no SQL fixture for plan mode.
 run "provider_gap_bridge_defaults_off" {
   command = plan
 

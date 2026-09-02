@@ -145,11 +145,6 @@ output "container_rendered_input_digest" {
   value       = module.platform.container_rendered_input_digest
 }
 
-output "migration_set_digest" {
-  description = "Stable digest of the D1 migration set."
-  value       = module.platform.migration_set_digest
-}
-
 output "bridge_helper_digest" {
   description = "Stable digest of the optional provider-gap bridge executable."
   value       = module.platform.bridge_helper_digest

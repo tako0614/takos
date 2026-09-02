@@ -20,9 +20,10 @@ ordinary production provider applies do not silently fill unsupported gaps. Set
 `cloudflare_provider_gap_bridge_mode = "staging"` with `environment = "staging"` only for disposable staging smoke inputs. A disposable production E2E must
 select `"disposable-production"` with `environment = "production"` and set
 `cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"`; any other acknowledgement fails closed.
-The bridge is app-owned and covers only Vectorize, D1 migrations, container-enabled Durable Object migration, and Container
-application reconciliation. Destroy invokes ownership-proven cleanup for bridge-created Container applications and the Vectorize
-index; it does not roll back D1 data.
+The bridge is app-owned and covers only Vectorize, container-enabled Durable Object migration, and Container
+application reconciliation. D1 schema is not in that set: the Worker applies its embedded migration set at runtime, so no
+Apply-time step migrates the database. Destroy invokes ownership-proven cleanup for bridge-created Container applications and the
+Vectorize index; the bridge never reads or writes D1.
 
 ## Takos Boundary
 
