@@ -2,10 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import {
-  buildOpentofuWorkerArtifact,
-  collectMigrationFiles,
-} from "./build-opentofu-worker-artifact.ts";
+import { buildOpentofuWorkerArtifact } from "./build-opentofu-worker-artifact.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -26,7 +23,6 @@ test("the Worker artifact contract is module-local and builds the resolved repos
     "deploy/opentofu/cloudflare/.takos-build/worker/index.js",
     "deploy/opentofu/cloudflare/.takos-build/assets",
     "deploy/opentofu/cloudflare/.takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
-    "deploy/opentofu/cloudflare/.takos-build/migrations",
     "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
     "deploy/opentofu/cloudflare/.takos-build/manifest.json",
   ]);
@@ -70,18 +66,13 @@ test("the nested Cloudflare module keeps artifact paths module-local", async () 
   expect(moduleSource).not.toContain("path.root");
 });
 
-test("canonical migration collection retains independently named duplicate versions", async () => {
-  const files = await collectMigrationFiles(
-    new URL("../db/migrations-control/migrations", import.meta.url).pathname,
+test("the source-build payload carries no SQL for the module to apply", async () => {
+  const builder = await readFile(
+    new URL("scripts/build-opentofu-worker-artifact.ts", root),
+    "utf8",
   );
-  const duplicateVersion = files.filter(({ path }) => path.startsWith("0043_"));
-  expect(duplicateVersion.map(({ path }) => path)).toEqual([
-    "0043_ap_followers.sql",
-    "0043_store_network_inventory_metadata.sql",
-  ]);
-  expect(duplicateVersion[0]?.sha256).not.toBe(duplicateVersion[1]?.sha256);
-  expect(files.every(({ path }) => path.endsWith(".sql"))).toBe(true);
-  expect(files).toEqual([...files].sort((a, b) => a.path.localeCompare(b.path)));
+  expect(builder).not.toContain("db/migrations-control/migrations");
+  expect(builder).not.toContain(".takos-build/migrations");
 });
 
 test("source materialization copies the exact current Worker and assets", async () => {
@@ -93,10 +84,6 @@ test("source materialization copies the exact current Worker and assets", async 
     await Bun.write(
       join(temporaryRoot, "scripts", "takos-cloudflare-opentofu-bridge.ts"),
       "export {};\n",
-    );
-    await Bun.write(
-      join(temporaryRoot, "db", "migrations-control", "migrations", "0001_initial.sql"),
-      "CREATE TABLE fixture (id TEXT PRIMARY KEY);\n",
     );
     const result = await buildOpentofuWorkerArtifact({
       rootDirectory: temporaryRoot,
@@ -113,8 +100,10 @@ test("source materialization copies the exact current Worker and assets", async 
       "current source\n",
     );
     const manifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
+    expect(manifest.format).toBe("takos-opentofu-worker-artifact/v2");
     expect(manifest.source).toBe("repository-source");
     expect(manifest).not.toHaveProperty("archive");
+    expect(manifest).not.toHaveProperty("migrations");
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }

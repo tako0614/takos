@@ -58,7 +58,6 @@ test("Takos publishes repository install hints and service declarations", () => 
     "deploy/opentofu/cloudflare/.takos-build/worker/index.js",
     "deploy/opentofu/cloudflare/.takos-build/assets",
     "deploy/opentofu/cloudflare/.takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
-    "deploy/opentofu/cloudflare/.takos-build/migrations",
     "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
     "deploy/opentofu/cloudflare/.takos-build/manifest.json",
   ]);

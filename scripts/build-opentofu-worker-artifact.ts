@@ -3,6 +3,9 @@
 /**
  * Build the Worker payload consumed by the ordinary OpenTofu module.
  *
+ * The payload carries no SQL: the Worker embeds its own migration set and
+ * applies it at runtime, so the module has nothing to migrate at Apply time.
+ *
  * This command deliberately writes below deploy/opentofu/cloudflare.  A
  * Takosumi runner may materialise only that module during Apply, so a
  * lifecycle helper must not depend on the repository root or root
@@ -32,7 +35,6 @@ const WORKER_OUTPUT = ".takos-build/worker/index.js";
 const ASSETS_OUTPUT = ".takos-build/assets";
 const BRIDGE_OUTPUT =
   ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts";
-const MIGRATIONS_OUTPUT = ".takos-build/migrations";
 const CONTAINER_CONFIG_OUTPUT = ".takos-build/container-desired.json";
 const MANIFEST_OUTPUT = ".takos-build/manifest.json";
 
@@ -50,12 +52,10 @@ export interface BuildWorkerArtifactResult {
   readonly workerPath: string;
   readonly assetsPath: string;
   readonly bridgePath: string;
-  readonly migrationsPath: string;
   readonly containerDesiredConfigPath: string;
   readonly manifestPath: string;
   readonly workerSha256: string;
   readonly assetsSha256: string;
-  readonly migrationSha256: string;
 }
 
 type FileEntry = {
@@ -217,51 +217,6 @@ async function buildRepositorySource(
   }
 }
 
-async function copyMigrations(
-  rootDirectory: string,
-  destination: string,
-): Promise<FileEntry[]> {
-  const source = resolve(rootDirectory, "db/migrations-control/migrations");
-  if (!(await exists(source))) {
-    throw new Error(`D1 migration directory is missing: ${source}`);
-  }
-  const sourceFiles = await collectMigrationFiles(source);
-  if (sourceFiles.length === 0) {
-    throw new Error("D1 migration directory has no SQL files");
-  }
-  if (sourceFiles.some(({ path }) => !/^\d{4}_[^/]+\.sql$/u.test(path))) {
-    throw new Error("D1 migration files must have a four-digit version prefix");
-  }
-  for (const { path } of sourceFiles) {
-    const destinationPath = resolve(destination, path);
-    await import("node:fs/promises").then(({ mkdir }) =>
-      mkdir(dirname(destinationPath), { recursive: true }),
-    );
-    await cp(resolve(source, path), destinationPath, { force: true });
-  }
-  const files = await listFiles(destination);
-  return files;
-}
-
-/** Return the canonical, sorted SQL migration set used by the artifact. */
-export async function collectMigrationFiles(
-  source: string,
-): Promise<readonly FileEntry[]> {
-  const sourceFiles = (await listFiles(source)).filter(({ path }) =>
-    path.endsWith(".sql"),
-  );
-  if (sourceFiles.length === 0) {
-    throw new Error("D1 migration directory has no SQL files");
-  }
-  if (sourceFiles.some(({ path }) => !/^\d{4}_[^/]+\.sql$/u.test(path))) {
-    throw new Error("D1 migration files must have a four-digit version prefix");
-  }
-  if (sourceFiles.some(({ bytes }) => bytes === 0)) {
-    throw new Error("D1 migration files must not be empty");
-  }
-  return sourceFiles;
-}
-
 async function copyBridge(rootDirectory: string, destination: string): Promise<void> {
   const source = resolve(rootDirectory, "scripts/takos-cloudflare-opentofu-bridge.ts");
   if (!(await exists(source))) {
@@ -327,7 +282,6 @@ export async function buildOpentofuWorkerArtifact(
   const workerOutput = resolve(moduleDirectory, WORKER_OUTPUT);
   const assetsOutput = resolve(moduleDirectory, ASSETS_OUTPUT);
   const bridgeOutput = resolve(moduleDirectory, BRIDGE_OUTPUT);
-  const migrationsOutput = resolve(moduleDirectory, MIGRATIONS_OUTPUT);
   const containerConfigOutput = resolve(moduleDirectory, CONTAINER_CONFIG_OUTPUT);
   const manifestOutput = resolve(moduleDirectory, MANIFEST_OUTPUT);
   const sourceBuilder = options.sourceBuilder ?? buildRepositorySource;
@@ -343,9 +297,6 @@ export async function buildOpentofuWorkerArtifact(
     mkdir(dirname(bridgeOutput), { recursive: true }),
   );
   await import("node:fs/promises").then(({ mkdir }) =>
-    mkdir(migrationsOutput, { recursive: true }),
-  );
-  await import("node:fs/promises").then(({ mkdir }) =>
     mkdir(dirname(containerConfigOutput), { recursive: true }),
   );
 
@@ -359,7 +310,6 @@ export async function buildOpentofuWorkerArtifact(
     await cp(workerSource, workerOutput, { force: true });
     await cp(assetsSource, assetsOutput, { recursive: true, force: true });
     await copyBridge(rootDirectory, bridgeOutput);
-    const migrationFiles = await copyMigrations(rootDirectory, migrationsOutput);
     await writeContainerDesiredConfig(containerConfigOutput);
     const workerDigest = await hashFile(workerOutput);
     const assetFiles = await listFiles(assetsOutput);
@@ -368,11 +318,8 @@ export async function buildOpentofuWorkerArtifact(
     const assetsSha256 = hashBytes(
       new TextEncoder().encode(stableJson(assetFiles)),
     );
-    const migrationSha256 = hashBytes(
-      new TextEncoder().encode(stableJson(migrationFiles)),
-    );
     const manifest = {
-      format: "takos-opentofu-worker-artifact/v1",
+      format: "takos-opentofu-worker-artifact/v2",
       source,
       entrypoint: SOURCE_ENTRYPOINT,
       worker: {
@@ -395,11 +342,6 @@ export async function buildOpentofuWorkerArtifact(
         sha256: containerConfigDigest.sha256,
         bytes: containerConfigDigest.bytes,
       },
-      migrations: {
-        path: "migrations",
-        sha256: migrationSha256,
-        files: migrationFiles,
-      },
     };
     await writeFile(manifestOutput, `${stableJson(manifest)}\n`, "utf8");
     return {
@@ -409,12 +351,10 @@ export async function buildOpentofuWorkerArtifact(
       workerPath: workerOutput,
       assetsPath: assetsOutput,
       bridgePath: bridgeOutput,
-      migrationsPath: migrationsOutput,
       containerDesiredConfigPath: containerConfigOutput,
       manifestPath: manifestOutput,
       workerSha256: workerDigest.sha256,
       assetsSha256,
-      migrationSha256,
     };
   } finally {
     if (temporaryDirectory) {
