@@ -76,6 +76,10 @@ export default defineConfig({
           },
           { text: "ルートとドメイン", link: "/deploy/routes" },
           { text: "環境と変数", link: "/deploy/environment" },
+          {
+            text: "スキーマ自動適用と縮退モード",
+            link: "/deploy/runtime-schema-and-capabilities",
+          },
           { text: "デプロイ手順", link: "/deploy/deploy" },
           {
             text: "Release artifact publication",
