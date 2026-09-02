@@ -232,12 +232,20 @@ bucket_name = "takos-offload"
 # - OIDC_CLIENT_SECRET: optional Takosumi Accounts OIDC client secret for a
 #   confidential OIDC client; public PKCE clients omit it
 #
+# Runtime secrets required at boot. The Worker answers 503 on every path except
+# /health until they exist. deploy/opentofu/cloudflare names them and holds no
+# value; generate them with `bun run generate:keys`. See docs/deploy/runtime-secrets.md.
+# - ENCRYPTION_KEY: AES-256-GCM master secret. A 64-character value is hex
+#   decoded into 32 bytes before PBKDF2-SHA256; any other length is used as a
+#   UTF-8 passphrase. The two encodings derive different keys, so a value cannot
+#   be re-encoded after data has been written.
+# - TAKOS_INTERNAL_API_SECRET: opaque shared secret compared in constant time
+#   against the X-Takos-Internal-Secret header on /internal/*.
+#
 # Platform keys:
-# - PLATFORM_PRIVATE_KEY: Private key for signing platform tokens
-# - PLATFORM_PUBLIC_KEY: Public key for verifying platform tokens
-#   The same pair is used for runtime-service JWTs. The unified takos Worker
-#   signs with PLATFORM_PRIVATE_KEY and injects PLATFORM_PUBLIC_KEY into the
-#   runtime container as JWT_PUBLIC_KEY.
+# - PLATFORM_PRIVATE_KEY: RSA-2048 PKCS#8 PEM. Signs the short-lived
+#   runtime-service JWT with RS256 through jose.importPKCS8.
+# - PLATFORM_PUBLIC_KEY: the matching RSA-2048 SPKI PEM.
 #
 # Agent container start:
 # - TAKOS_AGENT_START_TOKEN: Bearer credential used only for the private
