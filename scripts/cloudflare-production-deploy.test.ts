@@ -710,7 +710,7 @@ test("the desired Durable Object tag comes from the checked-in template", async 
   ).toEqual(["migration tag v6 -> v7"]);
 });
 
-test("the entrypoint contract probe lists both surfaces and is side-effect free", async () => {
+test("the entrypoint contract probe lists every surface and is side-effect free", async () => {
   const probe = Bun.spawn(["bun", "scripts/deploy.mjs", "--contract"], {
     cwd: repositoryRoot,
     stdout: "pipe",
@@ -737,6 +737,8 @@ test("the entrypoint contract probe lists both surfaces and is side-effect free"
   expect(contract.surfaces.map((entry) => entry.surface)).toEqual([
     "takos-release-artifact",
     "takos-cloudflare-production",
+    "takos-site",
+    "takos-docs",
   ]);
   // The control gate reads exactly these fields off the live answer.
   for (const entry of contract.surfaces) {

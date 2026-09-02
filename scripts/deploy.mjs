@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// The one Takos deploy entrypoint. It publishes two things and nothing else:
+// The one Takos deploy entrypoint. It publishes four things and nothing else:
 //
 //   takos-release-artifact       the immutable Worker release archive and the
 //                                digest-pinned agent images consumers pin
@@ -8,6 +8,8 @@
 //                                composed from the OpenTofu module's durable
 //                                infrastructure and this repository's worker
 //                                artifact half
+//   takos-site                   takos.jp, the prerendered product site
+//   takos-docs                   docs.takos.jp, the prerendered documentation
 //
 // Obligations and triggers live in takos-control `engineering.policy.json`.
 // `--contract` is side-effect free and describes both surfaces.
@@ -23,14 +25,28 @@ import {
   runCloudflareProduction,
   TAKOS_CLOUDFLARE_PRODUCTION_SURFACE,
 } from "./cloudflare-production-deploy.ts";
+import {
+  parseStaticSiteArgs,
+  runStaticSite,
+  STATIC_SITE_USAGE,
+  TAKOS_DOCS_SURFACE,
+  TAKOS_SITE_SURFACE,
+} from "./static-site-deploy.ts";
 
 const CONTRACT = {
   kind: "takos.deploy-contract@v2",
   surfaces: [
     TAKOS_RELEASE_ARTIFACT_SURFACE,
     TAKOS_CLOUDFLARE_PRODUCTION_SURFACE,
+    TAKOS_SITE_SURFACE,
+    TAKOS_DOCS_SURFACE,
   ],
 };
+
+const STATIC_SITE_SURFACES = new Set([
+  TAKOS_SITE_SURFACE.surface,
+  TAKOS_DOCS_SURFACE.surface,
+]);
 
 const args = process.argv.slice(2);
 
@@ -79,6 +95,32 @@ if (args[0] === TAKOS_CLOUDFLARE_PRODUCTION_SURFACE.surface) {
     // invoke this. Exit 3 and 4 already happened against the account; usage
     // text there would bury the diagnostic that matters.
     if (exitCode < 3) process.stderr.write(`${CLOUDFLARE_PRODUCTION_USAGE}\n`);
+    process.exit(exitCode);
+  }
+}
+
+if (STATIC_SITE_SURFACES.has(args[0])) {
+  try {
+    const result = await runStaticSite(
+      parseStaticSiteArgs(args[0], args.slice(1), process.cwd()),
+    );
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.exit(0);
+  } catch (error) {
+    // Same exit-code split as the Worker surface: 2 nothing touched, 3 the
+    // upload may have landed, 4 the bytes are public but a post-condition
+    // failed.
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    if (error && typeof error === "object" && "detail" in error && error.detail) {
+      process.stderr.write(`${error.detail}\n`);
+    }
+    const exitCode =
+      error && typeof error === "object" && typeof error.exitCode === "number"
+        ? error.exitCode
+        : 1;
+    if (exitCode < 3) process.stderr.write(`${STATIC_SITE_USAGE}\n`);
     process.exit(exitCode);
   }
 }
