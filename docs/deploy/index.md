@@ -112,4 +112,5 @@ Workspace に追加するアプリも、Git リポジトリにある OpenTofu �
 - [ロールバック](/deploy/rollback)
 - [Release artifact runbook](/deploy/release-artifact)
 - [本番デプロイレーン](/deploy/production-lane)
+- [サイトとドキュメントの配置](/deploy/site-and-docs)
 - [トラブルシューティング](/deploy/troubleshooting)
