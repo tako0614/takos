@@ -709,3 +709,42 @@ test("the desired Durable Object tag comes from the checked-in template", async 
     ),
   ).toEqual(["migration tag v6 -> v7"]);
 });
+
+test("the entrypoint contract probe lists both surfaces and is side-effect free", async () => {
+  const probe = Bun.spawn(["bun", "scripts/deploy.mjs", "--contract"], {
+    cwd: repositoryRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(probe.stdout).text(),
+    new Response(probe.stderr).text(),
+    probe.exited,
+  ]);
+  expect(`${exitCode} ${stderr}`).toBe("0 ");
+
+  const contract = JSON.parse(stdout.slice(stdout.indexOf("{"))) as {
+    kind: string;
+    surfaces: {
+      surface: string;
+      target: string;
+      triggers: string[];
+      obligations: Record<string, string>;
+      requiresEnv?: string[];
+    }[];
+  };
+  expect(contract.kind).toBe("takos.deploy-contract@v2");
+  expect(contract.surfaces.map((entry) => entry.surface)).toEqual([
+    "takos-release-artifact",
+    "takos-cloudflare-production",
+  ]);
+  // The control gate reads exactly these fields off the live answer.
+  for (const entry of contract.surfaces) {
+    expect(entry.target.length).toBeGreaterThan(0);
+    expect(Array.isArray(entry.triggers)).toBe(true);
+    const answers = Object.values(entry.obligations).join("\n");
+    for (const variable of entry.requiresEnv ?? []) {
+      expect(answers).toContain(variable);
+    }
+  }
+});
