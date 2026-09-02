@@ -55,6 +55,11 @@ output "cloudflare_d1_database_id" {
   value       = module.platform.d1_database_id
 }
 
+output "cloudflare_d1_database_name" {
+  description = "D1 database name for the DB binding (cloudflare target)."
+  value       = module.platform.d1_database_name
+}
+
 output "cloudflare_d1_database_ids" {
   description = "All D1 database IDs by logical binding: db (cloudflare target)."
   value       = module.platform.d1_database_ids
