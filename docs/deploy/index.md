@@ -32,6 +32,17 @@ application の反映には、Takos が所有する補助 bridge があります
 ためのものではなく、Container image は immutable digest のまま、destroy 時は所有を証明できる Container application
 と Vectorize index だけを削除します。D1 migration の巻き戻しは行いません。
 
+### ランタイムシークレット
+
+Worker が読む 5 つの runtime secret (`ENCRYPTION_KEY`、`TAKOS_AGENT_START_TOKEN`、
+`TAKOS_INTERNAL_API_SECRET`、`PLATFORM_PRIVATE_KEY`、`PLATFORM_PUBLIC_KEY`) は
+operator が所有します。module は名前だけを宣言し、値を保持しません。Takosumi の Run は
+OpenTofu state を StateVersion として保存するので、module 内で secret を生成すれば
+公開された secret になるためです。module は 5 つを Cloudflare の `inherit` binding として
+bind し、初回 install だけ `runtime_secrets_provisioned = false` → 値の投入 →
+`runtime_secrets_provisioned = true` の順に apply します。詳細は
+[ランタイムシークレット](/deploy/runtime-secrets) を参照してください。
+
 ## Takosumi は必須か
 
 OpenTofu モジュール自体は標準的な IaC です。運用者が自分の方法で `tofu plan` / `tofu apply` を実行できます。
@@ -47,7 +58,8 @@ Takosumi を使うと、Git ソース、確認済み plan、apply の結果、ou
 - Worker artifact をアップロードする手順
 - 本番用の secret を保管する仕組み
 
-secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しないでください。
+secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しないでください。値の形式と
+投入手順は [ランタイムシークレット](/deploy/runtime-secrets) にあります。
 
 ## 基本の流れ
 
@@ -94,6 +106,7 @@ Workspace に追加するアプリも、Git リポジトリにある OpenTofu �
 ## 関連ページ
 
 - [環境と変数](/deploy/environment)
+- [ランタイムシークレット](/deploy/runtime-secrets)
 - [デプロイ手順](/deploy/deploy)
 - [ルートとドメイン](/deploy/routes)
 - [ロールバック](/deploy/rollback)

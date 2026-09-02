@@ -37,6 +37,12 @@ variable "executor_capacity" {
   })
 }
 
+variable "runtime_secrets_provisioned" {
+  description = "True when the five Takos runtime secret bindings already exist on the target Worker, so the Worker Version can carry them forward with the `inherit` binding type instead of resending a value this module must never hold."
+  type        = bool
+  default     = false
+}
+
 variable "plan_mode" {
   description = "Plan-only mode: no real Cloudflare credentials required (for Takosumi Run with type `plan` review)."
   type        = bool

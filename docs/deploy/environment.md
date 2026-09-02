@@ -20,6 +20,14 @@ The direct Cloudflare adapter declares the product graph, while the provider-gap
 combination fails closed. The bridge only reconciles its owned Vectorize, Container, container-enabled Durable Object, and D1
 provider gaps; it never rolls back D1 data.
 
+## Runtime secrets
+
+Worker が読む 5 つの runtime secret は operator が所有します。`deploy/opentofu/cloudflare`
+は名前だけを宣言し、値を保持しません。`.well-known/takosumi.json` は `takosumi.com/v2.4`
+で、対称鍵 3 つを `secret.generated` (32 byte hex、binding delivery) として host に要求し、
+RSA 鍵対は operator 投入のままです。値の形式と投入順序は
+[ランタイムシークレット](/deploy/runtime-secrets) を参照してください。
+
 ## Takos Boundary
 
 Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Cloudflare provider gaps remain explicit unless the reviewed bridge is selected for a disposable E2E. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.

@@ -6,14 +6,6 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "= 5.19.1"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "= 3.9.0"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "= 4.3.0"
-    }
   }
 }
 
@@ -254,18 +246,29 @@ locals {
     }
   }
 
-  runtime_secret_bindings = {
-    ENCRYPTION_KEY            = random_password.encryption.result
-    TAKOS_AGENT_START_TOKEN   = random_password.agent_start.result
-    TAKOS_INTERNAL_API_SECRET = random_password.internal_api.result
-    PLATFORM_PRIVATE_KEY      = tls_private_key.platform.private_key_pem
-    PLATFORM_PUBLIC_KEY       = tls_private_key.platform.public_key_pem
-  }
-  secret_text_bindings = [
-    for name, value in local.runtime_secret_bindings : {
+  # The exact `env.<NAME>` runtime secrets the Takos Worker reads. This module
+  # names them and never holds a value: an OpenTofu-minted secret would persist
+  # in the state a Takosumi Run keeps as a StateVersion, which
+  # deploy/TAKOSUMI_DEPLOY.md forbids. The request for host-minted values is
+  # declared in .well-known/takosumi.json as `secret.generated` bindings; the
+  # RSA pair is operator-supplied because no generated-secret shape expresses it.
+  runtime_secret_binding_names = [
+    "ENCRYPTION_KEY",
+    "TAKOS_AGENT_START_TOKEN",
+    "TAKOS_INTERNAL_API_SECRET",
+    "PLATFORM_PRIVATE_KEY",
+    "PLATFORM_PUBLIC_KEY",
+  ]
+  # `inherit` carries a binding forward from the Worker's previous version
+  # without sending its value, so a later apply cannot silently drop a secret
+  # that was supplied out of band. A first install has no previous version to
+  # inherit from, so the names are bound only once the operator confirms they
+  # exist through runtime_secrets_provisioned.
+  runtime_secret_binding_targets = var.runtime_secrets_provisioned ? local.runtime_secret_binding_names : []
+  runtime_secret_bindings = [
+    for name in local.runtime_secret_binding_targets : {
       name = name
-      type = "secret_text"
-      text = value
+      type = "inherit"
     }
   ]
   plain_text_bindings = [
@@ -361,26 +364,6 @@ locals {
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT = file(local.container_desired_config_file_path)
     } : {},
   )
-}
-
-resource "random_password" "encryption" {
-  length  = 64
-  special = true
-}
-
-resource "random_password" "agent_start" {
-  length  = 64
-  special = true
-}
-
-resource "random_password" "internal_api" {
-  length  = 64
-  special = true
-}
-
-resource "tls_private_key" "platform" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
 }
 
 resource "cloudflare_d1_database" "this" {
@@ -545,10 +528,6 @@ resource "cloudflare_worker" "app" {
     cloudflare_workers_kv_namespace.this,
     cloudflare_r2_bucket.this,
     cloudflare_queue.this,
-    random_password.encryption,
-    random_password.agent_start,
-    random_password.internal_api,
-    tls_private_key.platform,
   ]
 }
 
@@ -655,7 +634,7 @@ resource "cloudflare_worker_version" "app" {
       type       = "durable_object_namespace"
       class_name = binding.class_name
     }],
-    local.secret_text_bindings,
+    local.runtime_secret_bindings,
     local.plain_text_bindings,
   )
 

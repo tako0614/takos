@@ -76,6 +76,7 @@ export default defineConfig({
           },
           { text: "ルートとドメイン", link: "/deploy/routes" },
           { text: "環境と変数", link: "/deploy/environment" },
+          { text: "ランタイムシークレット", link: "/deploy/runtime-secrets" },
           {
             text: "スキーマ自動適用と縮退モード",
             link: "/deploy/runtime-schema-and-capabilities",

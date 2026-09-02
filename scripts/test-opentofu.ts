@@ -12,12 +12,21 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const moduleRoot = join(root, "deploy", "opentofu", "cloudflare");
 const fixtureRoot = join(moduleRoot, "fixtures", "generated-root");
 
+const RUNTIME_SECRET_BINDING_NAMES = [
+  "ENCRYPTION_KEY",
+  "TAKOS_AGENT_START_TOKEN",
+  "TAKOS_INTERNAL_API_SECRET",
+  "PLATFORM_PRIVATE_KEY",
+  "PLATFORM_PUBLIC_KEY",
+] as const;
+
 await runTofu(
   ["init", "-backend=false", "-input=false", "-lockfile=readonly", "-no-color"],
   moduleRoot,
 );
 await runTofu(["test", "-no-color"], moduleRoot);
 await assertWorkerDestroyDependencyGraph();
+await assertRuntimeSecretBindings();
 const enabledProviderGapPlan = await assertProviderGapCapabilityPlans();
 await assertProviderGapCapabilityDependencyGraph(enabledProviderGapPlan);
 
@@ -80,10 +89,6 @@ async function assertWorkerDestroyDependencyGraph(): Promise<void> {
     '[root] module.platform.cloudflare_workers_kv_namespace.this (expand)',
     '[root] module.platform.cloudflare_r2_bucket.this (expand)',
     '[root] module.platform.cloudflare_queue.this (expand)',
-    '[root] module.platform.random_password.encryption (expand)',
-    '[root] module.platform.random_password.agent_start (expand)',
-    '[root] module.platform.random_password.internal_api (expand)',
-    '[root] module.platform.tls_private_key.platform (expand)',
   ];
   const missing = backingResources.filter(
     (resource) => !edges.has(`${worker} -> ${resource}`),
@@ -189,6 +194,148 @@ async function assertProviderGapCapabilityDependencyGraph(
   if ((edges.get(capability) ?? []).some((dependency) => dependency.includes("cloudflare_"))) {
     throw new Error("Capability preflight unexpectedly depends on a Cloudflare resource");
   }
+}
+
+/**
+ * The module names the Takos runtime secrets and never holds their values.
+ *
+ * Two saved plans prove it at the level a reviewer cares about: the planned
+ * Worker Version bindings and the planned resource set. A value-bearing
+ * `secret_text` binding, or any generator resource, would land plaintext in the
+ * OpenTofu state a Takosumi Run keeps as a StateVersion.
+ */
+async function assertRuntimeSecretBindings(): Promise<void> {
+  const planRoot = await mkdtemp(join(moduleRoot, ".runtime-secret-plan-test-"));
+  try {
+    const absent = await createRuntimeSecretPlan(planRoot, "absent", false);
+    const inherited = await createRuntimeSecretPlan(planRoot, "inherited", true);
+    for (const [name, plan] of [
+      ["absent", absent],
+      ["inherited", inherited],
+    ] as const) {
+      assertNoSecretMaterialInPlan(name, plan);
+    }
+
+    const absentNames = workerVersionBindings(absent)
+      .map((binding) => binding.name)
+      .filter((binding) =>
+        (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding),
+      );
+    if (absentNames.length !== 0) {
+      throw new Error(
+        `runtime_secrets_provisioned = false must bind no runtime secret name; found ${absentNames.join(", ")}`,
+      );
+    }
+
+    const inheritedBindings = workerVersionBindings(inherited).filter((binding) =>
+      (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding.name),
+    );
+    const inheritedNames = inheritedBindings.map((binding) => binding.name).sort();
+    const expectedNames = [...RUNTIME_SECRET_BINDING_NAMES].sort();
+    if (
+      inheritedNames.length !== expectedNames.length ||
+      inheritedNames.some((name, index) => name !== expectedNames[index])
+    ) {
+      throw new Error(
+        `runtime_secrets_provisioned = true must bind exactly ${expectedNames.join(", ")}; found ${inheritedNames.join(", ")}`,
+      );
+    }
+    const wrongType = inheritedBindings.filter((binding) => binding.type !== "inherit");
+    if (wrongType.length > 0) {
+      throw new Error(
+        `runtime secret bindings must use the value-free inherit type; found ${wrongType
+          .map((binding) => `${binding.name}=${String(binding.type)}`)
+          .join(", ")}`,
+      );
+    }
+  } finally {
+    await rm(planRoot, { recursive: true, force: true });
+  }
+}
+
+async function createRuntimeSecretPlan(
+  planRoot: string,
+  name: string,
+  provisioned: boolean,
+): Promise<unknown> {
+  const planPath = join(planRoot, `${name}.plan`);
+  await runTofuCapture(
+    [
+      "plan",
+      "-refresh=false",
+      "-input=false",
+      "-lock=false",
+      "-no-color",
+      `-out=${planPath}`,
+      `-var=project_name=takos-runtime-secret-${name}`,
+      `-var=public_url=https://takos-runtime-secret-${name}.example.com`,
+      "-var=environment=staging",
+      "-var=opentofu_plan_mode=true",
+      `-var=runtime_secrets_provisioned=${provisioned ? "true" : "false"}`,
+      '-var=cloudflare={account_id="00000000000000000000000000000000"}',
+    ],
+    moduleRoot,
+  );
+  const json = await runTofuCapture(["show", "-json", planPath], moduleRoot);
+  try {
+    return JSON.parse(json) as unknown;
+  } catch (error) {
+    throw new Error(
+      `OpenTofu ${name} runtime-secret plan is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function assertNoSecretMaterialInPlan(name: string, plan: unknown): void {
+  const generators = [...collectPlanResourceAddresses(plan)].filter((address) =>
+    /\.(random_password|random_string|random_bytes|tls_private_key|tls_self_signed_cert)\./.test(
+      address,
+    ),
+  );
+  if (generators.length > 0) {
+    throw new Error(
+      `the ${name} plan must mint no secret material in OpenTofu; found ${generators.join(", ")}`,
+    );
+  }
+  const valueBearing = workerVersionBindings(plan).filter(isValueBearingSecretBinding);
+  if (valueBearing.length > 0) {
+    throw new Error(
+      `the ${name} plan must carry no secret-valued Worker binding; found ${valueBearing
+        .map((binding) => String(binding.name))
+        .join(", ")}`,
+    );
+  }
+}
+
+function isValueBearingSecretBinding(binding: Record<string, unknown>): boolean {
+  if (binding.type === "secret_text" || binding.type === "secret_key") return true;
+  const isRuntimeSecretName =
+    typeof binding.name === "string" &&
+    (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding.name);
+  if (!isRuntimeSecretName) return false;
+  return ["text", "key_base64", "key_jwk"].some(
+    (field) => binding[field] !== undefined && binding[field] !== null,
+  );
+}
+
+function workerVersionBindings(plan: unknown): Record<string, unknown>[] {
+  const bindings: Record<string, unknown>[] = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(visit);
+    if (!recordValue(value)) return;
+    if (
+      value.type === "cloudflare_worker_version" &&
+      recordValue(value.values) &&
+      Array.isArray(value.values.bindings)
+    ) {
+      for (const binding of value.values.bindings) {
+        if (recordValue(binding)) bindings.push(binding);
+      }
+    }
+    for (const entry of Object.values(value)) visit(entry);
+  };
+  visit(plan);
+  return bindings;
 }
 
 async function assertProviderGapCapabilityPlans(): Promise<unknown> {
