@@ -30,6 +30,14 @@ export const ErrorCodes = {
   // 5xx サーバーエラー
   INTERNAL_ERROR: "INTERNAL_ERROR",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
+  /**
+   * The deployment does not have the resource this feature needs. Distinct
+   * from NOT_IMPLEMENTED (the product lacks the feature) and from
+   * SERVICE_UNAVAILABLE (it exists but is temporarily down): the install is
+   * running in a documented reduced mode and the answer will not change until
+   * an operator provisions the resource.
+   */
+  CAPABILITY_UNAVAILABLE: "CAPABILITY_UNAVAILABLE",
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
   BAD_GATEWAY: "BAD_GATEWAY",
   GATEWAY_TIMEOUT: "GATEWAY_TIMEOUT",
@@ -220,6 +228,21 @@ export class InternalError extends AppError {
 export class NotImplementedError extends AppError {
   constructor(message = "Not implemented", details?: unknown) {
     super(message, ErrorCodes.NOT_IMPLEMENTED, 501, details);
+  }
+}
+
+/**
+ * 501 この配置にはその機能を支えるリソースが無い
+ *
+ * `details.capability` に不足している capability 名、`details.reason` に
+ * 不足している binding を入れる。運用者が install を直すまで結果は変わらない。
+ */
+export class CapabilityUnavailableError extends AppError {
+  constructor(
+    message: string,
+    details?: { capability: string; reason?: string; mode?: string },
+  ) {
+    super(message, ErrorCodes.CAPABILITY_UNAVAILABLE, 501, details);
   }
 }
 

@@ -31,6 +31,10 @@ import {
   InternalError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
+import {
+  requireVectorSearch,
+  resolveRuntimeCapabilities,
+} from "../../../platform/runtime-capabilities.ts";
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const user = c.get("user");
@@ -95,6 +99,7 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
     edges: edgeCount,
     latestJob,
     vectorize_available: isEmbeddingsAvailable(c.env),
+    vector_search: resolveRuntimeCapabilities(c.env).vectorSearch,
   });
 }
 
@@ -110,9 +115,10 @@ export async function handleVectorizeIndex(
     throw new NotFoundError("Workspace");
   }
 
-  if (!isEmbeddingsAvailable(c.env)) {
-    throw new BadRequestError("Vectorize not available");
-  }
+  // Vector indexing IS this endpoint. Without an index there is nothing
+  // reduced to fall back to, so it answers with the stable capability error
+  // instead of the 400 it used to send for an install-level condition.
+  requireVectorSearch(c.env);
 
   const jobId = generateId();
   if (c.env.INDEX_QUEUE) {

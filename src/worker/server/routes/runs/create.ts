@@ -7,6 +7,7 @@ import { AppError, BadRequestError } from "@takos/worker-platform-utils/errors";
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 import { zValidator } from "../zod-validator.ts";
 import { createThreadRun } from "../../../application/services/execution/run-creation.ts";
+import { requireAgentContainers } from "../../../platform/runtime-capabilities.ts";
 
 export function registerRunCreateRoutes(app: RunRouteApp) {
   app.post(
@@ -21,6 +22,11 @@ export function registerRunCreateRoutes(app: RunRouteApp) {
       }),
     ),
     async (c) => {
+      // An install without the agent container application cannot execute a
+      // run at all. Refusing here beats accepting the run, queueing it, and
+      // letting it die in the dead-letter queue minutes later.
+      requireAgentContainers(c.env);
+
       const user = c.get("user");
       const threadId = c.req.param("threadId");
       const body = c.req.valid("json") as {

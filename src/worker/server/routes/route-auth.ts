@@ -17,6 +17,7 @@ export {
   AuthenticationError,
   AuthorizationError,
   BadRequestError,
+  CapabilityUnavailableError,
   ConflictError,
   type ErrorCode,
   ErrorCodes,

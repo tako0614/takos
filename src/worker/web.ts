@@ -54,6 +54,17 @@ import {
   getPlatformServices,
 } from "./platform/accessors.ts";
 import executorHostHandler from "./runtime/container-hosts/executor-host.ts";
+import { resolveRuntimeCapabilities } from "./platform/runtime-capabilities.ts";
+import {
+  convergeSchemaInBackground,
+  ensureSchemaReady,
+  guardRequestSchema,
+  resetSchemaGate,
+} from "./platform/migrations/schema-gate.ts";
+import {
+  readSchemaStatus,
+  runPendingMigrations,
+} from "./platform/migrations/runtime-migrations.ts";
 
 // Durable Object exports for wrangler.toml bindings.
 export { SessionDO } from "./runtime/durable-objects/session.ts";
@@ -324,6 +335,62 @@ app.all("/api/internal/v1/agent-control/*", async (c) => {
   auth.route("/", authOidcRouter);
   app.route("/auth", auth);
 }
+
+// ============================================================================
+// Runtime status and the explicit schema-migration trigger
+// ============================================================================
+// The two things an operator needs when an install lands in a reduced mode:
+// which capabilities this deployment actually has, and where the D1 schema
+// stands. Both are exempt from the schema gate (`schema-gate.ts`), so they
+// still answer while migration is pending or after it failed.
+
+function internalAccessFailure(
+  c: { req: { url: string; header(name: string): string | undefined }; env: Env },
+): { status: 403; body: { error: { code: string; message: string } } } | null {
+  const access = validateInternalApiAccess(c.req.url, c.env, (name) =>
+    c.req.header(name),
+  );
+  if (access.ok) return null;
+  return {
+    status: access.status,
+    body: { error: { code: "FORBIDDEN", message: access.message } },
+  };
+}
+
+app.get("/internal/runtime/status", async (c) => {
+  const denied = internalAccessFailure(c);
+  if (denied) return c.json(denied.body, denied.status);
+
+  const capabilities = resolveRuntimeCapabilities(c.env);
+  const schema = await readSchemaStatus(c.env.DB).catch((error) => ({
+    state: "failed" as const,
+    total: 0,
+    applied: 0,
+    pending: [] as string[],
+    ledgerTable: "unknown",
+    error: error instanceof Error ? error.message : String(error),
+  }));
+
+  return c.json({
+    status: schema.state === "ready" ? "ok" : schema.state,
+    capabilities,
+    schema,
+  });
+});
+
+app.post("/internal/runtime/migrate", async (c) => {
+  const denied = internalAccessFailure(c);
+  if (denied) return c.json(denied.body, denied.status);
+
+  // The explicit trigger retries a recorded failure immediately instead of
+  // waiting out the cool-down that protects ordinary request traffic.
+  const schema = await runPendingMigrations(c.env.DB, { retryFailed: true });
+  resetSchemaGate(c.env.DB);
+  if (schema.state === "ready") {
+    await ensureSchemaReady(c.env.DB);
+  }
+  return c.json({ schema }, schema.state === "failed" ? 500 : 200);
+});
 
 // ============================================================================
 // Internal Scheduled Trigger (for k8s CronJob / EventBridge / Cloud Scheduler)
@@ -704,6 +771,13 @@ export function createWebWorker(
         );
       }
 
+      // Converge the D1 schema before anything touches it. The first request
+      // into a fresh isolate drives the migration runner; later ones read a
+      // memoized answer. A pending or failed schema answers 503 with a retry
+      // hint rather than a "no such table" error from inside a query.
+      const schemaBlock = await guardRequestSchema(bindings.DB, url.pathname);
+      if (schemaBlock) return schemaBlock;
+
       // Defensive host gate: this worker is intended for the admin domain only,
       // plus service-binding internal calls.
       const hostname = url.hostname;
@@ -729,6 +803,17 @@ export function createWebWorker(
       const bindings = platform.bindings;
       const cron = controller.cron;
       const errors: Array<{ job: string; error: string }> = [];
+
+      // A deployment with no traffic yet still converges its schema: the cron
+      // is the second trigger, so an operator does not have to send a request
+      // to finish an install.
+      const schema = await convergeSchemaInBackground(bindings.DB);
+      if (schema.state !== "ready") {
+        errors.push({
+          job: "runtime-schema-migration",
+          error: `schema ${schema.state}${schema.error ? `: ${schema.error}` : ""}`,
+        });
+      }
 
       await runScheduledFamilyMaintenance(bindings, cron, errors, {
         logSuccesses: true,
