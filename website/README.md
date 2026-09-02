@@ -106,8 +106,15 @@ the main repository.
 
 ## Deploy
 
+The landing site is published by the repository's one deploy entrypoint, as the
+`takos-site` surface. Do not run `wrangler pages deploy` by hand: the entrypoint
+is what refuses a dirty production worktree, runs the scoped gate that builds
+these bytes, records the deployment it is replacing, and reads the published
+pages back.
+
 ```sh
-wrangler pages deploy .output/public --project-name takos-landing
+bun run deploy -- takos-site --status --environment production
+bun run deploy -- takos-site --apply  --environment production --execute
 ```
 
 Production custom domains for this Pages project are:
@@ -118,12 +125,16 @@ www.takos.jp
 ```
 
 Both domains must be registered under the `takos-landing` Pages project and
-their DNS records should point at `takos-landing.pages.dev`. The public CTA must
-continue to resolve to `https://app.takosumi.com/install?...` with a release tag
-or commit SHA, not a moving ref such as `main`.
+their DNS records should point at `takos-landing.pages.dev`. Creating the
+project and attaching those domains is provisioning and DNS, which the deploy
+surface deliberately does not do. The public CTA must continue to resolve to
+`https://app.takosumi.com/install?...` with a release tag or commit SHA, not a
+moving ref such as `main`.
 
-The docs site deploys from `takos/docs/` to the `takos-docs` Pages project. Keep landing deploys and docs deploys
-separate unless an operator explicitly chooses to combine them at the Cloudflare routing layer.
+The docs site is the separate `takos-docs` surface, published from `takos/docs/`
+to the `takos-docs` Pages project on `docs.takos.jp`. Landing deploys and docs
+deploys stay separate; see `docs/deploy/site-and-docs.md` for both surfaces and
+the first-deploy sequence.
 
 ## Local mirror
 
