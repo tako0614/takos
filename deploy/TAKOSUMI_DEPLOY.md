@@ -34,13 +34,25 @@ runner. Cloudflare-specific runtime secrets are documented in
 never through OpenTofu state or outputs. A `TAKOSUMI_ACCOUNTS_TOKEN` is
 optional and only needed for server-to-server Capsule calls.
 
-## Optional Service Form projection
+## There is no Service Form projection to choose
 
-An operator may model the distribution with generic Service Forms such as
-`EdgeWorker`, `ContainerService`, `SQLDatabase`, `KVStore`, `ObjectBucket`, and
-`Queue`. That projection is hosted by Takosumi and backed by explicit,
-versioned adapters. It does not create a Takos-specific lifecycle API or a
-catch-all `takosumi_takos` resource.
+`deploy/opentofu/cloudflare` is the only install surface. There is no operator
+option to model the distribution with Service Forms instead: the former
+Provider 1.x projection under `deploy/opentofu/takoform` is retained as release
+history, its HCL is named `main.tf.history` so neither OpenTofu nor Takosumi
+source discovery can select it, and it is absent from the Repository manifest.
+The retired vocabulary it used (`EdgeWorker`, `SQLDatabase`, `KVStore`,
+`ContainerService`, `Queue`) describes that history and names nothing
+installable today.
+
+Current Forms also do not cover this product's graph, so the retirement is not
+a temporary gap awaiting a provider bump: there is no Form for the vector index
+or for the agent container tiers, and `ActorNamespace` does not express the
+current Durable Object migration chain. That part of the graph stays in Takos's
+native runtime authority. Takosumi integration is proved as an OIDC / Capsule /
+Run / Output / Interface consumer, not by projecting Takos onto Forms. Nothing
+here creates a Takos-specific lifecycle API or a catch-all `takosumi_takos`
+resource.
 
 Runtime integrations such as MCP, file handlers, storage, UI surfaces, and Git
 hosting are consumed through Takosumi `Interface` and `InterfaceBinding`
