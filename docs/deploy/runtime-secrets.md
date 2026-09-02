@@ -4,7 +4,7 @@ Takos Worker が読む runtime secret は 5 つです。
 
 | binding | 形式 | 用途 |
 | --- | --- | --- |
-| `ENCRYPTION_KEY` | 32 byte hex (64 文字) | 保存トークンなどの AES-256-GCM 暗号化。Worker は 64 文字の値を hex として復号し、PBKDF2-SHA256 の入力にします。 |
+| `ENCRYPTION_KEY` | 64 文字の hex、またはそれ以外の長さの passphrase | 保存トークンなどの AES-256-GCM 暗号化。Worker は 64 文字ちょうどの値を hex として 32 byte に復号し、それ以外は UTF-8 の passphrase として扱い、いずれも PBKDF2-SHA256 に通します。 |
 | `TAKOS_AGENT_START_TOKEN` | 不透明な文字列 | executor host から agent container の `/start` への bearer credential。定数時間比較のみです。 |
 | `TAKOS_INTERNAL_API_SECRET` | 不透明な文字列 | `/internal/*` の `X-Takos-Internal-Secret` header 比較。 |
 | `PLATFORM_PRIVATE_KEY` | RSA-2048 PKCS#8 PEM | runtime service JWT の RS256 署名鍵。 |
@@ -55,6 +55,15 @@ manifest は要求であって値ではありません。実際に host が鋳�
 
 生成は `bun run generate:keys` を使います。PKCS#8 の秘密鍵と SPKI の公開鍵を出力し、
 値を標準出力に出しません。
+
+### ENCRYPTION_KEY の 2 つの符号化
+
+`ENCRYPTION_KEY` は長さで解釈が変わります。64 文字ちょうどなら hex として 32 byte に
+復号され、それ以外は文字列そのものが passphrase になります。host が鋳造する
+`secret.generated` は 64 文字の hex なので前者、`bun run generate:keys` は 32 byte の
+base64 (44 文字) を出すので後者です。どちらも有効ですが、**導出される鍵は異なります**。
+データを書いたあとに符号化を変えると既存の暗号文を復号できなくなるので、1 つの install
+では最初に選んだ形式を変えないでください。
 
 ## 投入手順
 
