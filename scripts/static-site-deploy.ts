@@ -886,9 +886,10 @@ async function applyPhase(context: Context): Promise<Record<string, unknown>> {
     );
   }
 
-  const deploymentUrl = `${upload.stdout}${upload.stderr}`.match(
-    new RegExp(`https://[0-9a-z-]+\\.${definition.project}\\.pages\\.dev`, "u"),
-  )?.[0];
+  const deploymentUrl = immutableDeploymentUrl(
+    `${upload.stdout}${upload.stderr}`,
+    definition.project,
+  );
   if (!deploymentUrl) {
     throw new StaticSiteDeployError(
       "indeterminate",
@@ -909,6 +910,28 @@ async function applyPhase(context: Context): Promise<Record<string, unknown>> {
     deploymentUrl,
     readback,
   };
+}
+
+/**
+ * The immutable deployment URL wrangler just minted.
+ *
+ * A branch publication prints two URLs that look alike: the per-deployment
+ * `https://<8 hex>.<project>.pages.dev` and the moving branch alias
+ * `https://<branch>.<project>.pages.dev`. Reading the alias back would prove
+ * nothing about the bytes just uploaded, so the hash-shaped one wins whenever
+ * it is present.
+ */
+export function immutableDeploymentUrl(
+  output: string,
+  project: string,
+): string | null {
+  const found = [
+    ...output.matchAll(
+      new RegExp(`https://([0-9a-z-]+)\\.${project}\\.pages\\.dev`, "gu"),
+    ),
+  ];
+  const hashed = found.find((match) => /^[0-9a-f]{8}$/u.test(match[1]));
+  return (hashed ?? found[0])?.[0] ?? null;
 }
 
 /**
