@@ -23,8 +23,9 @@ D1 の schema migration はこの surface の担当ではありません。Worke
 混ぜません。
 
 `cloudflare_provider_gap_bridge_mode` の disposable bridge は、Vectorize と Container
-についてはこの surface に置き換わります。bridge が今も担うのは D1 migration と
-container-ready Durable Object namespace の bootstrap だけです。
+についてはこの surface に置き換わります。bridge が今も担うのは container-ready な
+Durable Object namespace の bootstrap だけです。D1 migration はどちらの入口の担当でも
+ありません。
 
 ## 必要な入力
 
