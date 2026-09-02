@@ -154,3 +154,13 @@ output "cloudflare_provider_gap_bridge_mode" {
   description = "Explicit Cloudflare provider-gap bridge mode: off, staging, or disposable-production."
   value       = module.platform.cloudflare_provider_gap_bridge_mode
 }
+
+output "runtime_secret_binding_names" {
+  description = "Exact operator-owned runtime secret binding names the Takos Worker requires. This module never holds their values."
+  value       = module.platform.runtime_secret_binding_names
+}
+
+output "runtime_secrets_provisioned" {
+  description = "Whether the Worker Version carries the runtime secret bindings forward with the inherit binding type."
+  value       = module.platform.runtime_secrets_provisioned
+}

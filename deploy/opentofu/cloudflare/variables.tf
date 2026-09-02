@@ -54,6 +54,12 @@ variable "executor_capacity" {
   }
 }
 
+variable "runtime_secrets_provisioned" {
+  description = "Set to true only after the five Takos runtime secrets (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, PLATFORM_PUBLIC_KEY) already exist on the target Worker. This module never holds a runtime secret value, so it binds them with the Cloudflare `inherit` binding type, which carries an existing value forward without sending it. A first install has nothing to inherit: leave this false, apply, supply the five values out of band, then set it to true and apply again."
+  type        = bool
+  default     = false
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool
