@@ -264,6 +264,13 @@ export type VectorizeMatch = {
   values?: number[];
 };
 export type VectorizeIndex = {
+  /**
+   * Optional self-description of the backing store. Product-owned adapters set
+   * it (the pgvector store on the node platform); a provider-native binding
+   * does not, so an unmarked index is the provider's own. Capability reporting
+   * reads this to name the backend without sniffing the runtime.
+   */
+  readonly backend?: "pgvector";
   query(
     vector: number[] | Float32Array,
     options?: unknown,
