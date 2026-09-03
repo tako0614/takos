@@ -8,7 +8,6 @@ import {
   AuthenticationError,
   BadRequestError as BadRequestErr,
   ErrorCodes,
-  InternalError,
 } from "@takos/worker-platform-utils/errors";
 
 // Re-export Error classes and types from @takos/worker-platform-utils/errors (canonical location)
