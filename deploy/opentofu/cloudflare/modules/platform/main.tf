@@ -176,62 +176,9 @@ locals {
     } : {},
   )
 
-  queue_consumers = {
-    runs = {
-      queue_key        = "runs"
-      dlq_key          = "runs_dlq"
-      batch_size       = 1
-      max_wait_time_ms = 1000
-      max_retries      = 5
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    runs_dlq = {
-      queue_key        = "runs_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    index_jobs = {
-      queue_key        = "index_jobs"
-      dlq_key          = "index_jobs_dlq"
-      batch_size       = 5
-      max_wait_time_ms = 60000
-      max_retries      = 2
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    index_jobs_dlq = {
-      queue_key        = "index_jobs_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    notification_push = {
-      queue_key        = "notification_push"
-      dlq_key          = "notification_push_dlq"
-      batch_size       = 5
-      max_wait_time_ms = 5000
-      max_retries      = 5
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    notification_push_dlq = {
-      queue_key        = "notification_push_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 600
-    }
-  }
+  # queue_consumers is generated into queue-consumers.generated.tf from
+  # scripts/queue-consumer-contract.ts, which the Worker's own queue policy
+  # modules feed. wrangler.toml's consumer blocks come from the same contract.
 
   schedules = {
     maintenance_quarter_hour = {
