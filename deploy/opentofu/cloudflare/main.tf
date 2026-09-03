@@ -28,6 +28,7 @@ module "platform" {
   zone_name         = try(var.cloudflare.zone_name, null)
 
   runtime_secrets_provisioned = var.runtime_secrets_provisioned
+  vector_index_provisioned    = var.vector_index_provisioned
 
   cloudflare_provider_gap_bridge_mode            = var.cloudflare_provider_gap_bridge_mode
   cloudflare_provider_gap_bridge_acknowledgement = var.cloudflare_provider_gap_bridge_acknowledgement

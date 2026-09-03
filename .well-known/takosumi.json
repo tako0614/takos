@@ -75,6 +75,18 @@
             "advanced": true
           },
           {
+            "name": "vector_index_provisioned",
+            "source": { "kind": "user" },
+            "type": "boolean",
+            "required": false,
+            "label": { "ja": "Vectorize index 作成済み", "en": "Vectorize index provisioned" },
+            "helper": {
+              "ja": "Cloudflare provider は Vectorize index を作れないので、この module も作りません。false のままなら Worker は宣言済みの vectorSearch: disabled で動き、意味検索の endpoint だけが 501 を返します。cloudflare_vectorize_index_name の index を自分で作ってから true にします。",
+              "en": "The Cloudflare provider cannot create a Vectorize index, so this module does not create one. Left false, the Worker runs in the declared vectorSearch: disabled mode and only the semantic-search endpoints answer 501. Create the index named by cloudflare_vectorize_index_name yourself, then set this to true."
+            },
+            "advanced": true
+          },
+          {
             "name": "cloudflare_provider_gap_bridge_mode",
             "source": { "kind": "user" },
             "type": "string",

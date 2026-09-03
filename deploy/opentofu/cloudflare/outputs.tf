@@ -164,3 +164,13 @@ output "runtime_secrets_provisioned" {
   description = "Whether the Worker Version carries the runtime secret bindings forward with the inherit binding type."
   value       = module.platform.runtime_secrets_provisioned
 }
+
+output "vector_search_capability" {
+  description = "Vector search capability this deployment will report: `vectorize` or `disabled`."
+  value       = module.platform.vector_search_capability
+}
+
+output "vector_index_provisioned" {
+  description = "Whether an externally created Vectorize index was declared for the ordinary provider path."
+  value       = module.platform.vector_index_provisioned
+}

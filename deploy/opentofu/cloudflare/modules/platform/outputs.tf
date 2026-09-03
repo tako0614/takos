@@ -174,3 +174,16 @@ output "runtime_secrets_provisioned" {
   description = "Whether the Worker Version carries the runtime secret bindings forward with the inherit binding type."
   value       = var.runtime_secrets_provisioned
 }
+
+# The Worker decides `vectorSearch` from the bindings it actually has, so this
+# Output states the same answer at plan time: an operator reads the degraded
+# mode from the plan instead of discovering it from a failing vector call.
+output "vector_search_capability" {
+  description = "Vector search capability this deployment will report: `vectorize` when the Worker Version binds VECTORIZE, `disabled` when no lane creates the index."
+  value       = local.vector_index_available ? "vectorize" : "disabled"
+}
+
+output "vector_index_provisioned" {
+  description = "Whether an externally created Vectorize index was declared for the ordinary provider path."
+  value       = var.vector_index_provisioned
+}

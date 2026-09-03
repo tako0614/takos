@@ -60,6 +60,12 @@ variable "runtime_secrets_provisioned" {
   default     = false
 }
 
+variable "vector_index_provisioned" {
+  description = "Set to true only when the Vectorize index named by the `cloudflare_vectorize_index_name` Output already exists in this account. The Cloudflare provider cannot create a Vectorize index, so this module cannot create one on the ordinary provider path; binding `VECTORIZE` to an index that does not exist would make the Worker report `vectorSearch: vectorize` and then fail inside every vector call. Left false, the Worker Version omits the binding and the deployment runs in the declared `vectorSearch: disabled` mode. The provider-gap bridge creates the index itself and turns the binding on without this input."
+  type        = bool
+  default     = false
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool

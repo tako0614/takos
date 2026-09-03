@@ -22,3 +22,11 @@ cloudflare_provider_gap_bridge_mode = "off"
 # set this to true so every later apply carries the existing Worker bindings
 # forward instead of replacing the version without them.
 runtime_secrets_provisioned = false
+
+# The Cloudflare provider cannot create a Vectorize index, so this module never
+# creates one on the ordinary provider path. Leave this false and the Worker
+# runs in the declared `vectorSearch: disabled` mode: semantic search endpoints
+# answer 501 CAPABILITY_UNAVAILABLE and text search keeps working. Create the
+# index named by the `cloudflare_vectorize_index_name` output yourself, then set
+# this to true so the Worker Version binds it.
+vector_index_provisioned = false
