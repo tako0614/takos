@@ -17,6 +17,13 @@ function normalizeHostname(hostname: string): string {
 }
 
 interface Env {
+  /**
+   * Required. Every lane that provisions this Worker binds it: the OpenTofu
+   * module at `modules/platform/main.tf`, both `wrangler.toml` environments,
+   * and the local platform's env builder. Egress is metered through it, so an
+   * absent binding is a deployment that cannot enforce its own rate limit —
+   * not a deployment that runs without one.
+   */
   RATE_LIMITER_DO?: DurableObjectNamespace;
   EGRESS_MAX_REQUESTS?: string; // default 300
   EGRESS_WINDOW_MS?: string; // default 60000
@@ -181,11 +188,28 @@ function sanitizeOutboundHeaders(incoming: Headers): Headers {
   return out;
 }
 
-async function rateLimitIfConfigured(
+/**
+ * The capabilities this Worker cannot serve a request without.
+ *
+ * Resolved once per invocation, before any outbound work. `null` means the
+ * deployment is not ready, and the caller answers 503 rather than proxying:
+ * the same control used to fail *closed* on a transient Durable Object error
+ * and *open* on the binding being absent entirely, which is the larger hole of
+ * the two.
+ */
+function resolveEgressCapabilities(
+  env: Env,
+): { rateLimiter: DurableObjectNamespace } | null {
+  const rateLimiter = env.RATE_LIMITER_DO;
+  if (!rateLimiter) return null;
+  return { rateLimiter };
+}
+
+async function rateLimit(
+  rateLimiter: DurableObjectNamespace,
   env: Env,
   spaceId: string | null,
 ): Promise<{ allowed: boolean; info?: unknown }> {
-  if (!env.RATE_LIMITER_DO) return { allowed: true };
   if (!spaceId) return { allowed: true };
 
   const maxRequests = Math.max(
@@ -211,7 +235,7 @@ async function rateLimitIfConfigured(
       : Number.NaN;
 
   try {
-    const namespace = env.RATE_LIMITER_DO;
+    const namespace = rateLimiter;
     const id = namespace.idFromName(`egress:${spaceId}`);
     const stub = namespace.get(id);
     const body: Record<string, unknown> = {
@@ -239,10 +263,10 @@ async function rateLimitIfConfigured(
     if (json.allowed === false) return { allowed: false, info: json };
     return { allowed: true, info: json };
   } catch (e) {
-    // Fail closed: a configured rate limiter that errors must not silently let
-    // egress through unmetered. The caller only reaches this branch when
-    // RATE_LIMITER_DO is bound and a spaceId is present, so denying is the safe
-    // default rather than bypassing the limit on a transient DO failure.
+    // Fail closed: a rate limiter that errors must not silently let egress
+    // through unmetered. The binding is resolved before this function is
+    // reached, so denying is the safe default rather than bypassing the limit
+    // on a transient DO failure.
     logError("rate limiter DO error", e, { module: "egress" });
     return { allowed: false, info: { error: "rate_limiter_unavailable" } };
   }
@@ -266,9 +290,21 @@ function safeLogUrl(url: URL): {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // The egress worker has no required env bindings; every value it reads
-    // (RATE_LIMITER_DO and the EGRESS_* tunables) has a documented default
-    // or graceful no-op path, so there is nothing to validate at boot.
+    // Resolve what this Worker cannot serve without, before anything else.
+    // The EGRESS_* tunables all have documented defaults; RATE_LIMITER_DO does
+    // not, because there is no safe default for "meter this". An absent
+    // binding is a readiness failure the caller can see and retry, not a lane
+    // that quietly proxies unmetered traffic.
+    const capabilities = resolveEgressCapabilities(env);
+    if (capabilities === null) {
+      logError("egress is not ready", new Error("RATE_LIMITER_DO is not bound"), {
+        module: "egress",
+      });
+      return errorJsonResponse(
+        "Egress is not ready: the RATE_LIMITER_DO binding is missing, so outbound requests cannot be metered",
+        503,
+      );
+    }
     const startedAt = Date.now();
 
     // Trust boundary = the service binding. This egress worker is deployed
@@ -375,7 +411,7 @@ export default {
     // short-TTL-flip race. Redirect blocking below (redirect: 'manual') is an
     // orthogonal HTTP-layer control and does NOT close this name-resolution gap.
 
-    const rl = await rateLimitIfConfigured(env, spaceId);
+    const rl = await rateLimit(capabilities.rateLimiter, env, spaceId);
     if (!rl.allowed) {
       logWarn("rate limited", {
         module: "egress",
