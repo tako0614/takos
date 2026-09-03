@@ -1,0 +1,15 @@
+{
+  "note": "A migration's file name is its identity in the applied ledger (`_takos_opentofu_migrations`, and the `d1_migrations` / `_takos_self_host_migrations` ledgers it adopts). Renaming one makes a live database apply it a second time, so the two situations below are recorded rather than corrected. `scripts/validate-migration-safety.ts` refuses any new shared prefix or skipped number, and refuses an entry here that no longer describes the directory.",
+  "duplicatePrefixes": {
+    "0043": "0043_ap_followers.sql and 0043_store_network_inventory_metadata.sql both landed with this prefix. Both are applied on every live database under those exact names; renaming either would re-apply it.",
+    "0055": "0055_repair_service_fk_rename_artifacts.sql and 0055_service_env_vars_fk_repair.sql both landed with this prefix, with the same constraint."
+  },
+  "skippedPrefixes": {
+    "0100": "0100-0105 were never used. The numbers are free but must stay free: assigning one now would order the new migration before 0106-0109, which live databases have already applied.",
+    "0101": "See 0100.",
+    "0102": "See 0100.",
+    "0103": "See 0100.",
+    "0104": "See 0100.",
+    "0105": "See 0100."
+  }
+}
