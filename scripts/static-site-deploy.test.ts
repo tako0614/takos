@@ -49,11 +49,21 @@ function docsFiles(marker = "docs"): Record<string, string> {
   };
 }
 
+const FIXTURE_INSTALL_REF = "v9.9.9";
+
 async function fixtureRoot(
   definition: StaticSiteDefinition,
   files: Record<string, string> | null,
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "takos-static-site-"));
+  // takos-site publishes an install ref, so the surface reads the projected
+  // module before it will publish anything.
+  const generated = join(root, "website/src/lib/takos-release.generated.ts");
+  await mkdir(dirname(generated), { recursive: true });
+  await writeFile(
+    generated,
+    `export const TAKOS_INSTALL_REF = "${FIXTURE_INSTALL_REF}";\n`,
+  );
   if (files !== null) await writeOutput(definition, root, files);
   return root;
 }
@@ -83,6 +93,8 @@ type FakeOptions = {
   served?: Record<string, string>;
   /** null = no credential in the environment at all. */
   token?: string | null;
+  /** false = the tag the built site names does not exist on origin. */
+  installRefOnOrigin?: boolean;
   onGate?: () => Promise<void>;
 };
 
@@ -108,6 +120,12 @@ function fakeRuntime(options: FakeOptions = {}): {
         if (args.startsWith("log")) return ok("fixture subject\n");
         if (args === "status --porcelain") {
           return ok(options.clean === false ? " M website/src/app.tsx\n" : "");
+        }
+        if (args.startsWith("ls-remote --tags origin")) {
+          if (options.installRefOnOrigin === false) return ok("");
+          return ok(
+            `${"c".repeat(40)}\trefs/tags/${FIXTURE_INSTALL_REF}\n`,
+          );
         }
         throw new Error(`unexpected git ${args}`);
       }
@@ -457,6 +475,56 @@ test("--apply refuses before the account is touched when the credential is absen
     message: expect.stringContaining("CLOUDFLARE_API_TOKEN is not set"),
   });
   expect(fetched).toEqual([]);
+});
+
+test("the site refuses to publish an install ref that origin does not have", async () => {
+  const root = await fixtureRoot(TAKOS_SITE_DEFINITION, siteFiles());
+
+  // The version bump lands before its release, and publishing in between ships
+  // an Install link and a self-host runbook naming a tag that resolves nowhere.
+  const missing = fakeRuntime({ installRefOnOrigin: false });
+  await expect(
+    runStaticSiteRecorded(
+      parseStaticSiteArgs(
+        "takos-site",
+        ["--apply", "--environment", "production", "--execute"],
+        root,
+      ),
+      missing.runtime,
+    ),
+  ).rejects.toMatchObject({
+    exitCode: 2,
+    message: expect.stringContaining("does not exist on origin"),
+  });
+  expect(
+    missing.fetched.length,
+    "nothing is fetched or uploaded once the ref is refused",
+  ).toBe(0);
+
+  const status = await runStaticSiteRecorded(
+    parseStaticSiteArgs(
+      "takos-site",
+      ["--status", "--environment", "production"],
+      root,
+    ),
+    fakeRuntime({ installRefOnOrigin: false }).runtime,
+  );
+  expect(
+    (status.report.drift as string[]).join("\n"),
+  ).toContain("does not exist on origin");
+
+  // The docs site publishes no install ref, so it never asks.
+  const docs = await runStaticSiteRecorded(
+    parseStaticSiteArgs(
+      "takos-docs",
+      ["--status", "--environment", "production"],
+      await fixtureRoot(TAKOS_DOCS_DEFINITION, docsFiles()),
+    ),
+    fakeRuntime({ installRefOnOrigin: false }).runtime,
+  );
+  expect(
+    (docs.report.drift as string[]).join("\n"),
+  ).not.toContain("install ref");
 });
 
 test("production refuses a dirty worktree and an unpinned branch", async () => {
