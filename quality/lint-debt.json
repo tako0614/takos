@@ -1,8 +1,8 @@
 {
   "note": "Declared lint debt. `bun run check:lint` runs oxlint over src, web/src, scripts and website/src and refuses any finding that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. Rule selection lives in .oxlintrc.json.",
   "totals": {
-    "files": 58,
-    "diagnostics": 113
+    "files": 57,
+    "diagnostics": 112
   },
   "files": {
     "scripts/build-worker-release-artifact.ts": 1,
@@ -60,7 +60,6 @@
     "src/worker/server/routes/threads/thread.ts": 1,
     "src/worker/shared/types/bindings.ts": 1,
     "src/worker/web.ts": 1,
-    "web/src/hooks/useReposData.ts": 1,
     "web/src/views/chat/ChatInputBar.tsx": 1,
     "web/src/views/storage/StorageFileTable.tsx": 1
   }

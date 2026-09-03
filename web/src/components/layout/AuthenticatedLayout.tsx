@@ -24,7 +24,7 @@ function getMobileActiveItem(view: View): NavItem | undefined {
       return "memory";
     case "chat":
       return "chat";
-    // Views without a bottom-nav tab (apps / connections / storage / repos /
+    // Views without a bottom-nav tab (apps / connections / storage / source /
     // store / settings /
     // profile / legal …) highlight nothing rather than falsely lighting chat.
     default:
@@ -94,13 +94,6 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
       navigation.runSidebarAction(() => {
         navigation.navigate({ view: "store", storeTab: "discover" });
       }),
-    onNavigateRepos: () =>
-      navigation.runSidebarAction(() => {
-        navigation.navigate({
-          view: "repos",
-          spaceId: navigation.selectedSpaceId ?? undefined,
-        });
-      }),
     onOpenSearch: () =>
       navigation.runSidebarAction(() => {
         modal.setShowSearch(true);
@@ -156,14 +149,6 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
             "/",
           ),
         );
-      }),
-    onNavigateSpaceRepos: () =>
-      navigation.runSidebarAction(() => {
-        if (!navigation.sidebarSpace) return;
-        navigation.navigate({
-          view: "repos",
-          spaceId: getSpaceIdentifier(navigation.sidebarSpace),
-        });
       }),
     onNavigateSpaceApps: () =>
       navigation.runSidebarAction(() => {

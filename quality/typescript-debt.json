@@ -1,8 +1,8 @@
 {
-  "note": "Declared TypeScript debt. `bun run check:types` compiles every file in tsconfig.check.json and web/tsconfig.json and refuses any diagnostic that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. No production source under src/ or scripts/ carries debt; the web/src/views/repos and web/src/hooks/useReposData entries are the retired repository views, and the rest are test files.",
+  "note": "Declared TypeScript debt. `bun run check:types` compiles every file in tsconfig.check.json and web/tsconfig.json and refuses any diagnostic that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. Every entry is a test file; no production source carries type debt.",
   "totals": {
-    "files": 47,
-    "diagnostics": 155
+    "files": 33,
+    "diagnostics": 98
   },
   "files": {
     "scripts/__tests__/local-agent-proof.test.ts": 1,
@@ -37,20 +37,6 @@
     "src/worker/server/routes/auth/__tests__/in-process-bearer-userinfo.test.ts": 7,
     "src/worker/server/routes/auth/__tests__/node-resolver-oidc.integration.test.ts": 2,
     "src/worker/server/routes/auth/__tests__/oidc-router.test.ts": 6,
-    "src/worker/server/routes/capsules_test.ts": 2,
-    "web/src/components/layout/AuthenticatedLayout.tsx": 3,
-    "web/src/hooks/useReposData.ts": 1,
-    "web/src/views/repos/RepoSearchResults.tsx": 2,
-    "web/src/views/repos/ReposPanel.tsx": 1,
-    "web/src/views/repos/components/CommitList.tsx": 2,
-    "web/src/views/repos/components/FileTree.tsx": 2,
-    "web/src/views/repos/components/FileViewer.tsx": 8,
-    "web/src/views/repos/components/ForkModal.tsx": 1,
-    "web/src/views/repos/components/PRDetail.tsx": 15,
-    "web/src/views/repos/components/PRDiffView.tsx": 1,
-    "web/src/views/repos/components/PRList.tsx": 2,
-    "web/src/views/repos/components/RepoDetail.tsx": 13,
-    "web/src/views/repos/components/RepoDetailFiles.tsx": 3,
-    "web/src/views/repos/components/RepoDetailSidebar.tsx": 3
+    "src/worker/server/routes/capsules_test.ts": 2
   }
 }

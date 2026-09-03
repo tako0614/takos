@@ -22,8 +22,7 @@ or maintain a second Resource/Run ledger.
 
 An operator registers the Git source and installs
 `deploy/opentofu/cloudflare` as a Takosumi Capsule. The Provider is bound through
-Takosumi. The former `deploy/opentofu/takoform` Provider 1.x projection is not a
-current install option because it cannot represent the product graph. For the
+Takosumi. It is the only install surface. For the
 Cloudflare gaps that remain outside the ordinary provider path, use the
 explicitly reviewed bridge modes documented in `docs/deploy/index.md`. Those
 modes now gate only Vectorize index creation, the container-enabled Durable
@@ -91,13 +90,12 @@ publishing a Worker version that silently drops them.
 ## There is no Service Form projection to choose
 
 `deploy/opentofu/cloudflare` is the only install surface. There is no operator
-option to model the distribution with Service Forms instead: the former
-Provider 1.x projection under `deploy/opentofu/takoform` is retained as release
-history, its HCL is named `main.tf.history` so neither OpenTofu nor Takosumi
-source discovery can select it, and it is absent from the Repository manifest.
-The retired vocabulary it used (`EdgeWorker`, `SQLDatabase`, `KVStore`,
-`ContainerService`, `Queue`) describes that history and names nothing
-installable today.
+option to model the distribution with Service Forms instead. The former
+Provider 1.x projection was deleted along with its retired vocabulary
+(`EdgeWorker`, `SQLDatabase`, `KVStore`, `ContainerService`, `Queue`), which
+named nothing installable and disagreed with the live
+`deploy/product-resources.json` shape names. `scripts/validate-architecture-alignment.ts`
+keeps those paths absent.
 
 Current Forms also do not cover this product's graph, so the retirement is not
 a temporary gap awaiting a provider bump: there is no Form for the vector index
