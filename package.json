@@ -74,7 +74,7 @@
     "@aws-sdk/client-secrets-manager": "^3.700.0",
     "@aws-sdk/client-sqs": "^3.700.0",
     "@cloudflare/containers": "^0.3.5",
-    "@takosjp/takosumi-contract": "2.1.0",
+    "@takosjp/takosumi-contract": "^2.1.0",
     "@google-cloud/firestore": "^7.11.0",
     "@google-cloud/pubsub": "^4.9.0",
     "@google-cloud/storage": "^7.21.0",
