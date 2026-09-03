@@ -1,25 +1,25 @@
-# Takoserver fetch tracer (public Provider 3.0.0 candidate)
+# Takoserver fetch tracer (public Provider 4.0.0 integration)
 
-This directory is an opt-in, hermetic candidate tracer for validating a Takos
-Worker lifecycle against a Takoform Host with the publicly released
-`terraform-provider-takoform` v3.0.0 package. It is not the Takos product
-runtime, the default OpenTofu deployment surface, a published artifact, or
-publication/live-release evidence.
+This directory is an opt-in, hermetic integration tracer for validating a Takos
+Worker lifecycle against a Takoform Host with the published
+`terraform-provider-takoform` v4.0.0 package. It is not the Takos product
+runtime, the default OpenTofu deployment surface, or a claim that all Takos
+deployments run on Takoserver. It is also not publication/live-release evidence.
 
-The tracer creates exactly five Worker resources named by the Provider 3
+The tracer creates exactly five Host Worker resources named by the Provider 4
 contract (`takoform_module_worker`, `takoform_worker_bundle`,
 `takoform_worker_version`, `takoform_worker_deployment`, and
 `takoform_worker_endpoint`), checks exact v1 discovery/readback identities,
 probes the returned Worker, then destroys the graph and proves exact absence.
-The fixture pins the public registry source to exactly `= 3.0.0` and commits
+The fixture pins the public registry source to exactly `= 4.0.0` and commits
 the package checksum lockfile. Each run uses an isolated project name and an
 isolated `TF_DATA_DIR`; only direct registry installation is configured. Local
 provider binaries, development overrides, plugin caches, generated state, and
 provider source trees are not accepted.
 
 The lockfile's six `zh:` entries are the canonical checksums from the public
-release's exact [SHA256SUMS asset](https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/terraform-provider-takoform_3.0.0_SHA256SUMS),
-whose detached signature is the matching [SHA256SUMS.sig asset](https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/terraform-provider-takoform_3.0.0_SHA256SUMS.sig).
+release's exact [SHA256SUMS asset](https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/terraform-provider-takoform_4.0.0_SHA256SUMS),
+whose detached signature is the matching [SHA256SUMS.sig asset](https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/terraform-provider-takoform_4.0.0_SHA256SUMS.sig).
 Registry platform metadata must resolve those GitHub assets (not a generic
 registry download URL) and the release signing key ID
 `34FC18AC897FB709` / fingerprint
@@ -37,7 +37,7 @@ The real Registry/GitHub init proof is kept out of the portable gate. Run it
 explicitly on an online owner cadence with:
 
 ```bash
-bun test scripts/__tests__/takoserver-fetch-tracer.online.test.ts
+bun run test:takoserver-fetch-tracer:online
 ```
 
 That test is expected to fail when outbound access is disabled; its result is

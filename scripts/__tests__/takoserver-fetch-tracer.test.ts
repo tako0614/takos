@@ -20,14 +20,14 @@ import {
   cleanupRunRoot,
   cleanupAfterApply,
   combineTracerFailures,
+  createRevisionNameContext,
   createProviderInstallConfig,
   discoverV1,
   EVIDENCE_TOKEN_ENV,
-  DEFAULT_ENDPOINT_ORIGIN_TEMPLATE,
   MUTATION_TOKEN_ENV,
   knownResourceAddresses,
   materializeEndpointOrigin,
-  PROVIDER3_FORM_REFS,
+  PROVIDER4_FORM_REFS,
   PUBLIC_PROVIDER_H1_HASHES,
   PUBLIC_PROVIDER_CHECKSUM_SOURCE,
   PUBLIC_PROVIDER_PLATFORMS,
@@ -58,6 +58,7 @@ import {
   validateSpace,
   validateV1Discovery,
   type ResourceIdentity,
+  type RevisionNameContext,
   type FetchFunction,
   type SpawnFunction,
   type SpawnedChild,
@@ -70,22 +71,22 @@ const evidenceToken = "test-evidence-token-value";
 const nonce = "a".repeat(64);
 const projectUid = `puid-${nonce}`;
 const publicProviderChecksums = [
-  ["b741823cfd39cbbedf4d0ec0d4cca4ec6caba4cd134220fecd6b68c1147f21c2", "terraform-provider-takoform_3.0.0_darwin_amd64.zip"],
-  ["378d57128dd85305f43e81f494b3f5e2181d2b3e8f25f6646db9ed31d3fc8d9b", "terraform-provider-takoform_3.0.0_darwin_arm64.zip"],
-  ["f632146757f688dc4e48f65636fefe70fcbe2cb597d0e5e2f77cc1788a7f6585", "terraform-provider-takoform_3.0.0_linux_amd64.zip"],
-  ["84eda9fed68658be55885fc552741bbc1a778c1468a6380211639075260db309", "terraform-provider-takoform_3.0.0_linux_arm64.zip"],
-  ["f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32", "terraform-provider-takoform_3.0.0_manifest.json"],
-  ["8ae82b6a2186096ae3856d93268d19d056e2df851800976e09f004ba881e5844", "terraform-provider-takoform_3.0.0_windows_amd64.zip"],
+  ["a2b1f6c0bda3065c1e181db3b97eef52d9c823a74dc25e19339a4881ff501b17", "terraform-provider-takoform_4.0.0_darwin_amd64.zip"],
+  ["1a70d45661665b3ad799196637e93dd7765323b32fbc7eba7bd30496e225e3bd", "terraform-provider-takoform_4.0.0_darwin_arm64.zip"],
+  ["23fc2f43deec7e9bf20a4fe8253169fdbaa163840a8fdf8dfe1f4293f2346044", "terraform-provider-takoform_4.0.0_linux_amd64.zip"],
+  ["3a7d9e2f0edf19713a1df989b32541efe1ac5cf0926ca7a0c3b421e8acd3a633", "terraform-provider-takoform_4.0.0_linux_arm64.zip"],
+  ["f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32", "terraform-provider-takoform_4.0.0_manifest.json"],
+  ["ecd934d19ff177229afd0a9248ea2b37ef2a8bba8182f03acf21b36b4b9e2298", "terraform-provider-takoform_4.0.0_windows_amd64.zip"],
 ] as const;
 const publicProviderChecksumText = publicProviderChecksums.map(([hash, name]) => `${hash}  ${name}`).join("\n") + "\n";
 const publicProviderSignature = Buffer.from(
-  "iQIzBAABCgAdFiEENRDnXgW7zDA7ktd5NPwYrIl/twkFAmqM01sACgkQNPwYrIl/twkBkg/+NhhbrDlE6TbiK6WHmhpA5HdXrPLurOA2S8mkne9FeYeXaLQ2itnl4Ti6TrVU0boSevjEVouF/Pp0QzopSvZbXHbiK9qHbdOmfJGjPWme3SOqtTyzBthZ5DILXMt36pOAa9lwC/92DnWhCDBonzpse07LZaUKhtej7VhmiijCOQ+WkfeC/Bclk4/rDOigafaFfB8PrdeJwngQ089Dj7VE6wiP6EE2hexgU07Embj/CImClsspMnEVYlbSIW3apzX3TfdUoRi0UXzCi4wiMlyRUAbReYZsXxAe7APrX/M4afcvjkISfkvh9upAysGlBq2jw677myZb6Qn6JgPB37XTSjTLoT0urc+1BYAWjLdXiMLKSa4Q2e0hSqvjotEICZqd+dlcYSHyiJMf3RTUDq2HvvRTZsPzT4pNfa0uoA6AZHpSjPRt8rey1f/EpRd3p3UtNgJWjZow+EL/EQzqXCf6ozNQ1vTEJHbznJD+8fQdotxMTW+GSXCu5wij4PeliiRZOEhN5eAVea7vBFuepTPlaRBLnuKkWOW/cXYNEpxoTdrteYdtBbDYaIEEqExXBdndNBy9Fz6vbhvLgkynXXMR0c8qIJDk2S0fhWCDqIRmnRsEROrOa7Ck6ukiAgGXAklfVLeM3HWj2NCIm0pnAX5nFGaqb9XdMtB/hTXNCQ9SAIQ=",
+  "iQIzBAABCgAdFiEENRDnXgW7zDA7ktd5NPwYrIl/twkFAmqX6hQACgkQNPwYrIl/twliRg/6Aiukc6gd+fMd/UAZhR7/1WU2t/CYS+t98T6IWv6jmOLpI2qInVjaZ71FChQWh8x9Buuzvg4fjhRpwl5UH6dJWrn+m1ASTzqOmIiYnRjK6ATsv7WJbNUVuTxGbIg+HYRjGSfvRz1v99VxDNr0z7l+7+IaDH4uMHdWVtcdzbDI3Iwje/46PF2KJuRHzh5T2mqo+Kl+iSW17Aa3HyD6+i5PS+FAWzTJS6YCMunbpDwNIkDrlHYYAC96RzR7seOvBio94jBuXHaLssIPppBs0OyLxtxh1PTPD56M5b239PgDdiehwnM7gsVcxxSQO6TjPxUdeoBMl4qbdLTwCeurw4En3DXPuC+H8HHJLYFfYalQEDCbEyhvOXE/ge3n8ung3iJJN5HEoOg1cKIGJtSVyMj10nnyHxubp01SVyDleOPW8mjHzDQP+R1watQUSKvkhuvRNPOGrC3gtZvWjm9rSeieXTDxLtLp3kGDGWADG+8JW/k+2W2/BYkDVfhsM1qRPMAmOABZECOyB5kOuK+biEXii87PG8WeRy1h+Ay9p3T5XPF54HGnsoOth6oUFy1RY/QXwUidmOG7xW74/0en39W1d7CLwY38FTHDXIjlmrHlSp2+G0gT/E8FZ8x1eoiPdTKvHnsqEsZTKSZlOkVxAgQ2YlQt5i1wmCEqMJviZq/Wv1I=",
   "base64",
 );
 
 function publicProviderMetadataFixture(): readonly Record<string, unknown>[] {
   return PUBLIC_PROVIDER_PLATFORMS.map(([os, arch]) => {
-    const filename = `terraform-provider-takoform_3.0.0_${os}_${arch}.zip`;
+    const filename = `terraform-provider-takoform_4.0.0_${os}_${arch}.zip`;
     const checksum = publicProviderChecksums.find(([, name]) => name === filename)?.[0];
     if (!checksum) throw new Error(`missing fixture checksum for ${filename}`);
     return {
@@ -93,7 +94,7 @@ function publicProviderMetadataFixture(): readonly Record<string, unknown>[] {
       os,
       arch,
       filename,
-      download_url: `https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/${filename}`,
+      download_url: `https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/${filename}`,
       shasums_url: PUBLIC_PROVIDER_CHECKSUM_SOURCE,
       shasums_signature_url: PUBLIC_PROVIDER_SIGNATURE_SOURCE,
       shasum: checksum,
@@ -163,8 +164,8 @@ function redirectedPublicProviderFetch(options: {
   readonly secondChecksumRedirect?: string;
 } = {}): FetchFunction {
   let registryIndex = 0;
-  const checksumLocation = options.checksumLocation ?? githubReleaseAssetUrl("terraform-provider-takoform_3.0.0_SHA256SUMS");
-  const signatureLocation = options.signatureLocation ?? githubReleaseAssetUrl("terraform-provider-takoform_3.0.0_SHA256SUMS.sig");
+  const checksumLocation = options.checksumLocation ?? githubReleaseAssetUrl("terraform-provider-takoform_4.0.0_SHA256SUMS");
+  const signatureLocation = options.signatureLocation ?? githubReleaseAssetUrl("terraform-provider-takoform_4.0.0_SHA256SUMS.sig");
   return async (input) => {
     const url = String(input);
     if (url.startsWith(`${PUBLIC_PROVIDER_REGISTRY_DOWNLOAD_BASE}/`)) {
@@ -191,6 +192,15 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
   const configValue = environment.TF_VAR_config_value as string;
   const runNonce = environment.TF_VAR_project_nonce as string;
   const runUid = environment.TF_VAR_project_uid as string;
+  const revisions = createRevisionNameContext({
+    projectName,
+    configValue,
+    nonce: runNonce,
+    projectUid: runUid,
+    workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
+    workerModuleSize: 654,
+    bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+  });
   const commonUnknown = {
     conditions: true,
     form_api_version: true,
@@ -228,25 +238,27 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
       create_timeout: null,
       delete_timeout: null,
       main_module: "worker.mjs",
-      manifest_digest: "sha256:4cd22c5e2a5679dc8b324eec4eefc0878f103d3f28c20f0cbe91dfbf3f37b177",
-      modules: [{ content_file: "./worker.mjs", content_type: "application/javascript+module", digest: "sha256:b863a67c5000779a37b920473d1d1bfee77c0c52d527cdc6475942463798a0f2", name: "worker.mjs", size: 654 }],
-      name: `${projectName}-bundle`,
-      revision_owner: null,
+      manifest_digest: revisions.bundleManifestDigest,
+      modules: [{ content_file: "./worker.mjs", content_type: "application/javascript+module", digest: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a", name: "worker.mjs", size: 654 }],
+      name: revisions.bundleName,
+      revision_owner: projectName,
       space,
     }, { ...commonUnknown, modules: [{}] }, { ...commonSensitive, modules: [{}] }),
     change("takoform_worker_version", {
       actor_bindings: [],
+      apply_idempotency_key: null,
       assets: null,
-      bundle: `${projectName}-bundle`,
+      bucket_bindings: [],
+      bundle: revisions.bundleName,
       create_timeout: null,
       delete_timeout: null,
       external_services: [],
       handlers: ["fetch"],
       kv_bindings: [],
-      name: `${projectName}-version`,
+      name: revisions.workerVersionName,
       queue_producer_bindings: [],
       required_sensitive_vars: [],
-      revision_owner: null,
+      revision_owner: projectName,
       service_bindings: [],
       space,
       sqlite_bindings: [],
@@ -296,7 +308,7 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
       name: `${projectName}-deployment`,
       space,
       update_timeout: null,
-      versions: [{ weight: 10000, worker_version: `${projectName}-version` }],
+      versions: [{ weight: 10000, worker_version: revisions.workerVersionName }],
       worker: projectName,
     }, { ...commonUnknown, versions: [{}] }, { ...commonSensitive, versions: [{}] }),
     change("takoform_worker_endpoint", {
@@ -317,10 +329,10 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
   });
   const identityAfter = {
     module_worker: { hostname: null, name: projectName, space, url: null },
-    worker_bundle: { hostname: null, name: `${projectName}-bundle`, space, url: null },
+    worker_bundle: { hostname: null, name: revisions.bundleName, space, url: null },
     worker_deployment: { hostname: null, name: `${projectName}-deployment`, space, url: null },
     worker_endpoint: { name: `${projectName}-endpoint`, space },
-    worker_version: { hostname: null, name: `${projectName}-version`, space, url: null },
+    worker_version: { hostname: null, name: revisions.workerVersionName, space, url: null },
   };
   const identityUnknown = {
     module_worker: { form_api_version: true, form_definition_version: true, form_kind: true, form_schema_digest: true, generation: true, ready: true, revision: true, uid: true },
@@ -342,10 +354,14 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
   };
 }
 
-function identity(key: "module_worker" | "worker_bundle" | "worker_version" | "worker_deployment" | "worker_endpoint", projectName = "takos-fetch-tracer"): ResourceIdentity {
-  const form = PROVIDER3_FORM_REFS[key];
+function identity(
+  key: "module_worker" | "worker_bundle" | "worker_version" | "worker_deployment" | "worker_endpoint",
+  projectName = "takos-fetch-tracer",
+  revisions?: RevisionNameContext,
+): ResourceIdentity {
+  const form = PROVIDER4_FORM_REFS[key];
   return {
-    name: projectResourceName(key, projectName),
+    name: projectResourceName(key, projectName, revisions),
     space: "space-a",
     uid: `uid-${key}`,
     generation: "1",
@@ -752,7 +768,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       bodyAttemptResolve = resolve;
     });
     const fetchImpl: FetchFunction = async (_input, init) => {
-      requestSignal = init?.signal;
+      requestSignal = init?.signal ?? undefined;
       await new Promise<void>((resolve) => setTimeout(resolve, 25));
       const body = new ReadableStream<Uint8Array>({
         pull(controller) {
@@ -836,11 +852,11 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(signals).toEqual(["SIGTERM", "SIGKILL"]);
   });
 
-  test("accepts only the exact public Provider 3.0.0 lockfile", () => {
+  test("accepts only the exact public Provider 4.0.0 lockfile", () => {
     const lockfile = [
       'provider "registry.terraform.io/tako0614/takoform" {',
-      '  version     = "3.0.0"',
-      '  constraints = "3.0.0"',
+      '  version     = "4.0.0"',
+      '  constraints = "4.0.0"',
       '  hashes = [',
       ...[...PUBLIC_PROVIDER_H1_HASHES, ...PUBLIC_PROVIDER_ZH_HASHES].map((hash) => `    "${hash}"`),
       '  ]',
@@ -851,25 +867,25 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(lock.address).toBe(PROVIDER_SOURCE);
     expect(lock.version).toBe(PROVIDER_VERSION);
     expect(PROVIDER_SOURCE).toBe("registry.terraform.io/tako0614/takoform");
-    expect(PROVIDER_CONSTRAINT).toBe("= 3.0.0");
-    expect(() => assertProviderLockfile(lockfile.replace("3.0.0", "3.0.1"))).toThrow();
+    expect(PROVIDER_CONSTRAINT).toBe("= 4.0.0");
+    expect(() => assertProviderLockfile(lockfile.replace("4.0.0", "4.0.1"))).toThrow();
     expect(() => assertProviderLockfile(lockfile.replace("provider", "provider_installation"))).toThrow();
   });
 
   test("regresses the registry platform metadata to the signed GitHub release and six zh checksums", () => {
     const platforms = [
-      ["darwin", "amd64", "b741823cfd39cbbedf4d0ec0d4cca4ec6caba4cd134220fecd6b68c1147f21c2"],
-      ["darwin", "arm64", "378d57128dd85305f43e81f494b3f5e2181d2b3e8f25f6646db9ed31d3fc8d9b"],
-      ["linux", "amd64", "f632146757f688dc4e48f65636fefe70fcbe2cb597d0e5e2f77cc1788a7f6585"],
-      ["linux", "arm64", "84eda9fed68658be55885fc552741bbc1a778c1468a6380211639075260db309"],
-      ["windows", "amd64", "8ae82b6a2186096ae3856d93268d19d056e2df851800976e09f004ba881e5844"],
+      ["darwin", "amd64", "a2b1f6c0bda3065c1e181db3b97eef52d9c823a74dc25e19339a4881ff501b17"],
+      ["darwin", "arm64", "1a70d45661665b3ad799196637e93dd7765323b32fbc7eba7bd30496e225e3bd"],
+      ["linux", "amd64", "23fc2f43deec7e9bf20a4fe8253169fdbaa163840a8fdf8dfe1f4293f2346044"],
+      ["linux", "arm64", "3a7d9e2f0edf19713a1df989b32541efe1ac5cf0926ca7a0c3b421e8acd3a633"],
+      ["windows", "amd64", "ecd934d19ff177229afd0a9248ea2b37ef2a8bba8182f03acf21b36b4b9e2298"],
     ] as const;
     const metadata = platforms.map(([os, arch, shasum]) => ({
       protocols: ["6.0"],
       os,
       arch,
-      filename: `terraform-provider-takoform_3.0.0_${os}_${arch}.zip`,
-      download_url: `https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/terraform-provider-takoform_3.0.0_${os}_${arch}.zip`,
+      filename: `terraform-provider-takoform_4.0.0_${os}_${arch}.zip`,
+      download_url: `https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/terraform-provider-takoform_4.0.0_${os}_${arch}.zip`,
       shasums_url: PUBLIC_PROVIDER_CHECKSUM_SOURCE,
       shasums_signature_url: PUBLIC_PROVIDER_SIGNATURE_SOURCE,
       shasum,
@@ -894,7 +910,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(evidence.signingKeyId).toBe(PUBLIC_PROVIDER_SIGNING_KEY_ID);
     expect(evidence.signingKeyFingerprint).toBe(PUBLIC_PROVIDER_SIGNING_KEY_FINGERPRINT);
     expect([...parsePublicProviderChecksums(checksums)].sort()).toEqual([...PUBLIC_PROVIDER_ZH_HASHES].sort());
-    expect(() => assertProviderRegistryMetadata(metadata.map((entry) => ({ ...entry, shasums_url: "https://registry.terraform.io/v1/providers/tako0614/takoform/3.0.0/download" })), checksums)).toThrow(/SHA256SUMS URL/u);
+    expect(() => assertProviderRegistryMetadata(metadata.map((entry) => ({ ...entry, shasums_url: "https://registry.terraform.io/v1/providers/tako0614/takoform/4.0.0/download" })), checksums)).toThrow(/SHA256SUMS URL/u);
     expect(() => assertProviderRegistryMetadata(metadata.map((entry) => ({ ...entry, protocols: ["5.0"] })), checksums)).toThrow(/protocols/u);
     expect(() => verifyPublicProviderRelease({
       metadata,
@@ -930,21 +946,21 @@ describe("takoserver fetch tracer pure contracts", () => {
     })), checksums)).toThrow(/armor|CRC|fingerprint|public key/u);
     expect(() => assertProviderRegistryMetadata(metadata.map((entry) => ({
       ...entry,
-      download_url: "https://registry.terraform.io/v1/providers/tako0614/takoform/3.0.0/download/linux/amd64",
+      download_url: "https://registry.terraform.io/v1/providers/tako0614/takoform/4.0.0/download/linux/amd64",
     })), checksums)).toThrow(/archive URL/u);
     expect(() => assertProviderRegistryMetadata(metadata.slice(1), checksums)).toThrow(/exactly five|platform/u);
   });
 
   test("accepts one exact GitHub release-assets hop and rejects redirect confusion", async () => {
-    const checksumsLocation = githubReleaseAssetUrl("terraform-provider-takoform_3.0.0_SHA256SUMS");
-    const signatureLocation = githubReleaseAssetUrl("terraform-provider-takoform_3.0.0_SHA256SUMS.sig");
+    const checksumsLocation = githubReleaseAssetUrl("terraform-provider-takoform_4.0.0_SHA256SUMS");
+    const signatureLocation = githubReleaseAssetUrl("terraform-provider-takoform_4.0.0_SHA256SUMS.sig");
     const evidence = await fetchPublicProviderRelease({
       timeoutMs: 500,
       fetchImpl: redirectedPublicProviderFetch({ checksumLocation: checksumsLocation, signatureLocation }),
     });
     expect(evidence.signatureVerified).toBe(true);
 
-    const expectedFilename = "terraform-provider-takoform_3.0.0_SHA256SUMS";
+    const expectedFilename = "terraform-provider-takoform_4.0.0_SHA256SUMS";
     const missingSp = new URL(checksumsLocation);
     missingSp.searchParams.delete("sp");
     const invalidLocations = [
@@ -956,7 +972,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       `${checksumsLocation}&unexpected=1`,
       missingSp.toString(),
       checksumsLocation.replace("github-production-release-asset", "GitHub-production-release-asset"),
-      githubReleaseAssetUrl("terraform-provider-takoform_3.0.0_other.txt"),
+      githubReleaseAssetUrl("terraform-provider-takoform_4.0.0_other.txt"),
     ];
     for (const location of invalidLocations) {
       expect(() => assertGithubReleaseRedirect(new URL(location), expectedFilename)).toThrow(/redirect/u);
@@ -1090,7 +1106,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(() => assertExactAbsence(404, absent)).not.toThrow();
     expect(() => assertExactAbsence(404, { error: { ...absent.error, code: "permission_denied" } })).toThrow();
     expect(() => assertExactProbeBody({ buildIdentity: "wrong", configValue: "safe", nonce, projectUid }, "safe", nonce, projectUid)).toThrow();
-    expect(() => assertExactProbeBody({ buildIdentity: "takos-fetch-tracer@public-registry-provider-3.0.0", configValue: "safe", nonce, projectUid, extra: true }, "safe", nonce, projectUid)).toThrow();
+    expect(() => assertExactProbeBody({ buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0", configValue: "safe", nonce, projectUid, extra: true }, "safe", nonce, projectUid)).toThrow();
   });
 
   test("probes an assigned public Worker endpoint with the exact build contract", async () => {
@@ -1112,7 +1128,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       fetchImpl: async (input) => {
         requests.push(String(input));
         return new Response(JSON.stringify({
-          buildIdentity: "takos-fetch-tracer@public-registry-provider-3.0.0",
+          buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0",
           configValue: "safe-config",
           nonce,
           projectUid,
@@ -1129,9 +1145,19 @@ describe("takoserver fetch tracer pure contracts", () => {
 
   test("checks all five static project addresses for exact absence", async () => {
     const requests: string[] = [];
+    const projectName = "takos-fetch-tracer-aaaaaaaaaaaa";
+    const revisions = createRevisionNameContext({
+      projectName,
+      configValue: "safe-config",
+      nonce,
+      projectUid,
+      workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
+      workerModuleSize: 654,
+      bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+    });
     await assertAuthoritativeAbsence({
       apiRoot: "https://host.example/apis/forms.takoform.com/v1",
-      addresses: knownResourceAddresses("space-a"),
+      addresses: knownResourceAddresses("space-a", projectName, revisions),
       token,
       timeoutMs: 100,
       fetchImpl: async (input) => {
@@ -1150,11 +1176,11 @@ describe("takoserver fetch tracer pure contracts", () => {
         url.searchParams.get("definitionVersion") !== null &&
         url.searchParams.get("schemaDigest")?.startsWith("sha256:") === true;
     })).toBe(true);
-    expect(requests.some((request) => request.includes("ModuleWorker/takos-fetch-tracer"))).toBe(true);
-    expect(requests.some((request) => request.includes("WorkerBundle/takos-fetch-tracer-bundle"))).toBe(true);
-    expect(requests.some((request) => request.includes("WorkerVersion/takos-fetch-tracer-version"))).toBe(true);
-    expect(requests.some((request) => request.includes("WorkerDeployment/takos-fetch-tracer-deployment"))).toBe(true);
-    expect(requests.some((request) => request.includes("WorkerEndpoint/takos-fetch-tracer-endpoint"))).toBe(true);
+    expect(requests.some((request) => request.includes(`ModuleWorker/${projectName}`))).toBe(true);
+    expect(requests.some((request) => request.includes(`WorkerBundle/${revisions.bundleName}`))).toBe(true);
+    expect(requests.some((request) => request.includes(`WorkerVersion/${revisions.workerVersionName}`))).toBe(true);
+    expect(requests.some((request) => request.includes(`WorkerDeployment/${projectName}-deployment`))).toBe(true);
+    expect(requests.some((request) => request.includes(`WorkerEndpoint/${projectName}-endpoint`))).toBe(true);
   });
 
   test("unwraps realistic OpenTofu output wrappers before checking exact values", () => {
@@ -1297,9 +1323,9 @@ describe("takoserver fetch tracer pure contracts", () => {
       }
       if (subcommand === "init") {
         const workDir = options.cwd as string;
-        const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/3.0.0/linux_amd64/terraform-provider-takoform_v3.0.0");
+        const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/4.0.0/linux_amd64/terraform-provider-takoform_v4.0.0");
         const setup = mkdir(join(providerPath, ".."), { recursive: true })
-          .then(() => writeFile(providerPath, "synthetic-provider-3.0.0"))
+          .then(() => writeFile(providerPath, "synthetic-provider-4.0.0"))
           .then(() => chmod(providerPath, 0o755));
         return { exited: setup.then(() => 0), stdout: new Response("").body, stderr: new Response("").body };
       }
@@ -1398,9 +1424,9 @@ describe("takoserver fetch tracer pure contracts", () => {
       }
       if (subcommand === "init") {
         const workDir = options.cwd as string;
-        const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/3.0.0/linux_amd64/terraform-provider-takoform_v3.0.0");
+        const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/4.0.0/linux_amd64/terraform-provider-takoform_v4.0.0");
         const setup = mkdir(join(providerPath, ".."), { recursive: true })
-          .then(() => writeFile(providerPath, "synthetic-provider-3.0.0"))
+          .then(() => writeFile(providerPath, "synthetic-provider-4.0.0"))
           .then(() => chmod(providerPath, 0o755));
         return { exited: setup.then(() => 0), stdout: new Response("").body, stderr: new Response("").body };
       }
@@ -1424,14 +1450,23 @@ describe("takoserver fetch tracer pure contracts", () => {
         const projectName = environment.TF_VAR_project_name as string;
         const runNonce = environment.TF_VAR_project_nonce as string;
         const runUid = environment.TF_VAR_project_uid as string;
+        const revisions = createRevisionNameContext({
+          projectName,
+          configValue: environment.TF_VAR_config_value as string,
+          nonce: runNonce,
+          projectUid: runUid,
+          workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
+          workerModuleSize: 654,
+          bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+        });
         runtimeNonce = runNonce;
         runtimeUid = runUid;
         const endpointOrigin = `https://${projectName}.example/`;
         outputIdentities = Object.fromEntries(RESOURCE_KEYS.map((key) => [
           key,
           {
-            ...identity(key, projectName),
-            name: projectResourceName(key, projectName),
+          ...identity(key, projectName, revisions),
+            name: projectResourceName(key, projectName, revisions),
             space: environment.TF_VAR_space,
             hostname: key === "worker_endpoint" ? `${projectName}.example` : null,
             url: key === "worker_endpoint" ? endpointOrigin : null,
@@ -1480,7 +1515,7 @@ describe("takoserver fetch tracer pure contracts", () => {
         if (workerProbeSeen) return new Response("", { status: 404 });
         workerProbeSeen = true;
         return new Response(JSON.stringify({
-          buildIdentity: "takos-fetch-tracer@public-registry-provider-3.0.0",
+          buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0",
           configValue: "safe-config",
           nonce: runtimeNonce,
           projectUid: runtimeUid,
@@ -1595,9 +1630,9 @@ describe("takoserver fetch tracer pure contracts", () => {
         }
         if (subcommand === "init") {
           const workDir = options.cwd as string;
-          const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/3.0.0/linux_amd64/terraform-provider-takoform_v3.0.0");
+          const providerPath = join(workDir, ".terraform/providers/registry.terraform.io/tako0614/takoform/4.0.0/linux_amd64/terraform-provider-takoform_v4.0.0");
           const setup = mkdir(join(providerPath, ".."), { recursive: true })
-            .then(() => writeFile(providerPath, "synthetic-provider-3.0.0"))
+            .then(() => writeFile(providerPath, "synthetic-provider-4.0.0"))
             .then(() => chmod(providerPath, 0o755));
           return { exited: setup.then(() => 0), stdout: new Response("").body, stderr: new Response("").body };
         }
@@ -1620,10 +1655,19 @@ describe("takoserver fetch tracer pure contracts", () => {
           const projectName = environment.TF_VAR_project_name as string;
           const runNonce = environment.TF_VAR_project_nonce as string;
           const runUid = environment.TF_VAR_project_uid as string;
+          const revisions = createRevisionNameContext({
+            projectName,
+            configValue: environment.TF_VAR_config_value as string,
+            nonce: runNonce,
+            projectUid: runUid,
+            workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
+            workerModuleSize: 654,
+            bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+          });
           const endpointUrl = `https://${projectName}.invalid/`;
           outputIdentities = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, {
-            ...identity(key, projectName),
-            name: projectResourceName(key, projectName),
+            ...identity(key, projectName, revisions),
+            name: projectResourceName(key, projectName, revisions),
             space: environment.TF_VAR_space,
             hostname: key === "worker_endpoint" ? `${projectName}.invalid` : null,
             url: key === "worker_endpoint" ? endpointUrl : null,
@@ -1679,7 +1723,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(config).not.toContain(token);
   });
 
-  test("does not pin revision owners alongside names", async () => {
+  test("declares revision owners and lets Provider 4 derive immutable names", async () => {
     const configuration = await readFile(
       join(import.meta.dir, "../../deploy/opentofu/takoserver-fetch-tracer/main.tf"),
       "utf8",
@@ -1689,8 +1733,8 @@ describe("takoserver fetch tracer pure contracts", () => {
       expect(start).toBeGreaterThanOrEqual(0);
       const next = configuration.indexOf("\nresource ", start + 1);
       const block = configuration.slice(start, next === -1 ? configuration.length : next);
-      expect(block).toMatch(/^\s+name\s*=/mu);
-      expect(block).not.toMatch(/^\s+revision_owner\s*=/mu);
+      expect(block).toMatch(/^\s+revision_owner\s*=/mu);
+      expect(block).not.toMatch(/^ {2}name\s*=/mu);
     }
   });
 

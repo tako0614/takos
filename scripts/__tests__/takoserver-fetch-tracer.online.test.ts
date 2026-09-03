@@ -20,7 +20,7 @@ import {
 
 const mutationToken = "online-evidence-mutation-token";
 
-test("online evidence initializes and validates the exact public Provider 3.0.0", async () => {
+test("online evidence initializes and validates the exact public Provider 4.0.0", { timeout: 180_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), "fetch-tracer-public-provider-online-"));
   try {
     const fixture = join(root, "fixture");
@@ -80,7 +80,7 @@ test("online evidence initializes and validates the exact public Provider 3.0.0"
     expect(archive?.sha256).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(providerEvidence.sha256).toMatch(/^sha256:[0-9a-f]{64}$/u);
     const lock = assertProviderLockfile(await readFile(join(fixture, ".terraform.lock.hcl"), "utf8"));
-    expect(lock.version).toBe("3.0.0");
+    expect(lock.version).toBe("4.0.0");
     await runBoundedCommand({ ...command, args: ["validate", "-no-color"] });
   } finally {
     await rm(root, { recursive: true, force: true });

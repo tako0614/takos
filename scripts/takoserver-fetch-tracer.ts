@@ -19,13 +19,13 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const REPORT_KIND = "takos.takoserver-fetch-tracer@v1" as const;
-export const REPORT_LABEL = "public-registry-provider-3.0.0" as const;
+export const REPORT_LABEL = "public-registry-provider-4.0.0" as const;
 export const BUILD_IDENTITY =
-  "takos-fetch-tracer@public-registry-provider-3.0.0" as const;
+  "takos-fetch-tracer@public-registry-provider-4.0.0" as const;
 export const FIXED_CONFIG_VALUE = "fetch-tracer-config-v1" as const;
 export const PROVIDER_SOURCE = "registry.terraform.io/tako0614/takoform" as const;
-export const PROVIDER_VERSION = "3.0.0" as const;
-export const PROVIDER_CONSTRAINT = "= 3.0.0" as const;
+export const PROVIDER_VERSION = "4.0.0" as const;
+export const PROVIDER_CONSTRAINT = "= 4.0.0" as const;
 export const V1_DISCOVERY_PATH = "/.well-known/takoform/v1" as const;
 export const V1_API_VERSION = "forms.takoform.com/v1" as const;
 export const FORM_API_VERSION = "edge.forms.takoform.com" as const;
@@ -39,24 +39,20 @@ export const DEFAULT_ENDPOINT_ORIGIN_TEMPLATE = "https://{project}.invalid/";
 export const NATIVE_RESIDUAL_INVENTORY_BLOCKER =
   "Takoserver native residual inventory is not exposed by the public Host v1 contract; an operator-owned organization resources:read endpoint and credential are required";
 export const PUBLIC_PROVIDER_H1_HASHES = [
-  "h1:BT5z2yr8HvTahGYnc3BjSpihHzflK3yMnP+n9gw6VIk=",
-  "h1:GC/vBTpvIwCClpPHkjovjDBkAxzOBRiMnqrrYNKFQHE=",
-  "h1:GSS4MvLOvK+NDpEhBJqzXSSsUQZd1bKHPIa1Mhb5U+c=",
-  "h1:i2nDzu/wuSpJOs8qWD7lUro1wWLB6rtN8WKl+vc7O8A=",
-  "h1:yIoHKafkXgB+eXDZ07YK+Ifir5WQgquU1EkjYirx2N4=",
+  "h1:RYNZ0RDeAKvA8Ty+EZqSOA5nv+xpkgMyJux6XcHnNns=",
 ] as const;
 export const PUBLIC_PROVIDER_ZH_HASHES = [
-  "zh:378d57128dd85305f43e81f494b3f5e2181d2b3e8f25f6646db9ed31d3fc8d9b",
-  "zh:84eda9fed68658be55885fc552741bbc1a778c1468a6380211639075260db309",
-  "zh:8ae82b6a2186096ae3856d93268d19d056e2df851800976e09f004ba881e5844",
-  "zh:b741823cfd39cbbedf4d0ec0d4cca4ec6caba4cd134220fecd6b68c1147f21c2",
-  "zh:f632146757f688dc4e48f65636fefe70fcbe2cb597d0e5e2f77cc1788a7f6585",
+  "zh:1a70d45661665b3ad799196637e93dd7765323b32fbc7eba7bd30496e225e3bd",
+  "zh:23fc2f43deec7e9bf20a4fe8253169fdbaa163840a8fdf8dfe1f4293f2346044",
+  "zh:3a7d9e2f0edf19713a1df989b32541efe1ac5cf0926ca7a0c3b421e8acd3a633",
+  "zh:a2b1f6c0bda3065c1e181db3b97eef52d9c823a74dc25e19339a4881ff501b17",
+  "zh:ecd934d19ff177229afd0a9248ea2b37ef2a8bba8182f03acf21b36b4b9e2298",
   "zh:f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32",
 ] as const;
 export const PUBLIC_PROVIDER_CHECKSUM_SOURCE =
-  "https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/terraform-provider-takoform_3.0.0_SHA256SUMS" as const;
+  "https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/terraform-provider-takoform_4.0.0_SHA256SUMS" as const;
 export const PUBLIC_PROVIDER_SIGNATURE_SOURCE =
-  "https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/terraform-provider-takoform_3.0.0_SHA256SUMS.sig" as const;
+  "https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/terraform-provider-takoform_4.0.0_SHA256SUMS.sig" as const;
 export const PUBLIC_PROVIDER_SIGNING_KEY_ID = "34FC18AC897FB709" as const;
 export const PUBLIC_PROVIDER_SIGNING_KEY_FINGERPRINT =
   "3510E75E05BBCC303B92D77934FC18AC897FB709" as const;
@@ -91,7 +87,7 @@ HYQCsuc9Ul0Cm+MprVfm+UWVpk2a4k9sFWRZnlzFtVZ8fQthjMZZ6RTqNzUstqz3
 -----END PGP PUBLIC KEY BLOCK-----
 ` as const;
 export const PUBLIC_PROVIDER_REGISTRY_DOWNLOAD_BASE =
-  "https://registry.terraform.io/v1/providers/tako0614/takoform/3.0.0/download" as const;
+  "https://registry.terraform.io/v1/providers/tako0614/takoform/4.0.0/download" as const;
 export const PUBLIC_PROVIDER_PLATFORMS = [
   ["darwin", "amd64"],
   ["darwin", "arm64"],
@@ -100,11 +96,11 @@ export const PUBLIC_PROVIDER_PLATFORMS = [
   ["windows", "amd64"],
 ] as const;
 const PUBLIC_PROVIDER_PLATFORM_SHASUMS: Readonly<Record<string, string>> = {
-  "darwin/amd64": "b741823cfd39cbbedf4d0ec0d4cca4ec6caba4cd134220fecd6b68c1147f21c2",
-  "darwin/arm64": "378d57128dd85305f43e81f494b3f5e2181d2b3e8f25f6646db9ed31d3fc8d9b",
-  "linux/amd64": "f632146757f688dc4e48f65636fefe70fcbe2cb597d0e5e2f77cc1788a7f6585",
-  "linux/arm64": "84eda9fed68658be55885fc552741bbc1a778c1468a6380211639075260db309",
-  "windows/amd64": "8ae82b6a2186096ae3856d93268d19d056e2df851800976e09f004ba881e5844",
+  "darwin/amd64": "a2b1f6c0bda3065c1e181db3b97eef52d9c823a74dc25e19339a4881ff501b17",
+  "darwin/arm64": "1a70d45661665b3ad799196637e93dd7765323b32fbc7eba7bd30496e225e3bd",
+  "linux/amd64": "23fc2f43deec7e9bf20a4fe8253169fdbaa163840a8fdf8dfe1f4293f2346044",
+  "linux/arm64": "3a7d9e2f0edf19713a1df989b32541efe1ac5cf0926ca7a0c3b421e8acd3a633",
+  "windows/amd64": "ecd934d19ff177229afd0a9248ea2b37ef2a8bba8182f03acf21b36b4b9e2298",
 };
 const MAX_PROVIDER_RELEASE_BYTES = 4 * 1024 * 1024;
 export const RESOURCE_KEYS = [
@@ -167,11 +163,11 @@ export const TRACER_MILESTONES = [
 export type TracerMilestone = (typeof TRACER_MILESTONES)[number];
 
 /**
- * The public Provider 3.0.0 surface is deliberately pinned to these five
+ * The public Provider 4.0.0 surface is deliberately pinned to these five
  * current Edge FormRefs. A syntactically valid FormRef from another line is
  * not evidence for this tracer and must fail closed.
  */
-export const PROVIDER3_FORM_REFS: Readonly<Record<ResourceKey, {
+export const PROVIDER4_FORM_REFS: Readonly<Record<ResourceKey, {
   readonly apiVersion: typeof FORM_API_VERSION;
   readonly kind: string;
   readonly definitionVersion: string;
@@ -192,14 +188,14 @@ export const PROVIDER3_FORM_REFS: Readonly<Record<ResourceKey, {
   worker_version: {
     apiVersion: FORM_API_VERSION,
     kind: "WorkerVersion",
-    definitionVersion: "0.2.0",
-    schemaDigest: "sha256:3d4eeed966867a1ef8d7ce629a77c4b9687c6d48d3e496d22314b29aff0a42ed",
+    definitionVersion: "0.3.0",
+    schemaDigest: "sha256:65870343bfab512fe5e7ae6faea8b3dbc48f9c9de0d4d9349dcbfd819f06d365",
   },
   worker_deployment: {
     apiVersion: FORM_API_VERSION,
     kind: "WorkerDeployment",
-    definitionVersion: "0.1.0",
-    schemaDigest: "sha256:0d2bca351b8ecade0a1ebbddf2463bba22910313ff916414112ec8762204e769",
+    definitionVersion: "0.2.0",
+    schemaDigest: "sha256:3d5174bf2c3f351cf1468607689019e9eaa503a353eceb3095cf3d31bad62081",
   },
   worker_endpoint: {
     apiVersion: FORM_API_VERSION,
@@ -208,7 +204,7 @@ export const PROVIDER3_FORM_REFS: Readonly<Record<ResourceKey, {
     schemaDigest: "sha256:732f60aba45ce360d5ebbc6ac2e55fe4d59b65d353f4628e93960d71fbc2870f",
   },
 };
-export const PROVIDER_FORM_REFS = PROVIDER3_FORM_REFS;
+export const PROVIDER_FORM_REFS = PROVIDER4_FORM_REFS;
 
 const DEFAULT_PROJECT_NAME = "takos-fetch-tracer";
 const SOURCE_INVENTORY = [
@@ -303,6 +299,18 @@ export type SpawnedChild = {
 
 export type ProjectResourceAddresses = Record<ResourceKey, ResourceAddress>;
 
+/**
+ * Provider 4 derives immutable revision names from both the content digest
+ * and the declared revision owner.  Keep the name inputs together so plan,
+ * output, readback, and post-destroy absence all address the same immutable
+ * Host resources.
+ */
+export type RevisionNameContext = {
+  readonly bundleManifestDigest: string;
+  readonly bundleName: string;
+  readonly workerVersionName: string;
+};
+
 export type SpawnFunction = (
   argv: readonly string[],
   options: Record<string, unknown>,
@@ -391,7 +399,10 @@ export class CommandTimeoutError extends TracerError {
 }
 
 function singleLine(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f]/gu, " ").trim().slice(0, 512);
+  return Array.from(value, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f ? " " : character;
+  }).join("").trim().slice(0, 512);
 }
 
 function ownKeys(value: object): string[] {
@@ -446,12 +457,18 @@ function containsSecret(value: string, secret?: SecretInput): boolean {
   return secretValues(secret).some((valueToRedact) => value.includes(valueToRedact));
 }
 
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u;
 const PROXY_CREDENTIAL_PATTERN = /[a-z][a-z0-9+.-]*:\/\/[^/\s@]*@/iu;
 const PATH_TRAVERSAL_PATTERN = /(?:^|[\\/])\.\.(?:[\\/]|$)/u;
 const SENSITIVE_FIELD_PATTERN = /(?:^|_)(?:TOKEN|PASSWORD|PASSWD|SECRET|PRIVATE_KEY|CLIENT_KEY|AUTHORIZATION|AUTH_TOKEN|ACCESS_KEY|CREDENTIALS?)(?:$|_)/iu;
 const PATH_FIELD_PATTERN = /(?:^|_)(?:PATH|HOME|TMP|TMPDIR|TEMP|DIR|FILE|ROOT|CWD|WORKDIR|RECOVERYPATH|CONFIG_GLOBAL|CONFIG_NOSYSTEM)(?:$|_)/iu;
 const PROXY_FIELD_PATTERN = /^(?:HTTP|HTTPS|ALL|NO)_PROXY$/iu;
+
+function containsControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+}
 
 /**
  * Fail closed before diagnostics or reports are serialized. This walks the
@@ -469,7 +486,7 @@ export function assertNoKnownSecrets(value: unknown, secret?: SecretInput): void
       if (containsSecret(current, secrets)) {
         throw new TracerError("serialized output contained a known secret");
       }
-      if (CONTROL_CHARACTER_PATTERN.test(current)) {
+      if (containsControlCharacter(current)) {
         throw new TracerError("serialized output contained an unsafe control character");
       }
       if (PROXY_CREDENTIAL_PATTERN.test(current)) {
@@ -497,7 +514,7 @@ export function assertNoKnownSecrets(value: unknown, secret?: SecretInput): void
       throw new TracerError("serialized output could not be inspected safely");
     }
     for (const childKey of keys) {
-      if (containsSecret(childKey, secrets) || CONTROL_CHARACTER_PATTERN.test(childKey)) {
+      if (containsSecret(childKey, secrets) || containsControlCharacter(childKey)) {
         throw new TracerError("serialized output contained an unsafe field name");
       }
       let child: unknown;
@@ -728,10 +745,92 @@ export function validateSpace(value: string): string {
   if (value.length < 1 || Array.from(value).length > 255 || value !== value.trim()) {
     throw new TracerError("space must be 1..255 Unicode code points without leading/trailing whitespace");
   }
-  if (/[\/\p{Cc}]/u.test(value)) {
+  if (value.includes("/") || /\p{Cc}/u.test(value)) {
     throw new TracerError("space must not contain slash or control characters");
   }
   return value;
+}
+
+/** RFC 8785's object-key ordering is the only canonicalization needed by the
+ * tracer's closed integer/string/array/object revision specs.  Provider 4
+ * derives revision names from this canonical JSON digest, so insertion order
+ * must never become part of the identity. */
+function canonicalJson(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TracerError("revision identity JSON contained a non-finite number");
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  throw new TracerError("revision identity JSON contained an unsupported value");
+}
+
+function canonicalJsonDigest(value: unknown): string {
+  return `sha256:${createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
+}
+
+function derivedRevisionName(prefix: "bundle" | "version", owner: string, digest: string): string {
+  if (!DIGEST.test(digest)) throw new TracerError("revision content digest was not canonical");
+  if (!/^[a-z][a-z0-9-]{0,62}$/u.test(owner)) throw new TracerError("revision owner was not a DNS-like resource name");
+  const ownerDigest = createHash("sha256").update(owner, "utf8").digest("hex").slice(0, 12);
+  return `${prefix}-${digest.slice("sha256:".length, "sha256:".length + 12)}-${ownerDigest}`;
+}
+
+/** Build the exact Provider 4 revision identities for this tracer fixture. */
+export function createRevisionNameContext(input: {
+  readonly projectName: string;
+  readonly configValue: string;
+  readonly nonce: string;
+  readonly projectUid: string;
+  readonly workerModuleBytes?: Uint8Array;
+  readonly workerModuleSha256?: string;
+  readonly workerModuleSize?: number;
+  readonly bundleManifestDigest?: string;
+}): RevisionNameContext {
+  const moduleDigest = input.workerModuleBytes
+    ? hashFileBytes(input.workerModuleBytes)
+    : input.workerModuleSha256;
+  const moduleSize = input.workerModuleBytes?.byteLength ?? input.workerModuleSize;
+  if (!moduleDigest || !DIGEST.test(moduleDigest) || moduleSize === undefined || !Number.isSafeInteger(moduleSize) || moduleSize < 0) {
+    throw new TracerError("worker module bytes or exact digest/size are required for revision identity");
+  }
+  const manifest = {
+    apiVersion: "artifacts.takoform.com/v1alpha1",
+    kind: "WorkerBundle",
+    mainModule: "worker.mjs",
+    modules: [{ digest: moduleDigest, mediaType: "application/javascript+module", name: "worker.mjs", size: moduleSize }],
+  };
+  const bundleManifestDigest = input.bundleManifestDigest ?? canonicalJsonDigest(manifest);
+  if (!DIGEST.test(bundleManifestDigest)) throw new TracerError("bundle manifest digest was not canonical");
+  const bundleName = derivedRevisionName("bundle", input.projectName, bundleManifestDigest);
+  const workerVersionSpec = {
+    actorBindings: [],
+    bucketBindings: [],
+    bundle: { apiVersion: FORM_API_VERSION, kind: "WorkerBundle", name: bundleName },
+    externalServices: [],
+    handlers: ["fetch"],
+    kvBindings: [],
+    queueProducerBindings: [],
+    requiredSensitiveVars: [],
+    serviceBindings: [],
+    sqliteBindings: [],
+    vars: {
+      TAKOS_FETCH_TRACER_CONFIG: input.configValue,
+      TAKOS_FETCH_TRACER_NONCE: input.nonce,
+      TAKOS_FETCH_TRACER_PROJECT_UID: input.projectUid,
+    },
+    worker: { apiVersion: FORM_API_VERSION, kind: "ModuleWorker", name: input.projectName },
+    workflowBindings: [],
+  };
+  return {
+    bundleManifestDigest,
+    bundleName,
+    workerVersionName: derivedRevisionName("version", input.projectName, canonicalJsonDigest(workerVersionSpec)),
+  };
 }
 
 export function validateConfigValue(value: string): string {
@@ -811,7 +910,7 @@ export function parseArgs(
     }
     if (arg === "--provider-binary" || arg.startsWith("--provider-binary=") ||
       arg === "--provider-sha256" || arg.startsWith("--provider-sha256=")) {
-      throw new TracerError("local provider binaries and non-registry installations are forbidden; use the public Provider 3.0.0 package");
+      throw new TracerError("local provider binaries and non-registry installations are forbidden; use the public Provider 4.0.0 package");
     }
     if (arg === "--host") {
       [host, index] = readValue(index, arg);
@@ -898,7 +997,7 @@ export function usage(): string {
     "  [--token-env ENV_NAME] [--evidence-token-env ENV_NAME] [--tofu PATH] [--config-value VALUE]",
     "  [--timeout-ms N] [--kill-grace-ms N]",
     "",
-    "This uses only the public Registry Provider 3.0.0 and is not publication/live release evidence.",
+    "This uses only the public Registry Provider 4.0.0 and is not publication/live release evidence.",
   ].join("\n");
 }
 
@@ -1445,7 +1544,7 @@ function verifyDetachedProviderSignature(checksums: Uint8Array, signature: Uint8
 }
 
 /**
- * Validate the public Registry download response against the immutable v3.0.0
+ * Validate the public Registry download response against the immutable v4.0.0
  * GitHub release assets. This is intentionally a pure contract check so a
  * hermetic run cannot silently follow a mutable mirror or generic registry
  * URL. `checksumsText` is the exact SHA256SUMS release asset body.
@@ -1456,7 +1555,7 @@ export function assertProviderRegistryMetadata(
 ): ProviderRegistryMetadataEvidence {
   const expectedPlatforms = PUBLIC_PROVIDER_PLATFORMS.map(([os, arch]) => `${os}/${arch}`).sort();
   if (metadata.length !== expectedPlatforms.length) {
-    throw new TracerError("public Provider 3.0.0 registry metadata must cover exactly five published platforms");
+    throw new TracerError("public Provider 4.0.0 registry metadata must cover exactly five published platforms");
   }
   const seen = new Set<string>();
   const platformChecksums: string[] = [];
@@ -1477,9 +1576,9 @@ export function assertProviderRegistryMetadata(
     if (JSON.stringify(entry.protocols) !== JSON.stringify(["6.0"])) {
       throw new TracerError("Provider registry metadata protocols must be exactly [6.0]");
     }
-    const filename = `terraform-provider-takoform_3.0.0_${os}_${arch}.zip`;
+    const filename = `terraform-provider-takoform_4.0.0_${os}_${arch}.zip`;
     if (entry.filename !== filename) throw new TracerError("Provider registry metadata filename did not match the public release asset");
-    const expectedDownload = `https://github.com/tako0614/terraform-provider-takoform/releases/download/v3.0.0/${filename}`;
+    const expectedDownload = `https://github.com/tako0614/terraform-provider-takoform/releases/download/v4.0.0/${filename}`;
     if (entry.download_url !== expectedDownload) throw new TracerError("Provider registry metadata resolved an unexpected archive URL");
     if (entry.shasums_url !== PUBLIC_PROVIDER_CHECKSUM_SOURCE) throw new TracerError("Provider registry metadata resolved an unexpected SHA256SUMS URL");
     if (entry.shasums_signature_url !== PUBLIC_PROVIDER_SIGNATURE_SOURCE) throw new TracerError("Provider registry metadata resolved an unexpected SHA256SUMS signature URL");
@@ -1509,7 +1608,7 @@ export function assertProviderRegistryMetadata(
   const checksumEntries = parsePublicProviderChecksumEntries(checksumsText);
   const checksums = checksumEntries.map((entry) => `zh:${entry.sha256}`);
   if (checksums.length !== PUBLIC_PROVIDER_ZH_HASHES.length || !PUBLIC_PROVIDER_ZH_HASHES.every((hash) => checksums.includes(hash))) {
-    throw new TracerError("public Provider 3.0.0 SHA256SUMS did not carry the canonical six zh checksums");
+    throw new TracerError("public Provider 4.0.0 SHA256SUMS did not carry the canonical six zh checksums");
   }
   const checksumsByFilename = new Map(checksumEntries.map((entry) => [entry.filename, entry.sha256]));
   for (const archive of archiveChecksums) {
@@ -1539,12 +1638,12 @@ export function parsePublicProviderChecksumEntries(value: string): readonly Publ
   const lines = value.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
   if (lines.length !== PUBLIC_PROVIDER_ZH_HASHES.length) throw new TracerError("public Provider SHA256SUMS must contain exactly six entries");
   const expectedNames = new Set([
-    "terraform-provider-takoform_3.0.0_darwin_amd64.zip",
-    "terraform-provider-takoform_3.0.0_darwin_arm64.zip",
-    "terraform-provider-takoform_3.0.0_linux_amd64.zip",
-    "terraform-provider-takoform_3.0.0_linux_arm64.zip",
-    "terraform-provider-takoform_3.0.0_manifest.json",
-    "terraform-provider-takoform_3.0.0_windows_amd64.zip",
+    "terraform-provider-takoform_4.0.0_darwin_amd64.zip",
+    "terraform-provider-takoform_4.0.0_darwin_arm64.zip",
+    "terraform-provider-takoform_4.0.0_linux_amd64.zip",
+    "terraform-provider-takoform_4.0.0_linux_arm64.zip",
+    "terraform-provider-takoform_4.0.0_manifest.json",
+    "terraform-provider-takoform_4.0.0_windows_amd64.zip",
   ]);
   const seen = new Set<string>();
   const result: PublicProviderChecksumEntry[] = [];
@@ -1747,8 +1846,8 @@ async function fetchPublicProviderResponse(input: {
 }): Promise<PublicProviderResponse> {
   const deadline = Date.now() + input.timeoutMs;
   const expectedFilename = input.url.endsWith(".sig")
-    ? "terraform-provider-takoform_3.0.0_SHA256SUMS.sig"
-    : "terraform-provider-takoform_3.0.0_SHA256SUMS";
+    ? "terraform-provider-takoform_4.0.0_SHA256SUMS.sig"
+    : "terraform-provider-takoform_4.0.0_SHA256SUMS";
   let url = input.url;
   for (let redirects = 0; redirects < 2; redirects += 1) {
     const remaining = deadline - Date.now();
@@ -1836,11 +1935,11 @@ export function assertProviderLockfile(value: string): ProviderLock {
   }
   const version = block.match(/^\s*version\s*=\s*"([^"]+)"/mu)?.[1];
   if (version !== PROVIDER_VERSION) {
-    throw new TracerError("Provider lockfile must pin exactly public Provider 3.0.0");
+    throw new TracerError("Provider lockfile must pin exactly public Provider 4.0.0");
   }
   const constraints = block.match(/^\s*constraints\s*=\s*"([^"]+)"/mu)?.[1] ?? "";
-  if (constraints !== "3.0.0") {
-    throw new TracerError("Provider lockfile constraint must pin exactly 3.0.0");
+  if (constraints !== "4.0.0") {
+    throw new TracerError("Provider lockfile constraint must pin exactly 4.0.0");
   }
   const hashes = [...block.matchAll(/^\s+"((?:h1|zh):[^"]+)"/gmu)].map((match) => match[1]);
   const h1 = hashes.filter((hash): hash is (typeof PUBLIC_PROVIDER_H1_HASHES)[number] => hash.startsWith("h1:"));
@@ -1848,7 +1947,7 @@ export function assertProviderLockfile(value: string): ProviderLock {
   const exactSet = (actual: readonly string[], expected: readonly string[]): boolean =>
     actual.length === expected.length && new Set(actual).size === expected.length && expected.every((hash) => actual.includes(hash));
   if (!exactSet(h1, PUBLIC_PROVIDER_H1_HASHES) || !exactSet(zh, PUBLIC_PROVIDER_ZH_HASHES)) {
-    throw new TracerError("Provider lockfile must carry the canonical signed public Provider 3.0.0 checksum sets");
+    throw new TracerError("Provider lockfile must carry the canonical signed public Provider 4.0.0 checksum sets");
   }
   if (/\b(?:dev_overrides|filesystem_mirror)\b/u.test(value)) {
     throw new TracerError("Provider lockfile/config must not contain a local provider override");
@@ -1911,7 +2010,7 @@ function allowlistedParentEnvironment(base: NodeJS.ProcessEnv): Record<string, s
   for (const key of SAFE_PARENT_ENV_KEYS) {
     const value = base[key];
     if (typeof value !== "string") continue;
-    if (CONTROL_CHARACTER_PATTERN.test(value)) {
+    if (containsControlCharacter(value)) {
       throw new TracerError("inherited environment contained an unsafe control character");
     }
     if (PROXY_FIELD_PATTERN.test(key) && PROXY_CREDENTIAL_PATTERN.test(value)) {
@@ -2001,7 +2100,11 @@ function assertCanonicalNumber(value: unknown, subject: string): asserts value i
   }
 }
 
-export function projectResourceName(key: ResourceKey, projectName = DEFAULT_PROJECT_NAME): string {
+export function projectResourceName(
+  key: ResourceKey,
+  projectName = DEFAULT_PROJECT_NAME,
+  revisions?: RevisionNameContext,
+): string {
   if (!/^[a-z][a-z0-9-]{0,62}$/u.test(projectName)) {
     throw new TracerError("project_name must be a DNS-like lowercase resource name");
   }
@@ -2009,9 +2112,9 @@ export function projectResourceName(key: ResourceKey, projectName = DEFAULT_PROJ
     case "module_worker":
       return projectName;
     case "worker_bundle":
-      return `${projectName}-bundle`;
+      return revisions?.bundleName ?? `${projectName}-bundle`;
     case "worker_version":
-      return `${projectName}-version`;
+      return revisions?.workerVersionName ?? `${projectName}-version`;
     case "worker_deployment":
       return `${projectName}-deployment`;
     case "worker_endpoint":
@@ -2019,13 +2122,17 @@ export function projectResourceName(key: ResourceKey, projectName = DEFAULT_PROJ
   }
 }
 
-export function knownResourceAddresses(space: string, projectName = DEFAULT_PROJECT_NAME): ProjectResourceAddresses {
+export function knownResourceAddresses(
+  space: string,
+  projectName = DEFAULT_PROJECT_NAME,
+  revisions?: RevisionNameContext,
+): ProjectResourceAddresses {
   validateSpace(space);
   const result = {} as ProjectResourceAddresses;
   for (const key of RESOURCE_KEYS) {
-    const form = PROVIDER3_FORM_REFS[key];
+    const form = PROVIDER4_FORM_REFS[key];
     result[key] = {
-      name: projectResourceName(key, projectName),
+      name: projectResourceName(key, projectName, revisions),
       space,
       form_api_version: form.apiVersion,
       form_kind: form.kind,
@@ -2044,6 +2151,7 @@ export function assertExactResourceIdentity(
   // OpenTofu may expose the resource identity before the Host observes the
   // deployment. The authoritative readback path keeps the strict default.
   requireReady = true,
+  revisions?: RevisionNameContext,
 ): ResourceIdentity {
   const identity = requireRecord(value, `${key} identity`);
   const expectedKeys = [
@@ -2062,7 +2170,7 @@ export function assertExactResourceIdentity(
     if (!(field in identity)) throw new TracerError(`${key} identity is missing ${field}`);
   }
   const kind = requireString(identity.form_kind, `${key}.form_kind`);
-  const expectedForm = PROVIDER3_FORM_REFS[key];
+  const expectedForm = PROVIDER4_FORM_REFS[key];
   if (kind !== RESOURCE_KINDS[key] || kind !== expectedForm.kind) throw new TracerError(`${key} has unexpected Form kind`);
   if (identity.form_api_version !== expectedForm.apiVersion) throw new TracerError(`${key} has unexpected Form API version`);
   if (typeof identity.form_definition_version !== "string" || !FORM_DEFINITION_VERSION.test(identity.form_definition_version) || identity.form_definition_version !== expectedForm.definitionVersion) {
@@ -2074,7 +2182,7 @@ export function assertExactResourceIdentity(
   if (identity.space !== expectedSpace) throw new TracerError(`${key} is in the wrong SpaceID`);
   const name = requireString(identity.name, `${key}.name`);
   if (!/^[a-z][a-z0-9-]{0,62}$/u.test(name)) throw new TracerError(`${key} has an invalid resource name`);
-  if (name !== projectResourceName(key, expectedProjectName)) throw new TracerError(`${key} has an unexpected project resource name`);
+  if (name !== projectResourceName(key, expectedProjectName, revisions)) throw new TracerError(`${key} has an unexpected project resource name`);
   const uid = requireString(identity.uid, `${key}.uid`);
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(uid)) throw new TracerError(`${key} has an invalid uid`);
   assertCanonicalNumber(identity.generation, `${key}.generation`);
@@ -2097,6 +2205,7 @@ export function assertExactIdentitySet(
   expectedSpace: string,
   expectedProjectName = DEFAULT_PROJECT_NAME,
   requireReady = true,
+  revisions?: RevisionNameContext,
 ): Record<ResourceKey, ResourceIdentity> {
   const identities = requireRecord(value, "resource_identities");
   if (ownKeys(identities).join(",") !== [...RESOURCE_KEYS].sort().join(",")) {
@@ -2105,7 +2214,7 @@ export function assertExactIdentitySet(
   const result = {} as Record<ResourceKey, ResourceIdentity>;
   const uids = new Set<string>();
   for (const key of RESOURCE_KEYS) {
-    const identity = assertExactResourceIdentity(identities[key], key, expectedSpace, expectedProjectName, requireReady);
+    const identity = assertExactResourceIdentity(identities[key], key, expectedSpace, expectedProjectName, requireReady, revisions);
     if (uids.has(identity.uid)) throw new TracerError("resource identities must have distinct UIDs");
     uids.add(identity.uid);
     result[key] = identity;
@@ -2164,8 +2273,6 @@ const PLAN_RESOURCE_TYPES: Readonly<Record<ResourceKey, string>> = {
   worker_deployment: "takoform_worker_deployment",
   worker_endpoint: "takoform_worker_endpoint",
 };
-const TRACER_BUNDLE_MANIFEST_DIGEST = "sha256:4cd22c5e2a5679dc8b324eec4eefc0878f103d3f28c20f0cbe91dfbf3f37b177";
-
 export type PlanEvidence = {
   readonly creates: readonly string[];
   readonly planSha256: string;
@@ -2179,6 +2286,7 @@ export type PlanExpectation = {
   readonly projectUid: string;
   readonly workerModuleSha256: string;
   readonly workerModuleSize: number;
+  readonly revisions: RevisionNameContext;
 };
 
 const PLAN_COMMON_UNKNOWN_KEYS = [
@@ -2320,9 +2428,9 @@ function assertStrictPlanResource(change: JsonRecord, key: ResourceKey, expected
       assertExactJson(after.create_timeout, null, `${type}.create_timeout`);
       assertExactJson(after.delete_timeout, null, `${type}.delete_timeout`);
       assertExactJson(after.main_module, "worker.mjs", `${type}.main_module`);
-      assertExactJson(after.manifest_digest, TRACER_BUNDLE_MANIFEST_DIGEST, `${type}.manifest_digest`);
-      assertExactJson(after.name, `${name}-bundle`, `${type}.name`);
-      assertExactJson(after.revision_owner, null, `${type}.revision_owner`);
+      assertExactJson(after.manifest_digest, expected.revisions.bundleManifestDigest, `${type}.manifest_digest`);
+      assertExactJson(after.name, expected.revisions.bundleName, `${type}.name`);
+      assertExactJson(after.revision_owner, name, `${type}.revision_owner`);
       assertExactJson(after.space, space, `${type}.space`);
       if (!Array.isArray(after.modules) || after.modules.length !== 1) throw new TracerError(`${type}.modules must contain exactly one module`);
       assertExactJson(after.modules[0], {
@@ -2335,19 +2443,21 @@ function assertStrictPlanResource(change: JsonRecord, key: ResourceKey, expected
       break;
     }
     case "worker_version": {
-      assertClosedKeys(after, ["actor_bindings", "assets", "bundle", "create_timeout", "delete_timeout", "external_services", "handlers", "kv_bindings", "name", "queue_producer_bindings", "required_sensitive_vars", "revision_owner", "service_bindings", "space", "sqlite_bindings", "vars_json", "worker", "workflow_bindings"], [], `${type} after`);
+      assertClosedKeys(after, ["actor_bindings", "apply_idempotency_key", "assets", "bucket_bindings", "bundle", "create_timeout", "delete_timeout", "external_services", "handlers", "kv_bindings", "name", "queue_producer_bindings", "required_sensitive_vars", "revision_owner", "service_bindings", "space", "sqlite_bindings", "vars_json", "worker", "workflow_bindings"], [], `${type} after`);
       assertExactJson(after.actor_bindings, [], `${type}.actor_bindings`);
+      assertExactJson(after.apply_idempotency_key, null, `${type}.apply_idempotency_key`);
       assertExactJson(after.assets, null, `${type}.assets`);
-      assertExactJson(after.bundle, `${name}-bundle`, `${type}.bundle`);
+      assertExactJson(after.bucket_bindings, [], `${type}.bucket_bindings`);
+      assertExactJson(after.bundle, expected.revisions.bundleName, `${type}.bundle`);
       assertExactJson(after.create_timeout, null, `${type}.create_timeout`);
       assertExactJson(after.delete_timeout, null, `${type}.delete_timeout`);
       assertExactJson(after.external_services, [], `${type}.external_services`);
       assertExactJson(after.handlers, ["fetch"], `${type}.handlers`);
       assertExactJson(after.kv_bindings, [], `${type}.kv_bindings`);
-      assertExactJson(after.name, `${name}-version`, `${type}.name`);
+      assertExactJson(after.name, expected.revisions.workerVersionName, `${type}.name`);
       assertExactJson(after.queue_producer_bindings, [], `${type}.queue_producer_bindings`);
       assertExactJson(after.required_sensitive_vars, [], `${type}.required_sensitive_vars`);
-      assertExactJson(after.revision_owner, null, `${type}.revision_owner`);
+      assertExactJson(after.revision_owner, name, `${type}.revision_owner`);
       assertExactJson(after.service_bindings, [], `${type}.service_bindings`);
       assertExactJson(after.space, space, `${type}.space`);
       assertExactJson(after.sqlite_bindings, [], `${type}.sqlite_bindings`);
@@ -2374,7 +2484,7 @@ function assertStrictPlanResource(change: JsonRecord, key: ResourceKey, expected
         name: `${name}-deployment`,
         space,
         update_timeout: null,
-        versions: [{ weight: 10000, worker_version: `${name}-version` }],
+        versions: [{ weight: 10000, worker_version: expected.revisions.workerVersionName }],
         worker: name,
       }, `${type} after`);
       break;
@@ -2416,10 +2526,10 @@ function assertStrictPlanOutputs(value: unknown, expected: PlanExpectation): voi
   assertExactJson(output.before, null, "resource_identities.before");
   assertExactJson(output.after, {
     module_worker: { hostname: null, name: expected.projectName, space: expected.space, url: null },
-    worker_bundle: { hostname: null, name: `${expected.projectName}-bundle`, space: expected.space, url: null },
+    worker_bundle: { hostname: null, name: expected.revisions.bundleName, space: expected.space, url: null },
     worker_deployment: { hostname: null, name: `${expected.projectName}-deployment`, space: expected.space, url: null },
     worker_endpoint: { name: `${expected.projectName}-endpoint`, space: expected.space },
-    worker_version: { hostname: null, name: `${expected.projectName}-version`, space: expected.space, url: null },
+    worker_version: { hostname: null, name: expected.revisions.workerVersionName, space: expected.space, url: null },
   }, "resource_identities.after");
   const common = Object.fromEntries(["form_api_version", "form_definition_version", "form_kind", "form_schema_digest", "generation", "ready", "revision", "uid"].map((name) => [name, true]));
   assertExactJson(output.after_unknown, {
@@ -2476,7 +2586,12 @@ export async function inspectSavedPlan(planPath: string, showJson: string, expec
   return { creates, planSha256: hashFileBytes(planBytes) };
 }
 
-export function parseTofuOutputs(value: unknown, expectedSpace: string, expectedProjectName = DEFAULT_PROJECT_NAME): {
+export function parseTofuOutputs(
+  value: unknown,
+  expectedSpace: string,
+  expectedProjectName = DEFAULT_PROJECT_NAME,
+  revisions?: RevisionNameContext,
+): {
   readonly identities: Record<ResourceKey, ResourceIdentity>;
   readonly configValue: string;
   readonly endpointURL: string;
@@ -2488,7 +2603,7 @@ export function parseTofuOutputs(value: unknown, expectedSpace: string, expected
   assertClosedKeys(outputs, ["resource_identities", "config_value", "endpoint_url", "endpoint_hostname", "project_nonce", "project_uid"], [], "tofu output");
   // Apply output is an exact identity snapshot, but status can still be
   // Reconciling. The Host readback below is the readiness authority.
-  const identities = assertExactIdentitySet(unwrapTofuOutput(outputs.resource_identities, "resource_identities"), expectedSpace, expectedProjectName, false);
+  const identities = assertExactIdentitySet(unwrapTofuOutput(outputs.resource_identities, "resource_identities"), expectedSpace, expectedProjectName, false, revisions);
   const configValue = unwrapTofuOutput(outputs.config_value, "config_value");
   const endpointURL = unwrapTofuOutput(outputs.endpoint_url, "endpoint_url");
   const endpointHostname = unwrapTofuOutput(outputs.endpoint_hostname, "endpoint_hostname");
@@ -2706,13 +2821,10 @@ export function assertReadbackResource(value: unknown, identity: ResourceIdentit
     ...identity,
     revision: metadata.revision,
     ready: true,
-    ...(endpointOutputs ?? {}),
+    ...(endpointOutputs ? endpointOutputs : {}),
   };
   return authoritative;
 }
-
-/** @deprecated Use assertReadbackResource for the stable bare Resource shape. */
-export const assertReadbackEnvelope = assertReadbackResource;
 
 export async function readHostResource(input: {
   readonly apiRoot: string;
@@ -3037,7 +3149,7 @@ async function findProviderBinaries(root: string): Promise<string[]> {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
         await walk(path);
-      } else if (entry.isFile() && /^terraform-provider-takoform_v3\.0\.0(?:\.exe)?$/u.test(entry.name)) {
+      } else if (entry.isFile() && /^terraform-provider-takoform_v4\.0\.0(?:\.exe)?$/u.test(entry.name)) {
         found.push(path);
       }
     }
@@ -3056,7 +3168,7 @@ export async function verifyInstalledProviderBinary(workDir: string, tfDataDir?:
     const found = await findProviderBinaries(providerRoot).catch(() => []);
     candidates.push(...found);
   }
-  if (candidates.length !== 1) throw new TracerError("public Provider 3.0.0 installation must contain exactly one provider binary");
+  if (candidates.length !== 1) throw new TracerError("public Provider 4.0.0 installation must contain exactly one provider binary");
   const path = await realpath(candidates[0]);
   const allowedRoots = await Promise.all([workDir, ...(tfDataDir ? [tfDataDir] : [])].map((root) => realpath(root)));
   if (!allowedRoots.some((rootPath) => path === rootPath || path.startsWith(rootPath.endsWith("/") ? rootPath : `${rootPath}/`))) {
@@ -3069,18 +3181,6 @@ export async function verifyInstalledProviderBinary(workDir: string, tfDataDir?:
   return { path, platform: `${platform[1]}/${platform[2]}`, sha256: hashFileBytes(await readFile(path)) };
 }
 
-async function prepareWorkspace(config: CliConfig): Promise<{
-  readonly root: string;
-  readonly workDir: string;
-  readonly environment: Record<string, string | undefined>;
-  readonly projectName: string;
-  readonly nonce: string;
-  readonly projectUid: string;
-  readonly addresses: ProjectResourceAddresses;
-}> {
-  return prepareWorkspaceForIdentity(config, createRunIdentity());
-}
-
 async function prepareWorkspaceForIdentity(config: CliConfig, identity: RunIdentity): Promise<{
   readonly root: string;
   readonly workDir: string;
@@ -3089,12 +3189,21 @@ async function prepareWorkspaceForIdentity(config: CliConfig, identity: RunIdent
   readonly nonce: string;
   readonly projectUid: string;
   readonly addresses: ProjectResourceAddresses;
+  readonly revisions: RevisionNameContext;
 }> {
   const root = await mkdtemp(join(tmpdir(), "takoserver-fetch-tracer-"));
   try {
     const projectName = identity.projectName;
     const workDir = join(root, "fixture");
     await cp(config.fixtureDir, workDir, { recursive: true });
+    const workerModuleBytes = await readFile(join(workDir, "worker.mjs"));
+    const revisions = createRevisionNameContext({
+      projectName,
+      configValue: config.configValue,
+      nonce: identity.nonce,
+      projectUid: identity.projectUid,
+      workerModuleBytes,
+    });
     const cliConfigFile = join(root, "tofu.tfrc");
     await writeFile(cliConfigFile, createProviderInstallConfig(), { mode: 0o600 });
     const tfDataDir = join(root, "tfdata");
@@ -3124,7 +3233,8 @@ async function prepareWorkspaceForIdentity(config: CliConfig, identity: RunIdent
       projectName,
       nonce: identity.nonce,
       projectUid: identity.projectUid,
-      addresses: knownResourceAddresses(config.space, projectName),
+      addresses: knownResourceAddresses(config.space, projectName, revisions),
+      revisions,
     };
   } catch (error) {
     const cleaned = await cleanupRunRoot(root);
@@ -3723,6 +3833,7 @@ export async function runTracer(config: CliConfig, options: {
       projectUid: rootState.projectUid,
       workerModuleSha256: hashFileBytes(workerModuleBytes),
       workerModuleSize: workerModuleBytes.byteLength,
+      revisions: rootState.revisions,
     };
     const planPath = join(rootState.workDir, "tracer.tfplan");
     await runTofu({
@@ -3773,6 +3884,7 @@ export async function runTracer(config: CliConfig, options: {
       boundedJson(outputsResult.stdout, "tofu output"),
       config.space,
       rootState.projectName,
+      rootState.revisions,
     );
     if (parsedOutputs.nonce !== rootState.nonce || parsedOutputs.projectUid !== rootState.projectUid) {
       throw new TracerError("tofu outputs did not carry the exact per-run nonce and project UID");

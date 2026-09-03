@@ -1,4 +1,4 @@
-# Provider 3.0.0 public-registry tracer only. This module is intentionally not
+# Provider 4.0.0 public-registry tracer only. This module is intentionally not
 # referenced by Takos's default deployment surface or product runtime.
 
 terraform {
@@ -7,7 +7,7 @@ terraform {
   required_providers {
     takoform = {
       source  = "registry.terraform.io/tako0614/takoform"
-      version = "= 3.0.0"
+      version = "= 4.0.0"
     }
   }
 }
@@ -23,9 +23,9 @@ resource "takoform_module_worker" "app" {
 }
 
 resource "takoform_worker_bundle" "app" {
-  name        = "${var.project_name}-bundle"
-  space       = var.space
-  main_module = "worker.mjs"
+  revision_owner = var.project_name
+  space          = var.space
+  main_module    = "worker.mjs"
 
   modules = [
     {
@@ -41,11 +41,11 @@ resource "takoform_worker_bundle" "app" {
 }
 
 resource "takoform_worker_version" "app" {
-  name     = "${var.project_name}-version"
-  space    = var.space
-  worker   = takoform_module_worker.app.name
-  bundle   = takoform_worker_bundle.app.name
-  handlers = ["fetch"]
+  revision_owner = var.project_name
+  space          = var.space
+  worker         = takoform_module_worker.app.name
+  bundle         = takoform_worker_bundle.app.name
+  handlers       = ["fetch"]
   vars_json = jsonencode({
     TAKOS_FETCH_TRACER_CONFIG      = var.config_value
     TAKOS_FETCH_TRACER_NONCE       = var.project_nonce

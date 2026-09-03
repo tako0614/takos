@@ -1,5 +1,5 @@
 variable "host" {
-  description = "Bare origin of the Takoform Host used by the Provider 3.0.0 tracer candidate."
+  description = "Bare origin of the Takoform Host used by the Provider 4.0.0 integration tracer."
   type        = string
 
   validation {

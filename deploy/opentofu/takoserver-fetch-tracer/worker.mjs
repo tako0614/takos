@@ -1,5 +1,5 @@
 export const BUILD_IDENTITY =
-  "takos-fetch-tracer@public-registry-provider-3.0.0";
+  "takos-fetch-tracer@public-registry-provider-4.0.0";
 
 const CONFIG_KEY = "TAKOS_FETCH_TRACER_CONFIG";
 const NONCE_KEY = "TAKOS_FETCH_TRACER_NONCE";
