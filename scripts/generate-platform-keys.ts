@@ -42,19 +42,15 @@
 import { resolve } from "node:path";
 import { chmod, lstat, mkdir, writeFile } from "node:fs/promises";
 
+import { REQUIRED_RUNTIME_SECRET_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
+
 type Env = "staging" | "production" | "local";
 
 const SUPPORTED_ENVS = new Set<Env>(["staging", "production", "local"]);
 
 const DEFAULT_SECRETS_BASE = resolve(process.cwd(), ".secrets");
 
-const BASE_SECRET_FILES = [
-  "PLATFORM_PRIVATE_KEY",
-  "PLATFORM_PUBLIC_KEY",
-  "ENCRYPTION_KEY",
-  "TAKOS_AGENT_START_TOKEN",
-  "TAKOS_INTERNAL_API_SECRET",
-] as const;
+const BASE_SECRET_FILES = REQUIRED_RUNTIME_SECRET_NAMES;
 const OIDC_CLIENT_SECRET_NAME = "OIDC_CLIENT_SECRET" as const;
 type SecretName =
   | (typeof BASE_SECRET_FILES)[number]

@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { validateRuntimeSecrets } from "../src/worker/shared/config/runtime-secrets.ts";
+import {
+  REQUIRED_RUNTIME_SECRET_NAMES,
+  validateRuntimeSecrets,
+} from "../src/worker/shared/config/runtime-secrets.ts";
 
 const SOURCE_ROOT = resolve(import.meta.dir, "..");
 const GENERATOR = resolve(import.meta.dir, "generate-platform-keys.ts");
@@ -18,13 +21,6 @@ const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
 // The default public-client bundle must produce every required runtime name,
 // not just its key pair.
-const REQUIRED_RUNTIME_SECRET_NAMES = [
-  "ENCRYPTION_KEY",
-  "PLATFORM_PRIVATE_KEY",
-  "PLATFORM_PUBLIC_KEY",
-  "TAKOS_AGENT_START_TOKEN",
-  "TAKOS_INTERNAL_API_SECRET",
-] as const;
 
 type RuntimeSecretName = (typeof REQUIRED_RUNTIME_SECRET_NAMES)[number];
 

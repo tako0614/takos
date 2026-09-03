@@ -8,17 +8,12 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { REQUIRED_RUNTIME_SECRET_NAMES as RUNTIME_SECRET_BINDING_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const moduleRoot = join(root, "deploy", "opentofu", "cloudflare");
 const fixtureRoot = join(moduleRoot, "fixtures", "generated-root");
 
-const RUNTIME_SECRET_BINDING_NAMES = [
-  "ENCRYPTION_KEY",
-  "TAKOS_AGENT_START_TOKEN",
-  "TAKOS_INTERNAL_API_SECRET",
-  "PLATFORM_PRIVATE_KEY",
-  "PLATFORM_PUBLIC_KEY",
-] as const;
 
 await runTofu(
   ["init", "-backend=false", "-input=false", "-lockfile=readonly", "-no-color"],
