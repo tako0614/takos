@@ -28,10 +28,11 @@ export const repository = {
   appsCapsuleReadyOutputs: "{ready}/{total}件のoutputが準備完了",
   appsCapsuleUpdated: "更新 {date}",
   appsCapsuleSecret: "secret",
-  installStatusPending: "保留中",
+  installStatusPlanning: "計画中",
+  installStatusRecovering: "復旧中",
+  installStatusOutage: "停止中",
   installStatusInstalling: "インストール中",
   installStatusStale: "古い",
-  installStatusError: "エラー",
   installStatusFailed: "失敗",
 
   // Branches

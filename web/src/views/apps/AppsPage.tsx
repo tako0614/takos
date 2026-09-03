@@ -26,18 +26,29 @@ import {
   isInflightCapsule,
   useWorkspaceCapsules,
 } from "./inflight-installs.ts";
+import type { CapsuleStatus } from "../../../../src/contracts/external/takosumi-capsule-status.ts";
 
 export interface AppsPageProps {
   spaceId: string;
   onNavigateToStore?: () => void;
 }
 
-const INFLIGHT_STATUS_LABEL: Record<string, TranslationKey> = {
-  pending: "installStatusPending",
-  installing: "installStatusInstalling",
-  stale: "installStatusStale",
-  error: "installStatusError",
+/**
+ * Labels for the states an in-flight Capsule can be in.
+ *
+ * Keyed by the published Takosumi vocabulary plus takos's own `stale`. The map
+ * this replaced was keyed by `pending`, `installing` and `error`, none of
+ * which Takosumi ever sends, so those rows fell through to the raw string.
+ */
+const INFLIGHT_STATUS_LABEL: Partial<
+  Record<CapsuleStatus | "stale", TranslationKey>
+> = {
+  planning: "installStatusPlanning",
+  applying: "installStatusInstalling",
+  recovering: "installStatusRecovering",
+  outage: "installStatusOutage",
   failed: "installStatusFailed",
+  stale: "installStatusStale",
 };
 
 const INFLIGHT_POLL_INTERVAL_MS = 5000;
@@ -82,11 +93,14 @@ export function AppsPage(props: AppsPageProps) {
   const errorMessage = () => error();
 
   const inflightStatusLabel = (status: string) => {
-    const key = INFLIGHT_STATUS_LABEL[status];
+    const key = INFLIGHT_STATUS_LABEL[status as CapsuleStatus | "stale"];
     return key ? t(key) : status;
   };
+  // `failed` and `outage` are the two published statuses that mean something
+  // is wrong right now; `error` — the value this used to test for — is not in
+  // the vocabulary, so nothing was ever highlighted.
   const inflightStatusClass = (status: string) =>
-    status === "error"
+    status === "failed" || status === "outage"
       ? "text-red-600 dark:text-red-400 font-medium"
       : "text-zinc-500 dark:text-zinc-400";
 
