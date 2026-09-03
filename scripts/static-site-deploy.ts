@@ -91,6 +91,13 @@ export type StaticSiteDefinition = Readonly<{
   gate: readonly CommandRequest[];
   /** `/` first; the deploy is not called good until each one serves its bytes. */
   smoke: readonly SmokeTarget[];
+  /**
+   * True when the built bytes name a Takos release tag a visitor is sent to.
+   * takos.jp's install deep link and its self-host runbook both do, so this
+   * surface must not publish a build whose ref does not exist on `origin`:
+   * every Install click and every copied `git checkout` would fail.
+   */
+  publishesInstallRef?: boolean;
 }>;
 
 export const TAKOS_SITE_DEFINITION: StaticSiteDefinition = {
@@ -108,6 +115,7 @@ export const TAKOS_SITE_DEFINITION: StaticSiteDefinition = {
     { path: "/", file: "index.html" },
     { path: "/en/", file: "en/index.html" },
   ],
+  publishesInstallRef: true,
 };
 
 export const TAKOS_DOCS_DEFINITION: StaticSiteDefinition = {
@@ -349,9 +357,8 @@ export function mutatesTarget(request: CommandRequest): boolean {
     return true;
   }
   if (request.command === "git") {
-    return !["rev-parse", "status", "log", "show", "ls-files"].includes(
-      request.args[0] ?? "",
-    );
+    return !["rev-parse", "status", "log", "show", "ls-files", "ls-remote"]
+      .includes(request.args[0] ?? "");
   }
   // Local-only work: the scoped gate builds this machine's worktree and never
   // reaches the account.
@@ -694,6 +701,56 @@ function branchFor(options: StaticSiteOptions): string {
     : options.environment;
 }
 
+/* ---------------------------------------------------------- install ref */
+
+/**
+ * The Takos release tag the built site sends a visitor to.
+ *
+ * `website/src/lib/takos-release.generated.ts` is projected from the package
+ * version, so the ref is never a hand-advanced literal. What the projection
+ * cannot know is whether that tag has actually been published: a version bump
+ * lands before its release, and publishing the site in between ships an
+ * install deep link and a self-host runbook naming a ref that resolves
+ * nowhere.
+ */
+async function installRef(context: Context): Promise<string> {
+  const generated = await readFile(
+    resolve(
+      context.options.root,
+      "website/src/lib/takos-release.generated.ts",
+    ),
+    "utf8",
+  ).catch(() => null);
+  const ref = generated?.match(
+    /export const TAKOS_INSTALL_REF = "([^"]+)";/u,
+  )?.[1];
+  if (ref === undefined) {
+    refuse(
+      "website/src/lib/takos-release.generated.ts does not declare TAKOS_INSTALL_REF; run bun run generate:website-release-ref",
+    );
+  }
+  return ref;
+}
+
+/** `null` when the tag resolves on origin, otherwise the reason it does not. */
+async function unresolvedInstallRef(
+  context: Context,
+  ref: string,
+): Promise<string | null> {
+  const result = await invoke(context, {
+    command: "git",
+    args: ["ls-remote", "--tags", "origin", `refs/tags/${ref}`],
+    cwd: context.options.root,
+  });
+  if (result.exitCode !== 0) {
+    return `could not ask origin whether ${ref} exists: ${result.stderr.trim()}`;
+  }
+  if (result.stdout.trim() === "") {
+    return `the install ref this build publishes (${ref}) does not exist on origin, so every Install click and the self-host runbook's \`git checkout ${ref}\` would fail. Publish the release first.`;
+  }
+  return null;
+}
+
 /* ----------------------------------------------------------------- phases */
 
 async function statusPhase(context: Context): Promise<Record<string, unknown>> {
@@ -733,6 +790,13 @@ async function statusPhase(context: Context): Promise<Record<string, unknown>> {
   }
   if (outputError !== null) {
     drift.push(`no publishable build output: ${outputError}`);
+  }
+  if (definition.publishesInstallRef === true) {
+    const unresolved = await unresolvedInstallRef(
+      context,
+      await installRef(context),
+    );
+    if (unresolved !== null) drift.push(unresolved);
   }
   for (const [index, target] of definition.smoke.entries()) {
     const seen = probes[index];
@@ -818,6 +882,12 @@ async function applyPhase(context: Context): Promise<Record<string, unknown>> {
     refuse(
       `the Cloudflare Pages project ${definition.project} is not visible to this token. Create the project and attach ${definition.publicUrl} first: provisioning and DNS are a separate authority from this deploy.`,
     );
+  }
+
+  if (definition.publishesInstallRef === true) {
+    const ref = await installRef(context);
+    const unresolved = await unresolvedInstallRef(context, ref);
+    if (unresolved !== null) refuse(unresolved);
   }
 
   const gate = await runScopedGate(context);

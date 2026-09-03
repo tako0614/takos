@@ -6,6 +6,7 @@ import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
 import { reveal } from '~/lib/interactions';
 import type { InstallCard } from '~/content/site';
+import { TAKOS_INSTALL_REF } from '~/lib/takos-release.generated';
 
 export default function InstallCTA() {
   const t = useT();
@@ -38,8 +39,8 @@ export default function InstallCTA() {
                     <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
                     <span class='k'>$</span> cd takos{'\n'}
                     <span class='k'>$</span> git fetch --tags origin{'\n'}
-                    <span class='k'>$</span> git checkout --detach v0.12.8{'\n'}
-                    <span class='k'>$</span> git rev-parse --verify v0.12.8{'\n'}
+                    <span class='k'>$</span> git checkout --detach {TAKOS_INSTALL_REF}{'\n'}
+                    <span class='k'>$</span> git rev-parse --verify {TAKOS_INSTALL_REF}{'\n'}
                     <span class='k'>$</span> bun install --frozen-lockfile{'\n'}
                     <span class='k'>$</span> bun run build:opentofu-worker-artifact{'\n'}
                     <span class='k'>$</span> install -d -m 700 "$HOME/.config/takos"{'\n'}

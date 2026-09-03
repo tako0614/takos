@@ -17,6 +17,10 @@ const installCtaSource = await readFile(
   new URL("website/src/components/InstallCTA.tsx", root),
   "utf8",
 );
+const websiteReleaseSource = await readFile(
+  new URL("website/src/lib/takos-release.generated.ts", root),
+  "utf8",
+);
 const modules = {
   "deploy/opentofu/cloudflare": await readFile(
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
@@ -142,8 +146,16 @@ test("Takos publishes repository install hints and service declarations", () => 
 });
 
 test("the repository source and website CTA use one exact Takos release", () => {
-  const candidateTag = "v0.12.8";
+  // The published ref is a relation, not a literal: it is the package version,
+  // and the generated module the website imports has to agree with it. The
+  // literal this replaced sat at v0.12.8 against a package at 0.12.7, so the
+  // next website build would have shipped an install link and a self-host
+  // runbook naming a tag that resolves nowhere.
+  const candidateTag = `v${packageJson.version}`;
   expect(packageJson.takosRelease.version).toBe(packageJson.version);
+  expect(websiteReleaseSource).toContain(
+    `export const TAKOS_INSTALL_REF = "${candidateTag}";`,
+  );
   expect(websiteCloudUrlSource).toContain(
     'const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git"',
   );
@@ -151,8 +163,9 @@ test("the repository source and website CTA use one exact Takos release", () => 
     'url.searchParams.set("git", takosInstallGitUrl());',
   );
   expect(websiteCloudUrlSource).toContain(
-    `const DEFAULT_TAKOS_REF = "${candidateTag}"`,
+    "const DEFAULT_TAKOS_REF = TAKOS_INSTALL_REF;",
   );
+  expect(websiteCloudUrlSource).not.toMatch(/DEFAULT_TAKOS_REF = "/u);
   expect(websiteCloudUrlSource).toContain(
     'const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/cloudflare"',
   );
@@ -164,8 +177,8 @@ test("the repository source and website CTA use one exact Takos release", () => 
   const selfHostSequence = [
     "git clone https://github.com/tako0614/takos.git",
     "git fetch --tags origin",
-    "git checkout --detach v0.12.8",
-    "git rev-parse --verify v0.12.8",
+    "git checkout --detach {TAKOS_INSTALL_REF}",
+    "git rev-parse --verify {TAKOS_INSTALL_REF}",
     "bun install --frozen-lockfile",
     "bun run build:opentofu-worker-artifact",
     'install -d -m 700 "$HOME/.config/takos"',

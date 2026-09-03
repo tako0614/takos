@@ -20,15 +20,22 @@ The primary CTA resolves to the Takosumi platform worker install prefill route:
 https://app.takosumi.com/install?git=<takos-git-url>&ref=<immutable-release>&path=<module-path>&name=takos
 ```
 
-The fallback currently targets the next immutable Takos release, `v0.12.8`.
-Before publishing a website build, verify that the GitHub tag exists, points to
-the reviewed release commit, and contains the Cloudflare module plus the
-credential-free source build below. Never publish this CTA while the tag is
-missing or movable:
+The fallback ref is not a literal anyone edits. It is the package version,
+projected into `src/lib/takos-release.generated.ts` by
+`bun run generate:website-release-ref` and checked by `bun run check`. Advancing
+the published ref is therefore exactly one act: bump the package version and cut
+that release.
+
+Because a version bump lands before its release, `bun run deploy -- takos-site`
+asks `origin` whether the tag exists and refuses to publish while it does not —
+otherwise every Install click and the self-host runbook's `git checkout` would
+fail. `--status` reports the same thing as drift.
+
+An operator may still override the whole deep link for a staging platform:
 
 ```sh
 VITE_TAKOS_INSTALL_GIT_URL=https://github.com/tako0614/takos.git
-VITE_TAKOS_INSTALL_REF=v0.12.8
+VITE_TAKOS_INSTALL_REF=v0.0.0-your-tag
 VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu/cloudflare
 ```
 
@@ -52,7 +59,9 @@ the Git tree:
 
 ```sh
 set -eu
-release=v0.12.8
+# The tag takos.jp links to. `bun run check` keeps this equal to the package
+# version, and the takos-site deploy refuses to publish while it is unreleased.
+release=v0.12.7
 git clone https://github.com/tako0614/takos.git takos
 cd takos
 git fetch --tags origin
