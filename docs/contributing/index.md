@@ -31,6 +31,22 @@ live service、operator-private state、readiness evidence、recovery drill は�
 credential boundary と cadence を持ち、product check や release approval に
 混ぜません。
 
+### 宣言済み debt ledger
+
+type check、lint、portable test は対象を絞り込みません。3 つの gate はいずれも
+repository 全体を対象にし、残っている例外だけを `quality/` の ledger に
+書き出します。
+
+| Ledger | Gate | 意味 |
+| --- | --- | --- |
+| [`quality/typescript-debt.json`](../../quality/typescript-debt.json) | `bun run check:types` | `tsconfig.check.json` と `web/tsconfig.json` を全量 compile し、ここに数えていない diagnostic を拒否します。 |
+| [`quality/lint-debt.json`](../../quality/lint-debt.json) | `bun run check:lint` | oxlint (`.oxlintrc.json`) の finding のうち、ここに数えていないものを拒否します。 |
+| [`quality/test-quarantine.json`](../../quality/test-quarantine.json) | `bun run test` | tracked な test file のうち走らせないものを理由付きで宣言します。 |
+
+件数は countdown です。増えれば gate が落ち、減っても ledger を下げるまで落ちます。
+0 になった entry は削除します。quarantine は「今は失敗する」という主張なので、
+`bun run check:test-quarantine` が該当 file を実行し、通ってしまったものを拒否します。
+
 利用者向け docs を変更する場合は、[`documentation-style.md`](./documentation-style.md)
 の順序と用語ルールに従い、`bun run docs:build` も実行します。
 

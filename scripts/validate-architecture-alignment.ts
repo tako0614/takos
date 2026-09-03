@@ -273,13 +273,41 @@ async function main(): Promise<void> {
         "Portable build must traverse the real Worker module graph through bun run worker:build.",
     });
   }
-  if (
-    !/"test:product-contracts"\s*:\s*"[^"]*capsules_test\.ts/.test(packageText)
-  ) {
+  // The portable test runner takes every tracked test file, so the question is
+  // no longer whether one path is transcribed into a package script but
+  // whether it is quarantined out of the run. Dereference the quarantine
+  // ledger instead of matching a literal.
+  const capsuleProductPath = "src/worker/server/routes/capsules_test.ts";
+  const quarantineText = await readRequired(
+    "quality/test-quarantine.json",
+    failures,
+  );
+  let quarantinedFiles: Record<string, string> = {};
+  try {
+    quarantinedFiles =
+      (JSON.parse(quarantineText) as { files?: Record<string, string> })
+        .files ?? {};
+  } catch (error) {
+    failures.push({
+      path: "quality/test-quarantine.json",
+      message: `Unable to parse the test quarantine: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    });
+  }
+  if (capsuleProductPath in quarantinedFiles) {
+    failures.push({
+      path: "quality/test-quarantine.json",
+      message:
+        "Portable tests must exercise the canonical Capsule and Interface product path; " +
+        `${capsuleProductPath} is quarantined.`,
+    });
+  }
+  if (!/"test"\s*:\s*"bun scripts\/run-portable-tests\.ts/.test(packageText)) {
     failures.push({
       path: "package.json",
       message:
-        "Portable tests must exercise the canonical Capsule and Interface product path.",
+        "Portable tests must run through scripts/run-portable-tests.ts so every tracked test file is either run or quarantined with a reason.",
     });
   }
 

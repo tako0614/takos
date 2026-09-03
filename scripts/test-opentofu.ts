@@ -216,21 +216,21 @@ async function assertRuntimeSecretBindings(): Promise<void> {
       assertNoSecretMaterialInPlan(name, plan);
     }
 
-    const absentNames = workerVersionBindings(absent)
-      .map((binding) => binding.name)
-      .filter((binding) =>
-        (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding),
-      );
+    const absentNames = bindingNames(workerVersionBindings(absent));
     if (absentNames.length !== 0) {
       throw new Error(
         `runtime_secrets_provisioned = false must bind no runtime secret name; found ${absentNames.join(", ")}`,
       );
     }
 
-    const inheritedBindings = workerVersionBindings(inherited).filter((binding) =>
-      (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding.name),
+    const inheritedBindings = workerVersionBindings(inherited).filter(
+      (binding) =>
+        typeof binding.name === "string" &&
+        (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(
+          binding.name,
+        ),
     );
-    const inheritedNames = inheritedBindings.map((binding) => binding.name).sort();
+    const inheritedNames = bindingNames(inheritedBindings).sort();
     const expectedNames = [...RUNTIME_SECRET_BINDING_NAMES].sort();
     if (
       inheritedNames.length !== expectedNames.length ||
@@ -316,6 +316,18 @@ function isValueBearingSecretBinding(binding: Record<string, unknown>): boolean 
   return ["text", "key_base64", "key_jwk"].some(
     (field) => binding[field] !== undefined && binding[field] !== null,
   );
+}
+
+/** The runtime-secret binding names present in a plan's Worker version. */
+function bindingNames(
+  bindings: readonly Record<string, unknown>[],
+): string[] {
+  return bindings
+    .map((binding) => binding.name)
+    .filter((name): name is string => typeof name === "string")
+    .filter((name) =>
+      (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(name),
+    );
 }
 
 function workerVersionBindings(plan: unknown): Record<string, unknown>[] {

@@ -162,6 +162,12 @@ export interface Env
   OIDC_ISSUER_URL?: string;
   OIDC_DISCOVERY_URL?: string;
   OIDC_CLIENT_ID?: string;
+  /**
+   * Second registered client id for the Takos mobile shell. A Bearer token
+   * whose `aud` names it is accepted by `in-process-bearer.ts` exactly like
+   * one naming `OIDC_CLIENT_ID`.
+   */
+  OIDC_MOBILE_CLIENT_ID?: string;
   OIDC_CLIENT_SECRET?: string;
   OIDC_REDIRECT_URI?: string;
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;

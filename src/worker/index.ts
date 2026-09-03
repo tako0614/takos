@@ -42,13 +42,16 @@ export function createTakosWorker() {
       await background.queue(batch, env);
     },
 
+    // Both delegates take (event, env): the Workers `ctx` is deliberately not
+    // forwarded, because neither handler extends the invocation past its own
+    // await and a third argument does not type-check against either signature.
     async scheduled(
       controller: PlatformScheduledEvent & PlatformScheduledController,
       env: Parameters<typeof web.scheduled>[1] & Parameters<typeof background.scheduled>[1],
-      ctx: PlatformExecutionContext,
+      _ctx: PlatformExecutionContext,
     ): Promise<void> {
-      await web.scheduled(controller, env, ctx);
-      await background.scheduled(controller, env, ctx);
+      await web.scheduled(controller, env);
+      await background.scheduled(controller, env);
     },
   };
 }

@@ -369,7 +369,7 @@ function createToolboxRuntime(input: {
         threadId: "local-takosumi-mcp-agent-e2e",
         runId: input.runId,
         userId: input.subjectId,
-        role: "owner",
+        toolPolicyTier: "owner",
         capabilities: [],
         env: workerEnv,
         db,

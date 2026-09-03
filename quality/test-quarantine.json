@@ -1,0 +1,12 @@
+{
+  "note": "Test files excluded from `bun run test`. Each entry states why the file fails today. `bun scripts/run-portable-tests.ts --verify-quarantine` runs exactly these files and fails on any that now pass, so an entry is a claim that has to stay true or be deleted.",
+  "totals": {
+    "files": 4
+  },
+  "files": {
+    "scripts/__tests__/local-agent-proof-support.test.ts": "`computeAgentSourceFingerprint` hashes `../.dockerignore` and `../takos-agent-engine` relative to the repository's parent and hard-codes the checkout directory name `takos`, so the fingerprint case passes only inside the sibling ecosystem layout. The fingerprint's workspace coupling is the defect; quarantined until the build inputs are addressed from inside the repository.",
+    "src/worker/local-platform/__tests__/bootstrap.test.ts": "Seven local-dispatch cases assert behaviour the local platform no longer has: an unconfigured worker target answers `Local service target not configured` where the test expects `Tenant service not found`, and a tenant service URL override no longer rejects. Never ran under the previous file-level allowlist, so the drift went unseen; needs a product decision about which behaviour is right.",
+    "src/worker/local-platform/__tests__/local.redis.test.ts": "Asserts a Redis-backed local substrate that `resolveSessionDurableObject` now refuses outright (`SESSION_DO_REDIS_UNSUPPORTED`). The refusal is deliberate; the test predates it.",
+    "src/worker/node-platform/resolvers/__tests__/dispatch-resolver.test.ts": "`buildDispatcher` no longer registers a tenant runtime registry for a Node env without a data directory, so the case observes zero registries where it expects one. Never ran under the previous allowlist."
+  }
+}
