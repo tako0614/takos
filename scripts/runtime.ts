@@ -113,11 +113,11 @@ async function streamBytes(
   return out;
 }
 
-export async function readTextFile(path: string): Promise<string> {
+export async function readTextFile(path: string | URL): Promise<string> {
   return await readFile(path, "utf8");
 }
 
-export function readTextFileSync(path: string): string {
+export function readTextFileSync(path: string | URL): string {
   return readFileSync(path, "utf8");
 }
 

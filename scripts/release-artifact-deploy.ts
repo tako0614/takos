@@ -131,7 +131,7 @@ export function isolatedDockerEnv(
   if (!dockerConfig || !dockerConfig.startsWith("/")) {
     throw new Error("isolated Docker config path must be absolute");
   }
-  const isolated = { ...baseEnv, DOCKER_CONFIG: dockerConfig };
+  const isolated: NodeJS.ProcessEnv = { ...baseEnv, DOCKER_CONFIG: dockerConfig };
   // DOCKER_AUTH_CONFIG bypasses DOCKER_CONFIG and can silently reintroduce
   // operator credentials into the supposedly isolated registry session.
   delete isolated.DOCKER_AUTH_CONFIG;

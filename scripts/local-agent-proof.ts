@@ -180,9 +180,10 @@ export async function runLocalAgentPublicApiProof(
       ),
     ]);
 
-    lastRun = recordValue(runDetail.run);
-    const status = typeof lastRun?.status === "string" ? lastRun.status : null;
-    if (!status) {
+    const run = recordValue(runDetail.run);
+    lastRun = run;
+    const status = run && typeof run.status === "string" ? run.status : null;
+    if (!run || !status) {
       throw new Error("public run detail did not include run.status");
     }
     observedStatuses.add(status);
@@ -200,13 +201,13 @@ export async function runLocalAgentPublicApiProof(
       status === "failed" ? "error" : status,
     );
     const runOutputObserved =
-      typeof lastRun.output === "string" &&
-      lastRun.output.includes(LOCAL_AGENT_PROOF_ASSISTANT_MARKER);
+      typeof run.output === "string" &&
+      run.output.includes(LOCAL_AGENT_PROOF_ASSISTANT_MARKER);
 
     if (TERMINAL_STATUSES.has(status)) {
       if (status !== "completed") {
         const error =
-          typeof lastRun.error === "string" ? lastRun.error : "no run error";
+          typeof run.error === "string" ? run.error : "no run error";
         throw new Error(
           `agent run reached terminal status ${status}: ${error}; events=${eventTypes.join(",")}`,
         );

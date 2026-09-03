@@ -88,8 +88,8 @@ export async function smokeWorkerReleaseArchive(
         stderr: "pipe",
       },
     );
-    const stdout = readBoundedText(child.stdout);
-    const stderr = readBoundedText(child.stderr);
+    const stdout = readBoundedText(asByteStream(child.stdout));
+    const stderr = readBoundedText(asByteStream(child.stderr));
     let exitCode: number | undefined;
     void child.exited.then((code) => {
       exitCode = code;
@@ -290,7 +290,11 @@ binding = "RUN_QUEUE"
 }
 
 function localWranglerEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env = { ...base, CI: "true", WRANGLER_SEND_METRICS: "false" };
+  const env: NodeJS.ProcessEnv = {
+    ...base,
+    CI: "true",
+    WRANGLER_SEND_METRICS: "false",
+  };
   for (const name of Object.keys(env)) {
     if (
       name === "CF_API_EMAIL" ||
@@ -402,6 +406,18 @@ async function run(
     throw new Error(`${basename(executable)} ${args[0] ?? ""} failed with exit ${exitCode}`);
   }
   return { exitCode, stdout, stderr };
+}
+
+/**
+ * `Bun.spawn` types `stdout`/`stderr` as the union of every configurable shape.
+ * This process is spawned with `stdout: "pipe"`, so the value is always the
+ * stream; the refusal below keeps that assumption from failing silently.
+ */
+function asByteStream(value: unknown): ReadableStream<Uint8Array> {
+  if (!(value instanceof ReadableStream)) {
+    throw new Error("expected a piped byte stream from the spawned process");
+  }
+  return value as ReadableStream<Uint8Array>;
 }
 
 async function readBoundedText(stream: ReadableStream<Uint8Array>): Promise<string> {

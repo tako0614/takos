@@ -134,7 +134,11 @@ function fail(code: string, detail?: string): never {
   throw new BridgeFailure(code, detail);
 }
 
-function plainObject(value: unknown): value is Record<string, unknown> {
+// Every value this bridge inspects came out of `JSON.parse`, so the guard
+// claims the JSON shape rather than a looser `Record<string, unknown>`; that
+// is what lets a narrowed object be handed straight to the readback
+// comparators without a cast.
+function plainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -578,7 +582,10 @@ function durableObjectLifecycle(value: string): DurableObjectLifecycle {
   return { tags, steps, containerBindings };
 }
 
-async function readBounded(path: string, maximum: number): Promise<Uint8Array> {
+async function readBounded(
+  path: string,
+  maximum: number,
+): Promise<Uint8Array<ArrayBuffer>> {
   const metadata = await lstat(path).catch(() => fail("bridge_file_missing"));
   if (!metadata.isFile() || metadata.isSymbolicLink()) fail("bridge_file_invalid");
   if (metadata.size > maximum) fail("bridge_file_too_large");
@@ -2046,19 +2053,19 @@ function containerMatches(value: JsonObject, desired: DesiredContainer, namespac
   const configuration = plainObject(value.configuration) ? value.configuration : {};
   const durableObjects = plainObject(value.durable_objects) ? value.durable_objects : {};
   const disk = plainObject(configuration.disk) ? configuration.disk : {};
-  const namedCapacity = typeof desired.instanceType === "string"
+  // A named capacity and an explicit vcpu/memory/disk triple are the same
+  // desired shape read two ways, so resolve the triple once and compare it
+  // once; the name is only an additional accepted spelling.
+  const wantedCapacity = typeof desired.instanceType === "string"
     ? NAMED_CONTAINER_CAPACITIES[desired.instanceType]
-    : null;
-  const capacityMatches = namedCapacity !== null
-    ? configuration.instance_type === desired.instanceType ||
-      configuration.instance_type === undefined &&
-        Number(configuration.vcpu) === namedCapacity.vcpu &&
-        Number(configuration.memory_mib) === namedCapacity.memory_mib &&
-        Number(disk.size_mb) === namedCapacity.disk_mb
-    : configuration.instance_type === undefined &&
-      Number(configuration.vcpu) === desired.instanceType.vcpu &&
-      Number(configuration.memory_mib) === desired.instanceType.memory_mib &&
-      Number(disk.size_mb) === desired.instanceType.disk_mb;
+    : desired.instanceType;
+  const explicitCapacityMatches = configuration.instance_type === undefined &&
+    Number(configuration.vcpu) === wantedCapacity.vcpu &&
+    Number(configuration.memory_mib) === wantedCapacity.memory_mib &&
+    Number(disk.size_mb) === wantedCapacity.disk_mb;
+  const capacityMatches = (typeof desired.instanceType === "string" &&
+    configuration.instance_type === desired.instanceType) ||
+    explicitCapacityMatches;
   return (
     value.name === desired.name &&
     configuration.image === desired.image &&
@@ -2219,7 +2226,10 @@ async function workerArtifactDigest(
     return `sha256:${workerDigest}`;
   }
 
-  const metadata = await lstat(workerAssetsPath).catch(() =>
+  // `visit` closes over the assets root, and a parameter loses its narrowing
+  // inside a nested function, so bind the proven-present path once.
+  const assetsRoot = workerAssetsPath;
+  const metadata = await lstat(assetsRoot).catch(() =>
     fail("worker_assets_path_missing"),
   );
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
@@ -2241,11 +2251,11 @@ async function workerArtifactDigest(
         fail("worker_asset_file_too_large");
       }
       const digest = sha256(await readFile(childPath));
-      const path = relative(workerAssetsPath, childPath).split(sep).join("/");
+      const path = relative(assetsRoot, childPath).split(sep).join("/");
       entries.push({ path, digest });
     }
   }
-  await visit(workerAssetsPath);
+  await visit(assetsRoot);
   entries.sort((left, right) => compareTerraformStrings(left.path, right.path));
   return `sha256:${sha256(new TextEncoder().encode([
     `worker/index.js:${workerDigest}`,
