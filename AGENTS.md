@@ -6,7 +6,8 @@
 
 - Scope: Takos user-facing AI workspace distribution worker, web UI, and agent service wrapper.
 - Repository kind: `product`
-- Direct sibling dependencies: `takosumi`, `takos-agent-engine`, `takosumi-private`
+- Direct sibling dependencies: `takos-agent-engine`, `takosumi-private`
+- Published contracts consumed: `@takosjp/takosumi-contract` (takosumi, npm-package)
 - Repository gate: `bun run check`
 - Canonical docs: [README.md](README.md), [docs/architecture/index.md](docs/architecture/index.md), [docs/reference/api.md](docs/reference/api.md), [docs/deploy/index.md](docs/deploy/index.md)
 
