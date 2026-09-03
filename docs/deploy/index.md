@@ -26,6 +26,19 @@ Takosumi BYOC、self-host のどの install path でも同じ schema に到達�
 migration step はありません。詳細は
 [スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities) を参照してください。
 
+### Vector index は module が作りません
+
+Cloudflare provider には Vectorize resource がありません。この module は
+ordinary provider path で index を作れないので、既定では Worker Version に
+`VECTORIZE` binding を置きません。存在しない index を bind すると Worker は
+`vectorSearch: vectorize` と報告しながら全ての vector 呼び出しで失敗するので、
+宣言済みの `vectorSearch: disabled` として動かします。plan の
+`vector_search_capability` output がその答えをそのまま出します。
+
+意味検索を使う配置では、`cloudflare_vectorize_index_name` output が示す index を
+自分で作ってから `vector_index_provisioned = true` を指定します。bridge lane は
+index を自分で作るので、この input は不要です (同時指定は precondition が拒否します)。
+
 ### Cloudflare provider gap bridge
 
 Cloudflare provider がまだ表現できない Vectorize index、container-enabled Durable Object の bootstrap、

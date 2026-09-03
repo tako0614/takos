@@ -43,6 +43,12 @@ variable "runtime_secrets_provisioned" {
   default     = false
 }
 
+variable "vector_index_provisioned" {
+  description = "True when the Vectorize index this module names already exists in the account, so the Worker Version may bind it. False binds no `VECTORIZE`, which is the declared `vectorSearch: disabled` degraded mode rather than a binding pointed at nothing."
+  type        = bool
+  default     = false
+}
+
 variable "plan_mode" {
   description = "Plan-only mode: no real Cloudflare credentials required (for Takosumi Run with type `plan` review)."
   type        = bool

@@ -108,8 +108,17 @@ capability は次で読めます。
 - 既に queue に入っていた run は、queue の retry 上限に達した時点で
   dead-letter queue 経由で `failed` になります。
 
+### 既定の install がどちらになるか
+
+OpenTofu module は Vectorize index を作れないので、`vector_index_provisioned` を
+指定しない install は `vectorSearch: disabled` になります。これは事故ではなく
+plan に出る答えで、`vector_search_capability` output が `disabled` を返します。
+`agentContainers` も同様に、container を配置していない install では `disabled` です。
+
 ### 縮退モードから復帰する
 
 Vectorize index と Container application を配置してから Worker の binding を
-更新してください。binding が現れた時点で capability は変わります。schema の再適用は
+更新してください。OpenTofu module では、index を作ったあとに
+`vector_index_provisioned = true` を指定すると Worker Version が `VECTORIZE` を
+bind します。binding が現れた時点で capability は変わります。schema の再適用は
 不要です。bridge を使う場合の制約は [セルフホスト](/deploy/) を参照してください。

@@ -277,7 +277,19 @@ locals {
     }
   ]
 
-  provider_gap_bridge_enabled   = var.cloudflare_provider_gap_bridge_mode != "off"
+  provider_gap_bridge_enabled = var.cloudflare_provider_gap_bridge_mode != "off"
+
+  # A `VECTORIZE` binding is only honest when something actually created the
+  # index. The Cloudflare provider has no Vectorize resource, so on the
+  # ordinary provider path the index can only come from outside this module;
+  # the bridge lanes create it themselves. Binding it unconditionally is what
+  # made `resolveRuntimeCapabilities` answer `vectorSearch: vectorize` on a
+  # deployment whose every vector call fails, instead of the declared
+  # `vectorSearch: disabled` degraded mode.
+  vector_index_available = local.provider_gap_bridge_enabled || var.vector_index_provisioned
+  vector_bindings = local.vector_index_available ? [
+    { name = "VECTORIZE", type = "vectorize", index_name = local.vectorize.index_name },
+  ] : []
   bridge_acknowledgement_digest = sha256(var.cloudflare_provider_gap_bridge_acknowledgement)
 
   # Evaluating file digests only when the bridge is opted in keeps ordinary
@@ -424,6 +436,11 @@ resource "terraform_data" "provider_gap_contract" {
     precondition {
       condition     = var.cloudflare_provider_gap_bridge_mode == "disposable-production" || var.cloudflare_provider_gap_bridge_acknowledgement == ""
       error_message = "cloudflare_provider_gap_bridge_acknowledgement must be empty unless disposable-production bridge mode is selected."
+    }
+
+    precondition {
+      condition     = !var.vector_index_provisioned || !local.provider_gap_bridge_enabled
+      error_message = "vector_index_provisioned declares an externally created Vectorize index; the provider-gap bridge creates and owns the index itself, so exactly one of them may claim it."
     }
   }
 }
@@ -616,7 +633,6 @@ resource "cloudflare_worker_version" "app" {
       { name = "RUN_QUEUE", type = "queue", queue_name = cloudflare_queue.this["runs"].queue_name },
       { name = "INDEX_QUEUE", type = "queue", queue_name = cloudflare_queue.this["index_jobs"].queue_name },
       { name = "TAKOS_NOTIFICATION_PUSH_QUEUE", type = "queue", queue_name = cloudflare_queue.this["notification_push"].queue_name },
-      { name = "VECTORIZE", type = "vectorize", index_name = local.vectorize.index_name },
       { name = "AI", type = "ai" },
       { name = "SESSION_DO", type = "durable_object_namespace", class_name = "SessionDO" },
       { name = "RUN_NOTIFIER", type = "durable_object_namespace", class_name = "RunNotifierDO" },
@@ -625,6 +641,7 @@ resource "cloudflare_worker_version" "app" {
       { name = "ROUTING_DO", type = "durable_object_namespace", class_name = "RoutingDO" },
       { name = "TAKOS_EGRESS", type = "service", service = local.service_runtime_name, entrypoint = "TakosEgressEntrypoint" },
     ],
+    local.vector_bindings,
     [for binding in local.durable_object_lifecycle.container_bindings : {
       name       = binding.name
       type       = "durable_object_namespace"
