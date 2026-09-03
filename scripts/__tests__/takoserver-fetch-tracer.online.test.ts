@@ -20,7 +20,7 @@ import {
 
 const mutationToken = "online-evidence-mutation-token";
 
-test("online evidence initializes and validates the exact public Provider 4.0.0", { timeout: 180_000 }, async () => {
+test("online evidence initializes and validates the exact public Provider 4.0.0", async () => {
   const root = await mkdtemp(join(tmpdir(), "fetch-tracer-public-provider-online-"));
   try {
     const fixture = join(root, "fixture");
@@ -85,4 +85,4 @@ test("online evidence initializes and validates the exact public Provider 4.0.0"
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 180_000);
