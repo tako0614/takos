@@ -48,6 +48,9 @@ const RETIRED_PATHS = [
   "web/src/types/group.ts",
   "web/src/types/worker.ts",
   "web/src/views/app/space/DeployPanel.tsx",
+  "web/src/hooks/useReposData.ts",
+  "scripts/generate-takoform-schema-bundle.ts",
+  "scripts/takoform-schema-bundle.test.ts",
 ] as const;
 
 const RETIRED_DIRS = [
@@ -64,6 +67,9 @@ const RETIRED_DIRS = [
   "src/worker/server/routes/resources",
   "src/worker/server/routes/workers",
   "web/src/views/workers",
+  "web/src/views/repos",
+  "deploy/opentofu/takoform",
+  "deploy/distribution-contract",
 ] as const;
 
 const PACKAGE_FORBIDDEN_MARKERS = [

@@ -9,10 +9,10 @@
  * exactly the same thing on every install path because every install path now
  * converges on the Worker applying this set at runtime.
  *
- * `deploy/opentofu/takoform/migrations/schema-bundle.json` is a byte-identical
- * projection of the same reader, retained as release history for the retired
- * Provider 1.x tree. It is not a second live derived artifact; see
- * `scripts/generate-takoform-schema-bundle.ts`.
+ * There is no second projection of this reader. The retired Provider 1.x
+ * schema bundle used to hold a byte-identical copy pinned by a digest in a
+ * module the README forbade planning, so every new control migration had to
+ * edit a tree nothing applies; it was deleted.
  */
 
 import { createHash } from "node:crypto";

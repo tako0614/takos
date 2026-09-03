@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import { REQUIRED_RUNTIME_SECRET_NAMES } from "../../worker/shared/config/runtime-secrets.ts";
 
@@ -26,9 +26,6 @@ const modules = {
 const platformModuleSource = await readFile(
   new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
   "utf8",
-);
-const retiredTakoformEntries = await readdir(
-  new URL("deploy/opentofu/takoform/", root),
 );
 
 test("Takos publishes repository install hints and service declarations", () => {
@@ -142,12 +139,6 @@ test("Takos publishes repository install hints and service declarations", () => 
   );
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
-
-  expect(retiredTakoformEntries.filter((name) => /\.(?:tf|tofu)(?:\.json)?$/u.test(name))).toEqual([]);
-  expect(retiredTakoformEntries).toEqual(expect.arrayContaining([
-    "main.tf.history",
-    "outputs.tf.history",
-  ]));
 });
 
 test("the repository source and website CTA use one exact Takos release", () => {

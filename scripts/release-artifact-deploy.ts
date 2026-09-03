@@ -88,14 +88,6 @@ export type ReleaseArtifactOptions = Readonly<{
   prepareEvidence?: string;
 }>;
 
-export type ReleaseArtifactRuntime = Readonly<{
-  verifyPortableWorkerSourceIdentity?: (
-    takosRoot: string,
-    tag: string,
-    archiveDigest: string,
-  ) => Promise<void>;
-}>;
-
 type CommandResult = Readonly<{
   exitCode: number;
   stdout: string;
@@ -330,7 +322,6 @@ export function parseReleaseArtifactArgs(
 
 export async function runReleaseArtifact(
   options: ReleaseArtifactOptions,
-  runtime: ReleaseArtifactRuntime = {},
 ): Promise<unknown> {
   assertCanonicalAuthorityEnvironment();
   const root = await realpath(resolve(import.meta.dir, ".."));
@@ -343,16 +334,7 @@ export async function runReleaseArtifact(
   if (options.phase === "prepare") {
     return await prepareRelease(root, identity.commit, version, options);
   }
-  return await publishRelease(
-    root,
-    identity.commit,
-    version,
-    async (tag, archiveDigest) =>
-      await (runtime.verifyPortableWorkerSourceIdentity
-        ? runtime.verifyPortableWorkerSourceIdentity(root, tag, archiveDigest)
-        : assertPortableWorkerSourceIdentity(root, tag, archiveDigest)),
-    options,
-  );
+  return await publishRelease(root, identity.commit, version, options);
 }
 
 async function prepareRelease(
@@ -636,10 +618,6 @@ async function publishRelease(
   root: string,
   commit: string,
   version: string,
-  verifyPortableWorkerSourceIdentity: (
-    tag: string,
-    archiveDigest: string,
-  ) => Promise<void>,
   options: ReleaseArtifactOptions,
 ): Promise<unknown> {
   const preparePath = await physicalFile(
@@ -673,13 +651,7 @@ async function publishRelease(
       throw new Error(`prepared asset changed: ${asset.name}`);
     }
   }
-  await assertPreparedReleaseDescriptor(
-    commit,
-    version,
-    options.tag,
-    prepared,
-    verifyPortableWorkerSourceIdentity,
-  );
+  await assertPreparedReleaseDescriptor(commit, version, options.tag, prepared);
   await assertRemoteReleaseIdentityAvailable(root, options.tag, commit, true);
   const planned = {
     kind: "takos.release-artifact-publish@v2",
@@ -703,13 +675,7 @@ async function publishRelease(
   if (localSmoke.archiveDigest !== localArchive.digest) {
     throw new Error("pre-publication smoke did not exercise the prepared bytes");
   }
-  await assertPreparedReleaseDescriptor(
-    commit,
-    version,
-    options.tag,
-    prepared,
-    verifyPortableWorkerSourceIdentity,
-  );
+  await assertPreparedReleaseDescriptor(commit, version, options.tag, prepared);
   await assertTakosRepositoryIdentityUnchanged(root, commit);
   const creation = await createOnlyReleaseAfterFinalAbsence(
     root,
@@ -851,10 +817,6 @@ async function assertPreparedReleaseDescriptor(
   version: string,
   tag: string,
   prepared: PreparedRecord,
-  verifyPortableWorkerSourceIdentity: (
-    tag: string,
-    archiveDigest: string,
-  ) => Promise<void>,
 ): Promise<void> {
   const archiveAsset = prepared.assets.find(
     (asset) => asset.name === "takos-worker-release.tar.gz",
@@ -892,8 +854,6 @@ async function assertPreparedReleaseDescriptor(
   if (!bytesEqual(checksum.bytes, new TextEncoder().encode(expectedChecksum))) {
     throw new Error("prepared Worker archive checksum is not canonical");
   }
-  await verifyPortableWorkerSourceIdentity(tag, archiveDigest);
-
   const descriptor = parseCanonicalWorkerArtifactDescriptor(
     descriptorFile.bytes,
   );
@@ -1105,34 +1065,6 @@ function jsonRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-async function assertPortableWorkerSourceIdentity(
-  root: string,
-  tag: string,
-  archiveDigest: string,
-): Promise<void> {
-  const source = await readFile(
-    join(root, "deploy/opentofu/takoform/main.tf.history"),
-    "utf8",
-  );
-  const moduleDefault = (name: string): string | undefined => {
-    const block = source.match(
-      new RegExp(`variable\\s+"${name}"\\s*\\{([\\s\\S]*?)\\n\\}`, "u"),
-    )?.[1];
-    return block?.match(/\bdefault\s+=\s+"([^"]+)"/u)?.[1];
-  };
-  const expectedUrl =
-    `https://github.com/${REPOSITORY}/releases/download/${tag}/takos-worker-release.tar.gz`;
-  if (
-    moduleDefault("worker_release_tag") !== tag ||
-    moduleDefault("worker_artifact_url") !== expectedUrl ||
-    moduleDefault("worker_artifact_sha256") !== archiveDigest
-  ) {
-    throw new Error(
-      "historical Takoform migration reference does not select the exact prepared Worker release",
-    );
-  }
-}
-
 async function assertSourceWorkerIdentity(
   root: string,
   tag: string,
@@ -1141,7 +1073,6 @@ async function assertSourceWorkerIdentity(
   archiveSize: number,
   descriptorPath: string,
 ): Promise<void> {
-  await assertPortableWorkerSourceIdentity(root, tag, archiveDigest);
   const descriptor = parseCanonicalWorkerArtifactDescriptor(
     new Uint8Array(await readFile(descriptorPath)),
   );
