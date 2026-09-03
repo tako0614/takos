@@ -69,11 +69,22 @@ base64 (44 文字) を出すので後者です。どちらも有効ですが、*
 
 module は 5 つの名前を Cloudflare の `inherit` binding として bind します。
 `inherit` は既存 version の binding を値を送らずに引き継ぐので、後続の apply が
-operator の secret を落としません。初回 install には引き継ぐ version が無いため、
+operator の secret を落としません。
+
+Worker Version の binding 一覧は完全な集合です。`runtime_secrets_provisioned = false`
+は「5 つを bind しない version を出す」という意味で、`ENCRYPTION_KEY` を失った
+deployment では、その鍵で暗号化した MCP OAuth token、registry credential、
+environment snapshot が**復号できなくなります**。だから既定は `true` で、
+`false` にできるのは値がまだ存在しない初回 install だけです。その 1 回は
+`first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"` を
+完全一致で宣言します。宣言が無ければ plan が拒否され、値を投入したあとに
+宣言が残っていても拒否されます。
+
 順序は次の 3 段です。
 
-1. `runtime_secrets_provisioned = false` のまま apply する。secret が無い間、
-   Worker は `/health` 以外の全 path に `503` を返します。
+1. `runtime_secrets_provisioned = false` と
+   `first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"` で
+   apply する。secret が無い間、Worker は `/health` 以外の全 path に `503` を返します。
 2. 5 つの値を投入する。
 
    ```sh
@@ -85,7 +96,8 @@ operator の secret を落としません。初回 install には引き継ぐ ve
    wrangler secret put PLATFORM_PUBLIC_KEY
    ```
 
-3. `runtime_secrets_provisioned = true` にして再度 apply する。
+3. `runtime_secrets_provisioned = true` に戻し、`first_install_acknowledgement` を
+   空に戻して再度 apply する。以後の apply はこの設定のままです。
 
 `.tfvars`、OpenTofu output、Git リポジトリへ値を保存しないでください。
 

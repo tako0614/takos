@@ -79,10 +79,14 @@ The module binds the five names with the Cloudflare `inherit` binding type,
 which carries an existing value forward without sending it. A first install has
 no previous Worker version to inherit from, so the sequence is:
 
-1. apply with `runtime_secrets_provisioned = false`; the Worker serves `503` on
+1. apply with `runtime_secrets_provisioned = false` and
+   `first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"`; the Worker serves `503` on
    every path except `/health` until its secrets exist;
 2. load the five values with `wrangler secret put`;
-3. apply again with `runtime_secrets_provisioned = true`.
+3. apply again with `runtime_secrets_provisioned = true` and an empty
+   `first_install_acknowledgement`. Every later apply keeps those settings: a
+   Worker Version's binding list is complete, so `false` would publish a version
+   without `ENCRYPTION_KEY` and leave everything encrypted under it unreadable.
 
 After that, every later apply preserves the operator-owned values instead of
 publishing a Worker version that silently drops them.

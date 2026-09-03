@@ -223,6 +223,8 @@ async function assertRuntimeSecretBindings(): Promise<void> {
       );
     }
 
+    await assertUnacknowledgedRuntimeSecretDropRefused(planRoot);
+
     const inheritedBindings = workerVersionBindings(inherited).filter(
       (binding) =>
         typeof binding.name === "string" &&
@@ -253,6 +255,47 @@ async function assertRuntimeSecretBindings(): Promise<void> {
   }
 }
 
+/**
+ * The one apply that may publish a Worker Version without the runtime secret
+ * bindings is the first, before any value exists. Prove the module refuses the
+ * same shape without the acknowledgement, so a routine apply cannot reach it.
+ */
+async function assertUnacknowledgedRuntimeSecretDropRefused(
+  planRoot: string,
+): Promise<void> {
+  const planPath = join(planRoot, "unacknowledged.plan");
+  const attempt = Bun.spawn([
+    "tofu",
+    "plan",
+    "-refresh=false",
+    "-input=false",
+    "-lock=false",
+    "-no-color",
+    `-out=${planPath}`,
+    "-var=project_name=takos-runtime-secret-unacknowledged",
+    "-var=public_url=https://takos-runtime-secret-unacknowledged.example.com",
+    "-var=environment=staging",
+    "-var=opentofu_plan_mode=true",
+    "-var=runtime_secrets_provisioned=false",
+    '-var=cloudflare={account_id="00000000000000000000000000000000"}',
+  ], { cwd: moduleRoot, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(attempt.stdout).text(),
+    new Response(attempt.stderr).text(),
+    attempt.exited,
+  ]);
+  if (exitCode === 0) {
+    throw new Error(
+      "runtime_secrets_provisioned = false must be refused without first_install_acknowledgement",
+    );
+  }
+  if (!`${stdout}${stderr}`.includes("first_install_acknowledgement")) {
+    throw new Error(
+      "the refusal must name first_install_acknowledgement so an operator knows the only way through",
+    );
+  }
+}
+
 async function createRuntimeSecretPlan(
   planRoot: string,
   name: string,
@@ -272,6 +315,14 @@ async function createRuntimeSecretPlan(
       "-var=environment=staging",
       "-var=opentofu_plan_mode=true",
       `-var=runtime_secrets_provisioned=${provisioned ? "true" : "false"}`,
+      // Dropping the bindings is a first-install-only act, so the plan that
+      // proves the absent shape has to carry the same acknowledgement an
+      // operator would type.
+      ...(provisioned
+        ? []
+        : [
+          "-var=first_install_acknowledgement=FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS",
+        ]),
       '-var=cloudflare={account_id="00000000000000000000000000000000"}',
     ],
     moduleRoot,

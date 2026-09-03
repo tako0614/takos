@@ -55,9 +55,30 @@ variable "executor_capacity" {
 }
 
 variable "runtime_secrets_provisioned" {
-  description = "Set to true only after the five Takos runtime secrets (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, PLATFORM_PUBLIC_KEY) already exist on the target Worker. This module never holds a runtime secret value, so it binds them with the Cloudflare `inherit` binding type, which carries an existing value forward without sending it. A first install has nothing to inherit: leave this false, apply, supply the five values out of band, then set it to true and apply again."
+  description = "Whether the five Takos runtime secrets (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, PLATFORM_PUBLIC_KEY) already exist on the target Worker. This module never holds a runtime secret value, so it binds them with the Cloudflare `inherit` binding type, which carries an existing value forward without sending it. It defaults to true because a Worker Version's binding list is complete: an apply with this false publishes a version with no ENCRYPTION_KEY, and everything encrypted under it stays unreadable. Only a first install has nothing to inherit, and it must say so through first_install_acknowledgement."
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "first_install_acknowledgement" {
+  description = "Exact acknowledgement that this apply is a first install with no runtime secret values yet: FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS. Required whenever runtime_secrets_provisioned is false, and it must be empty otherwise. Supply the five values out of band after the first apply, clear this, and apply again."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.first_install_acknowledgement == "" || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "first_install_acknowledgement must be empty or exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS."
+  }
+
+  validation {
+    condition     = var.runtime_secrets_provisioned || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "runtime_secrets_provisioned = false drops every runtime secret binding from the next Worker Version, including ENCRYPTION_KEY, and everything encrypted under it stays unreadable. Only a first install may do that, and it must set first_install_acknowledgement = \"FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS\"."
+  }
+
+  validation {
+    condition     = !var.runtime_secrets_provisioned || var.first_install_acknowledgement == ""
+    error_message = "first_install_acknowledgement must be empty once runtime_secrets_provisioned is true; leaving it set would carry a first-install waiver into ordinary applies."
+  }
 }
 
 variable "vector_index_provisioned" {

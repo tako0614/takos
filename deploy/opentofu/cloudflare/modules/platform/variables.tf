@@ -38,9 +38,20 @@ variable "executor_capacity" {
 }
 
 variable "runtime_secrets_provisioned" {
-  description = "True when the five Takos runtime secret bindings already exist on the target Worker, so the Worker Version can carry them forward with the `inherit` binding type instead of resending a value this module must never hold."
+  description = "True when the five Takos runtime secret bindings already exist on the target Worker, so the Worker Version can carry them forward with the `inherit` binding type instead of resending a value this module must never hold. Defaults to true: a Worker Version's binding list is complete, so a routine apply with this false would publish a version without ENCRYPTION_KEY and make every payload encrypted under it unreadable. Setting it false requires the exact first_install_acknowledgement."
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "first_install_acknowledgement" {
+  description = "Exact acknowledgement that this apply is a first install with no runtime secret values yet: FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS. It is the only way to publish a Worker Version that does not bind the five runtime secrets. Clear it after supplying the values."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.first_install_acknowledgement == "" || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "first_install_acknowledgement must be empty or exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS."
+  }
 }
 
 variable "vector_index_provisioned" {

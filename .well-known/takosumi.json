@@ -56,8 +56,20 @@
             "required": false,
             "label": { "ja": "ランタイムシークレット設定済み", "en": "Runtime secrets provisioned" },
             "helper": {
-              "ja": "ENCRYPTION_KEY、TAKOS_AGENT_START_TOKEN、TAKOS_INTERNAL_API_SECRET、PLATFORM_PRIVATE_KEY、PLATFORM_PUBLIC_KEY が対象 Worker に既に存在するときだけ true にします。module は値を保持せず inherit binding で引き継ぎます。初回 install は false のまま apply し、値を投入してから true で再 apply します。",
-              "en": "Set to true only when ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, and PLATFORM_PUBLIC_KEY already exist on the target Worker. The module holds no value and carries them forward with the inherit binding. Apply a first install with false, supply the values, then apply again with true."
+              "ja": "既定は true です。Worker Version の binding 一覧は完全な集合なので、false のまま apply すると ENCRYPTION_KEY を持たない version が出て、それで暗号化した payload は読めなくなります。false にできるのは値がまだ存在しない初回 install だけで、first_install_acknowledgement を完全一致で指定します。",
+              "en": "Defaults to true. A Worker Version's binding list is complete, so applying with false publishes a version without ENCRYPTION_KEY and leaves everything encrypted under it unreadable. Only a first install, before any value exists, may set false, and it must pass the exact first_install_acknowledgement."
+            },
+            "advanced": true
+          },
+          {
+            "name": "first_install_acknowledgement",
+            "source": { "kind": "user" },
+            "type": "string",
+            "required": false,
+            "label": { "ja": "初回 install の確認", "en": "First install acknowledgement" },
+            "helper": {
+              "ja": "runtime_secrets_provisioned = false にする初回 install だけ FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS を完全一致で指定します。値を投入したら空に戻します。",
+              "en": "Pass exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS on the first install that sets runtime_secrets_provisioned to false. Clear it once the values exist."
             },
             "advanced": true
           },
