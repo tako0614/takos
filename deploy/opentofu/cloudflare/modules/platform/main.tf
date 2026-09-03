@@ -259,9 +259,15 @@ locals {
   ]
   # `inherit` carries a binding forward from the Worker's previous version
   # without sending its value, so a later apply cannot silently drop a secret
-  # that was supplied out of band. A first install has no previous version to
-  # inherit from, so the names are bound only once the operator confirms they
-  # exist through runtime_secrets_provisioned.
+  # that was supplied out of band. A Worker Version's binding list is complete,
+  # so omitting these five names does not leave them alone: it publishes a
+  # version without ENCRYPTION_KEY, and every AES-256-GCM payload written under
+  # it — MCP OAuth tokens, registry credentials, environment snapshots —
+  # becomes unreadable. That is why the names are bound by default and why
+  # dropping them takes a deliberate acknowledgement rather than one boolean.
+  #
+  # The one apply that legitimately cannot inherit is the very first, before
+  # any value exists. It is declared, not defaulted.
   runtime_secret_binding_targets = var.runtime_secrets_provisioned ? local.runtime_secret_binding_names : []
   runtime_secret_bindings = [
     for name in local.runtime_secret_binding_targets : {
@@ -441,6 +447,21 @@ resource "terraform_data" "provider_gap_contract" {
     precondition {
       condition     = !var.vector_index_provisioned || !local.provider_gap_bridge_enabled
       error_message = "vector_index_provisioned declares an externally created Vectorize index; the provider-gap bridge creates and owns the index itself, so exactly one of them may claim it."
+    }
+
+    # A Worker Version's binding list is complete, so an apply with
+    # runtime_secrets_provisioned = false publishes a version without
+    # ENCRYPTION_KEY and leaves every payload encrypted under it unreadable.
+    # The one apply that legitimately cannot inherit is the first, before any
+    # value exists, and it has to say so.
+    precondition {
+      condition     = var.runtime_secrets_provisioned || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+      error_message = "runtime_secrets_provisioned = false drops every runtime secret binding from the next Worker Version, including ENCRYPTION_KEY. Only a first install may do that, and it must set first_install_acknowledgement = \"FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS\"."
+    }
+
+    precondition {
+      condition     = !var.runtime_secrets_provisioned || var.first_install_acknowledgement == ""
+      error_message = "first_install_acknowledgement must be empty once runtime_secrets_provisioned is true; leaving it set would carry a first-install waiver into ordinary applies."
     }
   }
 }

@@ -16,12 +16,23 @@ cloudflare = {
 cloudflare_provider_gap_bridge_mode = "off"
 
 # Takos runtime secrets are operator-owned. They never pass through this file,
-# OpenTofu state, or an Output. Generate them with `bun run generate:keys`, load
-# ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET,
-# PLATFORM_PRIVATE_KEY, and PLATFORM_PUBLIC_KEY with `wrangler secret put`, then
-# set this to true so every later apply carries the existing Worker bindings
-# forward instead of replacing the version without them.
-runtime_secrets_provisioned = false
+# OpenTofu state, or an Output. Generate them with `bun run generate:keys` and
+# load ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET,
+# PLATFORM_PRIVATE_KEY, and PLATFORM_PUBLIC_KEY with `wrangler secret put`.
+#
+# This stays true for every apply after the first. A Worker Version's binding
+# list is complete, so false publishes a version with no ENCRYPTION_KEY and
+# everything encrypted under it stays unreadable.
+runtime_secrets_provisioned = true
+
+# The very first apply, before any value exists, has nothing to inherit. That
+# one apply sets runtime_secrets_provisioned = false and states it here:
+#
+#   runtime_secrets_provisioned   = false
+#   first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+#
+# Then load the five values and put both back to the settings above.
+first_install_acknowledgement = ""
 
 # The Cloudflare provider cannot create a Vectorize index, so this module never
 # creates one on the ordinary provider path. Leave this false and the Worker

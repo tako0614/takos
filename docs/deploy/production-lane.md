@@ -114,7 +114,9 @@ Container application が存在するかを読み取ります。`wrangler.toml` 
 # 1. 耐久インフラ。Worker identity はここで作られます。
 cd deploy/opentofu/cloudflare
 tofu init
-tofu apply -var-file=opentofu.tfvars   # runtime_secrets_provisioned = false
+# runtime_secrets_provisioned = false と
+# first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+tofu apply -var-file=opentofu.tfvars
 
 # 2. runtime secret を投入する
 cd ../../..
@@ -127,13 +129,21 @@ wrangler secret put PLATFORM_PUBLIC_KEY
 
 # 3. inherit binding を有効にして再 apply する
 cd deploy/opentofu/cloudflare
-tofu apply -var-file=opentofu.tfvars   # runtime_secrets_provisioned = true
+# runtime_secrets_provisioned = true、first_install_acknowledgement は空に戻す
+tofu apply -var-file=opentofu.tfvars
 tofu output -json > /srv/takos/outputs.json
 cd ../../..
 
 # 4. Vectorize index (provider が表現できない resource)
 bun run deploy -- takos-cloudflare-production --vectorize \
   --environment production --outputs /srv/takos/outputs.json --execute
+
+# 4b. index ができたので Worker に bind する
+cd deploy/opentofu/cloudflare
+# vector_index_provisioned = true
+tofu apply -var-file=opentofu.tfvars
+tofu output -json > /srv/takos/outputs.json
+cd ../../..
 
 # 5. 差分を読む
 bun run deploy -- takos-cloudflare-production --status \
