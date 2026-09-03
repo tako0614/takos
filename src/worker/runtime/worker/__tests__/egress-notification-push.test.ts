@@ -2,6 +2,40 @@ import { expect, test } from "bun:test";
 
 import egress from "../egress.ts";
 
+/**
+ * Egress refuses to serve without a rate limiter, so every case that expects
+ * the proxy to run has to bind one. The stub always allows, which is what a
+ * healthy limiter under the configured budget does.
+ */
+function rateLimiterStub() {
+  return {
+    idFromName: (name: string) => ({ name }),
+    get: () => ({
+      fetch: async () =>
+        Response.json({ allowed: true, remaining: 1, reset: 0, total: 1 }),
+    }),
+  };
+}
+
+function egressEnv(extra: Record<string, unknown> = {}) {
+  return { RATE_LIMITER_DO: rateLimiterStub(), ...extra } as never;
+}
+
+test("egress refuses to proxy when it cannot meter the request", async () => {
+  // The same control used to fail closed on a transient Durable Object error
+  // and open on the binding being absent entirely.
+  const response = await egress.fetch(
+    new Request("https://example.com/", {
+      method: "GET",
+      headers: { "X-Takos-Space-Id": "workspace-1" },
+    }),
+    {} as never,
+  );
+
+  expect(response.status).toBe(503);
+  expect(await response.text()).toContain("RATE_LIMITER_DO");
+});
+
 test("notification push loopback egress is disabled by default", async () => {
   const response = await egress.fetch(
     new Request("http://localhost:8787/_matrix/push/v1/notify", {
@@ -9,7 +43,7 @@ test("notification push loopback egress is disabled by default", async () => {
       headers: { "X-Takos-Egress-Mode": "notification-push" },
       body: "{}",
     }),
-    {} as never,
+    egressEnv(),
   );
 
   expect(response.status).toBe(400);
@@ -33,9 +67,7 @@ test("notification push loopback egress requires its mode and explicit developme
         headers: { "X-Takos-Egress-Mode": "web" },
         body: "{}",
       }),
-      {
-        TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK: "true",
-      } as never,
+      egressEnv({ TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK: "true" }),
     );
     expect(wrongMode.status).toBe(400);
     expect(outbound).toHaveLength(0);
@@ -51,9 +83,7 @@ test("notification push loopback egress requires its mode and explicit developme
         },
         body: "{}",
       }),
-      {
-        TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK: "true",
-      } as never,
+      egressEnv({ TAKOS_NOTIFICATION_PUSH_ALLOW_INSECURE_LOOPBACK: "true" }),
     );
 
     expect(allowed.status).toBe(200);
