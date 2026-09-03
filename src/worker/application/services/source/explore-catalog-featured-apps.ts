@@ -8,11 +8,12 @@ import type {
 import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
 import type { CatalogCapsuleRecord } from "./explore-catalog-accounts.ts";
 import type { CapsuleWorkloadServiceSummary } from "./takosumi-workload-services.ts";
+import type { CapsuleWireStatus } from "../../../../contracts/external/takosumi-capsule-status.ts";
 
 export type CatalogCapsuleProjection = {
   capsuleId: string;
   appId: string;
-  status: string;
+  status: CapsuleWireStatus;
   environment: string | null;
   sourceRef: string | null;
   sourceCommit: string | null;
