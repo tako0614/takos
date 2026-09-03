@@ -27,6 +27,15 @@ const modules = {
     "utf8",
   ),
 };
+// The name set is projected from src/worker/shared/config/runtime-secrets.ts
+// into a generated local, so the module reads it rather than restating it.
+const platformSecretNamesSource = await readFile(
+  new URL(
+    "deploy/opentofu/cloudflare/modules/platform/runtime-secret-names.generated.tf",
+    root,
+  ),
+  "utf8",
+);
 const platformModuleSource = await readFile(
   new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
   "utf8",
@@ -378,7 +387,7 @@ test("no two requirements deliver to the same variable or binding", () => {
  * has to name all five, because it binds them without holding a value.
  */
 test("the OpenTofu module names every runtime secret, including the operator-supplied pair", () => {
-  const declared = platformModuleSource.match(
+  const declared = platformSecretNamesSource.match(
     /runtime_secret_binding_names\s*=\s*\[([^\]]*)\]/u,
   );
   expect(declared).not.toBeNull();

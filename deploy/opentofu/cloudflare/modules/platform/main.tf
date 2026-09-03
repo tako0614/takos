@@ -197,13 +197,9 @@ locals {
   # deploy/TAKOSUMI_DEPLOY.md forbids. The request for host-minted values is
   # declared in .well-known/takosumi.json as `secret.generated` bindings; the
   # RSA pair is operator-supplied because no generated-secret shape expresses it.
-  runtime_secret_binding_names = [
-    "ENCRYPTION_KEY",
-    "TAKOS_AGENT_START_TOKEN",
-    "TAKOS_INTERNAL_API_SECRET",
-    "PLATFORM_PRIVATE_KEY",
-    "PLATFORM_PUBLIC_KEY",
-  ]
+  # runtime_secret_binding_names is generated into
+  # runtime-secret-names.generated.tf from
+  # src/worker/shared/config/runtime-secrets.ts, which the Worker itself reads.
   # `inherit` carries a binding forward from the Worker's previous version
   # without sending its value, so a later apply cannot silently drop a secret
   # that was supplied out of band. A Worker Version's binding list is complete,

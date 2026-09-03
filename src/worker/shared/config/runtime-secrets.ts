@@ -6,6 +6,13 @@
  * binding or credential cannot be smuggled into the runtime bundle.
  */
 
+/**
+ * The runtime secrets a Takos deployment must hold.
+ *
+ * This is the only place the set is written down. `scripts/generate-runtime-secret-names.ts`
+ * projects it into the OpenTofu modules, and every script that used to retype
+ * it imports it instead.
+ */
 export const REQUIRED_RUNTIME_SECRET_NAMES = [
   "ENCRYPTION_KEY",
   "PLATFORM_PRIVATE_KEY",
@@ -13,6 +20,22 @@ export const REQUIRED_RUNTIME_SECRET_NAMES = [
   "TAKOS_AGENT_START_TOKEN",
   "TAKOS_INTERNAL_API_SECRET",
 ] as const;
+
+/**
+ * Required runtime secrets that `validate-env.ts` deliberately does not
+ * require at boot, with the reason.
+ *
+ * These two lists disagreeing is not automatically a defect, but an
+ * undocumented disagreement is: it reads as an oversight and invites someone
+ * to "fix" it in either direction. Every difference is named here, and
+ * `runtime-secrets.test.ts` refuses an unnamed one.
+ */
+export const RUNTIME_SECRETS_NOT_REQUIRED_AT_BOOT: Readonly<
+  Record<string, string>
+> = {
+  TAKOS_INTERNAL_API_SECRET:
+    "internal-access.ts treats it as optional by design: unset means /internal/* is reachable from genuine loopback only, which is what the local stack runs on. A production Worker missing it therefore boots clean and silently refuses every external cron caller, so the operator-facing documentation still lists it as required.",
+};
 
 const ALLOWED_RUNTIME_SECRET_NAMES = new Set<string>([
   ...REQUIRED_RUNTIME_SECRET_NAMES,

@@ -144,7 +144,7 @@ variable "env" {
       for name, value in var.env :
       can(regex("^[A-Z_][A-Z0-9_]{0,127}$", name)) &&
       !can(regex("(SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_?KEY|API_?KEY)", upper(name))) &&
-      !contains([
+      !contains(concat([
         "TAKOSUMI_ACCOUNTS_URL",
         "OIDC_ISSUER_URL",
         "OIDC_CLIENT_ID",
@@ -171,12 +171,7 @@ variable "env" {
         "EXECUTOR_CONTAINER_TIER2",
         "EXECUTOR_CONTAINER_TIER3",
         "TAKOS_EGRESS",
-        "ENCRYPTION_KEY",
-        "TAKOS_AGENT_START_TOKEN",
-        "TAKOS_INTERNAL_API_SECRET",
-        "PLATFORM_PRIVATE_KEY",
-        "PLATFORM_PUBLIC_KEY",
-      ], name)
+      ], local.runtime_secret_binding_names), name)
     ])
     error_message = "env keys must be uppercase Worker plain-text variable names and must not be secret-like or reserved by the Takos module."
   }

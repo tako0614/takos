@@ -32,6 +32,14 @@ export function validateEnv(
 // Per-service required keys
 // ---------------------------------------------------------------------------
 
+/**
+ * Boot-required bindings by service.
+ *
+ * This is not the same set as `REQUIRED_RUNTIME_SECRET_NAMES`: a secret can be
+ * required of a deployment without being required at boot. Every difference is
+ * named, with its reason, in `RUNTIME_SECRETS_NOT_REQUIRED_AT_BOOT`, and
+ * `runtime-secrets.test.ts` refuses an unnamed one.
+ */
 const REQUIRED_KEYS = {
   takos: [
     "DB",
@@ -63,6 +71,13 @@ const REQUIRED_KEYS = {
 // ---------------------------------------------------------------------------
 // Per-service validators
 // ---------------------------------------------------------------------------
+
+/** The exact boot-required bindings for one service, for cross-checking. */
+export function requiredEnvKeys(
+  service: keyof typeof REQUIRED_KEYS,
+): readonly string[] {
+  return REQUIRED_KEYS[service];
+}
 
 export function validateWebEnv(env: object): string | null {
   return validateEnv("takos", env, REQUIRED_KEYS["takos"]);

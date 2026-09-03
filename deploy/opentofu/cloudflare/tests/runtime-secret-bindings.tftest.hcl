@@ -14,22 +14,13 @@ run "runtime_secret_names_are_published_without_values" {
     }
   }
 
+  # The names are not transcribed here: both sides are projections of
+  # src/worker/shared/config/runtime-secrets.ts, so this asserts that the
+  # module wires its own generated local through to the Output an operator
+  # reads, rather than that someone typed the same five strings twice.
   assert {
-    condition = alltrue([
-      for name in [
-        "ENCRYPTION_KEY",
-        "TAKOS_AGENT_START_TOKEN",
-        "TAKOS_INTERNAL_API_SECRET",
-        "PLATFORM_PRIVATE_KEY",
-        "PLATFORM_PUBLIC_KEY",
-      ] : contains(output.runtime_secret_binding_names, name)
-    ])
-    error_message = "every runtime secret the Takos Worker reads must be named in the Output an operator provisions from"
-  }
-
-  assert {
-    condition     = length(output.runtime_secret_binding_names) == 5
-    error_message = "the runtime secret name set must stay exactly the five names the Worker reads"
+    condition     = toset(output.runtime_secret_binding_names) == toset(local.runtime_secret_binding_names)
+    error_message = "the Output an operator provisions from must be exactly the projected runtime secret name set"
   }
 
   assert {
