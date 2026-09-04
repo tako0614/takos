@@ -6,6 +6,7 @@ import { describe, expect, jest, test } from "bun:test";
 
 import {
   assertExactAbsence,
+  assertNativeResidualCapability,
   assertNativeResidualResponse,
   assertExactIdentitySet,
   assertExactProbeBody,
@@ -26,6 +27,7 @@ import {
   createProviderInstallConfig,
   discoverV1,
   EVIDENCE_TOKEN_ENV,
+  isJsonMediaType,
   MUTATION_TOKEN_ENV,
   knownResourceAddresses,
   materializeEndpointOrigin,
@@ -52,6 +54,7 @@ import {
   RESOURCE_KEYS,
   resourceURL,
   readHostResource,
+  readResourceExecutionEvidence,
   readResponseBody,
   runBoundedCommand,
   runTracer,
@@ -68,6 +71,8 @@ import {
   type SpawnFunction,
   type SpawnedChild,
   assertProviderRegistryMetadata,
+  assertResourceExecutionEvidenceCapability,
+  assertDestroyExecutionEvidenceSuccessor,
   fetchPublicProviderRelease,
   verifyPublicProviderRelease,
 } from "../takoserver-fetch-tracer.ts";
@@ -400,6 +405,15 @@ function neverEndingStream(): ReadableStream<Uint8Array> {
 }
 
 describe("takoserver fetch tracer pure contracts", () => {
+  test("parses the exact JSON media type without accepting JSONP lookalikes", () => {
+    expect(isJsonMediaType("application/json")).toBe(true);
+    expect(isJsonMediaType("Application/JSON; charset=utf-8")).toBe(true);
+    expect(isJsonMediaType(" application/json ; profile=\"urn:test;v=1\" ")).toBe(true);
+    expect(isJsonMediaType("application/jsonp")).toBe(false);
+    expect(isJsonMediaType("application/json; charset")).toBe(false);
+    expect(isJsonMediaType("application/json; charset=\"unterminated")).toBe(false);
+  });
+
   test("requires explicit opt-in, keeps credentials in env, and rejects local providers", () => {
     expect(() => parseArgs(["--host", "https://host.example", "--space", "space-a"], {
       [MUTATION_TOKEN_ENV]: token,
@@ -1420,17 +1434,69 @@ describe("takoserver fetch tracer pure contracts", () => {
         status: "absent",
       },
     };
-    expect(assertNativeResidualResponse(absent)).toMatchObject(absent.residual);
-    expect(assertNativeResidualResponse(absent)).toMatchObject({
+    const nativeNowMs = Date.parse("2026-09-03T00:00:01.000Z");
+    expect(assertNativeResidualResponse(absent, nativeNowMs)).toMatchObject(absent.residual);
+    expect(assertNativeResidualResponse(absent, nativeNowMs)).toMatchObject({
       status: "absent",
       deploymentCount: 1,
       effectCount: 6,
     });
     expect(() =>
       assertNativeResidualResponse({
-        residual: { ...absent.residual, status: "indeterminate", reason: "effect_unresolved" },
+        residual: { ...absent.residual, status: "indeterminate" },
       }),
     ).toThrow(/absent/u);
+    expect(() =>
+      assertNativeResidualResponse({
+        residual: { ...absent.residual, evidenceRef: undefined },
+      }),
+    ).toThrow(/evidenceRef/u);
+    expect(() =>
+      assertNativeResidualResponse({
+        residual: { ...absent.residual, reason: "deployment_active" },
+      }),
+    ).toThrow(/reason/u);
+    expect(() => assertNativeResidualResponse({
+      residual: {
+        ...absent.residual,
+        checkedAt: "2026-09-01T23:59:59.999Z",
+      },
+    }, nativeNowMs)).toThrow(/evidence window/u);
+    expect(() => assertNativeResidualResponse({
+      residual: {
+        ...absent.residual,
+        checkedAt: "2026-09-02T01:00:01.000Z",
+      },
+    }, nativeNowMs)).toThrow(/evidence window/u);
+    expect(() => assertNativeResidualResponse({
+      residual: {
+        ...absent.residual,
+        checkedAt: "2026-02-29T00:00:00.000Z",
+      },
+    }, nativeNowMs)).toThrow(/canonical/u);
+
+    await expect(verifyNativeAbsence({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      identities: identities(),
+      token: evidenceToken,
+      timeoutMs: 100,
+      nowMs: nativeNowMs,
+      evidenceWindow: {
+        destroyStartedAtMs: nativeNowMs - 60_000,
+        destroyCompletedAtMs: nativeNowMs - 30_000,
+        readbackStartedAtMs: nativeNowMs - 5_000,
+      },
+      fetchImpl: async () => new Response(JSON.stringify({
+        residual: {
+          ...absent.residual,
+          checkedAt: "2026-09-02T01:00:01.000Z",
+        },
+      }), {
+        status: 200,
+        headers: { "cache-control": "no-store", "content-type": "application/json" },
+      }),
+    })).rejects.toThrow(/5 of 5/u);
 
     const requests: Array<{ url: string; authorization: string | null }> = [];
     const evidence = await verifyNativeAbsence({
@@ -1439,6 +1505,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       identities: identities(),
       token: evidenceToken,
       timeoutMs: 100,
+      nowMs: nativeNowMs,
       fetchImpl: async (input, init) => {
         requests.push({
           url: String(input),
@@ -1464,6 +1531,44 @@ describe("takoserver fetch tracer pure contracts", () => {
       requests.every(({ authorization }) => authorization === `Bearer ${evidenceToken}`),
     ).toBe(true);
 
+    await expect(
+      verifyNativeAbsence({
+        host: "https://host.example",
+        organizationId: "org-integration-e2e",
+        identities: identities(),
+        token: evidenceToken,
+        timeoutMs: 100,
+        nowMs: nativeNowMs,
+        fetchImpl: async () => new Response(JSON.stringify(absent), {
+          status: 200,
+          headers: {
+            "cache-control": "no-store",
+            "content-type": "application/jsonp",
+          },
+        }),
+      }),
+    ).rejects.toThrow(/5 of 5/u);
+
+    let malformedCalls = 0;
+    await expect(
+      verifyNativeAbsence({
+        host: "https://host.example",
+        organizationId: "org-integration-e2e",
+        identities: identities(),
+        token: evidenceToken,
+        timeoutMs: 100,
+        nowMs: nativeNowMs,
+        fetchImpl: async () => {
+          malformedCalls += 1;
+          return new Response(JSON.stringify(absent), {
+            status: 200,
+            headers: { "cache-control": "no-store" },
+          });
+        },
+      }),
+    ).rejects.toThrow(/5 of 5/u);
+    expect(malformedCalls).toBe(5);
+
     let failedCalls = 0;
     await expect(
       verifyNativeAbsence({
@@ -1472,6 +1577,7 @@ describe("takoserver fetch tracer pure contracts", () => {
         identities: identities(),
         token: evidenceToken,
         timeoutMs: 100,
+        nowMs: nativeNowMs,
         fetchImpl: async () => {
           failedCalls += 1;
           return new Response("operator-private diagnostic", { status: 503 });
@@ -1479,6 +1585,297 @@ describe("takoserver fetch tracer pure contracts", () => {
       }),
     ).rejects.toThrow(/5 of 5/u);
     expect(failedCalls).toBe(5);
+  });
+
+  test("proves the authenticated Resource execution-evidence route before mutation", async () => {
+    const requests: Array<{ readonly url: string; readonly authorization: string | null }> = [];
+    await assertResourceExecutionEvidenceCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        return new Response(JSON.stringify({
+          error: {
+            code: "not_found",
+            message: "Resource execution evidence was not found",
+            requestId: "request-capability-1",
+            retryable: false,
+          },
+        }), {
+          status: 404,
+          headers: {
+            "cache-control": "private, no-store",
+            "content-type": "application/json",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      },
+    });
+    expect(requests).toEqual([{
+      url:
+        `https://host.example/v1/organizations/org-integration-e2e/resources/capability-${nonce}/execution-evidence`,
+      authorization: `Bearer ${evidenceToken}`,
+    }]);
+
+    await expect(assertResourceExecutionEvidenceCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: {
+          code: "not_found",
+          message: "missing",
+          requestId: "request-capability-jsonp",
+          retryable: false,
+        },
+      }), {
+        status: 404,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "application/jsonp",
+          "x-content-type-options": "nosniff",
+        },
+      }),
+    })).rejects.toThrow(/not available/u);
+
+    await expect(assertResourceExecutionEvidenceCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: {
+          code: "not_found",
+          message: "missing",
+          requestId: "request-capability-2",
+          retryable: false,
+        },
+      }), { status: 404, headers: { "cache-control": "private, no-store" } }),
+    })).rejects.toThrow(/not available/u);
+  });
+
+  test("proves the authenticated native-residual backend before mutation", async () => {
+    const requests: Array<{ readonly url: string; readonly authorization: string | null }> = [];
+    await assertNativeResidualCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      space: "space-a",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        return new Response(JSON.stringify({
+          error: {
+            code: "resource_not_found",
+            message: "Resource was not found",
+            requestId: "request-native-capability-1",
+            retryable: false,
+          },
+        }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    expect(requests).toEqual([{
+      url:
+        `https://host.example/v1/organizations/org-integration-e2e/resources/capability-${nonce}/native-residual?space=space-a&name=capability-${nonce.slice(0, 32)}`,
+      authorization: `Bearer ${evidenceToken}`,
+    }]);
+
+    await expect(assertNativeResidualCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      space: "space-a",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: {
+          code: "resource_not_found",
+          message: "missing",
+          requestId: "request-native-capability-jsonp",
+          retryable: false,
+        },
+      }), { status: 404, headers: { "content-type": "application/jsonp" } }),
+    })).rejects.toThrow(/not available/u);
+
+    await expect(assertNativeResidualCapability({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      space: "space-a",
+      nonce,
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: {
+          code: "backend_unavailable",
+          message: "backend unavailable",
+          requestId: "request-native-capability-2",
+          retryable: true,
+        },
+      }), { status: 503, headers: { "content-type": "application/json" } }),
+    })).rejects.toThrow(/Host backend is unavailable/u);
+  });
+
+  test("reads one complete immutable Resource execution lifecycle across every page", async () => {
+    const resource = identity("module_worker");
+    const evidence = (commits: readonly Record<string, unknown>[], snapshotFence: number) => ({
+      format: "takoserver.resource-execution-evidence/v1",
+      organizationId: "org-integration-e2e",
+      resource: {
+        uid: resource.uid,
+        address: {
+          space: resource.space,
+          apiVersion: resource.form_api_version,
+          kind: resource.form_kind,
+          name: resource.name,
+        },
+        formRef: {
+          apiVersion: resource.form_api_version,
+          kind: resource.form_kind,
+          definitionVersion: resource.form_definition_version,
+          schemaDigest: resource.form_schema_digest,
+        },
+      },
+      coverage: "complete",
+      snapshotFence,
+      commits,
+    });
+    const commit = (sequence: number, action: "create" | "update") => ({
+      sequence,
+      operationId: `operation-${sequence}`,
+      action,
+      outcome: "committed",
+      resourceVersion: { generation: "1", revision: String(sequence) },
+      committedAt: `2026-09-04T00:00:0${sequence}.000Z`,
+    });
+    const pages = [
+      { executionEvidence: evidence([commit(2, "update")], 2), cursor: "next-page" },
+      { executionEvidence: evidence([commit(1, "create")], 2) },
+    ];
+    const requests: string[] = [];
+    const snapshot = await readResourceExecutionEvidence({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      identity: resource,
+      phase: "apply",
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        const page = pages.shift();
+        if (!page) throw new Error("unexpected execution evidence page");
+        return new Response(JSON.stringify(page), {
+          status: 200,
+          headers: {
+            "cache-control": "private, no-store",
+            "content-type": "application/json",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      },
+    });
+    expect(snapshot).toMatchObject({
+      uid: resource.uid,
+      snapshotFence: 2,
+      latestAction: "update",
+      commitCount: 2,
+    });
+    expect(requests).toHaveLength(2);
+    expect(new URL(requests[1]!).searchParams.get("cursor")).toBe("next-page");
+
+    await expect(readResourceExecutionEvidence({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      identity: resource,
+      phase: "apply",
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        executionEvidence: evidence([commit(1, "create")], 1),
+      }), {
+        status: 200,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "application/jsonp",
+          "x-content-type-options": "nosniff",
+        },
+      }),
+    })).rejects.toThrow(/unavailable/u);
+
+    await expect(readResourceExecutionEvidence({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      identity: resource,
+      phase: "apply",
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async () => new Response(JSON.stringify({
+        executionEvidence: evidence([commit(3, "update"), commit(1, "create")], 3),
+      }), {
+        status: 200,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "application/json",
+          "x-content-type-options": "nosniff",
+        },
+      }),
+    })).rejects.toThrow(/contiguous/u);
+  });
+
+  test("requires destroy evidence to advance and retain the exact apply history", () => {
+    const create = {
+      sequence: 1,
+      operationId: "operation-create",
+      action: "create" as const,
+      outcome: "committed" as const,
+      resourceVersion: { generation: "1", revision: "1" },
+      committedAt: "2026-09-04T00:00:01.000Z",
+    };
+    const apply = {
+      uid: "uid-module_worker",
+      snapshotFence: 1,
+      latestAction: "create" as const,
+      commitCount: 1,
+      commits: [create],
+    };
+    const destroy = {
+      uid: "uid-module_worker",
+      snapshotFence: 2,
+      latestAction: "delete" as const,
+      commitCount: 2,
+      commits: [{
+        sequence: 2,
+        operationId: "operation-delete",
+        action: "delete" as const,
+        outcome: "committed" as const,
+        resourceVersion: { generation: "1", revision: "2" },
+        committedAt: "2026-09-04T00:00:02.000Z",
+      }, create],
+    };
+    expect(() => assertDestroyExecutionEvidenceSuccessor(apply, destroy)).not.toThrow();
+    expect(() => assertDestroyExecutionEvidenceSuccessor(apply, {
+      ...destroy,
+      snapshotFence: 1,
+    })).toThrow(/advance/u);
+    expect(() => assertDestroyExecutionEvidenceSuccessor(apply, {
+      ...destroy,
+      commits: [destroy.commits[0]!, { ...create, operationId: "different-create" }],
+    })).toThrow(/retain/u);
   });
 
   test("unwraps realistic OpenTofu output wrappers before checking exact values", () => {
@@ -1661,9 +2058,39 @@ describe("takoserver fetch tracer pure contracts", () => {
       endpoints: { api: "https://host.example/apis/forms.takoform.com/v1" },
     };
     const authorizationHeaders: string[] = [];
-    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       authorizationHeaders.push(String(new Headers(init?.headers).get("authorization")));
-      if (authorizationHeaders.length === 1) return new Response(JSON.stringify(discoveryDocument), { status: 200 });
+      const url = new URL(String(input));
+      if (url.pathname === "/.well-known/takoform/v1") {
+        return new Response(JSON.stringify(discoveryDocument), { status: 200 });
+      }
+      if (url.pathname.endsWith("/execution-evidence")) {
+        return new Response(JSON.stringify({
+          error: {
+            code: "not_found",
+            message: "Resource execution evidence was not found",
+            requestId: "request-execution-capability-apply-failure",
+            retryable: false,
+          },
+        }), {
+          status: 404,
+          headers: {
+            "cache-control": "private, no-store",
+            "content-type": "application/json",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      if (url.pathname.endsWith("/native-residual")) {
+        return new Response(JSON.stringify({
+          error: {
+            code: "resource_not_found",
+            message: "Resource was not found",
+            requestId: "request-native-capability-apply-failure",
+            retryable: false,
+          },
+        }), { status: 404, headers: { "content-type": "application/json" } });
+      }
       return new Response("", { status: 401 });
     };
     let caught: unknown;
@@ -1688,6 +2115,8 @@ describe("takoserver fetch tracer pure contracts", () => {
       "init_completed",
       "provider_verified",
       "discovery_completed",
+      "execution_evidence_capability_proven",
+      "native_residual_capability_proven",
       "validate_completed",
       "plan_completed",
       "plan_verified",
@@ -1696,7 +2125,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(spawnCalls.map(({ argv }) => argv[1])).toEqual(["version", "init", "validate", "plan", "show", "apply", "destroy"]);
     expect(spawnCalls.filter(({ argv }) => ["version", "init", "validate", "show"].includes(argv[1] ?? "")).every(({ env }) => env.TAKOFORM_TOKEN === undefined)).toBe(true);
     expect(spawnCalls.filter(({ argv }) => ["plan", "apply", "destroy"].includes(argv[1] ?? "")).every(({ env }) => env.TAKOFORM_TOKEN === token)).toBe(true);
-    expect(authorizationHeaders).toHaveLength(6);
+    expect(authorizationHeaders).toHaveLength(8);
     expect(authorizationHeaders.every((value) => value === "Bearer " + evidenceToken)).toBe(true);
     if (error.recoveryPath) await rm(error.recoveryPath, { recursive: true, force: true });
   });
@@ -1707,7 +2136,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--host", "https://host.example",
       "--space", "space-a",
       "--organization-id", "org-integration-e2e",
-      "--timeout-ms", "100",
+      "--timeout-ms", "1000",
       "--kill-grace-ms", "100",
       "--config-value", "safe-config",
       "--endpoint-origin-template", "https://{project}.example/",
@@ -1717,6 +2146,8 @@ describe("takoserver fetch tracer pure contracts", () => {
     let runtimeNonce: string | undefined;
     let runtimeUid: string | undefined;
     let destroyed = false;
+    let executionEvidenceCapabilityProven = false;
+    let nativeResidualCapabilityProven = false;
     const spawn: SpawnFunction = (argv, options) => {
       const subcommand = argv[1] ?? "";
       spawnCommands.push(subcommand);
@@ -1745,6 +2176,8 @@ describe("takoserver fetch tracer pure contracts", () => {
         return { exited: Promise.resolve(0), stdout: new Response(JSON.stringify(strictPlanFixture(environment))).body, stderr: new Response("").body };
       }
       if (subcommand === "apply") {
+        expect(executionEvidenceCapabilityProven).toBe(true);
+        expect(nativeResidualCapabilityProven).toBe(true);
         return { exited: Promise.resolve(0), stdout: new Response("").body, stderr: new Response("").body };
       }
       if (subcommand === "output") {
@@ -1811,10 +2244,103 @@ describe("takoserver fetch tracer pure contracts", () => {
       if (url.pathname === "/.well-known/takoform/v1") {
         return new Response(JSON.stringify(discoveryDocument), { status: 200 });
       }
+      if (
+        /^\/v1\/organizations\/org-integration-e2e\/resources\/capability-[0-9a-f]{64}\/execution-evidence$/u
+          .test(url.pathname)
+      ) {
+        executionEvidenceCapabilityProven = true;
+        return new Response(JSON.stringify({
+          error: {
+            code: "not_found",
+            message: "Resource execution evidence was not found",
+            requestId: "request-capability-1",
+            retryable: false,
+          },
+        }), {
+          status: 404,
+          headers: {
+            "cache-control": "private, no-store",
+            "content-type": "application/json",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      if (url.pathname.endsWith("/execution-evidence")) {
+        if (!outputIdentities) throw new Error("execution evidence read happened before output");
+        const uid = decodeURIComponent(url.pathname.split("/").at(-2) ?? "");
+        const current = Object.values(outputIdentities).find((resource) => resource.uid === uid);
+        if (!current) return new Response("", { status: 404 });
+        const createCommit = {
+          sequence: 1,
+          operationId: `create-${uid}`,
+          action: "create",
+          outcome: "committed",
+          resourceVersion: { generation: "1", revision: "1" },
+          committedAt: "2026-09-04T00:00:01.000Z",
+        };
+        const commits = destroyed
+          ? [{
+              sequence: 2,
+              operationId: `delete-${uid}`,
+              action: "delete",
+              outcome: "committed",
+              resourceVersion: { generation: "1", revision: "2" },
+              committedAt: "2026-09-04T00:00:02.000Z",
+            }, createCommit]
+          : [createCommit];
+        return new Response(JSON.stringify({
+          executionEvidence: {
+            format: "takoserver.resource-execution-evidence/v1",
+            organizationId: "org-integration-e2e",
+            resource: {
+              uid: current.uid,
+              address: {
+                space: current.space,
+                apiVersion: current.form_api_version,
+                kind: current.form_kind,
+                name: current.name,
+              },
+              formRef: {
+                apiVersion: current.form_api_version,
+                kind: current.form_kind,
+                definitionVersion: current.form_definition_version,
+                schemaDigest: current.form_schema_digest,
+              },
+            },
+            coverage: "complete",
+            snapshotFence: commits.length,
+            commits,
+          },
+        }), {
+          status: 200,
+          headers: {
+            "cache-control": "private, no-store",
+            "content-type": "application/json",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
+      if (
+        /^\/v1\/organizations\/org-integration-e2e\/resources\/capability-[0-9a-f]{64}\/native-residual$/u
+          .test(url.pathname)
+      ) {
+        nativeResidualCapabilityProven = true;
+        return new Response(JSON.stringify({
+          error: {
+            code: "resource_not_found",
+            message: "Resource was not found",
+            requestId: "request-native-capability-1",
+            retryable: false,
+          },
+        }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
       if (url.pathname.endsWith("/native-residual")) {
         return new Response(JSON.stringify({
           residual: {
-            checkedAt: "2026-09-03T00:00:00.000Z",
+            checkedAt: new Date().toISOString(),
             deploymentCount: 0,
             effectCount: 0,
             evidenceRef: `sha256:${"c".repeat(64)}`,
@@ -1877,6 +2403,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       }), { status: 200 });
     };
     const report = await runTracer(config, { fetchImpl, providerFetchImpl: publicProviderFetch, spawn });
+    expect(report.kind).toBe("takos.takoserver-fetch-tracer@v2");
     expect(() => assertNoKnownSecrets(report, [token, evidenceToken])).not.toThrow();
     expect(report.provider).toMatchObject({
       source: PROVIDER_SOURCE,
@@ -1914,14 +2441,37 @@ describe("takoserver fetch tracer pure contracts", () => {
       resourceCount: 5,
       checkedCount: 5,
     });
+    expect(report.resourceExecution).toMatchObject({
+      format: "takoserver.resource-execution-evidence/v1",
+      status: "passed",
+      organizationId: "org-integration-e2e",
+      space: "space-a",
+      resourceCount: 5,
+      resources: {
+        module_worker: {
+          uid: expect.stringMatching(/^uid-module_worker$/u),
+          apply: { snapshotFence: 1, latestAction: "create", commitCount: 1 },
+          destroy: { snapshotFence: 2, latestAction: "delete", commitCount: 2 },
+        },
+      },
+    });
     expect(report.lifecycle).toEqual({ init: "passed", validate: "passed", plan: "passed", apply: "passed", destroy: "passed", absence: "passed" });
     expect(spawnCommands).toEqual(["version", "init", "validate", "plan", "show", "apply", "output", "destroy", "state"]);
-    expect(requests).toHaveLength(20);
-    expect(requests.slice(0, 6).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
-    expect(requests.slice(6, 9).every(({ authorization }) => authorization === null)).toBe(true);
-    expect(requests.slice(9, 14).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
-    expect(requests[14]?.authorization).toBeNull();
-    expect(requests.slice(15).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
+    expect(requests).toHaveLength(32);
+    expect(
+      requests.filter(({ authorization }) => authorization === null),
+    ).toHaveLength(4);
+    expect(
+      requests
+        .filter(({ authorization }) => authorization !== null)
+        .every(({ authorization }) => authorization === `Bearer ${evidenceToken}`),
+    ).toBe(true);
+    expect(
+      requests.filter(({ url }) => new URL(url).pathname.endsWith("/execution-evidence")),
+    ).toHaveLength(11);
+    expect(
+      requests.filter(({ url }) => new URL(url).pathname.endsWith("/native-residual")),
+    ).toHaveLength(6);
   });
 
   test("runs a real loopback diagnostic lifecycle without .invalid interception and marks runtime absence not-applicable", async () => {
@@ -1951,6 +2501,87 @@ describe("takoserver fetch tracer pure contracts", () => {
         hostRequests.push(url.toString());
         if (url.pathname === "/.well-known/takoform/v1") {
           return new Response(JSON.stringify({ ...discoveryDocument, endpoints: { api: `${hostServer.url.origin}/apis/forms.takoform.com/v1` } }), { status: 200 });
+        }
+        if (url.pathname.endsWith("/execution-evidence")) {
+          const uid = decodeURIComponent(url.pathname.split("/").at(-2) ?? "");
+          const current = outputIdentities && Object.values(outputIdentities)
+            .find((resource) => resource.uid === uid);
+          if (!current) {
+            return new Response(JSON.stringify({
+              error: {
+                code: "not_found",
+                message: "Resource execution evidence was not found",
+                requestId: "request-loopback-execution-capability",
+                retryable: false,
+              },
+            }), {
+              status: 404,
+              headers: {
+                "cache-control": "private, no-store",
+                "content-type": "application/json",
+                "x-content-type-options": "nosniff",
+              },
+            });
+          }
+          const createCommit = {
+            sequence: 1,
+            operationId: `create-${uid}`,
+            action: "create",
+            outcome: "committed",
+            resourceVersion: { generation: "1", revision: "1" },
+            committedAt: "2026-09-04T00:00:01.000Z",
+          };
+          const commits = resourcesPresent
+            ? [createCommit]
+            : [{
+                sequence: 2,
+                operationId: `delete-${uid}`,
+                action: "delete",
+                outcome: "committed",
+                resourceVersion: { generation: "1", revision: "2" },
+                committedAt: "2026-09-04T00:00:02.000Z",
+              }, createCommit];
+          return new Response(JSON.stringify({
+            executionEvidence: {
+              format: "takoserver.resource-execution-evidence/v1",
+              organizationId: "org-integration-e2e",
+              resource: {
+                uid: current.uid,
+                address: {
+                  space: current.space,
+                  apiVersion: current.form_api_version,
+                  kind: current.form_kind,
+                  name: current.name,
+                },
+                formRef: {
+                  apiVersion: current.form_api_version,
+                  kind: current.form_kind,
+                  definitionVersion: current.form_definition_version,
+                  schemaDigest: current.form_schema_digest,
+                },
+              },
+              coverage: "complete",
+              snapshotFence: commits.length,
+              commits,
+            },
+          }), {
+            status: 200,
+            headers: {
+              "cache-control": "private, no-store",
+              "content-type": "application/json",
+              "x-content-type-options": "nosniff",
+            },
+          });
+        }
+        if (url.pathname.endsWith("/native-residual")) {
+          return new Response(JSON.stringify({
+            error: {
+              code: "resource_not_found",
+              message: "Resource was not found",
+              requestId: "request-loopback-native-capability",
+              retryable: false,
+            },
+          }), { status: 404, headers: { "content-type": "application/json" } });
         }
         const name = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
         const current = outputIdentities && Object.values(outputIdentities).find((resource) => resource.name === name);

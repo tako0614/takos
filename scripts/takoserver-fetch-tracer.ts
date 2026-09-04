@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const REPORT_KIND = "takos.takoserver-fetch-tracer@v1" as const;
+export const REPORT_KIND = "takos.takoserver-fetch-tracer@v2" as const;
 export const REPORT_LABEL = "public-registry-provider-4.0.0" as const;
 export const BUILD_IDENTITY =
   "takos-fetch-tracer@public-registry-provider-4.0.0" as const;
@@ -38,6 +38,8 @@ export const NONCE_PATTERN = /^[0-9a-f]{64}$/u;
 export const DEFAULT_ENDPOINT_ORIGIN_TEMPLATE = "https://{project}.invalid/";
 export const NATIVE_ABSENCE_KIND =
   "takos.takoserver-native-absence@v1" as const;
+export const RESOURCE_EXECUTION_EVIDENCE_FORMAT =
+  "takoserver.resource-execution-evidence/v1" as const;
 export const PUBLIC_PROVIDER_H1_HASHES = [
   "h1:RYNZ0RDeAKvA8Ty+EZqSOA5nv+xpkgMyJux6XcHnNns=",
 ] as const;
@@ -122,6 +124,10 @@ const RESOURCE_KINDS: Record<ResourceKey, string> = {
 const MAX_OUTPUT_BYTES = 128 * 1024;
 const MAX_RESPONSE_BYTES = 256 * 1024;
 const MAX_NATIVE_RESIDUAL_COUNT = 1_000_000;
+const MAX_NATIVE_ABSENCE_CACHE_AGE_MS = 30 * 1_000;
+const MAX_NATIVE_ABSENCE_CLOCK_SKEW_MS = 5 * 1_000;
+const RESOURCE_EXECUTION_EVIDENCE_PAGE_LIMIT = 200;
+const MAX_RESOURCE_EXECUTION_EVIDENCE_PAGES = 16;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_KILL_GRACE_MS = 5_000;
 const FIXED_FEATURES = [
@@ -145,6 +151,8 @@ export const TRACER_MILESTONES = [
   "toolchain_verified",
   "provider_verified",
   "discovery_completed",
+  "execution_evidence_capability_proven",
+  "native_residual_capability_proven",
   "validate_completed",
   "plan_completed",
   "plan_verified",
@@ -152,6 +160,7 @@ export const TRACER_MILESTONES = [
   "apply_completed",
   "outputs_completed",
   "resource_readback_completed",
+  "apply_execution_evidence_completed",
   "runtime_probe_completed",
   "provenance_completed",
   "destroy_completed",
@@ -161,6 +170,7 @@ export const TRACER_MILESTONES = [
   "endpoint_absence_not_applicable",
   "native_absence_completed",
   "native_absence_not_applicable",
+  "destroy_execution_evidence_completed",
   "workdir_removed",
 ] as const;
 export type TracerMilestone = (typeof TRACER_MILESTONES)[number];
@@ -276,6 +286,43 @@ export type ResourceIdentity = {
   readonly form_schema_digest: string;
   readonly hostname?: string | null;
   readonly url?: string | null;
+};
+
+export type ResourceExecutionCommit = {
+  readonly sequence: number;
+  readonly operationId: string;
+  readonly action: "create" | "update" | "delete";
+  readonly outcome: "committed";
+  readonly resourceVersion: {
+    readonly generation: string;
+    readonly revision: string;
+  };
+  readonly committedAt: string;
+};
+
+export type ResourceExecutionSnapshot = {
+  readonly uid: string;
+  readonly snapshotFence: number;
+  readonly latestAction: ResourceExecutionCommit["action"];
+  readonly commitCount: number;
+  readonly commits: readonly ResourceExecutionCommit[];
+};
+
+export type ResourceExecutionSnapshotSummary = Omit<ResourceExecutionSnapshot, "commits"> & {
+  readonly historyDigest: string;
+};
+
+export type ResourceExecutionLifecycleEvidence = {
+  readonly format: typeof RESOURCE_EXECUTION_EVIDENCE_FORMAT;
+  readonly status: "passed";
+  readonly organizationId: string;
+  readonly space: string;
+  readonly resourceCount: 5;
+  readonly resources: Record<ResourceKey, {
+    readonly uid: string;
+    readonly apply: ResourceExecutionSnapshotSummary;
+    readonly destroy: ResourceExecutionSnapshotSummary;
+  }>;
 };
 
 export type Discovery = {
@@ -2965,6 +3012,633 @@ export async function readHostAddress(input: {
   return { status: response.status, body, rawBody };
 }
 
+function hasCacheControlDirective(value: string | null, directive: string): boolean {
+  return (value ?? "")
+    .split(",")
+    .map((candidate) => candidate.trim().toLowerCase())
+    .includes(directive);
+}
+
+const HTTP_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
+
+function isOptionalWhitespace(value: string): boolean {
+  return value === " " || value === "\t";
+}
+
+/**
+ * Parse one Content-Type value and accept only application/json.  A prefix
+ * check is insufficient here: application/jsonp is a different media type,
+ * while a valid parameter (for example charset=utf-8) is still part of the
+ * application/json representation.
+ */
+export function isJsonMediaType(value: string | null): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  let index = 0;
+  const skipWhitespace = (): void => {
+    while (index < value.length && isOptionalWhitespace(value[index] ?? "")) index += 1;
+  };
+  const readToken = (): string | undefined => {
+    const start = index;
+    while (index < value.length && HTTP_TOKEN.test(value[index] ?? "")) index += 1;
+    return index === start ? undefined : value.slice(start, index);
+  };
+
+  skipWhitespace();
+  const type = readToken();
+  if (!type || value[index] !== "/") return false;
+  index += 1;
+  const subtype = readToken();
+  if (!subtype || type.toLowerCase() !== "application" || subtype.toLowerCase() !== "json") {
+    return false;
+  }
+  skipWhitespace();
+  while (index < value.length) {
+    if (value[index] !== ";") return false;
+    index += 1;
+    skipWhitespace();
+    if (!readToken()) return false;
+    skipWhitespace();
+    if (value[index] !== "=") return false;
+    index += 1;
+    skipWhitespace();
+
+    if (value[index] === '"') {
+      index += 1;
+      let closed = false;
+      let escaped = false;
+      while (index < value.length) {
+        const character = value[index] ?? "";
+        index += 1;
+        if (escaped) {
+          // RFC 9110 quoted-pair permits a quoted visible character or HTAB;
+          // reject line breaks and other controls rather than accepting a
+          // folded/injected header as a parameter value.
+          if (
+            character === "\r" ||
+            character === "\n" ||
+            character === "\x7f" ||
+            (character < " " && character !== "\t")
+          ) {
+            return false;
+          }
+          escaped = false;
+          continue;
+        }
+        if (character === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (character === '"') {
+          closed = true;
+          break;
+        }
+        if (character === "\r" || character === "\n" || (character < " " && character !== "\t") || character === "\x7f") {
+          return false;
+        }
+      }
+      if (!closed || escaped) return false;
+    } else if (!readToken()) {
+      return false;
+    }
+    skipWhitespace();
+  }
+  return true;
+}
+
+/**
+ * Prove that the authenticated Takoserver control API exposes immutable
+ * Resource execution evidence before the OpenTofu writer is allowed to run.
+ * The nonce-derived UID cannot belong to the pending graph; the owner route
+ * authenticates first and then returns its closed not_found envelope.
+ */
+export async function assertResourceExecutionEvidenceCapability(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly nonce: string;
+  readonly token: string;
+  readonly timeoutMs: number;
+  readonly fetchImpl?: FetchFunction;
+}): Promise<void> {
+  const host = validateBareOrigin(input.host);
+  const organizationId = validateOrganizationId(input.organizationId);
+  if (!NONCE_PATTERN.test(input.nonce)) {
+    throw new TracerError("execution evidence capability nonce is invalid");
+  }
+  const url = new URL(host);
+  url.pathname =
+    `/v1/organizations/${encodeURIComponent(organizationId)}/resources/` +
+    `capability-${input.nonce}/execution-evidence`;
+  const timed = await fetchWithTimeout(
+    input.fetchImpl ?? fetch,
+    url,
+    {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${input.token}`,
+        "cache-control": "no-store",
+      },
+    },
+    input.timeoutMs,
+    input.token,
+  );
+  const response = timed.response;
+  const body = boundedJson(
+    await readTimedResponse(timed, { token: input.token }),
+    "execution evidence capability response",
+  );
+  if (
+    response.status !== 404 ||
+    !hasCacheControlDirective(response.headers.get("cache-control"), "private") ||
+    !hasCacheControlDirective(response.headers.get("cache-control"), "no-store") ||
+    response.headers.get("x-content-type-options")?.toLowerCase() !== "nosniff" ||
+    !isJsonMediaType(response.headers.get("content-type"))
+  ) {
+    throw new TracerError(
+      `Resource execution evidence capability was not available (HTTP ${response.status})`,
+    );
+  }
+  const envelope = requireRecord(body, "execution evidence capability response");
+  assertClosedKeys(envelope, ["error"], [], "execution evidence capability response");
+  const error = requireRecord(envelope.error, "execution evidence capability error");
+  assertClosedKeys(
+    error,
+    ["code", "message", "requestId", "retryable"],
+    [],
+    "execution evidence capability error",
+  );
+  if (
+    error.code !== "not_found" ||
+    typeof error.message !== "string" ||
+    error.message.length === 0 ||
+    typeof error.requestId !== "string" ||
+    error.requestId.length === 0 ||
+    error.retryable !== false
+  ) {
+    throw new TracerError("execution evidence capability response was not the closed owner contract");
+  }
+}
+
+/**
+ * Prove that the authenticated native-residual route is backed by the Host
+ * before OpenTofu may mutate anything. The impossible UID must pass through
+ * the configured residual backend and return its resource_not_found refusal;
+ * an unmounted route or missing backend returns a different owner code.
+ */
+export async function assertNativeResidualCapability(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly space: string;
+  readonly nonce: string;
+  readonly token: string;
+  readonly timeoutMs: number;
+  readonly fetchImpl?: FetchFunction;
+}): Promise<void> {
+  if (!NONCE_PATTERN.test(input.nonce)) {
+    throw new TracerError("native residual capability nonce is invalid");
+  }
+  if (!input.token || /[\r\n]/u.test(input.token)) {
+    throw new TracerError("native residual capability token is invalid");
+  }
+  const url = buildNativeResidualURL({
+    host: input.host,
+    organizationId: input.organizationId,
+    identity: {
+      uid: `capability-${input.nonce}`,
+      space: validateSpace(input.space),
+      name: `capability-${input.nonce.slice(0, 32)}`,
+    },
+  });
+  const timed = await fetchWithTimeout(
+    input.fetchImpl ?? fetch,
+    url,
+    {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${input.token}`,
+        "cache-control": "no-store",
+      },
+    },
+    input.timeoutMs,
+    input.token,
+  );
+  const response = timed.response;
+  const body = boundedJson(
+    await readTimedResponse(timed, { token: input.token }),
+    "native residual capability response",
+  );
+  if (!isJsonMediaType(response.headers.get("content-type"))) {
+    throw new TracerError(
+      `Native residual capability was not available (HTTP ${response.status})`,
+    );
+  }
+  const envelope = requireRecord(body, "native residual capability response");
+  assertClosedKeys(envelope, ["error"], [], "native residual capability response");
+  const error = requireRecord(envelope.error, "native residual capability error");
+  assertClosedKeys(
+    error,
+    ["code", "message", "requestId", "retryable"],
+    [],
+    "native residual capability error",
+  );
+  const hasErrorMetadata =
+    typeof error.message === "string" &&
+    error.message.length > 0 &&
+    typeof error.requestId === "string" &&
+    error.requestId.length > 0;
+  if (
+    response.status === 503 &&
+    error.code === "backend_unavailable" &&
+    hasErrorMetadata &&
+    error.retryable === true
+  ) {
+    throw new TracerError("Native residual Host backend is unavailable");
+  }
+  if (
+    response.status !== 404 ||
+    error.code !== "resource_not_found" ||
+    !hasErrorMetadata ||
+    error.retryable !== false
+  ) {
+    throw new TracerError("native residual capability response was not the closed owner contract");
+  }
+}
+
+function executionEvidenceText(value: unknown, subject: string, min: number, max: number): string {
+  if (
+    typeof value !== "string" ||
+    value.length < min ||
+    value.length > max ||
+    containsControlCharacter(value)
+  ) {
+    throw new TracerError(`${subject} is not bounded text`);
+  }
+  return value;
+}
+
+function executionEvidenceDecimal(value: unknown, subject: string): string {
+  const text = executionEvidenceText(value, subject, 1, 128);
+  if (!/^[0-9]+$/u.test(text)) {
+    throw new TracerError(`${subject} is not a decimal identity`);
+  }
+  return text;
+}
+
+function parseResourceExecutionCommit(value: unknown): ResourceExecutionCommit {
+  const commit = requireRecord(value, "Resource execution evidence commit");
+  assertClosedKeys(
+    commit,
+    ["action", "committedAt", "operationId", "outcome", "resourceVersion", "sequence"],
+    [],
+    "Resource execution evidence commit",
+  );
+  if (!Number.isSafeInteger(commit.sequence) || (commit.sequence as number) < 1) {
+    throw new TracerError("Resource execution evidence sequence is invalid");
+  }
+  const operationId = executionEvidenceText(
+    commit.operationId,
+    "Resource execution evidence operationId",
+    3,
+    128,
+  );
+  if (commit.action !== "create" && commit.action !== "update" && commit.action !== "delete") {
+    throw new TracerError("Resource execution evidence action is invalid");
+  }
+  if (commit.outcome !== "committed") {
+    throw new TracerError("Resource execution evidence outcome is not committed");
+  }
+  const resourceVersion = requireRecord(
+    commit.resourceVersion,
+    "Resource execution evidence resourceVersion",
+  );
+  assertClosedKeys(
+    resourceVersion,
+    ["generation", "revision"],
+    [],
+    "Resource execution evidence resourceVersion",
+  );
+  const generation = executionEvidenceDecimal(
+    resourceVersion.generation,
+    "Resource execution evidence generation",
+  );
+  const revision = executionEvidenceDecimal(
+    resourceVersion.revision,
+    "Resource execution evidence revision",
+  );
+  const committedAt = executionEvidenceText(
+    commit.committedAt,
+    "Resource execution evidence committedAt",
+    24,
+    24,
+  );
+  const parsedTime = new Date(committedAt);
+  if (!Number.isFinite(parsedTime.getTime()) || parsedTime.toISOString() !== committedAt) {
+    throw new TracerError("Resource execution evidence committedAt is not canonical UTC");
+  }
+  return {
+    sequence: commit.sequence as number,
+    operationId,
+    action: commit.action,
+    outcome: "committed",
+    resourceVersion: { generation, revision },
+    committedAt,
+  };
+}
+
+function assertResourceExecutionIdentity(value: unknown, identity: ResourceIdentity): void {
+  const resource = requireRecord(value, "Resource execution evidence resource");
+  assertClosedKeys(resource, ["address", "formRef", "uid"], [], "Resource execution evidence resource");
+  if (resource.uid !== identity.uid) {
+    throw new TracerError("Resource execution evidence UID does not match the applied Resource");
+  }
+  const address = requireRecord(resource.address, "Resource execution evidence address");
+  assertClosedKeys(
+    address,
+    ["apiVersion", "kind", "name", "space"],
+    [],
+    "Resource execution evidence address",
+  );
+  if (
+    address.space !== identity.space ||
+    address.apiVersion !== identity.form_api_version ||
+    address.kind !== identity.form_kind ||
+    address.name !== identity.name
+  ) {
+    throw new TracerError("Resource execution evidence address does not match the applied Resource");
+  }
+  const formRef = requireRecord(resource.formRef, "Resource execution evidence FormRef");
+  assertClosedKeys(
+    formRef,
+    ["apiVersion", "definitionVersion", "kind", "schemaDigest"],
+    [],
+    "Resource execution evidence FormRef",
+  );
+  if (
+    formRef.apiVersion !== identity.form_api_version ||
+    formRef.kind !== identity.form_kind ||
+    formRef.definitionVersion !== identity.form_definition_version ||
+    formRef.schemaDigest !== identity.form_schema_digest
+  ) {
+    throw new TracerError("Resource execution evidence FormRef does not match the applied Resource");
+  }
+}
+
+/** Read and validate the complete immutable execution history for one Host UID. */
+export async function readResourceExecutionEvidence(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly identity: ResourceIdentity;
+  readonly phase: "apply" | "destroy";
+  readonly token: string;
+  readonly timeoutMs: number;
+  readonly fetchImpl?: FetchFunction;
+}): Promise<ResourceExecutionSnapshot> {
+  const host = validateBareOrigin(input.host);
+  const organizationId = validateOrganizationId(input.organizationId);
+  if (!input.token || /[\r\n]/u.test(input.token)) {
+    throw new TracerError("Resource execution evidence token is invalid");
+  }
+  const seenCursors = new Set<string>();
+  const commits: ResourceExecutionCommit[] = [];
+  let cursor: string | undefined;
+  let snapshotFence: number | undefined;
+  let expectedSequence: number | undefined;
+
+  for (let pageIndex = 0; pageIndex < MAX_RESOURCE_EXECUTION_EVIDENCE_PAGES; pageIndex += 1) {
+    const url = new URL(host);
+    url.pathname =
+      `/v1/organizations/${encodeURIComponent(organizationId)}/resources/` +
+      `${encodeURIComponent(input.identity.uid)}/execution-evidence`;
+    url.searchParams.set("limit", String(RESOURCE_EXECUTION_EVIDENCE_PAGE_LIMIT));
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const timed = await fetchWithTimeout(
+      input.fetchImpl ?? fetch,
+      url,
+      {
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${input.token}`,
+          "cache-control": "no-store",
+        },
+      },
+      input.timeoutMs,
+      input.token,
+    );
+    const response = timed.response;
+    const rawBody = await readTimedResponse(timed, { token: input.token });
+    if (
+      response.status !== 200 ||
+      !hasCacheControlDirective(response.headers.get("cache-control"), "private") ||
+      !hasCacheControlDirective(response.headers.get("cache-control"), "no-store") ||
+      response.headers.get("x-content-type-options")?.toLowerCase() !== "nosniff" ||
+      !isJsonMediaType(response.headers.get("content-type"))
+    ) {
+      throw new TracerError(
+        `Resource execution evidence was unavailable for ${input.identity.uid} (HTTP ${response.status})`,
+      );
+    }
+    const envelope = requireRecord(
+      boundedJson(rawBody, "Resource execution evidence response"),
+      "Resource execution evidence response",
+    );
+    assertClosedKeys(
+      envelope,
+      ["executionEvidence"],
+      ["cursor"],
+      "Resource execution evidence response",
+    );
+    const evidence = requireRecord(
+      envelope.executionEvidence,
+      "Resource execution evidence",
+    );
+    assertClosedKeys(
+      evidence,
+      ["commits", "coverage", "format", "organizationId", "resource", "snapshotFence"],
+      [],
+      "Resource execution evidence",
+    );
+    if (
+      evidence.format !== RESOURCE_EXECUTION_EVIDENCE_FORMAT ||
+      evidence.organizationId !== organizationId ||
+      evidence.coverage !== "complete"
+    ) {
+      throw new TracerError("Resource execution evidence owner identity or coverage is invalid");
+    }
+    if (!Number.isSafeInteger(evidence.snapshotFence) || (evidence.snapshotFence as number) < 1) {
+      throw new TracerError("Resource execution evidence snapshot fence is invalid");
+    }
+    if (snapshotFence === undefined) {
+      snapshotFence = evidence.snapshotFence as number;
+      expectedSequence = snapshotFence;
+    } else if (evidence.snapshotFence !== snapshotFence) {
+      throw new TracerError("Resource execution evidence snapshot fence changed between pages");
+    }
+    assertResourceExecutionIdentity(evidence.resource, input.identity);
+    if (!Array.isArray(evidence.commits) || evidence.commits.length < 1) {
+      throw new TracerError("Resource execution evidence page omitted commits");
+    }
+    if (evidence.commits.length > RESOURCE_EXECUTION_EVIDENCE_PAGE_LIMIT) {
+      throw new TracerError("Resource execution evidence page exceeded its bound");
+    }
+    for (const value of evidence.commits) {
+      const commit = parseResourceExecutionCommit(value);
+      if (commit.sequence !== expectedSequence) {
+        throw new TracerError("Resource execution evidence sequence is not contiguous descending");
+      }
+      commits.push(commit);
+      expectedSequence = (expectedSequence ?? 0) - 1;
+    }
+
+    const nextCursor = envelope.cursor === undefined
+      ? undefined
+      : executionEvidenceText(
+          envelope.cursor,
+          "Resource execution evidence cursor",
+          1,
+          8_192,
+        );
+    if (!nextCursor) {
+      if (expectedSequence !== 0) {
+        throw new TracerError("Resource execution evidence sequence is not contiguous to one");
+      }
+      break;
+    }
+    if (expectedSequence === 0 || seenCursors.has(nextCursor)) {
+      throw new TracerError("Resource execution evidence cursor is inconsistent or repeated");
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+
+  if (snapshotFence === undefined || expectedSequence !== 0 || commits.length !== snapshotFence) {
+    throw new TracerError("Resource execution evidence did not reach its complete snapshot fence");
+  }
+  const latest = commits[0];
+  const oldest = commits[commits.length - 1];
+  if (!latest || !oldest || oldest.sequence !== 1 || oldest.action !== "create") {
+    throw new TracerError("Resource execution evidence does not begin with create");
+  }
+  if (input.phase === "apply") {
+    if ((latest.action !== "create" && latest.action !== "update") || commits.some((commit) => commit.action === "delete")) {
+      throw new TracerError("Resource execution evidence does not prove the applied lifecycle");
+    }
+  } else if (latest.action !== "delete") {
+    throw new TracerError("Resource execution evidence does not prove terminal destroy");
+  }
+  return {
+    uid: input.identity.uid,
+    snapshotFence,
+    latestAction: latest.action,
+    commitCount: commits.length,
+    commits,
+  };
+}
+
+type ResourceExecutionSnapshotSet = Record<ResourceKey, ResourceExecutionSnapshot>;
+
+export function assertDestroyExecutionEvidenceSuccessor(
+  prior: ResourceExecutionSnapshot,
+  snapshot: ResourceExecutionSnapshot,
+): void {
+  if (snapshot.uid !== prior.uid) {
+    throw new TracerError("destroy execution evidence UID changed from the apply evidence");
+  }
+  if (snapshot.snapshotFence <= prior.snapshotFence) {
+    throw new TracerError("destroy execution evidence did not advance the apply fence");
+  }
+  const retainedApply = snapshot.commits.slice(snapshot.commits.length - prior.commits.length);
+  if (canonicalJson(retainedApply) !== canonicalJson(prior.commits)) {
+    throw new TracerError("destroy execution evidence did not retain the exact apply history");
+  }
+}
+
+async function readResourceExecutionSnapshotSet(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly identities: Record<ResourceKey, ResourceIdentity>;
+  readonly phase: "apply" | "destroy";
+  readonly token: string;
+  readonly timeoutMs: number;
+  readonly prior?: ResourceExecutionSnapshotSet;
+  readonly fetchImpl?: FetchFunction;
+}): Promise<ResourceExecutionSnapshotSet> {
+  const snapshots = {} as ResourceExecutionSnapshotSet;
+  const failures: string[] = [];
+  for (const key of RESOURCE_KEYS) {
+    try {
+      const snapshot = await readResourceExecutionEvidence({
+        host: input.host,
+        organizationId: input.organizationId,
+        identity: input.identities[key],
+        phase: input.phase,
+        token: input.token,
+        timeoutMs: input.timeoutMs,
+        fetchImpl: input.fetchImpl,
+      });
+      const prior = input.prior?.[key];
+      if (input.phase === "destroy") {
+        if (!prior) throw new TracerError("destroy execution evidence has no apply predecessor");
+        assertDestroyExecutionEvidenceSuccessor(prior, snapshot);
+      }
+      snapshots[key] = snapshot;
+    } catch (error) {
+      failures.push(
+        `${key}: ${error instanceof Error ? safeErrorMessage(error, input.token) : "execution evidence read failed"}`,
+      );
+    }
+  }
+  if (failures.length > 0) {
+    throw new TracerError(
+      `Resource execution evidence failed for ${failures.length} resource(s): ${failures.join("; ")}`,
+    );
+  }
+  return snapshots;
+}
+
+function executionSnapshotSummary(
+  snapshot: ResourceExecutionSnapshot,
+): ResourceExecutionSnapshotSummary {
+  return {
+    uid: snapshot.uid,
+    snapshotFence: snapshot.snapshotFence,
+    latestAction: snapshot.latestAction,
+    commitCount: snapshot.commitCount,
+    historyDigest: canonicalJsonDigest(snapshot.commits),
+  };
+}
+
+function resourceExecutionLifecycleEvidence(input: {
+  readonly organizationId: string;
+  readonly space: string;
+  readonly apply: ResourceExecutionSnapshotSet;
+  readonly destroy: ResourceExecutionSnapshotSet;
+}): ResourceExecutionLifecycleEvidence {
+  const resources = {} as ResourceExecutionLifecycleEvidence["resources"];
+  for (const key of RESOURCE_KEYS) {
+    if (input.apply[key].uid !== input.destroy[key].uid) {
+      throw new TracerError("Resource execution evidence UID changed across lifecycle phases");
+    }
+    resources[key] = {
+      uid: input.apply[key].uid,
+      apply: executionSnapshotSummary(input.apply[key]),
+      destroy: executionSnapshotSummary(input.destroy[key]),
+    };
+  }
+  return {
+    format: RESOURCE_EXECUTION_EVIDENCE_FORMAT,
+    status: "passed",
+    organizationId: input.organizationId,
+    space: input.space,
+    resourceCount: 5,
+    resources,
+  };
+}
+
 export function assertExactAbsence(status: number, body: unknown): void {
   if (status !== 404) throw new TracerError(`expected exact absence HTTP 404, received ${status}`);
   const envelope = requireRecord(body, "absence response");
@@ -3059,25 +3733,13 @@ export async function assertEndpointAbsence(input: {
   };
 }
 
-const NATIVE_RESIDUAL_REASONS = new Set([
-  "closure_pending",
-  "effect_unresolved",
-  "deployment_active",
-  "deployment_unmarked",
-  "provider_unavailable",
-  "provider_readback_failed",
-  "provider_identity_missing",
-  "legacy_unattested",
-]);
-
 export type NativeResidualObservation = {
   readonly status: "absent";
   readonly source: "intrinsic" | "provider";
   readonly effectCount: number;
   readonly deploymentCount: number;
   readonly checkedAt: string;
-  readonly evidenceRef?: string;
-  readonly reason?: string;
+  readonly evidenceRef: string;
 };
 
 export type NativeAbsenceResourceEvidence = NativeResidualObservation & {
@@ -3094,6 +3756,27 @@ export type NativeAbsenceEvidence = {
   readonly checkedCount: 5;
   readonly resources: Record<ResourceKey, NativeAbsenceResourceEvidence>;
 };
+
+/**
+ * Wall-clock fence for a native-residual read.  The lower edge is the actual
+ * destroy start (minus the owner's bounded cache TTL); the upper edge is the
+ * request completion.  Keeping these timestamps explicit prevents a caller
+ * from substituting an unrelated current wall-clock value for this run.
+ */
+export type NativeAbsenceEvidenceWindow = {
+  readonly destroyStartedAtMs: number;
+  readonly destroyCompletedAtMs: number;
+  readonly readbackStartedAtMs?: number;
+};
+
+type NativeResidualTimestampWindow = {
+  readonly earliestMs: number;
+  readonly latestMs: number;
+};
+
+function isEpochMilliseconds(value: unknown): value is number {
+  return Number.isSafeInteger(value);
+}
 
 export type NativeAbsenceFailure = {
   readonly key: ResourceKey;
@@ -3126,26 +3809,44 @@ function boundedNativeCount(value: unknown, subject: string): number {
   return value as number;
 }
 
-function canonicalCheckedAt(value: unknown): string {
+function canonicalCheckedAt(
+  value: unknown,
+  window: NativeResidualTimestampWindow,
+): string {
   if (
     typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value) ||
-    !Number.isFinite(Date.parse(value))
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value) ||
+    !isEpochMilliseconds(window.earliestMs) ||
+    !isEpochMilliseconds(window.latestMs) ||
+    window.latestMs < window.earliestMs
   ) {
     throw new TracerError("native residual checkedAt is not a canonical UTC timestamp");
+  }
+  const checkedAtMs = Date.parse(value);
+  if (!Number.isFinite(checkedAtMs) || new Date(checkedAtMs).toISOString() !== value) {
+    throw new TracerError("native residual checkedAt is not a canonical UTC timestamp");
+  }
+  if (
+    checkedAtMs < window.earliestMs - MAX_NATIVE_ABSENCE_CLOCK_SKEW_MS ||
+    checkedAtMs > window.latestMs + MAX_NATIVE_ABSENCE_CLOCK_SKEW_MS
+  ) {
+    throw new TracerError("native residual checkedAt was outside the bounded evidence window");
   }
   return value;
 }
 
 /** Require the closed, authoritative Takoserver native residual absence envelope. */
-export function assertNativeResidualResponse(value: unknown): NativeResidualObservation {
+export function assertNativeResidualResponse(
+  value: unknown,
+  nowMsOrWindow: number | NativeResidualTimestampWindow = Date.now(),
+): NativeResidualObservation {
   const envelope = requireRecord(value, "native residual response");
   assertClosedKeys(envelope, ["residual"], [], "native residual response");
   const residual = requireRecord(envelope.residual, "native residual response residual");
   assertClosedKeys(
     residual,
-    ["checkedAt", "deploymentCount", "effectCount", "source", "status"],
-    ["evidenceRef", "reason"],
+    ["checkedAt", "deploymentCount", "effectCount", "evidenceRef", "source", "status"],
+    [],
     "native residual response residual",
   );
   if (residual.status !== "absent") {
@@ -3159,32 +3860,23 @@ export function assertNativeResidualResponse(value: unknown): NativeResidualObse
     residual.deploymentCount,
     "native residual deploymentCount",
   );
-  const checkedAt = canonicalCheckedAt(residual.checkedAt);
-  let evidenceRef: string | undefined;
-  if (residual.evidenceRef !== undefined) {
-    if (typeof residual.evidenceRef !== "string" || !DIGEST.test(residual.evidenceRef)) {
-      throw new TracerError("native residual evidenceRef is not a canonical digest");
-    }
-    evidenceRef = residual.evidenceRef;
+  if (typeof residual.evidenceRef !== "string" || !DIGEST.test(residual.evidenceRef)) {
+    throw new TracerError("native residual evidenceRef is not a canonical digest");
   }
-  let reason: string | undefined;
-  if (residual.reason !== undefined) {
-    if (
-      typeof residual.reason !== "string" ||
-      !NATIVE_RESIDUAL_REASONS.has(residual.reason)
-    ) {
-      throw new TracerError("native residual reason is invalid");
+  const timestampWindow: NativeResidualTimestampWindow = typeof nowMsOrWindow === "number"
+    ? {
+      earliestMs: nowMsOrWindow - MAX_NATIVE_ABSENCE_CACHE_AGE_MS,
+      latestMs: nowMsOrWindow,
     }
-    reason = residual.reason;
-  }
+    : nowMsOrWindow;
+  const checkedAt = canonicalCheckedAt(residual.checkedAt, timestampWindow);
   return {
     status: "absent",
     source: residual.source,
     effectCount,
     deploymentCount,
     checkedAt,
-    ...(evidenceRef === undefined ? {} : { evidenceRef }),
-    ...(reason === undefined ? {} : { reason }),
+    evidenceRef: residual.evidenceRef,
   };
 }
 
@@ -3221,6 +3913,8 @@ export async function verifyNativeAbsence(input: {
   readonly identities: Record<ResourceKey, ResourceIdentity>;
   readonly token: string;
   readonly timeoutMs: number;
+  readonly nowMs?: number;
+  readonly evidenceWindow?: NativeAbsenceEvidenceWindow;
   readonly projectName?: string;
   readonly revisions?: RevisionNameContext;
   readonly fetchImpl?: FetchFunction;
@@ -3241,6 +3935,31 @@ export async function verifyNativeAbsence(input: {
   );
   const space = identitySet.module_worker.space;
   const fetchImpl = input.fetchImpl ?? fetch;
+  const nowMs = input.nowMs ?? Date.now();
+  if (!isEpochMilliseconds(nowMs)) throw new TracerError("native residual evidence clock is invalid");
+  // Tests and callers that provide an explicit wall-clock anchor must get a
+  // fully deterministic request interval; live runs use the real clock for
+  // each request so the bound cannot be replaced with one stale `now` value.
+  const clockNow = input.nowMs === undefined ? Date.now : () => input.nowMs as number;
+  const configuredWindow = input.evidenceWindow;
+  if (configuredWindow) {
+    if (
+      !isEpochMilliseconds(configuredWindow.destroyStartedAtMs) ||
+      !isEpochMilliseconds(configuredWindow.destroyCompletedAtMs) ||
+      configuredWindow.destroyCompletedAtMs < configuredWindow.destroyStartedAtMs ||
+      (configuredWindow.readbackStartedAtMs !== undefined &&
+        (!isEpochMilliseconds(configuredWindow.readbackStartedAtMs) ||
+          configuredWindow.readbackStartedAtMs < configuredWindow.destroyCompletedAtMs))
+    ) {
+      throw new TracerError("native residual evidence destroy/readback interval is invalid");
+    }
+  }
+  const destroyStartedAtMs = configuredWindow?.destroyStartedAtMs ?? nowMs;
+  const destroyCompletedAtMs = configuredWindow?.destroyCompletedAtMs ?? nowMs;
+  const readbackStartedAtMs = configuredWindow?.readbackStartedAtMs ?? nowMs;
+  if (readbackStartedAtMs < destroyCompletedAtMs) {
+    throw new TracerError("native residual evidence readback started before destroy completed");
+  }
   const observations = await Promise.all(
     RESOURCE_KEYS.map(async (key): Promise<
       | { readonly key: ResourceKey; readonly evidence: NativeAbsenceResourceEvidence }
@@ -3253,6 +3972,10 @@ export async function verifyNativeAbsence(input: {
         identity,
       });
       let timed: TimedResponse;
+      const requestStartedAtMs = clockNow();
+      if (!Number.isSafeInteger(requestStartedAtMs)) {
+        return { key, failure: { key, code: "request_failed" } };
+      }
       try {
         timed = await fetchWithTimeout(
           fetchImpl,
@@ -3278,6 +4001,13 @@ export async function verifyNativeAbsence(input: {
       } catch {
         return { key, failure: { key, code: "malformed_response" } };
       }
+      // The readback interval includes the bounded response body, not only
+      // receipt of headers.  A server-generated checkedAt is therefore
+      // compared with the completion of the full request/response exchange.
+      const requestCompletedAtMs = clockNow();
+      if (!Number.isSafeInteger(requestCompletedAtMs) || requestCompletedAtMs < requestStartedAtMs) {
+        return { key, failure: { key, code: "request_failed" } };
+      }
       if (response.status !== 200) {
         return {
           key,
@@ -3289,13 +4019,22 @@ export async function verifyNativeAbsence(input: {
         !cacheControl
           .split(",")
           .map((value) => value.trim().toLowerCase())
-          .includes("no-store")
+          .includes("no-store") ||
+        !isJsonMediaType(response.headers.get("content-type"))
       ) {
         return { key, failure: { key, code: "malformed_response" } };
       }
       try {
         const observation = assertNativeResidualResponse(
           boundedJson(rawBody, "native residual response"),
+          {
+            // A cached owner receipt may predate either edge of this proof by
+            // at most its documented TTL, but it may not be replayed from an
+            // earlier run merely because that run happened after destroy.
+            earliestMs: Math.max(destroyStartedAtMs, requestStartedAtMs) -
+              MAX_NATIVE_ABSENCE_CACHE_AGE_MS,
+            latestMs: Math.max(requestCompletedAtMs, readbackStartedAtMs),
+          },
         );
         return {
           key,
@@ -4077,6 +4816,7 @@ export type TracerReport = {
       readonly gaEligible: false;
       readonly reason: "loopback-diagnostic-is-not-takoserver-runtime-evidence";
     };
+  readonly resourceExecution: ResourceExecutionLifecycleEvidence;
   readonly lifecycle: {
     readonly init: "passed";
     readonly validate: "passed";
@@ -4108,6 +4848,10 @@ export async function runTracer(config: CliConfig, options: {
   const assignedEndpoint = { url: undefined as string | undefined, hostname: undefined as string | undefined };
   let endpointAbsence: EndpointAbsenceEvidence | undefined;
   let appliedIdentities: Record<ResourceKey, ResourceIdentity> | undefined;
+  let applyExecutionEvidence: ResourceExecutionSnapshotSet | undefined;
+  let destroyExecutionEvidence: ResourceExecutionSnapshotSet | undefined;
+  let destroyPhaseStartedAtMs: number | undefined;
+  let destroyPhaseCompletedAtMs: number | undefined;
   let nativeAbsence:
     | NativeAbsenceEvidence
     | {
@@ -4144,6 +4888,29 @@ export async function runTracer(config: CliConfig, options: {
         markMilestone("state_empty");
       } catch (error) {
         stateError = error;
+      }
+    }
+
+    let executionEvidenceError: unknown;
+    if (!appliedIdentities || !applyExecutionEvidence) {
+      executionEvidenceError = new TracerError(
+        "pre-destroy Resource identities or apply execution evidence were unavailable",
+      );
+    } else {
+      try {
+        destroyExecutionEvidence = await readResourceExecutionSnapshotSet({
+          host: config.host,
+          organizationId: config.organizationId,
+          identities: appliedIdentities,
+          phase: "destroy",
+          token: config.evidenceToken,
+          timeoutMs: config.timeoutMs,
+          prior: applyExecutionEvidence,
+          fetchImpl: options.fetchImpl,
+        });
+        markMilestone("destroy_execution_evidence_completed");
+      } catch (error) {
+        executionEvidenceError = error;
       }
     }
 
@@ -4206,6 +4973,13 @@ export async function runTracer(config: CliConfig, options: {
       );
     } else {
       try {
+        const nativeReadbackStartedAtMs = Date.now();
+        if (!Number.isFinite(nativeReadbackStartedAtMs)) {
+          throw new TracerError("native residual evidence clock is invalid");
+        }
+        if (destroyPhaseStartedAtMs === undefined || destroyPhaseCompletedAtMs === undefined) {
+          throw new TracerError("destroy phase timestamps were unavailable for native absence verification");
+        }
         nativeAbsence = await verifyNativeAbsence({
           host: config.host,
           organizationId: config.organizationId,
@@ -4214,6 +4988,11 @@ export async function runTracer(config: CliConfig, options: {
           timeoutMs: config.timeoutMs,
           projectName: rootState.projectName,
           revisions: rootState.revisions,
+          evidenceWindow: {
+            destroyStartedAtMs: destroyPhaseStartedAtMs,
+            destroyCompletedAtMs: destroyPhaseCompletedAtMs,
+            readbackStartedAtMs: nativeReadbackStartedAtMs,
+          },
           fetchImpl: options.fetchImpl,
         });
         markMilestone("native_absence_completed");
@@ -4222,14 +5001,19 @@ export async function runTracer(config: CliConfig, options: {
       }
     }
 
-    if (stateError || absenceError || endpointError || nativeError) {
-      const details = [stateError, absenceError, endpointError, nativeError]
+    if (stateError || executionEvidenceError || absenceError || endpointError || nativeError) {
+      const details = [stateError, executionEvidenceError, absenceError, endpointError, nativeError]
         .filter((error): error is Error => error instanceof Error)
         .map((error) => safeErrorMessage(error, [config.token, config.evidenceToken]))
         .join("; ");
       throw new TracerError(
         "post-destroy cleanup proof failed" + (details ? ": " + details : ""),
-        { cause: redactErrorInPlace(stateError ?? absenceError ?? endpointError, [config.token, config.evidenceToken]) },
+        {
+          cause: redactErrorInPlace(
+            stateError ?? executionEvidenceError ?? absenceError ?? endpointError ?? nativeError,
+            [config.token, config.evidenceToken],
+          ),
+        },
       );
     }
   };
@@ -4244,16 +5028,21 @@ export async function runTracer(config: CliConfig, options: {
     await cleanupAfterApply({
       recoveryPath: rootState.root,
       destroy: async () => {
-        await runTofu({
-          config,
-          workDir: rootState.workDir,
-          environment: rootState.environment,
-          args: destroyArgs,
-          phase: "destroy",
-          command: tofuCommand,
-          spawn: options.spawn,
-        });
-        markMilestone("destroy_completed");
+        destroyPhaseStartedAtMs = Date.now();
+        try {
+          await runTofu({
+            config,
+            workDir: rootState.workDir,
+            environment: rootState.environment,
+            args: destroyArgs,
+            phase: "destroy",
+            command: tofuCommand,
+            spawn: options.spawn,
+          });
+          markMilestone("destroy_completed");
+        } finally {
+          destroyPhaseCompletedAtMs = Date.now();
+        }
       },
       absence: async () => absenceAndStateCheck(checkState),
       remove: removeRoot,
@@ -4308,6 +5097,27 @@ export async function runTracer(config: CliConfig, options: {
       fetchImpl: options.fetchImpl,
     });
     markMilestone("discovery_completed");
+
+    await assertResourceExecutionEvidenceCapability({
+      host: config.host,
+      organizationId: config.organizationId,
+      nonce: runIdentity.nonce,
+      token: config.evidenceToken,
+      timeoutMs: config.timeoutMs,
+      fetchImpl: options.fetchImpl,
+    });
+    markMilestone("execution_evidence_capability_proven");
+
+    await assertNativeResidualCapability({
+      host: config.host,
+      organizationId: config.organizationId,
+      space: config.space,
+      nonce: runIdentity.nonce,
+      token: config.evidenceToken,
+      timeoutMs: config.timeoutMs,
+      fetchImpl: options.fetchImpl,
+    });
+    markMilestone("native_residual_capability_proven");
 
     await runTofu({
       config,
@@ -4415,6 +5225,17 @@ export async function runTracer(config: CliConfig, options: {
     appliedIdentities = identities;
     markMilestone("resource_readback_completed");
 
+    applyExecutionEvidence = await readResourceExecutionSnapshotSet({
+      host: config.host,
+      organizationId: config.organizationId,
+      identities,
+      phase: "apply",
+      token: config.evidenceToken,
+      timeoutMs: config.timeoutMs,
+      fetchImpl: options.fetchImpl,
+    });
+    markMilestone("apply_execution_evidence_completed");
+
     for (const resource of Object.values(identities)) {
       for (const value of Object.values(resource)) {
         if (typeof value === "string" && containsSecret(value, [config.token, config.evidenceToken])) {
@@ -4450,7 +5271,12 @@ export async function runTracer(config: CliConfig, options: {
 
     await cleanupAppliedRun(true);
 
-    if (!endpointAbsence || !nativeAbsence) {
+    if (
+      !endpointAbsence ||
+      !nativeAbsence ||
+      !applyExecutionEvidence ||
+      !destroyExecutionEvidence
+    ) {
       throw new TracerError("post-destroy absence evidence was incomplete before report construction");
     }
 
@@ -4520,6 +5346,12 @@ export async function runTracer(config: CliConfig, options: {
           zeroResidual: false,
           gaEligible: false,
         },
+      resourceExecution: resourceExecutionLifecycleEvidence({
+        organizationId: config.organizationId,
+        space: config.space,
+        apply: applyExecutionEvidence,
+        destroy: destroyExecutionEvidence,
+      }),
       lifecycle: {
         init: "passed",
         validate: "passed",

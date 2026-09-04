@@ -10,7 +10,12 @@ The tracer creates exactly five Host Worker resources named by the Provider 4
 contract (`takoform_module_worker`, `takoform_worker_bundle`,
 `takoform_worker_version`, `takoform_worker_deployment`, and
 `takoform_worker_endpoint`), checks exact v1 discovery/readback identities,
-probes the returned Worker, then destroys the graph and proves exact absence.
+proves each UID's complete immutable execution ledger, probes the returned
+Worker, then destroys the graph and proves exact logical, endpoint, native, and
+execution-ledger absence. Before any mutation it also probes both the
+execution-evidence route and the configured native-residual backend with an
+authenticated impossible UID. A route-only 404, an unmounted backend, or an
+unexpected owner envelope is a refusal, not a skipped capability.
 The fixture pins the public registry source to exactly `= 4.0.0` and commits
 the package checksum lockfile. Each run uses an isolated project name and an
 isolated `TF_DATA_DIR`; only direct registry installation is configured. Local
@@ -58,9 +63,9 @@ bun scripts/takoserver-fetch-tracer.ts --run \
 `TAKOFORM_TOKEN` is copied only into the OpenTofu child environment for
 mutation. `TAKOFORM_EVIDENCE_TOKEN` is used only for direct Host discovery,
 resource readback, post-destroy absence GETs, and the organization-scoped
-native residual reads. The organization ID is a non-secret Takoserver
-authority coordinate, not a substitute for the evidence credential. The
-environment variable names may be changed with `--token-env` and
+execution-evidence and native-residual reads. The organization ID is a
+non-secret Takoserver authority coordinate, not a substitute for the evidence
+credential. The environment variable names may be changed with `--token-env` and
 `--evidence-token-env`, but both values remain operator-private environment
 inputs and must be distinct. Never put either value in a command line,
 fixture, report, or repository file.
@@ -76,7 +81,11 @@ The entrypoint runs `tofu init -backend=false -lockfile=readonly`, validates
 the exact public lockfile, records the executable/provider digests, and parses
 `tofu show -json` to prove exactly five create actions before executing
 `validate -> plan -> apply -> output / readback -> Worker probe -> destroy ->
-state/Host-absence/endpoint-absence/native-absence proof`. The root Worker
+state/Host-absence/endpoint-absence/native-absence/execution-evidence proof`.
+The apply evidence must cover every sequence from its immutable snapshot fence
+through the original create. Destroy must advance that fence, end in delete,
+and retain the exact apply history as its suffix; missing pages, repeated
+cursors, gaps, identity drift, or rewritten history fail closed. The root Worker
 response must echo the fresh nonce and project UID. The tracer also performs
 anonymous `GET /health` and `GET /.well-known/takos` checks. Discovery is
 deliberately scoped to this artifact: it declares only neutral JavaScript
@@ -91,7 +100,14 @@ Host resource absence and assigned endpoint absence are separate ledger entries.
 For a live HTTPS Host, success additionally requires Takoserver's closed,
 organization-scoped native-residual readback to attest exact absence for all
 five pre-destroy Host UIDs. The response must be non-cacheable, identify its
-intrinsic/provider source, and carry bounded effect/deployment ledger counts.
+intrinsic/provider source, carry bounded effect/deployment ledger counts, omit
+an indeterminate `reason`, and include the canonical cached evidence digest.
+`checkedAt` is an exact UTC calendar round-trip and must fall inside the actual
+destroy/readback interval, allowing only the owner's documented 30-second cache
+and a small clock-skew allowance; stale or impossible timestamps are refused.
+Evidence and residual responses must carry the exact `application/json` media
+type (case-insensitive, with valid parameters); lookalikes such as
+`application/jsonp` are not accepted.
 `status: "absent"`, not zero historical counts, is the native-absence
 authority. This integration-only evidence may record zero native residual for
 those five resources, but it never claims GA readiness or coverage of the full
