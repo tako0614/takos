@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import {
   assertExactAbsence,
@@ -52,6 +52,7 @@ import {
   RESOURCE_KEYS,
   resourceURL,
   readHostResource,
+  readResponseBody,
   runBoundedCommand,
   runTracer,
   unwrapTofuOutput,
@@ -787,35 +788,117 @@ describe("takoserver fetch tracer pure contracts", () => {
   });
 
   test("uses one total deadline across delayed Host headers and body", async () => {
+    jest.useFakeTimers({ now: 0 });
+    const realSetTimeout = globalThis.setTimeout;
+    let parentDeadline: (() => void) | undefined;
+    const bodyDeadlines: Array<() => void> = [];
+    globalThis.setTimeout = ((handler, _delay) => {
+      if (typeof handler !== "function") throw new Error("test timer handler must be callable");
+      const callback = (): void => handler();
+      if (parentDeadline) bodyDeadlines.push(callback);
+      else parentDeadline = callback;
+      return 0 as ReturnType<typeof setTimeout>;
+    }) as typeof globalThis.setTimeout;
+
     let requestSignal: AbortSignal | undefined;
     let bodyCancelled = false;
     let bodyAttemptResolve: ((aborted: boolean) => void) | undefined;
     const bodyAttempt = new Promise<boolean>((resolve) => {
       bodyAttemptResolve = resolve;
     });
+    let releaseHeaders: (() => void) | undefined;
+    const headersReady = new Promise<void>((resolve) => {
+      releaseHeaders = resolve;
+    });
     const fetchImpl: FetchFunction = async (_input, init) => {
       requestSignal = init?.signal ?? undefined;
-      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      await headersReady;
+      const body = new ReadableStream<Uint8Array>({
+        pull() {
+          return new Promise<never>(() => undefined);
+        },
+        cancel() {
+          bodyCancelled = true;
+          bodyAttemptResolve?.(requestSignal?.aborted ?? false);
+        },
+      });
+      return new Response(body, { status: 200 });
+    };
+
+    try {
+      const run = discoverV1({
+        host: "https://host.example",
+        token: evidenceToken,
+        timeoutMs: 50,
+        fetchImpl,
+      });
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+      jest.setSystemTime(25);
+      releaseHeaders?.();
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+      expect(parentDeadline).toBeDefined();
+
+      // Force the body cancellation callback to win the exact deadline race.
+      // A real timer scheduler can deliver the two callbacks in either order;
+      // this controlled clock makes the parent-signal contract deterministic.
+      jest.setSystemTime(50);
+      if (bodyDeadlines.length > 0) bodyDeadlines[0]();
+      else parentDeadline?.();
+
+      await expect(run).rejects.toThrow(/deadline/u);
+      expect(await bodyAttempt).toBe(true);
+      expect(bodyCancelled).toBe(true);
+      expect(Date.now()).toBe(50);
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      jest.useRealTimers();
+    }
+  });
+
+  test("retains a standalone timeoutMs when an external signal never aborts", async () => {
+    jest.useFakeTimers({ now: 0 });
+    const external = new AbortController();
+    let bodyCancelled = false;
+    let run: Promise<string> | undefined;
+    try {
+      const body = new ReadableStream<Uint8Array>({
+        pull() {
+          return new Promise<never>(() => undefined);
+        },
+        cancel() {
+          bodyCancelled = true;
+        },
+      });
+      run = readResponseBody(new Response(body, { status: 200 }), {
+        signal: external.signal,
+        timeoutMs: 25,
+      });
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+      jest.advanceTimersByTime(25);
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+      expect(bodyCancelled).toBe(true);
+      await expect(run).rejects.toThrow(/deadline/u);
+    } finally {
+      external.abort();
+      await run?.catch(() => undefined);
+      jest.useRealTimers();
+    }
+  });
+
+  test("aborts the request signal when the wall-clock guard reaches its deadline first", async () => {
+    jest.useFakeTimers({ now: 0 });
+    let requestSignal: AbortSignal | undefined;
+    let bodyCancelled = false;
+    let clockAdvanced = false;
+    const fetchImpl: FetchFunction = async (_input, init) => {
+      requestSignal = init?.signal ?? undefined;
       const body = new ReadableStream<Uint8Array>({
         pull(controller) {
-          setTimeout(() => {
-            bodyAttemptResolve?.(requestSignal?.aborted ?? false);
-            if (bodyCancelled) return;
-            controller.enqueue(new TextEncoder().encode(JSON.stringify({
-              api_versions: ["forms.takoform.com/v1"],
-              features: {
-                service_forms: true,
-                exact_form_ref: true,
-                optimistic_concurrency: true,
-                idempotent_lifecycle: true,
-                operations: true,
-                artifact_upload: true,
-                support_profiles: true,
-              },
-              endpoints: { api: "https://host.example/apis/forms.takoform.com/v1" },
-            })));
-            controller.close();
-          }, 35);
+          if (!clockAdvanced) {
+            clockAdvanced = true;
+            jest.setSystemTime(51);
+          }
+          controller.enqueue(new Uint8Array());
         },
         cancel() {
           bodyCancelled = true;
@@ -823,19 +906,19 @@ describe("takoserver fetch tracer pure contracts", () => {
       });
       return new Response(body, { status: 200 });
     };
-    const started = Date.now();
-    await expect(discoverV1({
-      host: "https://host.example",
-      token: evidenceToken,
-      timeoutMs: 50,
-      fetchImpl,
-    })).rejects.toThrow(/deadline/u);
-    const elapsed = Date.now() - started;
-    expect(await bodyAttempt).toBe(true);
-    expect(bodyCancelled).toBe(true);
-    // A body timeout reset after headers would allow the 35ms body delay to
-    // finish after the 25ms header delay. The shared 50ms deadline must win.
-    expect(elapsed).toBeLessThan(100);
+
+    try {
+      await expect(discoverV1({
+        host: "https://host.example",
+        token: evidenceToken,
+        timeoutMs: 50,
+        fetchImpl,
+      })).rejects.toThrow(/deadline/u);
+      expect(requestSignal?.aborted).toBe(true);
+      expect(bodyCancelled).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("bounds a Host fetch that ignores AbortSignal and cancels its late body", async () => {

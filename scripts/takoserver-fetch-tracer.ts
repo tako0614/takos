@@ -2726,7 +2726,16 @@ export async function readResponseBody(
     else parentSignal.addEventListener("abort", parentAbort, { once: true });
   }
   const remaining = deadline - Date.now();
-  const timer = Number.isFinite(remaining) && remaining > 0 ? setTimeout(() => abort.abort(), remaining) : undefined;
+  // An explicit absolute deadline paired with a caller-owned signal already
+  // has one timer authority for both headers and body. A second timer here can
+  // win the same millisecond race, cancel the derived body signal first, and
+  // leave the caller's request signal unobserved after readTimedResponse
+  // disposes it. A signal plus timeoutMs remains a standalone body read and
+  // therefore retains its own timeout for callers that never abort the signal.
+  const callerOwnsDeadline = parentSignal !== undefined && options.deadline !== undefined;
+  const timer = !callerOwnsDeadline && Number.isFinite(remaining) && remaining > 0
+    ? setTimeout(() => abort.abort(), remaining)
+    : undefined;
   try {
     if (!response.body) {
       if (abort.signal.aborted || Date.now() >= deadline) throw new TracerError("Host response body exceeded its deadline");
@@ -2763,6 +2772,10 @@ async function fetchWithTimeout(
   const dispose = (): void => {
     if (disposed) return;
     disposed = true;
+    // The wall-clock guard in readResponseBody can detect a deadline before
+    // the host timer callback is delivered. Preserve the caller-owned signal
+    // as the timeout authority before disposing that timer.
+    if (!controller.signal.aborted && Date.now() >= deadline) controller.abort();
     clearTimeout(timer);
   };
   try {
