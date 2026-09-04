@@ -12,6 +12,7 @@ import {
 import {
   createAuthenticatedOwnerSessionFileTransport,
   parseFirstInstallFunctionalProofArgs,
+  runFirstInstallFunctionalProofOwnerOperation,
 } from "../first-install-functional-proof.ts";
 
 describe("local agent public API proof", () => {
@@ -507,6 +508,87 @@ describe("authenticated staging functional proof", () => {
       }),
     ).rejects.toThrow(/cleanup/u);
   });
+
+  test("owner operation preserves refused, indeterminate, and post-condition exit classes", async () => {
+    const proofOptions = {
+      sourceCommit: "1".repeat(40),
+      servedVersion: "11111111-2222-3333-4444-555555555555",
+      publicUrl: "https://app.example.test",
+      sleep: async () => {},
+      now: () => 1_000,
+    } as const;
+
+    const refusedBase = authenticatedStagingTransport();
+    const refusedTransport: AuthenticatedOwnerSessionTransport = {
+      kind: "takos.authenticated-owner-session-transport@v1",
+      request: async (request) =>
+        request.path === "/health"
+          ? { status: 503, body: { status: "unavailable" } }
+          : refusedBase.request(request),
+    };
+    await expect(
+      runFirstInstallFunctionalProofOwnerOperation({
+        ...proofOptions,
+        transport: refusedTransport,
+      }),
+    ).rejects.toMatchObject({ stage: "refused", exitCode: 2 });
+
+    await expect(
+      runFirstInstallFunctionalProofOwnerOperation({
+        ...proofOptions,
+        transport: authenticatedStagingTransport({ model: "local-smoke" }),
+      }),
+    ).rejects.toMatchObject({ stage: "post-conditions", exitCode: 4 });
+
+    await expect(
+      runFirstInstallFunctionalProofOwnerOperation({
+        ...proofOptions,
+        transport: authenticatedStagingTransport({ cleanupStatus: 503 }),
+      }),
+    ).rejects.toMatchObject({ stage: "indeterminate", exitCode: 3 });
+
+    const lostAckBase = authenticatedStagingTransport();
+    const lostAckTransport: AuthenticatedOwnerSessionTransport = {
+      kind: "takos.authenticated-owner-session-transport@v1",
+      request: async (request) => {
+        if (
+          request.method === "POST" &&
+          request.path === "/api/threads/thread-functional/runs"
+        ) {
+          throw new Error("run create acknowledgement was lost");
+        }
+        return await lostAckBase.request(request);
+      },
+    };
+    await expect(
+      runFirstInstallFunctionalProofOwnerOperation({
+        ...proofOptions,
+        transport: lostAckTransport,
+      }),
+    ).rejects.toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(
+      lostAckBase.requests.some(
+        (request) =>
+          request.method === "DELETE" &&
+          request.path === "/api/spaces/space-functional",
+      ),
+    ).toBe(true);
+
+    const lostWorkspaceIdentityBase = authenticatedStagingTransport();
+    const lostWorkspaceIdentityTransport: AuthenticatedOwnerSessionTransport = {
+      kind: "takos.authenticated-owner-session-transport@v1",
+      request: async (request) =>
+        request.method === "POST" && request.path === "/api/spaces"
+          ? { status: 201, body: { space: {} } }
+          : await lostWorkspaceIdentityBase.request(request),
+    };
+    await expect(
+      runFirstInstallFunctionalProofOwnerOperation({
+        ...proofOptions,
+        transport: lostWorkspaceIdentityTransport,
+      }),
+    ).rejects.toMatchObject({ stage: "indeterminate", exitCode: 3 });
+  });
 });
 
 describe("authenticated owner session file adapter", () => {
@@ -516,12 +598,20 @@ describe("authenticated owner session file adapter", () => {
     await chmod(root, 0o700);
     await writeFile(sessionFile, "A2345678901234567890_session\n", { mode: 0o600 });
     const observed: Array<{ path: string; cookie: string | null; origin: string | null }> = [];
+    const pinned: string[] = [];
+    let resolutions = 0;
     try {
       const transport = await createAuthenticatedOwnerSessionFileTransport({
         publicUrl: "https://app.example.test",
         ownerSessionFile: sessionFile,
         repositoryRoot: resolve(import.meta.dir, "../.."),
-        fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        resolveAddresses: async (hostname) => {
+          resolutions += 1;
+          expect(hostname).toBe("app.example.test");
+          return [{ address: "93.184.216.34", family: 4 }];
+        },
+        pinnedFetchImpl: async (input, init, address) => {
+          pinned.push(`${address.address}/${address.family}`);
           const request = new Request(input, init);
           observed.push({
             path: new URL(request.url).pathname,
@@ -539,7 +629,7 @@ describe("authenticated owner session file adapter", () => {
                 }
               : undefined,
           );
-        }) as typeof fetch,
+        },
       });
       await transport.request({ scope: "anonymous", method: "GET", path: "/health" });
       await transport.request({ scope: "owner", method: "GET", path: "/api/auth/me" });
@@ -557,6 +647,12 @@ describe("authenticated owner session file adapter", () => {
           origin: "https://app.example.test",
         },
       ]);
+      expect(resolutions).toBe(1);
+      expect(pinned).toEqual([
+        "93.184.216.34/4",
+        "93.184.216.34/4",
+        "93.184.216.34/4",
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -568,16 +664,20 @@ describe("authenticated owner session file adapter", () => {
     const linked = join(root, "linked-session");
     await chmod(root, 0o700);
     await writeFile(real, "A2345678901234567890_session\n", { mode: 0o644 });
-    const fetchImpl = (() => {
+    const pinnedFetchImpl = (() => {
       throw new Error("fetch must not run");
-    }) as unknown as typeof fetch;
+    }) as never;
+    const resolveAddresses = async () => [
+      { address: "93.184.216.34", family: 4 as const },
+    ];
     try {
       await expect(
         createAuthenticatedOwnerSessionFileTransport({
           publicUrl: "https://app.example.test",
           ownerSessionFile: real,
           repositoryRoot: resolve(import.meta.dir, "../.."),
-          fetchImpl,
+          resolveAddresses,
+          pinnedFetchImpl,
         }),
       ).rejects.toThrow(/0600/u);
       await chmod(real, 0o600);
@@ -587,9 +687,117 @@ describe("authenticated owner session file adapter", () => {
           publicUrl: "https://app.example.test",
           ownerSessionFile: linked,
           repositoryRoot: resolve(import.meta.dir, "../.."),
-          fetchImpl,
+          resolveAddresses,
+          pinnedFetchImpl,
         }),
       ).rejects.toThrow(/canonical|symbolic link/u);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects private or mixed DNS before reading or sending the owner session", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-owner-session-dns-"));
+    let requests = 0;
+    const pinnedFetchImpl = async () => {
+      requests += 1;
+      return Response.json({ ok: true });
+    };
+    try {
+      for (const answers of [
+        [{ address: "10.0.0.7", family: 4 as const }],
+        [
+          { address: "93.184.216.34", family: 4 as const },
+          { address: "127.0.0.1", family: 4 as const },
+        ],
+        [{ address: "fd00::7", family: 6 as const }],
+      ]) {
+        await expect(
+          createAuthenticatedOwnerSessionFileTransport({
+            publicUrl: "https://app.example.test",
+            ownerSessionFile: join(root, "does-not-exist"),
+            repositoryRoot: resolve(import.meta.dir, "../.."),
+            resolveAddresses: async () => answers,
+            pinnedFetchImpl,
+          }),
+        ).rejects.toThrow(/globally routable DNS answers/u);
+      }
+      expect(requests).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("pins one safe address across requests even when a resolver would alternate", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-owner-session-pin-"));
+    const sessionFile = join(root, "session");
+    await chmod(root, 0o700);
+    await writeFile(sessionFile, "A2345678901234567890_session\n", { mode: 0o600 });
+    let resolutions = 0;
+    const used: string[] = [];
+    try {
+      const transport = await createAuthenticatedOwnerSessionFileTransport({
+        publicUrl: "https://app.example.test",
+        ownerSessionFile: sessionFile,
+        repositoryRoot: resolve(import.meta.dir, "../.."),
+        resolveAddresses: async () => {
+          resolutions += 1;
+          return resolutions === 1
+            ? [{ address: "93.184.216.34", family: 4 }]
+            : [{ address: "127.0.0.1", family: 4 }];
+        },
+        pinnedFetchImpl: async (_input, _init, address) => {
+          used.push(address.address);
+          return Response.json({ ok: true });
+        },
+      });
+      await transport.request({ scope: "anonymous", method: "GET", path: "/health" });
+      await transport.request({ scope: "owner", method: "GET", path: "/api/auth/me" });
+      expect(resolutions).toBe(1);
+      expect(used).toEqual(["93.184.216.34", "93.184.216.34"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses redirects and path-based origin confusion without following either", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-owner-session-redirect-"));
+    const sessionFile = join(root, "session");
+    await chmod(root, 0o700);
+    await writeFile(sessionFile, "A2345678901234567890_session\n", { mode: 0o600 });
+    let requests = 0;
+    try {
+      const transport = await createAuthenticatedOwnerSessionFileTransport({
+        publicUrl: "https://app.example.test",
+        ownerSessionFile: sessionFile,
+        repositoryRoot: resolve(import.meta.dir, "../.."),
+        resolveAddresses: async () => [
+          { address: "93.184.216.34", family: 4 },
+        ],
+        pinnedFetchImpl: async () => {
+          requests += 1;
+          return new Response(null, {
+            status: 302,
+            headers: { Location: "https://127.0.0.1/steal" },
+          });
+        },
+      });
+      await expect(
+        transport.request({
+          scope: "owner",
+          method: "GET",
+          path: "/api/auth/me",
+        }),
+      ).rejects.toThrow(/refused an HTTP redirect/u);
+      expect(requests).toBe(1);
+      await expect(
+        transport.request({
+          scope: "owner",
+          method: "GET",
+          path: "/\\attacker.example/steal",
+        }),
+      ).rejects.toThrow(/non-canonical request/u);
+      expect(requests).toBe(1);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

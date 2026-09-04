@@ -1,16 +1,19 @@
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   chmod,
+  link,
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 
 import { RUNTIME_SECRET_BINDING_NAMES } from "./cloudflare-production-config.ts";
 import {
@@ -36,6 +39,69 @@ const IMAGE = `registry.cloudflare.com/${ACCOUNT}/takos-agent@sha256:${"a".repea
 const HEAD = "1".repeat(40);
 const SERVED = "11111111-2222-3333-4444-555555555555";
 const NEXT = "99999999-8888-7777-6666-555555555555";
+const CONCURRENT = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const OWNER_CONTRACT_V2 = "takos.first-install-owner-contract@v2";
+const RELEASE_EVIDENCE_V2 = {
+  descriptor: {
+    kind: "takos.worker-artifact@v3",
+    digest: "sha256",
+    maxBytes: 256 * 1024,
+    releaseTagPattern: "^v\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
+    executorImagePattern:
+      "^registry\\.cloudflare\\.com/[0-9a-f]{32}/takos-agent@sha256:[0-9a-f]{64}$",
+    publicAgentImagePattern:
+      "^ghcr\\.io/tako0614/takos-agent@sha256:[0-9a-f]{64}$",
+  },
+  archive: {
+    digest: "sha256",
+    maxCompressedBytes: 64 * 1024 * 1024,
+    maxExpandedBytes: 256 * 1024 * 1024,
+    maxEntries: 20_000,
+    maxPathBytes: 4_096,
+  },
+  workerVersions: {
+    method: "cloudflare-api-v4",
+    pagination: "page/per_page",
+    pageSize: 100,
+    maxPages: 100,
+    maxRows: 10_000,
+    stableScans: 2,
+  },
+  containerApplications: {
+    method: "cloudflare-api-v4",
+    pagination: "per_page/page_token",
+    pageSize: 100,
+    maxPages: 100,
+    maxRows: 10_000,
+    stableScans: 2,
+    detailMethod: "wrangler-containers-info",
+  },
+} as const;
+
+const COMPLETE_CONTAINER_EVIDENCE = {
+  ...RELEASE_EVIDENCE_V2.containerApplications,
+  inventory: { status: "complete", scans: 2 },
+  exactApplicationNames: 3,
+  healthyApplicationDetails: 3,
+  activeRollouts: 0,
+} as const;
+
+const COMPLETE_APPLY_EVIDENCE = {
+  workerVersions: {
+    ...RELEASE_EVIDENCE_V2.workerVersions,
+    before: { status: "complete", scans: 2 },
+    after: { status: "complete", scans: 2 },
+    exactAttemptMatches: 1,
+    exactInventoryAdditions: 1,
+  },
+  containerApplications: COMPLETE_CONTAINER_EVIDENCE,
+} as const;
+
+function responseBytes(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
+}
 
 function outputs(overrides: Record<string, unknown> = {}): string {
   const wrap = (value: unknown) => ({ sensitive: false, type: "string", value });
@@ -83,14 +149,24 @@ function outputs(overrides: Record<string, unknown> = {}): string {
     cloudflare_vectorize_index_metric: wrap("cosine"),
     runtime_secret_binding_names: wrap([...RUNTIME_SECRET_BINDING_NAMES]),
     runtime_secrets_provisioned: wrap(true),
+    deployment_environment: wrap("staging"),
     cloudflare_worker_version_id: wrap(SERVED),
     ...overrides,
   });
 }
 
-function versionJson(versionId: string): string {
+function versionJson(
+  versionId: string,
+  annotations: Readonly<{ tag?: string; message?: string }> = {},
+): string {
   return JSON.stringify({
     id: versionId,
+    annotations: {
+      ...(annotations.tag === undefined ? {} : { "workers/tag": annotations.tag }),
+      ...(annotations.message === undefined
+        ? {}
+        : { "workers/message": annotations.message }),
+    },
     metadata: { migration_tag: "v7" },
     resources: {
       bindings: [
@@ -133,8 +209,98 @@ function versionJson(versionId: string): string {
           type: "durable_object_namespace",
           class_name: "ExecutorContainerTier3",
         },
+        ...Object.entries(
+          (JSON.parse(outputs()) as {
+            worker_env: { value: Record<string, string> };
+          }).worker_env.value,
+        ).map(([name, text]) => ({ name, type: "plain_text", text })),
+        { name: "OCI_ORCHESTRATOR_URL", type: "plain_text", text: "" },
+        { name: "ASSETS", type: "assets" },
+        { name: "AI", type: "ai" },
+        {
+          name: "TAKOS_EGRESS",
+          type: "service",
+          service: "takos-live",
+          entrypoint: "TakosEgressEntrypoint",
+        },
       ],
     },
+  });
+}
+
+function versionListJson(
+  rows: readonly Readonly<{ id: string; tag?: string; message?: string }>[],
+): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      id: row.id,
+      metadata: { created_on: "2026-09-04T00:00:00.000Z" },
+      annotations: {
+        ...(row.tag === undefined ? {} : { "workers/tag": row.tag }),
+        ...(row.message === undefined
+          ? {}
+          : { "workers/message": row.message }),
+      },
+    })),
+  );
+}
+
+function cloudflareEnvelope(
+  result: unknown,
+  resultInfo: Readonly<Record<string, unknown>>,
+): CloudflareApiResponse {
+  return {
+    status: 200,
+    body: {
+      success: true,
+      errors: [],
+      messages: [],
+      result,
+      result_info: resultInfo,
+    },
+  };
+}
+
+function versionApiPage(
+  rows: readonly Readonly<{ id: string; tag?: string; message?: string }>[],
+  page: number,
+  perPage = 100,
+): CloudflareApiResponse {
+  const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
+  const items = rows.slice((page - 1) * perPage, page * perPage).map((row) => ({
+    id: row.id,
+    metadata: { created_on: "2026-09-04T00:00:00.000Z" },
+    annotations: {
+      ...(row.tag === undefined ? {} : { "workers/tag": row.tag }),
+      ...(row.message === undefined
+        ? {}
+        : { "workers/message": row.message }),
+    },
+  }));
+  return cloudflareEnvelope(
+    { items },
+    {
+      page,
+      per_page: perPage,
+      count: items.length,
+      total_count: rows.length,
+      total_pages: totalPages,
+    },
+  );
+}
+
+function unrelatedVersionRows(
+  count: number,
+): Array<Readonly<{ id: string; tag?: string; message?: string }>> {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, "0")}`,
+  }));
+}
+
+function deploymentJson(versionId: string): string {
+  return JSON.stringify({
+    id: "deployment-1",
+    versions: [{ version_id: versionId, percentage: 100 }],
   });
 }
 
@@ -146,13 +312,75 @@ function containerListJson(image = IMAGE): string {
   return JSON.stringify(
     ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"].map(
       (className, index) => ({
-        id: `app-${index}`,
-        name: `takos-live-${className}`,
-        configuration: { image },
+        id: `00000000-0000-4000-8000-00000000000${index}`,
+        name: `takos-live-${className}`.toLowerCase(),
+        state: "ready",
+        instances: 0,
+        image,
+        version: index + 1,
       }),
     ),
   );
 }
+
+function containerApiRows(image = IMAGE): Array<Record<string, unknown>> {
+  return (JSON.parse(containerListJson(image)) as Array<Record<string, unknown>>)
+    .map(({ state: _state, ...row }) => ({
+      ...row,
+      health: {
+        instances: { active: 0, failed: 0, starting: 0, scheduling: 0 },
+      },
+    }));
+}
+
+function unrelatedContainerRows(count: number): Array<Record<string, unknown>> {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `eeeeeeee-eeee-4eee-8eee-${(index + 1).toString(16).padStart(12, "0")}`,
+    name: `foreign-container-${index + 1}`,
+    image: IMAGE,
+    version: 1,
+    instances: 0,
+    health: {
+      instances: { active: 0, failed: 0, starting: 0, scheduling: 0 },
+    },
+  }));
+}
+
+function containerApiRowsFromCliJson(value: string): Array<Record<string, unknown>> {
+  return (JSON.parse(value) as Array<Record<string, unknown>>).map(
+    ({ state, ...row }) => ({
+      ...row,
+      health: {
+        instances: state === "degraded"
+          ? { active: 0, failed: 1, starting: 0, scheduling: 0 }
+          : state === "provisioning"
+            ? { active: 0, failed: 0, starting: 1, scheduling: 0 }
+            : state === "active"
+              ? { active: 1, failed: 0, starting: 0, scheduling: 0 }
+              : { active: 0, failed: 0, starting: 0, scheduling: 0 },
+      },
+    }),
+  );
+}
+
+function containerInfoJson(index: number, image = IMAGE): string {
+  const className = CONTAINER_CLASSES[index];
+  return JSON.stringify({
+    id: `00000000-0000-4000-8000-00000000000${index}`,
+    name: `takos-live-${className}`.toLowerCase(),
+    image,
+    version: index + 1,
+    health: {
+      instances: { active: 0, failed: 0, starting: 0, scheduling: 0 },
+    },
+  });
+}
+
+const CONTAINER_CLASSES = [
+  "ExecutorContainerTier1",
+  "ExecutorContainerTier2",
+  "ExecutorContainerTier3",
+] as const;
 
 type Reply = Partial<CommandResult> | undefined;
 
@@ -169,6 +397,11 @@ function stubRuntime(
   const calls: CommandRequest[] = [];
   return {
     calls,
+    releaseLeaseRoot: join(
+      tmpdir(),
+      `takos-first-install-release-lease-test-${randomUUID()}`,
+    ),
+    assertPhysicalGitTree: async () => {},
     async run(request: CommandRequest): Promise<CommandResult> {
       calls.push(request);
       const line = `${request.command} ${request.args.join(" ")}`;
@@ -180,6 +413,17 @@ function stubRuntime(
       return { exitCode: 127, stdout: "", stderr: `unexpected command: ${line}` };
     },
     fetch: (url) => fetchReply(url),
+    async cloudflareApi(request) {
+      if (
+        request.path !== `/accounts/${ACCOUNT}/containers/dash/applications`
+      ) {
+        throw new Error(`unexpected Cloudflare API path ${request.path}`);
+      }
+      const line = "bunx wrangler containers list --json";
+      const reply = replies.find(([pattern]) => pattern.test(line))?.[1];
+      const stdout = reply?.stdout ?? containerListJson();
+      return cloudflareEnvelope(containerApiRowsFromCliJson(stdout), {});
+    },
   };
 }
 
@@ -794,6 +1038,416 @@ async function privateFirstInstallInputs(): Promise<{
   return { root, secretDirectory, tokenFile, values };
 }
 
+async function publishedReleaseFixture(commit: string = HEAD): Promise<{
+  root: string;
+  archive: Uint8Array;
+  descriptorPath: string;
+  descriptorDigest: string;
+  archiveDigest: string;
+  publicAgentImage: string;
+}> {
+  const root = await mkdtemp(join(tmpdir(), "takos-owner-release-"));
+  const packageRoot = join(root, "package");
+  await mkdir(join(packageRoot, "worker"), { recursive: true });
+  await mkdir(join(packageRoot, "assets"), { recursive: true });
+  await writeFile(join(packageRoot, "worker/index.js"), "export default {};\n");
+  await writeFile(join(packageRoot, "assets/index.html"), "<!doctype html>\n");
+  await writeFile(join(packageRoot, "asset-manifest.json"), "{}\n");
+  const archivePath = join(root, "takos-worker-release.tar.gz");
+  const tar = Bun.spawn(
+    ["tar", "-czf", archivePath, "-C", packageRoot, "."],
+    { stdout: "ignore", stderr: "pipe" },
+  );
+  expect(await tar.exited).toBe(0);
+  const archive = new Uint8Array(await readFile(archivePath));
+  const digest = createHash("sha256").update(archive).digest("hex");
+  const publicAgentImage =
+    `ghcr.io/tako0614/takos-agent@sha256:${"b".repeat(64)}`;
+  const descriptor = {
+    kind: "takos.worker-artifact@v3",
+    app: "takos",
+    commit,
+    ref: "v0.12.7",
+    workflowRun: null,
+    releaseTag: "v0.12.7",
+    artifact: {
+      filename: "takos-worker-release.tar.gz",
+      url: "https://github.com/tako0614/takos/releases/download/v0.12.7/takos-worker-release.tar.gz",
+      sha256: digest,
+      sha256Prefixed: `sha256:${digest}`,
+      size: archive.byteLength,
+      contentType: "application/gzip",
+    },
+    assetManifest: "asset-manifest.json",
+    containerImages: {
+      executor: IMAGE,
+      publicAgent: publicAgentImage,
+    },
+    manifestUrl:
+      "https://github.com/tako0614/takos/releases/download/v0.12.7/takos-artifact.json",
+  };
+  const descriptorPath = join(root, "takos-artifact.json");
+  const descriptorBytes = `${JSON.stringify(descriptor, null, 2)}\n`;
+  await writeFile(descriptorPath, descriptorBytes);
+  return {
+    root,
+    archive,
+    descriptorPath,
+    descriptorDigest: `sha256:${createHash("sha256").update(descriptorBytes).digest("hex")}`,
+    archiveDigest: `sha256:${digest}`,
+    publicAgentImage,
+  };
+}
+
+async function replacePublishedArchive(
+  release: Awaited<ReturnType<typeof publishedReleaseFixture>>,
+  archivePath: string,
+): Promise<Awaited<ReturnType<typeof publishedReleaseFixture>>> {
+  const archive = new Uint8Array(await readFile(archivePath));
+  const digest = createHash("sha256").update(archive).digest("hex");
+  const descriptor = JSON.parse(
+    await readFile(release.descriptorPath, "utf8"),
+  ) as {
+    artifact: { sha256: string; sha256Prefixed: string; size: number };
+  };
+  descriptor.artifact.sha256 = digest;
+  descriptor.artifact.sha256Prefixed = `sha256:${digest}`;
+  descriptor.artifact.size = archive.byteLength;
+  const descriptorBytes = `${JSON.stringify(descriptor, null, 2)}\n`;
+  await writeFile(release.descriptorPath, descriptorBytes);
+  return {
+    ...release,
+    archive,
+    archiveDigest: `sha256:${digest}`,
+    descriptorDigest:
+      `sha256:${createHash("sha256").update(descriptorBytes).digest("hex")}`,
+  };
+}
+
+function oversizedTarEntryArchive(): Uint8Array {
+  const tar = Buffer.alloc(1024);
+  tar.write("oversized", 0, "ascii");
+  tar.write("0000600\0", 100, "ascii");
+  tar.write("0000000\0", 108, "ascii");
+  tar.write("0000000\0", 116, "ascii");
+  tar.write(`${(256 * 1024 * 1024 + 1).toString(8).padStart(11, "0")}\0`, 124, "ascii");
+  tar.write("00000000000\0", 136, "ascii");
+  tar.fill(0x20, 148, 156);
+  tar[156] = 0x30;
+  const checksum = tar.subarray(0, 512).reduce((sum, byte) => sum + byte, 0);
+  tar.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148, "ascii");
+  return new Uint8Array(gzipSync(tar));
+}
+
+async function releaseCustodyPaths(request: CommandRequest): Promise<{
+  config: string;
+  entrypoint: string;
+  assets: string;
+}> {
+  const configIndex = request.args.indexOf("--config");
+  const config = request.args[configIndex + 1];
+  if (!config) throw new Error("release command omitted --config");
+  const text = await readFile(config, "utf8");
+  const value = (name: "main" | "directory"): string => {
+    const encoded = new RegExp(`^${name} = (".*")$`, "mu").exec(text)?.[1];
+    if (!encoded) throw new Error(`realized config omitted ${name}`);
+    return JSON.parse(encoded) as string;
+  };
+  return { config, entrypoint: value("main"), assets: value("directory") };
+}
+
+function releaseOwnerArgs(input: {
+  phase: "--release-apply" | "--release-status";
+  outputsPath: string;
+  outputsJson: string;
+  descriptorPath: string;
+  tokenFile: string;
+  expectedServedVersion?: string;
+}): string[] {
+  return [
+    input.phase,
+    "--environment",
+    "integration",
+    "--product-environment",
+    "staging",
+    "--outputs-file",
+    input.outputsPath,
+    "--output-digest",
+    `sha256:${createHash("sha256").update(input.outputsJson).digest("hex")}`,
+    "--source-commit",
+    HEAD,
+    "--operation-id",
+    input.phase === "--release-apply"
+      ? "first-install-release-apply-1"
+      : "first-install-release-status-1",
+    "--release-descriptor-file",
+    input.descriptorPath,
+    "--cloudflare-api-token-file",
+    input.tokenFile,
+    ...(input.phase === "--release-apply"
+      ? ["--execute"]
+      : ["--expected-served-version", input.expectedServedVersion ?? NEXT]),
+  ];
+}
+
+async function releaseOwnerScratch(outputsJson: string = outputs()): Promise<{
+  root: string;
+  outputsPath: string;
+  outputsJson: string;
+}> {
+  const { root, outputsPath } = await scratch();
+  await writeFile(outputsPath, outputsJson);
+  const deployDirectory = join(root, "deploy/cloudflare");
+  await mkdir(deployDirectory, { recursive: true });
+  await writeFile(
+    join(deployDirectory, "wrangler.toml"),
+    await readFile(join(repositoryRoot, "deploy/cloudflare/wrangler.toml"), "utf8"),
+  );
+  return { root, outputsPath, outputsJson };
+}
+
+function releaseStatusReplies(input: {
+  served?: string;
+  deployment?: string;
+  detail?: string;
+  secrets?: readonly string[];
+  vectorDimensions?: number;
+  vectorMetric?: string;
+  containers?: string;
+  containerInfo?: (index: number) => string;
+} = {}): readonly (readonly [RegExp, Reply])[] {
+  const served = input.served ?? NEXT;
+  return [
+    [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+    [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+    [/^git status --porcelain/u, { stdout: "" }],
+    [
+      /wrangler deployments status/u,
+      { stdout: input.deployment ?? deploymentJson(served) },
+    ],
+    [
+      /wrangler versions view/u,
+      { stdout: input.detail ?? versionJson(served) },
+    ],
+    [
+      /wrangler secret list/u,
+      { stdout: secretListJson(input.secrets ?? RUNTIME_SECRET_BINDING_NAMES) },
+    ],
+    [
+      /wrangler vectorize get/u,
+      {
+        stdout: JSON.stringify({
+          name: "takos-live-embeddings",
+          config: {
+            dimensions: input.vectorDimensions ?? 768,
+            metric: input.vectorMetric ?? "cosine",
+          },
+        }),
+      },
+    ],
+    [
+      /wrangler containers list/u,
+      { stdout: input.containers ?? containerListJson() },
+    ],
+    ...CONTAINER_CLASSES.map((_, index) => [
+      new RegExp(
+        `wrangler containers info 00000000-0000-4000-8000-00000000000${index}`,
+        "u",
+      ),
+      { stdout: input.containerInfo?.(index) ?? containerInfoJson(index) },
+    ] as const),
+  ];
+}
+
+function lostAcknowledgementReleaseRuntime(
+  archive: Uint8Array,
+  lands: boolean,
+  uploadAcknowledged = false,
+  readbackFails = false,
+  scenario:
+    | "ordinary"
+    | "concurrent-current"
+    | "duplicate-attempt"
+    | "missing-tag"
+    | "multiple-ack" =
+    "ordinary",
+  beforeReply?: (request: CommandRequest) => Promise<void>,
+): SurfaceRuntime & {
+  calls: CommandRequest[];
+  apiCalls: CloudflareApiRequest[];
+} {
+  let uploaded = false;
+  let attemptTag: string | undefined;
+  let attemptMessage: string | undefined;
+  const calls: CommandRequest[] = [];
+  const apiCalls: CloudflareApiRequest[] = [];
+  return {
+    calls,
+    apiCalls,
+    releaseLeaseRoot: join(
+      tmpdir(),
+      `takos-first-install-release-lease-test-${randomUUID()}`,
+    ),
+    assertPhysicalGitTree: async () => {},
+    async run(request) {
+      calls.push(request);
+      await beforeReply?.(request);
+      const line = `${request.command} ${request.args.join(" ")}`;
+      if (line === "git rev-parse HEAD") {
+        return { exitCode: 0, stdout: `${HEAD}\n`, stderr: "" };
+      }
+      if (line === "git rev-parse --abbrev-ref HEAD") {
+        return { exitCode: 0, stdout: "detached\n", stderr: "" };
+      }
+      if (line.startsWith("git status --porcelain")) {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+      if (request.command === "tar") {
+        const child = Bun.spawn([request.command, ...request.args], {
+          stdout: "ignore",
+          stderr: "pipe",
+        });
+        return {
+          exitCode: await child.exited,
+          stdout: "",
+          stderr: await new Response(child.stderr).text(),
+        };
+      }
+      if (/wrangler secret list/u.test(line)) {
+        return { exitCode: 0, stdout: secretListJson(), stderr: "" };
+      }
+      if (/wrangler vectorize get/u.test(line)) {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            name: "takos-live-embeddings",
+            config: { dimensions: 768, metric: "cosine" },
+          }),
+          stderr: "",
+        };
+      }
+      if (/wrangler deployments status/u.test(line)) {
+        if (uploaded && readbackFails) {
+          return {
+            exitCode: 1,
+            stdout: "",
+            stderr: "provider readback failed private-cloudflare-token",
+          };
+        }
+        return {
+          exitCode: 0,
+          stdout: deploymentJson(
+            uploaded && scenario === "concurrent-current"
+              ? CONCURRENT
+              : uploaded
+                ? NEXT
+                : SERVED,
+          ),
+          stderr: "",
+        };
+      }
+      if (/wrangler versions list/u.test(line)) {
+        const tagged = uploaded && attemptTag && attemptMessage
+          ? [{ id: NEXT, tag: attemptTag, message: attemptMessage }]
+          : [];
+        return {
+          exitCode: 0,
+          stdout: versionListJson(
+            scenario === "duplicate-attempt" && tagged.length === 1
+              ? [...tagged, { ...tagged[0]!, id: CONCURRENT }]
+              : tagged,
+          ),
+          stderr: "",
+        };
+      }
+      if (/wrangler versions view/u.test(line)) {
+        const version = line.includes(NEXT)
+          ? NEXT
+          : line.includes(CONCURRENT)
+            ? CONCURRENT
+            : SERVED;
+        return {
+          exitCode: 0,
+          stdout: versionJson(
+            version,
+            version === NEXT && scenario !== "missing-tag"
+              ? { tag: attemptTag, message: attemptMessage }
+              : {},
+          ),
+          stderr: "",
+        };
+      }
+      if (/wrangler containers list/u.test(line)) {
+        return { exitCode: 0, stdout: containerListJson(), stderr: "" };
+      }
+      if (/wrangler containers info/u.test(line)) {
+        const index = CONTAINER_CLASSES.findIndex((_, candidate) =>
+          line.includes(`00000000-0000-4000-8000-00000000000${candidate}`)
+        );
+        return {
+          exitCode: index < 0 ? 1 : 0,
+          stdout: index < 0 ? "" : containerInfoJson(index),
+          stderr: index < 0 ? "unknown container" : "",
+        };
+      }
+      if (/wrangler deploy/u.test(line) && request.args.includes("--dry-run")) {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+      if (/wrangler deploy/u.test(line)) {
+        const tagIndex = request.args.indexOf("--tag");
+        const messageIndex = request.args.indexOf("--message");
+        attemptTag = request.args[tagIndex + 1];
+        attemptMessage = request.args[messageIndex + 1];
+        uploaded = lands;
+        if (uploadAcknowledged) {
+          return {
+            exitCode: 0,
+            stdout: scenario === "multiple-ack"
+              ? `Uploaded takos-live\nVersion ID: ${CONCURRENT}\nCurrent Version ID: ${NEXT}\n`
+              : `Uploaded takos-live\nCurrent Version ID: ${NEXT}\n`,
+            stderr: "",
+          };
+        }
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: "provider lost acknowledgement private-cloudflare-token",
+        };
+      }
+      return { exitCode: 127, stdout: "", stderr: `unexpected command ${line}` };
+    },
+    async fetch(url) {
+      if (url.includes("takos-worker-release.tar.gz")) {
+        return new Response(responseBytes(archive), { status: 200 });
+      }
+      return new Response("ok", { status: 200 });
+    },
+    async cloudflareApi(request) {
+      apiCalls.push(request);
+      if (
+        request.path ===
+          `/accounts/${ACCOUNT}/workers/scripts/takos-live/versions`
+      ) {
+        const tagged = uploaded && attemptTag && attemptMessage
+          ? [{ id: NEXT, tag: attemptTag, message: attemptMessage }]
+          : [];
+        return versionApiPage(
+          scenario === "duplicate-attempt" && tagged.length === 1
+            ? [...tagged, { ...tagged[0]!, id: CONCURRENT }]
+            : tagged,
+          Number(request.query?.page ?? "0"),
+        );
+      }
+      if (
+        request.path === `/accounts/${ACCOUNT}/containers/dash/applications`
+      ) {
+        return cloudflareEnvelope(containerApiRows(), {});
+      }
+      throw new Error(`unexpected Cloudflare API path ${request.path}`);
+    },
+  };
+}
+
 function firstInstallArgs(
   phase: "--runtime-secrets-install" | "--absence-proof",
   privateInputs: { secretDirectory: string; tokenFile: string },
@@ -816,27 +1470,1887 @@ function firstInstallArgs(
   ];
 }
 
-test("first-install owner contract exports exact operations, result kinds, and fixed usage", () => {
+test("first-install owner contract exports the exact five operations, result kinds, and fixed usage", () => {
   expect(TAKOS_FIRST_INSTALL_OWNER_CONTRACT).toEqual({
-    kind: "takos.first-install-owner-contract@v1",
+    kind: OWNER_CONTRACT_V2,
     deployContractKind: "takos.deploy-contract@v2",
     deploySurface: "takos-cloudflare-production",
+    deployTarget: "cloudflare-worker:takos",
+    productEnvironment: "staging",
+    releaseEvidence: RELEASE_EVIDENCE_V2,
     operations: [
       "runtime-secrets-install",
+      "release-apply",
+      "release-status",
       "functional-proof",
       "absence-proof",
     ],
     resultKinds: {
       runtimeSecretsInstall: "takos.first-install-runtime-secrets@v1",
+      releaseApply: "takos.first-install-release-apply@v2",
+      releaseStatus: "takos.first-install-release-status@v2",
       functionalProof: "takos.first-install-functional-proof@v1",
       absenceProof: "takos.first-install-absence@v1",
     },
     usage: {
       runtimeSecretsInstall: expect.stringContaining("--runtime-secrets-install"),
+      releaseApply: expect.stringContaining("--release-apply"),
+      releaseStatus: expect.stringContaining("--expected-served-version"),
       functionalProof: expect.stringContaining("first-install:functional-proof"),
       absenceProof: expect.stringContaining("--absence-proof"),
     },
   });
+});
+
+test("release owner CLI accepts only the fixed integration to staging contract", () => {
+  const common = [
+    "--environment",
+    "integration",
+    "--product-environment",
+    "staging",
+    "--outputs-file",
+    "/private/outputs.json",
+    "--output-digest",
+    `sha256:${"2".repeat(64)}`,
+    "--source-commit",
+    HEAD,
+    "--operation-id",
+    "first-install-release-1",
+    "--release-descriptor-file",
+    "/private/takos-artifact.json",
+    "--cloudflare-api-token-file",
+    "/private/cloudflare-token",
+  ] as const;
+
+  expect(
+    parseCloudflareProductionArgs(
+      ["--release-apply", ...common, "--execute"],
+      repositoryRoot,
+    ),
+  ).toMatchObject({
+    phase: "release-apply",
+    environment: "integration",
+    productEnvironment: "staging",
+    outputs: "/private/outputs.json",
+    release: "/private/takos-artifact.json",
+    sourceCommit: HEAD,
+    operationId: "first-install-release-1",
+    cloudflareApiTokenFile: "/private/cloudflare-token",
+    execute: true,
+  });
+  expect(
+    parseCloudflareProductionArgs(
+      [
+        "--release-status",
+        ...common,
+        "--expected-served-version",
+        NEXT,
+      ],
+      repositoryRoot,
+    ),
+  ).toMatchObject({
+    phase: "release-status",
+    expectedServedVersion: NEXT,
+    execute: false,
+  });
+
+  for (const args of [
+    ["--release-apply", ...common],
+    ["--release-status", ...common, "--expected-served-version", NEXT, "--execute"],
+    ["--release-status", ...common],
+    ["--release-apply", ...common, "--expected-served-version", NEXT, "--execute"],
+    [
+      "--release-apply",
+      ...common,
+      "--outputs",
+      "/private/other-outputs.json",
+      "--execute",
+    ],
+    ["--release-apply", ...common, "--container-image", IMAGE, "--execute"],
+    ["--release-apply", ...common, "--commit", HEAD, "--execute"],
+    [
+      "--release-apply",
+      ...common.map((value) => value === "staging" ? "production" : value),
+      "--execute",
+    ],
+    [
+      "--release-apply",
+      ...common.map((value) => value === "integration" ? "production" : value),
+      "--execute",
+    ],
+  ]) {
+    expect(() => parseCloudflareProductionArgs(args, repositoryRoot)).toThrow();
+  }
+});
+
+test("release-apply deploys the verified release overlay and returns only bounded owner evidence", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  let uploaded = false;
+  let physicalProofs = 0;
+  let attemptTag: string | undefined;
+  let attemptMessage: string | undefined;
+  let uploadedConfig: string | undefined;
+  let uploadedConfigText: string | undefined;
+  const calls: CommandRequest[] = [];
+  const runtime: SurfaceRuntime = {
+    releaseLeaseRoot: join(scratch.root, "release-leases"),
+    assertPhysicalGitTree: async (input) => {
+      physicalProofs += 1;
+      expect(input).toEqual({
+        root: scratch.root,
+        commit: HEAD,
+        subject: "first-install release checkout",
+      });
+    },
+    async run(request) {
+      calls.push(request);
+      const line = `${request.command} ${request.args.join(" ")}`;
+      if (line === "git rev-parse HEAD") {
+        return { exitCode: 0, stdout: `${HEAD}\n`, stderr: "" };
+      }
+      if (line === "git rev-parse --abbrev-ref HEAD") {
+        return { exitCode: 0, stdout: "detached\n", stderr: "" };
+      }
+      if (line === "git status --porcelain=v1 --untracked-files=all") {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+      if (request.command === "tar") {
+        const child = Bun.spawn([request.command, ...request.args], {
+          stdout: "ignore",
+          stderr: "pipe",
+        });
+        return {
+          exitCode: await child.exited,
+          stdout: "",
+          stderr: await new Response(child.stderr).text(),
+        };
+      }
+      if (/wrangler secret list/u.test(line)) {
+        return { exitCode: 0, stdout: secretListJson(), stderr: "" };
+      }
+      if (/wrangler vectorize get/u.test(line)) {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            name: "takos-live-embeddings",
+            config: { dimensions: 768, metric: "cosine" },
+          }),
+          stderr: "",
+        };
+      }
+      if (/wrangler deployments status/u.test(line)) {
+        return {
+          exitCode: 0,
+          stdout: deploymentJson(uploaded ? NEXT : SERVED),
+          stderr: "",
+        };
+      }
+      if (/wrangler versions list/u.test(line)) {
+        return {
+          exitCode: 0,
+          stdout: versionListJson(
+            uploaded && attemptTag && attemptMessage
+              ? [{ id: NEXT, tag: attemptTag, message: attemptMessage }]
+              : [],
+          ),
+          stderr: "",
+        };
+      }
+      if (/wrangler versions view/u.test(line)) {
+        const version = line.includes(NEXT) ? NEXT : SERVED;
+        return {
+          exitCode: 0,
+          stdout: versionJson(
+            version,
+            version === NEXT
+              ? { tag: attemptTag, message: attemptMessage }
+              : {},
+          ),
+          stderr: "",
+        };
+      }
+      if (/wrangler containers list/u.test(line)) {
+        return { exitCode: 0, stdout: containerListJson(), stderr: "" };
+      }
+      if (/wrangler containers info/u.test(line)) {
+        const index = CONTAINER_CLASSES.findIndex((_, candidate) =>
+          line.includes(`00000000-0000-4000-8000-00000000000${candidate}`)
+        );
+        return {
+          exitCode: index < 0 ? 1 : 0,
+          stdout: index < 0 ? "" : containerInfoJson(index),
+          stderr: index < 0 ? "unknown container" : "",
+        };
+      }
+      if (/wrangler deploy/u.test(line) && request.args.includes("--dry-run")) {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+      if (/wrangler deploy/u.test(line)) {
+        const custody = await releaseCustodyPaths(request);
+        uploadedConfig = custody.config;
+        uploadedConfigText = await readFile(custody.config, "utf8");
+        const tagIndex = request.args.indexOf("--tag");
+        const messageIndex = request.args.indexOf("--message");
+        attemptTag = request.args[tagIndex + 1];
+        attemptMessage = request.args[messageIndex + 1];
+        uploaded = true;
+        return {
+          exitCode: 0,
+          stdout: `Uploaded takos-live\nCurrent Version ID: ${NEXT}\n`,
+          stderr: "",
+        };
+      }
+      return { exitCode: 127, stdout: "", stderr: `unexpected command ${line}` };
+    },
+    async fetch(url) {
+      if (url.includes("takos-worker-release.tar.gz")) {
+        return new Response(responseBytes(release.archive), { status: 200 });
+      }
+      return new Response("ok", { status: 200 });
+    },
+    async cloudflareApi(request) {
+      if (
+        request.path ===
+          `/accounts/${ACCOUNT}/workers/scripts/takos-live/versions`
+      ) {
+        return versionApiPage(
+          uploaded && attemptTag && attemptMessage
+            ? [{ id: NEXT, tag: attemptTag, message: attemptMessage }]
+            : [],
+          Number(request.query?.page ?? "0"),
+        );
+      }
+      if (
+        request.path === `/accounts/${ACCOUNT}/containers/dash/applications`
+      ) {
+        return cloudflareEnvelope(containerApiRows(), {});
+      }
+      throw new Error(`unexpected Cloudflare API path ${request.path}`);
+    },
+  };
+
+  try {
+    const { report, issued } = await runCloudflareProductionRecorded(
+      parseCloudflareProductionArgs(
+        releaseOwnerArgs({
+          phase: "--release-apply",
+          outputsPath: scratch.outputsPath,
+          outputsJson: scratch.outputsJson,
+          descriptorPath: release.descriptorPath,
+          tokenFile: custody.tokenFile,
+        }),
+        scratch.root,
+      ),
+      runtime,
+    );
+
+    expect(report).toEqual({
+      ownerContract: OWNER_CONTRACT_V2,
+      kind: "takos.first-install-release-apply@v2",
+      status: "applied",
+      operationId: "first-install-release-apply-1",
+      orchestrationLane: "integration",
+      productEnvironment: "staging",
+      sourceCommit: HEAD,
+      outputDigest: `sha256:${createHash("sha256").update(scratch.outputsJson).digest("hex")}`,
+      release: {
+        tag: "v0.12.7",
+        descriptor: {
+          kind: "takos.worker-artifact@v3",
+          digest: release.descriptorDigest,
+        },
+        archiveDigest: release.archiveDigest,
+        executorImage: IMAGE,
+        publicAgentImage: release.publicAgentImage,
+      },
+      target: {
+        accountId: ACCOUNT,
+        workerName: "takos-live",
+        publicUrl: "https://app.example.test",
+      },
+      bootstrap: { moduleVersion: SERVED },
+      activated: { servedVersion: NEXT },
+      attempt: {
+        tag: attemptTag,
+        message: attemptMessage,
+        versionId: NEXT,
+      },
+      completeness: COMPLETE_APPLY_EVIDENCE,
+      health: { path: "/health", status: 200 },
+      appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
+    });
+    const mutations = issued.filter(mutatesTarget);
+    expect(mutations).toHaveLength(1);
+    expect(physicalProofs).toBe(1);
+    expect(mutations[0]?.args).toContain("--no-bundle");
+    expect(mutations[0]?.args).toContain("--strict");
+    expect(mutations[0]?.args).toContain("--containers-rollout");
+    expect(mutations[0]?.args).toContain("immediate");
+    const attemptDigest = createHash("sha256").update(JSON.stringify({
+      kind: "takos.first-install-release-attempt@v2",
+      accountId: ACCOUNT,
+      workerName: "takos-live",
+      sourceCommit: HEAD,
+      outputDigest:
+        `sha256:${createHash("sha256").update(scratch.outputsJson).digest("hex")}`,
+      operationId: "first-install-release-apply-1",
+      releaseDescriptorDigest: release.descriptorDigest,
+    })).digest("hex");
+    expect(attemptTag).toBe(`takos-first-install-${attemptDigest}`);
+    expect(attemptMessage).toBe(
+      `takos.first-install-release-apply@v2:${attemptDigest}`,
+    );
+    expect(uploadedConfig).toStartWith(join(tmpdir(), "takos-production-release-"));
+    expect(uploadedConfig?.startsWith(scratch.root)).toBe(false);
+    const uploadedEntrypoint = /^main = (".*")$/mu.exec(uploadedConfigText ?? "")?.[1];
+    const uploadedAssets = /^directory = (".*")$/mu.exec(uploadedConfigText ?? "")?.[1];
+    expect(uploadedEntrypoint && JSON.parse(uploadedEntrypoint)).toStartWith(
+      dirname(uploadedConfig!),
+    );
+    expect(uploadedAssets && JSON.parse(uploadedAssets)).toStartWith(
+      dirname(uploadedConfig!),
+    );
+    expect(calls.some((request) => request.command === "bun")).toBe(false);
+    for (const request of calls.filter((request) => request.command === "bunx")) {
+      expect(request.cloudflareApiTokenFile).toBe(custody.tokenFile);
+      expect(request.cloudflareAccountId).toBe(ACCOUNT);
+      expect(request.args).not.toContain("private-cloudflare-token");
+    }
+    expect(JSON.stringify(report)).not.toContain("private-cloudflare-token");
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-status accepts only the expected release overlay through structured readback", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const runtime = stubRuntime(
+    [
+      [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+      [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+      [/^git status --porcelain/u, { stdout: "" }],
+      [/wrangler deployments status/u, { stdout: deploymentJson(NEXT) }],
+      [/wrangler versions view/u, { stdout: versionJson(NEXT) }],
+      [/wrangler secret list/u, { stdout: secretListJson() }],
+      [
+        /wrangler vectorize get/u,
+        {
+          stdout: JSON.stringify({
+            name: "takos-live-embeddings",
+            config: { dimensions: 768, metric: "cosine" },
+          }),
+        },
+      ],
+      [/wrangler containers list/u, { stdout: containerListJson() }],
+      ...CONTAINER_CLASSES.map((_, index) => [
+        new RegExp(
+          `wrangler containers info 00000000-0000-4000-8000-00000000000${index}`,
+          "u",
+        ),
+        { stdout: containerInfoJson(index) },
+      ] as const),
+    ],
+    async () => new Response("ok", { status: 200 }),
+  );
+
+  try {
+    const { report, issued } = await runCloudflareProductionRecorded(
+      parseCloudflareProductionArgs(
+        releaseOwnerArgs({
+          phase: "--release-status",
+          outputsPath: scratch.outputsPath,
+          outputsJson: scratch.outputsJson,
+          descriptorPath: release.descriptorPath,
+          tokenFile: custody.tokenFile,
+          expectedServedVersion: NEXT,
+        }),
+        scratch.root,
+      ),
+      runtime,
+    );
+
+    expect(report).toEqual({
+      ownerContract: OWNER_CONTRACT_V2,
+      kind: "takos.first-install-release-status@v2",
+      status: "active",
+      operationId: "first-install-release-status-1",
+      orchestrationLane: "integration",
+      productEnvironment: "staging",
+      sourceCommit: HEAD,
+      outputDigest: `sha256:${createHash("sha256").update(scratch.outputsJson).digest("hex")}`,
+      release: {
+        tag: "v0.12.7",
+        descriptor: {
+          kind: "takos.worker-artifact@v3",
+          digest: release.descriptorDigest,
+        },
+        archiveDigest: release.archiveDigest,
+        executorImage: IMAGE,
+        publicAgentImage: release.publicAgentImage,
+      },
+      target: {
+        accountId: ACCOUNT,
+        workerName: "takos-live",
+        publicUrl: "https://app.example.test",
+      },
+      bootstrap: { moduleVersion: SERVED },
+      activated: { servedVersion: NEXT },
+      runtimeSecrets: {
+        provisioned: true,
+        present: [...REQUIRED_RUNTIME_SECRET_NAMES],
+        missing: [],
+      },
+      completeness: {
+        containerApplications: COMPLETE_CONTAINER_EVIDENCE,
+      },
+      health: { path: "/health", status: 200 },
+      unrelatedDrift: [],
+      checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
+    });
+    expect(issued.length).toBeGreaterThan(0);
+    for (const request of issued) expect(mutatesTarget(request)).toBe(false);
+    for (const request of runtime.calls.filter((request) => request.command === "bunx")) {
+      expect(request.cloudflareApiTokenFile).toBe(custody.tokenFile);
+      expect(request.cloudflareAccountId).toBe(ACCOUNT);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply resolves one lost acknowledgement by readback and never retries the upload", async () => {
+  for (const lands of [true, false]) {
+    const custody = await privateFirstInstallInputs();
+    const release = await publishedReleaseFixture();
+    const scratch = await releaseOwnerScratch();
+    const runtime = lostAcknowledgementReleaseRuntime(release.archive, lands);
+    try {
+      const run = runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+      if (lands) {
+        const { report } = await run;
+        expect(report).toMatchObject({
+          kind: "takos.first-install-release-apply@v2",
+          status: "applied",
+          activated: { servedVersion: NEXT },
+        });
+        expect(JSON.stringify(report)).not.toContain("private-cloudflare-token");
+      } else {
+        let error: unknown;
+        try {
+          await run;
+        } catch (caught) {
+          error = caught;
+        }
+        expect(error).toMatchObject({
+          stage: "indeterminate",
+          exitCode: 3,
+        });
+        expect(error instanceof Error ? error.message : String(error)).not.toContain(
+          "private-cloudflare-token",
+        );
+      }
+      expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+    } finally {
+      await rm(custody.root, { recursive: true, force: true });
+      await rm(release.root, { recursive: true, force: true });
+      await rm(scratch.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("release-apply resolves a lost acknowledgement through every Worker-version page", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const base = lostAcknowledgementReleaseRuntime(release.archive, true);
+  const originalRun = base.run.bind(base);
+  const baseline = unrelatedVersionRows(1_050);
+  let versionApiCalls = 0;
+  const runtime: SurfaceRuntime = {
+    ...base,
+    async run(request) {
+      const line = `${request.command} ${request.args.join(" ")}`;
+      if (/wrangler versions list/u.test(line)) {
+        base.calls.push(request);
+        return { exitCode: 0, stdout: versionListJson([]), stderr: "" };
+      }
+      return await originalRun(request);
+    },
+    async cloudflareApi(request) {
+      expect(request.cloudflareApiTokenFile).toBe(custody.tokenFile);
+      if (
+        request.path ===
+          `/accounts/${ACCOUNT}/workers/scripts/takos-live/versions`
+      ) {
+        versionApiCalls += 1;
+        const upload = base.calls.find(mutatesTarget);
+        const tag = upload?.args[upload.args.indexOf("--tag") + 1];
+        const message = upload?.args[upload.args.indexOf("--message") + 1];
+        const rows = upload && tag && message
+          ? [...baseline, { id: NEXT, tag, message }]
+          : baseline;
+        return versionApiPage(rows, Number(request.query?.page ?? "0"));
+      }
+      if (
+        request.path === `/accounts/${ACCOUNT}/containers/dash/applications`
+      ) {
+        return cloudflareEnvelope(containerApiRows(), {});
+      }
+      throw new Error(`unexpected Cloudflare API path ${request.path}`);
+    },
+  };
+  try {
+    const { report } = await runCloudflareProductionRecorded(
+      parseCloudflareProductionArgs(
+        releaseOwnerArgs({
+          phase: "--release-apply",
+          outputsPath: scratch.outputsPath,
+          outputsJson: scratch.outputsJson,
+          descriptorPath: release.descriptorPath,
+          tokenFile: custody.tokenFile,
+        }),
+        scratch.root,
+      ),
+      runtime,
+    );
+    expect(report).toMatchObject({
+      status: "applied",
+      activated: { servedVersion: NEXT },
+    });
+    expect(versionApiCalls).toBeGreaterThan(40);
+    expect(base.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply holds one target-and-operation lease across absence, upload, and readback", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const leaseRoot = join(scratch.root, "shared-release-leases");
+  const firstBase = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+  );
+  const secondBase = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+  );
+  const originalFirstApi = firstBase.cloudflareApi!;
+  let enteredResolve: (() => void) | undefined;
+  let unblockResolve: (() => void) | undefined;
+  const entered = new Promise<void>((resolve) => {
+    enteredResolve = resolve;
+  });
+  const blocked = new Promise<void>((resolve) => {
+    unblockResolve = resolve;
+  });
+  let held = false;
+  const first: SurfaceRuntime = {
+    ...firstBase,
+    releaseLeaseRoot: leaseRoot,
+    async cloudflareApi(request) {
+      if (
+        !held &&
+        request.path.endsWith("/workers/scripts/takos-live/versions")
+      ) {
+        held = true;
+        enteredResolve?.();
+        await blocked;
+      }
+      return await originalFirstApi(request);
+    },
+  };
+  const second: SurfaceRuntime = {
+    ...secondBase,
+    releaseLeaseRoot: leaseRoot,
+  };
+  const parsed = parseCloudflareProductionArgs(
+    releaseOwnerArgs({
+      phase: "--release-apply",
+      outputsPath: scratch.outputsPath,
+      outputsJson: scratch.outputsJson,
+      descriptorPath: release.descriptorPath,
+      tokenFile: custody.tokenFile,
+    }),
+    scratch.root,
+  );
+  try {
+    const firstRun = runCloudflareProductionRecorded(parsed, first);
+    await entered;
+    let secondError: unknown;
+    try {
+      await runCloudflareProductionRecorded(parsed, second);
+    } catch (caught) {
+      secondError = caught;
+    }
+    expect(secondError).toMatchObject({ stage: "refused", exitCode: 2 });
+    expect(secondError instanceof Error ? secondError.message : String(secondError)).toMatch(
+      /local first-install release lease/u,
+    );
+    expect(secondBase.calls.filter(mutatesTarget)).toHaveLength(0);
+    expect(secondBase.apiCalls).toHaveLength(0);
+
+    unblockResolve?.();
+    const { report } = await firstRun;
+    expect(report).toMatchObject({
+      status: "applied",
+      activated: { servedVersion: NEXT },
+    });
+    expect(firstBase.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    unblockResolve?.();
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply never steals a stale or foreign target-and-operation lease", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const leaseRoot = join(scratch.root, "release-leases");
+  const scopeDigest = createHash("sha256").update(JSON.stringify({
+    kind: "takos.first-install-release-lease@v1",
+    accountId: ACCOUNT,
+    workerName: "takos-live",
+    operationId: "first-install-release-apply-1",
+  })).digest("hex");
+  const leasePath = join(leaseRoot, scopeDigest);
+  try {
+    await mkdir(leaseRoot, { mode: 0o700 });
+    for (const record of [
+      {
+        kind: "takos.first-install-release-lease@v1",
+        scopeDigest,
+        processId: 999_999,
+        acquiredAt: "2000-01-01T00:00:00.000Z",
+      },
+      {
+        kind: "foreign.release-lease@v9",
+        scopeDigest: "0".repeat(64),
+      },
+    ]) {
+      await mkdir(leasePath, { mode: 0o700 });
+      await writeFile(
+        join(leasePath, "lease.json"),
+        `${JSON.stringify(record)}\n`,
+        { mode: 0o600 },
+      );
+      const base = lostAcknowledgementReleaseRuntime(
+        release.archive,
+        true,
+        true,
+      );
+      const runtime: SurfaceRuntime = { ...base, releaseLeaseRoot: leaseRoot };
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+      expect(base.calls.filter(mutatesTarget)).toHaveLength(0);
+      expect(base.apiCalls).toHaveLength(0);
+      expect(await readFile(join(leasePath, "lease.json"), "utf8")).toBe(
+        `${JSON.stringify(record)}\n`,
+      );
+      await rm(leasePath, { recursive: true });
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply refuses duplicate or changing Worker-version pages before upload", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  try {
+    for (const scenario of ["duplicate-across-pages", "changing-pages"] as const) {
+      const base = lostAcknowledgementReleaseRuntime(
+        release.archive,
+        true,
+        true,
+      );
+      const originalApi = base.cloudflareApi!;
+      let versionCalls = 0;
+      const uniqueRows = unrelatedVersionRows(150);
+      const duplicateRows = [...unrelatedVersionRows(101)];
+      duplicateRows[100] = duplicateRows[0]!;
+      const runtime: SurfaceRuntime = {
+        ...base,
+        async cloudflareApi(request) {
+          if (!request.path.endsWith("/workers/scripts/takos-live/versions")) {
+            return await originalApi(request);
+          }
+          versionCalls += 1;
+          const page = Number(request.query?.page ?? "0");
+          if (scenario === "duplicate-across-pages") {
+            return versionApiPage(duplicateRows, page);
+          }
+          return versionApiPage(
+            page === 1
+              ? uniqueRows
+              : [...uniqueRows, {
+                  id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                }],
+            page,
+          );
+        },
+      };
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+      expect(versionCalls).toBe(2);
+      expect(base.calls.filter(mutatesTarget)).toHaveLength(0);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply treats more than ten concurrent post-upload versions as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const base = lostAcknowledgementReleaseRuntime(release.archive, true);
+  const originalApi = base.cloudflareApi!;
+  const baseline = unrelatedVersionRows(1_050);
+  const concurrent = Array.from({ length: 11 }, (_, index) => ({
+    id: `cccccccc-cccc-4ccc-8ccc-${(index + 1).toString(16).padStart(12, "0")}`,
+  }));
+  let versionCalls = 0;
+  const runtime: SurfaceRuntime = {
+    ...base,
+    async cloudflareApi(request) {
+      if (!request.path.endsWith("/workers/scripts/takos-live/versions")) {
+        return await originalApi(request);
+      }
+      versionCalls += 1;
+      const upload = base.calls.find(mutatesTarget);
+      const tag = upload?.args[upload.args.indexOf("--tag") + 1];
+      const message = upload?.args[upload.args.indexOf("--message") + 1];
+      const rows = upload && tag && message
+        ? [...baseline, { id: NEXT, tag, message }, ...concurrent]
+        : baseline;
+      return versionApiPage(rows, Number(request.query?.page ?? "0"));
+    },
+  };
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(versionCalls).toBeGreaterThan(40);
+    expect(base.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply rejects a duplicate attempt tag even after a normal acknowledgement", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const runtime = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+    false,
+    "duplicate-attempt",
+  );
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+    expect(
+      runtime.apiCalls.filter((request) =>
+        request.path.endsWith("/workers/scripts/takos-live/versions")
+      ),
+    ).toHaveLength(4);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply deterministically refuses a pre-existing attempt tag before upload", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const first = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+  );
+  try {
+    await runCloudflareProductionRecorded(
+      parseCloudflareProductionArgs(
+        releaseOwnerArgs({
+          phase: "--release-apply",
+          outputsPath: scratch.outputsPath,
+          outputsJson: scratch.outputsJson,
+          descriptorPath: release.descriptorPath,
+          tokenFile: custody.tokenFile,
+        }),
+        scratch.root,
+      ),
+      first,
+    );
+    const upload = first.calls.find(mutatesTarget);
+    const tag = upload?.args[upload.args.indexOf("--tag") + 1];
+    const message = upload?.args[upload.args.indexOf("--message") + 1];
+    expect(tag).toMatch(/^takos-first-install-[0-9a-f]{64}$/u);
+    expect(message).toMatch(/^takos\.first-install-release-apply@v2:[0-9a-f]{64}$/u);
+
+    const secondBase = lostAcknowledgementReleaseRuntime(release.archive, false);
+    const second: SurfaceRuntime = {
+      ...secondBase,
+      async cloudflareApi(request) {
+        if (
+          request.path.endsWith("/workers/scripts/takos-live/versions")
+        ) {
+          return versionApiPage(
+            [{ id: NEXT, tag, message }],
+            Number(request.query?.page ?? "0"),
+          );
+        }
+        return await secondBase.cloudflareApi!(request);
+      },
+    };
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        second,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+    expect(secondBase.calls.filter(mutatesTarget)).toHaveLength(0);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply never adopts a concurrent deployment or an ambiguous attempt tag after lost acknowledgement", async () => {
+  for (const scenario of ["concurrent-current", "duplicate-attempt"] as const) {
+    const custody = await privateFirstInstallInputs();
+    const release = await publishedReleaseFixture();
+    const scratch = await releaseOwnerScratch();
+    const runtime = lostAcknowledgementReleaseRuntime(
+      release.archive,
+      true,
+      false,
+      false,
+      scenario,
+    );
+    try {
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+      expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+      expect(
+        runtime.apiCalls.filter((request) =>
+          request.path.endsWith("/workers/scripts/takos-live/versions")
+        ),
+      ).toHaveLength(4);
+      expect(
+        runtime.calls.some((request) =>
+          request.args[0] === "wrangler" &&
+          request.args[1] === "versions" &&
+          request.args[2] === "list"
+        ),
+      ).toBe(false);
+    } finally {
+      await rm(custody.root, { recursive: true, force: true });
+      await rm(release.root, { recursive: true, force: true });
+      await rm(scratch.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("release-apply requires the acknowledged version detail to carry its exact attempt identity", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const runtime = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+    false,
+    "missing-tag",
+  );
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "post-conditions", exitCode: 4 });
+    expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply treats a multi-UUID upload acknowledgement as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const runtime = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+    false,
+    "multiple-ack",
+  );
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply classifies a failed attribution readback after acknowledged upload as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const runtime = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+    true,
+  );
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(error instanceof Error ? error.message : String(error)).not.toContain(
+      "private-cloudflare-token",
+    );
+    expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-apply rejects unsafe, duplicate, linked, and expanded archives before Cloudflare", async () => {
+  for (const kind of ["unsafe", "duplicate", "symlink", "hardlink", "expanded"] as const) {
+    const custody = await privateFirstInstallInputs();
+    const original = await publishedReleaseFixture();
+    const packageRoot = join(original.root, "package");
+    const archivePath = join(original.root, `takos-worker-${kind}.tar.gz`);
+    if (kind === "symlink") {
+      await rm(join(packageRoot, "assets/index.html"));
+      await symlink("../worker/index.js", join(packageRoot, "assets/index.html"));
+    }
+    if (kind === "hardlink") {
+      await rm(join(packageRoot, "assets/index.html"));
+      await link(
+        join(packageRoot, "worker/index.js"),
+        join(packageRoot, "assets/index.html"),
+      );
+    }
+    const tarArgs = kind === "unsafe"
+      ? [
+          "tar",
+          "-czf",
+          archivePath,
+          "--transform=s#^worker/index.js$#../escaped.js#",
+          "-C",
+          packageRoot,
+          "worker/index.js",
+          "assets",
+          "asset-manifest.json",
+        ]
+      : kind === "duplicate"
+        ? [
+            "tar",
+            "-czf",
+            archivePath,
+            "-C",
+            packageRoot,
+            ".",
+            "./worker/index.js",
+          ]
+        : ["tar", "-czf", archivePath, "-C", packageRoot, "."];
+    if (kind === "expanded") {
+      await writeFile(archivePath, oversizedTarEntryArchive());
+    } else {
+      const tar = Bun.spawn(tarArgs, { stdout: "ignore", stderr: "pipe" });
+      const tarError = await new Response(tar.stderr).text();
+      expect(`${await tar.exited} ${tarError}`).toStartWith("0 ");
+    }
+    const release = await replacePublishedArchive(original, archivePath);
+    const scratch = await releaseOwnerScratch();
+    const runtime = lostAcknowledgementReleaseRuntime(release.archive, false);
+    try {
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+      expect(error instanceof Error ? error.message : String(error)).toMatch(
+        /archive.*(?:unsafe|duplicate|link|bound)/iu,
+      );
+      expect(
+        runtime.calls.some((request) => request.command === "bunx"),
+      ).toBe(false);
+    } finally {
+      await rm(custody.root, { recursive: true, force: true });
+      await rm(release.root, { recursive: true, force: true });
+      await rm(scratch.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("release-apply refuses pre-upload custody drift even when bytes are restored", async () => {
+  for (const kind of ["content", "rename", "symlink", "config"] as const) {
+    const custody = await privateFirstInstallInputs();
+    const release = await publishedReleaseFixture();
+    const scratch = await releaseOwnerScratch();
+    let tampered = false;
+    const runtime = lostAcknowledgementReleaseRuntime(
+      release.archive,
+      true,
+      true,
+      false,
+      "ordinary",
+      async (request) => {
+        if (
+          tampered ||
+          request.command !== "bunx" ||
+          !request.args.includes("--dry-run")
+        ) return;
+        tampered = true;
+        const paths = await releaseCustodyPaths(request);
+        if (kind === "content") {
+          const bytes = await readFile(paths.entrypoint);
+          await writeFile(paths.entrypoint, "mutated then restored\n");
+          await writeFile(paths.entrypoint, bytes);
+        } else if (kind === "rename") {
+          const asset = join(paths.assets, "index.html");
+          const moved = join(paths.assets, "index.moved");
+          await rename(asset, moved);
+          await rename(moved, asset);
+        } else if (kind === "symlink") {
+          const asset = join(paths.assets, "index.html");
+          await rm(asset);
+          await symlink(paths.entrypoint, asset);
+        } else {
+          const bytes = await readFile(paths.config);
+          await writeFile(paths.config, `${bytes.toString()}\n# mutation\n`);
+          await writeFile(paths.config, bytes);
+        }
+      },
+    );
+    try {
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(tampered).toBe(true);
+      expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+      expect(error instanceof Error ? error.message : String(error)).toMatch(
+        /release custody changed before upload/u,
+      );
+      expect(runtime.calls.filter(mutatesTarget)).toHaveLength(0);
+    } finally {
+      await rm(custody.root, { recursive: true, force: true });
+      await rm(release.root, { recursive: true, force: true });
+      await rm(scratch.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("release-apply reports post-upload custody drift as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  let tampered = false;
+  const runtime = lostAcknowledgementReleaseRuntime(
+    release.archive,
+    true,
+    true,
+    false,
+    "ordinary",
+    async (request) => {
+      if (
+        tampered ||
+        request.command !== "bunx" ||
+        !request.args.includes("deploy") ||
+        request.args.includes("--dry-run")
+      ) return;
+      tampered = true;
+      const paths = await releaseCustodyPaths(request);
+      const bytes = await readFile(paths.config);
+      await writeFile(paths.config, `${bytes.toString()}\n# changed during upload\n`);
+      await writeFile(paths.config, bytes);
+    },
+  );
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-apply",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(tampered).toBe(true);
+    expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    expect(error instanceof Error ? error.message : String(error)).toMatch(
+      /release custody changed during upload/u,
+    );
+    expect(runtime.calls.filter(mutatesTarget)).toHaveLength(1);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-status rejects every non-overlay structural drift without parsing drift prose", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const wrongBinding = JSON.parse(versionJson(NEXT)) as {
+    resources: { bindings: Array<Record<string, unknown>> };
+  };
+  const db = wrongBinding.resources.bindings.find(
+    (binding) => binding.name === "DB",
+  );
+  if (!db) throw new Error("test fixture omitted DB");
+  db.id = "another-d1";
+  const oldMigration = JSON.parse(versionJson(NEXT)) as Record<string, unknown>;
+  oldMigration.metadata = { migration_tag: "v6" };
+  const wrongContainers = JSON.parse(containerListJson()) as Array<{
+    name: string;
+    image: string;
+    state: string;
+  }>;
+  wrongContainers[0]!.name = "unrelated-container";
+  const provisioningContainers = JSON.parse(containerListJson()) as Array<{
+    state: string;
+  }>;
+  provisioningContainers[0]!.state = "provisioning";
+  const duplicateContainers = JSON.parse(containerListJson()) as Array<{
+    name: string;
+  }>;
+  duplicateContainers.push({ ...duplicateContainers[0]! });
+  const wrongPlain = JSON.parse(versionJson(NEXT)) as {
+    resources: { bindings: Array<Record<string, unknown>> };
+  };
+  wrongPlain.resources.bindings.find(
+    (binding) => binding.name === "ADMIN_DOMAIN",
+  )!.text = "attacker.example.test";
+  const extraPlain = JSON.parse(versionJson(NEXT)) as {
+    resources: { bindings: Array<Record<string, unknown>> };
+  };
+  extraPlain.resources.bindings.push({
+    name: "UNEXPECTED_PLAIN_TEXT",
+    type: "plain_text",
+    text: "must-not-be-blessed",
+  });
+  const duplicateService = JSON.parse(versionJson(NEXT)) as {
+    resources: { bindings: Array<Record<string, unknown>> };
+  };
+  duplicateService.resources.bindings.push({
+    name: "TAKOS_EGRESS",
+    type: "service",
+    service: "takos-live",
+    entrypoint: "TakosEgressEntrypoint",
+  });
+  const cases = [
+    releaseStatusReplies({ served: SERVED }),
+    releaseStatusReplies({
+      deployment: JSON.stringify({
+        id: "split-deployment",
+        versions: [
+          { version_id: NEXT, percentage: 50 },
+          { version_id: SERVED, percentage: 50 },
+        ],
+      }),
+    }),
+    releaseStatusReplies({ detail: JSON.stringify(wrongBinding) }),
+    releaseStatusReplies({ detail: JSON.stringify(wrongPlain) }),
+    releaseStatusReplies({ detail: JSON.stringify(extraPlain) }),
+    releaseStatusReplies({ detail: JSON.stringify(duplicateService) }),
+    releaseStatusReplies({
+      secrets: REQUIRED_RUNTIME_SECRET_NAMES.filter(
+        (name) => name !== "ENCRYPTION_KEY",
+      ),
+    }),
+    releaseStatusReplies({ vectorDimensions: 1 }),
+    releaseStatusReplies({ containers: JSON.stringify(wrongContainers) }),
+    releaseStatusReplies({ containers: JSON.stringify(provisioningContainers) }),
+    releaseStatusReplies({
+      containerInfo: (index) => {
+        const info = JSON.parse(containerInfoJson(index)) as {
+          health: { instances: { failed: number } };
+        };
+        if (index === 0) info.health.instances.failed = 1;
+        return JSON.stringify(info);
+      },
+    }),
+    releaseStatusReplies({ detail: JSON.stringify(oldMigration) }),
+    releaseStatusReplies({
+      containerInfo: (index) => {
+        const info = JSON.parse(containerInfoJson(index)) as Record<string, unknown>;
+        if (index === 0) info.active_rollout_id = "rollout-still-progressing";
+        return JSON.stringify(info);
+      },
+    }),
+  ];
+  try {
+    for (const replies of cases) {
+      const runtime = stubRuntime(replies, async () =>
+        new Response("generic drift prose says everything is fine", { status: 200 })
+      );
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        stage: "post-conditions",
+        exitCode: 4,
+      });
+      expect(error instanceof Error ? error.message : String(error)).not.toContain(
+        "generic drift prose",
+      );
+      for (const request of runtime.calls) expect(mutatesTarget(request)).toBe(false);
+    }
+    const duplicateRuntime = stubRuntime(
+      releaseStatusReplies({ containers: JSON.stringify(duplicateContainers) }),
+      async () => new Response("ok", { status: 200 }),
+    );
+    let duplicateError: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-status",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+            expectedServedVersion: NEXT,
+          }),
+          scratch.root,
+        ),
+        duplicateRuntime,
+      );
+    } catch (caught) {
+      duplicateError = caught;
+    }
+    expect(duplicateError).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+    for (const request of duplicateRuntime.calls) expect(mutatesTarget(request)).toBe(false);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-status rejects an unexpected Container application on a later API page", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const base = stubRuntime(releaseStatusReplies(), async () =>
+    new Response("ok", { status: 200 })
+  );
+  let applicationApiCalls = 0;
+  const expected = containerApiRows();
+  const unexpected = unrelatedContainerRows(101);
+  const firstPage = [
+    expected[0]!,
+    expected[1]!,
+    ...unexpected.slice(0, 98),
+  ];
+  const laterPage = [expected[2]!, ...unexpected.slice(98)];
+  const runtime: SurfaceRuntime = {
+    ...base,
+    async cloudflareApi(request) {
+      expect(request.cloudflareApiTokenFile).toBe(custody.tokenFile);
+      if (
+        request.path !== `/accounts/${ACCOUNT}/containers/dash/applications`
+      ) {
+        throw new Error(`unexpected Cloudflare API path ${request.path}`);
+      }
+      applicationApiCalls += 1;
+      if (request.query?.page_token === "later-page") {
+        return cloudflareEnvelope(laterPage, {});
+      }
+      expect(request.query?.page_token).toBeUndefined();
+      return cloudflareEnvelope(
+        firstPage,
+        { next_page_token: "later-page" },
+      );
+    },
+  };
+  try {
+    let error: unknown;
+    try {
+      await runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-status",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+            expectedServedVersion: NEXT,
+          }),
+          scratch.root,
+        ),
+        runtime,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ stage: "post-conditions", exitCode: 4 });
+    expect(applicationApiCalls).toBe(4);
+    for (const request of base.calls) expect(mutatesTarget(request)).toBe(false);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-status treats Container page drift and non-adjacent token cycles as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  try {
+    for (const scenario of ["stable-scan-drift", "token-cycle"] as const) {
+      const base = stubRuntime(releaseStatusReplies(), async () =>
+        new Response("ok", { status: 200 })
+      );
+      let calls = 0;
+      const runtime: SurfaceRuntime = {
+        ...base,
+        async cloudflareApi(request) {
+          if (
+            request.path !== `/accounts/${ACCOUNT}/containers/dash/applications`
+          ) {
+            throw new Error(`unexpected Cloudflare API path ${request.path}`);
+          }
+          calls += 1;
+          if (scenario === "stable-scan-drift") {
+            const rows = containerApiRows();
+            if (calls === 2) rows[0] = { ...rows[0]!, version: 2 };
+            return cloudflareEnvelope(rows, {});
+          }
+          const token = request.query?.page_token;
+          if (token === undefined) {
+            return cloudflareEnvelope([], { next_page_token: "cursor-a" });
+          }
+          if (token === "cursor-a") {
+            return cloudflareEnvelope([], { next_page_token: "cursor-b" });
+          }
+          if (token === "cursor-b") {
+            return cloudflareEnvelope([], { next_page_token: "cursor-a" });
+          }
+          throw new Error(`unexpected cursor ${token}`);
+        },
+      };
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+      expect(calls).toBe(scenario === "stable-scan-drift" ? 2 : 3);
+      for (const request of base.calls) expect(mutatesTarget(request)).toBe(false);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release owner preflight rejects custody, source, descriptor, and product-environment drift before Cloudflare", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture("2".repeat(40));
+  const validRelease = await publishedReleaseFixture();
+  const untrustedOriginRelease = await publishedReleaseFixture();
+  const untrustedDescriptor = JSON.parse(
+    await readFile(untrustedOriginRelease.descriptorPath, "utf8"),
+  ) as { artifact: { url: string } };
+  untrustedDescriptor.artifact.url =
+    "https://untrusted.example.test/takos-worker-release.tar.gz";
+  await writeFile(
+    untrustedOriginRelease.descriptorPath,
+    `${JSON.stringify(untrustedDescriptor, null, 2)}\n`,
+  );
+  const productionOutputs = outputs({
+    deployment_environment: {
+      sensitive: false,
+      type: "string",
+      value: "production",
+    },
+  });
+  const scratch = await releaseOwnerScratch(productionOutputs);
+  try {
+    const environmentRuntime = stubRuntime([]);
+    await expect(
+      runCloudflareProductionRecorded(
+        parseCloudflareProductionArgs(
+          releaseOwnerArgs({
+            phase: "--release-status",
+            outputsPath: scratch.outputsPath,
+            outputsJson: scratch.outputsJson,
+            descriptorPath: release.descriptorPath,
+            tokenFile: custody.tokenFile,
+            expectedServedVersion: NEXT,
+          }),
+          scratch.root,
+        ),
+        environmentRuntime,
+      ),
+    ).rejects.toThrow(/fixed to orchestration lane integration/u);
+    expect(environmentRuntime.calls).toEqual([]);
+
+    const stagingScratch = await releaseOwnerScratch();
+    try {
+      const dirtySourceRuntime = stubRuntime([
+        [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+        [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+        [/^git status --porcelain/u, { stdout: " M scripts/local-change.ts\n" }],
+      ]);
+      await expect(
+        runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: stagingScratch.outputsPath,
+              outputsJson: stagingScratch.outputsJson,
+              descriptorPath: validRelease.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            stagingScratch.root,
+          ),
+          dirtySourceRuntime,
+        ),
+      ).rejects.toThrow(/clean checkout whose HEAD equals/u);
+      expect(dirtySourceRuntime.calls.some((request) => request.command === "bunx")).toBe(false);
+
+      const indexedSourceBase = stubRuntime([
+        [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+        [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+        [/^git status --porcelain/u, { stdout: "" }],
+      ]);
+      const indexedSourceRuntime = {
+        ...indexedSourceBase,
+        assertPhysicalGitTree: async () => {
+          throw new Error("assume-unchanged hid physical byte drift");
+        },
+      };
+      await expect(
+        runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: stagingScratch.outputsPath,
+              outputsJson: stagingScratch.outputsJson,
+              descriptorPath: validRelease.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            stagingScratch.root,
+          ),
+          indexedSourceRuntime,
+        ),
+      ).rejects.toThrow(/physical release owner checkout does not match/u);
+      expect(indexedSourceRuntime.calls.some((request) => request.command === "bunx")).toBe(false);
+
+      const descriptorRuntime = stubRuntime([
+        [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+        [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+        [/^git status --porcelain/u, { stdout: "" }],
+      ]);
+      await expect(
+        runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: stagingScratch.outputsPath,
+              outputsJson: stagingScratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            stagingScratch.root,
+          ),
+          descriptorRuntime,
+        ),
+      ).rejects.toThrow(/canonical release descriptor does not match/u);
+      expect(descriptorRuntime.calls.some((request) => request.command === "bunx")).toBe(false);
+
+      let archiveFetches = 0;
+      const originRuntime = stubRuntime(
+        [
+          [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+          [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+          [/^git status --porcelain/u, { stdout: "" }],
+        ],
+        async () => {
+          archiveFetches += 1;
+          return new Response(null, { status: 500 });
+        },
+      );
+      await expect(
+        runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-apply",
+              outputsPath: stagingScratch.outputsPath,
+              outputsJson: stagingScratch.outputsJson,
+              descriptorPath: untrustedOriginRelease.descriptorPath,
+              tokenFile: custody.tokenFile,
+            }),
+            stagingScratch.root,
+          ),
+          originRuntime,
+        ),
+      ).rejects.toThrow(/canonical release descriptor does not match/u);
+      expect(archiveFetches).toBe(0);
+      expect(originRuntime.calls.some((request) => request.command === "bunx")).toBe(false);
+
+      await chmod(custody.tokenFile, 0o644);
+      const custodyRuntime = stubRuntime([]);
+      await expect(
+        runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: stagingScratch.outputsPath,
+              outputsJson: stagingScratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            stagingScratch.root,
+          ),
+          custodyRuntime,
+        ),
+      ).rejects.toThrow(/mode 0600/u);
+      expect(custodyRuntime.calls).toEqual([]);
+    } finally {
+      await rm(stagingScratch.root, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(validRelease.root, { recursive: true, force: true });
+    await rm(untrustedOriginRelease.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
+});
+
+test("release-status reports provider readback loss as value-free indeterminate evidence", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  try {
+    for (const replies of [
+      [
+        [/^git rev-parse HEAD/u, { stdout: `${HEAD}\n` }],
+        [/^git rev-parse --abbrev-ref HEAD/u, { stdout: "detached\n" }],
+        [/^git status --porcelain/u, { stdout: "" }],
+        [
+          /wrangler deployments status/u,
+          {
+            exitCode: 1,
+            stderr: "provider leaked private-cloudflare-token in raw diagnostics",
+          },
+        ],
+      ] as const,
+      releaseStatusReplies({
+        deployment: `generic drift prose\n${deploymentJson(NEXT)}`,
+      }),
+    ]) {
+      const runtime = stubRuntime(replies);
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          parseCloudflareProductionArgs(
+            releaseOwnerArgs({
+              phase: "--release-status",
+              outputsPath: scratch.outputsPath,
+              outputsJson: scratch.outputsJson,
+              descriptorPath: release.descriptorPath,
+              tokenFile: custody.tokenFile,
+              expectedServedVersion: NEXT,
+            }),
+            scratch.root,
+          ),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+      expect(error instanceof Error ? error.message : String(error)).not.toContain(
+        "private-cloudflare-token",
+      );
+      expect(error instanceof Error ? error.message : String(error)).not.toContain(
+        "generic drift prose",
+      );
+      for (const request of runtime.calls) expect(mutatesTarget(request)).toBe(false);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
+  }
 });
 
 test("first-install CLI rejects free-form secret names and a drifted retained output digest", async () => {

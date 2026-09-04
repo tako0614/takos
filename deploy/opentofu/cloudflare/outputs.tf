@@ -15,6 +15,11 @@ output "service_runtime_name" {
   value       = module.platform.service_runtime_name
 }
 
+output "deployment_environment" {
+  description = "Takos product environment bound into retained first-install release evidence."
+  value       = module.platform.deployment_environment
+}
+
 output "url" {
   description = "Canonical public URL supplied through the required public_url input."
   value       = module.platform.launch_url
