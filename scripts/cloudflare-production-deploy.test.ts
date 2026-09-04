@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   chmod,
   link,
@@ -45,6 +46,7 @@ const RELEASE_EVIDENCE_V2 = {
   descriptor: {
     kind: "takos.worker-artifact@v3",
     digest: "sha256",
+    expectedDigestArgument: "--expected-release-descriptor-digest",
     maxBytes: 256 * 1024,
     releaseTagPattern: "^v\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
     executorImagePattern:
@@ -1163,7 +1165,10 @@ function releaseOwnerArgs(input: {
   descriptorPath: string;
   tokenFile: string;
   expectedServedVersion?: string;
+  expectedDescriptorDigest?: string;
 }): string[] {
+  const expectedDescriptorDigest = input.expectedDescriptorDigest ??
+    `sha256:${createHash("sha256").update(readFileSync(input.descriptorPath)).digest("hex")}`;
   return [
     input.phase,
     "--environment",
@@ -1182,6 +1187,8 @@ function releaseOwnerArgs(input: {
       : "first-install-release-status-1",
     "--release-descriptor-file",
     input.descriptorPath,
+    "--expected-release-descriptor-digest",
+    expectedDescriptorDigest,
     "--cloudflare-api-token-file",
     input.tokenFile,
     ...(input.phase === "--release-apply"
@@ -1518,6 +1525,8 @@ test("release owner CLI accepts only the fixed integration to staging contract",
     "first-install-release-1",
     "--release-descriptor-file",
     "/private/takos-artifact.json",
+    "--expected-release-descriptor-digest",
+    `sha256:${"3".repeat(64)}`,
     "--cloudflare-api-token-file",
     "/private/cloudflare-token",
   ] as const;
@@ -1533,6 +1542,7 @@ test("release owner CLI accepts only the fixed integration to staging contract",
     productEnvironment: "staging",
     outputs: "/private/outputs.json",
     release: "/private/takos-artifact.json",
+    expectedReleaseDescriptorDigest: `sha256:${"3".repeat(64)}`,
     sourceCommit: HEAD,
     operationId: "first-install-release-1",
     cloudflareApiTokenFile: "/private/cloudflare-token",
@@ -1580,6 +1590,117 @@ test("release owner CLI accepts only the fixed integration to staging contract",
     ],
   ]) {
     expect(() => parseCloudflareProductionArgs(args, repositoryRoot)).toThrow();
+  }
+
+  const withoutExpectedDescriptorDigest = common.filter(
+    (value, index) =>
+      value !== "--expected-release-descriptor-digest" &&
+      common[index - 1] !== "--expected-release-descriptor-digest",
+  );
+  expect(() =>
+    parseCloudflareProductionArgs(
+      ["--release-apply", ...withoutExpectedDescriptorDigest, "--execute"],
+      repositoryRoot,
+    )
+  ).toThrow(/expected-release-descriptor-digest/u);
+  expect(() =>
+    parseCloudflareProductionArgs(
+      [
+        "--release-apply",
+        ...common.map((value) =>
+          value === `sha256:${"3".repeat(64)}` ? "sha256:NOT-A-DIGEST" : value
+        ),
+        "--execute",
+      ],
+      repositoryRoot,
+    )
+  ).toThrow(/expected-release-descriptor-digest/u);
+  expect(() =>
+    parseCloudflareProductionArgs(
+      [
+        "--status",
+        "--environment",
+        "integration",
+        "--outputs",
+        "/private/outputs.json",
+        "--container-image",
+        IMAGE,
+        "--expected-release-descriptor-digest",
+        `sha256:${"3".repeat(64)}`,
+      ],
+      repositoryRoot,
+    )
+  ).toThrow(/release owner inputs only/u);
+});
+
+test("release-apply rejects a descriptor path swap against the caller-selected digest before provider access", async () => {
+  const custody = await privateFirstInstallInputs();
+  const release = await publishedReleaseFixture();
+  const scratch = await releaseOwnerScratch();
+  const selectedDigest = release.descriptorDigest;
+  const changed = JSON.parse(
+    await readFile(release.descriptorPath, "utf8"),
+  ) as { containerImages: { publicAgent: string } };
+  changed.containerImages.publicAgent =
+    `ghcr.io/tako0614/takos-agent@sha256:${"c".repeat(64)}`;
+  await writeFile(
+    release.descriptorPath,
+    `${JSON.stringify(changed, null, 2)}\n`,
+  );
+
+  const calls: CommandRequest[] = [];
+  let fetched = false;
+  let providerRead = false;
+  const runtime: SurfaceRuntime = {
+    async run(request) {
+      calls.push(request);
+      const line = `${request.command} ${request.args.join(" ")}`;
+      if (line === "git rev-parse HEAD") {
+        return { exitCode: 0, stdout: `${HEAD}\n`, stderr: "" };
+      }
+      if (line === "git rev-parse --abbrev-ref HEAD") {
+        return { exitCode: 0, stdout: "detached\n", stderr: "" };
+      }
+      if (line === "git status --porcelain=v1 --untracked-files=all") {
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+      throw new Error(`unexpected command ${line}`);
+    },
+    async fetch() {
+      fetched = true;
+      throw new Error("release archive fetch must not run");
+    },
+    async cloudflareApi() {
+      providerRead = true;
+      throw new Error("Cloudflare API must not run");
+    },
+  };
+
+  try {
+    const error = await runCloudflareProductionRecorded(
+      parseCloudflareProductionArgs(
+        releaseOwnerArgs({
+          phase: "--release-apply",
+          outputsPath: scratch.outputsPath,
+          outputsJson: scratch.outputsJson,
+          descriptorPath: release.descriptorPath,
+          expectedDescriptorDigest: selectedDigest,
+          tokenFile: custody.tokenFile,
+        }),
+        scratch.root,
+      ),
+      runtime,
+    ).catch((candidate) => candidate);
+
+    expect(error).toMatchObject({ stage: "refused", exitCode: 2 });
+    expect(error.message).toMatch(/caller-selected digest/u);
+    expect(calls.filter(mutatesTarget)).toHaveLength(0);
+    expect(fetched).toBe(false);
+    expect(providerRead).toBe(false);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+    await rm(release.root, { recursive: true, force: true });
+    await rm(scratch.root, { recursive: true, force: true });
   }
 });
 

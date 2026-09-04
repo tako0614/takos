@@ -40,6 +40,7 @@ Durable Object namespace の bootstrap だけです。D1 migration はどちら�
 | `--cloudflare-api-token-file` | first-install authority phase の account credential | 4 deploy-side first-install operation (repository 外の canonical `0600` file) |
 | `--outputs-file` / `--output-digest` | retained staging OpenTofu output と SHA-256 | `--release-apply` / `--release-status` |
 | `--release-descriptor-file` | canonical `takos.worker-artifact@v3` | `--release-apply` / `--release-status` |
+| `--expected-release-descriptor-digest` | caller が選んだ descriptor exact bytes の `sha256:` digest | `--release-apply` / `--release-status` |
 | `--product-environment staging` | Takos product environment (orchestration の `integration` lane とは別) | `--release-apply` / `--release-status` |
 | `--expected-served-version` | 成功した release apply receipt の exact UUID | `--release-status` |
 

@@ -25,6 +25,7 @@ export const TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE = {
   descriptor: {
     kind: "takos.worker-artifact@v3",
     digest: "sha256",
+    expectedDigestArgument: "--expected-release-descriptor-digest",
     maxBytes: 256 * 1024,
     releaseTagPattern: "^v\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
     executorImagePattern:
@@ -83,9 +84,9 @@ export const TAKOS_FIRST_INSTALL_OWNER_CONTRACT = {
     runtimeSecretsInstall:
       "bun run deploy -- takos-cloudflare-production --runtime-secrets-install --environment integration --outputs <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --runtime-secret-directory <absolute 0700 directory> --cloudflare-api-token-file <absolute 0600 file> --execute",
     releaseApply:
-      "bun run deploy -- takos-cloudflare-production --release-apply --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --cloudflare-api-token-file <absolute 0600 file> --execute",
+      "bun run deploy -- takos-cloudflare-production --release-apply --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --expected-release-descriptor-digest sha256:<64hex> --cloudflare-api-token-file <absolute 0600 file> --execute",
     releaseStatus:
-      "bun run deploy -- takos-cloudflare-production --release-status --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --cloudflare-api-token-file <absolute 0600 file> --expected-served-version <uuid>",
+      "bun run deploy -- takos-cloudflare-production --release-status --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --expected-release-descriptor-digest sha256:<64hex> --cloudflare-api-token-file <absolute 0600 file> --expected-served-version <uuid>",
     functionalProof:
       "bun run first-install:functional-proof -- --environment integration --public-url <https origin> --source-commit <40hex> --served-version <uuid> --owner-session-file <absolute 0600 file>",
     absenceProof:
