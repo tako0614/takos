@@ -36,8 +36,8 @@ export const EVIDENCE_TOKEN_ENV = "TAKOFORM_EVIDENCE_TOKEN" as const;
 export const NONCE_BYTES = 32;
 export const NONCE_PATTERN = /^[0-9a-f]{64}$/u;
 export const DEFAULT_ENDPOINT_ORIGIN_TEMPLATE = "https://{project}.invalid/";
-export const NATIVE_RESIDUAL_INVENTORY_BLOCKER =
-  "Takoserver native residual inventory is not exposed by the public Host v1 contract; an operator-owned organization resources:read endpoint and credential are required";
+export const NATIVE_ABSENCE_KIND =
+  "takos.takoserver-native-absence@v1" as const;
 export const PUBLIC_PROVIDER_H1_HASHES = [
   "h1:RYNZ0RDeAKvA8Ty+EZqSOA5nv+xpkgMyJux6XcHnNns=",
 ] as const;
@@ -121,6 +121,7 @@ const RESOURCE_KINDS: Record<ResourceKey, string> = {
 
 const MAX_OUTPUT_BYTES = 128 * 1024;
 const MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_NATIVE_RESIDUAL_COUNT = 1_000_000;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_KILL_GRACE_MS = 5_000;
 const FIXED_FEATURES = [
@@ -158,6 +159,8 @@ export const TRACER_MILESTONES = [
   "absence_completed",
   "endpoint_absence_completed",
   "endpoint_absence_not_applicable",
+  "native_absence_completed",
+  "native_absence_not_applicable",
   "workdir_removed",
 ] as const;
 export type TracerMilestone = (typeof TRACER_MILESTONES)[number];
@@ -211,6 +214,7 @@ const SOURCE_INVENTORY = [
   "package.json",
   "scripts/takoserver-fetch-tracer.ts",
   "scripts/__tests__/takoserver-fetch-tracer.test.ts",
+  "scripts/__tests__/takoserver-fetch-tracer.online.test.ts",
   "deploy/opentofu/takoserver-fetch-tracer/README.md",
   "deploy/opentofu/takoserver-fetch-tracer/main.tf",
   "deploy/opentofu/takoserver-fetch-tracer/variables.tf",
@@ -221,6 +225,7 @@ const SOURCE_INVENTORY = [
 
 export type CliConfig = {
   readonly host: string;
+  readonly organizationId: string;
   readonly space: string;
   /** Exact endpoint origin template; `{project}` is the only placeholder. */
   readonly endpointOriginTemplate: string;
@@ -751,6 +756,13 @@ export function validateSpace(value: string): string {
   return value;
 }
 
+export function validateOrganizationId(value: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value)) {
+    throw new TracerError("organization ID must be one canonical path segment");
+  }
+  return value;
+}
+
 /** RFC 8785's object-key ordering is the only canonicalization needed by the
  * tracer's closed integer/string/array/object revision specs.  Provider 4
  * derives revision names from this canonical JSON digest, so insertion order
@@ -880,6 +892,7 @@ export function parseArgs(
 
   let optedIn = false;
   let host: string | undefined;
+  let organizationId: string | undefined;
   let space: string | undefined;
   let endpointOriginTemplate = DEFAULT_ENDPOINT_ORIGIN_TEMPLATE;
   let tokenEnv: string = MUTATION_TOKEN_ENV;
@@ -914,6 +927,8 @@ export function parseArgs(
     }
     if (arg === "--host") {
       [host, index] = readValue(index, arg);
+    } else if (arg === "--organization-id") {
+      [organizationId, index] = readValue(index, arg);
     } else if (arg === "--space") {
       [space, index] = readValue(index, arg);
     } else if (arg === "--endpoint-origin-template") {
@@ -944,7 +959,9 @@ export function parseArgs(
   if (!optedIn) {
     throw new TracerError("refusing to mutate a Host: pass --run");
   }
-  if (!host || !space) throw new TracerError("--host and --space are required");
+  if (!host || !space || !organizationId) {
+    throw new TracerError("--host, --organization-id, and --space are required");
+  }
 
   const checkedTokenEnv = tokenEnvName(tokenEnv);
   const checkedEvidenceTokenEnv = tokenEnvName(evidenceTokenEnv);
@@ -964,11 +981,17 @@ export function parseArgs(
   if (token === evidenceToken) throw new TracerError("mutation and evidence tokens must be distinct");
 
   const checkedHost = validateBareOrigin(host);
+  const checkedOrganizationId = validateOrganizationId(organizationId);
   const checkedSpace = validateSpace(space);
   const checkedEndpointOriginTemplate = validateEndpointOriginTemplate(endpointOriginTemplate);
   const secrets = [token, evidenceToken] as const;
-  if (containsSecret(checkedHost, secrets) || containsSecret(checkedSpace, secrets) || containsSecret(tofu, secrets)) {
-    throw new TracerError("host and space must not contain a token");
+  if (
+    containsSecret(checkedHost, secrets) ||
+    containsSecret(checkedOrganizationId, secrets) ||
+    containsSecret(checkedSpace, secrets) ||
+    containsSecret(tofu, secrets)
+  ) {
+    throw new TracerError("host, organization ID, and space must not contain a token");
   }
   const checkedConfigValue = validateConfigValue(configValue);
   if (containsSecret(checkedConfigValue, secrets)) {
@@ -977,6 +1000,7 @@ export function parseArgs(
 
   return {
     host: checkedHost,
+    organizationId: checkedOrganizationId,
     space: checkedSpace,
     endpointOriginTemplate: checkedEndpointOriginTemplate,
     tokenEnv: checkedTokenEnv,
@@ -993,7 +1017,7 @@ export function parseArgs(
 
 export function usage(): string {
   return [
-    "usage: bun scripts/takoserver-fetch-tracer.ts --run --host ORIGIN --space SPACE --endpoint-origin-template https://{project}.example/",
+    "usage: bun scripts/takoserver-fetch-tracer.ts --run --host ORIGIN --organization-id ORG --space SPACE --endpoint-origin-template https://{project}.example/",
     "  [--token-env ENV_NAME] [--evidence-token-env ENV_NAME] [--tofu PATH] [--config-value VALUE]",
     "  [--timeout-ms N] [--kill-grace-ms N]",
     "",
@@ -2242,6 +2266,47 @@ export function assertExactProbeBody(
   }
 }
 
+export function assertExactHealthBody(value: unknown): void {
+  const body = requireRecord(value, "Worker health response");
+  assertClosedKeys(
+    body,
+    ["component", "product", "scope", "status"],
+    [],
+    "Worker health response",
+  );
+  if (
+    body.component !== "takoserver-fetch-tracer" ||
+    body.product !== "takos" ||
+    body.scope !== "integration-only" ||
+    body.status !== "ok"
+  ) {
+    throw new TracerError("Worker health response does not identify the integration-only Takos fetch tracer");
+  }
+}
+
+export function assertExactDiscoveryBody(value: unknown): void {
+  const body = requireRecord(value, "Worker Takos discovery response");
+  assertClosedKeys(
+    body,
+    ["artifact", "capabilities", "fullRuntime", "name", "product", "runtime", "scope"],
+    [],
+    "Worker Takos discovery response",
+  );
+  if (
+    body.artifact !== "takoserver-fetch-tracer" ||
+    !Array.isArray(body.capabilities) ||
+    body.capabilities.length !== 1 ||
+    body.capabilities[0] !== "fetch" ||
+    body.fullRuntime !== false ||
+    body.name !== "Takos" ||
+    body.product !== "takos" ||
+    body.runtime !== "neutral-javascript-fetch" ||
+    body.scope !== "integration-only"
+  ) {
+    throw new TracerError("Worker discovery response overstated or changed the fetch-tracer scope");
+  }
+}
+
 function boundedJson(value: string, subject: string): unknown {
   try {
     return JSON.parse(value) as unknown;
@@ -2503,7 +2568,14 @@ function assertStrictPlanResource(change: JsonRecord, key: ResourceKey, expected
 function assertStrictPlanOutputs(value: unknown, expected: PlanExpectation): void {
   const plan = requireRecord(value, "tofu show plan");
   const outputChanges = requireRecord(plan.output_changes, "tofu show plan output_changes");
-  const outputNames = ["config_value", "endpoint_hostname", "endpoint_url", "project_nonce", "project_uid", "resource_identities"];
+  const outputNames = [
+    "config_value",
+    "endpoint_hostname",
+    "endpoint_url",
+    "project_nonce",
+    "project_uid",
+    "resource_identities",
+  ];
   if (ownKeys(outputChanges).join(",") !== outputNames.join(",")) throw new TracerError("tofu show plan output_changes must contain exactly the tracer outputs");
   const assertOutput = (name: string, after: unknown, afterUnknown: unknown, hasAfter = true): void => {
     const output = requireRecord(outputChanges[name], `tofu show output ${name}`);
@@ -2600,7 +2672,19 @@ export function parseTofuOutputs(
   readonly projectUid: string;
 } {
   const outputs = requireRecord(value, "tofu output");
-  assertClosedKeys(outputs, ["resource_identities", "config_value", "endpoint_url", "endpoint_hostname", "project_nonce", "project_uid"], [], "tofu output");
+  assertClosedKeys(
+    outputs,
+    [
+      "resource_identities",
+      "config_value",
+      "endpoint_url",
+      "endpoint_hostname",
+      "project_nonce",
+      "project_uid",
+    ],
+    [],
+    "tofu output",
+  );
   // Apply output is an exact identity snapshot, but status can still be
   // Reconciling. The Host readback below is the readiness authority.
   const identities = assertExactIdentitySet(unwrapTofuOutput(outputs.resource_identities, "resource_identities"), expectedSpace, expectedProjectName, false, revisions);
@@ -2962,6 +3046,287 @@ export async function assertEndpointAbsence(input: {
   };
 }
 
+const NATIVE_RESIDUAL_REASONS = new Set([
+  "closure_pending",
+  "effect_unresolved",
+  "deployment_active",
+  "deployment_unmarked",
+  "provider_unavailable",
+  "provider_readback_failed",
+  "provider_identity_missing",
+  "legacy_unattested",
+]);
+
+export type NativeResidualObservation = {
+  readonly status: "absent";
+  readonly source: "intrinsic" | "provider";
+  readonly effectCount: number;
+  readonly deploymentCount: number;
+  readonly checkedAt: string;
+  readonly evidenceRef?: string;
+  readonly reason?: string;
+};
+
+export type NativeAbsenceResourceEvidence = NativeResidualObservation & {
+  readonly name: string;
+  readonly uid: string;
+};
+
+export type NativeAbsenceEvidence = {
+  readonly kind: typeof NATIVE_ABSENCE_KIND;
+  readonly status: "passed";
+  readonly organizationId: string;
+  readonly space: string;
+  readonly resourceCount: 5;
+  readonly checkedCount: 5;
+  readonly resources: Record<ResourceKey, NativeAbsenceResourceEvidence>;
+};
+
+export type NativeAbsenceFailure = {
+  readonly key: ResourceKey;
+  readonly code:
+    | "request_failed"
+    | "http_status"
+    | "malformed_response"
+    | "unexpected_status";
+  readonly status?: number;
+};
+
+export class NativeAbsenceError extends TracerError {
+  readonly failures: readonly NativeAbsenceFailure[];
+
+  constructor(failures: readonly NativeAbsenceFailure[]) {
+    super(`native absence verification failed for ${failures.length} of 5 resource checks`);
+    this.name = "NativeAbsenceError";
+    this.failures = failures;
+  }
+}
+
+function boundedNativeCount(value: unknown, subject: string): number {
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < 0 ||
+    (value as number) > MAX_NATIVE_RESIDUAL_COUNT
+  ) {
+    throw new TracerError(`${subject} must be a bounded non-negative integer`);
+  }
+  return value as number;
+}
+
+function canonicalCheckedAt(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value) ||
+    !Number.isFinite(Date.parse(value))
+  ) {
+    throw new TracerError("native residual checkedAt is not a canonical UTC timestamp");
+  }
+  return value;
+}
+
+/** Require the closed, authoritative Takoserver native residual absence envelope. */
+export function assertNativeResidualResponse(value: unknown): NativeResidualObservation {
+  const envelope = requireRecord(value, "native residual response");
+  assertClosedKeys(envelope, ["residual"], [], "native residual response");
+  const residual = requireRecord(envelope.residual, "native residual response residual");
+  assertClosedKeys(
+    residual,
+    ["checkedAt", "deploymentCount", "effectCount", "source", "status"],
+    ["evidenceRef", "reason"],
+    "native residual response residual",
+  );
+  if (residual.status !== "absent") {
+    throw new TracerError("native residual response must carry the exact absent status");
+  }
+  if (residual.source !== "intrinsic" && residual.source !== "provider") {
+    throw new TracerError("native residual response source is invalid");
+  }
+  const effectCount = boundedNativeCount(residual.effectCount, "native residual effectCount");
+  const deploymentCount = boundedNativeCount(
+    residual.deploymentCount,
+    "native residual deploymentCount",
+  );
+  const checkedAt = canonicalCheckedAt(residual.checkedAt);
+  let evidenceRef: string | undefined;
+  if (residual.evidenceRef !== undefined) {
+    if (typeof residual.evidenceRef !== "string" || !DIGEST.test(residual.evidenceRef)) {
+      throw new TracerError("native residual evidenceRef is not a canonical digest");
+    }
+    evidenceRef = residual.evidenceRef;
+  }
+  let reason: string | undefined;
+  if (residual.reason !== undefined) {
+    if (
+      typeof residual.reason !== "string" ||
+      !NATIVE_RESIDUAL_REASONS.has(residual.reason)
+    ) {
+      throw new TracerError("native residual reason is invalid");
+    }
+    reason = residual.reason;
+  }
+  return {
+    status: "absent",
+    source: residual.source,
+    effectCount,
+    deploymentCount,
+    checkedAt,
+    ...(evidenceRef === undefined ? {} : { evidenceRef }),
+    ...(reason === undefined ? {} : { reason }),
+  };
+}
+
+export function buildNativeResidualURL(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly identity: Pick<ResourceIdentity, "name" | "space" | "uid">;
+}): URL {
+  const host = validateBareOrigin(input.host);
+  const organizationId = validateOrganizationId(input.organizationId);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(input.identity.uid)) {
+    throw new TracerError("native residual resource UID is not canonical");
+  }
+  if (!/^[a-z][a-z0-9-]{0,62}$/u.test(input.identity.name)) {
+    throw new TracerError("native residual resource name is not canonical");
+  }
+  validateSpace(input.identity.space);
+  const url = new URL(host);
+  url.pathname = `/v1/organizations/${encodeURIComponent(organizationId)}/resources/${encodeURIComponent(input.identity.uid)}/native-residual`;
+  url.search = new URLSearchParams({
+    space: input.identity.space,
+    name: input.identity.name,
+  }).toString();
+  return url;
+}
+
+/**
+ * Read every pre-destroy Host UID from Takoserver's organization-scoped
+ * residual authority. One failed read never suppresses the other four.
+ */
+export async function verifyNativeAbsence(input: {
+  readonly host: string;
+  readonly organizationId: string;
+  readonly identities: Record<ResourceKey, ResourceIdentity>;
+  readonly token: string;
+  readonly timeoutMs: number;
+  readonly projectName?: string;
+  readonly revisions?: RevisionNameContext;
+  readonly fetchImpl?: FetchFunction;
+}): Promise<NativeAbsenceEvidence> {
+  const organizationId = validateOrganizationId(input.organizationId);
+  if (!input.token || /[\r\n]/u.test(input.token)) {
+    throw new TracerError("native residual evidence token is invalid");
+  }
+  if (!Number.isSafeInteger(input.timeoutMs) || input.timeoutMs < 1) {
+    throw new TracerError("native residual timeout is invalid");
+  }
+  const identitySet = assertExactIdentitySet(
+    input.identities,
+    input.identities.module_worker.space,
+    input.projectName ?? input.identities.module_worker.name,
+    true,
+    input.revisions,
+  );
+  const space = identitySet.module_worker.space;
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const observations = await Promise.all(
+    RESOURCE_KEYS.map(async (key): Promise<
+      | { readonly key: ResourceKey; readonly evidence: NativeAbsenceResourceEvidence }
+      | { readonly key: ResourceKey; readonly failure: NativeAbsenceFailure }
+    > => {
+      const identity = identitySet[key];
+      const url = buildNativeResidualURL({
+        host: input.host,
+        organizationId,
+        identity,
+      });
+      let timed: TimedResponse;
+      try {
+        timed = await fetchWithTimeout(
+          fetchImpl,
+          url,
+          {
+            method: "GET",
+            redirect: "manual",
+            headers: {
+              accept: "application/json",
+              authorization: `Bearer ${input.token}`,
+              "cache-control": "no-store",
+            },
+          },
+          input.timeoutMs,
+        );
+      } catch {
+        return { key, failure: { key, code: "request_failed" } };
+      }
+      const response = timed.response;
+      let rawBody: string;
+      try {
+        rawBody = await readTimedResponse(timed);
+      } catch {
+        return { key, failure: { key, code: "malformed_response" } };
+      }
+      if (response.status !== 200) {
+        return {
+          key,
+          failure: { key, code: "http_status", status: response.status },
+        };
+      }
+      const cacheControl = response.headers.get("cache-control") ?? "";
+      if (
+        !cacheControl
+          .split(",")
+          .map((value) => value.trim().toLowerCase())
+          .includes("no-store")
+      ) {
+        return { key, failure: { key, code: "malformed_response" } };
+      }
+      try {
+        const observation = assertNativeResidualResponse(
+          boundedJson(rawBody, "native residual response"),
+        );
+        return {
+          key,
+          evidence: {
+            ...observation,
+            name: identity.name,
+            uid: identity.uid,
+          },
+        };
+      } catch (error) {
+        return {
+          key,
+          failure: {
+            key,
+            code:
+              error instanceof TracerError && error.message.includes("exact absent")
+                ? "unexpected_status"
+                : "malformed_response",
+          },
+        };
+      }
+    }),
+  );
+  const failures = observations.flatMap((entry) =>
+    "failure" in entry ? [entry.failure] : [],
+  );
+  if (failures.length > 0) throw new NativeAbsenceError(failures);
+  const resources = {} as Record<ResourceKey, NativeAbsenceResourceEvidence>;
+  for (const entry of observations) {
+    if ("evidence" in entry) resources[entry.key] = entry.evidence;
+  }
+  const evidence: NativeAbsenceEvidence = {
+    kind: NATIVE_ABSENCE_KIND,
+    status: "passed",
+    organizationId,
+    space,
+    resourceCount: 5,
+    checkedCount: 5,
+    resources,
+  };
+  assertNoKnownSecrets(evidence, input.token);
+  return evidence;
+}
+
 function endpointURL(identity: ResourceIdentity): URL {
   const value = identity.url;
   if (typeof value !== "string" || !value) throw new TracerError("WorkerEndpoint did not return an assigned URL");
@@ -2987,7 +3352,7 @@ async function runLoopbackProbe(input: {
   readonly projectUid: string;
   readonly fetchImpl: FetchFunction;
   readonly timeoutMs: number;
-}): Promise<void> {
+}): Promise<readonly RuntimeProbeCheck[]> {
   const workerModule = (await import(`${pathToFileURL(input.workerPath).href}?tracer=${Date.now()}`)) as {
     default?: { fetch?: (request: Request, env: Record<string, string>, ctx: unknown) => Promise<Response> | Response };
   };
@@ -3003,19 +3368,84 @@ async function runLoopbackProbe(input: {
     }, {}),
   });
   try {
-    const timed = await fetchWithTimeout(input.fetchImpl, server.url, { method: "GET", redirect: "manual" }, input.timeoutMs);
-    const response = timed.response;
-    const rawBody = await readTimedResponse(timed);
-    if (response.status !== 200) throw new TracerError(`loopback Worker probe returned HTTP ${response.status}`);
-    assertExactProbeBody(
-      boundedJson(rawBody, "loopback Worker probe"),
-      input.configValue,
-      input.nonce,
-      input.projectUid,
-    );
+    return await probeRuntimeRoutes({
+      endpoint: server.url,
+      configValue: input.configValue,
+      nonce: input.nonce,
+      projectUid: input.projectUid,
+      timeoutMs: input.timeoutMs,
+      fetchImpl: input.fetchImpl,
+      subject: "loopback Worker probe",
+    });
   } finally {
     server.stop(true);
   }
+}
+
+export type RuntimeProbeCheck = {
+  readonly name: "root-correlation" | "health" | "takos-discovery";
+  readonly path: "/" | "/health" | "/.well-known/takos";
+  readonly status: 200;
+  readonly anonymous: true;
+};
+
+async function probeRuntimeRoutes(input: {
+  readonly endpoint: URL;
+  readonly configValue: string;
+  readonly nonce: string;
+  readonly projectUid: string;
+  readonly timeoutMs: number;
+  readonly fetchImpl: FetchFunction;
+  readonly subject: string;
+}): Promise<readonly RuntimeProbeCheck[]> {
+  const checks = [
+    {
+      name: "root-correlation",
+      path: "/",
+      assertBody: (value: unknown): void =>
+        assertExactProbeBody(value, input.configValue, input.nonce, input.projectUid),
+    },
+    { name: "health", path: "/health", assertBody: assertExactHealthBody },
+    {
+      name: "takos-discovery",
+      path: "/.well-known/takos",
+      assertBody: assertExactDiscoveryBody,
+    },
+  ] as const;
+  const evidence: RuntimeProbeCheck[] = [];
+  for (const check of checks) {
+    const url = new URL(check.path, input.endpoint);
+    const timed = await fetchWithTimeout(
+      input.fetchImpl,
+      url,
+      {
+        method: "GET",
+        redirect: "manual",
+        headers: { accept: "application/json" },
+      },
+      input.timeoutMs,
+    );
+    const response = timed.response;
+    const rawBody = await readTimedResponse(timed);
+    if (response.status !== 200) {
+      throw new TracerError(`${input.subject} ${check.path} returned HTTP ${response.status}`);
+    }
+    if (
+      response.headers.has("location") ||
+      response.headers.has("set-cookie") ||
+      response.headers.has("www-authenticate")
+    ) {
+      throw new TracerError(`${input.subject} ${check.path} did not preserve the anonymous no-redirect boundary`);
+    }
+    check.assertBody(boundedJson(rawBody, `${input.subject} ${check.path}`));
+    evidence.push({
+      name: check.name,
+      path: check.path,
+      status: 200,
+      anonymous: true,
+    });
+  }
+  return evidence;
 }
 
 export async function probeRuntime(input: {
@@ -3028,7 +3458,12 @@ export async function probeRuntime(input: {
   readonly targetHost: string;
   readonly timeoutMs: number;
   readonly fetchImpl?: FetchFunction;
-}): Promise<{ readonly mode: "loopback-diagnostic" | "assigned-endpoint"; readonly assignedUrl: string; readonly evidence: string }> {
+}): Promise<{
+  readonly mode: "loopback-diagnostic" | "assigned-endpoint";
+  readonly assignedUrl: string;
+  readonly evidence: string;
+  readonly checks: readonly RuntimeProbeCheck[];
+}> {
   const endpoint = assertEndpointTarget({
     assignedUrl: endpointURL(input.endpoint).toString(),
     hostname: input.endpoint.hostname,
@@ -3037,7 +3472,7 @@ export async function probeRuntime(input: {
   });
   const fetchImpl = input.fetchImpl ?? fetch;
   if (isLoopbackDiagnosticHost(input.targetHost) && normalizedHostname(endpoint.hostname).endsWith(".invalid")) {
-    await runLoopbackProbe({
+    const checks = await runLoopbackProbe({
       workerPath: input.workerPath,
       configValue: input.configValue,
       nonce: input.nonce,
@@ -3049,19 +3484,24 @@ export async function probeRuntime(input: {
       mode: "loopback-diagnostic",
       assignedUrl: endpoint.toString(),
       evidence: "diagnostic-only-not-host-runtime",
+      checks,
     };
   }
-  const timed = await fetchWithTimeout(fetchImpl, endpoint, { method: "GET", redirect: "manual", headers: { accept: "application/json" } }, input.timeoutMs);
-  const response = timed.response;
-  const rawBody = await readTimedResponse(timed);
-  if (response.status !== 200) throw new TracerError(`assigned Worker endpoint returned HTTP ${response.status}`);
-  assertExactProbeBody(
-    boundedJson(rawBody, "assigned Worker probe"),
-    input.configValue,
-    input.nonce,
-    input.projectUid,
-  );
-  return { mode: "assigned-endpoint", assignedUrl: endpoint.toString(), evidence: "host-runtime-readback" };
+  const checks = await probeRuntimeRoutes({
+    endpoint,
+    configValue: input.configValue,
+    nonce: input.nonce,
+    projectUid: input.projectUid,
+    timeoutMs: input.timeoutMs,
+    fetchImpl,
+    subject: "assigned Worker probe",
+  });
+  return {
+    mode: "assigned-endpoint",
+    assignedUrl: endpoint.toString(),
+    evidence: "host-runtime-readback",
+    checks,
+  };
 }
 
 export type TofuPhase = "init" | "validate" | "show" | "output" | "state" | "plan" | "apply" | "destroy" | "version";
@@ -3597,6 +4037,7 @@ export type TracerReport = {
     readonly assignedUrl: string;
     readonly exact: true;
     readonly evidence: string;
+    readonly checks: readonly RuntimeProbeCheck[];
   };
   readonly runtime: {
     readonly assignedUrl: string;
@@ -3612,12 +4053,17 @@ export type TracerReport = {
     readonly hostResources: { readonly absence: "passed" };
     readonly endpoint: EndpointAbsenceEvidence & { readonly expectedOrigin: string };
   };
-  readonly native: {
-    readonly status: "unavailable";
-    readonly zeroResidual: false;
-    readonly gaEligible: false;
-    readonly blocker: typeof NATIVE_RESIDUAL_INVENTORY_BLOCKER;
-  };
+  readonly native:
+    | (NativeAbsenceEvidence & {
+      readonly zeroResidual: true;
+      readonly gaEligible: false;
+    })
+    | {
+      readonly status: "not-applicable";
+      readonly zeroResidual: false;
+      readonly gaEligible: false;
+      readonly reason: "loopback-diagnostic-is-not-takoserver-runtime-evidence";
+    };
   readonly lifecycle: {
     readonly init: "passed";
     readonly validate: "passed";
@@ -3648,6 +4094,14 @@ export async function runTracer(config: CliConfig, options: {
   const expectedEndpointOrigin = materializeEndpointOrigin(config.endpointOriginTemplate, rootState.projectName);
   const assignedEndpoint = { url: undefined as string | undefined, hostname: undefined as string | undefined };
   let endpointAbsence: EndpointAbsenceEvidence | undefined;
+  let appliedIdentities: Record<ResourceKey, ResourceIdentity> | undefined;
+  let nativeAbsence:
+    | NativeAbsenceEvidence
+    | {
+      readonly status: "not-applicable";
+      readonly reason: "loopback-diagnostic-is-not-takoserver-runtime-evidence";
+    }
+    | undefined;
   let planEvidence: PlanEvidence | undefined;
   let lockEvidence: ProviderLock | undefined;
   let toolchainEvidence: ToolchainEvidence | undefined;
@@ -3726,8 +4180,37 @@ export async function runTracer(config: CliConfig, options: {
       }
     }
 
-    if (stateError || absenceError || endpointError) {
-      const details = [stateError, absenceError, endpointError]
+    let nativeError: unknown;
+    if (isLoopbackDiagnosticHost(config.host)) {
+      nativeAbsence = {
+        status: "not-applicable",
+        reason: "loopback-diagnostic-is-not-takoserver-runtime-evidence",
+      };
+      markMilestone("native_absence_not_applicable");
+    } else if (!appliedIdentities) {
+      nativeError = new TracerError(
+        "pre-destroy Host identities were unavailable for native absence verification",
+      );
+    } else {
+      try {
+        nativeAbsence = await verifyNativeAbsence({
+          host: config.host,
+          organizationId: config.organizationId,
+          identities: appliedIdentities,
+          token: config.evidenceToken,
+          timeoutMs: config.timeoutMs,
+          projectName: rootState.projectName,
+          revisions: rootState.revisions,
+          fetchImpl: options.fetchImpl,
+        });
+        markMilestone("native_absence_completed");
+      } catch (error) {
+        nativeError = error;
+      }
+    }
+
+    if (stateError || absenceError || endpointError || nativeError) {
+      const details = [stateError, absenceError, endpointError, nativeError]
         .filter((error): error is Error => error instanceof Error)
         .map((error) => safeErrorMessage(error, [config.token, config.evidenceToken]))
         .join("; ");
@@ -3916,6 +4399,7 @@ export async function runTracer(config: CliConfig, options: {
       if (!readback.identity) throw new TracerError(key + " readback did not return an authoritative identity");
       identities[key] = readback.identity;
     }
+    appliedIdentities = identities;
     markMilestone("resource_readback_completed");
 
     for (const resource of Object.values(identities)) {
@@ -3953,8 +4437,8 @@ export async function runTracer(config: CliConfig, options: {
 
     await cleanupAppliedRun(true);
 
-    if (!endpointAbsence) {
-      throw new TracerError("endpoint absence evidence was incomplete before report construction");
+    if (!endpointAbsence || !nativeAbsence) {
+      throw new TracerError("post-destroy absence evidence was incomplete before report construction");
     }
 
     const report: TracerReport = {
@@ -4012,12 +4496,17 @@ export async function runTracer(config: CliConfig, options: {
         hostResources: { absence: "passed" },
         endpoint: { ...endpointAbsence, expectedOrigin: expectedEndpointOrigin },
       },
-      native: {
-        status: "unavailable",
-        zeroResidual: false,
-        gaEligible: false,
-        blocker: NATIVE_RESIDUAL_INVENTORY_BLOCKER,
-      },
+      native: nativeAbsence.status === "passed"
+        ? {
+          ...nativeAbsence,
+          zeroResidual: true,
+          gaEligible: false,
+        }
+        : {
+          ...nativeAbsence,
+          zeroResidual: false,
+          gaEligible: false,
+        },
       lifecycle: {
         init: "passed",
         validate: "passed",

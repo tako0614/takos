@@ -30,6 +30,7 @@ test("online evidence initializes and validates the exact public Provider 4.0.0"
     const tfDataDir = join(root, "tfdata");
     const config: CliConfig = {
       host: "https://127.0.0.1:8787",
+      organizationId: "org-integration-e2e",
       space: "space-a",
       endpointOriginTemplate: "https://{project}.invalid/",
       tokenEnv: "TAKOFORM_ONLINE_EVIDENCE_TOKEN",
