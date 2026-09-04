@@ -86,6 +86,10 @@ export default defineConfig({
             text: "Release artifact publication",
             link: "/deploy/release-artifact",
           },
+          {
+            text: "First-install owner contract",
+            link: "/deploy/first-install-owner-contract",
+          },
           { text: "本番デプロイレーン", link: "/deploy/production-lane" },
           {
             text: "サイトとドキュメント",
