@@ -18,29 +18,166 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const OPERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
+export const TAKOS_FIRST_INSTALL_OWNER_CONTRACT_KIND =
+  "takos.first-install-owner-contract@v2" as const;
+
+export const TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE = {
+  descriptor: {
+    kind: "takos.worker-artifact@v3",
+    digest: "sha256",
+    maxBytes: 256 * 1024,
+    releaseTagPattern: "^v\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$",
+    executorImagePattern:
+      "^registry\\.cloudflare\\.com/[0-9a-f]{32}/takos-agent@sha256:[0-9a-f]{64}$",
+    publicAgentImagePattern:
+      "^ghcr\\.io/tako0614/takos-agent@sha256:[0-9a-f]{64}$",
+  },
+  archive: {
+    digest: "sha256",
+    maxCompressedBytes: 64 * 1024 * 1024,
+    maxExpandedBytes: 256 * 1024 * 1024,
+    maxEntries: 20_000,
+    maxPathBytes: 4_096,
+  },
+  workerVersions: {
+    method: "cloudflare-api-v4",
+    pagination: "page/per_page",
+    pageSize: 100,
+    maxPages: 100,
+    maxRows: 10_000,
+    stableScans: 2,
+  },
+  containerApplications: {
+    method: "cloudflare-api-v4",
+    pagination: "per_page/page_token",
+    pageSize: 100,
+    maxPages: 100,
+    maxRows: 10_000,
+    stableScans: 2,
+    detailMethod: "wrangler-containers-info",
+  },
+} as const;
+
 export const TAKOS_FIRST_INSTALL_OWNER_CONTRACT = {
-  kind: "takos.first-install-owner-contract@v1",
+  kind: TAKOS_FIRST_INSTALL_OWNER_CONTRACT_KIND,
   deployContractKind: "takos.deploy-contract@v2",
   deploySurface: "takos-cloudflare-production",
+  deployTarget: "cloudflare-worker:takos",
+  productEnvironment: "staging",
+  releaseEvidence: TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE,
   operations: [
     "runtime-secrets-install",
+    "release-apply",
+    "release-status",
     "functional-proof",
     "absence-proof",
   ],
   resultKinds: {
     runtimeSecretsInstall: "takos.first-install-runtime-secrets@v1",
+    releaseApply: "takos.first-install-release-apply@v2",
+    releaseStatus: "takos.first-install-release-status@v2",
     functionalProof: "takos.first-install-functional-proof@v1",
     absenceProof: "takos.first-install-absence@v1",
   },
   usage: {
     runtimeSecretsInstall:
       "bun run deploy -- takos-cloudflare-production --runtime-secrets-install --environment integration --outputs <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --runtime-secret-directory <absolute 0700 directory> --cloudflare-api-token-file <absolute 0600 file> --execute",
+    releaseApply:
+      "bun run deploy -- takos-cloudflare-production --release-apply --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --cloudflare-api-token-file <absolute 0600 file> --execute",
+    releaseStatus:
+      "bun run deploy -- takos-cloudflare-production --release-status --environment integration --product-environment staging --outputs-file <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --release-descriptor-file <absolute canonical descriptor.json> --cloudflare-api-token-file <absolute 0600 file> --expected-served-version <uuid>",
     functionalProof:
       "bun run first-install:functional-proof -- --environment integration --public-url <https origin> --source-commit <40hex> --served-version <uuid> --owner-session-file <absolute 0600 file>",
     absenceProof:
       "bun run deploy -- takos-cloudflare-production --absence-proof --environment integration --outputs <absolute retained outputs.json> --output-digest sha256:<64hex> --source-commit <40hex> --operation-id <fixed id> --cloudflare-api-token-file <absolute 0600 file>",
   },
 } as const;
+
+export type FirstInstallReleaseIdentity = Readonly<{
+  tag: string;
+  descriptor: Readonly<{
+    kind: "takos.worker-artifact@v3";
+    digest: string;
+  }>;
+  archiveDigest: string;
+  executorImage: string;
+  publicAgentImage: string;
+}>;
+
+export type FirstInstallReleaseTarget = Readonly<{
+  accountId: string;
+  workerName: string;
+  publicUrl: string;
+}>;
+
+export type FirstInstallReleaseApplyResult = Readonly<{
+  ownerContract: typeof TAKOS_FIRST_INSTALL_OWNER_CONTRACT_KIND;
+  kind: "takos.first-install-release-apply@v2";
+  status: "applied";
+  operationId: string;
+  orchestrationLane: "integration";
+  productEnvironment: "staging";
+  sourceCommit: string;
+  outputDigest: string;
+  release: FirstInstallReleaseIdentity;
+  target: FirstInstallReleaseTarget;
+  bootstrap: Readonly<{ moduleVersion: string }>;
+  activated: Readonly<{ servedVersion: string }>;
+  attempt: Readonly<{
+    tag: string;
+    message: string;
+    versionId: string;
+  }>;
+  completeness: Readonly<{
+    workerVersions: typeof TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.workerVersions & Readonly<{
+      before: Readonly<{ status: "complete"; scans: 2 }>;
+      after: Readonly<{ status: "complete"; scans: 2 }>;
+      exactAttemptMatches: 1;
+      exactInventoryAdditions: 1;
+    }>;
+    containerApplications:
+      typeof TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.containerApplications & Readonly<{
+        inventory: Readonly<{ status: "complete"; scans: 2 }>;
+        exactApplicationNames: 3;
+        healthyApplicationDetails: 3;
+        activeRollouts: 0;
+      }>;
+  }>;
+  health: Readonly<{ path: "/health"; status: 200 }>;
+  appliedAt: string;
+}>;
+
+export type FirstInstallReleaseStatusResult = Readonly<{
+  ownerContract: typeof TAKOS_FIRST_INSTALL_OWNER_CONTRACT_KIND;
+  kind: "takos.first-install-release-status@v2";
+  status: "active";
+  operationId: string;
+  orchestrationLane: "integration";
+  productEnvironment: "staging";
+  sourceCommit: string;
+  outputDigest: string;
+  release: FirstInstallReleaseIdentity;
+  target: FirstInstallReleaseTarget;
+  bootstrap: Readonly<{ moduleVersion: string }>;
+  activated: Readonly<{ servedVersion: string }>;
+  runtimeSecrets: Readonly<{
+    provisioned: true;
+    present: readonly string[];
+    missing: readonly [];
+  }>;
+  completeness: Readonly<{
+    containerApplications:
+      typeof TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.containerApplications & Readonly<{
+        inventory: Readonly<{ status: "complete"; scans: 2 }>;
+        exactApplicationNames: 3;
+        healthyApplicationDetails: 3;
+        activeRollouts: 0;
+      }>;
+  }>;
+  health: Readonly<{ path: "/health"; status: 200 }>;
+  unrelatedDrift: readonly [];
+  checkedAt: string;
+}>;
 
 export type FirstInstallRuntimeSecretsResult = Readonly<{
   kind: "takos.first-install-runtime-secrets@v1";
@@ -121,6 +258,13 @@ export type CloudflareApiResponse = Readonly<{
   body: unknown;
 }>;
 
+export type CloudflareListPagination = "numbered" | "cursor";
+
+export type CloudflareListResult = Readonly<
+  | { status: "complete"; rows: readonly Readonly<Record<string, unknown>>[] }
+  | { status: "indeterminate" }
+>;
+
 export class FirstInstallOwnerError extends Error {
   readonly exitCode: number;
   readonly stage: "refused" | "indeterminate" | "post-conditions";
@@ -153,6 +297,10 @@ function refuse(message: string): never {
 
 function indeterminate(message: string): never {
   throw new FirstInstallOwnerError("indeterminate", message);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function validateCommon(input: CommonInput): void {
@@ -424,6 +572,8 @@ export async function runFirstInstallRuntimeSecrets(
 
 type ApiEnvelope = Readonly<{
   success?: boolean;
+  errors?: unknown;
+  messages?: unknown;
   result?: unknown;
   result_info?: Readonly<Record<string, unknown>>;
 }>;
@@ -472,83 +622,191 @@ function resultRows(value: unknown): readonly Record<string, unknown>[] | null {
   return rows as Record<string, unknown>[];
 }
 
+export const CLOUDFLARE_COMPLETE_LIST = {
+  pageSize: TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.workerVersions.pageSize,
+  maxPages: TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.workerVersions.maxPages,
+  maxRows: TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.workerVersions.maxRows,
+  stableScans: TAKOS_FIRST_INSTALL_RELEASE_EVIDENCE.workerVersions.stableScans,
+} as const;
+
+/**
+ * Reads one complete, bounded Cloudflare list without relying on a CLI's
+ * display limit. Authority-sensitive callers opt in to the exact V4 envelope;
+ * older absence endpoints share the same bounded traversal while retaining
+ * their historically looser envelope compatibility.
+ */
+export async function listCloudflareApiRows(
+  api: (request: CloudflareApiRequest) => Promise<CloudflareApiResponse>,
+  input: Readonly<{
+    tokenFile: string;
+    path: string;
+    pagination: CloudflareListPagination;
+    resultShape: "array" | "items";
+    exactEnvelope: boolean;
+  }>,
+): Promise<CloudflareListResult> {
+  const rows: Record<string, unknown>[] = [];
+  const seenPageTokens = new Set<string>();
+  let page = 1;
+  let pageToken: string | undefined;
+  let expectedTotalCount: number | undefined;
+  let expectedTotalPages: number | undefined;
+
+  for (
+    let requestCount = 0;
+    requestCount < CLOUDFLARE_COMPLETE_LIST.maxPages;
+    requestCount += 1
+  ) {
+    let response: CloudflareApiResponse;
+    try {
+      response = await api({
+        method: "GET",
+        path: input.path,
+        query: {
+          per_page: String(CLOUDFLARE_COMPLETE_LIST.pageSize),
+          ...(input.pagination === "cursor"
+            ? (pageToken === undefined ? {} : { page_token: pageToken })
+            : { page: String(page) }),
+        },
+        cloudflareApiTokenFile: input.tokenFile,
+      });
+    } catch {
+      return { status: "indeterminate" };
+    }
+
+    const body = envelope(response);
+    if (
+      response.status !== 200 ||
+      !body ||
+      body.success !== true ||
+      (input.exactEnvelope &&
+        (!Array.isArray(body.errors) || !Array.isArray(body.messages))) ||
+      !Object.prototype.hasOwnProperty.call(body, "result") ||
+      !isRecord(body.result_info)
+    ) {
+      return { status: "indeterminate" };
+    }
+    const pageRows = input.resultShape === "items"
+      ? isRecord(body.result) && Array.isArray(body.result.items)
+        ? resultRows(body.result)
+        : null
+      : Array.isArray(body.result)
+        ? resultRows(body.result)
+        : null;
+    if (
+      pageRows === null ||
+      pageRows.length > CLOUDFLARE_COMPLETE_LIST.pageSize ||
+      rows.length + pageRows.length > CLOUDFLARE_COMPLETE_LIST.maxRows
+    ) {
+      return { status: "indeterminate" };
+    }
+    rows.push(...pageRows);
+
+    const info = body.result_info;
+    if (input.pagination === "cursor") {
+      if (
+        info.count !== undefined &&
+        (typeof info.count !== "number" ||
+          !Number.isSafeInteger(info.count) ||
+          info.count !== pageRows.length)
+      ) {
+        return { status: "indeterminate" };
+      }
+      const nextToken = info.next_page_token;
+      if (nextToken === undefined || nextToken === null) {
+        return { status: "complete", rows };
+      }
+      if (
+        typeof nextToken !== "string" ||
+        nextToken.length === 0 ||
+        nextToken.length > 2_048 ||
+        hasAsciiControlCharacter(nextToken) ||
+        seenPageTokens.has(nextToken)
+      ) {
+        return { status: "indeterminate" };
+      }
+      seenPageTokens.add(nextToken);
+      pageToken = nextToken;
+      continue;
+    }
+
+    const numeric = (name: string): number | undefined => {
+      const value = info[name];
+      return typeof value === "number" && Number.isSafeInteger(value)
+        ? value
+        : undefined;
+    };
+    const observedPage = numeric("page");
+    const observedPerPage = numeric("per_page");
+    const observedCount = numeric("count");
+    const totalCount = numeric("total_count");
+    const totalPages = numeric("total_pages");
+    if (
+      totalPages === undefined ||
+      totalPages < 0 ||
+      totalPages > CLOUDFLARE_COMPLETE_LIST.maxPages ||
+      (input.exactEnvelope &&
+        (observedPage !== page ||
+          observedPerPage !== CLOUDFLARE_COMPLETE_LIST.pageSize ||
+          observedCount !== pageRows.length ||
+          totalCount === undefined ||
+          totalCount < 0))
+    ) {
+      return { status: "indeterminate" };
+    }
+    if (expectedTotalPages === undefined) {
+      expectedTotalPages = totalPages;
+      expectedTotalCount = totalCount;
+    } else if (
+      totalPages !== expectedTotalPages ||
+      (input.exactEnvelope && totalCount !== expectedTotalCount)
+    ) {
+      return { status: "indeterminate" };
+    }
+    if (totalPages === 0) {
+      return page === 1 && rows.length === 0 &&
+          (!input.exactEnvelope || expectedTotalCount === 0)
+        ? { status: "complete", rows }
+        : { status: "indeterminate" };
+    }
+    if (page > totalPages) return { status: "indeterminate" };
+    if (page < totalPages) {
+      page += 1;
+      continue;
+    }
+    if (input.exactEnvelope && rows.length !== expectedTotalCount) {
+      return { status: "indeterminate" };
+    }
+    return { status: "complete", rows };
+  }
+  return { status: "indeterminate" };
+}
+
 async function listResourceNames(
   api: (request: CloudflareApiRequest) => Promise<CloudflareApiResponse>,
   tokenFile: string,
   path: string,
   nameOf: (row: Record<string, unknown>) => string | null,
+  pagination: CloudflareListPagination = "numbered",
 ): Promise<Readonly<{ status: "complete"; names: readonly string[] } | { status: "indeterminate" }>> {
+  const listing = await listCloudflareApiRows(api, {
+    tokenFile,
+    path,
+    pagination,
+    resultShape: "array",
+    exactEnvelope: false,
+  });
+  if (listing.status === "indeterminate") return listing;
   const names: string[] = [];
-  let page = 1;
-  let pageToken: string | undefined;
-  for (let requestCount = 0; requestCount < 100; requestCount += 1) {
-    let response: CloudflareApiResponse;
-    try {
-      response = await api({
-        method: "GET",
-        path,
-        query: {
-          per_page: "100",
-          ...(pageToken ? { page_token: pageToken } : { page: String(page) }),
-        },
-        cloudflareApiTokenFile: tokenFile,
-      });
-    } catch {
-      return { status: "indeterminate" };
+  try {
+    for (const entry of listing.rows) {
+      const name = nameOf(entry as Record<string, unknown>);
+      if (name) names.push(name);
     }
-    const body = envelope(response);
-    if (
-      response.status !== 200 ||
-      !body ||
-      body.success !== true
-    ) {
-      return { status: "indeterminate" };
-    }
-    const rows = resultRows(body.result);
-    if (!rows) return { status: "indeterminate" };
-    try {
-      for (const row of rows) {
-        const name = nameOf(row);
-        if (name) names.push(name);
-      }
-    } catch {
-      return { status: "indeterminate" };
-    }
-    if (
-      body.result_info !== undefined &&
-      (typeof body.result_info !== "object" || body.result_info === null)
-    ) {
-      return { status: "indeterminate" };
-    }
-    const info = body.result_info ?? {};
-    const nextToken =
-      typeof info.next_page_token === "string" && info.next_page_token.length > 0
-        ? info.next_page_token
-        : null;
-    if (nextToken) {
-      if (nextToken.length > 2_048 || hasAsciiControlCharacter(nextToken)) {
-        return { status: "indeterminate" };
-      }
-      if (nextToken === pageToken) return { status: "indeterminate" };
-      pageToken = nextToken;
-      continue;
-    }
-    if (info.total_pages === undefined) {
-      return rows.length < 100
-        ? { status: "complete", names }
-        : { status: "indeterminate" };
-    }
-    const totalPages = Number(info.total_pages);
-    if (!Number.isSafeInteger(totalPages) || totalPages < page) {
-      return { status: "indeterminate" };
-    }
-    if (page < totalPages) {
-      page += 1;
-      continue;
-    }
-    return { status: "complete", names };
+  } catch {
+    return { status: "indeterminate" };
   }
-  return { status: "indeterminate" };
+  return { status: "complete", names };
 }
 
 function row(
@@ -765,6 +1023,7 @@ export async function runFirstInstallAbsenceProof(
         }
         return entry.name;
       },
+      "cursor",
     ),
   ));
 

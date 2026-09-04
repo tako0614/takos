@@ -70,6 +70,7 @@ function outputsFixture(
     cloudflare_vectorize_index_metric: wrap("cosine"),
     runtime_secret_binding_names: wrap([...RUNTIME_SECRET_BINDING_NAMES]),
     runtime_secrets_provisioned: wrap(true),
+    deployment_environment: wrap("staging"),
     cloudflare_worker_version_id: wrap("11111111-2222-3333-4444-555555555555"),
     ...overrides,
   };
@@ -228,6 +229,12 @@ test("a plain name -> value outputs file is accepted too", () => {
     plain[name] = (entry as { value: unknown }).value;
   }
   expect(parseModuleOutputs(plain).serviceRuntimeName).toBe("takos-live");
+});
+
+test("the retained outputs preserve the OpenTofu product environment", () => {
+  expect(parseModuleOutputs(outputsFixture()).deploymentEnvironment).toBe(
+    "staging",
+  );
 });
 
 test("an unpinned or foreign-account container image is refused", () => {

@@ -14,6 +14,11 @@ output "service_runtime_name" {
   value       = local.service_runtime_name
 }
 
+output "deployment_environment" {
+  description = "Takos product environment bound into retained first-install release evidence."
+  value       = var.environment
+}
+
 output "launch_url" {
   description = "Canonical public Takos URL when public_url or workers_subdomain is supplied."
   value       = local.launch_url

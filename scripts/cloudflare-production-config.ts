@@ -75,6 +75,7 @@ export type ModuleOutputs = Readonly<{
   vectorIndex: Readonly<{ name: string; dimensions: number; metric: string }>;
   runtimeSecretBindingNames: readonly string[];
   runtimeSecretsProvisioned: boolean;
+  deploymentEnvironment: string | null;
   moduleWorkerVersionId: string | null;
 }>;
 
@@ -223,6 +224,7 @@ export function parseModuleOutputs(raw: unknown): ModuleOutputs {
   }
 
   const moduleWorkerVersionId = readOutput(raw, "cloudflare_worker_version_id");
+  const deploymentEnvironment = readOutput(raw, "deployment_environment");
 
   return {
     accountId,
@@ -274,6 +276,9 @@ export function parseModuleOutputs(raw: unknown): ModuleOutputs {
     },
     runtimeSecretBindingNames: secretNames as readonly string[],
     runtimeSecretsProvisioned: provisioned,
+    deploymentEnvironment: deploymentEnvironment === undefined
+      ? null
+      : requiredString(deploymentEnvironment, "deployment_environment"),
     moduleWorkerVersionId:
       typeof moduleWorkerVersionId === "string" && moduleWorkerVersionId.length > 0
         ? moduleWorkerVersionId

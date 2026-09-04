@@ -37,7 +37,11 @@ Durable Object namespace の bootstrap だけです。D1 migration はどちら�
 | `--container-image` | digest 固定の agent image | `--release` を渡さないとき |
 | `--commit` | HEAD と一致する exact commit | `main` 以外から production を配置するとき |
 | `CLOUDFLARE_API_TOKEN` | legacy apply/status lane の account credential | `--status` / `--vectorize` / `--apply` / `--containers` (環境変数のみ) |
-| `--cloudflare-api-token-file` | first-install authority phase の account credential | `--runtime-secrets-install` / `--absence-proof` (repository 外の canonical `0600` file) |
+| `--cloudflare-api-token-file` | first-install authority phase の account credential | 4 deploy-side first-install operation (repository 外の canonical `0600` file) |
+| `--outputs-file` / `--output-digest` | retained staging OpenTofu output と SHA-256 | `--release-apply` / `--release-status` |
+| `--release-descriptor-file` | canonical `takos.worker-artifact@v3` | `--release-apply` / `--release-status` |
+| `--product-environment staging` | Takos product environment (orchestration の `integration` lane とは別) | `--release-apply` / `--release-status` |
+| `--expected-served-version` | 成功した release apply receipt の exact UUID | `--release-status` |
 
 container image は必ず digest 固定です。`registry.cloudflare.com/<account>/takos-agent@sha256:…`
 または `docker.io/…@sha256:…` 以外は拒否し、tag 参照も受け付けません。通常は
@@ -103,6 +107,55 @@ upload の前に gate を 1 回実行します。
 upload の後は、新しい version id、binding closure、secret 名、pin された image を
 持つ Container application、そして公開 URL を読み戻します。production は
 `/health` が 200、`/api/auth/me` が 401 であることまで要求します。
+
+### `--release-apply`
+
+first-install coordinator 専用の closed writer です。既存 surface 名は
+`takos-cloudflare-production` のままですが、orchestration lane は `integration`、Takos
+product environment は `staging` に固定されます。generic `--outputs` / `--release` /
+`--container-image` / `--commit` / realized config、Durable Object migration authority は
+受け取りません。
+
+clean checkout の HEAD、`--source-commit`、canonical release descriptor commit を一致させ、regular-file
+descriptor の exact bytes digest と physical identity、published archive の size/digest を確認します。archive は repository 外の fresh private custody へ
+bounded stream し、compressed 64 MiB / expanded 256 MiB / 20,000 entry を上限に、duplicate、unsafe
+path、link、special entry を extraction 前に拒否します。archive、extracted payload、realized config の
+bytes と physical identity を seal し、upload 直前/直後に再検証します。retained output が記録した
+OpenTofu bootstrap version が現在配信中である場合だけ upload を 1 回行い、新しい served version、
+sealed realized config から導く exact non-secret binding closure、別管理の runtime secret 5 名、
+Vectorize、direct API の全 cursor page を 2 回一致させた Container application の exact 3-name closure、
+各 typed detail の image/health/no-active-rollout、`/health` を読み戻します。成功する v2 result は owner
+contract、release tag/descriptor exact bytes digest/archive digest/executor と public-agent image、
+account/Worker/public URL、bootstrap/served version、complete inventory evidence を value-free に束ねます。
+
+upload は account/Worker/source/output bytes digest/operation/release descriptor digest から決まる attempt
+tag/message を使います。owner-private な target/account+Worker+operation scope の atomic local lease を
+absence から exact unique readback まで保持し、stale/foreign lease は steal しません。これは same-host
+single-writer fence であり、provider の distributed CAS ではありません。lease 内で direct Worker Versions
+API の全 page を 2 回 scan して一致させ、exact attempt が不存在のときだけ
+`--strict --containers-rollout immediate` で upload を 1 回実行します。
+
+upload 後も全 page を 2 回 scan し、通常 acknowledgement と lost acknowledgement の両方で exact
+tag/message 1 件、pre-inventory からの immutable addition 1 件、current/version-detail の同一 UUID と
+tag/message を要求します。page drift、0 件、複数件、foreign concurrent addition/current は exit 3 です。
+新 overlay 全体を証明できれば通常の成功 receipt、できなければ exit 3 です。upload の retry や raw provider
+output の返却は行いません。`immediate` は Container rollout 完了を意味しないため、complete inventory と
+各 application detail の health と `active_rollout_id` の readback が成功条件です。
+
+### `--release-status` (read-only)
+
+成功した `release-apply` receipt の `activated.servedVersion` を exact
+`--expected-served-version` として受け取ります。retained bootstrap version と current served
+version の差だけを expected release overlay とし、その他の binding/secret/Vectorize/
+Container/Durable Object/config/health drift は active result にしません。Container は direct API の全
+cursor page を 2 回一致させた exact 3-name closure と各 typed detail を要求します。比較は typed readback
+だけで行い、current deployment は structured JSON の単一 100% version に固定します。v2 status は
+owner contract、descriptor exact bytes digest、complete Container inventory evidence を返します。legacy
+`--status` の `drift` prose や人向け UUID output は parse しません。`--execute` は拒否します。
+
+indeterminate apply は expected version を持たないので、この status に推測値を渡して回復
+させません。coordinator は indeterminate のまま停止します。exact CLI と result schema は
+[first-install owner contract](/deploy/first-install-owner-contract) が正本です。
 
 ### `--containers`
 
@@ -228,12 +281,12 @@ exit code が、どちら側で失敗したかを表します。
 | exit | 意味 | 次にすること |
 | --- | --- | --- |
 | 2 | account に触れていない | 表示された条件を満たしてやり直す |
-| 3 | upload が届いたか不明 | `--status` で権威的に読み戻してから判断する |
+| 3 | upload が届いたか、または readback が確定できない | legacy lane は `--status` で判断する。first-install release apply は内部の 1 回の readback でも証明できなかった状態なので、推測した version で retry/status を行わず停止する |
 | 4 | bytes は公開されたが post-condition が失敗 | `--status` で読み戻し、必要なら rollback |
 
 いずれの場合も自動 retry はしません。legacy apply/vectorize lane は provider の stdout と
-stderr を診断として出しますが、runtime-secret phase は値を反映し得る raw output を一切
-出さず、固定名と bounded acknowledgement だけを返します。
+stderr を診断として出しますが、first-install の runtime-secret/release phase は値を反映し得る
+raw output を一切出さず、固定した bounded evidence だけを返します。
 
 ## 既知の重なり
 
