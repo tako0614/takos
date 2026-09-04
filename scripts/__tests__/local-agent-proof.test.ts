@@ -1,8 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   LOCAL_AGENT_PROOF_ASSISTANT_MARKER,
+  runAuthenticatedStagingFunctionalProof,
   runLocalAgentPublicApiProof,
+  type AuthenticatedOwnerSessionRequest,
+  type AuthenticatedOwnerSessionTransport,
 } from "../local-agent-proof.ts";
+import {
+  createAuthenticatedOwnerSessionFileTransport,
+  parseFirstInstallFunctionalProofArgs,
+} from "../first-install-functional-proof.ts";
 
 describe("local agent public API proof", () => {
   test("stops before public API work when orchestration is interrupted", async () => {
@@ -226,5 +236,398 @@ describe("local agent public API proof", () => {
     ).rejects.toThrow(
       "agent run reached terminal status failed: container failed",
     );
+  });
+});
+
+function authenticatedStagingTransport(options?: {
+  model?: string;
+  executorContainerId?: string | null;
+  receiptServiceId?: string;
+  receiptAvailableAfterPoll?: number;
+  cleanupStatus?: number;
+}): AuthenticatedOwnerSessionTransport & {
+  requests: AuthenticatedOwnerSessionRequest[];
+} {
+  const requests: AuthenticatedOwnerSessionRequest[] = [];
+  let runPolls = 0;
+  return {
+    kind: "takos.authenticated-owner-session-transport@v1",
+    requests,
+    async request(request) {
+      requests.push(request);
+      const { method, path, scope } = request;
+      if (scope === "anonymous" && path === "/health") {
+        return { status: 200, body: { status: "ok" } };
+      }
+      if (scope === "anonymous" && path === "/api/auth/me") {
+        return { status: 401, body: { error: "unauthorized" } };
+      }
+      if (scope === "owner" && method === "GET" && path === "/api/auth/me") {
+        return {
+          status: 200,
+          body: {
+            user: { auth_identities: [{ source: "oidc", email: "owner@test" }] },
+          },
+        };
+      }
+      if (scope === "owner" && method === "GET" && path === "/api/setup/status") {
+        return { status: 200, body: { setup_completed: true } };
+      }
+      if (scope === "owner" && method === "POST" && path === "/api/spaces") {
+        return { status: 201, body: { space: { id: "space-functional" } } };
+      }
+      if (scope === "owner" && method === "GET" && path === "/api/spaces") {
+        return { status: 200, body: { spaces: [{ id: "space-functional" }] } };
+      }
+      if (method === "POST" && path === "/api/spaces/space-functional/threads") {
+        return { status: 201, body: { thread: { id: "thread-functional" } } };
+      }
+      if (method === "POST" && path === "/api/threads/thread-functional/messages") {
+        return { status: 201, body: { message: { id: "message-functional" } } };
+      }
+      if (method === "POST" && path === "/api/threads/thread-functional/runs") {
+        return {
+          status: 201,
+          body: {
+            run: {
+              id: "run-functional",
+              status: "queued",
+              model: options?.model ?? "managed:owner-model",
+            },
+          },
+        };
+      }
+      if (method === "GET" && path === "/api/runs/run-functional") {
+        runPolls += 1;
+        return {
+          status: 200,
+          body: {
+            run: {
+              id: "run-functional",
+              model: options?.model ?? "managed:owner-model",
+              status: runPolls === 1 ? "running" : "completed",
+              output: runPolls === 1 ? null : "A real nonempty assistant answer",
+              worker_id: "service-functional",
+            },
+          },
+        };
+      }
+      if (method === "GET" && path === "/api/runs/run-functional/events") {
+        const id = options?.executorContainerId === undefined
+          ? "01JREALCONTAINER1234567890"
+          : options.executorContainerId;
+        return {
+          status: 200,
+          body: {
+            events: [
+              ...(runPolls >= (options?.receiptAvailableAfterPoll ?? 0)
+                ? [{
+                    type: "executor_dispatch_receipt",
+                    data: JSON.stringify({
+                      service_id: options?.receiptServiceId ?? "service-functional",
+                      lease_version: 1,
+                      recorded_at: "2026-09-04T00:00:00.000Z",
+                      ...(id === null ? {} : { executor_container_id: id }),
+                    }),
+                  }]
+                : []),
+              { type: "started", data: "{}" },
+              ...(runPolls > 1 ? [{ type: "completed", data: "{}" }] : []),
+            ],
+          },
+        };
+      }
+      if (method === "GET" && path === "/api/threads/thread-functional/messages") {
+        return {
+          status: 200,
+          body: {
+            messages: runPolls > 1
+              ? [{ role: "assistant", content: "A real nonempty assistant answer" }]
+              : [],
+          },
+        };
+      }
+      if (method === "DELETE" && path === "/api/spaces/space-functional") {
+        return {
+          status: options?.cleanupStatus ?? 200,
+          body: { success: options?.cleanupStatus === undefined },
+        };
+      }
+      return { status: 404, body: { error: `unexpected ${method} ${path}` } };
+    },
+  };
+}
+
+describe("authenticated staging functional proof", () => {
+  test("proves OIDC, setup, workspace/chat, a real container run, and cleanup without accepting raw auth", async () => {
+    const transport = authenticatedStagingTransport();
+    const proof = await runAuthenticatedStagingFunctionalProof({
+      transport,
+      sourceCommit: "1".repeat(40),
+      servedVersion: "11111111-2222-3333-4444-555555555555",
+      publicUrl: "https://app.example.test",
+      sleep: async () => {},
+      now: () => 1_000,
+    });
+
+    expect(proof).toMatchObject({
+      kind: "takos.first-install-functional-proof@v1",
+      status: "passed",
+      sourceCommit: "1".repeat(40),
+      publicUrl: "https://app.example.test",
+      servedVersion: "11111111-2222-3333-4444-555555555555",
+      oidcIdentityObserved: true,
+      setupCompleted: true,
+      workspaceId: "space-functional",
+      threadId: "thread-functional",
+      runId: "run-functional",
+      runStatus: "completed",
+      model: "managed:owner-model",
+      executorContainerId: "01JREALCONTAINER1234567890",
+      assistantOutputDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      cleanup: { workspace: "deleted" },
+    });
+    expect(Object.keys(proof).sort()).toEqual([
+      "assistantOutputDigest",
+      "checkedAt",
+      "checks",
+      "cleanup",
+      "executorContainerId",
+      "executorReceipt",
+      "kind",
+      "model",
+      "oidcIdentityObserved",
+      "pollCount",
+      "publicUrl",
+      "runId",
+      "runStatus",
+      "servedVersion",
+      "setupCompleted",
+      "sourceCommit",
+      "status",
+      "threadId",
+      "workspaceId",
+    ]);
+    expect(Object.keys(proof.executorReceipt).sort()).toEqual([
+      "leaseVersion",
+      "recordedAt",
+      "serviceId",
+    ]);
+    expect(Object.keys(proof.cleanup).sort()).toEqual(["workspace"]);
+    for (const check of proof.checks) {
+      expect(Object.keys(check).sort()).toEqual([
+        "bodyDigest",
+        "name",
+        "status",
+      ]);
+    }
+    expect(proof.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "health", status: 200 }),
+        expect.objectContaining({ name: "auth-boundary", status: 401 }),
+        expect.objectContaining({ name: "oidc-owner", status: 200 }),
+        expect.objectContaining({ name: "setup", status: 200 }),
+        expect.objectContaining({ name: "agent-run", status: 200 }),
+        expect.objectContaining({ name: "cleanup", status: 200 }),
+      ]),
+    );
+    const runCreate = transport.requests.find(
+      (request) => request.path === "/api/threads/thread-functional/runs",
+    );
+    expect(runCreate?.body).toEqual({
+      agent_type: "default",
+      input: { proof: "takos-first-install-functional" },
+    });
+    expect("model" in (runCreate?.body ?? {})).toBe(false);
+    expect(JSON.stringify(proof)).not.toContain("A real nonempty assistant answer");
+  });
+
+  test("refuses local-smoke and missing real executor evidence but still deletes the proof workspace", async () => {
+    for (const transport of [
+      authenticatedStagingTransport({ model: "local-smoke" }),
+      authenticatedStagingTransport({ executorContainerId: null }),
+      authenticatedStagingTransport({ receiptServiceId: "stale-service" }),
+    ]) {
+      let tick = 0;
+      await expect(
+        runAuthenticatedStagingFunctionalProof({
+          transport,
+          sourceCommit: "1".repeat(40),
+          servedVersion: "11111111-2222-3333-4444-555555555555",
+          publicUrl: "https://app.example.test",
+          sleep: async () => {},
+          now: () => 1_000 + tick++,
+          timeoutMs: 8,
+          pollIntervalMs: 0,
+        }),
+      ).rejects.toThrow(/local-smoke|executor_container_id/u);
+      expect(
+        transport.requests.some(
+          (request) =>
+            request.method === "DELETE" &&
+            request.path === "/api/spaces/space-functional",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("waits for terminal receipt evidence that follows a fast completed run", async () => {
+    const transport = authenticatedStagingTransport({
+      receiptAvailableAfterPoll: 3,
+    });
+    const proof = await runAuthenticatedStagingFunctionalProof({
+      transport,
+      sourceCommit: "1".repeat(40),
+      servedVersion: "11111111-2222-3333-4444-555555555555",
+      publicUrl: "https://app.example.test",
+      sleep: async () => {},
+      now: () => 1_000,
+      pollIntervalMs: 0,
+    });
+
+    expect(proof.status).toBe("passed");
+    expect(
+      transport.requests.filter(
+        (request) => request.path === "/api/runs/run-functional",
+      ),
+    ).toHaveLength(3);
+    expect(proof.executorReceipt.serviceId).toBe("service-functional");
+  });
+
+  test("does not report a passing proof when cleanup is not authoritatively acknowledged", async () => {
+    const transport = authenticatedStagingTransport({ cleanupStatus: 503 });
+    await expect(
+      runAuthenticatedStagingFunctionalProof({
+        transport,
+        sourceCommit: "1".repeat(40),
+        servedVersion: "11111111-2222-3333-4444-555555555555",
+        publicUrl: "https://app.example.test",
+        sleep: async () => {},
+        now: () => 1_000,
+      }),
+    ).rejects.toThrow(/cleanup/u);
+  });
+});
+
+describe("authenticated owner session file adapter", () => {
+  test("keeps auth out of argv/transport input, omits it for anonymous checks, and follows session rotation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-owner-session-"));
+    const sessionFile = join(root, "session");
+    await chmod(root, 0o700);
+    await writeFile(sessionFile, "A2345678901234567890_session\n", { mode: 0o600 });
+    const observed: Array<{ path: string; cookie: string | null; origin: string | null }> = [];
+    try {
+      const transport = await createAuthenticatedOwnerSessionFileTransport({
+        publicUrl: "https://app.example.test",
+        ownerSessionFile: sessionFile,
+        repositoryRoot: resolve(import.meta.dir, "../.."),
+        fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const request = new Request(input, init);
+          observed.push({
+            path: new URL(request.url).pathname,
+            cookie: request.headers.get("cookie"),
+            origin: request.headers.get("origin"),
+          });
+          return Response.json(
+            { ok: true },
+            observed.length === 2
+              ? {
+                  headers: {
+                    "Set-Cookie":
+                      "__Host-tp_session=B2345678901234567890_rotated; Path=/; Secure; HttpOnly",
+                  },
+                }
+              : undefined,
+          );
+        }) as typeof fetch,
+      });
+      await transport.request({ scope: "anonymous", method: "GET", path: "/health" });
+      await transport.request({ scope: "owner", method: "GET", path: "/api/auth/me" });
+      await transport.request({ scope: "owner", method: "GET", path: "/api/setup/status" });
+      expect(observed).toEqual([
+        { path: "/health", cookie: null, origin: null },
+        {
+          path: "/api/auth/me",
+          cookie: "__Host-tp_session=A2345678901234567890_session",
+          origin: "https://app.example.test",
+        },
+        {
+          path: "/api/setup/status",
+          cookie: "__Host-tp_session=B2345678901234567890_rotated",
+          origin: "https://app.example.test",
+        },
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects permissive and symlinked session custody before fetch", async () => {
+    const root = await mkdtemp(join(tmpdir(), "takos-owner-session-invalid-"));
+    const real = join(root, "real-session");
+    const linked = join(root, "linked-session");
+    await chmod(root, 0o700);
+    await writeFile(real, "A2345678901234567890_session\n", { mode: 0o644 });
+    const fetchImpl = (() => {
+      throw new Error("fetch must not run");
+    }) as unknown as typeof fetch;
+    try {
+      await expect(
+        createAuthenticatedOwnerSessionFileTransport({
+          publicUrl: "https://app.example.test",
+          ownerSessionFile: real,
+          repositoryRoot: resolve(import.meta.dir, "../.."),
+          fetchImpl,
+        }),
+      ).rejects.toThrow(/0600/u);
+      await chmod(real, 0o600);
+      await symlink(real, linked);
+      await expect(
+        createAuthenticatedOwnerSessionFileTransport({
+          publicUrl: "https://app.example.test",
+          ownerSessionFile: linked,
+          repositoryRoot: resolve(import.meta.dir, "../.."),
+          fetchImpl,
+        }),
+      ).rejects.toThrow(/canonical|symbolic link/u);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("CLI accepts only the fixed integration session-file contract", () => {
+    expect(
+      parseFirstInstallFunctionalProofArgs([
+        "--environment",
+        "integration",
+        "--public-url",
+        "https://app.example.test",
+        "--source-commit",
+        "1".repeat(40),
+        "--served-version",
+        "11111111-2222-3333-4444-555555555555",
+        "--owner-session-file",
+        "/private/session",
+      ]),
+    ).toMatchObject({
+      environment: "integration",
+      ownerSessionFile: "/private/session",
+    });
+    expect(() =>
+      parseFirstInstallFunctionalProofArgs([
+        "--environment",
+        "integration",
+        "--public-url",
+        "https://app.example.test",
+        "--source-commit",
+        "1".repeat(40),
+        "--served-version",
+        "11111111-2222-3333-4444-555555555555",
+        "--owner-session-file",
+        "/private/session",
+        "--bearer-token",
+        "shared-key-downgrade",
+      ]),
+    ).toThrow(/unknown argument/u);
   });
 });

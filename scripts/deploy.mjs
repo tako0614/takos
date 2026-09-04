@@ -24,6 +24,7 @@ import {
   parseCloudflareProductionArgs,
   runCloudflareProduction,
   TAKOS_CLOUDFLARE_PRODUCTION_SURFACE,
+  TAKOS_FIRST_INSTALL_OWNER_CONTRACT,
 } from "./cloudflare-production-deploy.ts";
 import {
   parseStaticSiteArgs,
@@ -35,6 +36,7 @@ import {
 
 const CONTRACT = {
   kind: "takos.deploy-contract@v2",
+  ownerContracts: [TAKOS_FIRST_INSTALL_OWNER_CONTRACT],
   surfaces: [
     TAKOS_RELEASE_ARTIFACT_SURFACE,
     TAKOS_CLOUDFLARE_PRODUCTION_SURFACE,

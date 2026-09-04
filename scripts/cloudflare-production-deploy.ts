@@ -43,6 +43,22 @@ import {
   parseCanonicalWorkerArtifactDescriptor,
   type WorkerArtifactDescriptor,
 } from "./release-artifact-deploy.ts";
+import {
+  defaultCloudflareApi,
+  digestBytes,
+  runFirstInstallAbsenceProof,
+  runFirstInstallRuntimeSecrets,
+  TAKOS_FIRST_INSTALL_OWNER_CONTRACT,
+  type CloudflareApiRequest,
+  type CloudflareApiResponse,
+} from "./cloudflare-first-install.ts";
+import { readOwnerPrivateFile } from "./owner-private-input.ts";
+
+export {
+  TAKOS_FIRST_INSTALL_OWNER_CONTRACT,
+  type CloudflareApiRequest,
+  type CloudflareApiResponse,
+} from "./cloudflare-first-install.ts";
 
 const COMMIT = /^[0-9a-f]{40}$/u;
 const VERSION_ID =
@@ -77,21 +93,21 @@ export const TAKOS_CLOUDFLARE_PRODUCTION_SURFACE = {
   requiresEnv: ["CLOUDFLARE_API_TOKEN"],
   // The upload carries the Durable Object migration chain, so a first deploy or
   // a class change rewrites topology; the Container application it activates is
-  // pinned to an image digest minted by the release surface. Credentials are not
-  // this surface's class: the five runtime secrets are supplied out of band with
-  // `wrangler secret put` and are only ever read back by name.
-  triggers: ["irreversible", "published-identity"],
+  // pinned to an image digest minted by the release surface.
+  // `--runtime-secrets-install` is a separate fixed authority phase: values
+  // arrive only from owner-private files and are only ever read back by name.
+  triggers: ["authority", "irreversible", "published-identity"],
   obligations: {
     provenance:
-      "--apply --environment=production refuses a dirty worktree, requires clean main or an exact --commit equal to HEAD, and deploys the published release artifact of that commit: the takos.worker-artifact@v3 descriptor is parsed in its canonical form, its archive is downloaded from the release URL and accepted only when the exact size and SHA-256 match the record, and the record's commit must equal the deploying commit. integration and rehearsal may build from the worktree instead. The realized Wrangler configuration is rendered from the OpenTofu module's non-secret Outputs rather than hand-copied, and its SHA-256 is printed with the commit, the release tag, the archive digest, and the pinned container image digest. CLOUDFLARE_API_TOKEN selects the account and is read from the environment only; no credential is written, recorded, or echoed.",
+      "--apply --environment=production refuses a dirty worktree, requires clean main or an exact --commit equal to HEAD, and deploys the published release artifact of that commit: the takos.worker-artifact@v3 descriptor is parsed in its canonical form, its archive is downloaded from the release URL and accepted only when the exact size and SHA-256 match the record, and the record's commit must equal the deploying commit. integration and rehearsal may build from the worktree instead. The realized Wrangler configuration is rendered from the OpenTofu module's non-secret Outputs rather than hand-copied, and its SHA-256 is printed with the commit, the release tag, the archive digest, and the pinned container image digest. Legacy apply/status reads CLOUDFLARE_API_TOKEN from the environment. First-install authority phases reject ambient credential selection: the token comes only from a canonical owner-owned 0600 file, target account/name come from the digest-bound non-secret OpenTofu output artifact, secret values come only from the exact owner-owned 0700 five-file closure, and none is written, recorded, or echoed.",
     "post-conditions":
-      "After the upload the entrypoint reads the newly served Worker version id back from the account, requires it to differ from the version captured before the mutation, and reads that immutable version's binding closure to prove it binds the exact D1 database id, KV namespace id, five R2 bucket names, three queue names, Vectorize index name and all eight Durable Object classes the module named. It re-reads the Worker's secret names to prove the five runtime secrets survived the upload, requires a Container application carrying the pinned image digest for each of the three executor classes, and finally exercises the public URL as a user does: production requires /health to answer 200 and the authenticated API boundary /api/auth/me to answer 401; integration and rehearsal require the /health smoke only.",
+      "After the upload the entrypoint reads the newly served Worker version id back from the account, requires it to differ from the version captured before the mutation, and reads that immutable version's binding closure to prove it binds the exact D1 database id, KV namespace id, five R2 bucket names, three queue names, Vectorize index name and all eight Durable Object classes the module named. It re-reads the Worker's secret names to prove the five runtime secrets survived the upload, requires a Container application carrying the pinned image digest for each of the three executor classes, and finally exercises the public URL as a user does: production requires /health to answer 200 and the authenticated API boundary /api/auth/me to answer 401; integration and rehearsal require the /health smoke only. Runtime-secret installation performs authoritative secret-name readback after every one of the five stdin uploads and emits no value. Absence proof reports absent, present, or indeterminate for the full retained Worker, version, route/domain/workers.dev, D1, KV, five R2, six Queue, Vectorize, and three Container application closure.",
     reversal:
-      "The served Worker version id is read and printed before any mutation, together with the exact `wrangler versions deploy <id>@100%` command that restores it through Cloudflare's own version history. Worker rollback reverses nothing else: a Durable Object migration and a created Vectorize index are forward-only, so --apply refuses a pending Durable Object migration unless --allow-durable-object-migration records that the operator accepts an irreversible topology change, and this surface never deletes a Vectorize index or a Container application.",
+      "The served Worker version id is read and printed before any mutation, together with the exact `wrangler versions deploy <id>@100%` command that restores it through Cloudflare's own version history. Worker rollback reverses nothing else: a Durable Object migration and a created Vectorize index are forward-only, so --apply refuses a pending Durable Object migration unless --allow-durable-object-migration records that the operator accepts an irreversible topology change, and this surface never deletes a Vectorize index or a Container application. Secret replacement cannot reconstruct overwritten values; forward repair is another explicit installation from the owner-retained exact files after authoritative name readback, never an automatic retry. Absence proof never deletes directly and follows the owning OpenTofu destroy.",
     "failure-handling":
-      "Every phase is read-only until --execute is passed, and --status refuses to issue a mutating command at all. Failures carry the provider's own stdout and stderr and name which side of the mutation they fell on: exit 2 means nothing was touched, exit 3 means the upload may have landed and the state is indeterminate, exit 4 means the bytes are published but a post-condition failed. There is no retry; exit 3 and exit 4 direct the operator to --status for an authoritative readback first. A missing CLOUDFLARE_API_TOKEN, absent runtime secrets, an unpinned container image, a missing Vectorize index, a pending Durable Object migration, and an unresolved configuration placeholder are all refusals before the account is touched.",
+      "Every mutation phase is read-only until --execute is passed, --status refuses to issue a mutating command, and --absence-proof performs fixed GETs only. Artifact-deploy failures carry the provider's stdout and stderr and name which side of mutation they fell on; runtime-secret installation emits only bounded value-free attempt acknowledgements and never raw provider output because it may reflect stdin. Exit 2 means nothing was touched, exit 3 means a write may have landed and authoritative readback cannot prove the intended new value, and exit 4 means bytes are published but a post-condition failed. There is no retry. A missing CLOUDFLARE_API_TOKEN on the legacy apply/status lane, an invalid owner-private token file on first-install lanes, absent runtime secrets, an unpinned container image, a missing Vectorize index, a pending Durable Object migration, and an unresolved configuration placeholder are refusals before the account is touched.",
     "pre-mutation-proof":
-      "Before the writer runs, the exact realized configuration for the target account is compiled by one strict `wrangler deploy --dry-run`, and the live account is inspected read-only: the served Worker version, its binding closure, the Durable Object classes it already carries, the Vectorize index shape, the Container applications, and — by name only, never by value — the runtime secrets present on the Worker. Production additionally reuses the exact-commit gate attestation the release artifact publication already earned at that commit, and runs `bun run check` once when the deploy is not bound to such a release.",
+      "Before the ordinary Worker writer runs, the exact realized configuration for the target account is compiled by one strict `wrangler deploy --dry-run`, and the live account is inspected read-only: the served Worker version, its binding closure, the Durable Object classes it already carries, the Vectorize index shape, the Container applications, and — by name only, never by value — the runtime secrets present on the Worker. The separate runtime-secret writer first proves its retained output digest, fixed output-derived target, exact five-name closure, canonical paths, current-user ownership, 0700 directory, 0600 single-link regular files, link-free 0600 token file, and initial authoritative secret-name readback. Production Worker upload additionally reuses the exact-commit gate attestation the release artifact publication already earned at that commit, and runs `bun run check` once when the deploy is not bound to such a release.",
     "independent-review":
       "The Durable Object migration chain and the Container application activation are topology this surface cannot undo, so --allow-durable-object-migration requires a reviewer who did not author the change to have read the pending migration list --status prints against deploy/cloudflare/wrangler.toml's [[migrations]] tags. A routine code upload with no pending migration carries no review requirement, which is the policy's routine lane.",
     "no-overwrite":
@@ -100,7 +116,13 @@ export const TAKOS_CLOUDFLARE_PRODUCTION_SURFACE = {
 } as const;
 
 export type Environment = "integration" | "rehearsal" | "production";
-export type Phase = "status" | "vectorize" | "apply" | "containers";
+export type Phase =
+  | "status"
+  | "vectorize"
+  | "apply"
+  | "containers"
+  | "runtime-secrets-install"
+  | "absence-proof";
 
 export type CloudflareProductionOptions = Readonly<{
   phase: Phase;
@@ -109,6 +131,11 @@ export type CloudflareProductionOptions = Readonly<{
   release?: string;
   containerImage?: string;
   commit?: string;
+  sourceCommit?: string;
+  outputDigest?: string;
+  operationId?: string;
+  runtimeSecretDirectory?: string;
+  cloudflareApiTokenFile?: string;
   execute: boolean;
   allowDurableObjectMigration: boolean;
   root: string;
@@ -119,6 +146,9 @@ export type CommandRequest = Readonly<{
   command: string;
   args: readonly string[];
   cwd?: string;
+  stdinFile?: string;
+  cloudflareApiTokenFile?: string;
+  cloudflareAccountId?: string;
 }>;
 
 export type CommandResult = Readonly<{
@@ -132,6 +162,9 @@ export type FetchOptions = Readonly<{ redirect: "follow" | "manual" }>;
 export type SurfaceRuntime = Readonly<{
   run: (request: CommandRequest) => Promise<CommandResult>;
   fetch: (url: string, options: FetchOptions) => Promise<Response>;
+  cloudflareApi?: (
+    request: CloudflareApiRequest,
+  ) => Promise<CloudflareApiResponse>;
 }>;
 
 type FailureStage = "refused" | "indeterminate" | "post-conditions";
@@ -165,6 +198,8 @@ export const CLOUDFLARE_PRODUCTION_USAGE = `Usage:
   bun run deploy -- takos-cloudflare-production --vectorize --environment <env> --outputs <absolute.json> [--execute]
   bun run deploy -- takos-cloudflare-production --apply --environment <env> --outputs <absolute.json> (--release <absolute.json> | --container-image <ref>) [--commit <sha>] [--allow-durable-object-migration] [--execute]
   bun run deploy -- takos-cloudflare-production --containers --environment <env> --outputs <absolute.json> (--release <absolute.json> | --container-image <ref>)
+  bun run deploy -- takos-cloudflare-production --runtime-secrets-install --environment <env> --outputs <absolute.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --runtime-secret-directory <absolute 0700 dir> --cloudflare-api-token-file <absolute 0600 file> [--execute]
+  bun run deploy -- takos-cloudflare-production --absence-proof --environment <env> --outputs <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --cloudflare-api-token-file <absolute 0600 file>
 
 --outputs is \`tofu output -json\` from deploy/opentofu/cloudflare, or the same
 non-secret values exported by hand. --release is the published
@@ -176,6 +211,8 @@ const PHASES: Readonly<Record<string, Phase | undefined>> = {
   "--vectorize": "vectorize",
   "--apply": "apply",
   "--containers": "containers",
+  "--runtime-secrets-install": "runtime-secrets-install",
+  "--absence-proof": "absence-proof",
 };
 
 const ENVIRONMENTS: readonly Environment[] = [
@@ -194,9 +231,15 @@ export function parseCloudflareProductionArgs(
   let release: string | undefined;
   let containerImage: string | undefined;
   let commit: string | undefined;
+  let sourceCommit: string | undefined;
+  let outputDigest: string | undefined;
+  let operationId: string | undefined;
+  let runtimeSecretDirectory: string | undefined;
+  let cloudflareApiTokenFile: string | undefined;
   let realizedConfig: string | undefined;
   let execute = false;
   let allowDurableObjectMigration = false;
+  const seenValueArguments = new Set<string>();
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -220,6 +263,10 @@ export function parseCloudflareProductionArgs(
     if (value === undefined || value.startsWith("--")) {
       refuse(`${argument} requires a value`);
     }
+    if (seenValueArguments.has(argument)) {
+      refuse(`${argument} may be specified only once`);
+    }
+    seenValueArguments.add(argument);
     index += 1;
     switch (argument) {
       case "--environment": {
@@ -241,6 +288,21 @@ export function parseCloudflareProductionArgs(
       case "--commit":
         commit = value;
         break;
+      case "--source-commit":
+        sourceCommit = value;
+        break;
+      case "--output-digest":
+        outputDigest = value;
+        break;
+      case "--operation-id":
+        operationId = value;
+        break;
+      case "--runtime-secret-directory":
+        runtimeSecretDirectory = value;
+        break;
+      case "--cloudflare-api-token-file":
+        cloudflareApiTokenFile = value;
+        break;
       case "--realized-config":
         realizedConfig = value;
         break;
@@ -256,12 +318,18 @@ export function parseCloudflareProductionArgs(
     ["--outputs", outputs],
     ["--release", release],
     ["--realized-config", realizedConfig],
+    ["--runtime-secret-directory", runtimeSecretDirectory],
+    ["--cloudflare-api-token-file", cloudflareApiTokenFile],
   ] as const) {
     if (path !== undefined && !isAbsolute(path)) {
       refuse(`${name} must be an absolute path`);
     }
   }
-  if (phase !== "vectorize" && !release && !containerImage) {
+  if (
+    (phase === "status" || phase === "apply" || phase === "containers") &&
+    !release &&
+    !containerImage
+  ) {
     refuse(
       "the container image digest is a required input: pass --release <descriptor.json> or --container-image <ref@sha256:...>",
     );
@@ -274,6 +342,29 @@ export function parseCloudflareProductionArgs(
   if (commit !== undefined && !COMMIT.test(commit)) {
     refuse("--commit must be a full 40-character commit id");
   }
+  if (phase === "runtime-secrets-install" || phase === "absence-proof") {
+    if (!sourceCommit) refuse("--source-commit is required for first-install phases");
+    if (!outputDigest) refuse("--output-digest is required for first-install phases");
+    if (!operationId) refuse("--operation-id is required for first-install phases");
+    if (!cloudflareApiTokenFile) {
+      refuse("--cloudflare-api-token-file is required for first-install phases");
+    }
+    if (phase === "runtime-secrets-install" && !runtimeSecretDirectory) {
+      refuse("--runtime-secret-directory is required for --runtime-secrets-install");
+    }
+    if (phase === "absence-proof" && execute) {
+      refuse("--absence-proof is read-only and does not accept --execute");
+    }
+    if (release || containerImage || commit || realizedConfig) {
+      refuse("first-install phases reject release, image, commit, and realized-config inputs");
+    }
+    if (allowDurableObjectMigration) {
+      refuse("first-install phases reject Durable Object migration authority");
+    }
+    if (phase === "absence-proof" && runtimeSecretDirectory) {
+      refuse("--absence-proof does not accept a runtime-secret directory");
+    }
+  }
 
   return {
     phase,
@@ -282,6 +373,15 @@ export function parseCloudflareProductionArgs(
     ...(release === undefined ? {} : { release }),
     ...(containerImage === undefined ? {} : { containerImage }),
     ...(commit === undefined ? {} : { commit }),
+    ...(sourceCommit === undefined ? {} : { sourceCommit }),
+    ...(outputDigest === undefined ? {} : { outputDigest }),
+    ...(operationId === undefined ? {} : { operationId }),
+    ...(runtimeSecretDirectory === undefined
+      ? {}
+      : { runtimeSecretDirectory }),
+    ...(cloudflareApiTokenFile === undefined
+      ? {}
+      : { cloudflareApiTokenFile }),
     execute,
     allowDurableObjectMigration,
     root,
@@ -344,13 +444,60 @@ function wranglerSubcommand(request: CommandRequest): readonly string[] | null {
 
 const defaultRuntime: SurfaceRuntime = {
   async run(request) {
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      WRANGLER_SEND_METRICS: "false",
+    };
+    const repositoryRoot = request.cwd ?? process.cwd();
+    let stdinContents: string | null = null;
+    if (request.cloudflareApiTokenFile) {
+      // First-install credentials are file-reference only. Do not let an
+      // ambient token silently select another account, and never put the token
+      // in argv or the recorded command request.
+      for (const name of [
+        "CF_API_EMAIL",
+        "CF_API_KEY",
+        "CF_API_TOKEN",
+        "CF_ACCOUNT_ID",
+        "CF_API_BASE_URL",
+        "CLOUDFLARE_API_EMAIL",
+        "CLOUDFLARE_API_KEY",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_API_USER_SERVICE_KEY",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_BASE_URL",
+        "CLOUDFLARE_BASE_URL",
+        "CLOUDFLARE_COMPLIANCE_REGION",
+        "CLOUDFLARE_EMAIL",
+        "WRANGLER_API_ENVIRONMENT",
+      ]) {
+        delete env[name];
+      }
+      env.CLOUDFLARE_API_TOKEN = (await readOwnerPrivateFile(
+        request.cloudflareApiTokenFile,
+        { repositoryRoot, maxBytes: 8 * 1024 },
+      )).trim();
+      if (request.cloudflareAccountId) {
+        env.CLOUDFLARE_ACCOUNT_ID = request.cloudflareAccountId;
+      }
+    }
+    if (request.stdinFile) {
+      stdinContents = await readOwnerPrivateFile(request.stdinFile, {
+        repositoryRoot,
+        maxBytes: 256 * 1024,
+      });
+    }
     const child = Bun.spawn([request.command, ...request.args], {
       ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
-      env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
-      stdin: "ignore",
+      env,
+      stdin: stdinContents === null ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
     });
+    if (stdinContents !== null && child.stdin) {
+      child.stdin.write(stdinContents);
+      child.stdin.end();
+    }
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
@@ -363,6 +510,7 @@ const defaultRuntime: SurfaceRuntime = {
       redirect: options.redirect,
       signal: AbortSignal.timeout(120_000),
     }),
+  cloudflareApi: (request) => defaultCloudflareApi(request, process.cwd()),
 };
 
 type Context = {
@@ -809,10 +957,13 @@ async function renderRealizedConfig(
 
 /* ----------------------------------------------------------------- phases */
 
-async function loadOutputs(path: string): Promise<ModuleOutputs> {
-  let raw: string;
+async function loadOutputs(path: string): Promise<{
+  outputs: ModuleOutputs;
+  bytes: Uint8Array;
+}> {
+  let bytes: Uint8Array;
   try {
-    raw = await readFile(path, "utf8");
+    bytes = new Uint8Array(await readFile(path));
   } catch (error) {
     return refuse(
       `the module outputs file ${path} could not be read; run \`tofu output -json\` in deploy/opentofu/cloudflare first`,
@@ -820,7 +971,12 @@ async function loadOutputs(path: string): Promise<ModuleOutputs> {
     );
   }
   try {
-    return parseModuleOutputs(JSON.parse(raw) as unknown);
+    return {
+      outputs: parseModuleOutputs(
+        JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+      ),
+      bytes,
+    };
   } catch (error) {
     return refuse(
       `the module outputs file ${path} is not usable`,
@@ -1384,6 +1540,58 @@ async function execute(context: Context): Promise<Record<string, unknown>> {
       return await containersPhase(context);
     case "apply":
       return await applyPhase(context);
+    case "runtime-secrets-install": {
+      const options = context.options;
+      if (
+        !options.sourceCommit ||
+        !options.outputDigest ||
+        !options.operationId ||
+        !options.runtimeSecretDirectory ||
+        !options.cloudflareApiTokenFile
+      ) {
+        refuse("first-install runtime-secret inputs are incomplete");
+      }
+      return await runFirstInstallRuntimeSecrets(
+        {
+          environment: options.environment,
+          sourceCommit: options.sourceCommit,
+          outputDigest: options.outputDigest,
+          operationId: options.operationId,
+          cloudflareApiTokenFile: options.cloudflareApiTokenFile,
+          repositoryRoot: options.root,
+          outputs: context.outputs,
+          execute: options.execute,
+          runtimeSecretDirectory: options.runtimeSecretDirectory,
+        },
+        (request) => invoke(context, request),
+      ) as unknown as Record<string, unknown>;
+    }
+    case "absence-proof": {
+      const options = context.options;
+      if (
+        !options.sourceCommit ||
+        !options.outputDigest ||
+        !options.operationId ||
+        !options.cloudflareApiTokenFile
+      ) {
+        refuse("first-install absence inputs are incomplete");
+      }
+      const api = context.runtime.cloudflareApi ??
+        ((request: CloudflareApiRequest) =>
+          defaultCloudflareApi(request, options.root));
+      return await runFirstInstallAbsenceProof(
+        {
+          environment: options.environment,
+          sourceCommit: options.sourceCommit,
+          outputDigest: options.outputDigest,
+          operationId: options.operationId,
+          cloudflareApiTokenFile: options.cloudflareApiTokenFile,
+          repositoryRoot: options.root,
+          outputs: context.outputs,
+        },
+        api,
+      ) as unknown as Record<string, unknown>;
+    }
   }
 }
 
@@ -1402,10 +1610,22 @@ export async function runCloudflareProductionRecorded(
   report: Record<string, unknown>;
   issued: readonly CommandRequest[];
 }> {
+  const loaded = await loadOutputs(options.outputs);
+  if (
+    options.phase === "runtime-secrets-install" ||
+    options.phase === "absence-proof"
+  ) {
+    const actualDigest = digestBytes(loaded.bytes);
+    if (actualDigest !== options.outputDigest) {
+      refuse(
+        `retained module outputs digest ${actualDigest} does not match --output-digest ${options.outputDigest}`,
+      );
+    }
+  }
   const context: Context = {
     options,
     runtime,
-    outputs: await loadOutputs(options.outputs),
+    outputs: loaded.outputs,
     issued: [],
   };
   return { report: await execute(context), issued: context.issued };

@@ -31,6 +31,50 @@ import { assertRunExecutionAccess } from "../container-hosts/executor-run-state.
 import { AuthorizationError } from "@takos/worker-platform-utils/errors";
 import { fencePendingOperationsForClaimedRun } from "../../application/tools/idempotency.ts";
 import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
+import { EXECUTOR_CONTAINER_RECEIPT_HEADER } from "../container-hosts/executor-dispatch.ts";
+
+const EXECUTOR_CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+
+async function persistExecutorDispatchReceipt(
+  env: Env,
+  input: {
+    runId: string;
+    serviceId: string;
+    leaseVersion: number;
+    executorContainerId: string;
+  },
+): Promise<void> {
+  const recordedAt = new Date().toISOString();
+  const eventKey =
+    `executor-dispatch:${input.runId}:lease:${input.leaseVersion}:service:${input.serviceId}`;
+  const data = JSON.stringify({
+    service_id: input.serviceId,
+    lease_version: input.leaseVersion,
+    executor_container_id: input.executorContainerId,
+    recorded_at: recordedAt,
+  });
+  // Insert from the Run itself so the receipt is atomically fenced to the
+  // exact service/lease that the authenticated host acknowledged. Terminal
+  // completion deliberately remains eligible: a very fast container can
+  // finish before the dispatch response reaches this queue handler, while the
+  // retained service/lease still proves which attempt was accepted.
+  await env.DB.prepare(
+    `INSERT INTO "run_events"
+       ("run_id", "type", "event_key", "data", "created_at")
+     SELECT r."id", ?, ?, ?, ?
+     FROM "runs" r
+     WHERE r."id" = ? AND r."service_id" = ? AND r."lease_version" = ?
+     ON CONFLICT ("event_key") DO NOTHING`,
+  ).bind(
+    "executor_dispatch_receipt",
+    eventKey,
+    data,
+    recordedAt,
+    input.runId,
+    input.serviceId,
+    input.leaseVersion,
+  ).run();
+}
 
 function retryRunQueueMessage(message: MessageQueueMessage<unknown>): void {
   message.retry({
@@ -554,6 +598,39 @@ export async function handleQueue(
           }
         }
         continue;
+      }
+
+      // The executor host, not the public client or queue payload, selects the
+      // physical Container application slot. Persist its successful dispatch
+      // acknowledgement as a terminal-safe per-lease receipt in the existing
+      // run-event ledger. This remains owner-scoped through GET /api/runs/:id/events
+      // and deliberately carries no proxy token or provider credential.
+      const executorContainerId = res.headers.get(
+        EXECUTOR_CONTAINER_RECEIPT_HEADER,
+      );
+      if (executorContainerId && EXECUTOR_CONTAINER_ID.test(executorContainerId)) {
+        try {
+          await persistExecutorDispatchReceipt(env, {
+            runId,
+            serviceId,
+            leaseVersion,
+            executorContainerId,
+          });
+        } catch (receiptError) {
+          // The container has already accepted the run. Retrying the queue
+          // delivery here could duplicate execution, so retain availability
+          // while making the missing evidence visible to the functional proof.
+          logError(
+            `Failed to persist executor dispatch receipt for run ${runId}`,
+            receiptError,
+            { module: "run_queue" },
+          );
+        }
+      } else {
+        logWarn(
+          `Executor host accepted run ${runId} without a bounded container receipt`,
+          { module: "run_queue" },
+        );
       }
 
       // Container accepted the run (202) — ack immediately
