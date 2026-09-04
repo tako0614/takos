@@ -195,8 +195,18 @@ test("run queue dispatch accepts agent container control RPC side effects", asyn
   assertEquals(state.memoryEvidence.length, 0);
   assertEquals(
     state.runEvents.map((event) => event.type),
-    ["started", "progress", "completed"],
+    ["started", "progress", "completed", "executor_dispatch_receipt"],
   );
+  const receipt = state.runEvents.find(
+    (event) => event.type === "executor_dispatch_receipt",
+  );
+  assert(receipt);
+  assertEquals(JSON.parse(receipt.data), {
+    service_id: dispatches[0].serviceId,
+    lease_version: 1,
+    executor_container_id: "tier1-warm-0-revision-a",
+    recorded_at: receipt.createdAt,
+  });
   assertEquals(state.notifierPayloads.length, 4);
   assert(
     state.notifierPayloads.some(
@@ -227,6 +237,46 @@ test("run queue dispatch accepts agent container control RPC side effects", asyn
     state.indexMessages.map(
       (message) => (message as Record<string, unknown>).deliveryId,
     ),
+  );
+});
+
+test("run queue does not persist a host receipt after the acknowledged lease is replaced", async () => {
+  const state = createQueuedAgentProofState(
+    "run_dispatch_receipt_fence",
+    "replace the lease before receipt persistence",
+  );
+  const env = createAgentProofEnv(state, []);
+  env.EXECUTOR_HOST.fetch = async (request: Request) => {
+    const dispatch = (await request.json()) as Record<string, unknown>;
+    assertEquals(dispatch.runId, state.run.id);
+    state.run.serviceId = "replacement-service";
+    state.run.leaseVersion += 1;
+    return Response.json(
+      { accepted: true },
+      {
+        status: 202,
+        headers: {
+          "X-Takos-Executor-Container-Id": "tier1-warm-0-revision-a",
+        },
+      },
+    );
+  };
+  const message = createQueueMessage({
+    version: RUN_QUEUE_MESSAGE_VERSION,
+    runId: state.run.id,
+    timestamp: Date.now(),
+    model: "gpt-5.5",
+  });
+
+  await handleQueue(
+    { queue: "takos-runs", messages: [message] } as never,
+    env as never,
+  );
+
+  assertEquals(message.acks, 1);
+  assertEquals(
+    state.runEvents.some((event) => event.type === "executor_dispatch_receipt"),
+    false,
   );
 });
 
@@ -504,7 +554,15 @@ function createAgentProofEnv(
         const body = (await request.json()) as Record<string, unknown>;
         dispatches.push(body);
         await acceptedAgentContainerRun(state, body);
-        return Response.json({ accepted: true }, { status: 202 });
+        return Response.json(
+          { accepted: true },
+          {
+            status: 202,
+            headers: {
+              "X-Takos-Executor-Container-Id": "tier1-warm-0-revision-a",
+            },
+          },
+        );
       },
     },
   };
@@ -967,6 +1025,21 @@ function createRawStatement(state: AgentProofState, sql: string) {
             return { results: [], meta: { changes: rowCount } };
           }
           if (sql.includes('INSERT INTO "run_events"')) {
+            if (
+              values[0] === "executor_dispatch_receipt" &&
+              sql.includes('r."service_id" = ?')
+            ) {
+              const ownsAcknowledgedLease =
+                values[4] === state.run.id &&
+                values[5] === state.run.serviceId &&
+                values[6] === state.run.leaseVersion;
+              const duplicate = state.runEvents.some(
+                (event) => event.eventKey === values[1],
+              );
+              if (!ownsAcknowledgedLease || duplicate) {
+                return { results: [], meta: { changes: 0 } };
+              }
+            }
             const id = state.runEvents.length + 1;
             state.runEvents.push({
               id,

@@ -38,6 +38,32 @@ export interface AgentExecutorDispatchResult {
   body: string;
 }
 
+export const EXECUTOR_CONTAINER_RECEIPT_HEADER =
+  "X-Takos-Executor-Container-Id";
+
+const EXECUTOR_CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+
+/**
+ * Add the host-selected physical slot identity to an accepted internal
+ * dispatch response. The response carries no proxy token or provider secret;
+ * the queue owner persists this bounded value as a per-attempt receipt.
+ */
+export function withExecutorContainerReceipt(
+  response: Response,
+  executorContainerId: string,
+): Response {
+  if (!EXECUTOR_CONTAINER_ID.test(executorContainerId)) {
+    throw new Error("executor container id is not a bounded host identity");
+  }
+  const headers = new Headers(response.headers);
+  headers.set(EXECUTOR_CONTAINER_RECEIPT_HEADER, executorContainerId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export interface AgentExecutorDispatchTarget {
   startAndWaitForPorts(ports?: number | number[]): Promise<void>;
   fetch(request: Request): Promise<Response>;

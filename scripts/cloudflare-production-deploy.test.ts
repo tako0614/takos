@@ -1,21 +1,33 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { RUNTIME_SECRET_BINDING_NAMES } from "./cloudflare-production-config.ts";
 import {
+  TAKOS_FIRST_INSTALL_OWNER_CONTRACT,
   TAKOS_CLOUDFLARE_PRODUCTION_SURFACE,
   latestMigrationTag,
   mutatesTarget,
   parseCloudflareProductionArgs,
   pendingDurableObjectWork,
   runCloudflareProductionRecorded,
+  type CloudflareApiRequest,
+  type CloudflareApiResponse,
   type CommandRequest,
   type CommandResult,
   type SurfaceRuntime,
 } from "./cloudflare-production-deploy.ts";
+import { REQUIRED_RUNTIME_SECRET_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
 import { TAKOS_RELEASE_ARTIFACT_SURFACE } from "./release-artifact-deploy.ts";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
@@ -203,8 +215,15 @@ async function options(
 ): Promise<ReturnType<typeof parseCloudflareProductionArgs>> {
   const { outputsPath, realizedConfig } = await scratch();
   await writeFile(outputsPath, outputsJson);
+  const firstInstall = argv.includes("--runtime-secrets-install") ||
+    argv.includes("--absence-proof");
   return parseCloudflareProductionArgs(
-    [...argv, "--outputs", outputsPath, "--realized-config", realizedConfig],
+    [
+      ...argv,
+      "--outputs",
+      outputsPath,
+      ...(firstInstall ? [] : ["--realized-config", realizedConfig]),
+    ],
     repositoryRoot,
   );
 }
@@ -214,6 +233,7 @@ test("the contract answers every obligation its triggers make it owe", () => {
   expect(surface.surface).toBe("takos-cloudflare-production");
   expect(surface.target).toBe("cloudflare-worker:takos");
   expect([...surface.triggers].sort()).toEqual([
+    "authority",
     "irreversible",
     "published-identity",
   ]);
@@ -725,6 +745,7 @@ test("the entrypoint contract probe lists every surface and is side-effect free"
 
   const contract = JSON.parse(stdout.slice(stdout.indexOf("{"))) as {
     kind: string;
+    ownerContracts: unknown[];
     surfaces: {
       surface: string;
       target: string;
@@ -734,6 +755,7 @@ test("the entrypoint contract probe lists every surface and is side-effect free"
     }[];
   };
   expect(contract.kind).toBe("takos.deploy-contract@v2");
+  expect(contract.ownerContracts).toEqual([TAKOS_FIRST_INSTALL_OWNER_CONTRACT]);
   expect(contract.surfaces.map((entry) => entry.surface)).toEqual([
     "takos-release-artifact",
     "takos-cloudflare-production",
@@ -748,5 +770,722 @@ test("the entrypoint contract probe lists every surface and is side-effect free"
     for (const variable of entry.requiresEnv ?? []) {
       expect(answers).toContain(variable);
     }
+  }
+});
+
+async function privateFirstInstallInputs(): Promise<{
+  root: string;
+  secretDirectory: string;
+  tokenFile: string;
+  values: Record<string, string>;
+}> {
+  const root = await mkdtemp(join(tmpdir(), "takos-first-install-private-"));
+  await chmod(root, 0o700);
+  const secretDirectory = join(root, "runtime-secrets");
+  await mkdir(secretDirectory, { mode: 0o700 });
+  const values: Record<string, string> = {};
+  for (const name of REQUIRED_RUNTIME_SECRET_NAMES) {
+    const value = `private-${name}-${crypto.randomUUID()}`;
+    values[name] = value;
+    await writeFile(join(secretDirectory, name), `${value}\n`, { mode: 0o600 });
+  }
+  const tokenFile = join(root, "cloudflare-api-token");
+  await writeFile(tokenFile, "private-cloudflare-token\n", { mode: 0o600 });
+  return { root, secretDirectory, tokenFile, values };
+}
+
+function firstInstallArgs(
+  phase: "--runtime-secrets-install" | "--absence-proof",
+  privateInputs: { secretDirectory: string; tokenFile: string },
+): string[] {
+  return [
+    phase,
+    "--environment",
+    "integration",
+    "--source-commit",
+    HEAD,
+    "--output-digest",
+    `sha256:${createHash("sha256").update(outputs()).digest("hex")}`,
+    "--operation-id",
+    "generation-1-runtime-secrets",
+    ...(phase === "--runtime-secrets-install"
+      ? ["--runtime-secret-directory", privateInputs.secretDirectory]
+      : []),
+    "--cloudflare-api-token-file",
+    privateInputs.tokenFile,
+  ];
+}
+
+test("first-install owner contract exports exact operations, result kinds, and fixed usage", () => {
+  expect(TAKOS_FIRST_INSTALL_OWNER_CONTRACT).toEqual({
+    kind: "takos.first-install-owner-contract@v1",
+    deployContractKind: "takos.deploy-contract@v2",
+    deploySurface: "takos-cloudflare-production",
+    operations: [
+      "runtime-secrets-install",
+      "functional-proof",
+      "absence-proof",
+    ],
+    resultKinds: {
+      runtimeSecretsInstall: "takos.first-install-runtime-secrets@v1",
+      functionalProof: "takos.first-install-functional-proof@v1",
+      absenceProof: "takos.first-install-absence@v1",
+    },
+    usage: {
+      runtimeSecretsInstall: expect.stringContaining("--runtime-secrets-install"),
+      functionalProof: expect.stringContaining("first-install:functional-proof"),
+      absenceProof: expect.stringContaining("--absence-proof"),
+    },
+  });
+});
+
+test("first-install CLI rejects free-form secret names and a drifted retained output digest", async () => {
+  expect(() =>
+    parseCloudflareProductionArgs(
+      [
+        "--runtime-secrets-install",
+        "--environment",
+        "integration",
+        "--outputs",
+        "/private/outputs.json",
+        "--output-digest",
+        `sha256:${"0".repeat(64)}`,
+        "--source-commit",
+        HEAD,
+        "--operation-id",
+        "operation-1",
+        "--runtime-secret-directory",
+        "/private/secrets",
+        "--cloudflare-api-token-file",
+        "/private/token",
+        "--secret-name",
+        "ATTACKER_CHOSEN",
+      ],
+      repositoryRoot,
+    ),
+  ).toThrow(/unknown argument --secret-name/u);
+  expect(() =>
+    parseCloudflareProductionArgs(
+      [
+        ...firstInstallArgs("--absence-proof", {
+          secretDirectory: "/private/secrets",
+          tokenFile: "/private/token",
+        }),
+        "--outputs",
+        "/private/outputs.json",
+        "--container-image",
+        `docker.io/takos/agent@sha256:${"1".repeat(64)}`,
+      ],
+      repositoryRoot,
+    ),
+  ).toThrow(/first-install phases reject/u);
+  expect(() =>
+    parseCloudflareProductionArgs(
+      [
+        ...firstInstallArgs("--absence-proof", {
+          secretDirectory: "/private/secrets",
+          tokenFile: "/private/token",
+        }),
+        "--outputs",
+        "/private/outputs.json",
+        "--operation-id",
+        "operation-2",
+      ],
+      repositoryRoot,
+    ),
+  ).toThrow(/may be specified only once/u);
+
+  const custody = await privateFirstInstallInputs();
+  try {
+    const parsed = await options([
+      "--runtime-secrets-install",
+      "--environment",
+      "integration",
+      "--source-commit",
+      HEAD,
+      "--output-digest",
+      `sha256:${"0".repeat(64)}`,
+      "--operation-id",
+      "operation-1",
+      "--runtime-secret-directory",
+      custody.secretDirectory,
+      "--cloudflare-api-token-file",
+      custody.tokenFile,
+      "--execute",
+    ]);
+    const calls: CommandRequest[] = [];
+    await expect(
+      runCloudflareProductionRecorded(parsed, {
+        run: async (request) => {
+          calls.push(request);
+          return { exitCode: 0, stdout: "[]", stderr: "" };
+        },
+        fetch: async () => new Response(null, { status: 500 }),
+      }),
+    ).rejects.toThrow(/digest .* does not match/u);
+    expect(calls).toEqual([]);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("runtime-secret installation uses only the five fixed files via stdin and recovers one lost acknowledgement", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const present = new Set<string>();
+    const calls: CommandRequest[] = [];
+    const runtime: SurfaceRuntime = {
+      async run(request) {
+        calls.push(request);
+        if (request.args.includes("list")) {
+          return {
+            exitCode: 0,
+            stdout: secretListJson([...present]),
+            stderr: "",
+          };
+        }
+        const name = request.args[3];
+        if (!name) throw new Error("secret put omitted its fixed name");
+        expect((REQUIRED_RUNTIME_SECRET_NAMES as readonly string[]).includes(name)).toBe(true);
+        expect(request.args).toEqual([
+          "wrangler",
+          "secret",
+          "put",
+          name,
+          "--name",
+          "takos-live",
+          "--config",
+          "deploy/cloudflare/wrangler.toml",
+        ]);
+        expect(request.cwd).toBe(repositoryRoot);
+        expect(request.stdinFile).toBe(join(custody.secretDirectory, name));
+        expect(request.cloudflareApiTokenFile).toBe(custody.tokenFile);
+        expect(request.cloudflareAccountId).toBe(ACCOUNT);
+        present.add(name);
+        return {
+          exitCode: name === "TAKOS_INTERNAL_API_SECRET" ? 1 : 0,
+          stdout: "",
+          stderr:
+            name === "TAKOS_INTERNAL_API_SECRET"
+              ? `connection lost after ${custody.values[name]}`
+              : "",
+        };
+      },
+      fetch: async () => new Response(null, { status: 500 }),
+    };
+    const parsed = await options([
+      ...firstInstallArgs("--runtime-secrets-install", custody),
+      "--execute",
+    ]);
+    const { report } = await runCloudflareProductionRecorded(parsed, runtime);
+
+    expect(report).toMatchObject({
+      kind: "takos.first-install-runtime-secrets@v1",
+      status: "installed",
+      sourceCommit: HEAD,
+      operationId: "generation-1-runtime-secrets",
+      bindings: [...REQUIRED_RUNTIME_SECRET_NAMES],
+      target: { accountId: ACCOUNT, workerName: "takos-live" },
+    });
+    expect(report.outputDigest).toBe(
+      `sha256:${createHash("sha256").update(outputs()).digest("hex")}`,
+    );
+    expect(Object.keys(report).sort()).toEqual([
+      "attempts",
+      "bindings",
+      "environment",
+      "installedAt",
+      "kind",
+      "operationId",
+      "outputDigest",
+      "sourceCommit",
+      "status",
+      "target",
+    ]);
+    expect(Object.keys(report.target as Record<string, unknown>).sort()).toEqual([
+      "accountId",
+      "workerName",
+    ]);
+    for (const attempt of report.attempts as Array<Record<string, unknown>>) {
+      expect(Object.keys(attempt).sort()).toEqual([
+        "acknowledgement",
+        "name",
+      ]);
+    }
+    expect((report.attempts as Array<{ acknowledgement: string }>)).toContainEqual(
+      expect.objectContaining({
+        name: "TAKOS_INTERNAL_API_SECRET",
+        acknowledgement: "authoritative-readback-after-lost-ack",
+      }),
+    );
+    expect(calls.filter((request) => request.args.includes("put"))).toHaveLength(5);
+    for (const request of calls.filter((candidate) => candidate.args.includes("list"))) {
+      expect(request).toMatchObject({
+        command: "bunx",
+        args: [
+          "wrangler",
+          "secret",
+          "list",
+          "--name",
+          "takos-live",
+          "--config",
+          "deploy/cloudflare/wrangler.toml",
+          "--format",
+          "json",
+        ],
+        cwd: repositoryRoot,
+        cloudflareApiTokenFile: custody.tokenFile,
+        cloudflareAccountId: ACCOUNT,
+      });
+      expect(request.stdinFile).toBeUndefined();
+    }
+    expect(await readFile(join(repositoryRoot, "deploy/cloudflare/wrangler.toml"), "utf8"))
+      .not.toMatch(/^\s*account_id\s*=/mu);
+    expect(JSON.stringify(report)).not.toContain("private-");
+    expect(JSON.stringify(calls)).not.toContain("private-cloudflare-token");
+    expect(JSON.stringify(calls)).not.toContain(custody.values.ENCRYPTION_KEY);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("runtime-secret custody rejects permissive modes and symlinked files before any command", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const calls: CommandRequest[] = [];
+    const runtime: SurfaceRuntime = {
+      async run(request) {
+        calls.push(request);
+        return { exitCode: 0, stdout: "[]", stderr: "" };
+      },
+      fetch: async () => new Response(null, { status: 500 }),
+    };
+    await chmod(join(custody.secretDirectory, "ENCRYPTION_KEY"), 0o644);
+    await expect(
+      runCloudflareProductionRecorded(
+        await options([
+          ...firstInstallArgs("--runtime-secrets-install", custody),
+          "--execute",
+        ]),
+        runtime,
+      ),
+    ).rejects.toMatchObject({
+      stage: "refused",
+      exitCode: 2,
+      message: expect.stringMatching(/0600/u),
+    });
+    expect(calls).toEqual([]);
+
+    await chmod(join(custody.secretDirectory, "ENCRYPTION_KEY"), 0o600);
+    const target = join(custody.root, "real-encryption-key");
+    await writeFile(target, "secret\n", { mode: 0o600 });
+    await rm(join(custody.secretDirectory, "ENCRYPTION_KEY"));
+    await symlink(target, join(custody.secretDirectory, "ENCRYPTION_KEY"));
+    await expect(
+      runCloudflareProductionRecorded(
+        await options([
+          ...firstInstallArgs("--runtime-secrets-install", custody),
+          "--execute",
+        ]),
+        runtime,
+      ),
+    ).rejects.toThrow(/symbolic link|canonical/u);
+    expect(calls).toEqual([]);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("runtime-secret partial and pre-existing lost acknowledgements stop without a blind retry", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    for (const preexisting of [false, true]) {
+      let listCount = 0;
+      const puts: CommandRequest[] = [];
+      const runtime: SurfaceRuntime = {
+        async run(request) {
+          if (request.args.includes("list")) {
+            listCount += 1;
+            return {
+              exitCode: 0,
+              stdout: secretListJson(
+                preexisting ? ["ENCRYPTION_KEY"] : [],
+              ),
+              stderr: "",
+            };
+          }
+          puts.push(request);
+          return {
+            exitCode: preexisting ? 1 : 0,
+            stdout: "",
+            stderr: custody.values.ENCRYPTION_KEY,
+          };
+        },
+        fetch: async () => new Response(null, { status: 500 }),
+      };
+      let error: unknown;
+      try {
+        await runCloudflareProductionRecorded(
+          await options([
+            ...firstInstallArgs("--runtime-secrets-install", custody),
+            "--execute",
+          ]),
+          runtime,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ stage: "indeterminate", exitCode: 3 });
+      expect(String(error)).not.toContain(custody.values.ENCRYPTION_KEY);
+      expect(puts).toHaveLength(1);
+      expect(listCount).toBe(2);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("runtime-secret readback distinguishes preflight refusal from a thrown lost acknowledgement", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const parsed = await options([
+      ...firstInstallArgs("--runtime-secrets-install", custody),
+      "--execute",
+    ]);
+    const preflightPuts: CommandRequest[] = [];
+    await expect(
+      runCloudflareProductionRecorded(parsed, {
+        async run(request) {
+          if (request.args.includes("put")) preflightPuts.push(request);
+          return { exitCode: 1, stdout: "", stderr: custody.values.ENCRYPTION_KEY };
+        },
+        fetch: async () => new Response(null, { status: 500 }),
+      }),
+    ).rejects.toMatchObject({ stage: "refused", exitCode: 2 });
+    expect(preflightPuts).toEqual([]);
+
+    let reads = 0;
+    const putNames: string[] = [];
+    const present = new Set<string>();
+    const { report } = await runCloudflareProductionRecorded(parsed, {
+      async run(request) {
+        if (request.args.includes("list")) {
+          reads += 1;
+          return { exitCode: 0, stdout: secretListJson([...present]), stderr: "" };
+        }
+        const name = request.args[3];
+        if (!name) throw new Error("missing fixed secret name");
+        putNames.push(name);
+        present.add(name);
+        if (name === "ENCRYPTION_KEY") {
+          throw new Error(`lost acknowledgement ${custody.values[name]}`);
+        }
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
+      fetch: async () => new Response(null, { status: 500 }),
+    });
+    expect(report.status).toBe("installed");
+    expect(
+      (report.attempts as Array<{ name: string; acknowledgement: string }>)[0],
+    ).toEqual({
+      name: "ENCRYPTION_KEY",
+      acknowledgement: "authoritative-readback-after-lost-ack",
+    });
+    expect(putNames).toEqual([...REQUIRED_RUNTIME_SECRET_NAMES]);
+    expect(reads).toBe(REQUIRED_RUNTIME_SECRET_NAMES.length + 2);
+    expect(JSON.stringify(report)).not.toContain(custody.values.ENCRYPTION_KEY);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("runtime-secret readback fails closed on malformed or unbounded provider rows", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const parsed = await options([
+      ...firstInstallArgs("--runtime-secrets-install", custody),
+      "--execute",
+    ]);
+    for (const stdout of [
+      JSON.stringify([{ unexpected: "ENCRYPTION_KEY" }]),
+      JSON.stringify(Array.from({ length: 1025 }, () => ({ name: "EXTRA" }))),
+    ]) {
+      const puts: CommandRequest[] = [];
+      await expect(
+        runCloudflareProductionRecorded(parsed, {
+          async run(request) {
+            if (request.args.includes("put")) puts.push(request);
+            return { exitCode: 0, stdout, stderr: "" };
+          },
+          fetch: async () => new Response(null, { status: 500 }),
+        }),
+      ).rejects.toMatchObject({ stage: "refused", exitCode: 2 });
+      expect(puts).toEqual([]);
+    }
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+function absenceRuntime(
+  override?: (request: CloudflareApiRequest) => CloudflareApiResponse | undefined,
+): SurfaceRuntime {
+  return {
+    run: async () => ({ exitCode: 127, stdout: "", stderr: "unexpected command" }),
+    fetch: async () => new Response(null, { status: 500 }),
+    cloudflareApi: async (request) => {
+      const changed = override?.(request);
+      if (changed) return changed;
+      if (
+        request.path.endsWith("/workers/routes") ||
+        request.path.endsWith("/workers/domains") ||
+        request.path.endsWith("/queues") ||
+        request.path.endsWith("/containers/dash/applications")
+      ) {
+        return {
+          status: 200,
+          body: { success: true, result: [], result_info: { total_pages: 1 } },
+        };
+      }
+      return { status: 404, body: { success: false, errors: [] } };
+    },
+  };
+}
+
+test("absence proof inventories the complete retained Takos Cloudflare closure and never mutates", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const { report, issued } = await runCloudflareProductionRecorded(
+      await options(firstInstallArgs("--absence-proof", custody)),
+      absenceRuntime(),
+    );
+    expect(issued).toEqual([]);
+    expect(report).toMatchObject({
+      kind: "takos.first-install-absence@v1",
+      status: "absent",
+      sourceCommit: HEAD,
+      target: { accountId: ACCOUNT, workerName: "takos-live" },
+    });
+    expect(Object.keys(report).sort()).toEqual([
+      "checkedAt",
+      "environment",
+      "kind",
+      "operationId",
+      "outputDigest",
+      "resources",
+      "sourceCommit",
+      "status",
+      "summary",
+      "target",
+    ]);
+    const resources = report.resources as Array<{
+      resourceType: string;
+      name: string;
+      status: string;
+    }>;
+    expect(resources).toHaveLength(22);
+    expect(Object.keys(report.target as Record<string, unknown>).sort()).toEqual([
+      "accountId",
+      "workerName",
+    ]);
+    expect(Object.keys(report.summary as Record<string, unknown>).sort()).toEqual([
+      "absent",
+      "indeterminate",
+      "present",
+    ]);
+    for (const resource of resources) {
+      expect(Object.keys(resource).sort()).toEqual([
+        "evidence",
+        "name",
+        "resourceType",
+        "status",
+      ]);
+    }
+    expect(
+      resources.reduce<Record<string, number>>((counts, resource) => {
+        counts[resource.resourceType] = (counts[resource.resourceType] ?? 0) + 1;
+        return counts;
+      }, {}),
+    ).toEqual({
+      worker: 1,
+      "worker-version": 1,
+      "worker-route": 1,
+      "worker-custom-domain": 1,
+      "workers.dev": 1,
+      d1: 1,
+      kv: 1,
+      r2: 5,
+      queue: 6,
+      vectorize: 1,
+      "container-application": 3,
+    });
+    expect(resources.filter((resource) => resource.resourceType === "queue").map((resource) => resource.name).sort()).toEqual([
+      "takos-live-index-jobs",
+      "takos-live-index-jobs-dlq",
+      "takos-live-notification-push",
+      "takos-live-notification-push-dlq",
+      "takos-live-runs",
+      "takos-live-runs-dlq",
+    ]);
+    expect(
+      resources.find((resource) => resource.resourceType === "worker-route"),
+    ).toMatchObject({ name: "app.example.test" });
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("absence proof distinguishes present from indeterminate and does not collapse either to absent", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const parsed = await options(firstInstallArgs("--absence-proof", custody));
+    const present = await runCloudflareProductionRecorded(
+      parsed,
+      absenceRuntime((request) =>
+        request.path.endsWith("/settings")
+          ? { status: 200, body: { success: true, result: {} } }
+          : undefined,
+      ),
+    );
+    expect(present.report.status).toBe("present");
+
+    const indeterminate = await runCloudflareProductionRecorded(
+      parsed,
+      absenceRuntime((request) =>
+        request.path.includes("/vectorize/")
+          ? { status: 503, body: { success: false, errors: [] } }
+          : undefined,
+      ),
+    );
+    expect(indeterminate.report.status).toBe("indeterminate");
+
+    const route = await runCloudflareProductionRecorded(
+      parsed,
+      absenceRuntime((request) =>
+        request.path.endsWith("/workers/routes")
+          ? {
+              status: 200,
+              body: {
+                success: true,
+                result: [{ script: "takos-live", pattern: "app.example.test/*" }],
+                result_info: { total_pages: 1 },
+              },
+            }
+          : undefined,
+      ),
+    );
+    expect(
+      (route.report.resources as Array<{
+        resourceType: string;
+        name: string;
+        status: string;
+        evidence: string;
+      }>).find((resource) => resource.resourceType === "worker-route"),
+    ).toEqual({
+      resourceType: "worker-route",
+      name: "app.example.test",
+      status: "present",
+      evidence: "list-complete",
+    });
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("absence proof reads every list page before deciding a retained resource is absent", async () => {
+  const custody = await privateFirstInstallInputs();
+  const queueRequests: CloudflareApiRequest[] = [];
+  try {
+    const runtime = absenceRuntime((request) => {
+      if (!request.path.endsWith("/queues")) return undefined;
+      queueRequests.push(request);
+      if (request.query?.page === "1") {
+        return {
+          status: 200,
+          body: {
+            success: true,
+            result: [],
+            result_info: { total_pages: 2 },
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          success: true,
+          result: [{ queue_name: "takos-live-runs" }],
+          result_info: { total_pages: 2 },
+        },
+      };
+    });
+    const { report } = await runCloudflareProductionRecorded(
+      await options(firstInstallArgs("--absence-proof", custody)),
+      runtime,
+    );
+    expect(report.status).toBe("present");
+    expect(queueRequests.map((request) => request.query?.page)).toEqual(["1", "2"]);
+    const queues = (report.resources as Array<{
+      resourceType: string;
+      name: string;
+      status: string;
+    }>).filter((resource) => resource.resourceType === "queue");
+    expect(queues.find((resource) => resource.name === "takos-live-runs")?.status).toBe(
+      "present",
+    );
+    expect(queues.filter((resource) => resource.status === "absent")).toHaveLength(5);
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
+  }
+});
+
+test("absence proof treats malformed list and workers.dev readback as indeterminate", async () => {
+  const custody = await privateFirstInstallInputs();
+  try {
+    const { report } = await runCloudflareProductionRecorded(
+      await options(firstInstallArgs("--absence-proof", custody)),
+      absenceRuntime((request) => {
+        if (request.path.endsWith("/queues")) {
+          return {
+            status: 200,
+            body: {
+              success: true,
+              result: [{ unexpected_queue_shape: "takos-live-runs" }],
+              result_info: { total_pages: 1 },
+            },
+          };
+        }
+        if (request.path.endsWith("/subdomain")) {
+          return { status: 200, body: { success: true, result: {} } };
+        }
+        return undefined;
+      }),
+    );
+
+    expect(report.status).toBe("indeterminate");
+    const resources = report.resources as Array<{
+      resourceType: string;
+      status: string;
+      evidence: string;
+    }>;
+    expect(
+      resources.filter((resource) => resource.resourceType === "queue"),
+    ).toHaveLength(6);
+    expect(
+      resources
+        .filter((resource) => resource.resourceType === "queue")
+        .every(
+          (resource) =>
+            resource.status === "indeterminate" &&
+            resource.evidence === "api-indeterminate",
+        ),
+    ).toBe(true);
+    expect(
+      resources.find((resource) => resource.resourceType === "workers.dev"),
+    ).toMatchObject({
+      status: "indeterminate",
+      evidence: "api-indeterminate",
+    });
+  } finally {
+    await rm(custody.root, { recursive: true, force: true });
   }
 });

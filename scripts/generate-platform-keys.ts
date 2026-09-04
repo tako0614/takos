@@ -39,8 +39,15 @@
  *     [--runtime-json] [--per-cloud] [--confidential-oidc]
  */
 
+import { constants } from "node:fs";
 import { resolve } from "node:path";
-import { chmod, lstat, mkdir, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  open,
+  realpath,
+} from "node:fs/promises";
 
 import { REQUIRED_RUNTIME_SECRET_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
 
@@ -268,7 +275,20 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 async function ensureDir(path: string): Promise<void> {
-  await mkdir(path, { recursive: true });
+  await mkdir(path, { recursive: true, mode: 0o700 });
+  const canonical = await realpath(path);
+  if (canonical !== resolve(path)) {
+    throw new Error(`Secret output directory must be canonical and contain no symbolic link: ${path}`);
+  }
+  const metadata = await lstat(path);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    throw new Error(`Secret output directory must not be a symbolic link: ${path}`);
+  }
+  const uid = process.getuid?.();
+  if (uid !== undefined && metadata.uid !== uid) {
+    throw new Error(`Secret output directory must be owned by the current user: ${path}`);
+  }
+  await chmod(path, 0o700);
 }
 
 async function checkConflicts(
@@ -332,17 +352,45 @@ async function writeSecret(
 ): Promise<string> {
   const target = resolve(outputDir, name);
   const data = contents.endsWith("\n") ? contents : `${contents}\n`;
-  await writeFile(target, data, "utf8");
-  try {
-    await chmod(target, 0o600);
-  } catch (error) {
-    // chmod is best-effort (Windows / restricted FS) — don't abort.
+  if (await pathExists(target)) {
+    const existing = await lstat(target);
+    const uid = process.getuid?.();
     if (
-      !isNodeErrorCode(error, "ENOTSUP") &&
-      !isNodeErrorCode(error, "EOPNOTSUPP")
+      existing.isSymbolicLink() ||
+      !existing.isFile() ||
+      existing.nlink !== 1 ||
+      (uid !== undefined && existing.uid !== uid)
     ) {
-      throw error;
+      throw new Error(
+        `Refusing unsafe existing secret file (link, type, or owner): ${target}`,
+      );
     }
+  }
+  const handle = await open(
+    target,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      (constants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
+  try {
+    const opened = await handle.stat();
+    const uid = process.getuid?.();
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      (uid !== undefined && opened.uid !== uid)
+    ) {
+      throw new Error(`Refusing unsafe opened secret file: ${target}`);
+    }
+    // Tighten an existing --force target before any new secret bytes become
+    // visible. A newly created file already starts at 0600, but an older
+    // owner-owned regular file may have been more permissive.
+    await handle.chmod(0o600);
+    await handle.truncate(0);
+    await handle.writeFile(data, "utf8");
+  } finally {
+    await handle.close();
   }
   return target;
 }

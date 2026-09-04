@@ -33,6 +33,7 @@ import {
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
   resolveAgentExecutorServiceId,
+  withExecutorContainerReceipt,
 } from "./executor-dispatch.ts";
 import {
   buildAgentExecutorContainerEnvVars,
@@ -961,7 +962,7 @@ export default {
         const { tier, containerId } = explicitTarget;
         const ns = resolveContainerNamespace(env, tier);
         const stub = ns.getByName(containerId);
-        return await forwardAgentExecutorDispatch(
+        const response = await forwardAgentExecutorDispatch(
           stub,
           dispatchPayloadWithContainerControl(env, {
             ...body,
@@ -969,13 +970,16 @@ export default {
             executorContainerId: containerId,
           }),
         );
+        return response.ok
+          ? withExecutorContainerReceipt(response, containerId)
+          : response;
       }
 
       const selected = await selectExecutorPoolSlot(env);
       if (!selected) {
         return errorJsonResponse("No executor capacity available", 503);
       }
-      return await forwardAgentExecutorDispatch(
+      const response = await forwardAgentExecutorDispatch(
         selected.stub,
         dispatchPayloadWithContainerControl(env, {
           ...body,
@@ -983,6 +987,9 @@ export default {
           executorContainerId: selected.containerId,
         }),
       );
+      return response.ok
+        ? withExecutorContainerReceipt(response, selected.containerId)
+        : response;
     }
 
     if (path.startsWith("/proxy/")) {

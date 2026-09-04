@@ -36,15 +36,17 @@ Durable Object namespace の bootstrap だけです。D1 migration はどちら�
 | `--release` | 公開済み `takos.worker-artifact@v3` descriptor の絶対 path | production の `--apply` |
 | `--container-image` | digest 固定の agent image | `--release` を渡さないとき |
 | `--commit` | HEAD と一致する exact commit | `main` 以外から production を配置するとき |
-| `CLOUDFLARE_API_TOKEN` | account を選ぶ credential | 常に (環境変数のみ) |
+| `CLOUDFLARE_API_TOKEN` | legacy apply/status lane の account credential | `--status` / `--vectorize` / `--apply` / `--containers` (環境変数のみ) |
+| `--cloudflare-api-token-file` | first-install authority phase の account credential | `--runtime-secrets-install` / `--absence-proof` (repository 外の canonical `0600` file) |
 
 container image は必ず digest 固定です。`registry.cloudflare.com/<account>/takos-agent@sha256:…`
 または `docker.io/…@sha256:…` 以外は拒否し、tag 参照も受け付けません。通常は
 `--release` の `containerImages.executor` から解決されるので、operator が別途
 指定する必要はありません。
 
-runtime secret は operator が `wrangler secret put` で投入します。この surface は
-名前だけを読み、値を読みません。詳細は
+first install の runtime secret は operator-private file からこの surface の固定
+`--runtime-secrets-install` phase が stdin で投入します。free-form secret 名や command は
+受け取らず、account から読み戻すのは名前だけです。詳細は
 [ランタイムシークレット](/deploy/runtime-secrets) を参照してください。
 
 ## Phase
@@ -108,6 +110,23 @@ upload の後は、新しい version id、binding closure、secret 名、pin さ
 Container application が存在するかを読み取ります。`wrangler.toml` の
 `[[containers]]` が宣言の正本で、reconcile は `--apply` の upload が行います。
 
+### `--runtime-secrets-install`
+
+first-install coordinator 用の authority phase です。digest で固定した non-secret module
+output から account/Worker を取り、`REQUIRED_RUNTIME_SECRET_NAMES` の 5 file だけを
+stdin upload します。各 upload の直後に secret name を authoritative readback し、lost
+acknowledgement で新しい値を証明できない場合は停止します。credential/value は argv、raw
+log、result に出さず、blind retry もしません。`--execute` が無い場合は fixed plan だけを
+返します。
+
+### `--absence-proof` (read-only)
+
+owning OpenTofu destroy 後に retained output artifact を使い、Takos が所有していた Worker /
+version / route / domain、D1、KV、R2、Queue、Vectorize、Container application の 22 row を
+`absent` / `present` / `indeterminate` で読み戻します。fixed GET 以外を発行せず、resource を
+直接削除しません。詳細な result shape は
+[first-install owner contract](/deploy/first-install-owner-contract) に固定されています。
+
 ## 初回の本番配置
 
 ```sh
@@ -117,15 +136,23 @@ tofu init
 # runtime_secrets_provisioned = false と
 # first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
 tofu apply -var-file=opentofu.tfvars
+tofu output -json > /operator-private/takos/generation-1-outputs.json
 
-# 2. runtime secret を投入する
+# 2. repository 外の owner-private directory に 5 secret を生成して固定 phase で投入する
 cd ../../..
-bun run generate:keys
-wrangler secret put ENCRYPTION_KEY
-wrangler secret put TAKOS_AGENT_START_TOKEN
-wrangler secret put TAKOS_INTERNAL_API_SECRET
-wrangler secret put PLATFORM_PRIVATE_KEY
-wrangler secret put PLATFORM_PUBLIC_KEY
+bun run generate:keys -- \
+  --env=production \
+  --output=/operator-private/takos/runtime-secrets
+bun run deploy -- takos-cloudflare-production \
+  --runtime-secrets-install \
+  --environment production \
+  --outputs /operator-private/takos/generation-1-outputs.json \
+  --output-digest sha256:<generation-1-outputs の SHA-256> \
+  --source-commit <40 桁 commit> \
+  --operation-id <coordinator operation id> \
+  --runtime-secret-directory /operator-private/takos/runtime-secrets \
+  --cloudflare-api-token-file /operator-private/cloudflare/api-token \
+  --execute
 
 # 3. inherit binding を有効にして再 apply する
 cd deploy/opentofu/cloudflare
@@ -204,7 +231,9 @@ exit code が、どちら側で失敗したかを表します。
 | 3 | upload が届いたか不明 | `--status` で権威的に読み戻してから判断する |
 | 4 | bytes は公開されたが post-condition が失敗 | `--status` で読み戻し、必要なら rollback |
 
-いずれの場合も自動 retry はしません。provider の stdout と stderr をそのまま出します。
+いずれの場合も自動 retry はしません。legacy apply/vectorize lane は provider の stdout と
+stderr を診断として出しますが、runtime-secret phase は値を反映し得る raw output を一切
+出さず、固定名と bounded acknowledgement だけを返します。
 
 ## 既知の重なり
 

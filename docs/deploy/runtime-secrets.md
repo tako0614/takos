@@ -53,8 +53,10 @@ manifest は要求であって値ではありません。実際に host が鋳�
 - host 側の rsa-key-pair material は operator が所有する InstallConfig の領域で、
   repository manifest から要求できません。
 
-生成は `bun run generate:keys` を使います。PKCS#8 の秘密鍵と SPKI の公開鍵を出力し、
-値を標準出力に出しません。
+生成は `bun run generate:keys` を使います。first install で使う場合は repository 外の
+absolute path を `--output=` に指定します。generator は directory を `0700`、各 file を
+`0600` に固定し、symlink directory を拒否します。PKCS#8 の秘密鍵と SPKI の公開鍵を
+出力しますが、値は標準出力に出しません。
 
 ### ENCRYPTION_KEY の 2 つの符号化
 
@@ -85,21 +87,40 @@ environment snapshot が**復号できなくなります**。だから既定は 
 1. `runtime_secrets_provisioned = false` と
    `first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"` で
    apply する。secret が無い間、Worker は `/health` 以外の全 path に `503` を返します。
-2. 5 つの値を投入する。
+2. 5 つの値を Takos 所有の固定 phase で投入する。
 
    ```sh
-   bun run generate:keys
-   wrangler secret put ENCRYPTION_KEY
-   wrangler secret put TAKOS_AGENT_START_TOKEN
-   wrangler secret put TAKOS_INTERNAL_API_SECRET
-   wrangler secret put PLATFORM_PRIVATE_KEY
-   wrangler secret put PLATFORM_PUBLIC_KEY
+   bun run generate:keys -- \
+     --env=staging \
+     --output=/operator-private/takos/runtime-secrets
+
+   bun run deploy -- takos-cloudflare-production \
+     --runtime-secrets-install \
+     --environment integration \
+     --outputs /operator-private/takos/generation-1-outputs.json \
+     --output-digest sha256:<generation-1-outputs の SHA-256> \
+     --source-commit <40 桁 commit> \
+     --operation-id <coordinator operation id> \
+     --runtime-secret-directory /operator-private/takos/runtime-secrets \
+     --cloudflare-api-token-file /operator-private/cloudflare/api-token \
+     --execute
    ```
+
+   phase が受け取る名前は
+   `src/worker/shared/config/runtime-secrets.ts` の
+   `REQUIRED_RUNTIME_SECRET_NAMES` 5 つだけです。directory はその 5 file だけを持つ
+   canonical `0700` directory、各 secret と Cloudflare credential は current owner の
+   link-free `0600` regular file でなければなりません。credential/value を argv、log、
+   result に出しません。各値は stdin で upload し、毎回 secret **name** を account から
+   readback します。lost acknowledgement が新しい値を証明できない場合は停止し、blind
+   retry しません。
 
 3. `runtime_secrets_provisioned = true` に戻し、`first_install_acknowledgement` を
    空に戻して再度 apply する。以後の apply はこの設定のままです。
 
 `.tfvars`、OpenTofu output、Git リポジトリへ値を保存しないでください。
+固定 result shape と destroy 後の absence proof は
+[first-install owner contract](/deploy/first-install-owner-contract) を参照してください。
 
 ## 関連ページ
 

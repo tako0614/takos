@@ -31,6 +31,7 @@
     "local:smoke": "bun scripts/local-smoke.mjs",
     "local:e2e": "bun scripts/local-e2e.mjs",
     "local:takosumi-mcp-agent-e2e": "bash scripts/local-takosumi-mcp-agent-e2e.sh",
+    "first-install:functional-proof": "bun scripts/first-install-functional-proof.ts",
     "docs:dev": "bunx vitepress dev docs",
     "docs:build": "bunx vitepress build docs",
     "lint:docs": "bun run docs:build",
