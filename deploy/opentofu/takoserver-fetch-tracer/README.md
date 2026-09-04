@@ -50,16 +50,20 @@ variables (the values are never accepted in argv):
 TAKOFORM_TOKEN='mutation-token' \
 TAKOFORM_EVIDENCE_TOKEN='readback-token' \
 bun scripts/takoserver-fetch-tracer.ts --run \
-  --host https://host.example --space SPACE_ID \
+  --host https://host.example \
+  --organization-id TAKOSERVER_ORGANIZATION_ID --space SPACE_ID \
   --endpoint-origin-template 'https://{project}.workers.example/'
 ```
 
 `TAKOFORM_TOKEN` is copied only into the OpenTofu child environment for
 mutation. `TAKOFORM_EVIDENCE_TOKEN` is used only for direct Host discovery,
-resource readback, and post-destroy absence GETs. The names may be changed
-with `--token-env` and `--evidence-token-env`, but both values remain
-operator-private environment inputs and must be distinct. Never put either
-value in a command line, fixture, report, or repository file.
+resource readback, post-destroy absence GETs, and the organization-scoped
+native residual reads. The organization ID is a non-secret Takoserver
+authority coordinate, not a substitute for the evidence credential. The
+environment variable names may be changed with `--token-env` and
+`--evidence-token-env`, but both values remain operator-private environment
+inputs and must be distinct. Never put either value in a command line,
+fixture, report, or repository file.
 
 `--endpoint-origin-template` declares the exact project-derived endpoint
 origin. It must be an HTTPS origin-root template containing one `{project}`
@@ -72,16 +76,37 @@ The entrypoint runs `tofu init -backend=false -lockfile=readonly`, validates
 the exact public lockfile, records the executable/provider digests, and parses
 `tofu show -json` to prove exactly five create actions before executing
 `validate -> plan -> apply -> output / readback -> Worker probe -> destroy ->
-state/Host-absence/endpoint-absence proof`. The Worker response must echo the
-fresh nonce and project UID. If Apply fails,
+state/Host-absence/endpoint-absence/native-absence proof`. The root Worker
+response must echo the fresh nonce and project UID. The tracer also performs
+anonymous `GET /health` and `GET /.well-known/takos` checks. Discovery is
+deliberately scoped to this artifact: it declares only neutral JavaScript
+`fetch`, says `fullRuntime: false`, and must not be read as evidence for Takos
+Durable Objects, Vectorize, agent containers, or Cloudflare-native topology.
+If Apply fails,
 cleanup and exact absence are still attempted; a cleanup failure is reported
 separately without replacing the original phase failure, and failed absence
 readback preserves the recovery workdir for the operator.
 
 Host resource absence and assigned endpoint absence are separate ledger entries.
-The public Host v1 contract does not expose Takoserver's native residual
-inventory/readback; reports carry an explicit `native` blocker and never claim
-zero native residuals or GA readiness from this tracer alone.
+For a live HTTPS Host, success additionally requires Takoserver's closed,
+organization-scoped native-residual readback to attest exact absence for all
+five pre-destroy Host UIDs. The response must be non-cacheable, identify its
+intrinsic/provider source, and carry bounded effect/deployment ledger counts.
+`status: "absent"`, not zero historical counts, is the native-absence
+authority. This integration-only evidence may record zero native residual for
+those five resources, but it never claims GA readiness or coverage of the full
+Takos runtime.
+
+The fixture keeps the separate control-profile output contract narrow:
+`resource_identities`, `endpoint_url`, `endpoint_hostname`, `config_value`,
+`project_nonce`, and `project_uid`. The five UIDs are derived from the exact
+identity output rather than duplicated in a second output. The control
+wrapper's explicit `--product takos --profile takoserver` lane consumes this
+shape, while its default Takos lane remains `deploy/opentofu/cloudflare`. The
+control profile currently binds its external public-URL evidence to the exact
+root correlation response; this owner entrypoint additionally requires the
+anonymous health and scoped discovery routes. This repository does not weaken
+or replace the default Takos install to bridge that evidence-scope difference.
 
 For an explicit HTTP loopback Host, the local Worker module is exercised only
 as a diagnostic. Its synthetic `.invalid` endpoint has no host-runtime route,

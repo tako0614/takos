@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertExactAbsence,
+  assertNativeResidualResponse,
   assertExactIdentitySet,
   assertExactProbeBody,
   assertReadbackResource,
@@ -16,6 +17,7 @@ import {
   assertGithubReleaseRedirect,
   assertProviderLockfile,
   buildTofuEnvironment,
+  buildNativeResidualURL,
   canonicalDigest,
   cleanupRunRoot,
   cleanupAfterApply,
@@ -55,8 +57,10 @@ import {
   unwrapTofuOutput,
   validateBareOrigin,
   validateEndpointOriginTemplate,
+  validateOrganizationId,
   validateSpace,
   validateV1Discovery,
+  verifyNativeAbsence,
   type ResourceIdentity,
   type RevisionNameContext,
   type FetchFunction,
@@ -197,9 +201,9 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
     configValue,
     nonce: runNonce,
     projectUid: runUid,
-    workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
-    workerModuleSize: 654,
-    bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+    workerModuleSha256: "sha256:0a0076dcbdef296ac1f61d506f1ef25e75531001beb116e84041a8c186c68765",
+    workerModuleSize: 1871,
+    bundleManifestDigest: "sha256:9053305f3308c67b2a25758422bf72b83980974c3f0f4c16c4866b0e578302b9",
   });
   const commonUnknown = {
     conditions: true,
@@ -239,7 +243,7 @@ function strictPlanFixture(environment: Record<string, string | undefined>): Rec
       delete_timeout: null,
       main_module: "worker.mjs",
       manifest_digest: revisions.bundleManifestDigest,
-      modules: [{ content_file: "./worker.mjs", content_type: "application/javascript+module", digest: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a", name: "worker.mjs", size: 654 }],
+      modules: [{ content_file: "./worker.mjs", content_type: "application/javascript+module", digest: "sha256:0a0076dcbdef296ac1f61d506f1ef25e75531001beb116e84041a8c186c68765", name: "worker.mjs", size: 1871 }],
       name: revisions.bundleName,
       revision_owner: projectName,
       space,
@@ -419,11 +423,19 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--provider-binary", "/tmp/provider",
     ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken })).toThrow(/local provider/u);
 
+    expect(() => parseArgs([
+      "--run",
+      "--host", "https://host.example",
+      "--space", "space-a",
+    ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken })).toThrow(/organization/u);
+
     const config = parseArgs([
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
     ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken });
+    expect(config.organizationId).toBe("org-integration-e2e");
     expect(config.token).toBe(token);
     expect(config.tokenEnv).toBe(MUTATION_TOKEN_ENV);
     expect(config.evidenceToken).toBe(evidenceToken);
@@ -433,6 +445,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
       "--token-env", "CUSTOM_MUTATION_TOKEN",
       "--evidence-token-env", "CUSTOM_EVIDENCE_TOKEN",
     ], { CUSTOM_MUTATION_TOKEN: token, CUSTOM_EVIDENCE_TOKEN: evidenceToken });
@@ -442,6 +455,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
       "--token-env", "PATH",
     ], { PATH: token, [EVIDENCE_TOKEN_ENV]: evidenceToken })).toThrow(/inherited process environment/u);
 
@@ -449,6 +463,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
       "--config-value", "prefix-" + token + "-suffix",
     ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken })).toThrow(/must not contain a token/u);
 
@@ -559,6 +574,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(() => validateEndpointOriginTemplate("http://{project}.workers.example/")).toThrow();
     const config = parseArgs([
       "--run", "--host", "https://host.example", "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
     ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken });
     await expect(runTracer(config, { spawn: () => { throw new Error("must fail before spawn"); } })).rejects.toThrow(/non-.invalid/u);
   });
@@ -602,7 +618,16 @@ describe("takoserver fetch tracer pure contracts", () => {
       targetHost: "http://127.0.0.1:8787",
       timeoutMs: 500,
     });
-    expect(diagnostic).toEqual({ mode: "loopback-diagnostic", assignedUrl: "https://takos-fetch-tracer.invalid/", evidence: "diagnostic-only-not-host-runtime" });
+    expect(diagnostic).toEqual({
+      mode: "loopback-diagnostic",
+      assignedUrl: "https://takos-fetch-tracer.invalid/",
+      evidence: "diagnostic-only-not-host-runtime",
+      checks: [
+        { name: "root-correlation", path: "/", status: 200, anonymous: true },
+        { name: "health", path: "/health", status: 200, anonymous: true },
+        { name: "takos-discovery", path: "/.well-known/takos", status: 200, anonymous: true },
+      ],
+    });
     await expect(probeRuntime({
       endpoint,
       workerPath: join(import.meta.dir, "../../deploy/opentofu/takoserver-fetch-tracer/worker.mjs"),
@@ -692,6 +717,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
     ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken });
     const childEnvironment = buildTofuEnvironment({
       host: config.host,
@@ -1115,7 +1141,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       hostname: "takos-fetch-tracer.example",
       url: "https://takos-fetch-tracer.example/",
     };
-    const requests: string[] = [];
+    const requests: Array<{ url: string; authorization: string | null }> = [];
     const result = await probeRuntime({
       endpoint,
       workerPath: join(import.meta.dir, "../../deploy/opentofu/takoserver-fetch-tracer/worker.mjs"),
@@ -1125,8 +1151,31 @@ describe("takoserver fetch tracer pure contracts", () => {
       expectedEndpointOrigin: "https://takos-fetch-tracer.example/",
       targetHost: "https://host.example",
       timeoutMs: 100,
-      fetchImpl: async (input) => {
-        requests.push(String(input));
+      fetchImpl: async (input, init) => {
+        const url = new URL(String(input));
+        requests.push({
+          url: url.toString(),
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        if (url.pathname === "/health") {
+          return new Response(JSON.stringify({
+            component: "takoserver-fetch-tracer",
+            product: "takos",
+            scope: "integration-only",
+            status: "ok",
+          }), { status: 200 });
+        }
+        if (url.pathname === "/.well-known/takos") {
+          return new Response(JSON.stringify({
+            artifact: "takoserver-fetch-tracer",
+            capabilities: ["fetch"],
+            fullRuntime: false,
+            name: "Takos",
+            product: "takos",
+            runtime: "neutral-javascript-fetch",
+            scope: "integration-only",
+          }), { status: 200 });
+        }
         return new Response(JSON.stringify({
           buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0",
           configValue: "safe-config",
@@ -1139,8 +1188,85 @@ describe("takoserver fetch tracer pure contracts", () => {
       mode: "assigned-endpoint",
       assignedUrl: "https://takos-fetch-tracer.example/",
       evidence: "host-runtime-readback",
+      checks: [
+        { name: "root-correlation", path: "/", status: 200, anonymous: true },
+        { name: "health", path: "/health", status: 200, anonymous: true },
+        { name: "takos-discovery", path: "/.well-known/takos", status: 200, anonymous: true },
+      ],
     });
-    expect(requests).toEqual(["https://takos-fetch-tracer.example/"]);
+    expect(requests).toEqual([
+      { url: "https://takos-fetch-tracer.example/", authorization: null },
+      { url: "https://takos-fetch-tracer.example/health", authorization: null },
+      { url: "https://takos-fetch-tracer.example/.well-known/takos", authorization: null },
+    ]);
+  });
+
+  test("serves scoped Takos health and discovery anonymously without claiming the full runtime", async () => {
+    const workerPath = join(
+      import.meta.dir,
+      "../../deploy/opentofu/takoserver-fetch-tracer/worker.mjs",
+    );
+    const workerModule = (await import(
+      `${new URL(`file://${workerPath}`).href}?routes=${Date.now()}`
+    )) as {
+      default: {
+        fetch(request: Request, env: Record<string, string>): Promise<Response>;
+      };
+    };
+    const env = {
+      TAKOS_FETCH_TRACER_CONFIG: "safe-config",
+      TAKOS_FETCH_TRACER_NONCE: nonce,
+      TAKOS_FETCH_TRACER_PROJECT_UID: projectUid,
+    };
+
+    const root = await workerModule.default.fetch(
+      new Request("https://tracer.example/"),
+      env,
+    );
+    expect(root.status).toBe(200);
+    expect(await root.json()).toEqual({
+      buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0",
+      configValue: "safe-config",
+      nonce,
+      projectUid,
+    });
+
+    const health = await workerModule.default.fetch(
+      new Request("https://tracer.example/health"),
+      env,
+    );
+    expect(health.status).toBe(200);
+    expect(health.headers.get("www-authenticate")).toBeNull();
+    expect(health.headers.get("set-cookie")).toBeNull();
+    expect(await health.json()).toEqual({
+      component: "takoserver-fetch-tracer",
+      product: "takos",
+      scope: "integration-only",
+      status: "ok",
+    });
+
+    const discovery = await workerModule.default.fetch(
+      new Request("https://tracer.example/.well-known/takos"),
+      env,
+    );
+    expect(discovery.status).toBe(200);
+    expect(discovery.headers.get("www-authenticate")).toBeNull();
+    expect(discovery.headers.get("set-cookie")).toBeNull();
+    expect(await discovery.json()).toEqual({
+      artifact: "takoserver-fetch-tracer",
+      capabilities: ["fetch"],
+      fullRuntime: false,
+      name: "Takos",
+      product: "takos",
+      runtime: "neutral-javascript-fetch",
+      scope: "integration-only",
+    });
+
+    const missing = await workerModule.default.fetch(
+      new Request("https://tracer.example/not-a-product-route"),
+      env,
+    );
+    expect(missing.status).toBe(404);
   });
 
   test("checks all five static project addresses for exact absence", async () => {
@@ -1181,6 +1307,92 @@ describe("takoserver fetch tracer pure contracts", () => {
     expect(requests.some((request) => request.includes(`WorkerVersion/${revisions.workerVersionName}`))).toBe(true);
     expect(requests.some((request) => request.includes(`WorkerDeployment/${projectName}-deployment`))).toBe(true);
     expect(requests.some((request) => request.includes(`WorkerEndpoint/${projectName}-endpoint`))).toBe(true);
+  });
+
+  test("requires five authoritative Takoserver native-absence attestations and attempts every UID", async () => {
+    expect(validateOrganizationId("org-integration-e2e")).toBe(
+      "org-integration-e2e",
+    );
+    expect(() => validateOrganizationId("../operator")).toThrow(/organization/u);
+    expect(
+      buildNativeResidualURL({
+        host: "https://host.example",
+        organizationId: "org-integration-e2e",
+        identity: identity("module_worker"),
+      }).toString(),
+    ).toBe(
+      "https://host.example/v1/organizations/org-integration-e2e/resources/uid-module_worker/native-residual?space=space-a&name=takos-fetch-tracer",
+    );
+
+    const absent = {
+      residual: {
+        checkedAt: "2026-09-03T00:00:00.000Z",
+        deploymentCount: 1,
+        effectCount: 6,
+        evidenceRef: `sha256:${"b".repeat(64)}`,
+        source: "provider",
+        status: "absent",
+      },
+    };
+    expect(assertNativeResidualResponse(absent)).toMatchObject(absent.residual);
+    expect(assertNativeResidualResponse(absent)).toMatchObject({
+      status: "absent",
+      deploymentCount: 1,
+      effectCount: 6,
+    });
+    expect(() =>
+      assertNativeResidualResponse({
+        residual: { ...absent.residual, status: "indeterminate", reason: "effect_unresolved" },
+      }),
+    ).toThrow(/absent/u);
+
+    const requests: Array<{ url: string; authorization: string | null }> = [];
+    const evidence = await verifyNativeAbsence({
+      host: "https://host.example",
+      organizationId: "org-integration-e2e",
+      identities: identities(),
+      token: evidenceToken,
+      timeoutMs: 100,
+      fetchImpl: async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get("authorization"),
+        });
+        return new Response(JSON.stringify(absent), {
+          status: 200,
+          headers: { "cache-control": "no-store", "content-type": "application/json" },
+        });
+      },
+    });
+    expect(evidence).toMatchObject({
+      kind: "takos.takoserver-native-absence@v1",
+      status: "passed",
+      organizationId: "org-integration-e2e",
+      space: "space-a",
+      resourceCount: 5,
+      checkedCount: 5,
+    });
+    expect(Object.keys(evidence.resources)).toEqual([...RESOURCE_KEYS]);
+    expect(requests).toHaveLength(5);
+    expect(
+      requests.every(({ authorization }) => authorization === `Bearer ${evidenceToken}`),
+    ).toBe(true);
+
+    let failedCalls = 0;
+    await expect(
+      verifyNativeAbsence({
+        host: "https://host.example",
+        organizationId: "org-integration-e2e",
+        identities: identities(),
+        token: evidenceToken,
+        timeoutMs: 100,
+        fetchImpl: async () => {
+          failedCalls += 1;
+          return new Response("operator-private diagnostic", { status: 503 });
+        },
+      }),
+    ).rejects.toThrow(/5 of 5/u);
+    expect(failedCalls).toBe(5);
   });
 
   test("unwraps realistic OpenTofu output wrappers before checking exact values", () => {
@@ -1310,6 +1522,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
       "--timeout-ms", "100",
       "--kill-grace-ms", "100",
       "--endpoint-origin-template", "https://{project}.example/",
@@ -1407,6 +1620,7 @@ describe("takoserver fetch tracer pure contracts", () => {
       "--run",
       "--host", "https://host.example",
       "--space", "space-a",
+      "--organization-id", "org-integration-e2e",
       "--timeout-ms", "100",
       "--kill-grace-ms", "100",
       "--config-value", "safe-config",
@@ -1416,6 +1630,7 @@ describe("takoserver fetch tracer pure contracts", () => {
     let outputIdentities: Record<string, ResourceIdentity> | undefined;
     let runtimeNonce: string | undefined;
     let runtimeUid: string | undefined;
+    let destroyed = false;
     const spawn: SpawnFunction = (argv, options) => {
       const subcommand = argv[1] ?? "";
       spawnCommands.push(subcommand);
@@ -1431,6 +1646,7 @@ describe("takoserver fetch tracer pure contracts", () => {
         return { exited: setup.then(() => 0), stdout: new Response("").body, stderr: new Response("").body };
       }
       if (subcommand === "validate" || subcommand === "destroy" || subcommand === "state") {
+        if (subcommand === "destroy") destroyed = true;
         return { exited: Promise.resolve(0), stdout: new Response("").body, stderr: new Response("").body };
       }
       if (subcommand === "plan") {
@@ -1455,9 +1671,9 @@ describe("takoserver fetch tracer pure contracts", () => {
           configValue: environment.TF_VAR_config_value as string,
           nonce: runNonce,
           projectUid: runUid,
-          workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
-          workerModuleSize: 654,
-          bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+          workerModuleSha256: "sha256:0a0076dcbdef296ac1f61d506f1ef25e75531001beb116e84041a8c186c68765",
+          workerModuleSize: 1871,
+          bundleManifestDigest: "sha256:9053305f3308c67b2a25758422bf72b83980974c3f0f4c16c4866b0e578302b9",
         });
         runtimeNonce = runNonce;
         runtimeUid = runUid;
@@ -1501,7 +1717,6 @@ describe("takoserver fetch tracer pure contracts", () => {
       endpoints: { api: "https://host.example/apis/forms.takoform.com/v1" },
     };
     let resourceReads = 0;
-    let workerProbeSeen = false;
     const requests: Array<{ url: string; authorization: string | null }> = [];
     const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = new URL(String(input));
@@ -1510,10 +1725,43 @@ describe("takoserver fetch tracer pure contracts", () => {
       if (url.pathname === "/.well-known/takoform/v1") {
         return new Response(JSON.stringify(discoveryDocument), { status: 200 });
       }
+      if (url.pathname.endsWith("/native-residual")) {
+        return new Response(JSON.stringify({
+          residual: {
+            checkedAt: "2026-09-03T00:00:00.000Z",
+            deploymentCount: 0,
+            effectCount: 0,
+            evidenceRef: `sha256:${"c".repeat(64)}`,
+            source: "provider",
+            status: "absent",
+          },
+        }), {
+          status: 200,
+          headers: { "cache-control": "no-store", "content-type": "application/json" },
+        });
+      }
       const endpointOrigin = outputIdentities?.worker_endpoint.url ? new URL(String(outputIdentities.worker_endpoint.url)).origin : undefined;
       if (endpointOrigin && url.origin === endpointOrigin) {
-        if (workerProbeSeen) return new Response("", { status: 404 });
-        workerProbeSeen = true;
+        if (destroyed) return new Response("", { status: 404 });
+        if (url.pathname === "/health") {
+          return new Response(JSON.stringify({
+            component: "takoserver-fetch-tracer",
+            product: "takos",
+            scope: "integration-only",
+            status: "ok",
+          }), { status: 200 });
+        }
+        if (url.pathname === "/.well-known/takos") {
+          return new Response(JSON.stringify({
+            artifact: "takoserver-fetch-tracer",
+            capabilities: ["fetch"],
+            fullRuntime: false,
+            name: "Takos",
+            product: "takos",
+            runtime: "neutral-javascript-fetch",
+            scope: "integration-only",
+          }), { status: 200 });
+        }
         return new Response(JSON.stringify({
           buildIdentity: "takos-fetch-tracer@public-registry-provider-4.0.0",
           configValue: "safe-config",
@@ -1554,21 +1802,40 @@ describe("takoserver fetch tracer pure contracts", () => {
       signingKeyId: PUBLIC_PROVIDER_SIGNING_KEY_ID,
       signingKeyFingerprint: PUBLIC_PROVIDER_SIGNING_KEY_FINGERPRINT,
     });
-    expect(report.runtimeProbe).toEqual({ mode: "assigned-endpoint", assignedUrl: expect.stringMatching(/^https:\/\/takos-fetch-tracer-[0-9a-f]{12}\.example\/$/u), exact: true, evidence: "host-runtime-readback" });
+    expect(report.runtimeProbe).toEqual({
+      mode: "assigned-endpoint",
+      assignedUrl: expect.stringMatching(/^https:\/\/takos-fetch-tracer-[0-9a-f]{12}\.example\/$/u),
+      exact: true,
+      evidence: "host-runtime-readback",
+      checks: [
+        { name: "root-correlation", path: "/", status: 200, anonymous: true },
+        { name: "health", path: "/health", status: 200, anonymous: true },
+        { name: "takos-discovery", path: "/.well-known/takos", status: 200, anonymous: true },
+      ],
+    });
     expect(report.run.nonce).toMatch(/^[0-9a-f]{64}$/u);
     expect(report.run.projectUid).toBe(`puid-${report.run.nonce}`);
     expect(report.runtime.nonce).toBe(report.run.nonce);
     expect(report.ledger.plan.creates).toHaveLength(5);
     expect(report.ledger.plan.planSha256).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(report.ledger.endpoint).toMatchObject({ status: 404, nonce: report.run.nonce });
-    expect(report.native).toEqual({ status: "unavailable", zeroResidual: false, gaEligible: false, blocker: expect.any(String) });
+    expect(report.native).toMatchObject({
+      kind: "takos.takoserver-native-absence@v1",
+      status: "passed",
+      zeroResidual: true,
+      gaEligible: false,
+      organizationId: "org-integration-e2e",
+      resourceCount: 5,
+      checkedCount: 5,
+    });
     expect(report.lifecycle).toEqual({ init: "passed", validate: "passed", plan: "passed", apply: "passed", destroy: "passed", absence: "passed" });
     expect(spawnCommands).toEqual(["version", "init", "validate", "plan", "show", "apply", "output", "destroy", "state"]);
-    expect(requests).toHaveLength(13);
+    expect(requests).toHaveLength(20);
     expect(requests.slice(0, 6).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
-    expect(requests[6]?.authorization).toBeNull();
-    expect(requests.slice(7, 12).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
-    expect(requests[12]?.authorization).toBeNull();
+    expect(requests.slice(6, 9).every(({ authorization }) => authorization === null)).toBe(true);
+    expect(requests.slice(9, 14).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
+    expect(requests[14]?.authorization).toBeNull();
+    expect(requests.slice(15).every(({ authorization }) => authorization === `Bearer ${evidenceToken}`)).toBe(true);
   });
 
   test("runs a real loopback diagnostic lifecycle without .invalid interception and marks runtime absence not-applicable", async () => {
@@ -1620,7 +1887,8 @@ describe("takoserver fetch tracer pure contracts", () => {
     });
     try {
       const config = parseArgs([
-        "--run", "--host", hostServer.url.origin, "--space", "space-loopback", "--timeout-ms", "500", "--kill-grace-ms", "100",
+        "--run", "--host", hostServer.url.origin, "--space", "space-loopback",
+        "--organization-id", "org-integration-e2e", "--timeout-ms", "500", "--kill-grace-ms", "100",
       ], { [MUTATION_TOKEN_ENV]: token, [EVIDENCE_TOKEN_ENV]: evidenceToken });
       const spawn: SpawnFunction = (argv, options) => {
         const subcommand = argv[1] ?? "";
@@ -1660,9 +1928,9 @@ describe("takoserver fetch tracer pure contracts", () => {
             configValue: environment.TF_VAR_config_value as string,
             nonce: runNonce,
             projectUid: runUid,
-            workerModuleSha256: "sha256:b5004673bb9ab47cc66d468963f80934e95226acad0bba11de618cc10ad23e9a",
-            workerModuleSize: 654,
-            bundleManifestDigest: "sha256:0cd32958ba84ab50dc92e794a18f73e4aeabb6dcbf821f81a48da9bd03a71fdb",
+            workerModuleSha256: "sha256:0a0076dcbdef296ac1f61d506f1ef25e75531001beb116e84041a8c186c68765",
+            workerModuleSize: 1871,
+            bundleManifestDigest: "sha256:9053305f3308c67b2a25758422bf72b83980974c3f0f4c16c4866b0e578302b9",
           });
           const endpointUrl = `https://${projectName}.invalid/`;
           outputIdentities = Object.fromEntries(RESOURCE_KEYS.map((key) => [key, {
@@ -1735,6 +2003,29 @@ describe("takoserver fetch tracer pure contracts", () => {
       const block = configuration.slice(start, next === -1 ? configuration.length : next);
       expect(block).toMatch(/^\s+revision_owner\s*=/mu);
       expect(block).not.toMatch(/^ {2}name\s*=/mu);
+    }
+  });
+
+  test("projects the exact current control Takoserver-profile outputs", async () => {
+    const outputs = await readFile(
+      join(import.meta.dir, "../../deploy/opentofu/takoserver-fetch-tracer/outputs.tf"),
+      "utf8",
+    );
+    const outputNames = [...outputs.matchAll(/^output "([^"]+)" \{/gmu)]
+      .map((match) => match[1])
+      .sort();
+    expect(outputNames).toEqual([
+      "config_value",
+      "endpoint_hostname",
+      "endpoint_url",
+      "project_nonce",
+      "project_uid",
+      "resource_identities",
+    ]);
+    for (const key of RESOURCE_KEYS) {
+      expect(outputs).toMatch(
+        new RegExp(`^\\s*${key}\\s+=\\s+local\\.${key}_identity$`, "mu"),
+      );
     }
   });
 
