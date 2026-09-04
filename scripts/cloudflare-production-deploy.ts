@@ -140,7 +140,7 @@ export const TAKOS_CLOUDFLARE_PRODUCTION_SURFACE = {
   triggers: ["authority", "irreversible", "published-identity"],
   obligations: {
     provenance:
-      "--apply --environment=production refuses a dirty worktree, requires clean main or an exact --commit equal to HEAD, and deploys the published release artifact of that commit: the takos.worker-artifact@v3 descriptor is parsed in its canonical form, its archive is downloaded from the release URL and accepted only when the exact size and SHA-256 match the record, and the record's commit must equal the deploying commit. integration and rehearsal may build from the worktree instead. The realized Wrangler configuration is rendered from the OpenTofu module's non-secret Outputs rather than hand-copied, and its SHA-256 is printed with the commit, the release tag, the archive digest, and the pinned container image digest. The first-install @v2 release writer additionally bounds and digests the exact canonical descriptor bytes, fixes orchestration to integration and the Takos product environment to staging, requires clean HEAD = source commit = canonical descriptor commit, streams the archive into fresh private custody outside the repository, rejects traversal, duplicate, linked, special, over-count, over-size, and over-expanded tar entries before extraction, seals the archive, extracted payload, manifest, assets, and realized configuration by content and physical identity, uploads only from custody, and records the retained OpenTofu bootstrap Worker version separately from the newly activated served version. Legacy apply/status reads CLOUDFLARE_API_TOKEN from the environment. First-install authority phases reject ambient credential selection: the token comes only from a canonical owner-owned 0600 file, target account/name come from the digest-bound non-secret OpenTofu output artifact, secret values come only from the exact owner-owned 0700 five-file closure, and none is written, recorded, or echoed.",
+      "--apply --environment=production refuses a dirty worktree, requires clean main or an exact --commit equal to HEAD, and deploys the published release artifact of that commit: the takos.worker-artifact@v3 descriptor is parsed in its canonical form, its archive is downloaded from the release URL and accepted only when the exact size and SHA-256 match the record, and the record's commit must equal the deploying commit. integration and rehearsal may build from the worktree instead. The realized Wrangler configuration is rendered from the OpenTofu module's non-secret Outputs rather than hand-copied, and its SHA-256 is printed with the commit, the release tag, the archive digest, and the pinned container image digest. The first-install @v2 release writer additionally bounds and digests the exact canonical descriptor bytes, requires that digest to equal the caller-selected --expected-release-descriptor-digest before provider access, fixes orchestration to integration and the Takos product environment to staging, requires clean HEAD = source commit = canonical descriptor commit, streams the archive into fresh private custody outside the repository, rejects traversal, duplicate, linked, special, over-count, over-size, and over-expanded tar entries before extraction, seals the archive, extracted payload, manifest, assets, and realized configuration by content and physical identity, uploads only from custody, and records the retained OpenTofu bootstrap Worker version separately from the newly activated served version. Legacy apply/status reads CLOUDFLARE_API_TOKEN from the environment. First-install authority phases reject ambient credential selection: the token comes only from a canonical owner-owned 0600 file, target account/name come from the digest-bound non-secret OpenTofu output artifact, secret values come only from the exact owner-owned 0700 five-file closure, and none is written, recorded, or echoed.",
     "post-conditions":
       "After the upload the entrypoint reads the newly served Worker version id back from the account, requires it to differ from the version captured before the mutation, and reads that immutable version's binding closure to prove the exact sealed-config-derived non-secret closure, including every var, ASSETS, AI, D1, KV, R2, Queue, Vectorize, Durable Object, and service binding plus service entrypoint, with no unexpected or duplicate binding. It separately re-reads the Worker's secret names to prove the exact five runtime secrets survived the upload. First-install reads every bounded Cloudflare Container API page twice, requires both complete inventories to match and their entire canonical name set to equal exactly the three executor applications, then checks each typed detail for the pinned image, exact identity, healthy counts, and no active rollout; the upload's immediate rollout flag alone is not completion evidence. It finally exercises the public URL as a user does: production requires /health to answer 200 and the authenticated API boundary /api/auth/me to answer 401; integration and rehearsal require the /health smoke only. First-install release-status accepts only the exact served UUID returned by release-apply as an overlay distinct from the retained module Worker version and rejects every other structural drift without parsing generic drift prose. Runtime-secret installation performs authoritative secret-name readback after every one of the five stdin uploads and emits no value. Absence proof reports absent, present, or indeterminate for the full retained Worker, version, route/domain/workers.dev, D1, KV, five R2, six Queue, Vectorize, and three Container application closure.",
     reversal:
@@ -176,6 +176,7 @@ export type CloudflareProductionOptions = Readonly<{
   commit?: string;
   sourceCommit?: string;
   outputDigest?: string;
+  expectedReleaseDescriptorDigest?: string;
   operationId?: string;
   productEnvironment?: "staging";
   expectedServedVersion?: string;
@@ -258,8 +259,8 @@ export const CLOUDFLARE_PRODUCTION_USAGE = `Usage:
   bun run deploy -- takos-cloudflare-production --containers --environment <env> --outputs <absolute.json> (--release <absolute.json> | --container-image <ref>)
   bun run deploy -- takos-cloudflare-production --runtime-secrets-install --environment <env> --outputs <absolute.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --runtime-secret-directory <absolute 0700 dir> --cloudflare-api-token-file <absolute 0600 file> [--execute]
   bun run deploy -- takos-cloudflare-production --absence-proof --environment <env> --outputs <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --cloudflare-api-token-file <absolute 0600 file>
-  bun run deploy -- takos-cloudflare-production --release-apply --environment integration --product-environment staging --outputs-file <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --release-descriptor-file <absolute.json> --cloudflare-api-token-file <absolute 0600 file> --execute
-  bun run deploy -- takos-cloudflare-production --release-status --environment integration --product-environment staging --outputs-file <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --release-descriptor-file <absolute.json> --cloudflare-api-token-file <absolute 0600 file> --expected-served-version <uuid>
+  bun run deploy -- takos-cloudflare-production --release-apply --environment integration --product-environment staging --outputs-file <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --release-descriptor-file <absolute.json> --expected-release-descriptor-digest <sha256:...> --cloudflare-api-token-file <absolute 0600 file> --execute
+  bun run deploy -- takos-cloudflare-production --release-status --environment integration --product-environment staging --outputs-file <absolute retained.json> --output-digest <sha256:...> --source-commit <sha> --operation-id <id> --release-descriptor-file <absolute.json> --expected-release-descriptor-digest <sha256:...> --cloudflare-api-token-file <absolute 0600 file> --expected-served-version <uuid>
 
 --outputs is \`tofu output -json\` from deploy/opentofu/cloudflare, or the same
 non-secret values exported by hand. --release is the published
@@ -297,6 +298,7 @@ export function parseCloudflareProductionArgs(
   let commit: string | undefined;
   let sourceCommit: string | undefined;
   let outputDigest: string | undefined;
+  let expectedReleaseDescriptorDigest: string | undefined;
   let operationId: string | undefined;
   let productEnvironment: string | undefined;
   let expectedServedVersion: string | undefined;
@@ -365,6 +367,9 @@ export function parseCloudflareProductionArgs(
         break;
       case "--output-digest":
         outputDigest = value;
+        break;
+      case "--expected-release-descriptor-digest":
+        expectedReleaseDescriptorDigest = value;
         break;
       case "--operation-id":
         operationId = value;
@@ -471,6 +476,14 @@ export function parseCloudflareProductionArgs(
     if (!outputDigest || !SHA256_DIGEST.test(outputDigest)) {
       refuse("release owner phases require --output-digest sha256:<64 lowercase hex>");
     }
+    if (
+      !expectedReleaseDescriptorDigest ||
+      !SHA256_DIGEST.test(expectedReleaseDescriptorDigest)
+    ) {
+      refuse(
+        "release owner phases require --expected-release-descriptor-digest sha256:<64 lowercase hex>",
+      );
+    }
     if (!operationId || !OPERATION_ID.test(operationId)) {
       refuse("release owner phases require a bounded --operation-id");
     }
@@ -495,8 +508,14 @@ export function parseCloudflareProductionArgs(
         refuse("--release-status requires an exact --expected-served-version UUID");
       }
     }
-  } else if (productEnvironment || expectedServedVersion) {
-    refuse("product environment and expected served version are release owner inputs only");
+  } else if (
+    productEnvironment ||
+    expectedServedVersion ||
+    expectedReleaseDescriptorDigest
+  ) {
+    refuse(
+      "product environment, expected served version, and expected release descriptor digest are release owner inputs only",
+    );
   }
 
   return {
@@ -508,6 +527,9 @@ export function parseCloudflareProductionArgs(
     ...(commit === undefined ? {} : { commit }),
     ...(sourceCommit === undefined ? {} : { sourceCommit }),
     ...(outputDigest === undefined ? {} : { outputDigest }),
+    ...(expectedReleaseDescriptorDigest === undefined
+      ? {}
+      : { expectedReleaseDescriptorDigest }),
     ...(operationId === undefined ? {} : { operationId }),
     ...(productEnvironment === undefined
       ? {}
@@ -2540,6 +2562,14 @@ async function resolveRelease(context: Context): Promise<ReleaseBinding> {
     };
   }
   const descriptorRead = await readReleaseDescriptor(options.release);
+  if (
+    isReleaseOwnerPhase(options.phase) &&
+    descriptorRead.digest !== options.expectedReleaseDescriptorDigest
+  ) {
+    refuse(
+      "the canonical release descriptor digest does not match the caller-selected digest",
+    );
+  }
   const { descriptor } = descriptorRead;
   if (isReleaseOwnerPhase(options.phase)) {
     if (!options.sourceCommit) {
@@ -3061,6 +3091,14 @@ async function assertReleaseOwnerPreflight(context: Context): Promise<void> {
   }
   if (!options.cloudflareApiTokenFile) {
     refuse("first-install release ownership requires a Cloudflare token file");
+  }
+  if (
+    !options.expectedReleaseDescriptorDigest ||
+    !SHA256_DIGEST.test(options.expectedReleaseDescriptorDigest)
+  ) {
+    refuse(
+      "first-install release ownership requires the caller-selected canonical descriptor digest",
+    );
   }
   try {
     const tokenFile = await assertOwnerPrivateFile(

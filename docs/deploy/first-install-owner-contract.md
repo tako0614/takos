@@ -38,6 +38,9 @@ canonical pattern もこの value-free contract に含めます。
 `release-apply` は、digest で固定した staging OpenTofu output と canonical
 `takos.worker-artifact@v3` descriptor を受け取る 1 回だけの writer です。descriptor は owner-private
 regular file から最大 256 KiB だけ読み、その exact bytes の SHA-256 と physical identity を固定します。
+呼び出し側が選んだ exact bytes の SHA-256 は `--expected-release-descriptor-digest` で必須入力にし、owner が
+同じ file descriptor から読んだ digest と一致しない限り、archive fetch、provider read、account mutation の前に
+拒否します。path を一度検査しただけの結果を mutation authority として引き継ぎません。
 checkout は clean でなければならず、HEAD、`--source-commit`、descriptor の `commit` が一致し、descriptor
 の `ref` と release tag も一致しなければなりません。archive は download 後に size と SHA-256 を照合し、
 descriptor の executor/public-agent image は digest reference のまま receipt に束ねます。
@@ -62,6 +65,7 @@ bun run deploy -- takos-cloudflare-production \
   --source-commit <40 桁 commit> \
   --operation-id <coordinator operation id> \
   --release-descriptor-file /operator-private/takos/takos-artifact.json \
+  --expected-release-descriptor-digest sha256:<caller が選んだ exact bytes> \
   --cloudflare-api-token-file /operator-private/cloudflare/api-token \
   --execute
 ```
@@ -126,6 +130,7 @@ bun run deploy -- takos-cloudflare-production \
   --source-commit <40 桁 commit> \
   --operation-id <coordinator operation id> \
   --release-descriptor-file /operator-private/takos/takos-artifact.json \
+  --expected-release-descriptor-digest sha256:<release-apply と同じ exact bytes> \
   --cloudflare-api-token-file /operator-private/cloudflare/api-token \
   --expected-served-version <release-apply の servedVersion>
 ```
