@@ -792,12 +792,15 @@ describe("takoserver fetch tracer pure contracts", () => {
     const realSetTimeout = globalThis.setTimeout;
     let parentDeadline: (() => void) | undefined;
     const bodyDeadlines: Array<() => void> = [];
-    globalThis.setTimeout = ((handler, _delay) => {
+    globalThis.setTimeout = ((
+      handler: Parameters<typeof globalThis.setTimeout>[0],
+      _delay?: Parameters<typeof globalThis.setTimeout>[1],
+    ): ReturnType<typeof globalThis.setTimeout> => {
       if (typeof handler !== "function") throw new Error("test timer handler must be callable");
       const callback = (): void => handler();
       if (parentDeadline) bodyDeadlines.push(callback);
       else parentDeadline = callback;
-      return 0 as ReturnType<typeof setTimeout>;
+      return realSetTimeout(() => undefined, 0);
     }) as typeof globalThis.setTimeout;
 
     let requestSignal: AbortSignal | undefined;
