@@ -1,66 +1,132 @@
 #!/usr/bin/env bun
 
 /**
- * Portable test runner.
+ * Portable and explicitly online test runner.
  *
- * Every `*.test.ts(x)` and `*_test.ts` file the repository tracks is part of
- * the gate. What is not part of it has to be named, with a reason, in
- * `quality/test-quarantine.json`, and the count is printed on every run.
- *
- * The list this replaced was an allowlist in `package.json` naming 53 of 210
- * test files, so a file left out of it was indistinguishable from a file that
- * did not exist. Three of the paths in it were even appended to
- * `bun run test:opentofu`, a script that never reads its arguments, so they
- * were listed as running while running nowhere.
- *
- * `--verify-quarantine` runs the quarantined files instead, and fails on any
- * that now pass: a quarantine entry is a claim that the file fails today, and
- * a claim that stopped being true has to leave the ledger.
+ * Every tracked test file is classified by one of the two ledgers: the
+ * portable gate runs files in neither ledger, while `--online` runs the files
+ * in `quality/test-online.json`. `--verify-quarantine` keeps the existing
+ * quarantine claim check separate from online evidence.
  */
 
 import { readFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
+
+import {
+  canRunTestSelection,
+  selectTestFiles,
+  validateTestInventory,
+  type TestInventory,
+} from "./test-inventory.ts";
 
 const root = resolve(import.meta.dir, "..");
 const quarantinePath = "quality/test-quarantine.json";
+const onlinePath = "quality/test-online.json";
+const supportedFlags = new Set(["--list", "--online", "--verify-quarantine"]);
 
-type Quarantine = {
-  readonly note: string;
-  readonly totals: { readonly files: number };
-  readonly files: Readonly<Record<string, string>>;
-};
+type TestMode = "portable" | "online" | "quarantine";
 
-const quarantine = JSON.parse(
-  await readFile(resolve(root, quarantinePath), "utf8"),
-) as Quarantine;
-const quarantined = Object.keys(quarantine.files).sort();
-if (quarantined.length !== quarantine.totals.files) {
-  console.error(
-    `${quarantinePath}: totals say ${quarantine.totals.files} file(s) but ` +
-      `${quarantined.length} are listed`,
+if (import.meta.main) await main();
+
+async function main(): Promise<void> {
+  const args = Bun.argv.slice(2);
+  const unknown = args.filter((arg) => !supportedFlags.has(arg));
+  if (unknown.length > 0) {
+    console.error(`Unknown runner argument(s): ${unknown.join(", ")}`);
+    process.exit(1);
+  }
+
+  const verifyQuarantine = args.includes("--verify-quarantine");
+  const online = args.includes("--online");
+  const list = args.includes("--list");
+  if (verifyQuarantine && online) {
+    console.error("--online and --verify-quarantine are mutually exclusive.");
+    process.exit(1);
+  }
+
+  const quarantine = await readManifest(quarantinePath);
+  const onlineManifest = await readManifest(onlinePath);
+  const tracked = await trackedTestFiles();
+  const validation = validateTestInventory(
+    tracked,
+    quarantine,
+    onlineManifest,
   );
-  process.exit(1);
+  if (validation.issues.length > 0) {
+    console.error("Test inventory validation failed:");
+    for (const issue of validation.issues) {
+      console.error(`- ${issue.path}: ${issue.message}`);
+    }
+    process.exit(1);
+  }
+
+  const mode: TestMode = verifyQuarantine
+    ? "quarantine"
+    : online
+      ? "online"
+      : "portable";
+  const selected = selectTestFiles(validation.inventory, mode);
+  if (list) {
+    listSelection(mode, selected, validation.inventory);
+    return;
+  }
+  if (!canRunTestSelection(mode, selected)) {
+    console.error(`Refusing to run an empty ${mode} test selection.`);
+    process.exit(1);
+  }
+
+  if (verifyQuarantine) {
+    await verifyQuarantined(selected);
+    return;
+  }
+
+  const label = mode === "online" ? "online" : "portable";
+  if (mode === "portable") {
+    console.log(
+      `Running ${selected.length} ${label} test file(s); ` +
+        `${validation.inventory.quarantined.length} quarantined and ` +
+        `${validation.inventory.online.length} online file(s) excluded.`,
+    );
+  } else {
+    console.log(`Running ${selected.length} ${label} test file(s).`);
+  }
+  const passed = await runTests(selected, "inherit");
+  process.exit(passed ? 0 : 1);
 }
-for (const [file, reason] of Object.entries(quarantine.files)) {
-  if (typeof reason !== "string" || reason.trim() === "") {
-    console.error(`${quarantinePath}: ${file} has no reason`);
+
+async function readManifest(path: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(resolve(root, path), "utf8")) as unknown;
+  } catch (error) {
+    console.error(
+      `${path}: unable to read or parse manifest: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     process.exit(1);
   }
 }
 
-const tracked = await trackedTestFiles();
-const missing = quarantined.filter((file) => !tracked.includes(file));
-if (missing.length > 0) {
-  console.error(`${quarantinePath} names files that do not exist:`);
-  for (const file of missing) console.error(`- ${file}`);
-  process.exit(1);
+function listSelection(
+  mode: TestMode,
+  selected: readonly string[],
+  inventory: TestInventory,
+): void {
+  const label = mode === "quarantine" ? "quarantine" : mode;
+  console.log(`${label} test selection (${selected.length} file(s)):`);
+  for (const file of selected) console.log(file);
+  if (mode === "portable") {
+    console.log(
+      `${inventory.quarantined.length} quarantined; ` +
+        `${inventory.online.length} online excluded.`,
+    );
+  }
 }
 
-const verifyQuarantine = Bun.argv.includes("--verify-quarantine");
-if (verifyQuarantine) {
+async function verifyQuarantined(files: readonly string[]): Promise<void> {
   const stillFailing: string[] = [];
   const nowPassing: string[] = [];
-  for (const file of quarantined) {
+  for (const file of files) {
     const passed = await runTests([file], "ignore");
     if (passed) nowPassing.push(file);
     else stillFailing.push(file);
@@ -71,19 +137,8 @@ if (verifyQuarantine) {
     console.error(`Remove them from ${quarantinePath}.`);
     process.exit(1);
   }
-  console.log(
-    `Quarantine verified: ${stillFailing.length} file(s) still fail.`,
-  );
-  process.exit(0);
+  console.log(`Quarantine verified: ${stillFailing.length} file(s) still fail.`);
 }
-
-const selected = tracked.filter((file) => !quarantined.includes(file));
-console.log(
-  `Running ${selected.length} test file(s); ${quarantined.length} ` +
-    `quarantined in ${quarantinePath}.`,
-);
-const passed = await runTests(selected, "inherit");
-process.exit(passed ? 0 : 1);
 
 async function trackedTestFiles(): Promise<string[]> {
   const listed = Bun.spawn(["git", "ls-files", "-z"], {
@@ -91,17 +146,13 @@ async function trackedTestFiles(): Promise<string[]> {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout] = await Promise.all([
-    new Response(listed.stdout).text(),
-    listed.exited,
-  ]);
+  const stdout = await new Response(listed.stdout).text();
   if ((await listed.exited) !== 0) {
     throw new Error("could not list repository files");
   }
   return stdout
     .split("\0")
     .filter((path) => /(?:\.test\.tsx?|_test\.ts)$/u.test(path))
-    .map((path) => relative(".", path))
     .sort();
 }
 
@@ -109,7 +160,7 @@ async function runTests(
   files: readonly string[],
   output: "inherit" | "ignore",
 ): Promise<boolean> {
-  if (files.length === 0) return true;
+  if (files.length === 0) return false;
   const child = Bun.spawn(["bun", "test", ...files], {
     cwd: root,
     stdin: "ignore",

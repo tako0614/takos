@@ -41,11 +41,16 @@ repository 全体を対象にし、残っている例外だけを `quality/` の
 | --- | --- | --- |
 | [`quality/typescript-debt.json`](../../quality/typescript-debt.json) | `bun run check:types` | `tsconfig.check.json` と `web/tsconfig.json` を全量 compile し、ここに数えていない diagnostic を拒否します。 |
 | [`quality/lint-debt.json`](../../quality/lint-debt.json) | `bun run check:lint` | oxlint (`.oxlintrc.json`) の finding のうち、ここに数えていないものを拒否します。 |
-| [`quality/test-quarantine.json`](../../quality/test-quarantine.json) | `bun run test` | tracked な test file のうち走らせないものを理由付きで宣言します。 |
+| [`quality/test-quarantine.json`](../../quality/test-quarantine.json) | `bun run test` / `bun run check:test-quarantine` | portable gate から除外する、現在失敗する tracked test file を理由付きで宣言します。 |
+| [`quality/test-online.json`](../../quality/test-online.json) | `bun run test:online` | public network や operator-owned online evidence が必要で、portable gate から除外する test file を理由付きで宣言します。 |
 
 件数は countdown です。増えれば gate が落ち、減っても ledger を下げるまで落ちます。
 0 になった entry は削除します。quarantine は「今は失敗する」という主張なので、
 `bun run check:test-quarantine` が該当 file を実行し、通ってしまったものを拒否します。
+
+online evidence は portable gate に混ぜません。`bun run test:online` または
+`bun scripts/run-portable-tests.ts --online` を明示的に実行してください。
+`--list` は選択された file だけを表示し、test process を起動しません。
 
 利用者向け docs を変更する場合は、[`documentation-style.md`](./documentation-style.md)
 の順序と用語ルールに従い、`bun run docs:build` も実行します。

@@ -21,6 +21,7 @@
     "check:types": "bun scripts/check-types.ts",
     "check:lint": "bun scripts/check-lint.ts",
     "check:test-quarantine": "bun scripts/run-portable-tests.ts --verify-quarantine",
+    "test:online": "bun scripts/run-portable-tests.ts --online",
     "build": "bun run web:build && bun run worker:build",
     "worker:build": "bun scripts/build-worker-bundle.ts",
     "doctor": "bun scripts/doctor.mjs",

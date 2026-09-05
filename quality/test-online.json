@@ -1,0 +1,9 @@
+{
+  "note": "Test files excluded from the portable `bun run test` gate because they require public network or operator-owned online evidence. `bun scripts/run-portable-tests.ts --online` runs exactly these files.",
+  "totals": {
+    "files": 1
+  },
+  "files": {
+    "scripts/__tests__/takoserver-fetch-tracer.online.test.ts": "Contacts the public Terraform Registry and GitHub release to verify the signed Provider 4.0.0 artifact. Run explicitly with the online evidence credentials and network access; it is not portable gate evidence."
+  }
+}
