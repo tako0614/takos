@@ -6,7 +6,7 @@ import {
   featuredAppCatalogEntries,
   featuredAppPreinstallJobs,
 } from "../../../infra/db/index.ts";
-import { D1TransactionManager } from "../../../shared/utils/db-transaction.ts";
+import { executeAtomicStatements } from "../../../infra/db/client.ts";
 import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import type {
   FeaturedAppCatalogEntry,
@@ -45,14 +45,6 @@ import {
   applyInstallableAppCapsule,
   planInstallableAppCapsule,
 } from "./installable-app-install.ts";
-
-function hasTransactionSupport(db: FeaturedAppCatalogEnv["DB"]): boolean {
-  return (
-    typeof db === "object" &&
-    db !== null &&
-    typeof Reflect.get(db, "prepare") === "function"
-  );
-}
 
 function nextRetryAt(timestamp: string, attempts: number): string {
   const base = Date.parse(timestamp);
@@ -229,6 +221,10 @@ interface FeaturedAppPreinstallPlan {
   refreshed: boolean;
 }
 
+// One catalog row binds all 14 persisted fields. Seven rows keep each INSERT
+// at 98 parameters, below D1 and edge.sql's shared 100-parameter ceiling.
+const FEATURED_APP_CATALOG_ROWS_PER_INSERT = 7;
+
 export async function saveFeaturedAppCatalogEntries(
   env: FeaturedAppCatalogEnv,
   rawEntries: unknown[],
@@ -247,7 +243,6 @@ export async function saveFeaturedAppCatalogEntries(
       { cause: error },
     );
   }
-  const db = featuredAppCatalogDeps.getDb(env.DB);
   const timestamp = options.timestamp ?? new Date().toISOString();
   const rows = entries.map((entry, index) => ({
     id: entry.name,
@@ -265,26 +260,18 @@ export async function saveFeaturedAppCatalogEntries(
     createdAt: timestamp,
     updatedAt: timestamp,
   }));
-
-  const replaceRows = async () => {
-    await db.delete(featuredAppCatalogEntries).run();
-    await db
+  await executeAtomicStatements(env.DB, (db) => {
+    const deleteEntries = db.delete(featuredAppCatalogEntries);
+    const deleteConfig = db
       .delete(featuredAppCatalogConfig)
-      .where(eq(featuredAppCatalogConfig.id, "default"))
-      .run();
-    await db
-      .insert(featuredAppCatalogConfig)
-      .values({
-        id: "default",
-        configured: true,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      })
-      .run();
-    if (rows.length > 0) {
-      await db.insert(featuredAppCatalogEntries).values(rows).run();
-    }
-    await db
+      .where(eq(featuredAppCatalogConfig.id, "default"));
+    const insertConfig = db.insert(featuredAppCatalogConfig).values({
+      id: "default",
+      configured: true,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const requeueBlockedJobs = db
       .update(featuredAppPreinstallJobs)
       .set({
         status: "queued",
@@ -296,16 +283,27 @@ export async function saveFeaturedAppCatalogEntries(
         applyQueuedAt: null,
         updatedAt: timestamp,
       })
-      .where(eq(featuredAppPreinstallJobs.status, "blocked_by_config"))
-      .run();
-  };
-
-  if (hasTransactionSupport(env.DB)) {
-    const txManager = new D1TransactionManager(env.DB);
-    await txManager.runInTransaction(replaceRows);
-  } else {
-    await replaceRows();
-  }
+      .where(eq(featuredAppPreinstallJobs.status, "blocked_by_config"));
+    const insertEntries = [];
+    for (
+      let offset = 0;
+      offset < rows.length;
+      offset += FEATURED_APP_CATALOG_ROWS_PER_INSERT
+    ) {
+      insertEntries.push(
+        db.insert(featuredAppCatalogEntries).values(
+          rows.slice(offset, offset + FEATURED_APP_CATALOG_ROWS_PER_INSERT),
+        ),
+      );
+    }
+    return [
+      deleteEntries,
+      deleteConfig,
+      insertConfig,
+      ...insertEntries,
+      requeueBlockedJobs,
+    ];
+  }, featuredAppCatalogDeps.getDb);
   // Drop any stale cache entry from this isolate before re-seeding with the
   // freshly written rows. Readers that race with this write therefore never
   // see a half-updated cache state.
@@ -323,24 +321,19 @@ export async function clearFeaturedAppCatalogEntries(
   options: { timestamp?: string } = {},
   clock: Clock = systemClock,
 ): Promise<void> {
-  const db = featuredAppCatalogDeps.getDb(env.DB);
   const timestamp = options.timestamp ?? new Date().toISOString();
-  const clearRows = async () => {
-    await db.delete(featuredAppCatalogEntries).run();
-    await db
+  await executeAtomicStatements(env.DB, (db) => [
+    db.delete(featuredAppCatalogEntries),
+    db
       .delete(featuredAppCatalogConfig)
-      .where(eq(featuredAppCatalogConfig.id, "default"))
-      .run();
-    await db
-      .insert(featuredAppCatalogConfig)
-      .values({
-        id: "default",
-        configured: false,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      })
-      .run();
-    await db
+      .where(eq(featuredAppCatalogConfig.id, "default")),
+    db.insert(featuredAppCatalogConfig).values({
+      id: "default",
+      configured: false,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }),
+    db
       .update(featuredAppPreinstallJobs)
       .set({
         status: "queued",
@@ -352,16 +345,8 @@ export async function clearFeaturedAppCatalogEntries(
         applyQueuedAt: null,
         updatedAt: timestamp,
       })
-      .where(eq(featuredAppPreinstallJobs.status, "blocked_by_config"))
-      .run();
-  };
-
-  if (hasTransactionSupport(env.DB)) {
-    const txManager = new D1TransactionManager(env.DB);
-    await txManager.runInTransaction(clearRows);
-  } else {
-    await clearRows();
-  }
+      .where(eq(featuredAppPreinstallJobs.status, "blocked_by_config")),
+  ], featuredAppCatalogDeps.getDb);
   // Drop any stale cache entry from this isolate before re-seeding with the
   // freshly cleared state.
   invalidateCatalogCache(env.DB);

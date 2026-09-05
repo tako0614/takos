@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Pool, type PoolClient, type QueryResult } from "pg";
 import type {
   SqlPreparedStatementBinding,
+  SqlResultBinding,
   SqlTransactionSessionBinding,
 } from "../shared/types/bindings.ts";
 import type {
@@ -28,7 +29,9 @@ import type {
 import {
   classifyTransactionSql,
   isExactTransactionControlSql,
+  normalizeArgs,
   normalizePostgresSql,
+  resultSetToSqlResult,
   type PostgresRunner,
   type ServerSqlDatabase,
 } from "./d1-shared.ts";
@@ -57,8 +60,8 @@ async function loadLibsqlCreateClient(): Promise<typeof createLibsqlClient> {
 }
 
 /**
- * FIFO async gate used to serialize transactional access on the Postgres
- * adapters. The `pg` Pool hands out a different backend connection per
+ * FIFO async gate used to serialize database operations around atomic work.
+ * The `pg` Pool hands out a different backend connection per
  * `pool.query()`, so a transaction (BEGIN..COMMIT) must run on a single
  * dedicated `PoolClient`. The previous design stored that client in a shared
  * adapter slot and routed *every* query to it whenever a transaction was open,
@@ -71,7 +74,8 @@ async function loadLibsqlCreateClient(): Promise<typeof createLibsqlClient> {
  * that can arrive in that window belong to the transaction owner (every other
  * caller is parked in the gate queue). Non-transactional queries acquire the
  * gate momentarily and run on the pool, so they never observe or join an
- * in-flight transaction.
+ * in-flight transaction. The persistent SQLite adapter uses the same gate to
+ * keep ordinary statements outside a complete native atomic batch.
  */
 export function createSerializationGate(): {
   acquire(): Promise<() => void>;
@@ -91,18 +95,14 @@ export function createSerializationGate(): {
 }
 
 type SqliteLikeClient = {
+  assertUsable?(): void;
   execute(
     statementOrSql: string | { sql: string; args?: unknown[] },
   ): Promise<ResultSet>;
-  transaction(mode?: string): Promise<{
-    execute(
-      statementOrSql: string | { sql: string; args?: unknown[] },
-    ): Promise<ResultSet>;
-    executeMultiple(sql: string): Promise<void>;
-    commit(): Promise<void>;
-    rollback(): Promise<void>;
-    close(): void;
-  }>;
+  batch(
+    statements: Array<{ sql: string; args?: unknown[] }>,
+    mode?: "write",
+  ): Promise<ResultSet[]>;
   executeMultiple(sql: string): Promise<void>;
   close(): void;
 };
@@ -201,10 +201,21 @@ async function createNodeSqliteClient(
 ): Promise<SqliteLikeClient> {
   const sqlite = await import("node:sqlite");
   const db = new sqlite.DatabaseSync(dbPath);
+  let terminalFailure: Error | undefined;
+
+  const assertUsable = () => {
+    if (terminalFailure !== undefined) {
+      throw new Error(
+        "sqlite_client_unusable: a previous batch could not be rolled back",
+        { cause: terminalFailure },
+      );
+    }
+  };
 
   const execute = async (
     statementOrSql: string | { sql: string; args?: unknown[] },
   ): Promise<ResultSet> => {
+    assertUsable();
     const statement = typeof statementOrSql === "string"
       ? { sql: statementOrSql, args: [] as unknown[] }
       : { sql: statementOrSql.sql, args: statementOrSql.args ?? [] };
@@ -236,34 +247,39 @@ async function createNodeSqliteClient(
   };
 
   return {
+    assertUsable,
     execute,
-    async transaction(
-      _mode?: "write" | "read" | "deferred" | "immediate" | "exclusive",
-    ) {
-      db.exec("BEGIN");
-      let finished = false;
-
-      return {
-        execute,
-        async executeMultiple(sql: string) {
-          db.exec(sql);
-        },
-        async commit() {
-          if (finished) return;
-          db.exec("COMMIT");
-          finished = true;
-        },
-        async rollback() {
-          if (finished) return;
-          db.exec("ROLLBACK");
-          finished = true;
-        },
-        close() {
-          return;
-        },
-      };
+    async batch(statements) {
+      assertUsable();
+      let transactionStarted = false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionStarted = true;
+        const results: ResultSet[] = [];
+        for (const statement of statements) {
+          results.push(await execute(statement));
+        }
+        db.exec("COMMIT");
+        transactionStarted = false;
+        return results;
+      } catch (error) {
+        if (transactionStarted) {
+          try {
+            db.exec("ROLLBACK");
+          } catch (rollbackError) {
+            terminalFailure = new AggregateError(
+              [error, rollbackError],
+              "sqlite_batch_rollback_failed: local SQLite batch cleanup failed",
+              { cause: error },
+            );
+            throw terminalFailure;
+          }
+        }
+        throw error;
+      }
     },
     async executeMultiple(sql: string) {
+      assertUsable();
       db.exec(sql);
     },
     close() {
@@ -305,15 +321,77 @@ export async function openSqliteSqlDatabase(
     client = await createNodeSqliteClient(dbPath);
   }
   const libsqlClient = client as LibsqlClient;
+  const gate = createSerializationGate();
 
-  const runStatement = <T = Record<string, unknown>>(
-    statement: SqlPreparedStatementBinding,
-  ) => statement.run<T>();
+  async function runSerialized<T>(operation: () => Promise<T>): Promise<T> {
+    const release = await gate.acquire();
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  function statementClient(
+    execute: SqliteLikeClient["execute"],
+  ): LibsqlClient {
+    return new Proxy(libsqlClient, {
+      get(target, property) {
+        if (property === "execute") return execute;
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }
+
+  const serializedClient = statementClient((statement) =>
+    runSerialized(() => client.execute(statement))
+  );
+  const preparedStates = new WeakMap<
+    SqlPreparedStatementBinding,
+    { sql: string; params: readonly unknown[] }
+  >();
+  const createTrackedPrepared = (
+    query: string,
+    params: readonly unknown[] = [],
+  ): SqlPreparedStatementBinding => {
+    const statement = createPreparedStatement(
+      serializedClient,
+      query,
+      [...params],
+    );
+    statement.bind = (...values: unknown[]) =>
+      createTrackedPrepared(query, values);
+    preparedStates.set(statement, { sql: query, params: [...params] });
+    return statement;
+  };
+
+  async function batch<T = Record<string, unknown>>(
+    statements: SqlPreparedStatementBinding[],
+  ): Promise<SqlResultBinding<T>[]> {
+    client.assertUsable?.();
+    if (statements.length === 0) return [];
+    const requests = statements.map((statement) => {
+      const state = preparedStates.get(statement);
+      if (!state) {
+        throw new Error(
+          "sqlite_batch_statement_mismatch: local SQLite batches only accept statements prepared by the same database binding",
+        );
+      }
+      return {
+        sql: state.sql,
+        args: normalizeArgs([...state.params]) as unknown[],
+      };
+    });
+    const results = await runSerialized(() => client.batch(requests, "write"));
+    return results.map((result) => resultSetToSqlResult<T>(result));
+  }
+
   const session = {
     prepare(query: string) {
-      return createPreparedStatement(libsqlClient, query);
+      return createTrackedPrepared(query);
     },
-    batch: createSequentialBatch(runStatement),
+    batch,
     getBookmark() {
       return null;
     },
@@ -321,19 +399,22 @@ export async function openSqliteSqlDatabase(
 
   const db: ServerSqlDatabase = {
     prepare(query: string) {
-      return createPreparedStatement(libsqlClient, query);
+      return createTrackedPrepared(query);
     },
-    batch: createSequentialBatch(runStatement),
+    batch,
     async exec(query: string) {
       const startedAt = Date.now();
-      await client.executeMultiple(query);
+      await runSerialized(() => client.executeMultiple(query));
       return { count: 0, duration: Date.now() - startedAt };
     },
     withSession() {
       return session;
     },
     async dump() {
-      const bytes = await readFile(dbPath);
+      const bytes = await runSerialized(() => {
+        client.assertUsable?.();
+        return readFile(dbPath);
+      });
       return bytes.buffer.slice(
         bytes.byteOffset,
         bytes.byteOffset + bytes.byteLength,
