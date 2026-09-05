@@ -12,13 +12,57 @@ import type { ExecutionContext as HonoExecutionContext } from "hono";
 export type Ai = {
   run(model: string, inputs?: unknown, options?: unknown): Promise<unknown>;
 };
+
+/**
+ * The portable `edge.sql@1.0.0` encoded byte value.  The external binding
+ * keeps BLOBs in this shape; provider adapters may decode it only while
+ * crossing into a backend-native representation.
+ */
+export type EdgeSqlEncodedBytes = {
+  readonly encoding: "base64";
+  readonly data: string;
+};
+
+/** Values accepted by the published edge.sql interface. */
+export type EdgeSqlValue =
+  | null
+  | number
+  | string
+  | EdgeSqlEncodedBytes;
+
+export type EdgeSqlStatement = {
+  readonly sql: string;
+  readonly params?: readonly EdgeSqlValue[];
+};
+
+export type EdgeSqlResult = {
+  readonly rows: readonly Readonly<Record<string, EdgeSqlValue>>[];
+  readonly rowsWritten: number;
+};
+
+/** Exact three-method surface projected by `module-worker.sqlite@1.0.0`. */
+export type EdgeSqlBinding = {
+  execute(
+    sql: string,
+    params?: readonly EdgeSqlValue[],
+  ): Promise<EdgeSqlResult>;
+  query(
+    sql: string,
+    params?: readonly EdgeSqlValue[],
+  ): Promise<EdgeSqlResult>;
+  transaction(
+    statements: readonly EdgeSqlStatement[],
+  ): Promise<{ readonly results: readonly EdgeSqlResult[] }>;
+};
+
 export type SqlResultMeta = {
-  duration: number;
-  size_after: number;
-  rows_read: number;
-  rows_written: number;
-  last_row_id: number;
-  changed_db: boolean;
+  /** Provider-specific fields are absent on the edge.sql projection. */
+  duration?: number;
+  size_after?: number;
+  rows_read?: number;
+  rows_written?: number;
+  last_row_id?: number;
+  changed_db?: boolean;
   changes: number;
   served_by?: string;
   [key: string]: unknown;

@@ -47,6 +47,7 @@ import {
 import { resolveContainerHostBaseUrl } from "@takos/worker-platform-utils/container-host";
 import { PRODUCTION_DOMAIN } from "./shared/constants/app.ts";
 import { buildWorkersWebPlatform } from "./platform/adapters/workers.ts";
+import { isExternallyManagedSqlBinding } from "./platform/adapters/edge-sql.ts";
 import type { ControlPlatform } from "./platform/platform-config.ts";
 import { getPlatformContext, setPlatformContext } from "./platform/context.ts";
 import {
@@ -781,7 +782,10 @@ export function createWebWorker(
       // (`local-platform/persistent-d1.ts`). Running a second, SQLite-only
       // applier over an already-converged Postgres database would only be able
       // to fail.
-      if (platform.source !== "node") {
+      if (
+        platform.source !== "node" &&
+        !isExternallyManagedSqlBinding(bindings.DB)
+      ) {
         const schemaBlock = await guardRequestSchema(bindings.DB, url.pathname);
         if (schemaBlock) return schemaBlock;
       }
@@ -816,7 +820,10 @@ export function createWebWorker(
       // is the second trigger, so an operator does not have to send a request
       // to finish an install. Node self-host converges at database open
       // instead — see the note in fetch().
-      if (platform.source !== "node") {
+      if (
+        platform.source !== "node" &&
+        !isExternallyManagedSqlBinding(bindings.DB)
+      ) {
         const schema = await convergeSchemaInBackground(bindings.DB);
         if (schema.state !== "ready") {
           errors.push({

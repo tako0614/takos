@@ -16,6 +16,7 @@ import type {
   PlatformServices,
   PlatformSource,
 } from "../platform-config.ts";
+import { resolveSqlDatabaseBinding } from "./edge-sql.ts";
 
 /**
  * The adapters read wrangler-style bindings by string key (e.g., `env.DB`,
@@ -196,6 +197,16 @@ export function buildPlatformFromEnv<TBindings extends object>(
     sseNotifier?: PlatformServices["sseNotifier"];
   },
 ): ControlPlatform<TBindings> {
+  // `DB` is the one decisive cross-host binding.  Keep native D1 identity and
+  // project only the exact external edge.sql surface into the D1-shaped port
+  // consumed by Takos' existing services.  A partial or hybrid value throws
+  // here, before a request can enter a misleading migration or query path.
+  const originalSqlBinding = Reflect.get(bindings, "DB");
+  const sqlBinding = resolveSqlDatabaseBinding(originalSqlBinding);
+  const platformBindings = sqlBinding === originalSqlBinding
+    ? bindings
+    : ({ ...bindings, DB: sqlBinding } as TBindings & PlatformEnvIndex);
+
   const config = createPlatformConfig({
     adminDomain: getString(bindings, "ADMIN_DOMAIN"),
     tenantBaseDomain: getString(bindings, "TENANT_BASE_DOMAIN"),
@@ -221,7 +232,7 @@ export function buildPlatformFromEnv<TBindings extends object>(
         });
       },
     }),
-    sqlBinding: bindings.DB as Env["DB"] | undefined,
+    sqlBinding,
     routingStore: bindings.ROUTING_STORE as Env["ROUTING_STORE"] | undefined,
     hostnameRouting: bindings.HOSTNAME_ROUTING as
       | Env["HOSTNAME_ROUTING"]
@@ -268,5 +279,10 @@ export function buildPlatformFromEnv<TBindings extends object>(
     sseNotifier: options.sseNotifier,
   });
 
-  return buildPlatform(options.source, bindings, config, services);
+  return buildPlatform(
+    options.source,
+    platformBindings as TBindings,
+    config,
+    services,
+  );
 }

@@ -6,7 +6,9 @@
  */
 
 import { drizzle } from "drizzle-orm/d1";
+import { getEdgeSqlSourceBinding } from "../../platform/adapters/edge-sql.ts";
 import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
+import { drizzleEdgeSql } from "./edge-sql-driver.ts";
 import * as schema from "./schema.ts";
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
@@ -42,7 +44,10 @@ export function getDb(db: SqlDatabaseBinding | Database): Database {
   const cached = clientCache.get(db);
   if (cached) return cached;
 
-  const client = drizzle(db, { schema });
+  const edgeSql = getEdgeSqlSourceBinding(db);
+  const client = (edgeSql
+    ? drizzleEdgeSql(edgeSql, { schema })
+    : drizzle(db, { schema })) as Database;
   clientCache.set(db, client);
   return client;
 }
