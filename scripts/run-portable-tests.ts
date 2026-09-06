@@ -3,7 +3,7 @@
 /**
  * Portable and explicitly online test runner.
  *
- * Every tracked test file is classified by one of the two ledgers: the
+ * Every discovered test file is classified by one of the two ledgers: the
  * portable gate runs files in neither ledger, while `--online` runs the files
  * in `quality/test-online.json`. `--verify-quarantine` keeps the existing
  * quarantine claim check separate from online evidence.
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 
   const quarantine = await readManifest(quarantinePath);
   const onlineManifest = await readManifest(onlinePath);
-  const tracked = await trackedTestFiles();
+  const tracked = await discoverTestFiles(root);
   const validation = validateTestInventory(
     tracked,
     quarantine,
@@ -140,20 +140,23 @@ async function verifyQuarantined(files: readonly string[]): Promise<void> {
   console.log(`Quarantine verified: ${stillFailing.length} file(s) still fail.`);
 }
 
-async function trackedTestFiles(): Promise<string[]> {
-  const listed = Bun.spawn(["git", "ls-files", "-z"], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+export async function discoverTestFiles(repositoryRoot: string): Promise<string[]> {
+  const listed = Bun.spawn(
+    ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: repositoryRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
   const stdout = await new Response(listed.stdout).text();
   if ((await listed.exited) !== 0) {
     throw new Error("could not list repository files");
   }
-  return stdout
+  const files = stdout
     .split("\0")
-    .filter((path) => /(?:\.test\.tsx?|_test\.ts)$/u.test(path))
-    .sort();
+    .filter((path) => /(?:\.test\.tsx?|_test\.ts)$/u.test(path));
+  return [...new Set(files)].sort();
 }
 
 async function runTests(
