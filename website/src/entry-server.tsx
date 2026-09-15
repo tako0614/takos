@@ -7,6 +7,7 @@ export default createHandler(() => (
       <html lang="ja">
         <head>
           <meta charset="utf-8" />
+          <meta name="adring-site-verification" content="adring_vrf_tqjNuQemCMN6ZUe9kOJCjmPJ4_-hA4Qv" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>Takos — AI-first chat & agent, your own server.</title>
           <meta

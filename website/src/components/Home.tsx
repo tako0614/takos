@@ -13,6 +13,7 @@ import BundledApps from './BundledApps';
 import Comparison from './Comparison';
 import InstallCTA from './InstallCTA';
 import Footer from './Footer';
+import AdringWidget from './AdringWidget';
 
 /** The full landing page, rendered once per locale by the route shells. */
 export default function Home(props: { locale: Locale }): JSX.Element {
@@ -33,6 +34,7 @@ export default function Home(props: { locale: Locale }): JSX.Element {
           </div>
         </main>
         <Footer />
+        <AdringWidget />
         <JsonLd locale={props.locale} />
       </CloudProvider>
     </LocaleProvider>
