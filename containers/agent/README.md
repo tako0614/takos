@@ -7,7 +7,7 @@
 bounded agent loop、structured conversation/tool transcript、Worker提供contextのmodel request化、model adapter、tool bridgeを扱います。
 Takos Workerが所有するagent-control RPCと接続します。
 
-このディレクトリの正本責務は次です。
+このディレクトリの正本 (正とする情報) としての責務は次です。
 
 - agent loop orchestration
 - engine checkpointの生成・resume (durable保存とlease authorityはWorker)
@@ -42,7 +42,7 @@ Container diskやpool slotはproduct stateの正本ではありません。resta
 idempotent nodeをresumeし、別RunのconversationはTakos Workerのcanonical historyから構築します。TakosumiはCapsule / ContainerServiceのdeploy、credential、OpenTofu Run ledgerを
 管理しますが、Takos固有のconversation / memory / skill / tool-control RPCはTakos Workerが所有します。
 remote side effectのoutcomeが不明な場合はWorker-owned tool operation ledgerをauthorityとして復元し、新leaseはmodel/toolを再実行せず
-同じfail-closed outcomeをatomic completionします。
+同じ安全側停止のoutcomeをatomic completionします。
 
 ## 主要モジュール
 
@@ -112,7 +112,7 @@ tool execute / engine checkpoint save・load / heartbeat / status update / run e
 loopだけを使います。engine checkpointのdurable authorityはWorkerのRun ledgerで、container diskをrecovery authorityにしません。
 idempotent tool nodeはresumeできますが、`uncertain` side effectはoperation ledgerからfatal reasonを復元し、直前のRunning
 checkpointをreasonless terminal stateで上書きせず再実行を防ぎます。provider-neutralなidempotency contractがないmodel nodeも
-自動再発行せずfail closedします。
+自動再発行せず安全側に停止します。
 checkpoint protocol v2はfatal responseを交渉し、rolling中のv1 wrapperには既存mapperが理解するcanonical RPC errorを返します。
 `spaceId` / `installationId`をdurable filesystem namespaceとして使いません。
 
