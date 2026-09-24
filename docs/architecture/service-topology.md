@@ -1,6 +1,6 @@
 # サービストポロジー
 
-> このページでわかること: Takos の runtime 境界と、local Compose が起動する開発用 process の違い。
+> このページでわかること: Takos の runtime 境界と、ローカルの Docker Compose が起動する開発用 process の違い。
 
 Takos の product 境界は **単一の Takos distribution worker** です。self-host / hosted distribution では Takos product
 surface をこの worker が提供し、Takosumi Accounts、Takosumi deploy-control、dashboard、OpenTofu runner は外部 Takosumi
@@ -9,7 +9,7 @@ control plane が提供します。
 worker-native で、`takos-worker` が read-only Smart HTTP clone/fetch を R2 object store から配信します
 (push は Takos repository API 経由)。
 
-local Compose は実装と smoke を扱いやすくするため、Takosumi control-plane source を `takosumi` dev sidecar process として
+ローカルの Docker Compose は実装と smoke を扱いやすくするため、Takosumi control-plane source を `takosumi` dev sidecar process として
 起動します。これは product の split-service 境界ではありません。
 
 ## Local Compose Services
@@ -23,7 +23,7 @@ local Compose は実装と smoke を扱いやすくするため、Takosumi contr
 | `redis`        |      `16379` | `compose.local.yml` | local queue / cache の実行基盤                                     |
 
 この service 一式は `bun run doctor`、`bun run local:config`、`bun run local:e2e` で検査します。`local:e2e` は
-この一式の上に証明専用の Compose override を重ねます。そこに出る local issuer、固定の model endpoint、
+この一式の上に証明専用の Docker Compose override を重ねます。そこに出る local issuer、固定の model endpoint、
 executor bridge は製品の service ではなく test harness です。
 
 ## 呼び出しの形
@@ -34,7 +34,7 @@ executor bridge は製品の service ではなく test harness です。
   status、output、event、assistant message です。`bun run local:e2e` は、health
   や gateway の到達性を agent の証拠として扱わず、この経路を終端の Run まで
   証明します。
-- Compose 内の `takosumi` は、Takosumi control-plane source の開発用 sidecar
+- Docker Compose 内の `takosumi` は、Takosumi control-plane source の開発用 sidecar
   です。production / self-host の構成では、self-hoster または operator が運用する
   外部の Takosumi control-plane origin / API を使います。Takos Worker は
   Accounts、deploy-control、dashboard、OpenTofu runner の handler を
@@ -47,7 +47,7 @@ executor bridge は製品の service ではなく test harness です。
 
 local の env 名 `TAKOSUMI_INTERNAL_URL`、`TAKOS_AGENT_INTERNAL_URL`、
 `TAKOS_INTERNAL_SERVICE_SECRET`、`TAKOS_INTERNAL_API_SECRET`、
-`TAKOSUMI_INTERNAL_API_SECRET` は Compose / 開発用の配線です。hosted product の
+`TAKOSUMI_INTERNAL_API_SECRET` は Docker Compose / 開発用の配線です。hosted product の
 サブドメインとして扱ったり、分割された公開 worker を再導入する理由にしたり
 しないでください。
 

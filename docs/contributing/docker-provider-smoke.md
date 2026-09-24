@@ -2,7 +2,7 @@
 
 > このページでわかること: Docker self-host path の current proof。
 
-Takos product の Docker proof は portable product check と local Compose
+Takos product の Docker proof は portable product check とローカルの Docker Compose
 で扱います。
 
 ```sh

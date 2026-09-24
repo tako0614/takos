@@ -5,7 +5,7 @@
 ## アーキテクチャ
 
 - [`current-state.md`](./current-state.md) — Takos product shell と external Takosumi control plane の実装スナップショット。
-- [`api-surface.md`](./api-surface.md) — Takos product routes と、Takos が消費する Takosumi deploy-control /
+- [`api-surface.md`](./api-surface.md) — Takos product routes と、Takos が利用する Takosumi deploy-control /
   account-plane surface。
 - Takosumi deploy topology notes (`takosumi/docs/operations/deploy-topology-notes.md`)
   — hosted operator / self-host distribution の deploy target と ownership boundary。
@@ -60,8 +60,8 @@ online evidence は portable gate に混ぜません。`bun run test:online` ま
 - [`smoke.md`](./smoke.md) — Takos product root の portable gate と focused local smoke。
 - [`runtime-agent-api-smoke.md`](./runtime-agent-api-smoke.md) — runtime-agent API の Takosumi test path。
 - [`router-config-smoke.md`](./router-config-smoke.md) — router config contract の Takosumi test path。
-- [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke と local Compose proof。
-- [`compose-smoke.md`](./compose-smoke.md) — `bun run local:*` による current Compose smoke。
+- [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke とローカルの Docker Compose proof。
+- [`compose-smoke.md`](./compose-smoke.md) — `bun run local:*` による現在の Docker Compose smoke。
 - [`git-source-smoke.md`](./git-source-smoke.md) — `takosumi` の Git URL install / source proof。
 - [`postgres-storage-smoke.md`](./postgres-storage-smoke.md) — SQL storage / migration proof。
 - [`redis-queue-smoke.md`](./redis-queue-smoke.md) — queue / background worker proof。

@@ -2,7 +2,7 @@
 
 > このページでわかること: Docker Compose を実際に起動する local proof。
 
-実 Docker / Compose proof は明示的に operator が動かす local evidence です。
+実際の Docker Compose proof は明示的に operator が動かす local evidence です。
 Takos product root の current commands は次です。
 
 ```sh

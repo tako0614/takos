@@ -74,7 +74,7 @@ stack で container callback helper endpoint が見える場合も、これは c
 
 ## 個別のプロセスを起動する
 
-compose を使わず個別に起動したい場合は、Takos repo 内の source owner から起動します。
+Docker Compose を使わず個別に起動したい場合は、Takos repo 内の source owner から起動します。
 
 - `src/worker/` / `src/worker/server/routes/` — Takos Worker、worker-native Git Smart HTTP を含む (`bun run dev`)
 - `web/` — browser UI (`bun run --cwd web dev`)

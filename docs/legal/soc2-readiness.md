@@ -56,7 +56,7 @@ Out of scope for the first readiness pass:
 - Capsule ledger and Takosumi Account billing model are listed in the data
   protection owner audit checklist (Takosumi Capsule lifecycle: identity / billing
   owner = the operator-selected account plane, managed example: takosumi
-  の Takosumi Accounts; Capsule 台帳 = ownership primitive).
+  の Takosumi Accounts; Capsule 記録 = ownership primitive).
 
 ### Access Control
 

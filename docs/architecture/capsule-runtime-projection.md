@@ -179,7 +179,7 @@ runtime の URL は HTTP(S) で、userinfo や fragment を含まず、認証情
 credential 配信の仕組みを要求できません。
 
 ランチャーの route、サイドバーの拡張、ファイルハンドラーの route はすべて、これらの認可された Interface を
-直接読みます。Takos 側の publication cache、consume resolver、Output Sync のフォールバックはありません。
+直接読みます。Takos 側の publication cache、読み込み resolver、Output Sync のフォールバックはありません。
 未知の version、認証フィールド、未対応の delivery、不正な URL、宣言されていない input、古い binding は安全側
 に停止して除外されます。
 

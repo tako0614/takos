@@ -56,7 +56,7 @@ Takos は、認証不要の Principal profile もさらに 2 つ実装してい�
 
 どちらも `delivery.type = none` と、現在の解決済み revision に対する Ready な Binding を必要とします。
 ファイルハンドラーの URL にはリテラルの `:id` パスセグメントが含まれます。これらの経路は Takosumi を直接
-読み、Takos 側に publish/consume のキャッシュや Output Sync のフォールバックはありません。
+読み、Takos 側に公開・読み込みのキャッシュや Output Sync のフォールバックはありません。
 
 Takos の Git install レビューでは、endpoint の Output、delivery の種類、ランチャーの Output、そして module
 が必要とする場合は現在の Accounts issuer を受け取る通常の OpenTofu 変数を提案できます。すべての名前は明示的

@@ -84,7 +84,7 @@ mount せず、installed `takos-git` の `source.git.smart_http` /
 
 Takos の deploy 権威は Takosumi-applied OpenTofu Capsule です。
 `takosumi-private/platform/wrangler.toml` と operator-local secrets などの手作業で維持する deploy 用の生成物は
-同じ topology の **interim materialization** (暫定的な実体化) であり、別の正とする情報として扱いません。Takos product routes は独自の
+同じ topology の **暫定的な実体化** であり、別の正とする情報として扱いません。Takos product routes は独自の
 product-local deployment surface を公開せず、Takosumi の deploy control API 経由で plan / apply / destroy を行います。
 
 GitHub Release と Cloudflare Container Registry へ versioned distribution bytes を公開する
