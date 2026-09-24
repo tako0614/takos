@@ -9,9 +9,9 @@ apply し、結果は Run / StateVersion / Output として Takosumi に残り�
 | 例 | 見せること |
 | --- | --- |
 | [シンプルな Worker](/examples/simple-worker) | 最小構成の install。Git URL と ref だけで始める |
-| [Worker + DB](/examples/worker-with-db) | DB の接続情報を module の Output から受け取る |
+| [Worker + DB](/examples/worker-with-db) | DB の非 secret な識別子または endpoint を module の Output から参照する |
 | [Worker + Container](/examples/worker-with-container) | Container 実行を伴う module を policy 経由で動かす |
-| [MCP Server](/examples/mcp-server) | Interface と InterfaceBinding まで含む、いちばん完全な例 |
+| [MCP Server](/examples/mcp-server) | mcp.server Interface、InterfaceBinding、endpoint mapping、delivery を扱う |
 | [マルチサービス構成](/examples/multi-service) | module path を指定して複数サービスの graph を install する |
 
 アプリの探し方と install の入口は [Capsule を発見して install する](/platform/store)、

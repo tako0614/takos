@@ -31,20 +31,15 @@ service-side で明示します。これは Interface の宣言ではなく、Ou
 
 ## Takosumi で Interface を宣言する
 
-Workspace オーナー、オペレーター、または install flow が、Takosumi の service-side 設定に Interface を作成します。
-app-owned launcher のような plain Capsule の宣言案は、repository の v2 `interfaces[]` から exact snapshot と
-module compatibility をレビューしたうえで `InstallConfig.interfaceBlueprints` に compile されます。最初の
-成功した apply 後に blueprint を一度生成し、明示的な `capsule_output` input にその Capsule id を入れます。
-`launch_url` のような Output は宣言された Interface input の値にすぎず、Output 名から Interface を推測する
-fallback はありません。`/api/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。
-宣言には、その利用者が理解できる任意の protocol type / version を使えます。`document` は任意の non-secret な
-JSON で、動的な値は明示的な input で接続します。
-
-Form-backed Resource では、verified な Takoform Form Definition の `interfaces[]` descriptor が portable な宣言を
-所有できます。descriptor は open な name / version、non-secret document schema、`literal` / Form output からの
-deterministic input mapping だけを持ちます。Takosumi は Ready な Resource から普通の host-owned Interface を
-生成しますが、InterfaceBinding、token、認可、record lifecycle は Form や provider へ移しません。plain
-Capsule に Form は必須ではなく、Takosumi 専用 provider resource を authoring path として要求しません。
+Interface の `ownerRef.kind` は現行契約では `Workspace` または `Capsule` だけです。Workspace オーナー、オペレーター、
+または install flow が service-side 設定に Interface を作成します。app-owned launcher のような plain Capsule の宣言案は、
+repository の v2 `interfaces[]` から exact snapshot と module compatibility をレビューしたうえで
+`InstallConfig.interfaceBlueprints` に compile できます。保存される Interface は Capsule-owned または Workspace-owned です。
+成功した apply 後に blueprint を生成し、動的な値は明示的な `literal` または `capsule_output` input で接続します。
+`launch_url` のような Output は宣言された Interface input の値にすぎず、Output 名から Interface を推測する fallback は
+ありません。`/api/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。`document` は任意の
+non-secret な JSON で、type / version は利用者が理解できる契約を選びます。Resource-owned Interface と
+`resource_output` input は現行の Interface 契約にはありません。
 
 `InstallConfig.lifecycleActions` は同じく service-side の設定ですが、provider gap や application initialization のための
 Plan-pinned action であり、Interface や Output から生成しません。
@@ -78,13 +73,37 @@ Plan-pinned action であり、Interface や Output から生成しません。
 
 input に使える source は次のとおりです。
 
-- `literal`: Interface と一緒に保存された公開設定
+- `literal`: Interface と一緒に保存された non-secret な公開設定
 - `capsule_output`: Capsule のふつうの root Output を名前で参照する
-- `resource_output`: Resource が公開した観測済みの値を名前で参照する
 
 Output を参照する input には、RFC 6901 の JSON Pointer も指定できます。Takosumi は input を
 `status.resolvedInputs` に解決し、その来歴を記録し、実効値が変わるたびに解決済みリビジョンを進めます。module を
 書き換えたり、固定の Output 名を要求したりはしません。
+
+## Takos の managed Interface profiles
+
+Takos が現在読む managed Interface は次の 3 profile です。各 profile は exact な Interface の type / version、
+宣言された input と `status.resolvedInputs`、対応する permission、delivery を検証します。
+
+| 対象 | type / version | 必須の宣言と解決済み input | permission / delivery |
+| --- | --- | --- | --- |
+| MCP tool | `mcp.server` / `2025-11-25` | `inputs.endpoint`、`status.resolvedInputs.endpoint`、`document.transport = streamable-http` | `mcp.invoke`; `none` または実装済みの Principal `oauth2` |
+| アプリランチャーとサイドバー | `interface.ui.surface` / `1` | `inputs.url`、`status.resolvedInputs.url`、`document.launcher = true`、任意の `document.display` / `document.sidebar` | `ui.open`; `none` |
+| ファイルを開くハンドラー | `interface.file.handler` / `1` | `inputs.openUrl`、`status.resolvedInputs.openUrl`、有効な `document.mimeTypes` または `document.extensions` を 1 つ以上 | `file.open`; `none` |
+
+すべての profile は、Interface の `metadata.generation` と `status.observedGeneration` が一致する `Resolved` 状態、
+正の `status.resolvedRevision`、その revision を `observedInterfaceRevision` として持つ現在の Principal の `Ready` な
+InterfaceBinding を要求します。未知の type / version、未宣言または未解決の input、古い binding、未対応の delivery は
+安全側に停止します。
+
+`document.display` の正規キーは `title` / `description` / `icon` / `category` / `sortOrder`（すべて任意）です。
+`interface.ui.surface` は `document.launcher = true` と任意の `document.sidebar` を持ちます。`display.icon` は、
+credential 情報を含まない絶対 HTTPS URL、surface の解決済み runtime URL の origin 基準で解決する先頭 `/` パス、
+または `/` `.` `:` を含まない 16 文字以内の emoji glyph のいずれかです。
+
+profile の runtime URL は HTTP(S) で、userinfo、fragment、認証情報らしき query parameter を含みません。ファイル
+ハンドラーの URL はさらにリテラルの `:id` パスセグメントを 1 つ含み、Takos が選択した file ID に置き換えます。
+UI とファイルハンドラーは独自の credential 配信を要求できません。
 
 ## 利用者を認可する
 
@@ -99,16 +118,14 @@ Output を参照する input には、RFC 6901 の JSON Pointer も指定でき�
 }
 ```
 
-Takos が現在利用するのは、対応する Principal binding が `Ready` で、同じ Interface revision を観測しており、
-`mcp.invoke` を許可し、認証情報なしの配送 (`none`) か、同梱の Principal `oauth2` フローのどちらかを使っている、
-解決済みの `mcp.server` Interface だけです。OAuth を使うには、認証情報を含まない HTTPS の resource URI、
-Accounts が支える短命な issuer、Interface のオーナーがそのホスト名を管理していることを示す新しい host proof が
-必要です。Workload-token や Secret を使った配送は、host 側が対応する実装を提供するまで使えません。未対応の配送
-方式は安全側に停止します。
+上記の profile を利用するには、対応する Principal binding が `Ready` で、同じ Interface revision を観測している必要が
+あります。OAuth を使う場合は、認証情報を含まない HTTPS の resource URI、Accounts が支える短命な issuer、
+Interface のオーナーがそのホスト名を管理していることを示す host proof が必要です。Workload-token や Secret を使う
+delivery は host 側が対応する実装を提供するまで `NotReady` のままです。
 
 認証情報の値は、Output、Interface document、解決済み input、Binding record のどこにも入りません。
-ProviderConnection / CredentialRecipe / ProviderBinding は OpenTofu の Run を認可するためのもので、ランタイム
-Interface の認可には転用しません。
+ProviderConnection / CredentialRecipe / ProviderBinding は OpenTofu の Run を認可するためのもので、runtime Interface の
+認可には転用しません。
 
 ## ソース検出
 

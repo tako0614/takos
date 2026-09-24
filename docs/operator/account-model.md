@@ -75,8 +75,8 @@ Takos app root で OIDC account model を確認します。
 
 ```bash
 cd takos
-bun test ../../src/worker/server/routes/auth/__tests__/oidc-router.test.ts
-bun run test:api
+bun test src/worker/server/routes/auth/__tests__/oidc-router.test.ts
+bun run test
 bun run validate:migration-safety
 ```
 

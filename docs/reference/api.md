@@ -43,8 +43,8 @@ Current public/product API markers:
 
 - `/api/spaces/:spaceId/threads/search`
 - `/api/threads/:threadId/runs`
-- `/api/threads/:threadId/messages/search`
-- `/api/threads/:threadId/shares/:shareId/revoke`
+- `/api/threads/:id/messages/search`
+- `/api/threads/:id/shares/:shareId/revoke`
 - `/api/runs/:id/events`
 - `/api/runs/:id/replay`
 - `/api/runs/:id/ws`
@@ -60,7 +60,6 @@ Current public/product API markers:
 - `/api/spaces/:spaceId/capsules/git-url/revision/apply`
 - `/api/spaces/:spaceId/capsules/:capsuleId` (`DELETE` は destroy-plan Run の作成だけを行い、
   `202` とレビュー用 Run / expected guard を返す。適用は Takosumi 側の承認後に行う)
-- `/_takosumi/launch`
 - `/git/:owner/:repo.git/info/refs`
 
 Git URL の `plan` は呼び出し側が `Idempotency-Key` header を必ず送り、通信再試行でも

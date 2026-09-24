@@ -10,8 +10,8 @@ OIDC / billing / secret delivery schema ではありません。
 
 | 操作                              | 正本                                                                              | 補足                                                                                      |
 | --------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Capsule create / plan / apply flow      | 作成は compatibility check と明示確認後。`/install` は prefill link。                     |
-| ローカル作業 tree の upload       | `takosumi deploy ./dir` -> upload-origin Source snapshot -> `POST /api/v1/deploy` | developer / operator helper。標準 product flow は Git URL install。                       |
+| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Source / Capsule plan / apply flow      | API では `POST /api/v1/sources`、Source sync、`POST /api/v1/capsules/:capsuleId/plan`、`POST /api/v1/runs/:runId/apply` を使います。作成は compatibility check と明示確認後。`/install` は prefill link。 |
+| ローカル作業 tree の upload       | 現在の CLI / API に local tree upload surface はありません                           | Git URL、ref、module path を Source として登録し、commit に固定した Snapshot から plan / apply へ進みます。 |
 | update                            | Source sync -> plan Run -> approval -> apply Run -> StateVersion / Output         | exact Run id と Workspace / Capsule fence を保った通常のRun flow。                        |
 | rollback                          | retained StateVersion/source identity -> rollback plan -> approval -> apply Run   | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作ります。 |
 | export / import                   | operator runbook + 正本の Source / Capsule / StateVersion / Output の read       | portability handoff。secret/OIDC/runtime credential valueは移植せずtarget 側で再発行します。 |
@@ -53,8 +53,9 @@ backup / restore Run、または operator-owned data restorer evidence で扱い
 
 ## Export / Import
 
-Export は Capsule を別 operator / self-host へ移すための portability handoff です。正本の ledger の read と operator runbook を
-組み合わせ、廃止した projection APIを別のdeploy authorityとして再導入しません。
+Export は Capsule を別 operator / self-host へ移すための portability handoff です。現在の Source / Capsule /
+StateVersion / Output を API で読み、operator runbook と組み合わせます。別の deploy authority や local-tree upload
+surface を持つ projection API はありません。
 
 Export bundle に入れてよいもの:
 
@@ -76,17 +77,19 @@ data dump / restore が必要な app は、その Capsule または operator run
 
 ## CLI の境界
 
-公開の標準導線は dashboard の Git URL install です。CLI は補助です。
+公開の標準導線は dashboard の Git URL install です。現在の CLI は Run の確認と operator 管理用の補助操作を提供します。
 
 ```bash
-takosumi deploy ./my-capsule --space @me --name my-app --provider cloudflare=conn_cf
-takosumi plan ./my-capsule --space @me --name my-app
 takosumi status <run-id>
 takosumi logs <run-id>
+takosumi connections list
+takosumi install-configs patch <install-config-id> --file <install-config-patch.json>
 ```
 
-`takosumi internal installations export ...` / `takosumi internal installations import ...` は legacy-named operator / development helper であり、
-通常の install / update / rollback product path として公開しません。operator runbook では正本の ledger の read とtarget側の再設定を扱います。
+Source / Capsule の plan / apply は dashboard または上記の deploy-control API で行います。CLI に local tree の
+upload、plan、export、import の操作はありません。`installations` domain は retired で、呼び出すとエラーになります。
+移行先では Git URL から Source / Capsule を作り直し、plan / apply と target 側の credential、OIDC、InterfaceBinding を
+再設定します。operator runbook では正本の ledger の read と target 側の再設定を扱います。
 
 ## 現在の revision の境界
 

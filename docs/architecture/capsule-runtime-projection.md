@@ -6,12 +6,12 @@
 
 ## 1. モデル
 
-Takosumi には 2 つのデプロイ記述フローと、1 つの共有 runtime interaction 層があります。
+Takosumi の OpenTofu Stack flow (Capsule) と、1 つの共有 runtime interaction 層があります。
 
 ```text
-OpenTofu Stack flow         Resource Shape flow
-        |                          |
-        +---- 公開 Output ---------+
+OpenTofu Stack flow (Capsule)
+        |
+        +---- 公開 Output
                        |
         Takosumi の Interface input 解決
                        |
@@ -41,7 +41,7 @@ Takosumi は、HCL や Output 名がどうであっても、そこから runtime
 
 ## 3. Interface の宣言
 
-Interface には owner (`Workspace`、`Capsule`、`Resource` のいずれか)、安定した名前、label、generation が
+Interface には owner (`Workspace` または `Capsule`)、安定した名前、label、generation が
 あります。その spec は意図的に小さく作られています。
 
 | フィールド | 意味                                                                        |
@@ -98,22 +98,18 @@ Interface の実体と認可は service-side の設定に置かれます。`/api
 `InstallConfig.interfaceBlueprints` から一度 生成することもできます。app-owned launcher など plain
 Capsule の宣言案は、repository manifest v2 の `interfaces[]` から Takosumi が検証して同じ blueprint へ compile
 できます。repository manifest は実行権限ではなく、Output 名から Interface を推測する fallback もありません。
-Form-backed Resource は、verified な Takoform Form Definition の `interfaces[]` descriptor から portable な宣言を
-生成できます。どの経路でも record と認可は Takosumi が所有し、plain Capsule に Takosumi 専用 provider
-resource は要求しません。`InstallConfig.outputAllowlist` は UI や install summary に公開する通常の Output を
-選ぶ別の設定で、Interface の宣言や lifecycle action の発見には使いません。
+Resource-owned Interface や `resource_output` input は現行契約にはありません。`InstallConfig.outputAllowlist` は UI や
+install summary に公開する通常の Output を選ぶ別の設定で、Interface の宣言や lifecycle action の発見には使いません。
 
 ## 4. Input の解決
 
-Interface の input には、次の 3 種類のいずれかの由来があります。
+Interface の input には、次の 2 種類のいずれかの由来があります。
 
 - `literal`: service-side の設定にある non-secret な JSON
 - `capsule_output`: Capsule id、通常の root Output 名、任意の RFC 6901 JSON Pointer
-- `resource_output`: Resource id、公開されている観測済み output 名、任意の JSON Pointer
 
 resolver は解決した公開値を `status.resolvedInputs` に書き込み、input ごとの provenance を記録します。
-Capsule の provenance には Output の id、digest、名前、pointer、利用可能な Run / StateVersion の id が含まれ
-ます。Resource の provenance には Resource の id と generation が含まれます。
+Capsule の provenance には Output の id、digest、名前、pointer、利用可能な Run / StateVersion の id が含まれます。
 
 参照元が存在しない、OpenTofu または明示的な mapping で sensitive とマークされている、pointer が無効、削除済み、
 その他利用できない場合、解決は安全側に停止します。普通の module に sensitive な state や Output があっても
@@ -134,7 +130,7 @@ delete -> Terminating -> Retired
 
 Output の変更は、その Output を明示的に mapping している Interface だけを再解決の対象にします。Workspace 内の
 すべての Capsule を plan / apply することはなく、runtime 利用者側の OpenTofu module を stale にもしません。
-Resource の変更も同じ明示参照のルールに従います。
+Interface input の参照元が変わる場合も同じ明示参照のルールに従います。
 
 ## 6. InterfaceBinding
 
@@ -143,7 +139,6 @@ InterfaceBinding は 1 つの対象を認可します。
 - `Principal`
 - `ServiceAccount`
 - `Capsule`
-- `Resource`
 
 Binding には permission と delivery の記述があります。delivery は `none`、`oauth2`、`workload_token` のような
 開かれた capability token です。任意の `credentialRef` は参照であり、認証情報の値そのものではありません。
@@ -157,31 +152,13 @@ delivery は、host が明示的な実装を提供するまで `NotReady` のま
 
 ## 7. Takos の利用者 profile
 
-Takos は 3 つの厳密な managed Interface profile を実装しています。それぞれの読み取りには、exact な
-Takosumi Interface の envelope、宣言の generation と一致する observed generation を持つ Resolved 状態、正の
-解決済み revision、そして現在の Principal に対してその revision を観測する Ready な binding が必要です。
+Takos が現在読む 3 つの managed Interface profile の type / version、inputs、permissions、revision checks、URL rules、
+display metadata は [OpenTofu Output とランタイム Interface](../deploy/runtime-interfaces.md) に集約しています。
+このページでは、その Interface を launcher、sidebar、file handler が直接読む projection の境界を説明します。
 
-| 対象                         | type / version                 | 必須の宣言と解決済み input                                                                                                                                               | permission / delivery                                    |
-| ---------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| MCP tool                     | `mcp.server` / `2025-11-25`    | 宣言された `inputs.endpoint`; `status.resolvedInputs.endpoint`; `document.transport = streamable-http`                                                                   | `mcp.invoke`; `none` または実装済みの Principal `oauth2` |
-| アプリランチャーとサイドバー | `interface.ui.surface` / `1`   | 宣言された `inputs.url`; `status.resolvedInputs.url`; `document.launcher = true`; 任意の `document.display` / `document.sidebar`                                         | `ui.open`; `none`                                        |
-| ファイルを開くハンドラー     | `interface.file.handler` / `1` | 宣言された `inputs.openUrl`; `status.resolvedInputs.openUrl`; 少なくとも 1 つの有効な `document.mimeTypes` または `document.extensions`; 任意の `document.display.title` | `file.open`; `none`                                      |
-
-`document.display` の正規キーは `title` / `description` / `icon` / `category` /
-`sortOrder`(すべて任意)で、正本 (正とする情報) は Takosumi spec の Display Metadata Contract です。
-`display.icon` は「credential 情報を含まない絶対 HTTPS URL」「surface の解決済み
-runtime URL の origin 基準で解決する先頭 `/` パス(例: `/icons/app.svg`)」
-「16 文字以内で `/` `.` `:` を含まない emoji glyph」の 3 形式のみを受け付けます。
-
-runtime の URL は HTTP(S) で、userinfo や fragment を含まず、認証情報らしき query parameter も含みません。
-ファイルハンドラーの URL はさらに、リテラルの `:id` パスセグメントを 1 つ含む必要があります。Takos はその
-セグメントを選択したファイル ID に置き換えます。UI とファイルハンドラーの document は、自分専用の認証や
-credential 配信の仕組みを要求できません。
-
-ランチャーの route、サイドバーの拡張、ファイルハンドラーの route はすべて、これらの認可された Interface を
-直接読みます。Takos 側の publication cache、読み込み resolver、Output Sync のフォールバックはありません。
-未知の version、認証フィールド、未対応の delivery、不正な URL、宣言されていない input、古い binding は安全側
-に停止して除外されます。
+ランチャーの route、サイドバーの拡張、ファイルハンドラーの route は、認可された Interface を直接読みます。Takos 側の
+publication cache、読み込み resolver、Output Sync のフォールバックはありません。profile の条件を満たさない version、
+delivery、URL、input、binding は安全側に停止して除外されます。
 
 外部の MCP Connections は引き続き別の Takos 機能です。その直接 URL、registry discovery、OAuth token、
 ユーザーレビュー、tool policy は、OpenTofu Output に偽装されることなく Takos が保存・管理します。
@@ -227,7 +204,9 @@ Workspace 全体の Output Sync の挙動も持っていました。そのプロ
 - 共有契約: `takosumi/contract/interfaces.ts`
 - Resolver とライフサイクル: `takosumi/core/domains/interfaces/`
 - HTTP API: `takosumi/core/api/interface_routes.ts`
-- Takos の Interface 利用側: `takos/src/worker/application/services/platform/takosumi-interfaces.ts`
-- MCP の表示アダプター: `takos/src/worker/application/services/platform/mcp/interface-read.ts`
+- Takos の Interface 読み取り: `takos/src/worker/application/services/platform/runtime-interface-client.ts`
+- Takos の profile 検証: `takos/src/worker/application/services/platform/runtime-interface-profiles.ts`
+- UI 拡張: `takos/src/worker/application/services/platform/ui-extensions.ts`
+- MCP tools: `takos/src/worker/application/tools/mcp-tools.ts`
 - ランチャー route: `takos/src/worker/server/routes/apps/routes.ts`
 - ファイルハンドラー route: `takos/src/worker/server/routes/spaces/storage-management.ts`

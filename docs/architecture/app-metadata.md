@@ -30,21 +30,9 @@ type / version は推測しません。
 - `mcp.server` の endpoint、delivery、non-secret document
 - Interface の type / version、permission、resolved revision
 
-表示メタデータの具体キーは Takosumi の正本 spec (final-plan / core-spec の
-Display Metadata Contract) に一元定義された `document.display` object です:
-`title` / `description` / `icon` / `category` / `sortOrder`(すべて任意)。
-`interface.ui.surface` はさらに `document.launcher = true`(ランチャー表示)と
-任意の `document.sidebar` を持ちます。`display.icon` に使えるのは次の 3 形式
-だけです。
-
-- credential 情報を含まない絶対 HTTPS URL
-- 先頭 `/` のパス(surface の解決済み runtime URL の origin 基準で解決。例:
-  `resolvedInputs.url` が `https://app.example` のとき `/icons/app.svg` →
-  `https://app.example/icons/app.svg`)
-- 短い emoji glyph(16 文字以内、`/` `.` `:` を含まない)
-
-この parse / sanitize は contract 層が export する共有 parser を使うのが正で、
-consumer ごとの独自実装は conformance 違反です。
+表示メタデータの具体キー、icon の許可形式、URL の安全規則は managed Interface profile の契約詳細です。
+type / version、inputs、permissions、revision checks、URL rules、display metadata は [OpenTofu Output とランタイム Interface](../deploy/runtime-interfaces.md) に
+集約し、このページでは Takos の表示責任と service-side metadata の所有境界を説明します。
 
 Takos が所有するのは、対応する type / version の描画・呼び出し方、safe URL validation、ユーザーの local な
 open-with 選択、chat / agent / memory / Workspace に紐づく product state です。`/api/apps` は別の app metadata
@@ -56,8 +44,9 @@ repository は v2.1 [`/.well-known/takosumi.json`](../../.well-known/takosumi.js
 レビューして DB-owned `InstallConfig.interfaceBlueprints` に compile し、成功した Apply 後に host-owned
 Interface へ生成します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
 を推測する fallback もありません。Host-managed adapter や control MCP の宣言は、必要に応じて service-side
-`InstallConfig.interfaceBlueprints` または明示的な Interface API に残ります。Form-backed Resource は、verified
-な Takoform Form Definition の `interfaces[]` descriptor で portable な宣言と input mapping を持てます。
+`InstallConfig.interfaceBlueprints` または明示的な Interface API に残ります。現行の Interface 契約では Resource owner や
+`resource_output` input はなく、repository declaration を compile しても owner は Workspace または Capsule、mapping は
+`literal` または `capsule_output` です。
 InterfaceBinding と lifecycle はどの経路でも Takosumi が引き続き所有します。
 `InstallConfig.outputAllowlist` は UI / install summary / 外部表示へ公開する通常の Output を選ぶ別の設定であり、
 Interface の宣言ではありません。どの Interface 宣言経路でも binding(認可)はユーザー側に残ります。アプリは
@@ -65,18 +54,9 @@ Interface の宣言ではありません。どの Interface 宣言経路でも b
 `takos-storage` / `takos-git` / `takos-computer` も同じ通常の installable Capsule であり、その agent tool を
 Takos の静的な catalog には複製しません。
 
-現在 Takos が consumer として実装している profile は次の 3 つです。
-
-- MCP: `mcp.server` version `2025-11-25`、`inputs.endpoint`、`mcp.invoke`
-- ランチャー / サイドバー: `interface.ui.surface` version `1`、`inputs.url`、`document.launcher = true`、
-  `ui.open`
-- ファイルハンドラー: `interface.file.handler` version `1`、`inputs.openUrl`、MIME type / 拡張子のセレクタ、
-  `file.open`
-
-いずれも、Resolved な Interface と同じ revision の Ready な Principal Binding を要求し、未知の type /
-version、未宣言の input、古い Binding、未対応の delivery は安全側に停止し、表示しません。ランチャー /
-サイドバー / ファイルハンドラーは Takosumi の Interface を直接読み、Takos 内の publication cache や Output
-Sync を経由しません。
+現在 Takos が consumer として実装している 3 profile の詳細は [OpenTofu Output とランタイム Interface](../deploy/runtime-interfaces.md) を
+参照してください。ランチャー、サイドバー、ファイルハンドラーは Takosumi の Interface を直接読み、Takos 内の publication
+cache や Output Sync を経由しません。
 
 ## Takosumi が記録すること
 

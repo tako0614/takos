@@ -10,12 +10,12 @@ Takosumi は Git で公開された module を Source / Capsule / Run / StateVer
 が成功すると、通常の root Output が記録されます。これらの Output はアプリの manifest でも runtime の登録簿でも
 認証情報の経路でもありません。
 
-runtime のメタデータは、Workspace、Capsule、または Resource が持つ Takosumi の service-side Interface です。
+runtime のメタデータは、Workspace または Capsule が owner になる Takosumi の service-side Interface です。
 その宣言には次が含まれます。
 
 - 利用側が決める `type` と `version`
 - 任意の non-secret な JSON `document`
-- `literal`、`capsule_output`、`resource_output` のいずれかから来る明示的な公開 input
+- `literal` または `capsule_output` から来る明示的な公開 input
 - 公開範囲 (visibility) と、任意の policy / resource URI 参照
 
 Takos は、自分が使い方を知っている解決済みの Interface の type と version だけを読みます。これにより、
@@ -23,13 +23,14 @@ Takosumi の宣言モデルを開いたまま保ちながら、Takos が未知�
 
 ## 現在の managed Interface profile
 
-managed MCP の経路は Streamable HTTP です。
+Takos が読む managed Interface は 3 profile です。各 profile の type / version、inputs、permissions、revision checks、
+URL rules、display metadata は [OpenTofu Output とランタイム Interface](../deploy/runtime-interfaces.md) に
+集約しています。このページでは、アプリ側から managed MCP を利用するときの所有権と流れだけを説明します。
 
-1. アプリの Capsule が `mcp_url` のような通常の公開 endpoint Output を返します。
-2. service-side の設定が、`type: mcp.server`、`version: 2025-11-25`、その Output への明示的な
-   `inputs.endpoint` mapping を持つ Capsule 所有の Interface を作ります。
-3. Takosumi が Interface を解決し、Output の provenance (来歴) と解決済みの revision を記録します。
-4. InterfaceBinding が、その exact な revision について Principal に `mcp.invoke` を許可します。
+1. アプリの Capsule が通常の公開 endpoint Output を返します。
+2. service-side の Interface が `capsule_output` input でその Output を明示的に参照します。
+3. Takosumi が Interface を解決し、Output の provenance (来歴) と revision を記録します。
+4. InterfaceBinding が、その revision について Principal に必要な permission を許可します。
 5. Takos は解決済みで認可された Interface だけを一覧表示し、その tool を Workspace に公開します。
 
 ```text
@@ -41,22 +42,8 @@ managed MCP の経路は Streamable HTTP です。
   -> Takos の MCP registry と tool policy
 ```
 
-Takos が現在受け付ける managed MCP Interface は、認証不要 (`delivery.type = none`) と Principal `oauth2` の
-2 つです。OAuth では、Takosumi が Capsule が HTTPS resource の hostname を所有していることを証明したあと、
-最大 60 秒の audience 限定 token を新しく発行します。Accounts の delegated token が Capsule へ送られることは
-ありません。対応していない credential 配信を宣言する文書は、黙って公開サーバー扱いにはならず、拒否されます。
-外部の MCP Connections は、Takos 内で別の OAuth と認証情報のフローを持ち続けます。
-
-Takos は、認証不要の Principal profile もさらに 2 つ実装しています。
-
-- `interface.ui.surface` version `1`: `inputs.url` を宣言し、`document.launcher = true` を要求し、`ui.open`
-  を許可し、ランチャー / サイドバー用の表示メタデータを提供します。
-- `interface.file.handler` version `1`: `inputs.openUrl` を宣言し、`file.open` を許可し、少なくとも 1 つの
-  MIME type または拡張子でファイルを選びます。
-
-どちらも `delivery.type = none` と、現在の解決済み revision に対する Ready な Binding を必要とします。
-ファイルハンドラーの URL にはリテラルの `:id` パスセグメントが含まれます。これらの経路は Takosumi を直接
-読み、Takos 側に公開・読み込みのキャッシュや Output Sync のフォールバックはありません。
+MCP の delivery や URL / revision の検証は上記の contract home に従います。外部の MCP Connections は、Takos 内で別の
+OAuth と認証情報のフローを持ち続けます。
 
 Takos の Git install レビューでは、endpoint の Output、delivery の種類、ランチャーの Output、そして module
 が必要とする場合は現在の Accounts issuer を受け取る通常の OpenTofu 変数を提案できます。すべての名前は明示的
@@ -132,9 +119,9 @@ host Interface の利用要件は同じ文書の `requires[].kind: interface.con
 置きます。Interface ID、endpoint、provider、credential は置かず、Takosumi が DB-owned InstallConfig と Capsule OIDC の
 pairwise Principal から通常の InterfaceBinding を解決します。
 ソースのリポジトリは普通の OpenTofu module のままであり、Takosumi 専用 provider resource は要求しません。
-Form-backed Resource の portable な宣言は、verified な Takoform Form Definition の `interfaces[]` descriptor に置けます。
-Takosumi はその descriptor から host-owned Interface を 生成しますが、InterfaceBinding は別の明示的な
-service-side 認可です。
+現在の Interface 契約では Resource owner や `resource_output` input はありません。repository-owned declaration を
+compile する場合も、保存される Interface の owner は Workspace または Capsule で、値の mapping は `literal` または
+`capsule_output` です。InterfaceBinding は引き続き別の明示的な service-side 認可です。
 
 対応している Interface をアプリランチャー、Connections、file handling、agent tool にどう反映するかは Takos
 が決めます。プロトコルを宣言しただけでは自動的に Takos の機能にはなりません。製品側がその Interface の

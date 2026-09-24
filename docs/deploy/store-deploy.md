@@ -62,7 +62,7 @@ production install は tag または commit SHA に pin します。`main` / `la
 ## App launcher への反映
 
 追加が完了すると、Apps launcher に app が表示されます。launch URL が projection されている app は launcher から直接開けます。
-準備中、失敗、確認待ちの app は launcher では状態を短く見せ、詳細は `/installations/:id` の install 詳細に分けます。
+準備中、失敗、確認待ちの app は launcher では状態を短く見せ、詳細は `/workloads/:id` または `/runs/:id` に分けます。旧 `/capsules/:id` は現在の詳細 route へリダイレクトされます。
 
 ## Install detail
 

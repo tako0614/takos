@@ -9,8 +9,8 @@ const requiredText = [
   "## Capsule API",
   "`/api/spaces/:spaceId/threads/search`",
   "`/api/threads/:threadId/runs`",
-  "`/api/threads/:threadId/messages/search`",
-  "`/api/threads/:threadId/shares/:shareId/revoke`",
+  "`/api/threads/:id/messages/search`",
+  "`/api/threads/:id/shares/:shareId/revoke`",
   "`/api/runs/:id/events`",
   "`/api/runs/:id/replay`",
   "`/api/runs/:id/ws`",
@@ -19,11 +19,11 @@ const requiredText = [
   "`/api/spaces/:spaceId/capsules/:capsuleId/services`",
   "`/api/spaces/:spaceId/capsules/git-url/plan`",
   "`/api/spaces/:spaceId/capsules/git-url/apply`",
-  "`/_takosumi/launch`",
   "`/git/:owner/:repo.git/info/refs`",
 ] as const;
 
 const forbiddenText = [
+  "`/_takosumi/launch`",
   "`/api/public/v1/oauth",
   "`/api/public/v1/deployments`",
   "`/oauth/authorize",
