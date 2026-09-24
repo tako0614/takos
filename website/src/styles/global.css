@@ -1025,160 +1025,349 @@ footer.site .container {
   background: var(--tg-accent);
 }
 
-/* Abstract visual panel (representation, not a real screenshot) */
+/* Simplified render of the real takos app UI (web/src): sidebar shell +
+ * the actual surface per core. Vocabulary mirrors web/src/i18n/en. */
 .viz {
   border: 1px solid var(--tg-line);
   border-radius: var(--tg-r-lg);
   background: linear-gradient(180deg, var(--tg-bg-elev), var(--tg-bg));
   box-shadow: var(--tg-shadow-lg);
-  padding: var(--tg-s-4);
-  min-height: 248px;
+  min-height: 268px;
   display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-3);
   position: relative;
   overflow: hidden;
 }
-.viz-bar {
+.appviz {
+  flex-direction: row;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* sidebar — UnifiedSidebar (personal / space modes) */
+.ap-side {
+  width: 100px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--tg-line);
+  background: var(--tg-bg-subtle);
+}
+.ap-logo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 8px;
+  font-weight: 700;
+}
+.ap-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--tg-accent);
+}
+.ap-back {
+  padding: 2px 4px 8px;
+  font-family: var(--tg-font-mono);
+  font-size: 10px;
+  color: var(--tg-fg-muted);
+}
+.ap-nav {
+  padding: 4px 6px;
+  border-radius: var(--tg-r-sm);
+  color: var(--tg-fg-muted);
+  white-space: nowrap;
+}
+.ap-nav.on {
+  background: var(--tg-bg-elev);
+  color: var(--tg-fg);
+}
+.ap-nav.ap-primary {
+  font-weight: 600;
+  color: var(--tg-fg);
+}
+.ap-label {
+  margin-top: 8px;
+  padding: 0 6px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--tg-fg-subtle);
+}
+.ap-thread {
+  padding: 3px 6px 3px 14px;
+  border-radius: var(--tg-r-sm);
+  color: var(--tg-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--tg-line);
+  padding-top: 8px;
+}
+
+/* main surface */
+.ap-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tg-s-2);
+  padding: var(--tg-s-3);
+}
+.ap-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--tg-line);
 }
-.viz-chip {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-muted);
-  background: var(--tg-bg-subtle);
-  border: 1px solid var(--tg-line);
-  border-radius: var(--tg-r-full);
-  padding: 3px 10px;
+.ap-model {
+  font-weight: 600;
 }
-.viz-dots {
-  color: var(--tg-fg-subtle);
-  font-size: 8px;
-  letter-spacing: 2px;
-}
-.viz i {
-  display: block;
-  height: 8px;
-  border-radius: var(--tg-r-full);
-  background: color-mix(in srgb, var(--tg-fg) 16%, transparent);
-}
-
-/* chat */
-.chat-msg {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: var(--tg-s-3);
-  border-radius: var(--tg-r-md);
-}
-.chat-user {
-  width: 56%;
-  align-self: flex-end;
-  align-items: flex-end;
-  background: color-mix(in srgb, var(--tg-accent) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tg-accent) 30%, transparent);
-}
-.chat-user i {
-  background: color-mix(in srgb, var(--tg-accent) 45%, transparent);
-}
-.chat-ai {
-  width: 78%;
-  align-self: flex-start;
-  background: var(--tg-bg-subtle);
-  border: 1px solid var(--tg-line);
-}
-.chat-who {
-  font-family: var(--tg-font-mono);
-  font-size: 10px;
-  color: var(--tg-fg-subtle);
-}
-
-/* agent */
-.run-log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-2);
-  color: var(--tg-fg-muted);
-}
-.run-log .run-k {
-  color: var(--tg-accent-text);
-}
-.run-log .run-ok {
-  color: var(--tg-success);
-}
-.run-log .run-ok span {
-  font-weight: 700;
-}
-
-/* memory */
-.viz-memory {
-  justify-content: center;
-}
-.mem-card {
-  border: 1px solid var(--tg-line);
-  background: var(--tg-bg-subtle);
-  border-radius: var(--tg-r-md);
-  padding: var(--tg-s-3);
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-left: calc(var(--i) * 18px);
-  width: calc(100% - var(--i) * 18px);
-}
-.mem-tag {
-  font-family: var(--tg-font-mono);
-  font-size: 10px;
-  color: var(--tg-success);
-  letter-spacing: 0.04em;
-}
-
-/* space */
-.viz-space {
-  flex-direction: row;
-  gap: var(--tg-s-3);
-}
-.space-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-2);
-  min-width: 96px;
-}
-.space-item {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-muted);
-  padding: 6px 8px;
-  border-radius: var(--tg-r-sm);
-}
-.space-item.is-active {
-  color: var(--tg-fg);
-  background: var(--tg-bg-subtle);
-  border: 1px solid var(--tg-line);
-}
-.app-grid {
+.ap-feed {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ap-bubble {
+  align-self: flex-end;
+  max-width: 78%;
+  padding: 6px 9px;
+  border-radius: var(--tg-r-md);
+  background: color-mix(in srgb, var(--tg-accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tg-accent) 32%, transparent);
+}
+.ap-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--tg-fg-muted);
+}
+.ap-reply {
+  margin: 0;
+}
+.ap-reply code {
+  font-family: var(--tg-font-mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--tg-bg-subtle);
+}
+.ap-composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 9px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-md);
+  background: var(--tg-bg-subtle);
+}
+.ap-placeholder {
+  color: var(--tg-fg-subtle);
+}
+.ap-send {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tg-accent);
+  color: var(--tg-accent-fg);
+  font-size: 10px;
+}
+.ap-hint {
+  align-self: flex-end;
+  font-size: 9px;
+  color: var(--tg-fg-subtle);
+}
+
+/* tabs (Agent settings / Memory page) */
+.ap-tabs {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--tg-line);
+  font-size: 10px;
+  color: var(--tg-fg-muted);
+  white-space: nowrap;
+}
+.ap-tabs .on {
+  color: var(--tg-fg);
+  font-weight: 600;
+  margin-bottom: -7px;
+  padding-bottom: 5px;
+  border-bottom: 2px solid var(--tg-fg);
+}
+
+/* page head + cards */
+.ap-pagehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ap-pagehead b {
+  font-size: 12px;
+}
+.ap-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-sm);
+  background: var(--tg-bg-subtle);
+  font-size: 10px;
+  color: var(--tg-fg);
+  white-space: nowrap;
+}
+.ap-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 9px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-md);
+  background: var(--tg-bg-subtle);
+}
+.ap-card-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ap-pill {
+  padding: 1px 7px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-full);
+  font-size: 9px;
+  color: var(--tg-fg-muted);
+}
+.ap-pill.prog {
+  color: var(--tg-accent-text);
+  border-color: color-mix(in srgb, var(--tg-accent) 40%, transparent);
+}
+.ap-pri {
+  font-size: 9px;
+  color: var(--tg-warn);
+}
+.ap-meta {
+  font-size: 10px;
+  color: var(--tg-fg-muted);
+}
+.ap-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.ap-actions span {
+  padding: 2px 7px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-sm);
+  background: var(--tg-bg-elev);
+  font-size: 10px;
+}
+
+/* memory page */
+.ap-search {
+  padding: 5px 8px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-sm);
+  background: var(--tg-bg-subtle);
+  font-size: 10px;
+  color: var(--tg-fg-subtle);
+}
+.ap-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ap-filters span {
+  padding: 2px 8px;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-full);
+  background: var(--tg-bg-subtle);
+  font-size: 10px;
+  color: var(--tg-fg-muted);
+}
+.ap-filters .on {
+  background: var(--tg-fg);
+  border-color: var(--tg-fg);
+  color: var(--tg-bg);
+}
+.ap-mem {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ap-chip {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--tg-bg-elev);
+  font-size: 9px;
+  color: var(--tg-fg-muted);
+}
+.ap-mem-body {
+  margin: 0;
+  font-size: 10px;
+}
+.ap-mem-foot {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 5px;
+  border-top: 1px solid var(--tg-line);
+  font-size: 9px;
+  color: var(--tg-fg-muted);
+}
+
+/* space apps launcher */
+.ap-launcher {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--tg-s-2);
+  gap: 10px;
+  margin-top: 4px;
 }
-.app-tile {
-  aspect-ratio: 1;
+.ap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: var(--tg-fg-muted);
+  text-align: center;
+}
+.ap-tile-ic {
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--tg-line);
   border-radius: var(--tg-r-md);
   background: var(--tg-bg-subtle);
-  font-family: var(--tg-font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tg-fg);
+}
+.ap-capsule {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tg-line);
   font-size: 10px;
-  color: var(--tg-fg-muted);
+}
+
+/* Narrow viewports: the real app collapses the sidebar to mobile chrome,
+ * so the crop drops it too and shows the surface full-width. */
+@media (max-width: 520px) {
+  .ap-side {
+    display: none;
+  }
 }
 
 /* ===== Bundled app cards (differentiated from the showcase rows) ===== */

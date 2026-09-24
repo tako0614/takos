@@ -5,69 +5,191 @@ import { useT } from '~/lib/i18n';
 import { reveal } from '~/lib/interactions';
 import type { ShowcaseItem } from '~/content/site';
 
-/** Abstract, on-brand visual per core. These are representations (not real
- *  screenshots): bars + short labels evoke the thread / run / memory / space. */
+/** Simplified renderings of the real takos app (web/src): the UnifiedSidebar
+ *  shell plus the actual surface for each core — ChatPage, the agent Work
+ *  board, MemoryPage, and the space Apps launcher. Labels and status
+ *  vocabulary come from web/src/i18n/en. */
+function Side(props: {
+  mode: 'personal' | 'space';
+  active?: 'chat' | 'memory';
+}): JSX.Element {
+  const nav = (key: 'chat' | 'memory', label: string) => (
+    <span class={props.active === key ? 'ap-nav on' : 'ap-nav'}>{label}</span>
+  );
+  if (props.mode === 'space') {
+    return (
+      <div class='ap-side'>
+        <span class='ap-back'>‹ work</span>
+        <span class={props.active === 'chat' ? 'ap-nav ap-primary on' : 'ap-nav ap-primary'}>Chat</span>
+        {nav('memory', 'Memory')}
+        <span class='ap-nav'>Connections</span>
+        <span class='ap-label'>Threads</span>
+        <span class='ap-thread'>release notes</span>
+        <span class='ap-thread'>takos-git triage</span>
+        <span class='ap-thread'>weekly plan</span>
+        <span class='ap-nav ap-foot'>Space Settings</span>
+      </div>
+    );
+  }
+  return (
+    <div class='ap-side'>
+      <span class='ap-logo'><span class='ap-mark' />takos</span>
+      <span class='ap-nav ap-primary'>New Chat</span>
+      {nav('memory', 'Memory')}
+      <span class='ap-nav'>Connections</span>
+      <span class='ap-nav'>Search</span>
+      <span class='ap-label'>Projects</span>
+      <span class='ap-thread'>work</span>
+      <span class='ap-thread'>Personal</span>
+    </div>
+  );
+}
+
 function Visual(props: { kind: ShowcaseItem['key'] }): JSX.Element {
   switch (props.kind) {
     case 'chat':
       return (
-        <div class='viz viz-chat' aria-hidden='true'>
-          <div class='viz-bar'>
-            <span class='viz-chip'>model ▾</span>
-            <span class='viz-dots'>● ● ●</span>
-          </div>
-          <div class='chat-msg chat-user'>
-            <i style={{ width: '64%' }} />
-            <i style={{ width: '38%' }} />
-          </div>
-          <div class='chat-msg chat-ai'>
-            <span class='chat-who'>assistant</span>
-            <i style={{ width: '88%' }} />
-            <i style={{ width: '72%' }} />
-            <i style={{ width: '54%' }} />
+        <div class='viz appviz' aria-hidden='true'>
+          <Side mode='personal' />
+          <div class='ap-main'>
+            <div class='ap-head'>
+              <span class='ap-model'>GPT-5.5 ▾</span>
+            </div>
+            <div class='ap-feed'>
+              <div class='ap-bubble'>
+                Draft the v0.12.7 release notes and save them to docs
+              </div>
+              <div class='ap-tools'>⚙ 3 tools executed · 8s ▶</div>
+              <p class='ap-reply'>
+                Drafted <code>release-notes-0.12.7.md</code> in docs — ready to
+                review.
+              </p>
+            </div>
+            <div class='ap-composer'>
+              <span class='ap-placeholder'>Message...</span>
+              <span class='ap-send'>↑</span>
+            </div>
+            <span class='ap-hint'>Shift + Enter for new line</span>
           </div>
         </div>
       );
     case 'agent':
       return (
-        <div class='viz viz-agent' aria-hidden='true'>
-          <div class='viz-bar'>
-            <span class='viz-chip'>agent run</span>
-            <span class='viz-dots'>● ● ●</span>
+        <div class='viz appviz' aria-hidden='true'>
+          <Side mode='space' />
+          <div class='ap-main'>
+            <div class='ap-tabs'>
+              <span class='on'>Work</span>
+              <span>AI Model</span>
+              <span>Skills</span>
+              <span>Memory</span>
+            </div>
+            <div class='ap-pagehead'>
+              <b>Work Tasks</b>
+              <span class='ap-btn'>+ Add Task</span>
+            </div>
+            <div class='ap-card'>
+              <div class='ap-card-top'>
+                <b>Release notes for v0.12.7</b>
+                <span class='ap-pill prog'>In Progress</span>
+                <span class='ap-pri'>High</span>
+              </div>
+              <div class='ap-meta'>
+                Agent: Execution Agent · Model: GPT-5.5
+              </div>
+              <div class='ap-meta'>Latest run: Run completed</div>
+              <div class='ap-actions'>
+                <span>Resume in Chat</span>
+                <span>Complete</span>
+              </div>
+            </div>
+            <div class='ap-card'>
+              <div class='ap-card-top'>
+                <b>Review open PRs on takos-git</b>
+                <span class='ap-pill'>Planned</span>
+                <span class='ap-pri'>Medium</span>
+              </div>
+              <div class='ap-actions'>
+                <span>Start</span>
+              </div>
+            </div>
           </div>
-          <ul class='run-log'>
-            <li><span class='run-k'>→ tool</span> search(&quot;…&quot;)</li>
-            <li><span class='run-k'>→ edit</span> report.md</li>
-            <li><span class='run-k'>→ run</span> build &amp; test</li>
-            <li class='run-ok'><span>✓ done</span> 3 steps</li>
-          </ul>
         </div>
       );
     case 'memory':
       return (
-        <div class='viz viz-memory' aria-hidden='true'>
-          <For each={[0, 1, 2]}>
-            {(n) => (
-              <div class='mem-card' style={{ '--i': String(n) }}>
-                <span class='mem-tag'>remembered</span>
-                <i style={{ width: n === 2 ? '52%' : n === 1 ? '74%' : '90%' }} />
+        <div class='viz appviz' aria-hidden='true'>
+          <Side mode='personal' active='memory' />
+          <div class='ap-main'>
+            <div class='ap-tabs'>
+              <span class='on'>Memories (2)</span>
+              <span>Reminders (1)</span>
+            </div>
+            <div class='ap-search'>Search memories...</div>
+            <div class='ap-filters'>
+              <span class='on'>All</span>
+              <span>📅 Episode</span>
+              <span>💡 Knowledge</span>
+              <span>📋 Procedure</span>
+            </div>
+            <div class='ap-mem'>
+              <div class='ap-card'>
+                <div class='ap-card-top'>
+                  <span class='ap-meta'>💡 Knowledge</span>
+                  <span class='ap-chip'>project</span>
+                </div>
+                <p class='ap-mem-body'>
+                  Release notes are drafted in docs via takos-office.
+                </p>
+                <div class='ap-mem-foot'>
+                  <span>★★★★☆</span>
+                  <span>9/24</span>
+                </div>
               </div>
-            )}
-          </For>
+              <div class='ap-card'>
+                <div class='ap-card-top'>
+                  <span class='ap-meta'>📅 Episode</span>
+                </div>
+                <p class='ap-mem-body'>
+                  Asked for a v0.12.7 changelog draft.
+                </p>
+                <div class='ap-mem-foot'>
+                  <span>★★★☆☆</span>
+                  <span>9/23</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       );
     case 'space':
       return (
-        <div class='viz viz-space' aria-hidden='true'>
-          <div class='space-list'>
-            <span class='space-item is-active'>● work</span>
-            <span class='space-item'>● personal</span>
-            <span class='space-item'>● team</span>
-          </div>
-          <div class='app-grid'>
-            <For each={['docs', 'slide', 'sheet', 'computer', 'social', '+']}>
-              {(label) => <span class='app-tile'>{label}</span>}
-            </For>
+        <div class='viz appviz' aria-hidden='true'>
+          <Side mode='space' active='chat' />
+          <div class='ap-main'>
+            <div class='ap-pagehead'>
+              <b>Apps</b>
+              <span class='ap-btn'>Add from Git URL</span>
+            </div>
+            <div class='ap-meta'>3 installed · 1 Capsule</div>
+            <div class='ap-launcher'>
+              <div class='ap-tile'>
+                <span class='ap-tile-ic'>O</span>
+                <span>takos-office</span>
+              </div>
+              <div class='ap-tile'>
+                <span class='ap-tile-ic'>C</span>
+                <span>takos-computer</span>
+              </div>
+              <div class='ap-tile'>
+                <span class='ap-tile-ic'>S</span>
+                <span>social</span>
+              </div>
+            </div>
+            <div class='ap-capsule'>
+              <b>Takosumi Capsules</b>
+              <span class='ap-meta'>takos-office · 3/3 outputs ready</span>
+            </div>
           </div>
         </div>
       );
