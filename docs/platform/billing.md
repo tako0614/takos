@@ -11,14 +11,15 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
   に報告する立場
 - アプリの利用量は Capsule / installed-service projection 単位で計上
 
-::: warning Public paid access このページの Plus / Pay As You Go と Stripe
-Checkout は operator account plane (リファレンス実装: Takosumi Accounts) の current contract
-を説明するものです。`takosumi` reference implementation の public paid
-checkout は、hosted Takosumi launch-readiness evidence、`acceptedReady: true`
-topology reports、`ready: true` public summary、saved live audit、 canonical
-digest、separate operator approval、sanitized public summary
-が揃い、platform access status が open 可能と判定されるまで
-closed です。 :::
+::: warning Public paid access
+このページの Plus / Pay As You Go と Stripe Checkout は、operator の account plane
+(リファレンス実装: Takosumi Accounts) の現在の contract を説明するものです。
+`takosumi` reference implementation の有料 checkout は、hosted Takosumi の
+launch-readiness 証跡、`acceptedReady: true` の topology report、`ready: true` の
+公開 summary、保存した live audit、canonical digest、operator の個別承認、
+公開用に sanitize した summary が揃い、platform access status が open 可能と
+判定されるまで closed です。
+:::
 
 ユーザーから見える表示:
 
@@ -201,10 +202,11 @@ takosumi Accounts は top-up pack catalog の public `GET` endpoint を
 `/v1/billing/stripe/checkout` に `mode: "payment"` と metadata (例:
 `purchase_kind: "pro_topup"`) を渡してください。
 
-::: warning Plus ユーザーは Topup 不可 Plus
+::: warning Plus ユーザーは Topup 不可
 サブスクリプションがアクティブな状態で PayG クレジットを購入しようとすると
 `409 Conflict` が返ります。先にサブスクリプションをキャンセルしてから Topup
-してください。 :::
+してください。
+:::
 
 ## ランタイム制限
 
