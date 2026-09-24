@@ -205,7 +205,7 @@ const ja: Strings = {
             t: "クラウドの LLM もローカルモデルも、同じ会話の中で切り替えながら使える。会話は thread として Workspace に整理され、",
           },
           { t: "履歴はすべて自分のサーバーの中", em: true },
-          { t: "。どのモデルに何を話したかが、他社に渡らない。" },
+          { t: "。ローカルモデルを選べば、会話は外部に出ない。" },
         ],
         points: [
           "複数 LLM をスレッド内で切り替え",
@@ -446,7 +446,7 @@ const en: Strings = {
             t: "Use cloud LLMs and local models, switching between them in the same conversation. Threads are organized inside a Workspace, and ",
           },
           { t: "all history stays on your own server", em: true },
-          { t: ". What you said to which model never leaves for a vendor." },
+          { t: ". Choose a local model and the conversation never leaves it." },
         ],
         points: [
           "Switch LLMs within a thread",
