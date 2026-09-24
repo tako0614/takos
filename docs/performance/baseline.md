@@ -1,9 +1,16 @@
 # パフォーマンスベースライン
 
-> このページでわかること: Takosumi のデプロイ処理のベンチマーク結果。
+> このページでわかること: 2026-04-30 時点の deploy kernel のベンチマーク記録。
 
-`takos/scripts/load-test/`
-のスクリプトで計測したインプロセスのパフォーマンスベースラインです。
+::: warning 歴史的な計測記録です
+このページは、takos 内にあった deploy kernel (`resolveDeployment` /
+`applyDeployment` / `InMemoryDeploymentStore`) を 2026-04-30 に計測した記録です。
+deploy 処理は現在 Takosumi の deploy-control が所有し、計測に使った
+`scripts/load-test/` と `bun run load-test*` コマンドはこのリポジトリに
+存在しません。表中の `/api/v1/installations/*` という endpoint 表記も、
+現在の `/v1/app-installations` への rename 前のものです。数値は当時の
+インプロセス計測の記録として残しています。
+:::
 
 ## 計測環境
 
@@ -127,8 +134,9 @@ in-process ベースラインと業務想定スループットから導いたス
 
 ## k6 ロードテスト (実環境、operator 用)
 
-`takos/scripts/load-test/k6-load-test.js` を staging / production-mirror
-環境で実行します。
+当時は `takos/scripts/load-test/k6-load-test.js` を staging / production-mirror
+環境で実行していました。スクリプト自体は現行 tree にありませんが、
+負荷プロファイルと threshold は同等の計測を組み直すときの参考として残します。
 
 ```bash
 k6 run \
@@ -161,7 +169,9 @@ threshold (失敗時 exit code != 0):
 
 サマリは `k6-load-test-summary.json` に出力されます。
 
-## 再実行手順
+## 再実行について
+
+計測当時は次のコマンドで再実行できました。
 
 ```bash
 cd takos
@@ -170,8 +180,9 @@ bun run load-test:concurrent-deploys # 並行 deploy 単体
 bun run load-test:kernel-api-bench   # HTTP API 単体
 ```
 
-実環境 (k6) は operator が cluster-scoped credentials で実行します。 Takos core
-repo に値を commit しないでください。
+これらのスクリプトは kernel の Takosumi 移管にともなって削除済みです。
+現行の deploy-control に対するベースラインが必要な場合は、Takosumi 側で
+新しく計測を作り直してください。
 
 ## 判定サマリ
 
@@ -185,5 +196,4 @@ repo に値を commit しないでください。
 | in-process テスト 2 + k6 スクリプト 1              | **OK**                 |
 | baseline-metrics.md 完成                           | **OK**                 |
 
-operator 残務: 実環境の Cloudflare で k6 を走らせて p95 / p99 を測定し、
-本ドキュメントの「latency 目安」表を実測値で上書きしてください。
+上の判定は 2026-04-30 時点の計測に対するものです。

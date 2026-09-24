@@ -110,7 +110,7 @@ worker 自身のコードからしか到達できません。外部クライア�
 ### 2. 信頼できない実行コンテナ → worker → 実行ごとの capability token (信頼できない相手の認証)
 
 **agent 実行コンテナは信頼できない / 利用者供給のコードを実行し**、
-`/api/internal/v1/agent-control/*` → `/internal/executor-rpc/*` 経由で
+`/api/internal/v1/agent-control/*` への POST で Takos worker に
 呼び戻します。これは「内部認証」ではなく、信頼できない相手を認証するものなので、
 本物の credential を維持します。
 
@@ -126,7 +126,7 @@ worker 自身のコードからしか到達できません。外部クライア�
   実行コンテナへ転送する secret をその job が参照するものに限定し、
   実行コンテナの egress を既定拒否にします。
 
-### 3. サービス間の実装呼び出し → worker → shared secret (alvo: 署名付き envelope)
+### 3. サービス間の実装呼び出し → worker → shared secret (目標: 署名付き envelope)
 
 Takos には、scheduled job、featured-app カタログ確認、agent-control の backend
 呼び出しのような、product 内部の実装呼び出しが残っています。これらは Takosumi
@@ -135,19 +135,20 @@ HTTP route を、各 worker 内の runner / executor コンテナの呼び戻し
 います。閉じた hosted deploy には、OSS / Takos self-host の公開モデルの外側に
 provider endpoint bridge があることがありますが、それらの route は Takos の
 product route ではなく、Takosumi OSS の customer API でもありません。Takos の
-product コードが本物の service / trust-domain の境界を越えるときの alvo é a
-署名付きリクエスト envelope — hoje essas chamadas usam shared secret por header.
+product コードが本物の service / trust-domain の境界を越えるときの目標は
+署名付きリクエスト envelope で、現在のこれらの呼び出しは header の shared
+secret を使っています。
 
-- **仕組み atual: shared secret por header.** As rotas `/internal/*` exigem o
-  header `X-Takos-Internal-Secret`, verificado em tempo constante
-  (`validateInternalApiAccess`). Em produção self-host a secret é obrigatória;
-  sem ela só o loopback local passa (conveniência de dev). Já
-  `/api/internal/v1/agent-control/*` é verificado pelo proxy token de cada
-  run (seção 2), não por essa secret.
-- **Alvo (追跡中・未実施): `takos-internal-v3` HMAC 署名付きリクエスト
-  envelope.** A ideia é assinar method + path + body com `caller` /
-  `audience` / `capabilities` / nonce / timestamp (replay 防止) e colapsar
-  o shared secret nessa transporte única. Ainda não existe no código.
+- **現在の仕組み: header の shared secret。** `/internal/*` route は
+  `X-Takos-Internal-Secret` header を要求し、定時間比較で検証します
+  (`validateInternalApiAccess`)。self-host の production では secret は必須で、
+  未設定の場合はローカルの loopback のみ通ります (開発用の便宜)。
+  `/api/internal/v1/agent-control/*` はこの secret ではなく、実行ごとの
+  proxy token で検証します (セクション 2)。
+- **目標 (追跡中・未実施): `takos-internal-v3` HMAC 署名付きリクエスト
+  envelope。** method + path + body への署名に `caller` / `audience` /
+  `capabilities` / nonce / timestamp (replay 防止) を含め、shared secret を
+  この単一の transport に畳む構想です。コードにはまだ存在しません。
 - **判断:** 署名付き envelope が、Takos の HTTP サービス呼び出しのための
   唯一のサービス間プリミティブです。agent コンテナの `/start` entrypoint は
   `TAKOS_AGENT_START_TOKEN` が守る、より狭い private-container の境界です。
