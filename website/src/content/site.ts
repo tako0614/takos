@@ -160,7 +160,7 @@ const ja: Strings = {
     scroll: "scroll",
     termComment1: "# どこにでも install できるが、一番速いのは Use Takos。",
     termComment2:
-      "# 自前 substrate では Git source を install lifecycle に渡す:",
+      "# 自前の実行基盤では Git source を install lifecycle に渡す:",
     termOk1: "✓ takos-worker → http://your-takos.example/",
     termOk2: "✓ takos-git → docs / files / agents",
     copy: "コピー",
@@ -184,7 +184,7 @@ const ja: Strings = {
       },
       {
         title: "ロックインしない",
-        body: "SaaS にも特定ベンダーにも縛られない。同じ Takos が Cloudflare / AWS / GCP / Kubernetes / 自前 VM の上で動き、substrate は後からでも乗り換えられる。",
+        body: "SaaS にも特定ベンダーにも縛られない。同じ Takos が Cloudflare / AWS / GCP / Kubernetes / 自前 VM の上で動き、実行基盤は後からでも乗り換えられる。",
       },
       {
         title: "fork できる自由",
