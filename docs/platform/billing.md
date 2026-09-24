@@ -1,349 +1,80 @@
 # 課金
 
-> このページでわかること: Takos の課金の仕組みとユーザーから見える表示。
+> このページでわかること: Takos の課金の仕組みと、製品の契約と operator 側の
+> 実装の境界。
 
-Takos の課金はオペレーターの account plane (BillingPort) が担当します。 Takos
-プラン (Free / Plus / Pay As You Go)
-はオペレーターの請求書に含まれる形で課金されます。
+Takos 自体は課金主体ではありません。利用量を app-local に記録し、課金は
+operator の account plane (BillingPort) が行います。
 
-- 契約・支払い方法は Takosumi operator account plane に紐づく
-- Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
-  に報告する立場
+- 契約・支払い方法は operator の account plane に紐づく
+- Takos は usage を記録して operator の BillingPort に報告する立場
 - アプリの利用量は Capsule / installed-service projection 単位で計上
 
-::: warning Public paid access
-このページの Plus / Pay As You Go と Stripe Checkout は、operator の account plane
-(リファレンス実装: Takosumi Accounts) の現在の contract を説明するものです。
-`takosumi` reference implementation の有料 checkout は、hosted Takosumi の
-launch-readiness 証跡、`acceptedReady: true` の topology report、`ready: true` の
-公開 summary、保存した live audit、canonical digest、operator の個別承認、
-公開用に sanitize した summary が揃い、platform access status が open 可能と
-判定されるまで closed です。
-:::
-
-ユーザーから見える表示:
-
-```txt
-Takos Plus
-¥3,000 / month
-Billed by <operator>
-```
-
-つまり:
-
-| 見た目             | 実体                                         |
-| ------------------ | -------------------------------------------- |
-| Product name       | Takos Plus                                   |
-| Contract owner     | operator account plane / BillingPort         |
-| Product usage      | Takos plan / Takos product usage             |
-| Invoice issuer     | operator (managed example は Takosumi)       |
-| Billing line items | Takos plan + compute / storage / model usage |
-
-## プラン
-
-| プラン            | ID          | 課金モデル         | 説明                                                                   |
-| ----------------- | ----------- | ------------------ | ---------------------------------------------------------------------- |
-| **Free**          | `plan_free` | 無料               | 個人の検証・小規模利用向け。デフォルトプラン                           |
-| **Plus**          | `plan_plus` | サブスクリプション | operator が public paid access を開いた後に Stripe Checkout で契約     |
-| **Pay As You Go** | `plan_payg` | プリペイド残高     | operator が paid checkout を開いた後にクレジットを購入して残高から消費 |
-
-プランは課金アカウントごとに 1 つです。takosumi Accounts では、operator が
-hosted Takosumi access gate を開いた場合に Takosumi Accounts の Stripe checkout
-endpoint からサブスクリプション / 支払い checkout session を作成し、Stripe
-webhook で billing 状態を更新します。
-
-::: info Billing portal / invoice API Billing portal、invoice list、usage read
-API は将来の拡張予定です。現在の Accounts HTTP surface は Stripe checkout /
-webhook と legacy-named installed-service usage report ingest を公開します。 :::
-
-## Billing line item の構造
-
-operator invoice は以下の line item から構成されます:
-
-```ts
-type BillingLineItem = {
-  accountId: string;
-  capsuleId?: string; // bundled / third-party app usage の場合だけ入る
-  product: "takos";
-  kind: "subscription" | "compute_usage" | "storage_usage" | "model_usage";
-
-  amount: number;
-  currency: "JPY" | "USD";
-};
-```
-
-`product: "takos"` の line item が Takos product plan / usage を表します。
-bundled / third-party app usage は `capsuleId` と app id を別 metadata
-に持つ line item として並列に積み上がります。
-
-### プランの課金モード
-
-各プランには課金モード（`BillingMode`）が紐づいています:
-
-| プラン        | Tier   | Mode                |
-| ------------- | ------ | ------------------- |
-| Free          | `free` | `free`              |
-| Plus          | `plus` | `plus_subscription` |
-| Pay As You Go | `pro`  | `pro_prepaid`       |
-
-## プランごとのクォータ
-
-### Free プラン
-
-| メーター              | 上限   |
-| --------------------- | ------ |
-| `llm_tokens_input`    | 20,000 |
-| `llm_tokens_output`   | 10,000 |
-| `embedding_count`     | 200    |
-| `vector_search_count` | 100    |
-| `exec_seconds`        | 600    |
-| `r2_storage_gb_month` | 1 GB   |
-| `wfp_requests`        | 100    |
-| `queue_messages`      | 100    |
-
-### Plus プラン
-
-| メーター              | 上限    |
-| --------------------- | ------- |
-| `llm_tokens_input`    | 250,000 |
-| `llm_tokens_output`   | 125,000 |
-| `embedding_count`     | 2,500   |
-| `vector_search_count` | 1,250   |
-| `exec_seconds`        | 1,800   |
-| `r2_storage_gb_month` | 5 GB    |
-| `wfp_requests`        | 1,000   |
-| `queue_messages`      | 1,000   |
-
-### Pay As You Go プラン
-
-全メーター上限なし（`-1` =
-無制限）。代わりに使った分だけ残高から差し引かれます。
-
-従量単価（cents/unit）:
-
-| メーター              | 単価 (cents) |
-| --------------------- | ------------ |
-| `llm_tokens_input`    | 3            |
-| `llm_tokens_output`   | 15           |
-| `embedding_count`     | 1            |
-| `vector_search_count` | 2            |
-| `exec_seconds`        | 5            |
-| `r2_storage_gb_month` | 2,300        |
-| `wfp_requests`        | 1            |
-| `queue_messages`      | 1            |
-
-## 使い方
-
-### API の所在
-
-請求 API はオペレーターの account plane が提供します。consumer は account API
-で返される endpoint URL に対して billing request を送ります。
-
-以下の例では解決済みの endpoint を `$ACCOUNTS_BILLING_ENDPOINT` と表記します。
-invoice・支払い方法・サブスクリプション・使用量集計はすべて Takosumi Accounts
-が所有します。
-
-### Plus にアップグレード
-
-```bash
-curl -X POST "$ACCOUNTS_BILLING_ENDPOINT/v1/billing/stripe/checkout" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subject": "tsub_account",
-    "priceId": "price_plus_monthly",
-    "mode": "subscription",
-    "successUrl": "https://accounts.example.test/billing/success",
-    "cancelUrl": "https://accounts.example.test/billing/cancel",
-    "metadata": { "purchase_kind": "plus_subscription" }
-  }'
-```
-
-レスポンス:
-
-```json
-{
-  "session_id": "cs_xxx",
-  "url": "https://checkout.stripe.com/c/pay_xxx"
-}
-```
-
-ブラウザでこの URL を開くと Stripe Checkout に遷移します。支払い完了後、Webhook
-経由でプランが `plan_plus` に更新されます。
-
-### PayG クレジット購入
-
-```bash
-curl -X POST "$ACCOUNTS_BILLING_ENDPOINT/v1/billing/stripe/checkout" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subject": "tsub_account",
-    "priceId": "price_payg_topup",
-    "mode": "payment",
-    "successUrl": "https://accounts.example.test/billing/success",
-    "cancelUrl": "https://accounts.example.test/billing/cancel",
-    "metadata": { "purchase_kind": "pro_topup" }
-  }'
-```
-
-レスポンス:
-
-```json
-{
-  "session_id": "cs_xxx",
-  "url": "https://checkout.stripe.com/c/pay_xxx"
-}
-```
-
-## Topup Packs
-
-takosumi Accounts は top-up pack catalog の public `GET` endpoint を
-公開していません。オペレーターの dashboard / install UI で top-up SKU を表示
-する場合は、operator 側の catalog config から Stripe の `priceId` を選び、
-`/v1/billing/stripe/checkout` に `mode: "payment"` と metadata (例:
-`purchase_kind: "pro_topup"`) を渡してください。
-
-::: warning Plus ユーザーは Topup 不可
-サブスクリプションがアクティブな状態で PayG クレジットを購入しようとすると
-`409 Conflict` が返ります。先にサブスクリプションをキャンセルしてから Topup
-してください。
-:::
-
-## ランタイム制限
-
-全プラン共通で、エージェント実行には **7 日間ローリングウィンドウで 5
-時間（18,000 秒）** の上限があります。
-
-```typescript
-WEEKLY_RUNTIME_WINDOW_DAYS = 7;
-WEEKLY_RUNTIME_LIMIT_SECONDS = 5 * 60 * 60; // 18,000
-```
-
-この制限は `exec_seconds` のクォータとは別に適用されます。
-
-## メーター
-
-| メーター                      | 説明                   |
-| ----------------------------- | ---------------------- |
-| `llm_tokens_input` / `output` | AI トークン使用量      |
-| `embedding_count`             | エンベディング生成回数 |
-| `vector_search_count`         | セマンティック検索回数 |
-| `exec_seconds`                | セッション実行時間     |
-| `r2_storage_gb_month`         | R2 ストレージ (GB/月)  |
-| `wfp_requests`                | Worker リクエスト数    |
-| `queue_messages`              | キューメッセージ数     |
-
-Web検索はTakos組み込みserviceではなく、Workspaceへ登録された外部MCP
-serverが提供します。その上流利用量はTakosのquota・usage meter・従量課金には
-含めません。URL取得の`web_fetch`もWeb検索meterとして数えません。
-
-## クォータ超過時
-
-- **80% 到達**: 月次上限があるメーターで、書き込み系 API の推定使用量を足した
-  projected usage が上限の 80% 以上になる場合、レスポンスヘッダーに
-  `X-Quota-Warning: approaching`
-- **上限到達**: 書き込み系 API が `402 Payment Required` で拒否
-- **読み取りは継続可能**: GET / HEAD はクォータ超過時も利用できる
-- **リセット**: 全メーター月次で自動リセット (詳細は下記)
-
-## クォータリセットのタイミング
-
-**全メーターは月次でリセットされます。** メーターごとの個別 reset cycle
-はありません。
-
-使用量ロールアップは `period_start` を基準にした月次集計で、`period_start`
-は毎月 1 日 00:00 (UTC) です。
-
-```text
-period_start: "2026-03-01"  → 3月分 (2026-03-01 00:00 UTC ～ 2026-04-01 00:00 UTC)
-period_start: "2026-04-01"  → 4月分 (2026-04-01 00:00 UTC ～ 2026-05-01 00:00 UTC)
-```
-
-毎月 1 日 (UTC) に新しいロールアップ行が作成され、すべてのメーター
-(`llm_tokens_input` / `llm_tokens_output` / `embedding_count` /
-`vector_search_count` / `exec_seconds` / `wfp_requests` /
-`queue_messages`) のカウントが 0 からスタートします。
-
-::: info `r2_storage_gb_month` の扱い `r2_storage_gb_month`
-だけはストレージ滞在量に対する平均値メーターであり、毎月の集計でリセットされる
-counter
-ではなく、その月のストレージ占有量から算出されます。それ以外のメーターはすべて 0
-リセットの monthly counter です。 :::
-
-::: info ランタイム制限は別枠 `exec_seconds`
-の月次クォータとは別に、[ランタイム制限](#ランタイム制限) として 7
-日ローリングウィンドウ 18,000
-秒の独立した上限が適用されます。これは月次リセットとは別のスライディングウィンドウで管理されます。
-:::
-
-Plus プランのサブスクリプション更新日は `subscription_period_end`
-で確認できます。Stripe の `invoice.paid` Webhook
-で更新されます。サブスクリプション更新日と meter reset 日は異なる場合があります
-(meter reset は常に UTC の月初)。
-
-## プラン変更のフロー
-
-### Free → Plus
-
-```text
-POST /v1/billing/stripe/checkout { "mode": "subscription", "priceId": "price_plus_monthly" }
-  → Stripe Checkout に遷移
-  →支払い完了
-  → Webhook: checkout.session.completed (purchase_kind: "plus_subscription")
-  → planId を "plan_plus" に更新
-  → processorCustomerId / processorSubscriptionId を保存
-```
-
-### Free → Pay As You Go
-
-```text
-POST /v1/billing/stripe/checkout { "mode": "payment", "priceId": "price_payg_topup" }
-  → Stripe Checkout に遷移
-  →支払い完了
-  → Webhook: checkout.session.completed (purchase_kind: "pro_topup")
-  → planId を "plan_payg" に更新
-  →クレジットを残高に加算
-```
-
-### Plus →解約
-
-```text
-Stripe dashboard / operator billing UI でサブスクリプションをキャンセル
-  → Webhook: customer.subscription.deleted
-  →残高があれば "plan_payg" に、なければ "plan_free" にダウングレード
-```
-
-## Handled webhook events
-
-operator account-plane billing webhook (reference impl: Takosumi Accounts)
-で処理される Stripe event の一覧です。列挙された event 以外は signature 検証後に
-`200 OK` で ack しますが、state 更新は行いません。
-
-| event                           | 用途                                                          |
-| ------------------------------- | ------------------------------------------------------------- |
-| `checkout.session.completed`    | Pro top-up クレジット付与 / Plus subscription start           |
-| `invoice.paid`                  | Plus subscription period end の同期                           |
-| `invoice.payment_failed`        | `status='past_due'` に flip (dunning UI)                      |
-| `customer.subscription.updated` | plan change / cancel-at-period-end / status の同期            |
-| `customer.subscription.deleted` | terminal cancel → `plan_payg` or `plan_free` にダウングレード |
-
-## API 一覧
-
-current operator account-plane billing HTTP surface は Stripe checkout /
-webhook です。Capsule runtime からの usage ingest は Takosumi Cloud / Operator
-の billing extension が所有し、Takos OSS が廃止した installed-service
-projection route を公開する前提にはしません。
-
-| エンドポイント                | メソッド | 説明                                        |
-| ----------------------------- | -------- | ------------------------------------------- |
-| `/v1/billing/stripe/checkout` | POST     | Stripe Checkout session 作成                |
-| `/v1/billing/stripe/webhook`  | POST     | Stripe Webhook（認証不要・Stripe 署名検証） |
-
-checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
-が必須です。
-
-請求は operator の BillingPort を使います。usage ingest、payment enforcement、
-entitlement、customer portal、invoice download は Takosumi Cloud / Operator
-extension の責務で、Takos はその非公開 endpoint を正とする情報として扱いません。
+## 責務の分かれ目
+
+| 見た目             | 実体                                 |
+| ------------------ | ------------------------------------ |
+| Product name       | operator が命名する plan             |
+| Contract owner     | operator account plane / BillingPort |
+| Product usage      | Takos plan / Takos product usage     |
+| Invoice issuer     | operator                             |
+| Billing line items | operator が定義する plan と usage    |
+
+プラン名・価格・クォータの値は Takos 側の製品定数ではなく、operator が自分の
+billing 実装で定義します。
+
+## Takos 側が持つもの: usage 計測
+
+Takos app が記録するのは usage event だけです。
+
+- `app_usage_events`: 個別の usage event (idempotency key つき)
+- `app_usage_rollups`: `period_start` 基準の期間集計
+
+`meter_type` は open な文字列で、emit する側が stable token を決めます。
+現在 Takos が emit する meter は次の 2 つです。
+
+| メーター            | 説明                   |
+| ------------------- | ---------------------- |
+| `embedding_count`  | エンベディング生成回数 |
+| `exec_seconds`     | セッション実行時間     |
+
+## OSS contract が持つもの: 非 blocking の ledger と port
+
+Takosumi の OSS contract (`contract/billing.ts`) は billing を
+operator-scoped で non-blocking な ledger として定義します。plan、
+subscription、balance、invoice などの commercial record は host 側の
+所有物で、OSS contract を越えません。
+
+commercial な強制は port として差し込みます。
+
+- `BillingEnforcement`: plan 時に reserve / capture / release を差し込む
+  port。通るはずの plan を block することだけができます
+- `QuotaPolicy`: plan quota / per-run limit の port。OSS の既定は
+  `NOOP_QUOTA_POLICY` (制限なし)
+
+つまり OSS 単体では、quota 超過で API が拒否されることはありません。商用の
+強制は host (managed example: Takosumi Cloud) が自分の billing module から
+注入します。
+
+## reference implementation の HTTP surface
+
+公開 billing API は operator の account plane が提供します。reference
+implementation 側に実在する surface は次のとおりです。
+
+- Takosumi Accounts: `GET /api/v1/workspaces/{workspaceId}/billing`
+  (workspace の billing 状態の read)
+- Takosumi hosted (closed): wallet 残高への checkout
+  (`/v1/marketplace/wallet/checkout` 系) と subscription 系
+  (`/api/v1/account/subscription/*`)。wallet の reserve / capture と
+  `insufficient_quota` (402) は hosted の billing module が実装します
+
+Billing portal、invoice list、usage read API は今のところ公開 surface に
+ありません。
+
+## operator が確認すべき状態
+
+- usage event / rollup の蓄積
+- operator account plane 側の billing ステータス
 
 ## 関連ドキュメント
 
@@ -351,7 +82,5 @@ extension の責務で、Takos はその非公開 endpoint を正とする情報
   —契約主体 / billing owner / OIDC issuer の詳細
 - [Takosumi Capsule Lifecycle](https://takosumi.com/docs/concepts/)
   — Takos app installation と billing の関係
-- [Capsule Run Ledger](https://takosumi.com/docs/concepts/)
-  — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・反映 /
   export 時の billing 再紐付け
