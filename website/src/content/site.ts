@@ -184,7 +184,7 @@ const ja: Strings = {
       },
       {
         title: "ロックインしない",
-        body: "SaaS にも特定ベンダーにも縛られない。同じ Takos が Cloudflare / AWS / GCP / Kubernetes / 自前 VM の上で動き、実行基盤は後からでも乗り換えられる。",
+        body: "SaaS にも特定ベンダーにも縛られない。deploy は OpenTofu module として宣言されていて、現在の supported adapter は Cloudflare。別の実行基盤は adapter を足せば増やせる構成だ。",
       },
       {
         title: "fork できる自由",
@@ -238,13 +238,13 @@ const ja: Strings = {
           {
             t: "やり取りから memory が Workspace に積み上がり、次の会話へ文脈が引き継がれる。",
           },
-          { t: "memory も自分のサーバーの中", em: true },
-          { t: " にあり、学習に使われたり外に出たりしない。" },
+          { t: "memory は自分のサーバーに保存され", em: true },
+          { t: "、ベンダーのサービスに履歴が溜まり続ける形にはならない。" },
         ],
         points: [
           "会話から memory が蓄積",
           "次のチャットへ文脈を引き継ぎ",
-          "ベンダー学習に使われない",
+          "ベンダーのサービスに溜まらない",
         ],
       },
       {
@@ -374,10 +374,10 @@ const en: Strings = {
   meta: {
     title: "Takos — AI-first chat & agent, on your own server.",
     description:
-      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on Cloudflare, AWS, GCP, or your own VM — and your history and memory never leave your server. Open source under AGPL.",
+      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
     ogTitle: "Takos — AI-first chat & agent, your own server.",
     ogDescription:
-      "A self-hostable AI chat & agent. Your history and memory stay on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
+      "A self-hostable AI chat & agent. Your history and memory are stored on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
   },
   nav: {
     why: "Why Takos",
@@ -425,7 +425,7 @@ const en: Strings = {
       },
       {
         title: "No lock-in",
-        body: "Tied to neither a SaaS nor a single vendor. The same Takos runs on Cloudflare, AWS, GCP, Kubernetes, or your own VM — and you can switch substrate later.",
+        body: "Tied to neither a SaaS nor a single vendor. Deploy is declared as a plain OpenTofu module; the current supported adapter is Cloudflare, and other substrates can be added as adapters.",
       },
       {
         title: "Freedom to fork",
@@ -479,13 +479,13 @@ const en: Strings = {
           {
             t: "Memory accumulates in the Workspace from your interactions and carries context into the next chat. ",
           },
-          { t: "Memory also lives on your own server", em: true },
-          { t: " — never trained on, never sent out." },
+          { t: "Memory is stored on your own server", em: true },
+          { t: " — it does not pile up in a vendor’s service." },
         ],
         points: [
           "Memory accrues from chats",
           "Context carries to the next chat",
-          "Not used for vendor training",
+          "Doesn’t accumulate on vendor servers",
         ],
       },
       {
