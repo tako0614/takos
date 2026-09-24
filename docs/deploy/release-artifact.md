@@ -167,7 +167,7 @@ descriptor レコードと asset レコードの両方と一致しなければ�
 ## 回復と上書き禁止
 
 - image push のあとで中断した prepare は、権威でない upload tag を残すことが
-  あります。versioned の Git や GitHub Release の identity は消費していない
+  あります。versioned の Git や GitHub Release の identity はまだ使われていない
   ので、失敗を調べ、tag / release が作られていないことを確認してからだけ
   再実行してください。
 - create-only の公開が始まったあとは、自動で再実行してはいけません。

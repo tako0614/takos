@@ -16,15 +16,15 @@ local Compose は実装と smoke を扱いやすくするため、Takosumi contr
 
 | service        | default port | owner               | role                                                               |
 | -------------- | -----------: | ------------------- | ------------------------------------------------------------------ |
-| `takos-worker` |       `8787` | `src/worker`        | Takos product HTTP entrypoint and local integration host           |
-| `takosumi`     |       `8788` | `../takosumi`       | local dev sidecar for Takosumi control-plane checks and run ledger |
-| `takos-agent`  |       `8789` | `containers/agent`  | agent execution container                                          |
-| `postgres`     |      `15432` | `compose.local.yml` | local durable store for Takos / Takosumi                           |
-| `redis`        |      `16379` | `compose.local.yml` | local queue / cache substrate                                      |
+| `takos-worker` |       `8787` | `src/worker`        | Takos product の HTTP 入口と local 統合 host                       |
+| `takosumi`     |       `8788` | `../takosumi`       | Takosumi control-plane の確認と Run ledger 用の local 開発 sidecar |
+| `takos-agent`  |       `8789` | `containers/agent`  | agent 実行 container                                               |
+| `postgres`     |      `15432` | `compose.local.yml` | Takos / Takosumi の local 永続ストア                               |
+| `redis`        |      `16379` | `compose.local.yml` | local queue / cache の実行基盤                                     |
 
-The service set is validated by `bun run doctor`, `bun run local:config`, and `bun run local:e2e`. `local:e2e` additionally
-layers a proof-only Compose override over this service set. Its local issuer, deterministic model endpoint, and executor bridge are
-test harnesses, not product services.
+この service 一式は `bun run doctor`、`bun run local:config`、`bun run local:e2e` で検査します。`local:e2e` は
+この一式の上に証明専用の Compose override を重ねます。そこに出る local issuer、固定の model endpoint、
+executor bridge は製品の service ではなく test harness です。
 
 ## 呼び出しの形
 
