@@ -34,7 +34,6 @@ Takosumi operations runbook で管理してください。
 | `OIDC_CLIENT_SECRET`    | optional | operator secret store | confidential client の場合だけ使う secret      |
 | `OIDC_REDIRECT_URI`     | no       | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                |
 | `ENCRYPTION_KEY`        | yes      | Takos product DB      | app-local secret と委任OAuth tokenの暗号化     |
-| `TAKOS_INSTALLATION_ID` | no       | Takos runtime         | legacy-named app-local Capsule/profile id      |
 | `DB`                    | binding  | Takos product         | app-local persistence                          |
 | `SESSION_DO`            | binding  | Takos product session | browser session store                          |
 

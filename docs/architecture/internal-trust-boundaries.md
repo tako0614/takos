@@ -121,13 +121,12 @@ worker 自身のコードからしか到達できません。外部クライア�
   run から tenant・thread・identity を導きます** (`resolveRunThreadTenant`、
   `getRunBootstrap`、TIER A binding)。侵害されたコンテナが別の tenant を狙えない
   ようにします。
-- 最小権限: 実行コンテナへ転送する secret は、その job が参照するものに限定
-  します (`collectReferencedSecretNames`)。
 - 対象の hardening (追跡中・未実施): 単一の粗い `ProxyCapability="control"` を
   用途ごとの scope に分割し、実行 run には agent run より小さい集合を与え、
+  実行コンテナへ転送する secret をその job が参照するものに限定し、
   実行コンテナの egress を既定拒否にします。
 
-### 3. サービス間の実装呼び出し → worker → 1 つの署名付き envelope
+### 3. サービス間の実装呼び出し → worker → shared secret (alvo: 署名付き envelope)
 
 Takos には、scheduled job、featured-app カタログ確認、agent-control の backend
 呼び出しのような、product 内部の実装呼び出しが残っています。これらは Takosumi
@@ -136,14 +135,19 @@ HTTP route を、各 worker 内の runner / executor コンテナの呼び戻し
 います。閉じた hosted deploy には、OSS / Takos self-host の公開モデルの外側に
 provider endpoint bridge があることがありますが、それらの route は Takos の
 product route ではなく、Takosumi OSS の customer API でもありません。Takos の
-product コードが本物の service / trust-domain の境界を越えるときは、route 名や
-ヘッダーの目印ではなく、署名付きリクエスト envelope を使わなければなりません。
+product コードが本物の service / trust-domain の境界を越えるときの alvo é a
+署名付きリクエスト envelope — hoje essas chamadas usam shared secret por header.
 
-- **正とする仕組み: `takos-internal-v3` HMAC 署名付きリクエスト envelope**
-  (`verifyTakosumiInternalRequestFromHeaders`)。method + path + body への署名に、
-  `caller` / `audience` / `capabilities` / nonce / timestamp (replay 防止)
-  を含みます。既に `/internal/executor-rpc` (signed-backend mode) と
-  `/api/internal/v1/agent-control-backend` を支えています。
+- **仕組み atual: shared secret por header.** As rotas `/internal/*` exigem o
+  header `X-Takos-Internal-Secret`, verificado em tempo constante
+  (`validateInternalApiAccess`). Em produção self-host a secret é obrigatória;
+  sem ela só o loopback local passa (conveniência de dev). Já
+  `/api/internal/v1/agent-control/*` é verificado pelo proxy token de cada
+  run (seção 2), não por essa secret.
+- **Alvo (追跡中・未実施): `takos-internal-v3` HMAC 署名付きリクエスト
+  envelope.** A ideia é assinar method + path + body com `caller` /
+  `audience` / `capabilities` / nonce / timestamp (replay 防止) e colapsar
+  o shared secret nessa transporte única. Ainda não existe no código.
 - **判断:** 署名付き envelope が、Takos の HTTP サービス呼び出しのための
   唯一のサービス間プリミティブです。agent コンテナの `/start` entrypoint は
   `TAKOS_AGENT_START_TOKEN` が守る、より狭い private-container の境界です。
@@ -166,14 +170,16 @@ token**」です。
   ネットワーク分離の不変条件 (egress URL が公開経路可能でないこと) であり、
   `takosumi-private` の staging evidence で表明する必要があります。上記の
   egress の profile 適用範囲の注記を参照してください。
-- tier 2: tenant 横断の binding と最小権限の secret は **完了**。capability の
+- tier 2: tenant 横断の binding は **完了**。最小権限の secret、capability の
   分割と workflow egress の関門は追跡中です。
-- tier 3: 署名付き envelope は **存在し、Takos product のサービス間実装呼び出しの
-  正とする仕組み** です。平文 secret の関門をこれへ畳むには、cross-repo の
-  operator 側呼び出し元が envelope を送り、そのうえで `/internal/*` と egress
-  が binding / entrypoint 経由でのみ到達できるよう topology を調整する必要が
-  あります。これらは worker 内の編集ではなく **deploy 環境の変更** で、
-  `takosumi-private` の staging evidence で検証します。
+- tier 3: 署名付き envelope (`takos-internal-v3`) は **まだ存在しません**。
+  現在の関門は `X-Takos-Internal-Secret` の shared secret
+  (`validateInternalApiAccess`) と、agent-control の proxy token です。
+  平文 secret の関門を envelope へ畳むには、まず envelope の実装、次に
+  cross-repo の operator 側呼び出し元が envelope を送る対応、そのうえで
+  `/internal/*` と egress が binding / entrypoint 経由でのみ到達できるよう
+  topology を調整する必要があります。これらは worker 内の編集ではなく
+  **deploy 環境の変更** で、`takosumi-private` の staging evidence で検証します。
 - 任意の transport 更新: tier 1 / 2 は、将来的に binding 経由の
   `.fetch(Request)` からネイティブの Cloudflare RPC (WorkerEntrypoint /
   DO RPC) へ移し、型付きでヘッダーなしの呼び出しにできます。これは整頓の
