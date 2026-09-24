@@ -4,7 +4,7 @@
   /* ===== Palette — dark-only. Black base + 朱 red UI accent. =====
    * No light mode. Decorative blue/red ink lives in --tg-ink-* (used only by
    * InkSplash / SplatField) and is separate from the red UI accent.
-   * Canonical source: docs/reference/design-language.md
+   * Canonical source: takos-control/docs/reference/design-language.md
    */
 
   --tg-bg: #0a0a0a;

@@ -321,6 +321,19 @@ section h2 + .lede {
   background-size: 30px 30px;
   pointer-events: none;
 }
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.48) 0%,
+    rgba(0, 0, 0, 0.28) 42%,
+    transparent 68%
+  );
+}
 .hero-splat-wrap {
   position: absolute;
   inset: 0;
@@ -348,6 +361,37 @@ section h2 + .lede {
 section > .container {
   position: relative;
   z-index: 1;
+}
+
+/* Narrow screens: the continuous ink field sits under the whole text column,
+   so page-field splats are capped faint enough for body copy to hold AA
+   (takos-control/docs/reference/design-language.md §A11y). The hero keeps its
+   ink but dims it behind the headline via .hero-splat-wrap + a stronger
+   .hero::after veil (same treatment as takosumi). */
+@media (max-width: 720px) {
+  .ink-canvas > .splat-field .splat {
+    opacity: 0.16 !important;
+  }
+  .hero::after {
+    background:
+      radial-gradient(
+        ellipse at center,
+        rgba(0, 0, 0, 0.76) 0%,
+        rgba(0, 0, 0, 0.62) 42%,
+        rgba(0, 0, 0, 0.2) 72%,
+        transparent 100%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.12) 0%,
+        rgba(0, 0, 0, 0.48) 34%,
+        rgba(0, 0, 0, 0.5) 72%,
+        rgba(0, 0, 0, 0.18) 100%
+      );
+  }
+  .hero-splat-wrap {
+    opacity: 0.54;
+  }
 }
 
 /* ===== Simple centered hero (login / signup focused) ===== */
@@ -786,7 +830,7 @@ footer.site .copy {
 /* Inline accent emphasis (RichText `em` segments) */
 .em {
   font-style: normal;
-  color: var(--tg-accent);
+  color: var(--tg-accent-text);
   font-weight: 600;
 }
 .hero .em {
