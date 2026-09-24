@@ -48,7 +48,7 @@ bun run local:down   # 停止
 
 ## 各プロダクトのコマンド
 
-プロダクト固有のチェックは canonical owner から実行します:
+プロダクト固有のチェックは、そのプロダクトを所有する repo から実行します:
 
 ```sh
 cd . && bun run ...               # Takos Worker / validators
