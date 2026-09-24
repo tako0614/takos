@@ -20,7 +20,7 @@ Takos は次の面を別々に管理します。
 
 ### リソース
 
-`/api/resources` がリソース操作の基点です。
+リソース操作の基点となる公開 API はまだありません。設計上の責務は次のとおりです。
 
 - リソースの CRUD
 - access grant (`/access`)
@@ -59,8 +59,6 @@ service / worker ごとにランタイム設定・リミット・フラグを持
 | ---------------------------------- | ------------------------------------------------------------------ |
 | ベクトル検索                       | `/api/spaces/:spaceId/search*`                                     |
 | Embeddings / index                 | `/api/spaces/:spaceId/index*`                                      |
-| セッション実行時間                 | `/api/sessions*`                                                   |
-| Service / WFP の usage             | `/api/services*`                                                   |
 | Agent ランタイム + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*` |
 
 agent 系では次の制限も併用します。

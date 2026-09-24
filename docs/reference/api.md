@@ -52,9 +52,6 @@ Current public/product API markers:
 - `/api/artifacts/:id`
 - `/api/spaces/:spaceId/tools`
 - `/api/spaces/:spaceId/tools/:toolName`
-- `/api/explore/catalog`
-- `/api/explore/repos/by-name/:username/:repoName`
-- `/api/explore/packages/by-repo/:repoId/reviews`
 - `/api/spaces/:spaceId/capsules`
 - `/api/spaces/:spaceId/capsules/:capsuleId/services`
 - `/api/spaces/:spaceId/capsules/git-url/plan`

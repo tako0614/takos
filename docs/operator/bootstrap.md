@@ -25,18 +25,18 @@ Takosumi operations runbook で管理してください。
 
 ## Env テーブル
 
-| key                        | secret  | scope                 | 用途                                               |
-| -------------------------- | ------- | --------------------- | -------------------------------------------------- |
-| `BASE_URL`                 | no      | worker origin         | Takos public origin                                |
-| `TAKOSUMI_ACCOUNTS_URL`    | no      | Accounts plane        | external Takosumi Accounts API / issuer origin     |
-| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | Takosumi Accounts issuer                           |
-| `OIDC_CLIENT_ID`           | no      | Accounts projection   | Takosumi Accounts plane が発行した client id       |
-| `OIDC_CLIENT_SECRET`       | optional | operator secret store | confidential client の場合だけ使う secret          |
-| `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
-| `ENCRYPTION_KEY`           | yes     | Takos product DB      | app-local secret と委任OAuth tokenの暗号化         |
-| `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | legacy-named app-local Capsule/profile id          |
-| `DB`                       | binding | Takos product         | app-local persistence                              |
-| `SESSION_DO`               | binding | Takos product session | browser session store                              |
+| key                     | secret   | scope                 | 用途                                           |
+| ----------------------- | -------- | --------------------- | ---------------------------------------------- |
+| `BASE_URL`              | no       | worker origin         | Takos public origin                            |
+| `TAKOSUMI_ACCOUNTS_URL` | no       | Accounts plane        | external Takosumi Accounts API / issuer origin |
+| `OIDC_ISSUER_URL`       | no       | Takos auth consumer   | Takosumi Accounts issuer                       |
+| `OIDC_CLIENT_ID`        | no       | Accounts projection   | Takosumi Accounts plane が発行した client id   |
+| `OIDC_CLIENT_SECRET`    | optional | operator secret store | confidential client の場合だけ使う secret      |
+| `OIDC_REDIRECT_URI`     | no       | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                |
+| `ENCRYPTION_KEY`        | yes      | Takos product DB      | app-local secret と委任OAuth tokenの暗号化     |
+| `TAKOS_INSTALLATION_ID` | no       | Takos runtime         | legacy-named app-local Capsule/profile id      |
+| `DB`                    | binding  | Takos product         | app-local persistence                          |
+| `SESSION_DO`            | binding  | Takos product session | browser session store                          |
 
 `OIDC_*` は Takosumi Accounts plane が Takos product routes に投影する consumer metadata です。
 
@@ -65,11 +65,10 @@ plan/apply/list/delete は、ログイン時に発行された親 Workspace bind
 初回ユーザーは `/setup` に送られます。この画面は Takos app-local profile 用の username だけを保存します。ログイン用
 credential、upstream IdP、PAT、billing identity は Accounts plane が所有します。
 
-| method | path                        | 用途                        |
-| ------ | --------------------------- | --------------------------- |
-| GET    | `/api/setup/status`         | setup 状態確認              |
-| POST   | `/api/setup/check-username` | username availability check |
-| POST   | `/api/setup/complete`       | username 保存               |
+| method | path                  | 用途           |
+| ------ | --------------------- | -------------- |
+| GET    | `/api/setup/status`   | setup 状態確認 |
+| POST   | `/api/setup/complete` | username 保存  |
 
 ## 3. Accounts bearer で API smoke を行う
 
