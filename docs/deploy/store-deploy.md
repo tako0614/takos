@@ -41,7 +41,7 @@ Store / Source 画面が持たないもの:
 - provider credential
 - secret output
 - state backend
-- policy decision の正本
+- policy decision の正本 (正とする情報)
 - deploy 実行そのもの
 
 これらは Takosumi control plane、Connections、policy、operator secret store の責務です。

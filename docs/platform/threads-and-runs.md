@@ -13,11 +13,11 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 
 - **Takos product API と agent runtime profile** が Thread / Run
   のライフサイクル、キュー、DB、認証、Workspace の状態を管理します
-- **`takos-agent`** (ランタイムコンテナ) は正本の会話履歴を受け取り、
+- **`takos-agent`** (ランタイムコンテナ) は正本 (正とする情報) の会話履歴を受け取り、
   回数に上限のある model / tool の loop を実行します
 - 両者は agent-control RPC (`/api/internal/v1/agent-control/*`) で連携します
 
-Thread message、summary、memory、skill / tool catalog の正本 (正とする情報) は Takos Worker です。
+Thread message、summary、memory、skill / tool catalog の正本は Takos Worker です。
 engine checkpoint (中断した Run を再開するための途中状態) も Run に紐づけて保存します。checkpoint の書き込みは
 lease (実行の担当権) の版で制限するので、restart や別の pool slot へ移っても、何度実行しても結果が同じ node から
 再開できます。ただし checkpoint は会話や memory の第二の正本ではありません。

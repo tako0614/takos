@@ -67,7 +67,7 @@ bind します。既定は `runtime_secrets_provisioned = true` で、値がま�
 を宣言して apply し、値を投入してから既定に戻します。詳細は
 [ランタイムシークレット](/deploy/runtime-secrets) を参照してください。
 first-install coordinator が使う固定 result/absence contract は
-[first-install owner contract](/deploy/first-install-owner-contract) が正本です。
+[first-install owner contract](/deploy/first-install-owner-contract) が正本 (正とする情報) です。
 
 ## Takosumi は必須か
 

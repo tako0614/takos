@@ -1,6 +1,6 @@
 # Workspace
 
-> このページでわかること: Takos Workspace の正本モデルと、旧 `space` 永続化語彙の境界。
+> このページでわかること: Takos Workspace の正本 (正とする情報) モデルと、旧 `space` 永続化語彙の境界。
 
 Takos の **Workspace** は chat、agent、memory、Git repository、app launcher、MCP tools をまとめる
 private な作業領域です。認証済みの一つの外部 subject は Takos 内の一つの Principal に対応し、その Principal は

@@ -20,7 +20,7 @@ Takos Worker は API とブラウザ UI の入口です。エージェント実�
 
 ## クラウドとの境界
 
-Takos本体が必要とするリソースと接続名の正本は
+Takos本体が必要とするリソースと接続名の正本 (正とする情報) は
 [`deploy/product-resources.json`](../../deploy/product-resources.json)です。
 そこにはCloudflare、Takoform、account ID、credentialを書きません。
 

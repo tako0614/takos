@@ -1,6 +1,6 @@
 # Capsule の update / rollback / export
 
-このページは、Takos 上の installed app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本は
+このページは、Takos 上の installed app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本 (正とする情報) は
 Takosumi control plane の Workspace / Project / Capsule / Source / Run / StateVersion / Output / AuditEvent です。provider access は
 ProviderBinding が provider (+ optional alias) を explicit ProviderConnection に解決します。runtime surface は
 Interface、runtime authorization は InterfaceBinding が正本です。Output は apply evidence であり、runtime registry や

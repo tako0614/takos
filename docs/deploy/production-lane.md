@@ -9,7 +9,7 @@ Takos の本番 Worker は `bun run deploy -- takos-cloudflare-production` か�
 
 Takos の配置は 2 つの半分でできています。
 
-| 半分 | 正本 | 所有するもの |
+| 半分 | 正本 (正とする情報) | 所有するもの |
 | --- | --- | --- |
 | 耐久インフラ | `deploy/opentofu/cloudflare` | D1、KV、R2、Queue、Worker identity、queue consumer、cron |
 | worker artifact | `deploy/cloudflare/wrangler.toml` | entry module、ASSETS、container image、Durable Object migration、route、binding |

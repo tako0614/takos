@@ -40,7 +40,7 @@ manifest は要求であって値ではありません。実際に host が鋳�
 次第で、Takosumi は CredentialRecipe で run-scoped sensitive input protocol を
 宣言した provider にだけ配送します。上流の Cloudflare provider はこれを宣言しない
 ため、この BYOC module では要求は現状 inert で、5 つとも operator が投入します。
-それでも宣言を置くのは、これがアプリの必要条件の正本だからで、配送できる host lane
+それでも宣言を置くのは、これがアプリの必要条件の正本 (正とする情報) だからで、配送できる host lane
 では manifest を変えずに満たされます。
 
 ## RSA 鍵対を生成 secret にしない理由

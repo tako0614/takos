@@ -14,7 +14,7 @@ file handling として描画します。
 
 Takos は product として、ユーザーに見える workspace 体験を所有します。ただし Git / storage / agent runtime /
 MCP を、OpenTofu Output の中に Takos 専用の service 種別として宣言させることはありません。deploy された
-runtime の宣言は Takosumi の service-side `Interface` が正本 (管理元) で、利用者の認可は `InterfaceBinding`
+runtime の宣言は Takosumi の service-side `Interface` が正本 (正とする情報) で、利用者の認可は `InterfaceBinding`
 が正本です。詳細は [Capsule の runtime Interface](./capsule-runtime-projection) を参照してください。
 
 Capsule の OpenTofu module は、endpoint のような通常の deploy の事実だけを root Output として返せます。

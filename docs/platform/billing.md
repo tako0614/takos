@@ -341,7 +341,7 @@ checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 
 請求は operator の BillingPort を使います。usage ingest、payment enforcement、
 entitlement、customer portal、invoice download は Takosumi Cloud / Operator
-extension の責務で、Takos はその非公開 endpoint を正本化しません。
+extension の責務で、Takos はその非公開 endpoint を正とする情報として扱いません。
 
 ## 関連ドキュメント
 
