@@ -1,36 +1,29 @@
 # yurucommu
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+yurucommu は、フィード、ストーリー、プロフィール、コミュニティ、ダイレクト
+メッセージをひとつにまとめた SNS です。ActivityPub (異なる SNS サーバー同士を
+つなぐ共通仕様) に対応し、ほかのサーバーのユーザーともやり取りできます。
+Takos Workspace には普通の Capsule アプリとして明示的に install します。
 
-## Current Flow
+## 主な機能
 
-1. Choose a Git URL/ref for the OpenTofu Capsule repository.
-2. Create a `plan` type Run and review its proposed changes, warnings, and run ledger entry.
-3. Apply the reviewed plan as an `apply` type Run, which records a StateVersion and Output on success.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution for the run.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
+- フィードへの投稿、返信、リアクション、検索
+- 画像や動画を使ったストーリー
+- 公開範囲を選べるプロフィールとコミュニティ
+- ユーザーやコミュニティとのダイレクトメッセージ
+- ActivityPub による、別の対応サーバーとのフォローや投稿配送
 
-## Takos Boundary
+## 運用先の選び方
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and run ledger evidence. Takosumi Accounts plane owns account-plane policy, billing, OIDC, and the dashboard.
+yurucommu が所有するのは必要な役割と接続名です。Takosumi ではトップレベルで
+Takoform または Cloudflare のデプロイ adapter を選び、そのあとに別の
+ProviderConnection で接続先を選びます。Takoform の接続先は Host としての
+Takoserver、Cloudflare の接続先は利用者が接続した Cloudflare アカウントで、
+D1、R2、Workers KV、Queues がデータの置き場所になります。
 
-## API Shape
+## 関連ページ
 
-```json
-{
-  "spaceId": "space_1",
-  "repository": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-`apply` type Run requests reference the reviewed `plan` type Run returned by the plan step. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
+- [Installable Apps](/platform/featured-apps)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [yurucommu ドキュメント](https://yurucommu.com/help/)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

@@ -42,7 +42,7 @@ Takosumi Accounts の operator は Takos 用の public OIDC client を通常の 
 
 Accounts は authorize 時の Capsule/client と現在の membership から Workspace を解決し、UserInfo の
 `takosumi.workspace_id` と `workspace_memberships` に返します。callback はその claim が空でなく、membership が一つだけで
-claim と一致しない限り user provisioning や Accounts delegation の保存まで進みません。一致した場合だけ access/refresh token と
+claim と一致しない限り ユーザーの作成や Accounts delegation の保存まで進みません。一致した場合だけ access/refresh token と
 検証済み Workspace binding を app-local DB に暗号化保存します。app launcher の server-to-server call はこのユーザー委任tokenを使い、
 Accounts側でも scope、subject、Workspaceを再検証します。membership 配列だけから Workspace を推測しません。
 token や Workspace binding を OpenTofu state / Output に保存しません。`identity.oidc` capability の Capsule-bound client 登録は
@@ -66,7 +66,7 @@ Accounts が所有し、Takos app 自体は credential issuer を持ちません
 ## Dedicated Runtime
 
 public install 導線では、dedicated runtime も最初から Capsule / Run ledger 経由で作成します。既に動いている dedicated
-runtime を後から台帳に採用する作業は、公開 contract ではなく private operator evidence shaping です。この公開 docs では
+runtime を後から実行履歴に採用する作業は、公開 contract ではなく private operator evidence shaping です。この公開 docs では
 手順化しません。
 
 ## 検証

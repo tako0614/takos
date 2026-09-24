@@ -86,8 +86,8 @@ environment snapshot が**復号できなくなります**。だから既定は 
 
 1. `runtime_secrets_provisioned = false` と
    `first_install_acknowledgement = "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"` で
-   apply する。secret が無い間、Worker は `/health` 以外の全 path に `503` を返します。
-2. 5 つの値を Takos 所有の固定 phase で投入する。
+   apply します。secret が無い間、Worker は `/health` 以外の全 path に `503` を返します。
+2. 5 つの値を Takos 所有の固定 phase で投入します。
 
    ```sh
    bun run generate:keys -- \
@@ -116,7 +116,7 @@ environment snapshot が**復号できなくなります**。だから既定は 
    retry しません。
 
 3. `runtime_secrets_provisioned = true` に戻し、`first_install_acknowledgement` を
-   空に戻して再度 apply する。以後の apply はこの設定のままです。
+   空に戻して再度 apply します。以後の apply はこの設定のままです。
 
 `.tfvars`、OpenTofu output、Git リポジトリへ値を保存しないでください。
 固定 result shape と destroy 後の absence proof は

@@ -26,28 +26,42 @@ The service set is validated by `bun run doctor`, `bun run local:config`, and `b
 layers a proof-only Compose override over this service set. Its local issuer, deterministic model endpoint, and executor bridge are
 test harnesses, not product services.
 
-## Call Shape
+## 呼び出しの形
 
-- Browser and API traffic enter through `takos-worker`.
-- The normal execution path is public Takos API -> `RUN_QUEUE` -> executor/container dispatch -> `takos-agent` -> token-scoped
-  control RPC -> durable Run status, output, event, and assistant message. `bun run local:e2e` proves this path to a terminal Run instead of
-  treating health or gateway reachability as agent evidence.
-- `takosumi` in Compose is a dev sidecar for the Takosumi control-plane source. Production/self-host composition uses
-  an external Takosumi control-plane origin/API operated by the self-hoster or operator. The Takos Worker does not mount
-  Accounts, deploy-control, dashboard, or OpenTofu runner handlers in-process.
-- Git Smart HTTP (read-only clone/fetch) is served worker-native by `takos-worker` from the R2 object store. Repository writes go through the Takos repository API, not Git Smart HTTP.
-- `takos-agent` executes agent workload and calls the configured control-plane/runtime endpoints for local smoke.
+- ブラウザと API の通信は `takos-worker` に入ります。
+- 通常の実行経路は、公開 Takos API → `RUN_QUEUE` → executor / container の
+  dispatch → `takos-agent` → token で絞った control RPC → 永続化された Run の
+  status、output、event、assistant message です。`bun run local:e2e` は、health
+  や gateway の到達性を agent の証拠として扱わず、この経路を終端の Run まで
+  証明します。
+- Compose 内の `takosumi` は、Takosumi control-plane source の開発用 sidecar
+  です。production / self-host の構成では、self-hoster または operator が運用する
+  外部の Takosumi control-plane origin / API を使います。Takos Worker は
+  Accounts、deploy-control、dashboard、OpenTofu runner の handler を
+  プロセス内に載せません。
+- Git Smart HTTP (read-only の clone / fetch) は `takos-worker` が R2 object
+  store から worker-native に配信します。リポジトリへの書き込みは Git Smart
+  HTTP ではなく Takos repository API を通ります。
+- `takos-agent` は agent の workload を実行し、設定された control-plane /
+  runtime endpoint を local smoke のために呼びます。
 
-The local env names `TAKOSUMI_INTERNAL_URL`, `TAKOS_AGENT_INTERNAL_URL`,
-`TAKOS_INTERNAL_SERVICE_SECRET`, `TAKOS_INTERNAL_API_SECRET`, and `TAKOSUMI_INTERNAL_API_SECRET` are Compose/dev wiring.
-Do not treat them as hosted product subdomains or as a reason to reintroduce split public workers.
+local の env 名 `TAKOSUMI_INTERNAL_URL`、`TAKOS_AGENT_INTERNAL_URL`、
+`TAKOS_INTERNAL_SERVICE_SECRET`、`TAKOS_INTERNAL_API_SECRET`、
+`TAKOSUMI_INTERNAL_API_SECRET` は Compose / 開発用の配線です。hosted product の
+サブドメインとして扱ったり、分割された公開 worker を再導入する理由にしたり
+しないでください。
 
-## Ownership Rules
+## 所有権のルール
 
-- Takos owns the product surface: chat, agent, memory, Workspace, app launcher, worker-native Git and agent-container UX, and the first-party
-  Takos Capsule output projection profile.
-- Takosumi owns its OpenTofu control-plane Workspace, Project, Capsule, Source, ProviderConnection, ProviderBinding,
-  OpenTofu Run, StateVersion, Output, policy, audit, provider resolver, Capsule output projection standard, and Accounts
-  plane. Takos conversation Thread / agent Run remain Takos product state; the two Run ledgers are not interchangeable.
-- Production and staging deploy config and secrets live outside this repo in the operator environment.
-- Do not add standalone deploy/runtime services to the product model. Local sidecars must stay local dev conveniences.
+- Takos が持つのは product 面です。chat、agent、memory、Workspace、アプリの
+  起動、worker-native の Git と agent-container の UX、first-party の Takos
+  Capsule output projection profile です。
+- Takosumi が持つのは、OpenTofu control-plane の Workspace、Project、Capsule、
+  Source、ProviderConnection、ProviderBinding、OpenTofu Run、StateVersion、
+  Output、policy、監査、provider resolver、Capsule output projection 標準、
+  Accounts plane です。Takos の会話 Thread / agent Run は Takos product の
+  state のままで、2 つの Run の履歴は互換ではありません。
+- production と staging の deploy 設定と secret は、この repo の外の operator
+  環境に置きます。
+- product model に独立した deploy / runtime service を足さないでください。
+  local の sidecar は開発用の便利さの範囲に留めます。

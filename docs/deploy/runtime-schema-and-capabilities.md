@@ -93,7 +93,7 @@ capability は次で読めます。
   `error.code = "CAPABILITY_UNAVAILABLE"` を返します。`error.details` に
   `capability`、不足している binding を示す `reason`、`mode` が入ります。
 - **文字列検索に落とせる path は落として応答します。** workspace 検索、thread 検索、
-  agent の `info_unit_search` tool は durable な text index を使い続けます。結果は
+  agent の `info_unit_search` tool は 永続化された text index を使い続けます。結果は
   減りますが、応答は返ります。
 - **agent の会話 memory recall は空になります。** run は動きますが、過去の thread
   から意味的に近い message を引いてくる部分は結果を返しません。

@@ -97,8 +97,8 @@ lease の内側で direct Cloudflare Worker Versions API の全 page を 2 回 s
 が不存在であることを確認します。その後だけ
 `wrangler deploy --strict --containers-rollout immediate --tag <attempt> --message <attempt>` を 1 回実行し、
 upload 後にも全 page の scan を 2 回一致させます。通常 acknowledgement と lost acknowledgement の両方で、
-post-inventory の exact tag/message がちょうど 1 件、pre-inventory からの immutable addition もちょうど 1 件、
-current version と immutable version detail が同じ UUID/tag/message である場合だけ採用します。page drift、0 件、
+post-inventory の exact tag/message がちょうど 1 件、pre-inventory 以降の変更不可の追加 もちょうど 1 件、
+current version と 変更不可の version detail が同じ UUID/tag/message である場合だけ採用します。page drift、0 件、
 複数件、foreign concurrent addition、別の current version は exit 3 です。
 
 採用した version は sealed realized config から導いた non-secret binding の完全 closure を満たす必要が
@@ -185,7 +185,7 @@ request ごとの再解決や redirect に owner cookie を渡しません。
 
 実 container の evidence は `worker_id` ではありません。executor host が成功した internal
 dispatch acknowledgement に bounded `X-Takos-Executor-Container-Id` を付け、queue owner が
-既存の durable run-event ledger へ `executor_dispatch_receipt` を記録します。receipt は
+既存の run-event ledger へ `executor_dispatch_receipt` を記録します。receipt は
 `service_id`、`lease_version`、host-selected `executor_container_id`、`recorded_at` のみで、
 proxy token metadata を含みません。owner-scoped `GET /api/runs/:id/events` から terminal 後も
 読み取れます。proof はこの receipt が無い run を成功扱いしません。

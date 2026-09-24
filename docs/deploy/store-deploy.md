@@ -67,7 +67,7 @@ production install は tag または commit SHA に pin します。`main` / `la
 ## Install detail
 
 Workspace ユーザーは install 詳細で Source / Capsule / Run / StateVersion / Output / Activity を確認します。
-Workspace ユーザー向けの主導線では、この台帳を最初の説明にしません。
+Workspace ユーザー向けの主導線では、この履歴を最初の説明にしません。
 
 ## 関連ページ
 

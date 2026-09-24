@@ -21,7 +21,7 @@ publisher表示はserver-localなcurationであり、Takosはcertificationや実
 Takosが行うこと:
 
 - TCS v2または手入力からcredential-freeなGit URLを得る
-- Takosumi operator-control MCPへidempotent install-planを要求する
+- Takosumi operator-control MCPへ重複実行しても安全な install-planを要求する
 - reviewable Runを表示し、ユーザーの明示確認後だけapprove/applyする
 - install 済み app の状態を Apps launcher に反映する
 

@@ -51,8 +51,8 @@ Container application の反映には、Takos が所有する補助 bridge が�
 `disposable-production` は一回限りの使い捨て環境に限り、
 `cloudflare_provider_gap_bridge_acknowledgement = "DISPOSABLE_PRODUCTION_ONE_SHOT"` を完全一致で指定します。
 `off` と `staging` では acknowledgement を空欄にしてください。bridge は一般の production deploy を有効にする
-ためのものではなく、Container image は immutable digest のまま、destroy 時は所有を証明できる Container application
-と Vectorize index だけを削除します。bridge は D1 を読み書きしないので、durable な product data を触ることも、
+ためのものではなく、Container image は digest が変わらないまま、destroy 時は所有を証明できる Container application
+と Vectorize index だけを削除します。bridge は D1 を読み書きしないので、永続化された product data を触ることも、
 巻き戻すこともありません。
 
 ### ランタイムシークレット
@@ -89,13 +89,13 @@ secret を `.tfvars`、OpenTofu output、Git リポジトリへ保存しない�
 
 ## 基本の流れ
 
-1. このリポジトリを tag または commit に固定する
-2. 選んだadapterの変数を確認する。Cloudflare directでは `deploy/opentofu/cloudflare/opentofu.tfvars.example` を参考にする
-3. `tofu init` と `tofu plan` を実行する
-4. 作成・変更・削除と料金を確認する
-5. 確認した plan を apply する
-6. 同じ commit の Worker artifact を operator-owned deployment で反映する
-7. 公開 URL、ログイン、Chat、エージェント実行を確認する
+1. このリポジトリを tag または commit に固定してください
+2. 選んだadapterの変数を確認してください。Cloudflare direct では `deploy/opentofu/cloudflare/opentofu.tfvars.example` を参考にしてください
+3. `tofu init` と `tofu plan` を実行してください
+4. 作成・変更・削除と料金を確認してください
+5. 確認した plan を apply してください
+6. 同じ commit の Worker artifact を operator-owned deployment で反映してください
+7. 公開 URL、ログイン、Chat、エージェント実行を確認してください
 
 Cloudflareへ直接配置する例:
 

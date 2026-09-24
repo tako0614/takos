@@ -1,4 +1,4 @@
-# Cloudflare Workload Placement
+# Cloudflare の workload 配置
 
 > このページでわかること: Cloudflare 環境で workload placement を operator 設定として扱う方針。
 

@@ -1,29 +1,32 @@
 # takos-office
 
-`takos-office` is an Office Capsule app users can explicitly install into a Takos Workspace. It combines Docs, Slide, and
-Sheet surfaces in one worker and publishes one MCP endpoint for agent use.
+takos-office は、利用者が Takos Workspace に明示的に install できる office アプリです。
+文書 (docs)・スライド (slide)・表計算 (sheet) の画面を 1 つの worker にまとめ、
+エージェント向けの MCP endpoint を 1 つ公開します。
 
 ## Runtime contract
 
-Takos Office is a normal removable Capsule app. It publishes UI surfaces, file handlers, and a `protocol.mcp.server`
-publication. It consumes the `storage.object` publication from an independently installed `takos-storage` Capsule.
+Takos Office は取り外せる普通の Capsule アプリです。UI 画面、file handler、
+protocol.mcp.server の publication を公開し、別途 install した takos-storage
+Capsule の storage.object publication を利用します。
 
-The consume requests `files:read` / `files:write`. Takosumi's bind-time grant broker injects the endpoint as
-`OBJECT_STORAGE_API_URL`, a prefix-scoped bearer as `OBJECT_STORAGE_ACCESS_TOKEN`, and the assigned object prefix as
-`OBJECT_STORAGE_KEY_PREFIX`. The credential comes from protected `takos-storage` signing material and never appears in
-a public OpenTofu Output.
+利用時には files:read / files:write を要求します。Takosumi の bind-time grant
+broker が、endpoint を OBJECT_STORAGE_API_URL、prefix 限定の bearer を
+OBJECT_STORAGE_ACCESS_TOKEN、割り当てられた object prefix を
+OBJECT_STORAGE_KEY_PREFIX として注入します。credential は保護された
+takos-storage の署名素材から来るため、公開の OpenTofu Output には出ません。
 
-## Surfaces
+## 画面
 
-- `/docs` for `.takosdoc`
-- `/slide` for `.takosslide`
-- `/sheet` for `.takossheet`
-- `/mcp` for the unified Office MCP server
+- /docs — .takosdoc
+- /slide — .takosslide
+- /sheet — .takossheet
+- /mcp — 統合 Office MCP server
 
-Office stores document, slide, and sheet data through the same `storage.object` publication.
-They are not separate current apps.
+文書・スライド・表計算のデータは、どれも同じ storage.object publication に
+保存します。別々の現行アプリではありません。
 
-## References
+## 関連ページ
 
 - [Installable Apps](/platform/featured-apps)
 - [Takos App Interface](/architecture/app-interface)

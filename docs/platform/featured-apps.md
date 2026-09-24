@@ -1,39 +1,28 @@
-# おすすめアプリ
+# おすすめアプリ (featured apps)
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+featured apps は、Takos の配布側が「まずこれを」と用意するアプリのカタログです。
+並ぶのはすべて普通の Capsule アプリで、Git リポジトリから Takosumi の reviewed な
+Run を通して install されます。Takos だけの特別なアプリ形式はありません。
 
-## Current Flow
+## カタログの中身
 
-1. Create a Capsule from a Git URL/ref pointing at an OpenTofu Capsule.
-2. Trigger a **`plan` type Run** and review the recorded plan, changes, and warnings before approval.
-3. Apply the reviewed plan as an **`apply` type Run**. A successful apply records StateVersion and Output.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution used by each run.
-5. Infrastructure lifecycle credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
+各エントリは表示名、アイコン、Git の repository URL と ref、並び順、有効フラグを持ちます。
+preinstall が立ったエントリは、Workspace 作成時の「デフォルトアプリを install」
+設定が有効なときに自動で追加されます。それ以外は Apps 画面から利用者が選んで追加します。
 
-## Takos Boundary
+カタログは配布側の設定です。どのエントリも install の実行権限を変えず、通常の
+plan / apply の確認はそのまま行われます。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the Capsule, `plan` Run, `apply` Run, StateVersion, and Output run ledger. Takosumi Accounts plane owns account-plane policy such as accounts, billing, OIDC, and dashboard.
+## first-party の例
 
-## API Shape
+| アプリ | 内容 |
+| --- | --- |
+| [takos-office](/platform/takos-office) | 文書・スライド・表計算を 1 つの worker にまとめた office suite |
+| [takos-computer](/platform/takos-computer) | エージェントが MCP 経由で使うサンドボックス実行環境 |
+| [yurucommu](/platform/yurucommu) | ActivityPub 対応のセルフホスト SNS |
 
-```json
-{
-  "spaceId": "space_1",
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
+## 関連ページ
 
-A Capsule references the OpenTofu Capsule repo; a `plan` type Run records the plan, then an `apply` type Run applies
-the reviewed plan. Takos product routes should call the Takosumi deploy control plane or the Takosumi account-plane
-install flow instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
+- [Capsule を発見して install する](/platform/store)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)

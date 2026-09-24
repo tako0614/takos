@@ -110,9 +110,9 @@ InstallConfig は次のような通常の Interface blueprint と binding propos
 ```
 
 最初の成功した apply 後、Takosumi は blueprint を普通の Interface と Ready な Principal InterfaceBinding に
-materialize します。Interface の宣言・binding proposal・認可 authority は service-side にあり、Capsule module に
+生成します。Interface の宣言・binding proposal・認可 authority は service-side にあり、Capsule module に
 Takosumi control credential や Interface write authority を与えません。repository manifest v2 の app-owned
-declaration も install review で検証されてから service-side blueprint に compile されます。Takos からは materialize 済みの Interface /
+declaration も install review で検証されてから service-side blueprint に compile されます。Takos からは 生成済みの Interface /
 InterfaceBinding API だけが見えます。
 
 adapter は invocation 用 Interface OAuth token を自分の endpoint で検証し、その Principal / Workspace と現在の
@@ -133,7 +133,7 @@ host Interface の利用要件は同じ文書の `requires[].kind: interface.con
 pairwise Principal から通常の InterfaceBinding を解決します。
 ソースのリポジトリは普通の OpenTofu module のままであり、Takosumi 専用 provider resource は要求しません。
 Form-backed Resource の portable な宣言は、verified な Takoform Form Definition の `interfaces[]` descriptor に置けます。
-Takosumi はその descriptor から host-owned Interface を materialize しますが、InterfaceBinding は別の明示的な
+Takosumi はその descriptor から host-owned Interface を 生成しますが、InterfaceBinding は別の明示的な
 service-side 認可です。
 
 対応している Interface をアプリランチャー、Connections、file handling、agent tool にどう反映するかは Takos
@@ -165,4 +165,4 @@ Capsule を再 apply しなくても、その revision を観測できます。�
 - [Capsule の runtime Interface](./capsule-runtime-projection)
 - [OpenTofu Output と runtime Interface](/deploy/runtime-interfaces)
 - [MCP サーバー](/apps/mcp)
-- [Takosumi Deploy-Control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

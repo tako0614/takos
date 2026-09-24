@@ -16,7 +16,7 @@ Takos の配置は 2 つの半分でできています。
 
 Cloudflare provider は worker artifact 側を表現できません。さらに Vectorize index と
 Container application は、どちらの半分の provider resource にも存在しません。
-この surface はその 2 つを含めて、宣言された冪等な phase として実行します。
+この surface はその 2 つを含めて、宣言された phase を何度実行しても同じ結果になる形で実行します。
 
 D1 の schema migration はこの surface の担当ではありません。Worker が起動時に自分で
 適用します。code の upload と schema の変更は別の class なので、同じ mutation に
@@ -137,7 +137,7 @@ API の全 page を 2 回 scan して一致させ、exact attempt が不存在�
 `--strict --containers-rollout immediate` で upload を 1 回実行します。
 
 upload 後も全 page を 2 回 scan し、通常 acknowledgement と lost acknowledgement の両方で exact
-tag/message 1 件、pre-inventory からの immutable addition 1 件、current/version-detail の同一 UUID と
+tag/message 1 件、pre-inventory 以降の変更不可の追加 1 件、current/version-detail の同一 UUID と
 tag/message を要求します。page drift、0 件、複数件、foreign concurrent addition/current は exit 3 です。
 新 overlay 全体を証明できれば通常の成功 receipt、できなければ exit 3 です。upload の retry や raw provider
 output の返却は行いません。`immediate` は Container rollout 完了を意味しないため、complete inventory と
@@ -282,7 +282,7 @@ exit code が、どちら側で失敗したかを表します。
 | exit | 意味 | 次にすること |
 | --- | --- | --- |
 | 2 | account に触れていない | 表示された条件を満たしてやり直す |
-| 3 | upload が届いたか、または readback が確定できない | legacy lane は `--status` で判断する。first-install release apply は内部の 1 回の readback でも証明できなかった状態なので、推測した version で retry/status を行わず停止する |
+| 3 | upload が届いたか、または readback が確定できない | legacy lane は `--status` で判断します。first-install release apply は内部の 1 回の readback でも証明できなかった状態なので、推測した version で retry/status を行わず停止します |
 | 4 | bytes は公開されたが post-condition が失敗 | `--status` で読み戻し、必要なら rollback |
 
 いずれの場合も自動 retry はしません。legacy apply/vectorize lane は provider の stdout と

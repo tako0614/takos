@@ -6,31 +6,36 @@ OpenTofu-native な deploy control plane として run ledger
 **Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
 ProviderBinding が provider (+ optional alias) ごとに explicit provider connection (an explicit ProviderConnection) を解決し、policy が provider allowlist / state backend / workload placement を解決します。
 
-## Current Flow
+## 現在の流れ
 
 1. Takos の OpenTofu module (`deploy/opentofu/cloudflare`) を指す
-   **Capsule** を作る。module metadata は Git URL / commit / tag / module path と well-known OpenTofu outputs から解決する。
-2. `plan` を実行すると **`plan` type Run** が記録され、reviewed plan として diff / warning / policy decision を確認する。
-3. reviewed plan を `apply` すると **`apply` type Run** が記録され、成功した apply が StateVersion と Output を更新する。
-4. apply が公開した non-secret service URL / binding map は **Output** として記録される。
+   **Capsule** を作ります。module metadata は Git URL / commit / tag / module path と well-known OpenTofu outputs から解決します。
+2. `plan` を実行すると **`plan` type Run** が記録され、reviewed plan として diff / warning / policy decision を確認できます。
+3. reviewed plan を `apply` すると **`apply` type Run** が記録され、成功した apply が StateVersion と Output を更新します。
+4. apply が公開した non-secret service URL / binding map は **Output** として記録されます。
 5. Connection が credential reference を保持し、ProviderBinding が provider (+ optional alias) ごとに explicit provider connection を解決し、policy が provider allowlist / state backend / workload placement を解決し、
-   account / billing / OIDC / dashboard は Takosumi Accounts plane が所有する。
+   account / billing / OIDC / dashboard は Takosumi Accounts plane が所有します。
 
-## Takos Boundary
+## Takos と Takosumi の境界
 
-Takos owns product UI, chat, agent, memory, Workspaces, and app launcher UX. Git, storage, agent runtime,
-file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts rather than product-local service classes。Takosumi records Capsule / Run / StateVersion / Output と audit ledger。Connections hold credential references, ProviderBindings resolve each
-provider (and optional alias), and policy resolves provider allowlists, state handling, and runner execution。
-account-plane policy (account / billing / OIDC / dashboard) は Takosumi Accounts plane が所有する。
+Takos が持つのは product UI、chat、agent、memory、Workspace、アプリ起動の UX です。
+Git、ストレージ、agent runtime、file handler、UI、MCP は product-local の
+service class ではなく、Capsule の Output と Takos の runtime contract 経由で
+公開されます。Takosumi は Capsule / Run / StateVersion / Output と監査の履歴を
+記録します。接続 (credential) は ProviderConnection が参照を持ち、
+ProviderBinding が provider (と任意の alias) ごとに接続を解決し、policy が
+provider の許可リスト、state の扱い、runner の実行を解決します。アカウントの
+policy (アカウント / 課金 / OIDC / dashboard) は Takosumi Accounts plane が
+所有します。詳しくは [Takos の概念](/platform/)を参照してください。
 
-## Current Boundary
+## Current Boundary (現在の境界)
 
-Takos product routes expose workspace, thread, run, tools, and app-launcher
-APIs. Capsule inventory and lifecycle routes below are authenticated projections
-to the external Takosumi control plane; Takos does not persist or execute a
-second service, Resource, or Deployment lifecycle. Takosumi Accounts owns
-account-plane identity, account/billing policy, OIDC issuer behavior, and the
-dashboard-backed installation flow.
+Takos の product route は workspace、thread、run、tool、アプリ起動の API を
+公開します。下記の Capsule 一覧と lifecycle の route は、外部の Takosumi
+control plane への認証済みの投影であり、Takos は第二の service、Resource、
+Deployment の lifecycle を保持も実行もしません。Takosumi Accounts は
+account-plane の identity、アカウント / 課金の policy、OIDC issuer の動作、
+dashboard を介した install flow を所有します。
 
 ## Capsule API
 
@@ -78,9 +83,9 @@ mount せず、installed `takos-git` の `source.git.smart_http` /
 ## Deploy authority
 
 Takos の deploy 権威は Takosumi-applied OpenTofu Capsule です。
-`takosumi-private/platform/wrangler.toml` と operator-local secrets などの hand-maintained deploy materialization は
-同じ topology の **interim materialization** であり、別の source of truth として扱わない。Takos product routes は独自の
-product-local deployment surface を expose せず、Takosumi の deploy control API 経由で plan / apply / destroy を行う。
+`takosumi-private/platform/wrangler.toml` と operator-local secrets などの手作業で維持する deploy 用の生成物は
+同じ topology の **interim materialization** (暫定的な実体化) であり、別の正とする情報として扱いません。Takos product routes は独自の
+product-local deployment surface を公開せず、Takosumi の deploy control API 経由で plan / apply / destroy を行います。
 
 GitHub Release と Cloudflare Container Registry へ versioned distribution bytes を公開する
 `takos-release-artifact` は product deployment ではありません。これは Takosumi が
@@ -92,4 +97,4 @@ provider credential、plan、apply、destroy の authority は持ちません。
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)

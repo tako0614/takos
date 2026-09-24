@@ -19,7 +19,7 @@ Takos の Worker 本体は別 surface です。そちらは
 | `takos-site` | `https://takos.jp` | `takos-landing` | `website/.output/public` | `npm run build` (SolidStart / Vinxi の static prerender) |
 | `takos-docs` | `https://docs.takos.jp` | `takos-docs` | `docs/.vitepress/dist` | `bun run docs:build` (VitePress) |
 
-どちらも durable state、server handler、target 側が保持する credential、
+どちらも 永続データ、server handler、target 側が保持する credential、
 利用者が pin する identity を持ちません。したがって trigger は 0 で、負う義務は
 provenance / post-conditions / reversal / failure-handling の baseline 4 つだけです。
 policy 上は routine の `static` lane です。
@@ -61,7 +61,7 @@ npm package です。
 
 ## この surface が所有しないもの
 
-- Pages project の作成、rename、custom domain の紐付け。これは provisioning と DNS
+- Pages project の作成、rename、custom domain の紐付け。これは account 内の resource 作成と DNS
   で、deploy とは別 authority です。project が見えないとき、entrypoint は
   account に触れる前に refuse します。
 - `app.takos.jp` の Worker。`takos-cloudflare-production` が所有します。
@@ -91,7 +91,7 @@ routine な static lane です。次を順に確かめ、どれか 1 つでも�
 5. build 出力が存在し、smoke する page がその中にあること
 6. 公開される bytes に credential 形状が無いこと
 
-`--execute` を付けたときだけ upload が 1 回走ります。upload の後は、immutable な
+`--execute` を付けたときだけ upload が 1 回走ります。upload の後は、変更されない
 `https://<hash>.<project>.pages.dev` が今 build した bytes を返すことを確認し、
 production ではさらに公開 URL の 2 page が同じ digest を返すまで確認します。
 
@@ -117,7 +117,7 @@ disk に転がっていた古い出力を上げることはありません。
 | `rehearsal` | `rehearsal` | 動かない (preview) | dirty 可 |
 | `production` | `main` | 動く | clean `main` または exact commit |
 
-preview は公開 alias を動かさないので、readback も immutable deployment URL だけを
+preview は公開 alias を動かさないので、readback も 変更されない deployment URL だけを
 読みます。公開 URL を読むと他人の bytes を読むことになるからです。
 
 ## 初回の公開

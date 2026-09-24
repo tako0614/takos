@@ -345,11 +345,11 @@ extension の責務で、Takos はその非公開 endpoint を正本化しませ
 
 ## 関連ドキュメント
 
-- [Takosumi operator model](https://takosumi.com/docs/reference/operator)
+- [Takosumi を自分で動かす](https://takosumi.com/docs/concepts/self-host)
   —契約主体 / billing owner / OIDC issuer の詳細
-- [Takosumi Capsule Lifecycle](https://takosumi.com/docs/reference/model)
+- [Takosumi Capsule Lifecycle](https://takosumi.com/docs/concepts/)
   — Takos app installation と billing の関係
-- [Capsule Run Ledger](https://takosumi.com/docs/reference/model)
+- [Capsule Run Ledger](https://takosumi.com/docs/concepts/)
   — installation 単位の usage / billing 紐付け
-- [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
+- [Upgrade と Export](/platform/upgrade-export) — plan 変更・反映 /
   export 時の billing 再紐付け

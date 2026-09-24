@@ -34,7 +34,7 @@ service-side で明示します。これは Interface の宣言ではなく、Ou
 Workspace オーナー、オペレーター、または install flow が、Takosumi の service-side 設定に Interface を作成します。
 app-owned launcher のような plain Capsule の宣言案は、repository の v2 `interfaces[]` から exact snapshot と
 module compatibility をレビューしたうえで `InstallConfig.interfaceBlueprints` に compile されます。最初の
-成功した apply 後に blueprint を一度 materialize し、明示的な `capsule_output` input にその Capsule id を入れます。
+成功した apply 後に blueprint を一度生成し、明示的な `capsule_output` input にその Capsule id を入れます。
 `launch_url` のような Output は宣言された Interface input の値にすぎず、Output 名から Interface を推測する
 fallback はありません。`/api/v1/interfaces` の service-side API から同じ record を明示的に作ることもできます。
 宣言には、その利用者が理解できる任意の protocol type / version を使えます。`document` は任意の non-secret な
@@ -43,7 +43,7 @@ JSON で、動的な値は明示的な input で接続します。
 Form-backed Resource では、verified な Takoform Form Definition の `interfaces[]` descriptor が portable な宣言を
 所有できます。descriptor は open な name / version、non-secret document schema、`literal` / Form output からの
 deterministic input mapping だけを持ちます。Takosumi は Ready な Resource から普通の host-owned Interface を
-materialize しますが、InterfaceBinding、token、認可、record lifecycle は Form や provider へ移しません。plain
+生成しますが、InterfaceBinding、token、認可、record lifecycle は Form や provider へ移しません。plain
 Capsule に Form は必須ではなく、Takosumi 専用 provider resource を authoring path として要求しません。
 
 `InstallConfig.lifecycleActions` は同じく service-side の設定ですが、provider gap や application initialization のための
@@ -143,4 +143,4 @@ source の検出は module を特定するだけです。HCL の内容や、よ�
 - [インストール経路](/apps/install-paths)
 - [Takos App Interface](/architecture/app-interface)
 - [Capsule Runtime Interfaces](/architecture/capsule-runtime-projection)
-- [Takosumi Deploy-Control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

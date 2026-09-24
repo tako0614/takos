@@ -1,36 +1,43 @@
 # OIDC 設定
 
-**Takos は provider-neutral な resource contract を持つ OpenTofu-native AI workspace distribution です。** Self-host では外部 Takosumi
-Accounts plane が OIDC issuer になります。Takosumi は Takos distribution を Capsule として扱い、
-**Capsule -> Run -> StateVersion -> Output** という run ledger を記録します。OIDC client 設定そのものは account-plane policy であり、Takosumi Accounts plane が所有します。
+self-host の Takos は、外部の Takosumi Accounts plane を OIDC issuer として
+サインインします。OIDC client の設定はアカウント側の policy であり、
+Takosumi Accounts plane が所有します。Takos 側が持つのは issuer への接続設定だけです。
 
-## Current Flow
+## 必要な環境変数
 
-1. Takos の OpenTofu Capsule (`deploy/opentofu/cloudflare`) を install して **Capsule** を作る。接続した Cloudflare account に product graph を materialize する。Cloudflare provider gap は通常の production provider path では未解決のままで、disposable E2E だけ reviewed bridge mode を明示する。
-2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
-3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateVersion** と **Output** を記録する。
-4. ProviderConnection が credential reference を保持し、ProviderBinding が module の使う provider (+ optional alias) ごとに explicit ProviderConnection を解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。
-5. OIDC clients, billing, domains, dashboard などの account-plane policy は Takosumi Accounts plane が所有する。
+| 変数 | 内容 |
+| --- | --- |
+| `OIDC_ISSUER_URL` | Takosumi Accounts の issuer URL |
+| `OIDC_CLIENT_ID` | issuer に登録した client の ID |
+| `OIDC_CLIENT_SECRET` | その client の secret (runtime secret として投入) |
+| `OIDC_REDIRECT_URI` | 登録した callback URL |
+| `OIDC_DISCOVERY_URL` | discovery document の URL (issuer から導ける場合は省略可) |
 
-## Takos Boundary
+callback のパスは `/auth/oidc/callback` です。issuer 側の client には、その
+URL を redirect URI として登録します。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) for the applied OpenTofu Capsule, while Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) used by the module, and policy resolves provider allowlists and state handling. Takosumi Accounts plane が OIDC / billing / dashboard などの account-plane policy を所有する。
+## サインインの流れ
 
-## OpenTofu Module Shape
+1. 利用者が `/auth/oidc/login` を開くと、worker は issuer の
+   authorization endpoint へリダイレクトします。PKCE は S256、state は短命の
+   HttpOnly cookie にも置き、callback で state が一致しない応答を拒否します。
+2. 要求する scope は `openid profile email offline_access capsules:read
+   capsules:write` です。
+3. callback で code を token に交換し、profile を解決して session を作ります。
 
-Takosumi に渡す install 対象は OpenTofu Capsule です。module metadata は Git URL / ref / commit / module path と well-known OpenTofu outputs から解決する。
+## 確認とつまずきやすいところ
 
-```hcl
-module "takos" {
-  source = "github.com/tako0614/takos//deploy/opentofu/cloudflare"
-}
-```
+- client ID / secret / redirect URI は issuer に登録した値と完全一致させます。
+- `OIDC_CLIENT_SECRET` は runtime secret として扱い、公開の Output や
+  リポジトリには書きません。値の形式と投入順序は
+  [ランタイムシークレット](/deploy/runtime-secrets)を参照してください。
+- 公開 hosted install 向けの OIDC client は operator の承認後に account plane
+  が開きます。開くまでは同じ流れを rehearsal / self-host 環境で確認できます。
 
-adapter を選ぶと、typed Runs を経て StateVersion と Output が更新され、非機密な endpoint は Output として記録される。Takos product routes は別の product-local deployment surface を露出せず、Takosumi deploy control plane の run ledger を信頼する。
+## 関連ページ
 
-## References
-
+- [オペレーター向けガイド](/operator/)
+- [アカウントモデル](/operator/account-model)
 - [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

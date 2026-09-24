@@ -95,11 +95,11 @@ output "mcp_url" {
 ```
 
 Interface の実体と認可は service-side の設定に置かれます。`/api/v1/interfaces` から直接作ることも、apply 成功後に
-`InstallConfig.interfaceBlueprints` から一度 materialize することもできます。app-owned launcher など plain
+`InstallConfig.interfaceBlueprints` から一度 生成することもできます。app-owned launcher など plain
 Capsule の宣言案は、repository manifest v2 の `interfaces[]` から Takosumi が検証して同じ blueprint へ compile
 できます。repository manifest は実行権限ではなく、Output 名から Interface を推測する fallback もありません。
 Form-backed Resource は、verified な Takoform Form Definition の `interfaces[]` descriptor から portable な宣言を
-materialize できます。どの経路でも record と認可は Takosumi が所有し、plain Capsule に Takosumi 専用 provider
+生成できます。どの経路でも record と認可は Takosumi が所有し、plain Capsule に Takosumi 専用 provider
 resource は要求しません。`InstallConfig.outputAllowlist` は UI や install summary に公開する通常の Output を
 選ぶ別の設定で、Interface の宣言や lifecycle action の発見には使いません。
 

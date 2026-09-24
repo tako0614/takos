@@ -27,6 +27,6 @@
 ## 参考
 
 - [API Reference](/reference/api)
-- [Takosumi operator model](https://takosumi.com/docs/reference/operator)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Capsule Run ledger](https://takosumi.com/docs/reference/model)
+- [Takosumi を自分で動かす](https://takosumi.com/docs/concepts/self-host)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Capsule の実行モデル](https://takosumi.com/docs/concepts/run-model)

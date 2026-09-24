@@ -27,11 +27,11 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 }
 ```
 
-An A Capsule points at a Git URL/ref and module path; plan and apply are recorded as typed Run against it. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
+An A Capsule points at a Git URL/ref and module path; plan and apply are recorded as typed Run against it. Takos product routes should call the Takosumi API or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

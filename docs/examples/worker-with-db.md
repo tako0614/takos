@@ -1,20 +1,21 @@
 # Worker + DB
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+データベースを持つ module の例です。DB の接続情報は module が Output として返し、
+apply の成功後に Takosumi の Output から確認できます。
 
-## Current Flow
+## 流れ
 
-1. Create a Capsule from a Git URL/ref for the OpenTofu Capsule repo.
-2. Run a plan and review the resulting `plan` type Run, its proposed changes, and warnings.
-3. Apply the reviewed plan; the apply is recorded as an `apply` type Run against that `plan` type Run.
-4. A successful `apply` type Run writes a new StateVersion and Output, which surfaces the database connection details produced by the module; destroy is recorded as `destroy_plan` followed by `destroy_apply`.
-5. Connections hold external credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit ProviderConnection provider connection, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. OIDC clients, billing, domains, and the dashboard belong to the Takosumi Accounts plane.
+1. OpenTofu module を持つ Git リポジトリの URL と ref を選びます。
+2. Capsule を作り plan を実行し、`plan` Run の差分と警告を確認します。
+3. 確認した plan を apply します。`apply` Run として記録され、成功すると
+   StateVersion と Output が更新されます。DB の接続情報もこの Output に出ます。
+4. 消すときは `destroy_plan` の確認を経て `destroy_apply` まで進みます。
 
-## Takos Boundary
+接続 (credential) は ProviderConnection が参照を持ち、ProviderBinding が module の
+provider ごとに接続を解決します。OIDC client、課金、ドメインは
+Takosumi Accounts plane の管轄です。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions. Takosumi Accounts plane owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
-
-## API Shape
+## install の形
 
 ```json
 {
@@ -26,11 +27,13 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 }
 ```
 
-A plan request creates a `plan` type Run; the apply request references that `plan` type Run so only a reviewed plan is applied. Takos product routes should call the Takosumi deploy control plane or the external Takosumi Accounts flow instead of exposing a separate product-local deployment surface.
+plan の要求は `plan` Run を作り、apply の要求はその `plan` Run を参照します。
+確認した plan だけが適用されます。Takos と Takosumi の分担は
+[Takos の概念](/platform/)を参照してください。
 
-## References
+## 関連ページ
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

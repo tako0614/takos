@@ -1,21 +1,20 @@
 # File Handlers
 
-File handlers let installed apps open or edit selected file types from a Workspace. Takos discovers them through
-Capsule output projection, not through a Takos-specific manifest.
+file handler は、install したアプリが Workspace 内の特定のファイル形式を開いたり
+編集したりする仕組みです。Takos は Takos 専用の manifest ではなく、Capsule の
+Output の projection を通して handler を検出します。
 
-## Current Flow
+## 流れ
 
-1. Install an app Capsule from Git.
-2. Review and apply the Takosumi plan.
-3. The app exposes non-secret service metadata with a capability such as `interface.file.handler`.
-4. Takos reads the bound export and shows the handler for matching files in the Workspace.
-5. Runtime authority, when needed, comes from the deployed runtime/account-plane boundary rather than OpenTofu output values.
+1. アプリの Capsule を Git から install します。
+2. Takosumi の plan を確認して apply します。
+3. アプリが `interface.file.handler` のような capability で、秘密でない
+   service metadata を公開します。
+4. Takos は束縛された export を読み、一致するファイルにその handler を表示します。
+5. 実行時の権限が必要な場合は、OpenTofu の Output 値ではなく、deploy 済みの
+   runtime / account-plane の境界から供給されます。
 
-## Takos Boundary
-
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) for the applied OpenTofu Capsule, while Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists and state handling. The Takosumi Accounts plane owns account-plane policy (OIDC / billing / dashboard).
-
-## Install Shape
+## install の形
 
 ```json
 {
@@ -27,13 +26,14 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 }
 ```
 
-Selecting an adapter runs a `plan` type Run and then an `apply` type Run, which records StateVersion and
-non-sensitive endpoints as Output. Takos product routes rely on the Takosumi deploy-control ledger and
-Capsule output projection instead of exposing a separate product-local deployment surface.
+adapter を選ぶと `plan` Run のあと `apply` Run が走り、StateVersion と
+秘密でない endpoint が Output に記録されます。Takos の product route は Takosumi の
+deploy-control の記録と Capsule Output の projection を使い、独自の deploy 権限は
+持ちません。境界の全体像は [Takos の概念](/platform/)を参照してください。
 
-## References
+## 関連ページ
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Takosumi API](https://takosumi.com/docs/reference/api)

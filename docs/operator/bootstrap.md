@@ -12,7 +12,7 @@ Takosumi Accounts plane の upstream IdP / credential policy として扱い、T
 
 ## Prerequisites
 
-- Takos OpenTofu module が product backing resources (D1 / KV / R2 / Queues) を provision 済み
+- Takos OpenTofu module が product backing resources (D1 / KV / R2 / Queues) を作成済み
 - worker artifact が同じ origin に deploy 済み
 - `BASE_URL` が Takos worker origin、`TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` が Takosumi Accounts origin を指す
 - `identity.oidc` capability が `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /

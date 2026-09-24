@@ -10,9 +10,9 @@ Takos に公開する方法を示します。リポジトリには Takos 専用�
 2. Capsule を作り、`plan` Run を開始して、その diff と policy の結果を確認します。
 3. 承認した plan を apply します。成功すると StateVersion と module の通常の Output が記録されます。
 4. `InstallConfig.interfaceBlueprints` から、`inputs.endpoint` を Capsule の公開 endpoint Output へ明示的に
-   mapping する service-side の `mcp.server` Interface を materialize します。Form-backed Resource として実現する
+   mapping する service-side の `mcp.server` Interface を 生成します。Form-backed Resource として実現する
    サービスなら、verified な Takoform Form Definition の `interfaces[]` descriptor から portable な宣言を
-   materialize する経路もあります。
+   生成する経路もあります。
 5. 意図した Principal に `mcp.invoke` を許可する InterfaceBinding を作ります。
 6. Takos は、解決され認可された Interface を Workspace の tool catalog に一覧表示します。
 

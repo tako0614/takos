@@ -4,7 +4,7 @@
 > どちらが持つか。
 
 Takos にアプリを 1 つ追加すると、そのアプリの実体は Takosumi が **Capsule** (Git URL から取り込むアプリ/イン
-フラの 1 単位。[Takosumi のモデル](https://takosumi.com/docs/reference/model) 参照) として記録し、install / plan / apply の実行記録
+フラの 1 単位。[Takosumi の概念](https://takosumi.com/docs/concepts/) 参照) として記録し、install / plan / apply の実行記録
 (**Capsule -> Run -> StateVersion -> Output**) を残します。provider の許可範囲、認証情報、state backend、
 workload placement は **ProviderConnection / ProviderBinding / policy** が所有します。一方で、
 アプリの宣言メタデータは Takosumi の service-side Interface が所有し、Takos はその認可済み view を launcher や
@@ -54,7 +54,7 @@ Interface の実体、Output mapping、binding、lifecycle は service-side の 
 repository は v2.1 [`/.well-known/takosumi.json`](../../.well-known/takosumi.json) の `interfaces[]` で、launcher
 など app-owned な Interface の宣言案と Output mapping を提案できます。Takosumi は exact source snapshot を
 レビューして DB-owned `InstallConfig.interfaceBlueprints` に compile し、成功した Apply 後に host-owned
-Interface へ materialize します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
+Interface へ生成します。repository metadata は実行権限ではなく、`launch_url` Output だけで Interface
 を推測する fallback もありません。Host-managed adapter や control MCP の宣言は、必要に応じて service-side
 `InstallConfig.interfaceBlueprints` または明示的な Interface API に残ります。Form-backed Resource は、verified
 な Takoform Form Definition の `interfaces[]` descriptor で portable な宣言と input mapping を持てます。
@@ -89,7 +89,7 @@ Sync を経由しません。
 Takos の resource authority は `deploy/product-resources.json` です。Takosumi は
 `deploy/opentofu/cloudflare` を通常の OpenTofu module として install / apply します。
 直接接続した Cloudflare account に product runtime connections を写します。Cloudflare provider-gap bridge は既定で off のため、通常の production provider path では未対応 gap は解決されず、disposable E2E だけ reviewed mode を明示します。
-手書きの `wrangler` / distribution pipeline は direct Cloudflare adapter の artifact materialization であり、
+手書きの `wrangler` / distribution pipeline は direct Cloudflare adapter の artifact の生成 であり、
 別の resource authority ではありません。
 
 アカウント側の policy (account / 課金 / OIDC / dashboard) は Takosumi Accounts plane が持ちます。
@@ -99,5 +99,5 @@ Takos の resource authority は `deploy/product-resources.json` です。Takosu
 - [内部トラスト境界](./internal-trust-boundaries.md)
 - [システムアーキテクチャ](./system-architecture.md)
 - [Capsule の runtime Interface](./capsule-runtime-projection.md)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi のモデル](https://takosumi.com/docs/reference/model)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Takosumi の概念](https://takosumi.com/docs/concepts/)

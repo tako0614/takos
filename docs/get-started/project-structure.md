@@ -1,24 +1,25 @@
 # プロジェクト構成
 
-Takos は AI workspace distribution です。ユーザー向けの主な構成要素は Workspace、chat、agent、memory、Git、
-app launcher、MCP tools です。アプリや追加 runtime service は Git URL から入る OpenTofu Capsule として install され、
-external Takosumi control plane が Capsule / Run / StateVersion / Output / Capsule output projection を管理します。
+Takos は AI workspace の配布です。利用者が触る主な要素は Workspace、chat、agent、
+memory、Git、アプリの起動、MCP tools です。アプリや追加の runtime service は
+Git URL から入る OpenTofu Capsule として install され、外部の Takosumi control
+plane が Capsule / Run / StateVersion / Output / Capsule output projection を管理します。
 
-## Current Flow
+## 使い方の流れ
 
-1. Create a Workspace and use chat, memory, Git, and tools.
-2. Install apps or services by selecting a Git URL/ref and module path for an OpenTofu Capsule.
-3. Review the Takosumi `plan` Run and approve the saved plan before `apply`.
-4. Takos reads non-secret outputs and Capsule output projection records to show app launcher entries, MCP tools, file handlers, storage, Git, and agent runtime capabilities.
-5. Accounts, billing, OIDC clients, dashboard, provider credentials, state, and audit evidence stay in external Takosumi control plane.
+1. Workspace を作り、chat、memory、Git、tool を使います。
+2. アプリやサービスは、OpenTofu Capsule の Git URL / ref / module path を選んで
+   install します。
+3. Takosumi の `plan` Run を確認し、保存された plan を承認してから `apply` します。
+4. Takos は秘密でない Output と Capsule output projection の記録を読み、アプリの
+   起動項目、MCP tool、file handler、ストレージ、Git、agent runtime の capability を
+   表示します。
+5. アカウント、課金、OIDC client、dashboard、provider credential、state、監査の
+   記録は外部の Takosumi control plane に残ります。
 
-## Takos Boundary
+## Capsule の形
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Its provider-gap bridge is off by default, so ordinary production provider applies leave unsupported Cloudflare gaps unresolved; disposable E2E runs must select a reviewed bridge mode explicitly. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
-
-## Capsule Shape
-
-A Capsule references the OpenTofu module to deploy:
+Capsule はデプロイする OpenTofu module を指します。
 
 ```json
 {
@@ -31,10 +32,11 @@ A Capsule references the OpenTofu module to deploy:
 }
 ```
 
-Plan and apply requests reference the Capsule and the reviewed `plan` Run. Takos product routes call the Takosumi deploy-control API or the Takosumi Accounts dashboard flow instead of exposing a separate product-local deployment surface.
+plan / apply の要求は Capsule と確認済みの `plan` Run を参照します。Takos と
+Takosumi の分担は [Takos の概念](/platform/)を参照してください。
 
-## References
+## 関連ページ
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)

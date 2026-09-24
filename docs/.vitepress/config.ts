@@ -44,7 +44,7 @@ export default defineConfig({
           { text: "通知", link: "/get-started/notifications" },
           { text: "プロジェクト構成", link: "/get-started/project-structure" },
           { text: "ローカル開発", link: "/get-started/local-development" },
-          { text: "Local Shell", link: "/get-started/local-shell" },
+          { text: "ローカルシェル", link: "/get-started/local-shell" },
         ],
       },
       {
@@ -61,9 +61,9 @@ export default defineConfig({
         text: "Operator",
         items: [
           { text: "概要", link: "/operator/" },
-          { text: "OIDC Setup", link: "/operator/oidc-setup" },
-          { text: "Account Model", link: "/operator/account-model" },
-          { text: "Bootstrap", link: "/operator/bootstrap" },
+          { text: "OIDC 設定", link: "/operator/oidc-setup" },
+          { text: "アカウントモデル", link: "/operator/account-model" },
+          { text: "初回セットアップ", link: "/operator/bootstrap" },
         ],
       },
       {
@@ -83,7 +83,7 @@ export default defineConfig({
           },
           { text: "デプロイ手順", link: "/deploy/deploy" },
           {
-            text: "Release artifact publication",
+            text: "release artifact の公開",
             link: "/deploy/release-artifact",
           },
           {
@@ -107,27 +107,27 @@ export default defineConfig({
         items: [
           { text: "概要", link: "/architecture/" },
           {
-            text: "System Architecture",
+            text: "システムアーキテクチャ",
             link: "/architecture/system-architecture",
           },
-          { text: "Service Topology", link: "/architecture/service-topology" },
-          { text: "Takos App Interface", link: "/architecture/app-interface" },
+          { text: "サービストポロジー", link: "/architecture/service-topology" },
+          { text: "Takos アプリの Interface", link: "/architecture/app-interface" },
           {
-            text: "Capsule Runtime Projection",
+            text: "Capsule の runtime Interface",
             link: "/architecture/capsule-runtime-projection",
           },
-          { text: "App Metadata", link: "/architecture/app-metadata" },
-          { text: "Runtime / Agent", link: "/architecture/runtime-service" },
+          { text: "アプリメタデータの境界", link: "/architecture/app-metadata" },
+          { text: "ランタイム / エージェント", link: "/architecture/runtime-service" },
           {
-            text: "Internal Trust Boundaries",
+            text: "内部トラスト境界",
             link: "/architecture/internal-trust-boundaries",
           },
-          { text: "Diagrams", link: "/architecture/diagrams" },
+          { text: "アーキテクチャ図", link: "/architecture/diagrams" },
         ],
       },
       {
-        text: "Performance",
-        items: [{ text: "Baseline", link: "/performance/baseline" }],
+        text: "パフォーマンス",
+        items: [{ text: "ベースライン", link: "/performance/baseline" }],
       },
       {
         text: "Legal",
@@ -198,14 +198,14 @@ export default defineConfig({
         text: "プラットフォーム",
         items: [
           { text: "概要", link: "/platform/" },
-          { text: "Space", link: "/platform/spaces" },
-          { text: "Threads and Runs", link: "/platform/threads-and-runs" },
-          { text: "Upgrade / Export", link: "/platform/upgrade-export" },
+          { text: "Workspace", link: "/platform/spaces" },
+          { text: "Thread / Run / Artifact", link: "/platform/threads-and-runs" },
+          { text: "update / rollback / export", link: "/platform/upgrade-export" },
           { text: "Git URL から install", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
-          { text: "Bundled Apps", link: "/platform/featured-apps" },
+          { text: "おすすめアプリ", link: "/platform/featured-apps" },
           {
-            text: "Resource Governance",
+            text: "リソースガバナンス",
             link: "/platform/resource-governance",
           },
           { text: "takos-office", link: "/platform/takos-office" },
@@ -219,7 +219,7 @@ export default defineConfig({
           { text: "概要", link: "/reference/" },
           { text: "用語集", link: "/reference/glossary" },
           { text: "API", link: "/reference/api" },
-          { text: "Database Ownership", link: "/reference/database" },
+          { text: "データベース所有権", link: "/reference/database" },
         ],
       },
       {
@@ -232,7 +232,7 @@ export default defineConfig({
             text: "Worker + Container",
             link: "/examples/worker-with-container",
           },
-          { text: "MCP Server", link: "/examples/mcp-server" },
+          { text: "MCP サーバー", link: "/examples/mcp-server" },
           { text: "マルチサービス構成", link: "/examples/multi-service" },
         ],
       },
