@@ -54,7 +54,7 @@ backup / restore Run、または operator-owned data restorer evidence で扱い
 ## Export / Import
 
 Export は Capsule を別 operator / self-host へ移すための portability handoff です。正本の ledger の read と operator runbook を
-組み合わせ、retired projection APIを別のdeploy authorityとして再導入しません。
+組み合わせ、廃止した projection APIを別のdeploy authorityとして再導入しません。
 
 Export bundle に入れてよいもの:
 

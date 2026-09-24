@@ -330,7 +330,7 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 
 current operator account-plane billing HTTP surface は Stripe checkout /
 webhook です。Capsule runtime からの usage ingest は Takosumi Cloud / Operator
-の billing extension が所有し、Takos OSS が retired installed-service
+の billing extension が所有し、Takos OSS が廃止した installed-service
 projection route を公開する前提にはしません。
 
 | エンドポイント                | メソッド | 説明                                        |
