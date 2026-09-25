@@ -1,9 +1,5 @@
-import { For, type JSX } from 'solid-js';
-import Section from './Section';
-import RichText from './RichText';
-import { useT } from '~/lib/i18n';
-import { reveal } from '~/lib/interactions';
-import type { ShowcaseItem } from '~/content/site';
+import type { JSX } from 'solid-js';
+import type { AppVisualKind } from '~/content/site';
 
 /** Simplified renderings of the real takos app (web/src): the UnifiedSidebar
  *  shell plus the actual surface for each core — ChatPage, the agent Work
@@ -45,7 +41,7 @@ function Side(props: {
   );
 }
 
-function Visual(props: { kind: ShowcaseItem['key'] }): JSX.Element {
+export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
   switch (props.kind) {
     case 'chat':
       return (
@@ -194,35 +190,4 @@ function Visual(props: { kind: ShowcaseItem['key'] }): JSX.Element {
         </div>
       );
   }
-}
-
-export default function Showcase(): JSX.Element {
-  const t = useT();
-  void reveal;
-  return (
-    <Section id='features' title={t.showcase.title} lede={t.showcase.lede}>
-      <div class='showcase'>
-        <For each={t.showcase.items}>
-          {(item, i) => (
-            <article class='showcase-row reveal' use:reveal={i() * 80}>
-              <div class='showcase-copy'>
-                <div class='showcase-eyebrow'>{String(i() + 1).padStart(2, '0')} · {item.key}</div>
-                <h3>{item.name}</h3>
-                <p class='showcase-tagline'>{item.tagline}</p>
-                <p class='showcase-body'>
-                  <RichText value={item.body} />
-                </p>
-                <ul class='showcase-points'>
-                  <For each={item.points}>{(p) => <li>{p}</li>}</For>
-                </ul>
-              </div>
-              <div class='showcase-visual'>
-                <Visual kind={item.key} />
-              </div>
-            </article>
-          )}
-        </For>
-      </div>
-    </Section>
-  );
 }

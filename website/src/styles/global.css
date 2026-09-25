@@ -874,12 +874,6 @@ footer.site .copy {
   border-top: 2px solid var(--tg-accent);
   padding-top: var(--tg-s-4);
 }
-.why-num {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-sm);
-  color: var(--tg-accent-text);
-  letter-spacing: 0.1em;
-}
 .why-point h3 {
   font-family: var(--tg-font-display);
   font-size: var(--tg-fs-xl);
@@ -942,79 +936,134 @@ footer.site .container {
   }
 }
 
-/* ===== Showcase — alternating product-core rows with abstract visuals ===== */
-.showcase {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-9);
-  margin-top: var(--tg-s-7);
+/* ===== Run — one request traced through the surfaces it touches ===== */
+/* Rail + state labels: the same job moves down the page the way it moves
+   through the app (asked -> running -> kept), not a parallel catalog. */
+.run-request {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--tg-s-3);
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--tg-accent) 32%, transparent);
+  border-radius: var(--tg-r-md);
+  background: color-mix(in srgb, var(--tg-accent) 14%, transparent);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-sm);
 }
-.showcase-row {
+.run-request-label {
+  font-size: var(--tg-fs-xs);
+  color: var(--tg-accent-text);
+  letter-spacing: 0.08em;
+}
+.run {
+  list-style: none;
+  margin: var(--tg-s-7) 0 0;
+  padding: 0;
+}
+.run-step {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--tg-s-8);
-  align-items: center;
+  grid-template-columns: 26px minmax(0, 5fr) minmax(0, 7fr);
+  column-gap: var(--tg-s-6);
+  padding-bottom: var(--tg-s-9);
 }
-.showcase-row:nth-child(even) .showcase-copy {
-  order: 2;
+.run-step:last-child {
+  padding-bottom: 0;
 }
-.showcase-row:nth-child(even) .showcase-visual {
-  order: 1;
+.run-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
 }
-@media (max-width: 880px) {
-  .showcase {
-    gap: var(--tg-s-8);
-  }
-  .showcase-row {
-    grid-template-columns: 1fr;
-    gap: var(--tg-s-5);
-  }
-  .showcase-row:nth-child(even) .showcase-copy,
-  .showcase-row:nth-child(even) .showcase-visual {
-    order: initial;
-  }
+.run-rail::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: calc(-1 * var(--tg-s-9));
+  width: 2px;
+  background: var(--tg-line);
 }
-.showcase-eyebrow {
+.run-step:last-child .run-rail::before {
+  display: none;
+}
+.run-dot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--tg-accent);
+  box-shadow: 0 0 0 5px var(--tg-bg);
+}
+.run-state {
   font-family: var(--tg-font-mono);
   font-size: var(--tg-fs-sm);
   letter-spacing: 0.08em;
   color: var(--tg-accent-text);
-  text-transform: lowercase;
 }
-.showcase-copy h3 {
+.run-copy h3 {
   font-family: var(--tg-font-display);
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
   font-weight: 800;
   letter-spacing: -0.02em;
-  margin: var(--tg-s-2) 0 var(--tg-s-1);
+  margin: var(--tg-s-2) 0;
 }
-.showcase-tagline {
-  margin: 0 0 var(--tg-s-3);
-  color: var(--tg-fg);
-  font-size: var(--tg-fs-lg);
-  font-weight: 600;
-}
-.showcase-body {
-  margin: 0 0 var(--tg-s-4);
+.run-copy p {
+  margin: 0;
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
-  max-width: 48ch;
+  max-width: 46ch;
 }
-.showcase-points {
+.run-visual {
+  min-width: 0;
+}
+@media (max-width: 880px) {
+  .run-step {
+    grid-template-columns: 18px 1fr;
+    column-gap: var(--tg-s-4);
+    row-gap: var(--tg-s-4);
+    padding-bottom: var(--tg-s-8);
+  }
+  .run-rail {
+    grid-row: 1 / span 2;
+  }
+  .run-copy,
+  .run-visual {
+    grid-column: 2;
+  }
+}
+
+/* ===== Workspace — the stage the run happens on ===== */
+.ws {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--tg-s-8);
+  align-items: center;
+  margin-top: var(--tg-s-6);
+}
+@media (max-width: 880px) {
+  .ws {
+    grid-template-columns: 1fr;
+    gap: var(--tg-s-5);
+  }
+}
+.ws-points {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--tg-s-2);
+  gap: var(--tg-s-3);
 }
-.showcase-points li {
+.ws-points li {
   position: relative;
   padding-left: var(--tg-s-5);
   color: var(--tg-fg);
-  font-size: var(--tg-fs-sm);
+  font-size: var(--tg-fs-base);
 }
-.showcase-points li::before {
+.ws-points li::before {
   content: '';
   position: absolute;
   left: 0;
@@ -1023,6 +1072,9 @@ footer.site .container {
   height: 7px;
   border-radius: 2px;
   background: var(--tg-accent);
+}
+.ws-visual {
+  min-width: 0;
 }
 
 /* Simplified render of the real takos app UI (web/src): sidebar shell +
@@ -1370,7 +1422,7 @@ footer.site .container {
   }
 }
 
-/* ===== Bundled app cards (differentiated from the showcase rows) ===== */
+/* ===== Bundled app cards (first-party InstallableApp cards) ===== */
 .app-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

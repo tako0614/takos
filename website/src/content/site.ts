@@ -30,14 +30,16 @@ export interface Item {
   readonly body: string;
 }
 
-/** A product-core showcase row (chat / agent / memory / Workspace). The `key`
- *  selects which abstract CSS visual the Showcase component renders. */
-export interface ShowcaseItem {
-  readonly key: "chat" | "agent" | "memory" | "space";
+/** Which real-UI surface the AppVisual component renders. */
+export type AppVisualKind = "chat" | "agent" | "memory" | "space";
+
+/** One step of the run sequence — the same request moving through surfaces.
+ *  `key` selects which real-UI visual the Run section renders. */
+export interface RunStep {
+  readonly key: "chat" | "agent" | "memory";
+  readonly state: string;
   readonly name: string;
-  readonly tagline: string;
-  readonly body: Rich;
-  readonly points: readonly string[];
+  readonly connect: string;
 }
 
 export interface AppItem {
@@ -71,6 +73,7 @@ export interface Strings {
   readonly nav: {
     readonly why: string;
     readonly features: string;
+    readonly workspace: string;
     readonly apps: string;
     readonly docs: string;
     readonly install: string;
@@ -95,10 +98,16 @@ export interface Strings {
     readonly lede: Rich;
     readonly points: readonly Item[];
   };
-  readonly showcase: {
+  readonly run: {
     readonly title: string;
     readonly lede: string;
-    readonly items: readonly ShowcaseItem[];
+    readonly request: string;
+    readonly steps: readonly RunStep[];
+  };
+  readonly workspace: {
+    readonly title: string;
+    readonly lede: Rich;
+    readonly points: readonly string[];
   };
   readonly apps: {
     readonly title: string;
@@ -141,7 +150,8 @@ const ja: Strings = {
   },
   nav: {
     why: "なぜ Takos",
-    features: "中身",
+    features: "使い方",
+    workspace: "Workspace",
     apps: "Installable apps",
     docs: "Docs",
     install: "Install",
@@ -167,108 +177,77 @@ const ja: Strings = {
     copied: "コピーしました",
   },
   why: {
-    title: "ソフトウェアを、自分の手に。",
+    title: "だから、自分のサーバーで。",
     lede: [
-      { t: "AI は日常のインフラになりつつある。だからこそ、" },
-      { t: "誰と話したか・何を覚えさせたか", em: true },
       {
-        t: " が他社のサーバーに溜まり続けるのは、おかしい。Takos は chat も agent も memory も、",
+        t: "ここまでの run で起きたこと — 依頼の内容、tool が触れた file、残った docs、積み上がった memory — は全部 ",
       },
-      { t: "あなたが所有するサーバーの中で", em: true },
-      { t: " 完結させます。" },
+      { t: "あなたのサーバーの中", em: true },
+      {
+        t: " にあります。AI が日常のインフラになるなら、誰と話したか・何を覚えさせたかが他社のサーバーに溜まり続けるのは、おかしい。",
+      },
     ],
     points: [
       {
         title: "データ主権",
-        body: "会話・memory・file は、すべて自分の VM / cloud の中に置かれる。ベンダーのサーバーに溜まり続けることがなく、いつでも丸ごと export して別の環境へ移せる。",
+        body: "会話・memory・file は自分の VM / cloud の中に置かれ、いつでも丸ごと export して別の環境へ移せる。",
       },
       {
         title: "ロックインしない",
-        body: "SaaS にも特定ベンダーにも縛られない。deploy は OpenTofu module として宣言されていて、現在の supported adapter は Cloudflare。別の実行基盤は adapter を足せば増やせる構成だ。",
+        body: "deploy は OpenTofu module として宣言。現在の supported adapter は Cloudflare で、別の実行基盤は adapter を足せる。",
       },
       {
         title: "fork できる自由",
-        body: "AGPL でコードは全部 public。自分の用途に合わせて fork し、機能を足しても外しても自由。ブラックボックスの「提供される範囲」に閉じ込められない。",
+        body: "AGPL でコードは全部 public。自分の用途に合わせて機能を足しても外しても自由。",
       },
     ],
   },
-  showcase: {
-    title: "4 つの core が、噛み合う。",
-    lede: "chat で話し、agent が動き、memory が積み上がり、Workspace がぜんぶを束ねる。単体の機能ではなく、噛み合って初めて「自分の AI 環境」になる。",
-    items: [
+  run: {
+    title: "頼む。残る。",
+    lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過です。",
+    request: "Draft the v0.12.7 release notes and save them to docs",
+    steps: [
       {
         key: "chat",
-        name: "Chat",
-        tagline: "複数モデルを、1 つのスレッドで。",
-        body: [
-          {
-            t: "クラウドの LLM もローカルモデルも、同じ会話の中で切り替えながら使える。会話は thread として Workspace に整理され、",
-          },
-          { t: "履歴はすべて自分のサーバーの中", em: true },
-          { t: "。ローカルモデルを選べば、会話は外部に出ない。" },
-        ],
-        points: [
-          "複数 LLM をスレッド内で切り替え",
-          "thread 単位で Workspace に整理",
-          "履歴は自分のサーバーに保存",
-        ],
+        state: "依頼 → 実行",
+        name: "Chat で頼む",
+        connect:
+          "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼んで動き始める。",
       },
       {
         key: "agent",
-        name: "Agent",
-        tagline: "tool を呼び、file を触り、手順を回す。",
-        body: [
-          { t: "Rust 製の agent engine が、" },
-          { t: "tool 呼び出し・ファイル操作・複数ステップの実行", em: true },
-          {
-            t: " を担う。MCP 経由で installable app にも繋がり、docs を書いたり sheet を更新したりを agent に任せられる。",
-          },
-        ],
-        points: [
-          "Rust 製 agent engine が実行",
-          "MCP で app / tool に接続",
-          "長い手順を自動化",
-        ],
+        state: "進行 → 完了",
+        name: "Work board で進む",
+        connect:
+          "同じ job が Work Tasks に task として載り、In Progress から Run completed まで状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の agent engine が担う。",
       },
       {
         key: "memory",
-        name: "Memory",
-        tagline: "話すほど、文脈が育つ。",
-        body: [
-          {
-            t: "やり取りから memory が Workspace に積み上がり、次の会話へ文脈が引き継がれる。",
-          },
-          { t: "memory は自分のサーバーに保存され", em: true },
-          { t: "、ベンダーのサービスに履歴が溜まり続ける形にはならない。" },
-        ],
-        points: [
-          "会話から memory が蓄積",
-          "次のチャットへ文脈を引き継ぎ",
-          "ベンダーのサービスに溜まらない",
-        ],
-      },
-      {
-        key: "space",
-        name: "Workspace",
-        tagline: "人・agent・app・data の単位。",
-        body: [
-          { t: "Workspace は活動の単位。" },
-          { t: "Workspace ごとに分離・権限管理", em: true },
-          {
-            t: " され、必要な app を選んで Workspace に追加できる。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。",
-          },
-        ],
-        points: [
-          "Workspace ごとに分離・権限管理",
-          "必要な app を選んで追加",
-          "ActivityPub で federation",
-        ],
+        state: "保存 → 蓄積",
+        name: "docs に残り、Memory に効く",
+        connect:
+          "成果物は install した takos-office の docs に file として残り、やり取りは Memory に蓄積する。次の会話は続きから始まる。",
       },
     ],
   },
+  workspace: {
+    title: "舞台は、Workspace。",
+    lede: [
+      { t: "この run が起きている場所が Workspace。" },
+      { t: "Workspace ごとに分離・権限管理", em: true },
+      {
+        t: " され、必要な app を選んで追加できる。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。",
+      },
+    ],
+    points: [
+      "Workspace ごとに分離・権限管理",
+      "必要な app を選んで追加",
+      "ActivityPub で federation",
+    ],
+  },
   apps: {
-    title: "必要な app を、選んで追加。",
-    lede: "Takos distribution と一緒に扱える 1st-party の InstallableApp。通常の Capsule として選んで install し、必要なければ uninstall できる。",
+    title: "toolbox は、install で育つ。",
+    lede: "Apps 画面の「Add from Git URL」から Capsule を install すると、Workspace に tile が並び、その app が公開する tool が MCP 経由で agent の toolbox に加わる。さっきの run で docs に保存できたのも、install 済みの takos-office の tool だった。",
     items: [
       {
         name: "takos-office",
@@ -381,7 +360,8 @@ const en: Strings = {
   },
   nav: {
     why: "Why Takos",
-    features: "Inside",
+    features: "How it runs",
+    workspace: "Workspace",
     apps: "Installable apps",
     docs: "Docs",
     install: "Install",
@@ -408,111 +388,80 @@ const en: Strings = {
     copied: "Copied",
   },
   why: {
-    title: "Own your software.",
+    title: "Which is why it runs on your server.",
     lede: [
-      { t: "AI is becoming everyday infrastructure. So it is strange that " },
-      { t: "who you talked to and what you taught it", em: true },
       {
-        t: " keeps piling up on someone else’s server. Takos keeps chat, agent, and memory ",
+        t: "Everything in that run — the request, the files the tools touched, the saved docs, the accumulated memory — stays ",
       },
-      { t: "inside a server you own", em: true },
-      { t: "." },
+      { t: "inside your server", em: true },
+      {
+        t: ". If AI is becoming everyday infrastructure, who you talked to and what you taught it shouldn’t keep piling up on someone else’s.",
+      },
     ],
     points: [
       {
         title: "Data sovereignty",
-        body: "Conversations, memory, and files all sit inside your own VM or cloud. Nothing piles up on a vendor’s servers, and you can export everything and move to another environment anytime.",
+        body: "Conversations, memory, and files sit inside your own VM or cloud, and you can export everything and move anytime.",
       },
       {
         title: "No lock-in",
-        body: "Tied to neither a SaaS nor a single vendor. Deploy is declared as a plain OpenTofu module; the current supported adapter is Cloudflare, and other substrates can be added as adapters.",
+        body: "Deploy is declared as a plain OpenTofu module. The current supported adapter is Cloudflare; other substrates can be added as adapters.",
       },
       {
         title: "Freedom to fork",
-        body: "AGPL, with all code public. Fork it for your needs — add features or remove them. You are never boxed into a black-box “as offered” scope.",
+        body: "AGPL, with all code public. Fork it for your needs — add features or remove them.",
       },
     ],
   },
-  showcase: {
-    title: "Four cores that mesh.",
-    lede: "Chat to talk, agents to act, memory that accumulates, and a Workspace that ties it together. They become your own AI environment only when they mesh — not as standalone features.",
-    items: [
+  run: {
+    title: "Ask. It stays.",
+    lede: "Follow one request through Takos. Chat, the Work board, and Memory aren’t separate features — they’re one run in progress.",
+    request: "Draft the v0.12.7 release notes and save them to docs",
+    steps: [
       {
         key: "chat",
-        name: "Chat",
-        tagline: "Many models, one thread.",
-        body: [
-          {
-            t: "Use cloud LLMs and local models, switching between them in the same conversation. Threads are organized inside a Workspace, and ",
-          },
-          { t: "all history stays on your own server", em: true },
-          { t: ". Choose a local model and the conversation never leaves it." },
-        ],
-        points: [
-          "Switch LLMs within a thread",
-          "Organized as threads per Workspace",
-          "History stays on your server",
-        ],
+        state: "asked → running",
+        name: "Ask in Chat",
+        connect:
+          "Write what you want in plain words. Cloud LLMs and local models switch within the same thread, and the agent starts calling tools on the spot.",
       },
       {
         key: "agent",
-        name: "Agent",
-        tagline: "Calls tools, touches files, runs steps.",
-        body: [
-          { t: "A Rust agent engine handles " },
-          { t: "tool calls, file operations, and multi-step runs", em: true },
-          {
-            t: ". Over MCP it reaches installable apps too — let an agent write docs or update a sheet.",
-          },
-        ],
-        points: [
-          "Rust agent engine executes",
-          "Connects to apps / tools via MCP",
-          "Automates long procedures",
-        ],
+        state: "in progress → completed",
+        name: "It progresses on the Work board",
+        connect:
+          "The same job lands on Work Tasks and moves from In Progress to Run completed. A Rust agent engine handles the tool calls and multi-step execution.",
       },
       {
         key: "memory",
-        name: "Memory",
-        tagline: "The more you talk, the more context grows.",
-        body: [
-          {
-            t: "Memory accumulates in the Workspace from your interactions and carries context into the next chat. ",
-          },
-          { t: "Memory is stored on your own server", em: true },
-          { t: " — it does not pile up in a vendor’s service." },
-        ],
-        points: [
-          "Memory accrues from chats",
-          "Context carries to the next chat",
-          "Doesn’t accumulate on vendor servers",
-        ],
-      },
-      {
-        key: "space",
-        name: "Workspace",
-        tagline: "The unit of people, agents, apps, and data.",
-        body: [
-          { t: "A Workspace is the unit of activity. " },
-          {
-            t: "Each Workspace is isolated, with its own permissions",
-            em: true,
-          },
-          {
-            t: ", and you can add the apps you need to it. Connect to other Takos and the fediverse over ActivityPub when you want.",
-          },
-        ],
-        points: [
-          "Isolation & permissions per Workspace",
-          "Add the apps you need",
-          "Federation via ActivityPub",
-        ],
+        state: "saved → remembered",
+        name: "Kept in docs, carried by Memory",
+        connect:
+          "The artifact stays as a file in docs — here, via the installed takos-office — and the exchange accrues in Memory. The next chat starts where this one left off.",
       },
     ],
   },
+  workspace: {
+    title: "The stage is a Workspace.",
+    lede: [
+      { t: "A Workspace is where this run happens. " },
+      {
+        t: "Each Workspace is isolated, with its own permissions",
+        em: true,
+      },
+      {
+        t: ", and you add the apps you need to it. Connect to other Takos and the fediverse over ActivityPub when you want.",
+      },
+    ],
+    points: [
+      "Isolation & permissions per Workspace",
+      "Add the apps you need",
+      "Federation via ActivityPub",
+    ],
+  },
   apps: {
-    title: "Add apps when you need them.",
-    lede: "First-party InstallableApps that work with the Takos distribution. Install them as normal Capsules, and remove them when you do not need them.",
+    title: "The toolbox grows by install.",
+    lede: "Install a Capsule from “Add from Git URL” on the Apps screen: a tile joins the Workspace, and the tools the app publishes join the agent’s toolbox over MCP. The docs save in the run above worked because an installed takos-office tool was already in the toolbox.",
     items: [
       {
         name: "takos-office",

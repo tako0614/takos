@@ -17,7 +17,6 @@ export default function Why() {
         <For each={t.why.points}>
           {(p, i) => (
             <div class='why-point reveal' use:reveal={i() * 90}>
-              <span class='why-num'>{String(i() + 1).padStart(2, '0')}</span>
               <h3>{p.title}</h3>
               <p>{p.body}</p>
             </div>

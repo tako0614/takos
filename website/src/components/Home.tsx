@@ -7,9 +7,10 @@ import Seo from './Seo';
 import JsonLd from './JsonLd';
 import Nav from './Nav';
 import Hero from './Hero';
-import Why from './Why';
-import Showcase from './Showcase';
+import Run from './Run';
+import Workspace from './Workspace';
 import BundledApps from './BundledApps';
+import Why from './Why';
 import Comparison from './Comparison';
 import InstallCTA from './InstallCTA';
 import Footer from './Footer';
@@ -26,9 +27,10 @@ export default function Home(props: { locale: Locale }): JSX.Element {
           <Hero />
           <div class='ink-canvas'>
             <SplatField density='page' />
-            <Why />
-            <Showcase />
+            <Run />
+            <Workspace />
             <BundledApps />
+            <Why />
             <Comparison />
             <InstallCTA />
           </div>

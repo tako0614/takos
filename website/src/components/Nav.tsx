@@ -19,9 +19,10 @@ export default function Nav() {
   });
 
   const links = () => [
-    { href: '#why', label: t.nav.why },
     { href: '#features', label: t.nav.features },
+    { href: '#workspace', label: t.nav.workspace },
     { href: '#apps', label: t.nav.apps },
+    { href: '#why', label: t.nav.why },
     { href: 'https://docs.takos.jp/', label: t.nav.docs, external: true },
   ];
 
