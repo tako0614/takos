@@ -87,7 +87,7 @@ takosumi install-configs patch <install-config-id> --file <install-config-patch.
 ```
 
 Source / Capsule の plan / apply は dashboard または上記の deploy-control API で行います。CLI に local tree の
-upload、plan、export、import の操作はありません。`installations` domain は retired で、呼び出すとエラーになります。
+upload、plan、export、import の操作はありません。`installations` domain は廃止済みで、呼び出すとエラーになります。
 移行先では Git URL から Source / Capsule を作り直し、plan / apply と target 側の credential、OIDC、InterfaceBinding を
 再設定します。operator runbook では正本の ledger の read と target 側の再設定を扱います。
 
