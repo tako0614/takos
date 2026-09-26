@@ -261,5 +261,26 @@ export default defineConfig({
   head: [
     ["meta", { name: "theme-color", content: "#dc2626" }],
     ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Takos Docs" }],
+    ["meta", { name: "twitter:card", content: "summary" }],
   ],
+  transformHead({ pageData, title, description }) {
+    const route = pageData.relativePath
+      .replace(/(^|\/)index\.md$/u, "$1")
+      .replace(/\.md$/u, "");
+    return [
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      [
+        "meta",
+        { property: "og:url", content: new URL(route, "https://docs.takos.jp/").href },
+      ],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: description }],
+    ];
+  },
+  sitemap: {
+    hostname: "https://docs.takos.jp/",
+  },
 });
