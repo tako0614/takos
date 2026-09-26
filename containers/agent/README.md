@@ -1,6 +1,6 @@
 # takos-agent
 
-> Internal service of [Takos](../README.md). 公開 product overview と Quickstart
+> Internal service of [Takos](../../README.md). 公開 product overview と Quickstart
 > は親 README を参照してください。
 
 `takos-agent` はTakosのrun-scoped agent execution serviceです。`takos-agent-engine`をRust libraryとして利用し、
