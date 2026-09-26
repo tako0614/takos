@@ -262,6 +262,14 @@ export default defineConfig({
       quote: "URLが正しいか確認するか、検索から探してください。",
       linkText: "トップへ",
     },
+    footer: {
+      message: "AGPL-3.0-only",
+      copyright: "© Takos contributors",
+    },
+    editLink: {
+      pattern: "https://github.com/tako0614/takos/edit/main/docs/:path",
+      text: "GitHub でこのページを編集",
+    },
   },
   head: [
     ["meta", { name: "theme-color", content: "#dc2626" }],
