@@ -28,7 +28,7 @@ lease、checkpoint、operation ledger、fence などの実行を支える用語�
 
 この分離により、Cloudflare Agents SDK の永続化する agent、streaming、MCP、Workflow 連携と同じ設計上の利点を
 保ちながら、Takoform host、別クラウド、ローカル host でも同じ Takos contract を実装できます。Cloudflare
-Workflows を直接使う実装は Cloudflare adapter の選択肢であり、Takosumi Cloud や Takos 本体の必須条件では
+Workflows を直接使う実装は Cloudflare adapter の選択肢であり、Takosumi Hosted や Takos 本体の必須条件では
 ありません。
 
 ## 各コンポーネントの役割

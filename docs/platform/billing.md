@@ -53,7 +53,7 @@ commercial な強制は port として差し込みます。
   `NOOP_QUOTA_POLICY` (制限なし)
 
 つまり OSS 単体では、quota 超過で API が拒否されることはありません。商用の
-強制は host (managed example: Takosumi Cloud) が自分の billing module から
+強制は host (managed example: Takosumi Hosted) が自分の billing module から
 注入します。
 
 ## reference implementation の HTTP surface
