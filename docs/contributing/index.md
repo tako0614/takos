@@ -68,6 +68,7 @@ online evidence は portable gate に混ぜません。`bun run test:online` ま
 - [`object-storage-smoke.md`](./object-storage-smoke.md) — object-store / R2 export artifact proof。
 - [`docker-provider-smoke.md`](./docker-provider-smoke.md) — Docker / self-host proof。
 - [`compose-real-smoke.md`](./compose-real-smoke.md) — 実 Docker Compose を起動する local proof。
+- [`real-backend-e2e-plan.md`](./real-backend-e2e-plan.md) — source gate と real infrastructure proof の分け方と、各 live path。
 
 ## Operator-owned Infrastructure
 
