@@ -111,11 +111,16 @@ locals {
       { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
       { deleted_classes = ["TakosRuntimeContainer"] },
     ]
-    container_bindings = [
+    # Container classes are part of the executor runtime only when the
+    # provider-gap bridge actually provisions their backing applications.
+    # Keep the Durable Object migration steps above independent: off-mode
+    # installs still advance the DO migration history without advertising an
+    # executor binding that cannot run.
+    container_bindings = local.provider_gap_bridge_enabled ? [
       { name = "EXECUTOR_CONTAINER", class_name = "ExecutorContainerTier1" },
       { name = "EXECUTOR_CONTAINER_TIER2", class_name = "ExecutorContainerTier2" },
       { name = "EXECUTOR_CONTAINER_TIER3", class_name = "ExecutorContainerTier3" },
-    ]
+    ] : []
   }
 
   # The release builder owns these files at the app module root. This child
