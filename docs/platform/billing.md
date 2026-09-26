@@ -61,7 +61,8 @@ commercial な強制は port として差し込みます。
 公開 billing API は operator の account plane が提供します。reference
 implementation 側に実在する surface は次のとおりです。
 
-- Takosumi Accounts: `GET /api/v1/workspaces/{workspaceId}/billing`
+- deploy-control の internal seam (accounts plane と in-process CLI が
+  使う側): `GET /internal/v1/workspaces/:workspaceId/billing`
   (workspace の billing 状態の read)
 - Takosumi hosted (closed): wallet 残高への checkout
   (`/v1/marketplace/wallet/checkout` 系) と subscription 系

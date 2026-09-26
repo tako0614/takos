@@ -10,7 +10,7 @@ OIDC / billing / secret delivery schema ではありません。
 
 | 操作                              | 正本                                                                              | 補足                                                                                      |
 | --------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Source / Capsule plan / apply flow      | API では `POST /api/v1/sources`、Source sync、`POST /api/v1/capsules/:capsuleId/plan`、`POST /api/v1/runs/:runId/apply` を使います。作成は compatibility check と明示確認後。`/install` は prefill link。 |
+| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Source / Capsule plan / apply flow      | API では `POST /internal/v1/sources`、Source sync、`POST /internal/v1/capsules/:capsuleId/plan`、`POST /internal/v1/apply-runs` を使います。作成は compatibility check と明示確認後。`/install` は prefill link。 |
 | ローカル作業 tree の upload       | 現在の CLI / API に local tree upload surface はありません                           | Git URL、ref、module path を Source として登録し、commit に固定した Snapshot から plan / apply へ進みます。 |
 | update                            | Source sync -> plan Run -> approval -> apply Run -> StateVersion / Output         | exact Run id と Workspace / Capsule fence を保った通常のRun flow。                        |
 | rollback                          | retained StateVersion/source identity -> rollback plan -> approval -> apply Run   | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作ります。 |
