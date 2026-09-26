@@ -324,6 +324,7 @@ export default defineConfig({
     return [
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: ogDescription }],
+      ["meta", { property: "og:locale", content: "ja_JP" }],
       [
         "meta",
         { property: "og:url", content: new URL(route, "https://docs.takos.jp/").href },
