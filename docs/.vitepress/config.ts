@@ -312,7 +312,7 @@ export default defineConfig({
     ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "Takos Docs" }],
-    ["meta", { name: "twitter:card", content: "summary" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
   ],
   transformHead({ pageData, siteConfig, title, description }) {
     const route = pageData.relativePath
@@ -320,16 +320,23 @@ export default defineConfig({
       .replace(/\.md$/u, "");
     const ogDescription = pageData.frontmatter?.description
       ? description
-      : (firstParagraph(siteConfig.srcDir, pageData.relativePath) ?? description);
+      : (siteConfig?.srcDir
+          ? firstParagraph(siteConfig.srcDir, pageData.relativePath)
+          : undefined) ?? description;
     const pageUrl = new URL(route, "https://docs.takos.jp/").href;
     return [
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: ogDescription }],
       ["meta", { property: "og:locale", content: "ja_JP" }],
       ["meta", { property: "og:url", content: pageUrl }],
+      ["meta", { property: "og:image", content: "https://docs.takos.jp/og.png" }],
+      ["meta", { property: "og:image:type", content: "image/png" }],
+      ["meta", { property: "og:image:width", content: "1200" }],
+      ["meta", { property: "og:image:height", content: "630" }],
       ["link", { rel: "canonical", href: pageUrl }],
       ["meta", { name: "twitter:title", content: title }],
       ["meta", { name: "twitter:description", content: ogDescription }],
+      ["meta", { name: "twitter:image", content: "https://docs.takos.jp/og.png" }],
     ];
   },
   sitemap: {
