@@ -321,14 +321,13 @@ export default defineConfig({
     const ogDescription = pageData.frontmatter?.description
       ? description
       : (firstParagraph(siteConfig.srcDir, pageData.relativePath) ?? description);
+    const pageUrl = new URL(route, "https://docs.takos.jp/").href;
     return [
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: ogDescription }],
       ["meta", { property: "og:locale", content: "ja_JP" }],
-      [
-        "meta",
-        { property: "og:url", content: new URL(route, "https://docs.takos.jp/").href },
-      ],
+      ["meta", { property: "og:url", content: pageUrl }],
+      ["link", { rel: "canonical", href: pageUrl }],
       ["meta", { name: "twitter:title", content: title }],
       ["meta", { name: "twitter:description", content: ogDescription }],
     ];
