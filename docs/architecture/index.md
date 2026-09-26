@@ -21,7 +21,7 @@ Takos Worker は API とブラウザ UI の入口です。エージェント実�
 ## クラウドとの境界
 
 Takos本体が必要とするリソースと接続名の正本 (正とする情報) は
-[`deploy/product-resources.json`](../../deploy/product-resources.json)です。
+[`deploy/product-resources.json`](https://github.com/tako0614/takos/blob/main/deploy/product-resources.json)です。
 そこにはCloudflare、Takoform、account ID、credentialを書きません。
 
 - `deploy/opentofu/cloudflare` は、自分のCloudflare accountへ直接置くadapterです。install surfaceはこれ一つで、選べる代替はありません。
