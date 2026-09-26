@@ -21,6 +21,8 @@ export default defineConfig({
   srcExclude: ["**/_*.md", "contributing/**", "releases/**"],
   themeConfig: {
     siteTitle: "Takos Docs",
+    // Same logo tile as the takos.jp landing (website/public/logo.png).
+    logo: "/logo.png",
     search: {
       provider: "local",
     },
@@ -256,5 +258,8 @@ export default defineConfig({
     lightModeSwitchTitle: "ライトモード",
     darkModeSwitchTitle: "ダークモード",
   },
-  head: [["meta", { name: "theme-color", content: "#dc2626" }]],
+  head: [
+    ["meta", { name: "theme-color", content: "#dc2626" }],
+    ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
+  ],
 });
