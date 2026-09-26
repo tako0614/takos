@@ -13,3 +13,6 @@
 Before opening a PR, update user-facing docs when behavior, API, or deployment
 contracts change. Use `bun run docs:dev`, `bun run docs:build`, and
 `bun run lint:docs` to verify docs changes locally.
+
+The contributor index — architecture snapshots, API surface, and the smoke and
+live-proof paths — lives in [docs/contributing/](docs/contributing/index.md).
