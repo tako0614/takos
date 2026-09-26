@@ -97,7 +97,7 @@ export default defineConfig({
             text: "サイトとドキュメント",
             link: "/deploy/site-and-docs",
           },
-          { text: "複数サービス", link: "/deploy/deploy-group" },
+          { text: "Run の履歴", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },
           { text: "ロールバック", link: "/deploy/rollback" },
