@@ -35,6 +35,23 @@
         } catch {
           /* localStorage may be unavailable; the app will apply the theme. */
         }
+
+        /* Same pre-hydration pass for <html lang>: mirrors
+           lib/locale.ts detectLanguage() (takos-lang storage, then
+           navigator.language) so ja readers get the right lang before the
+           bundle re-syncs it via LangSync. */
+        try {
+          var storedLang = localStorage.getItem("takos-lang");
+          var lang =
+            storedLang === "ja" || storedLang === "en"
+              ? storedLang
+              : (navigator.language || "").toLowerCase().startsWith("ja")
+                ? "ja"
+                : "en";
+          document.documentElement.lang = lang;
+        } catch {
+          /* The app applies the detected language after hydration. */
+        }
       })();
     </script>
     <style>
