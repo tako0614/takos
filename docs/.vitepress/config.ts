@@ -257,6 +257,11 @@ export default defineConfig({
     darkModeSwitchLabel: "テーマ切替",
     lightModeSwitchTitle: "ライトモード",
     darkModeSwitchTitle: "ダークモード",
+    notFound: {
+      title: "ページがありません",
+      quote: "URLが正しいか確認するか、検索から探してください。",
+      linkText: "トップへ",
+    },
   },
   head: [
     ["meta", { name: "theme-color", content: "#dc2626" }],
