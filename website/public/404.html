@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="dark" />
+    <title>ページが見つかりません - Takos</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <style>
+      :root {
+        --tg-bg: #0a0a0a;
+        --tg-fg: #fafafa;
+        --tg-fg-muted: #a3a3a3;
+        --tg-accent: #ef4444;
+        --tg-accent-text: #fca5a5;
+        --tg-border: #262626;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background:
+          radial-gradient(circle at 85% 10%, rgb(239 68 68 / 10%), transparent 40%),
+          radial-gradient(circle at 10% 90%, rgb(59 130 246 / 8%), transparent 40%),
+          var(--tg-bg);
+        color: var(--tg-fg);
+        font-family:
+          'Bricolage Grotesque Variable', 'Bricolage Grotesque', -apple-system,
+          BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
+          'Segoe UI', Roboto, sans-serif;
+        text-align: center;
+      }
+      .code {
+        font-family:
+          'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace,
+          Menlo, Consolas, monospace;
+        font-size: 0.85rem;
+        letter-spacing: 0.2em;
+        color: var(--tg-accent-text);
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0.9rem 0 0.8rem;
+        font-size: clamp(2.2rem, 6vw, 3.4rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+      }
+      p {
+        max-width: 30rem;
+        margin: 0 auto;
+        color: var(--tg-fg-muted);
+        font-size: 1rem;
+        line-height: 1.8;
+      }
+      p.en {
+        margin-top: 0.4rem;
+        font-size: 0.85rem;
+      }
+      nav {
+        margin-top: 2rem;
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      a {
+        display: inline-block;
+        padding: 0.65rem 1.4rem;
+        border-radius: 0.5rem;
+        font-size: 0.92rem;
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--tg-fg);
+        border: 1px solid var(--tg-border);
+      }
+      a:hover { border-color: var(--tg-fg-muted); }
+      a.primary {
+        background: var(--tg-accent);
+        border-color: var(--tg-accent);
+        color: #fff;
+      }
+      a.primary:hover { filter: brightness(1.1); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="code">404 · not found</p>
+      <h1>ページが見つかりません</h1>
+      <p>お探しのページは移動したか、存在しません。</p>
+      <p class="en">The page you are looking for has moved or does not exist.</p>
+      <nav>
+        <a class="primary" href="/">Takos トップへ</a>
+        <a href="https://docs.takos.jp/">Docs</a>
+      </nav>
+    </main>
+  </body>
+</html>
