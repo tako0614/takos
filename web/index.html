@@ -8,7 +8,52 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; frame-ancestors 'none'; base-uri 'self'"
     >
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <title>takos</title>
+    <title>Takos</title>
+    <meta
+      name="description"
+      content="A workspace where you delegate work to AI agents and keep the results in files, Git, memory, and apps."
+    >
+    <script>
+      /* Pre-hydration theme init: mirrors store/theme.ts so data-theme is on
+         <html> before first paint instead of flashing light for dark-mode
+         users. The app re-syncs it from ThemeSync once hydrated. */
+      (function () {
+        try {
+          var stored = localStorage.getItem("takos-theme");
+          var theme;
+          try {
+            theme = JSON.parse(stored);
+          } catch {
+            theme = stored;
+          }
+          if (theme !== "light" && theme !== "dark") {
+            theme = matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch {
+          /* localStorage may be unavailable; the app will apply the theme. */
+        }
+      })();
+    </script>
+    <style>
+      /* Pre-hydration flash guard — must match styles.css --color-bg-primary /
+         --color-text-primary (light + dark) so there is no color jump when the
+         stylesheet loads. */
+      html,
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: #18181b;
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body {
+        background: #09090b;
+        color: #fafafa;
+      }
+    </style>
+    <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" href="/logo.png">
     <link rel="apple-touch-icon" href="/logo.png">
     <meta name="theme-color" content="#E53935">
