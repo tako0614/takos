@@ -1,10 +1,10 @@
 :root {
   color-scheme: dark;
 
-  /* ===== Palette — dark-only. Black base + 朱 red UI accent. =====
-   * No light mode. Decorative blue/red ink lives in --tg-ink-* (used only by
-   * InkSplash / SplatField) and is separate from the red UI accent.
-   * Canonical source: takos-control/docs/reference/design-language.md
+  /* ===== Palette — dark-only. Near-black base + 朱 red UI accent. =====
+   * No light mode. Decorative ink splats were removed from this surface
+   * (2026-09): the brand mark lives in the wordmark; decorative ink is
+   * documented in takos-control/docs/reference/design-language.md.
    */
 
   --tg-bg: #0a0a0a;
@@ -28,13 +28,6 @@
   --tg-grad-from: #fafafa;
   --tg-grad-mid: #ef4444;
   --tg-grad-to: #dc2626;
-
-  /* Decorative ink — pure decoration, NOT role-bound. InkSplash / SplatField only.
-   * main blob = -deep, droplets = bright (two-tone depth without blur). */
-  --tg-ink-blue: #3b82f6;
-  --tg-ink-blue-deep: #2563eb;
-  --tg-ink-red: #ff3b3b;
-  --tg-ink-red-deep: #dc2626;
 
   --tg-success: #16a34a;
   --tg-warn: #ea580c;

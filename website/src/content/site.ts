@@ -93,14 +93,7 @@ export interface Strings {
     readonly useTakos: string;
     readonly github: string;
     readonly spec: readonly string[];
-  };
-  readonly sec: {
-    readonly run: string;
-    readonly workspace: string;
-    readonly apps: string;
-    readonly why: string;
-    readonly compare: string;
-    readonly install: string;
+    readonly cloneHint: string;
   };
   readonly why: {
     readonly title: string;
@@ -110,7 +103,6 @@ export interface Strings {
   readonly run: {
     readonly title: string;
     readonly lede: string;
-    readonly request: string;
     readonly steps: readonly RunStep[];
   };
   readonly workspace: {
@@ -135,9 +127,7 @@ export interface Strings {
     readonly lede: Rich;
     readonly cards: readonly InstallCard[];
   };
-  readonly visuals: {
-    readonly realBadge: string;
-  } & Record<AppVisualKind, VisualCopy>;
+  readonly visuals: Record<AppVisualKind, VisualCopy>;
   readonly footer: {
     readonly tagline: string;
     readonly copyright: string;
@@ -153,10 +143,10 @@ export interface Strings {
 const ja: Strings = {
   htmlLang: "ja",
   meta: {
-    title: "Takos | an AI agent on your own server",
+    title: "Takos | self-hosted AI workspace",
     description:
       "Takos は self-hostable な chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
-    ogTitle: "Takos | an AI agent on your own server",
+    ogTitle: "Takos | self-hosted AI workspace",
     ogDescription:
       "Self-hostable な chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
   },
@@ -172,7 +162,7 @@ const ja: Strings = {
   },
   hero: {
     kicker: "self-hosted · open source · AGPL-3.0",
-    title: [{ t: "AI agent," }, { t: "on your server", grad: true }],
+    title: [{ t: "Self-hosted" }, { t: "AI workspace.", grad: true }],
     lede: [
       {
         t: "chat で頼むと agent が tool を呼んで仕事を進め、成果とやり取りが memory に残る。その全部を、",
@@ -183,14 +173,7 @@ const ja: Strings = {
     useTakos: "Takos を使う",
     github: "GitHub",
     spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
-  },
-  sec: {
-    run: "how a run moves",
-    workspace: "workspace",
-    apps: "installable apps",
-    why: "why takos",
-    compare: "self-host vs saas",
-    install: "install",
+    cloneHint: "または source から",
   },
   why: {
     title: "会話も memory も、自分のサーバーに残る",
@@ -221,7 +204,6 @@ const ja: Strings = {
   run: {
     title: "ひとつの依頼が、chat・task・memory をつなぐ",
     lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過です。",
-    request: "Draft the v0.12.7 release notes and save them to docs",
     steps: [
       {
         key: "chat",
@@ -349,7 +331,6 @@ const ja: Strings = {
     ],
   },
   visuals: {
-    realBadge: "実画面",
     chat: {
       alt: "Takos の実画面: chat での依頼に agent が tool を実行し、docs にファイルを保存して返答している",
       caption: "chat での依頼と、agent による tool 実行の結果",
@@ -386,10 +367,10 @@ const ja: Strings = {
 const en: Strings = {
   htmlLang: "en",
   meta: {
-    title: "Takos | an AI agent on your own server",
+    title: "Takos | self-hosted AI workspace",
     description:
       "Takos is a self-hostable chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
-    ogTitle: "Takos | an AI agent on your own server",
+    ogTitle: "Takos | self-hosted AI workspace",
     ogDescription:
       "A self-hostable AI chat & agent. Your history and memory are stored on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
   },
@@ -405,7 +386,7 @@ const en: Strings = {
   },
   hero: {
     kicker: "self-hosted · open source · AGPL-3.0",
-    title: [{ t: "AI agent," }, { t: "on your server", grad: true }],
+    title: [{ t: "Self-hosted" }, { t: "AI workspace.", grad: true }],
     lede: [
       {
         t: "Ask in chat and the agent calls tools to get it done; the work and the exchange accrue in memory. All of it runs ",
@@ -416,14 +397,7 @@ const en: Strings = {
     useTakos: "Use Takos",
     github: "GitHub",
     spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
-  },
-  sec: {
-    run: "how a run moves",
-    workspace: "workspace",
-    apps: "installable apps",
-    why: "why takos",
-    compare: "self-host vs saas",
-    install: "install",
+    cloneHint: "or build from source",
   },
   why: {
     title: "Conversations and memory stay on your server",
@@ -454,7 +428,6 @@ const en: Strings = {
   run: {
     title: "One request connects chat, tasks, and memory",
     lede: "Follow one request through Takos. Chat, the Work board, and Memory aren’t separate features — they’re one run in progress.",
-    request: "Draft the v0.12.7 release notes and save them to docs",
     steps: [
       {
         key: "chat",
@@ -589,7 +562,6 @@ const en: Strings = {
     ],
   },
   visuals: {
-    realBadge: "Live UI",
     chat: {
       alt: "Actual Takos screen: a chat request where the agent ran tools and saved a file to docs",
       caption: "A chat request and the agent's tool-run result",

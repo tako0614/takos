@@ -1,23 +1,18 @@
 import { For } from 'solid-js';
-import SplatField from './SplatField';
 import AppVisual from './AppVisual';
 import RichText from './RichText';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
-import { useParallax } from '~/lib/interactions';
 
+/** Workbench hero: a compact factual header, then the real product screen
+ *  full-width — the app itself is the visual, not decoration. */
 export default function Hero() {
   const t = useT();
   const cloud = useCloudUrls();
-  let splashRef: HTMLDivElement | undefined;
-  useParallax(() => splashRef, 0.16);
 
   return (
     <section class='hero'>
-      <div ref={splashRef} class='hero-splat-wrap' aria-hidden='true'>
-        <SplatField density='hero' />
-      </div>
-      <div class='container hero-grid'>
+      <div class='container'>
         <div class='hero-copy'>
           <p class='hero-kicker'>{t.hero.kicker}</p>
           <h1>
@@ -44,6 +39,10 @@ export default function Hero() {
               {t.hero.github}
             </a>
           </div>
+          <p class='hero-clone'>
+            {t.hero.cloneHint}{' '}
+            <code>git clone https://github.com/tako0614/takos.git</code>
+          </p>
           <ul class='hero-spec' aria-label='contents'>
             <For each={t.hero.spec}>{(s) => <li>{s}</li>}</For>
           </ul>

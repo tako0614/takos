@@ -11,7 +11,7 @@ export default function Nav() {
 
   onMount(() => {
     const onScroll = () => {
-      setScrolled(globalThis.scrollY > globalThis.innerHeight * 0.7);
+      setScrolled(globalThis.scrollY > 24);
     };
     onScroll();
     globalThis.addEventListener('scroll', onScroll, { passive: true });

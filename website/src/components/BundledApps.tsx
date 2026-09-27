@@ -1,27 +1,26 @@
 import { For } from 'solid-js';
 import Section from './Section';
 import { useT } from '~/lib/i18n';
-import { reveal } from '~/lib/interactions';
 
+/** First-party installable apps as a spec list — hairline rows, not cards. */
 export default function BundledApps() {
   const t = useT();
-  void reveal;
   return (
-    <Section id='apps' label={t.sec.apps} title={t.apps.title} lede={t.apps.lede}>
-      <div class='app-cards'>
+    <Section id='apps' title={t.apps.title} lede={t.apps.lede}>
+      <ul class='app-list'>
         <For each={t.apps.items}>
-          {(a, i) => (
-            <article class='app-card reveal' use:reveal={i() * 80}>
-              <div class='app-card-head'>
-                <h3>{a.name}</h3>
+          {(a) => (
+            <li class='app-row'>
+              <div class='app-row-id'>
+                <span class='app-name'>{a.name}</span>
                 <span class='feature-tag'>{a.tag}</span>
+                <span class='app-role'>{a.role}</span>
               </div>
-              <div class='app-card-role'>{a.role}</div>
-              <p>{a.body}</p>
-            </article>
+              <p class='app-body'>{a.body}</p>
+            </li>
           )}
         </For>
-      </div>
+      </ul>
     </Section>
   );
 }

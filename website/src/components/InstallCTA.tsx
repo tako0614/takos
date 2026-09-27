@@ -4,35 +4,31 @@ import CodeBlock from './CodeBlock';
 import RichText from './RichText';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
-import { reveal } from '~/lib/interactions';
 import type { InstallCard } from '~/content/site';
 import { TAKOS_INSTALL_REF } from '~/lib/takos-release.generated';
 
 export default function InstallCTA() {
   const t = useT();
   const cloud = useCloudUrls();
-  void reveal;
 
   const href = (kind: InstallCard['kind']) => (kind === 'use' ? cloud().useTakos : cloud().install);
 
   return (
     <Section
       id='install'
-      class='end-cta'
-      label={t.sec.install}
+      class='install'
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >
       <div class='install-options'>
         <For each={t.install.cards}>
-          {(c, i) => (
+          {(c) => (
             <div
-              class='install-card reveal'
+              class='install-card'
               classList={{
                 'install-card-highlight': c.kind === 'use',
                 'install-card-full': c.kind === 'self',
               }}
-              use:reveal={i() * 80}
             >
               <h3>{c.title}</h3>
               <p>{c.body}</p>
