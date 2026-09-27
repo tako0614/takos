@@ -144,10 +144,10 @@ const ja: Strings = {
   meta: {
     title: "Takos | an AI agent on your own server",
     description:
-      "Takos は self-hostable な AI-first chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
+      "Takos は self-hostable な chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
     ogTitle: "Takos | an AI agent on your own server",
     ogDescription:
-      "Self-hostable な AI-first chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
+      "Self-hostable な chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
   },
   nav: {
     why: "なぜ Takos",
@@ -366,7 +366,7 @@ const en: Strings = {
   meta: {
     title: "Takos | an AI agent on your own server",
     description:
-      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
+      "Takos is a self-hostable chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
     ogTitle: "Takos | an AI agent on your own server",
     ogDescription:
       "A self-hostable AI chat & agent. Your history and memory are stored on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
