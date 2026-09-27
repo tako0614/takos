@@ -7,10 +7,10 @@ import { useT } from '~/lib/i18n';
  *  memory list, and the install surface. Alt text and caption come from
  *  the locale dictionary so the frame can honestly label itself. */
 const FILES: Record<AppVisualKind, string> = {
-  chat: '/screens/chat.png',
-  agent: '/screens/work.png',
-  memory: '/screens/memory.png',
-  space: '/screens/install.png',
+  chat: '/screens/chat.webp',
+  agent: '/screens/work.webp',
+  memory: '/screens/memory.webp',
+  space: '/screens/install.webp',
 };
 
 export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
