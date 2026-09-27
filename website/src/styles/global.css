@@ -393,7 +393,7 @@ section > .container {
       );
   }
   .hero-splat-wrap {
-    opacity: 0.6;
+    opacity: 0.34;
   }
 }
 
@@ -450,6 +450,9 @@ section > .container {
   .hero-visual .viz {
     margin-right: 0;
     transform: none;
+  }
+  .hero-splat-wrap {
+    opacity: 0.34;
   }
 }
 .hero h1 {
