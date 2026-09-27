@@ -1,193 +1,34 @@
 import type { JSX } from 'solid-js';
 import type { AppVisualKind } from '~/content/site';
+import { useT } from '~/lib/i18n';
 
-/** Simplified renderings of the real takos app (web/src): the UnifiedSidebar
- *  shell plus the actual surface for each core — ChatPage, the agent Work
- *  board, MemoryPage, and the space Apps launcher. Labels and status
- *  vocabulary come from web/src/i18n/en. */
-function Side(props: {
-  mode: 'personal' | 'space';
-  active?: 'chat' | 'memory';
-}): JSX.Element {
-  const nav = (key: 'chat' | 'memory', label: string) => (
-    <span class={props.active === key ? 'ap-nav on' : 'ap-nav'}>{label}</span>
-  );
-  if (props.mode === 'space') {
-    return (
-      <div class='ap-side'>
-        <span class='ap-back'>‹ work</span>
-        <span class={props.active === 'chat' ? 'ap-nav ap-primary on' : 'ap-nav ap-primary'}>Chat</span>
-        {nav('memory', 'Memory')}
-        <span class='ap-nav'>Connections</span>
-        <span class='ap-label'>Threads</span>
-        <span class='ap-thread'>release notes</span>
-        <span class='ap-thread'>takos-git triage</span>
-        <span class='ap-thread'>weekly plan</span>
-        <span class='ap-nav ap-foot'>Space Settings</span>
-      </div>
-    );
-  }
-  return (
-    <div class='ap-side'>
-      <span class='ap-logo'><span class='ap-mark' />takos</span>
-      <span class='ap-nav ap-primary'>New Chat</span>
-      {nav('memory', 'Memory')}
-      <span class='ap-nav'>Connections</span>
-      <span class='ap-nav'>Search</span>
-      <span class='ap-label'>Projects</span>
-      <span class='ap-thread'>work</span>
-      <span class='ap-thread'>Personal</span>
-    </div>
-  );
-}
+/** Real screenshots of the running takos app (website/public/screens),
+ *  captured from the actual web UI — chat thread, agent Work board,
+ *  memory list, and the install surface. Alt text and caption come from
+ *  the locale dictionary so the frame can honestly label itself. */
+const FILES: Record<AppVisualKind, string> = {
+  chat: '/screens/chat.png',
+  agent: '/screens/work.png',
+  memory: '/screens/memory.png',
+  space: '/screens/install.png',
+};
 
 export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
-  switch (props.kind) {
-    case 'chat':
-      return (
-        <div class='viz appviz' aria-hidden='true'>
-          <Side mode='personal' />
-          <div class='ap-main'>
-            <div class='ap-head'>
-              <span class='ap-model'>GPT-5.5 ▾</span>
-            </div>
-            <div class='ap-feed'>
-              <div class='ap-bubble'>
-                Draft the v0.12.7 release notes and save them to docs
-              </div>
-              <div class='ap-tools'>⚙ 3 tools executed · 8s ▶</div>
-              <p class='ap-reply'>
-                Drafted <code>release-notes-0.12.7.md</code> in docs — ready to
-                review.
-              </p>
-            </div>
-            <div class='ap-composer'>
-              <span class='ap-placeholder'>Message...</span>
-              <span class='ap-send'>↑</span>
-            </div>
-            <span class='ap-hint'>Shift + Enter for new line</span>
-          </div>
-        </div>
-      );
-    case 'agent':
-      return (
-        <div class='viz appviz' aria-hidden='true'>
-          <Side mode='space' />
-          <div class='ap-main'>
-            <div class='ap-tabs'>
-              <span class='on'>Work</span>
-              <span>AI Model</span>
-              <span>Skills</span>
-              <span>Memory</span>
-            </div>
-            <div class='ap-pagehead'>
-              <b>Work Tasks</b>
-              <span class='ap-btn'>+ Add Task</span>
-            </div>
-            <div class='ap-card'>
-              <div class='ap-card-top'>
-                <b>Release notes for v0.12.7</b>
-                <span class='ap-pill prog'>In Progress</span>
-                <span class='ap-pri'>High</span>
-              </div>
-              <div class='ap-meta'>
-                Agent: Execution Agent · Model: GPT-5.5
-              </div>
-              <div class='ap-meta'>Latest run: Run completed</div>
-              <div class='ap-actions'>
-                <span>Resume in Chat</span>
-                <span>Complete</span>
-              </div>
-            </div>
-            <div class='ap-card'>
-              <div class='ap-card-top'>
-                <b>Review open PRs on takos-git</b>
-                <span class='ap-pill'>Planned</span>
-                <span class='ap-pri'>Medium</span>
-              </div>
-              <div class='ap-actions'>
-                <span>Start</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    case 'memory':
-      return (
-        <div class='viz appviz' aria-hidden='true'>
-          <Side mode='personal' active='memory' />
-          <div class='ap-main'>
-            <div class='ap-tabs'>
-              <span class='on'>Memories (2)</span>
-              <span>Reminders (1)</span>
-            </div>
-            <div class='ap-search'>Search memories...</div>
-            <div class='ap-filters'>
-              <span class='on'>All</span>
-              <span>📅 Episode</span>
-              <span>💡 Knowledge</span>
-              <span>📋 Procedure</span>
-            </div>
-            <div class='ap-mem'>
-              <div class='ap-card'>
-                <div class='ap-card-top'>
-                  <span class='ap-meta'>💡 Knowledge</span>
-                  <span class='ap-chip'>project</span>
-                </div>
-                <p class='ap-mem-body'>
-                  Release notes are drafted in docs via takos-office.
-                </p>
-                <div class='ap-mem-foot'>
-                  <span>★★★★☆</span>
-                  <span>9/24</span>
-                </div>
-              </div>
-              <div class='ap-card'>
-                <div class='ap-card-top'>
-                  <span class='ap-meta'>📅 Episode</span>
-                </div>
-                <p class='ap-mem-body'>
-                  Asked for a v0.12.7 changelog draft.
-                </p>
-                <div class='ap-mem-foot'>
-                  <span>★★★☆☆</span>
-                  <span>9/23</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    case 'space':
-      return (
-        <div class='viz appviz' aria-hidden='true'>
-          <Side mode='space' active='chat' />
-          <div class='ap-main'>
-            <div class='ap-pagehead'>
-              <b>Apps</b>
-              <span class='ap-btn'>Add from Git URL</span>
-            </div>
-            <div class='ap-meta'>3 installed · 1 Capsule</div>
-            <div class='ap-launcher'>
-              <div class='ap-tile'>
-                <span class='ap-tile-ic'>O</span>
-                <span>takos-office</span>
-              </div>
-              <div class='ap-tile'>
-                <span class='ap-tile-ic'>C</span>
-                <span>takos-computer</span>
-              </div>
-              <div class='ap-tile'>
-                <span class='ap-tile-ic'>S</span>
-                <span>social</span>
-              </div>
-            </div>
-            <div class='ap-capsule'>
-              <b>Takosumi Capsules</b>
-              <span class='ap-meta'>takos-office · 3/3 outputs ready</span>
-            </div>
-          </div>
-        </div>
-      );
-  }
+  const t = useT();
+  const copy = () => t.visuals[props.kind];
+  return (
+    <figure class='viz appviz appviz-shot'>
+      <img
+        src={FILES[props.kind]}
+        alt={copy().alt}
+        width='1600'
+        height='1000'
+        loading='lazy'
+      />
+      <figcaption class='appviz-caption'>
+        <span class='appviz-real'>{t.visuals.realBadge}</span>
+        {copy().caption}
+      </figcaption>
+    </figure>
+  );
 }
