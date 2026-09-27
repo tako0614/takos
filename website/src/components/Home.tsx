@@ -2,7 +2,6 @@ import type { JSX } from 'solid-js';
 import type { Locale } from '~/content/site';
 import { LocaleProvider } from '~/lib/i18n';
 import { CloudProvider } from '~/lib/cloud';
-import SplatField from './SplatField';
 import Seo from './Seo';
 import JsonLd from './JsonLd';
 import Nav from './Nav';
@@ -25,15 +24,12 @@ export default function Home(props: { locale: Locale }): JSX.Element {
         <Nav />
         <main>
           <Hero />
-          <div class='ink-canvas'>
-            <SplatField density='page' />
-            <Run />
-            <Workspace />
-            <BundledApps />
-            <Why />
-            <Comparison />
-            <InstallCTA />
-          </div>
+          <Run />
+          <Workspace />
+          <BundledApps />
+          <Why />
+          <Comparison />
+          <InstallCTA />
         </main>
         <Footer />
         <AdringWidget />

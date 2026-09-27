@@ -11,7 +11,7 @@ export default function Run(): JSX.Element {
   const t = useT();
   void reveal;
   return (
-    <Section id='features' title={t.run.title} lede={t.run.lede}>
+    <Section id='features' label={t.sec.run} title={t.run.title} lede={t.run.lede}>
       <p class='run-request reveal' use:reveal>
         <span class='run-request-label'>request</span>
         {t.run.request}

@@ -19,6 +19,7 @@ export default function InstallCTA() {
     <Section
       id='install'
       class='end-cta'
+      label={t.sec.install}
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >
@@ -27,7 +28,10 @@ export default function InstallCTA() {
           {(c, i) => (
             <div
               class='install-card reveal'
-              classList={{ 'install-card-highlight': c.kind === 'use' }}
+              classList={{
+                'install-card-highlight': c.kind === 'use',
+                'install-card-full': c.kind === 'self',
+              }}
               use:reveal={i() * 80}
             >
               <h3>{c.title}</h3>

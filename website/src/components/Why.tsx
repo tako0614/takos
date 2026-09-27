@@ -10,6 +10,7 @@ export default function Why() {
   return (
     <Section
       id='why'
+      label={t.sec.why}
       title={t.why.title}
       lede={<RichText value={t.why.lede} />}
     >

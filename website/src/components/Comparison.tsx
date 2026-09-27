@@ -5,7 +5,7 @@ import { useT } from '~/lib/i18n';
 export default function Comparison() {
   const t = useT();
   return (
-    <Section id='compare' title={t.compare.title} lede={t.compare.lede}>
+    <Section id='compare' label={t.sec.compare} title={t.compare.title} lede={t.compare.lede}>
       <div class='comparison'>
         <table>
           <thead>

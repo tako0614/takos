@@ -7,7 +7,7 @@ export default function BundledApps() {
   const t = useT();
   void reveal;
   return (
-    <Section id='apps' title={t.apps.title} lede={t.apps.lede}>
+    <Section id='apps' label={t.sec.apps} title={t.apps.title} lede={t.apps.lede}>
       <div class='app-cards'>
         <For each={t.apps.items}>
           {(a, i) => (

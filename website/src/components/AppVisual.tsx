@@ -18,6 +18,12 @@ export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
   const copy = () => t.visuals[props.kind];
   return (
     <figure class='viz appviz appviz-shot'>
+      <div class='appviz-chrome' aria-hidden='true'>
+        <span class='appviz-dot' />
+        <span class='appviz-dot' />
+        <span class='appviz-dot' />
+        <span class='appviz-host'>takos</span>
+      </div>
       <img
         src={FILES[props.kind]}
         alt={copy().alt}

@@ -87,9 +87,20 @@ export interface Strings {
     readonly closeMenu: string;
   };
   readonly hero: {
+    readonly kicker: string;
     readonly title: readonly TitleLine[];
     readonly lede: Rich;
     readonly useTakos: string;
+    readonly github: string;
+    readonly spec: readonly string[];
+  };
+  readonly sec: {
+    readonly run: string;
+    readonly workspace: string;
+    readonly apps: string;
+    readonly why: string;
+    readonly compare: string;
+    readonly install: string;
   };
   readonly why: {
     readonly title: string;
@@ -160,6 +171,7 @@ const ja: Strings = {
     closeMenu: "メニューを閉じる",
   },
   hero: {
+    kicker: "self-hosted · open source · AGPL-3.0",
     title: [{ t: "AI agent," }, { t: "on your server", grad: true }],
     lede: [
       {
@@ -169,6 +181,16 @@ const ja: Strings = {
       { t: " 動かせます。ログインしてすぐ始められます。" },
     ],
     useTakos: "Takos を使う",
+    github: "GitHub",
+    spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
+  },
+  sec: {
+    run: "how a run moves",
+    workspace: "workspace",
+    apps: "installable apps",
+    why: "why takos",
+    compare: "self-host vs saas",
+    install: "install",
   },
   why: {
     title: "会話も memory も、自分のサーバーに残る",
@@ -382,6 +404,7 @@ const en: Strings = {
     closeMenu: "Close menu",
   },
   hero: {
+    kicker: "self-hosted · open source · AGPL-3.0",
     title: [{ t: "AI agent," }, { t: "on your server", grad: true }],
     lede: [
       {
@@ -391,6 +414,16 @@ const en: Strings = {
       { t: ". Log in and start in seconds." },
     ],
     useTakos: "Use Takos",
+    github: "GitHub",
+    spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
+  },
+  sec: {
+    run: "how a run moves",
+    workspace: "workspace",
+    apps: "installable apps",
+    why: "why takos",
+    compare: "self-host vs saas",
+    install: "install",
   },
   why: {
     title: "Conversations and memory stay on your server",

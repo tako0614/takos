@@ -13,6 +13,7 @@ export default function Workspace(): JSX.Element {
   return (
     <Section
       id='workspace'
+      label={t.sec.workspace}
       title={t.workspace.title}
       lede={<RichText value={t.workspace.lede} />}
     >
