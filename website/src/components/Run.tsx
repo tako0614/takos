@@ -12,11 +12,12 @@ export default function Run(): JSX.Element {
     <Section id='features' title={t.run.title} lede={t.run.lede}>
       <ol class='run'>
         <For each={t.run.steps}>
-          {(step) => (
+          {(step, i) => (
             <li class='run-step'>
               <div class='run-copy'>
-                <span class='run-state'>{step.state}</span>
-                <h3>{step.name}</h3>
+                <h3>
+                  <span class='run-num'>{i() + 1}.</span> {step.name}
+                </h3>
                 <p>{step.connect}</p>
               </div>
               <div class='run-visual'>

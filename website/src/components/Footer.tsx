@@ -15,7 +15,6 @@ export default function Footer() {
       <div class='container'>
         <div class='footer-brand'>
           <Wordmark variant='inkdrop' size={22} />
-          <p class='footer-tagline'>{t.footer.tagline}</p>
           <span class='copy'>{t.footer.copyright}</span>
         </div>
         <div class='footer-meta'>

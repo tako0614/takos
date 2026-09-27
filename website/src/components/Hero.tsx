@@ -14,11 +14,10 @@ export default function Hero() {
     <section class='hero'>
       <div class='container'>
         <div class='hero-copy'>
-          <p class='hero-kicker'>{t.hero.kicker}</p>
           <h1>
             <For each={t.hero.title}>
-              {(line) => (
-                <span class='hero-line' classList={{ 'hero-accent': line.grad }}>
+            {(line) => (
+                <span class='hero-line'>
                   {line.t}
                 </span>
               )}

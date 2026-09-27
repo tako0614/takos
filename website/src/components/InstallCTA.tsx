@@ -26,7 +26,6 @@ export default function InstallCTA() {
             <div
               class='install-card'
               classList={{
-                'install-card-highlight': c.kind === 'use',
                 'install-card-full': c.kind === 'self',
               }}
             >
@@ -48,7 +47,9 @@ export default function InstallCTA() {
                     <span class='k'>$</span> chmod 600 "$HOME/.config/takos/takos.tfvars"{'\n'}
                     <span class='k'>$</span> <span class='c'># edit external tfvars before planning</span>{'\n'}
                     <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare init -input=false{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false -var-file="$HOME/.config/takos/takos.tfvars" -out="$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false \{'\n'}
+                    {'    '}-var-file="$HOME/.config/takos/takos.tfvars" \{'\n'}
+                    {'    '}-out="$HOME/.config/takos/takos.tfplan"{'\n'}
                     <span class='k'>$</span> tofu show "$HOME/.config/takos/takos.tfplan"{'\n'}
                     <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"
                   </CodeBlock>

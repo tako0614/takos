@@ -22,7 +22,6 @@ export type Rich = readonly Seg[];
 
 export interface TitleLine {
   readonly t: string;
-  readonly grad?: boolean;
 }
 
 export interface Item {
@@ -43,7 +42,6 @@ export interface VisualCopy {
  *  `key` selects which real-UI visual the Run section renders. */
 export interface RunStep {
   readonly key: "chat" | "agent" | "memory";
-  readonly state: string;
   readonly name: string;
   readonly connect: string;
 }
@@ -87,7 +85,6 @@ export interface Strings {
     readonly closeMenu: string;
   };
   readonly hero: {
-    readonly kicker: string;
     readonly title: readonly TitleLine[];
     readonly lede: Rich;
     readonly useTakos: string;
@@ -129,7 +126,6 @@ export interface Strings {
   };
   readonly visuals: Record<AppVisualKind, VisualCopy>;
   readonly footer: {
-    readonly tagline: string;
     readonly copyright: string;
     readonly links: readonly {
       readonly label: string;
@@ -161,8 +157,7 @@ const ja: Strings = {
     closeMenu: "メニューを閉じる",
   },
   hero: {
-    kicker: "self-hosted · open source · AGPL-3.0",
-    title: [{ t: "Self-hosted" }, { t: "AI workspace.", grad: true }],
+    title: [{ t: "Self-hosted AI workspace." }],
     lede: [
       {
         t: "chat で頼むと agent が tool を呼んで仕事を進め、成果とやり取りが memory に残る。その全部を、",
@@ -172,7 +167,15 @@ const ja: Strings = {
     ],
     useTakos: "Takos を使う",
     github: "GitHub",
-    spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
+    spec: [
+      "AGPL-3.0",
+      "chat",
+      "agent",
+      "memory",
+      "workspace",
+      "installable apps",
+      "MCP tools",
+    ],
     cloneHint: "または source から",
   },
   why: {
@@ -207,21 +210,18 @@ const ja: Strings = {
     steps: [
       {
         key: "chat",
-        state: "依頼 → 実行",
         name: "Chat で頼む",
         connect:
           "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼んで動き始める。",
       },
       {
         key: "agent",
-        state: "進行 → 完了",
         name: "Work board で進む",
         connect:
           "同じ job が Work Tasks に task として載り、In Progress から Run completed まで状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の agent engine が担う。",
       },
       {
         key: "memory",
-        state: "保存 → 蓄積",
         name: "docs に残り、Memory に効く",
         connect:
           "成果物は install した takos-office の docs に file として残り、やり取りは Memory に蓄積する。次の会話は続きから始まる。",
@@ -268,7 +268,7 @@ const ja: Strings = {
     ],
   },
   compare: {
-    title: "預けるか、所有するか。",
+    title: "SaaS chat と何が違うか",
     lede: "自分のサーバーで動かす Takos と、提供元に預ける SaaS chat の典型的な違い。data が誰のものか、という観点で並べています (すべての SaaS に当てはまるわけではありません)。",
     colUs: "Takos (self-host)",
     colThem: "SaaS chat (預ける)",
@@ -304,10 +304,10 @@ const ja: Strings = {
   install: {
     title: "Takosumi から、ボタンひとつで導入",
     lede: [
-      { t: "むずかしい設定はいりません。リンクを押すと " },
+      { t: "リンクを押すと " },
       { t: "Takosumi", code: true },
       {
-        t: " の導入画面が開き、中身を確認してから自分の場所に入れて、そのまま使えます。だれでも同じ入口です。",
+        t: " の導入画面が開きます。中身を確認して自分の場所に入れ、そのまま使えます。",
       },
     ],
     cards: [
@@ -349,7 +349,6 @@ const ja: Strings = {
     },
   },
   footer: {
-    tagline: "AI と話す場所は、あなたのサーバーで。",
     copyright: "© Takos contributors — AGPL · Powered by Takosumi.",
     links: [
       { label: "Docs", href: "https://docs.takos.jp/", external: true },
@@ -385,8 +384,7 @@ const en: Strings = {
     closeMenu: "Close menu",
   },
   hero: {
-    kicker: "self-hosted · open source · AGPL-3.0",
-    title: [{ t: "Self-hosted" }, { t: "AI workspace.", grad: true }],
+    title: [{ t: "Self-hosted AI workspace." }],
     lede: [
       {
         t: "Ask in chat and the agent calls tools to get it done; the work and the exchange accrue in memory. All of it runs ",
@@ -396,7 +394,15 @@ const en: Strings = {
     ],
     useTakos: "Use Takos",
     github: "GitHub",
-    spec: ["chat", "agent", "memory", "workspace", "installable apps", "MCP tools"],
+    spec: [
+      "AGPL-3.0",
+      "chat",
+      "agent",
+      "memory",
+      "workspace",
+      "installable apps",
+      "MCP tools",
+    ],
     cloneHint: "or build from source",
   },
   why: {
@@ -431,21 +437,18 @@ const en: Strings = {
     steps: [
       {
         key: "chat",
-        state: "asked → running",
         name: "Ask in Chat",
         connect:
           "Write what you want in plain words. Cloud LLMs and local models switch within the same thread, and the agent starts calling tools on the spot.",
       },
       {
         key: "agent",
-        state: "in progress → completed",
         name: "It progresses on the Work board",
         connect:
           "The same job lands on Work Tasks and moves from In Progress to Run completed. A Rust agent engine handles the tool calls and multi-step execution.",
       },
       {
         key: "memory",
-        state: "saved → remembered",
         name: "Kept in docs, carried by Memory",
         connect:
           "The artifact stays as a file in docs — here, via the installed takos-office — and the exchange accrues in Memory. The next chat starts where this one left off.",
@@ -495,7 +498,7 @@ const en: Strings = {
     ],
   },
   compare: {
-    title: "Entrust it, or own it.",
+    title: "How it differs from SaaS chat",
     lede: "How running Takos on your own server differs from delegating to a SaaS provider — typical trade-offs framed around who owns the data (not true of every product).",
     colUs: "Takos (self-host)",
     colThem: "SaaS chat (delegated)",
@@ -535,10 +538,10 @@ const en: Strings = {
   install: {
     title: "One button, installed through Takosumi",
     lede: [
-      { t: "No tricky setup. Press the link and " },
+      { t: "Press the link and " },
       { t: "Takosumi", code: true },
       {
-        t: "'s install screen opens — review what's inside, add it to your own place, and start using it. Same entrance for everyone.",
+        t: "'s install screen opens. Review what's inside, add it to your own place, and start using it.",
       },
     ],
     cards: [
@@ -580,7 +583,6 @@ const en: Strings = {
     },
   },
   footer: {
-    tagline: "The place you talk to AI is your own server.",
     copyright: "© Takos contributors — AGPL · Powered by Takosumi.",
     links: [
       { label: "Docs", href: "https://docs.takos.jp/", external: true },
