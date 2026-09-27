@@ -89,7 +89,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     const db = getDb(c.env.DB);
-    const conditions = [eq(agentTasks.accountId, spaceId)];
+    const conditions = [eq(agentTasks.accountId, access.space.id)];
     if (status) {
       conditions.push(eq(agentTasks.status, status));
     }
@@ -156,14 +156,16 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         const thread = await db
           .select({ id: threads.id })
           .from(threads)
-          .where(and(eq(threads.id, threadId), eq(threads.accountId, spaceId)))
+          .where(
+            and(eq(threads.id, threadId), eq(threads.accountId, access.space.id)),
+          )
           .get();
         if (!thread) {
           throw new NotFoundError("Thread");
         }
       }
       if (!threadId && body.create_thread !== false) {
-        const thread = await createThread(c.env.DB, spaceId, {
+        const thread = await createThread(c.env.DB, access.space.id, {
           title: body.title.trim(),
         });
         threadId = thread?.id || null;
@@ -183,7 +185,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         .insert(agentTasks)
         .values({
           id: taskId,
-          accountId: spaceId,
+          accountId: access.space.id,
           createdByAccountId: user.id,
           threadId,
           title: body.title.trim(),

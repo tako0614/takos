@@ -39,9 +39,21 @@ async function writeResponse(
   nodeResponse.statusCode = response.status;
   nodeResponse.statusMessage = response.statusText;
 
+  // Set-Cookie is a multi-value header: ServerResponse.setHeader replaces the
+  // previous value for the same key, so writing it inside the forEach loop
+  // would silently drop all but the last cookie (local OIDC login dead-ends —
+  // the callback emits the session cookie AND the state-cookie clear). Gather
+  // them via getSetCookie (Bun/undici) and write once as an array.
+  const setCookies =
+    (response.headers as { getSetCookie?: () => string[] }).getSetCookie?.() ??
+    [];
   response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "set-cookie") return;
     nodeResponse.setHeader(key, value);
   });
+  if (setCookies.length > 0) {
+    nodeResponse.setHeader("set-cookie", setCookies);
+  }
 
   if (!response.body) {
     nodeResponse.end();
