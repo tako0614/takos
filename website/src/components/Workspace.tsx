@@ -14,14 +14,10 @@ export default function Workspace(): JSX.Element {
       title={t.workspace.title}
       lede={<RichText value={t.workspace.lede} />}
     >
-      <div class='ws'>
-        <ul class='ws-points'>
-          <For each={t.workspace.points}>{(p) => <li>{p}</li>}</For>
-        </ul>
-        <div class='ws-visual'>
-          <AppVisual kind='space' />
-        </div>
-      </div>
+      <ul class='ws-points'>
+        <For each={t.workspace.points}>{(p) => <li>{p}</li>}</For>
+      </ul>
+      <AppVisual kind='space' />
     </Section>
   );
 }

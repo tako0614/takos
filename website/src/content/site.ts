@@ -30,7 +30,7 @@ export interface Item {
 }
 
 /** Which real screen the AppVisual component renders (public/screens). */
-export type AppVisualKind = "chat" | "agent" | "memory" | "space";
+export type AppVisualKind = "chat" | "thread" | "agent" | "memory" | "space";
 
 /** Alt text + caption for one real screenshot. */
 export interface VisualCopy {
@@ -41,7 +41,7 @@ export interface VisualCopy {
 /** One step of the run sequence — the same request moving through surfaces.
  *  `key` selects which real-UI visual the Run section renders. */
 export interface RunStep {
-  readonly key: "chat" | "agent" | "memory";
+  readonly key: AppVisualKind;
   readonly name: string;
   readonly connect: string;
 }
@@ -139,10 +139,10 @@ export interface Strings {
 const ja: Strings = {
   htmlLang: "ja",
   meta: {
-    title: "Takos | self-hosted AI workspace",
+    title: "Takos",
     description:
       "Takos は self-hostable な chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
-    ogTitle: "Takos | self-hosted AI workspace",
+    ogTitle: "Takos",
     ogDescription:
       "Self-hostable な chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
   },
@@ -179,7 +179,7 @@ const ja: Strings = {
     cloneHint: "または source から",
   },
   why: {
-    title: "会話も memory も、自分のサーバーに残る",
+    title: "データは自分のサーバーに残る",
     lede: [
       {
         t: "ここまでの run で起きたこと — 依頼の内容、tool が触れた file、残った docs、積み上がった memory — は全部 ",
@@ -205,11 +205,11 @@ const ja: Strings = {
     ],
   },
   run: {
-    title: "ひとつの依頼が、chat・task・memory をつなぐ",
+    title: "使い方",
     lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過です。",
     steps: [
       {
-        key: "chat",
+        key: "thread",
         name: "Chat で頼む",
         connect:
           "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼んで動き始める。",
@@ -229,7 +229,7 @@ const ja: Strings = {
     ],
   },
   workspace: {
-    title: "Workspace ごとに分離。app は選んで足す",
+    title: "Workspace",
     lede: [
       { t: "この run が起きている場所が Workspace。" },
       { t: "Workspace ごとに分離・権限管理", em: true },
@@ -244,7 +244,7 @@ const ja: Strings = {
     ],
   },
   apps: {
-    title: "app を install すると、agent の tool が増える",
+    title: "Installable apps",
     lede: "Apps 画面の「Add from Git URL」から Capsule を install すると、Workspace に tile が並び、その app が公開する tool が MCP 経由で agent の toolbox に加わる。さっきの run で docs に保存できたのも、install 済みの takos-office の tool だった。",
     items: [
       {
@@ -268,7 +268,7 @@ const ja: Strings = {
     ],
   },
   compare: {
-    title: "SaaS chat と何が違うか",
+    title: "SaaS chat との違い",
     lede: "自分のサーバーで動かす Takos と、提供元に預ける SaaS chat の典型的な違い。data が誰のものか、という観点で並べています (すべての SaaS に当てはまるわけではありません)。",
     colUs: "Takos (self-host)",
     colThem: "SaaS chat (預ける)",
@@ -302,7 +302,7 @@ const ja: Strings = {
     ],
   },
   install: {
-    title: "Takosumi から、ボタンひとつで導入",
+    title: "導入",
     lede: [
       { t: "リンクを押すと " },
       { t: "Takosumi", code: true },
@@ -335,6 +335,10 @@ const ja: Strings = {
       alt: "Takos の実画面: chat での依頼に agent が tool を実行し、docs にファイルを保存して返答している",
       caption: "chat での依頼と、agent による tool 実行の結果",
     },
+    thread: {
+      alt: "Takos の実画面: chat スレッドで agent が tool 実行の進行を返している",
+      caption: "chat スレッド。依頼への tool 実行がその場で進む",
+    },
     agent: {
       alt: "Takos の実画面: エージェント設定の仕事タブに、予定・進行中・完了の task が並んでいる",
       caption: "エージェント設定の「仕事」タブ。task が状態で並ぶ",
@@ -366,10 +370,10 @@ const ja: Strings = {
 const en: Strings = {
   htmlLang: "en",
   meta: {
-    title: "Takos | self-hosted AI workspace",
+    title: "Takos",
     description:
       "Takos is a self-hostable chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
-    ogTitle: "Takos | self-hosted AI workspace",
+    ogTitle: "Takos",
     ogDescription:
       "A self-hostable AI chat & agent. Your history and memory are stored on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
   },
@@ -406,7 +410,7 @@ const en: Strings = {
     cloneHint: "or build from source",
   },
   why: {
-    title: "Conversations and memory stay on your server",
+    title: "Your data stays on your server",
     lede: [
       {
         t: "Everything in that run — the request, the files the tools touched, the saved docs, the accumulated memory — stays ",
@@ -432,11 +436,11 @@ const en: Strings = {
     ],
   },
   run: {
-    title: "One request connects chat, tasks, and memory",
+    title: "Using Takos",
     lede: "Follow one request through Takos. Chat, the Work board, and Memory aren’t separate features — they’re one run in progress.",
     steps: [
       {
-        key: "chat",
+        key: "thread",
         name: "Ask in Chat",
         connect:
           "Write what you want in plain words. Cloud LLMs and local models switch within the same thread, and the agent starts calling tools on the spot.",
@@ -456,7 +460,7 @@ const en: Strings = {
     ],
   },
   workspace: {
-    title: "Isolated per Workspace. Add the apps you need",
+    title: "Workspaces",
     lede: [
       { t: "A Workspace is where this run happens. " },
       {
@@ -474,7 +478,7 @@ const en: Strings = {
     ],
   },
   apps: {
-    title: "Install an app and your agent gains tools",
+    title: "Installable apps",
     lede: "Install a Capsule from “Add from Git URL” on the Apps screen: a tile joins the Workspace, and the tools the app publishes join the agent’s toolbox over MCP. The docs save in the run above worked because an installed takos-office tool was already in the toolbox.",
     items: [
       {
@@ -498,7 +502,7 @@ const en: Strings = {
     ],
   },
   compare: {
-    title: "How it differs from SaaS chat",
+    title: "Differences from SaaS chat",
     lede: "How running Takos on your own server differs from delegating to a SaaS provider — typical trade-offs framed around who owns the data (not true of every product).",
     colUs: "Takos (self-host)",
     colThem: "SaaS chat (delegated)",
@@ -536,7 +540,7 @@ const en: Strings = {
     ],
   },
   install: {
-    title: "One button, installed through Takosumi",
+    title: "Install",
     lede: [
       { t: "Press the link and " },
       { t: "Takosumi", code: true },
@@ -568,6 +572,10 @@ const en: Strings = {
     chat: {
       alt: "Actual Takos screen: a chat request where the agent ran tools and saved a file to docs",
       caption: "A chat request and the agent's tool-run result",
+    },
+    thread: {
+      alt: "Actual Takos screen: a chat thread with the agent reporting tool-run progress",
+      caption: "A chat thread — tool runs progress in place",
     },
     agent: {
       alt: "Actual Takos screen: the agent settings Work tab listing planned, in-progress, and completed tasks",

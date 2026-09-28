@@ -23,12 +23,7 @@ export default function InstallCTA() {
       <div class='install-options'>
         <For each={t.install.cards}>
           {(c) => (
-            <div
-              class='install-card'
-              classList={{
-                'install-card-full': c.kind === 'self',
-              }}
-            >
+            <div class='install-row'>
               <h3>{c.title}</h3>
               <p>{c.body}</p>
               <Show
@@ -55,13 +50,8 @@ export default function InstallCTA() {
                   </CodeBlock>
                 }
               >
-                <a
-                  class={`btn ${c.kind === 'use' ? 'btn-primary' : 'btn-secondary'}`}
-                  href={href(c.kind)}
-                  rel='noopener'
-                >
-                  {c.cta}
-                  {c.kind === 'use' ? ' →' : ''}
+                <a class='link-go' href={href(c.kind)} rel='noopener'>
+                  {c.cta} →
                 </a>
               </Show>
             </div>

@@ -91,48 +91,14 @@ section h2 + .lede {
   max-width: 64ch;
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--tg-s-2);
-  padding: 0.9em 1.55em;
-  border-radius: var(--tg-r-md);
+/* Text links — the only action style on this page. */
+.link-go {
   font-weight: 600;
   font-size: var(--tg-fs-sm);
-  border: 1px solid transparent;
-  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-  white-space: nowrap;
-  font-family: var(--tg-font-display);
-  letter-spacing: -0.005em;
-}
-.btn:hover {
-}
-.btn-primary {
-  background: var(--tg-accent);
-  color: #ffffff;
-}
-.btn-primary:hover {
-  color: #ffffff;
-  background: var(--tg-accent-hover);
-}
-.btn-secondary {
-  background: transparent;
   color: var(--tg-fg);
-  border-color: var(--tg-line-strong);
 }
-.btn-secondary:hover {
-  border-color: var(--tg-accent);
+.link-go:hover {
   color: var(--tg-accent);
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--tg-fg-muted);
-  padding: 0.5em 0.8em;
-}
-.btn-ghost:hover {
-  color: var(--tg-fg);
-  background: var(--tg-bg-subtle);
 }
 
 /* ===== Nav — transparent over hero, blurred fill after scroll ===== */
@@ -227,10 +193,11 @@ section h2 + .lede {
   background: var(--tg-bg-subtle);
 }
 
-.nav-cta {
-  padding: 0.55em 1em !important;
-  font-size: var(--tg-fs-sm) !important;
+.nav-use {
+  font-size: var(--tg-fs-sm);
+  font-weight: 600;
   margin-left: var(--tg-s-2);
+  white-space: nowrap;
 }
 
 /* Mobile disclosure menu — <details>/<summary>, zero JS, SSR-safe. */
@@ -283,7 +250,7 @@ section h2 + .lede {
   }
 }
 
-/* ===== HERO — compact factual header, product screen full-width ===== */
+/* ===== Intro — compact factual header, then the product screen ===== */
 .hero {
   background: var(--tg-bg);
   color: var(--tg-fg);
@@ -299,7 +266,7 @@ section h2 + .lede {
   display: flex;
   flex-wrap: wrap;
   gap: var(--tg-s-2) var(--tg-s-4);
-  margin: var(--tg-s-7) 0 0;
+  margin: var(--tg-s-6) 0 0;
   padding: var(--tg-s-4) 0 0;
   border-top: 1px solid var(--tg-line);
   font-family: var(--tg-font-mono);
@@ -323,7 +290,7 @@ section h2 + .lede {
 .hero h1 {
   font-family: var(--tg-font-display);
   font-size: clamp(1.75rem, 3.2vw, 2.4rem);
-  line-height: 1.08;
+  line-height: 1.15;
   letter-spacing: -0.02em;
   text-wrap: balance;
   margin: 0 0 var(--tg-s-5);
@@ -336,31 +303,14 @@ section h2 + .lede {
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
   max-width: 58ch;
-  margin: 0 0 var(--tg-s-6);
+  margin: 0 0 var(--tg-s-5);
 }
-.hero .cta-row {
+.intro-links {
   display: flex;
-  gap: var(--tg-s-3);
+  gap: var(--tg-s-5);
   flex-wrap: wrap;
-  align-items: center;
-}
-.hero .btn-primary {
-  background: var(--tg-accent);
-  color: #fff;
-  box-shadow: none;
-}
-.hero .btn-primary:hover {
-  color: #fff;
-  background: var(--tg-accent-hover);
-}
-.hero .btn-secondary {
-  color: var(--tg-fg);
-  border-color: var(--tg-line-strong);
-  background: transparent;
-}
-.hero .btn-secondary:hover {
-  border-color: var(--tg-accent);
-  color: var(--tg-accent);
+  align-items: baseline;
+  margin: 0 0 var(--tg-s-4);
 }
 
 /* CodeBlock */
@@ -368,7 +318,7 @@ section h2 + .lede {
   background: var(--tg-code-bg);
   color: var(--tg-code-fg);
   border: 1px solid var(--tg-line);
-  border-radius: var(--tg-r-lg);
+  border-radius: var(--tg-r-sm);
   padding: var(--tg-s-5) var(--tg-s-5);
   overflow-x: auto;
   font-family: var(--tg-font-mono);
@@ -398,10 +348,8 @@ section h2 + .lede {
   margin: 0;
 }
 
-/* Comparison */
+/* Comparison — a plain table on the page, not a boxed card */
 .comparison {
-  border: 1px solid var(--tg-line);
-  border-radius: var(--tg-r-lg);
   overflow-x: auto;
 }
 .comparison table {
@@ -411,19 +359,18 @@ section h2 + .lede {
   min-width: 560px;
 }
 .comparison th, .comparison td {
-  padding: var(--tg-s-3) var(--tg-s-4);
+  padding: var(--tg-s-3) var(--tg-s-3) var(--tg-s-3) 0;
   border-bottom: 1px solid var(--tg-line);
   text-align: left;
   vertical-align: top;
 }
 .comparison thead th {
-  background: var(--tg-bg-subtle);
   font-size: var(--tg-fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: var(--tg-fg-subtle);
-  font-weight: 700;
+  font-weight: 600;
   font-family: var(--tg-font-mono);
+  border-bottom: 1px solid var(--tg-line-strong);
 }
 .comparison td.us {
   font-weight: 600;
@@ -436,7 +383,6 @@ footer.site {
   padding: var(--tg-s-7) 0;
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-sm);
-  background: var(--tg-bg-subtle);
 }
 footer.site nav {
   display: flex;
@@ -462,55 +408,37 @@ footer.site .copy {
   display: inline-block;
   font-family: var(--tg-font-mono);
   font-size: var(--tg-fs-xs);
-  background: var(--tg-bg-subtle);
   color: var(--tg-fg-subtle);
-  padding: 2px 8px;
-  border-radius: var(--tg-r-full);
   margin-left: var(--tg-s-2);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: lowercase;
   vertical-align: middle;
 }
+
+/* Install — three plain ways in, separated by hairlines. */
 .install-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--tg-s-5);
   margin-top: var(--tg-s-6);
+  border-top: 1px solid var(--tg-line);
 }
-@media (max-width: 880px) {
-  .install-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.install-row {
+  padding: var(--tg-s-5) 0;
+  border-bottom: 1px solid var(--tg-line);
 }
-.install-card {
-  min-width: 0;
-}
-.install-card-full {
-  grid-column: 1 / -1;
-}
-.install-card {
-  padding: var(--tg-s-6);
-  background: var(--tg-bg-elev);
-  border: 1px solid var(--tg-line);
-  border-radius: var(--tg-r-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-3);
-}
-.install-card h3 {
+.install-row h3 {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-xl);
+  font-size: var(--tg-fs-lg);
   font-weight: 700;
-  letter-spacing: -0.015em;
-  margin: 0;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--tg-s-2);
 }
-.install-card p {
+.install-row p {
   color: var(--tg-fg-muted);
-  margin: 0;
+  margin: 0 0 var(--tg-s-3);
+  max-width: 64ch;
 }
-.install-card .btn {
-  align-self: start;
+.install-row .codeblock {
+  margin-top: var(--tg-s-3);
 }
 /* Inline accent emphasis (RichText `em` segments) */
 .em {
@@ -539,34 +467,36 @@ footer.site .copy {
   }
 }
 
-/* ===== Why — numbered 3-point grid (red top rule) ===== */
+/* ===== Why — flat rows, term left / detail right ===== */
 .why-points {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--tg-s-6);
   margin-top: var(--tg-s-6);
-}
-@media (max-width: 880px) {
-  .why-points {
-    grid-template-columns: 1fr;
-    gap: var(--tg-s-5);
-  }
+  border-top: 1px solid var(--tg-line);
 }
 .why-point {
-  border-top: 1px solid var(--tg-line);
-  padding-top: var(--tg-s-4);
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: var(--tg-s-3) var(--tg-s-6);
+  align-items: baseline;
+  padding: var(--tg-s-4) 0;
+  border-bottom: 1px solid var(--tg-line);
 }
 .why-point h3 {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-lg);
+  font-size: var(--tg-fs-base);
   font-weight: 700;
   letter-spacing: -0.01em;
-  margin: var(--tg-s-2) 0;
+  margin: 0;
 }
 .why-point p {
   margin: 0;
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
+}
+@media (max-width: 720px) {
+  .why-point {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--tg-s-1);
+  }
 }
 
 .comparison tbody th[scope="row"] {
@@ -603,113 +533,76 @@ footer.site .container {
   }
 }
 
-/* ===== Tour — one request traced through the real surfaces it touches ===== */
-/* Screenshot-led: each step is the actual UI with a functional caption. */
+/* ===== Usage — one request traced through the real surfaces it touches ===== */
+/* Text first, then the actual screen full-width under it — a document page,
+ * not alternating feature rows. */
 .run {
   list-style: none;
-  margin: var(--tg-s-7) 0 0;
+  margin: var(--tg-s-6) 0 0;
   padding: 0;
 }
 .run-step {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  column-gap: var(--tg-s-7);
-  align-items: center;
-  padding-bottom: var(--tg-s-8);
+  padding: var(--tg-s-6) 0;
+  border-top: 1px solid var(--tg-line);
 }
-.run-step:last-child {
-  padding-bottom: 0;
+.run-step:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 .run-num {
   color: var(--tg-fg-subtle);
   font-weight: 400;
 }
-.run-copy h3 {
+.run-step h3 {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-xl);
+  font-size: var(--tg-fs-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
-  margin: var(--tg-s-2) 0 var(--tg-s-3);
+  margin: 0 0 var(--tg-s-2);
 }
-.run-copy p {
-  margin: 0;
+.run-connect {
+  margin: 0 0 var(--tg-s-4);
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
-  max-width: 46ch;
-}
-.run-visual {
-  min-width: 0;
-}
-@media (max-width: 880px) {
-  .run-step {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: var(--tg-s-4);
-    padding-bottom: var(--tg-s-8);
-  }
+  max-width: 64ch;
 }
 
 /* ===== Workspace — the stage the run happens on ===== */
-.ws {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--tg-s-8);
-  align-items: center;
-  margin-top: var(--tg-s-6);
-}
-@media (max-width: 880px) {
-  .ws {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--tg-s-5);
-  }
-}
 .ws-points {
   list-style: none;
-  margin: 0;
+  margin: 0 0 var(--tg-s-6);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--tg-s-3);
+  gap: var(--tg-s-2);
 }
 .ws-points li {
-  position: relative;
-  padding-left: var(--tg-s-5);
   color: var(--tg-fg);
   font-size: var(--tg-fs-base);
 }
 .ws-points li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.62em;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--tg-fg-subtle);
-}
-.ws-visual {
-  min-width: 0;
+  content: '—';
+  color: var(--tg-fg-subtle);
+  margin-right: var(--tg-s-2);
 }
 
-/* Frame for real screenshots of the running takos app
- * (public/screens, captured from the actual web UI). A plain figure:
- * hairline border and an honest caption — no re-drawn browser chrome. */
+/* Real screenshots of the running takos app (public/screens, captured from
+ * the actual web UI). Plain figures: a 1px image rule and a caption line —
+ * no boxed frame, no re-drawn chrome. */
 .viz {
   margin: 0;
-  border: 1px solid var(--tg-line);
-  border-radius: var(--tg-r-md);
-  background: var(--tg-bg-elev);
-  overflow: hidden;
 }
 .appviz-shot img {
   display: block;
   width: 100%;
   height: auto;
+  border: 1px solid var(--tg-line);
+  border-radius: var(--tg-r-sm);
 }
 .appviz-caption {
-  padding: 10px 14px;
-  border-top: 1px solid var(--tg-line);
+  padding: var(--tg-s-2) 2px 0;
   font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-muted);
+  color: var(--tg-fg-subtle);
 }
 
 /* ===== Installable apps — spec list, hairline rows ===== */

@@ -14,15 +14,11 @@ export default function Run(): JSX.Element {
         <For each={t.run.steps}>
           {(step, i) => (
             <li class='run-step'>
-              <div class='run-copy'>
-                <h3>
-                  <span class='run-num'>{i() + 1}.</span> {step.name}
-                </h3>
-                <p>{step.connect}</p>
-              </div>
-              <div class='run-visual'>
-                <AppVisual kind={step.key} />
-              </div>
+              <h3>
+                <span class='run-num'>{i() + 1}.</span> {step.name}
+              </h3>
+              <p class='run-connect'>{step.connect}</p>
+              <AppVisual kind={step.key} />
             </li>
           )}
         </For>

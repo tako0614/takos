@@ -23,6 +23,7 @@ export default function Nav() {
     { href: '#workspace', label: t.nav.workspace },
     { href: '#apps', label: t.nav.apps },
     { href: '#why', label: t.nav.why },
+    { href: '#install', label: t.nav.install },
     { href: 'https://docs.takos.jp/', label: t.nav.docs, external: true },
   ];
 
@@ -42,8 +43,8 @@ export default function Nav() {
             </svg>
           </a>
           <LangToggle class='nav-icon-desk' />
-          <a class='btn btn-primary nav-cta' href={cloud().useTakos} rel='noopener'>
-            {t.hero.useTakos}
+          <a class='nav-use' href={cloud().useTakos} rel='noopener'>
+            {t.hero.useTakos} →
           </a>
           <details class='nav-menu'>
             <summary class='nav-icon nav-menu-toggle' aria-label={t.nav.openMenu}>

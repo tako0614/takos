@@ -8,6 +8,7 @@ import { useT } from '~/lib/i18n';
  *  caption, no re-drawn browser chrome. */
 const FILES: Record<AppVisualKind, { src: string; w: number; h: number }> = {
   chat: { src: '/screens/chat.webp', w: 1600, h: 1000 },
+  thread: { src: '/screens/chat-thread.webp', w: 1060, h: 1000 },
   agent: { src: '/screens/work.webp', w: 1600, h: 1000 },
   memory: { src: '/screens/memory.webp', w: 1600, h: 720 },
   space: { src: '/screens/install.webp', w: 1600, h: 500 },

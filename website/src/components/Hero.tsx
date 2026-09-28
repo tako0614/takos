@@ -26,18 +26,21 @@ export default function Hero() {
           <p class='lede'>
             <RichText value={t.hero.lede} />
           </p>
-          <div class='cta-row'>
-            <a class='btn btn-primary' href={cloud().useTakos} rel='noopener'>
-              {t.hero.useTakos}
+          <p class='intro-links'>
+            <a class='link-go' href={cloud().useTakos} rel='noopener'>
+              {t.hero.useTakos} →
             </a>
             <a
-              class='btn btn-secondary'
+              class='link-go'
               href='https://github.com/tako0614/takos'
               rel='noopener'
             >
-              {t.hero.github}
+              {t.hero.github} →
             </a>
-          </div>
+            <a class='link-go' href='https://docs.takos.jp/' rel='noopener'>
+              Docs →
+            </a>
+          </p>
           <p class='hero-clone'>
             {t.hero.cloneHint}{' '}
             <code>git clone https://github.com/tako0614/takos.git</code>
