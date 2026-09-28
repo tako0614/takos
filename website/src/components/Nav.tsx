@@ -19,10 +19,9 @@ export default function Nav() {
   });
 
   const links = () => [
-    { href: '#features', label: t.nav.features },
-    { href: '#workspace', label: t.nav.workspace },
+    { href: '#run', label: t.nav.run },
     { href: '#apps', label: t.nav.apps },
-    { href: '#why', label: t.nav.why },
+    { href: '#data', label: t.nav.data },
     { href: '#install', label: t.nav.install },
     { href: 'https://docs.takos.jp/', label: t.nav.docs, external: true },
   ];
@@ -44,7 +43,7 @@ export default function Nav() {
           </a>
           <LangToggle class='nav-icon-desk' />
           <a class='nav-use' href={cloud().useTakos} rel='noopener'>
-            {t.hero.useTakos} →
+            {t.head.useTakos} →
           </a>
           <details class='nav-menu'>
             <summary class='nav-icon nav-menu-toggle' aria-label={t.nav.openMenu}>

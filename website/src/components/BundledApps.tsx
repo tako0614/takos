@@ -6,7 +6,7 @@ import { useT } from '~/lib/i18n';
 export default function BundledApps() {
   const t = useT();
   return (
-    <Section id='apps' title={t.apps.title} lede={t.apps.lede}>
+    <Section id='apps' index='03' title={t.apps.title} lede={t.apps.lede}>
       <ul class='app-list'>
         <For each={t.apps.items}>
           {(a) => (

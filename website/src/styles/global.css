@@ -250,67 +250,104 @@ section h2 + .lede {
   }
 }
 
-/* ===== Intro — compact factual header, then the product screen ===== */
-.hero {
-  background: var(--tg-bg);
-  color: var(--tg-fg);
+/* ===== Document head — factual opening, then the real screen ===== */
+.doc-head {
   padding-top: calc(var(--tg-nav-h) + var(--tg-s-8));
   padding-bottom: var(--tg-s-8);
   border-top: none;
 }
-.hero-copy {
-  max-width: 720px;
-}
-.hero-spec {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--tg-s-2) var(--tg-s-4);
-  margin: var(--tg-s-6) 0 0;
-  padding: var(--tg-s-4) 0 0;
-  border-top: 1px solid var(--tg-line);
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  letter-spacing: 0.06em;
-  color: var(--tg-fg-muted);
-}
-.hero-clone {
-  margin: var(--tg-s-4) 0 0;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
-}
-.hero-clone code {
-  font-size: var(--tg-fs-xs);
-}
-.hero-visual {
-  margin-top: var(--tg-s-7);
-  min-width: 0;
-}
-.hero h1 {
+.doc-title {
   font-family: var(--tg-font-display);
-  font-size: clamp(1.75rem, 3.2vw, 2.4rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-  margin: 0 0 var(--tg-s-5);
-  font-weight: 700;
+  font-size: clamp(2.2rem, 4.6vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  margin: 0;
 }
-.hero h1 .hero-line {
-  display: block;
+.doc-tagline {
+  font-size: var(--tg-fs-lg);
+  font-weight: 500;
+  color: var(--tg-fg);
+  margin: var(--tg-s-3) 0 0;
 }
-.hero .lede {
+.doc-lede {
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
-  max-width: 58ch;
-  margin: 0 0 var(--tg-s-5);
+  max-width: 60ch;
+  margin: var(--tg-s-5) 0 0;
 }
 .intro-links {
   display: flex;
   gap: var(--tg-s-5);
   flex-wrap: wrap;
   align-items: baseline;
-  margin: 0 0 var(--tg-s-4);
+  margin: var(--tg-s-4) 0 0;
+}
+.doc-head .viz {
+  margin-top: var(--tg-s-7);
+}
+
+/* ===== Section grid — clause number in the margin, body beside it ===== */
+.doc-grid {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  column-gap: var(--tg-s-6);
+}
+.doc-index {
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  color: var(--tg-fg-subtle);
+  letter-spacing: 0.08em;
+  padding-top: 0.5em;
+}
+.doc-body {
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .doc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .doc-index {
+    padding-top: 0;
+    padding-bottom: var(--tg-s-1);
+  }
+}
+
+/* ===== Term/definition rows — spec list in the head, fact rows in Data ===== */
+.spec-list,
+.def-list {
+  margin: var(--tg-s-6) 0 0;
+  border-top: 1px solid var(--tg-line);
+}
+.spec-row,
+.def-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--tg-s-2) var(--tg-s-5);
+  align-items: baseline;
+  padding: var(--tg-s-3) 0;
+  border-bottom: 1px solid var(--tg-line);
+}
+.spec-row dt,
+.def-row dt {
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  color: var(--tg-fg-subtle);
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+.spec-row dd,
+.def-row dd {
+  margin: 0;
+  font-size: var(--tg-fs-sm);
+  color: var(--tg-fg);
+}
+@media (max-width: 720px) {
+  .spec-row,
+  .def-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
 }
 
 /* CodeBlock */
@@ -346,35 +383,6 @@ section h2 + .lede {
 
 .code-terminal pre {
   margin: 0;
-}
-
-/* Comparison — a plain table on the page, not a boxed card */
-.comparison {
-  overflow-x: auto;
-}
-.comparison table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--tg-fs-sm);
-  min-width: 560px;
-}
-.comparison th, .comparison td {
-  padding: var(--tg-s-3) var(--tg-s-3) var(--tg-s-3) 0;
-  border-bottom: 1px solid var(--tg-line);
-  text-align: left;
-  vertical-align: top;
-}
-.comparison thead th {
-  font-size: var(--tg-fs-xs);
-  letter-spacing: 0.04em;
-  color: var(--tg-fg-subtle);
-  font-weight: 600;
-  font-family: var(--tg-font-mono);
-  border-bottom: 1px solid var(--tg-line-strong);
-}
-.comparison td.us {
-  font-weight: 600;
-  color: var(--tg-fg);
 }
 
 /* Footer */
@@ -467,44 +475,6 @@ footer.site .copy {
   }
 }
 
-/* ===== Why — flat rows, term left / detail right ===== */
-.why-points {
-  margin-top: var(--tg-s-6);
-  border-top: 1px solid var(--tg-line);
-}
-.why-point {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  gap: var(--tg-s-3) var(--tg-s-6);
-  align-items: baseline;
-  padding: var(--tg-s-4) 0;
-  border-bottom: 1px solid var(--tg-line);
-}
-.why-point h3 {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-base);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-.why-point p {
-  margin: 0;
-  color: var(--tg-fg-muted);
-  font-size: var(--tg-fs-base);
-}
-@media (max-width: 720px) {
-  .why-point {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--tg-s-1);
-  }
-}
-
-.comparison tbody th[scope="row"] {
-  background: transparent;
-  color: var(--tg-fg);
-  font-weight: 700;
-}
-
 /* ===== Footer (expanded) ===== */
 footer.site .container {
   display: grid;
@@ -533,38 +503,51 @@ footer.site .container {
   }
 }
 
-/* ===== Usage — one request traced through the real surfaces it touches ===== */
-/* Text first, then the actual screen full-width under it — a document page,
- * not alternating feature rows. */
-.run {
+/* ===== Run — one request traced through the real surfaces it touches ===== */
+/* Compact note left, actual UI crop right — three stages of the same run. */
+.run-steps {
   list-style: none;
   margin: var(--tg-s-6) 0 0;
   padding: 0;
-}
-.run-step {
-  padding: var(--tg-s-6) 0;
   border-top: 1px solid var(--tg-line);
 }
-.run-step:first-child {
-  border-top: none;
-  padding-top: 0;
+.run-step {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--tg-s-4) var(--tg-s-6);
+  align-items: start;
+  padding: var(--tg-s-5) 0;
+  border-bottom: 1px solid var(--tg-line);
+}
+.run-step-copy {
+  min-width: 0;
 }
 .run-num {
+  display: block;
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  font-weight: 500;
   color: var(--tg-fg-subtle);
-  font-weight: 400;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--tg-s-1);
 }
 .run-step h3 {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-lg);
+  font-size: var(--tg-fs-base);
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0 0 var(--tg-s-2);
 }
 .run-connect {
-  margin: 0 0 var(--tg-s-4);
+  margin: 0;
   color: var(--tg-fg-muted);
-  font-size: var(--tg-fs-base);
-  max-width: 64ch;
+  font-size: var(--tg-fs-sm);
+  max-width: 52ch;
+}
+@media (max-width: 880px) {
+  .run-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ===== Workspace — the stage the run happens on ===== */

@@ -3,15 +3,15 @@ import type { AppVisualKind } from '~/content/site';
 import { useT } from '~/lib/i18n';
 
 /** Real screenshots of the running takos app (public/screens), captured from
- *  the actual web UI — chat thread, agent Work board, memory list, and the
- *  install surface. Rendered as a plain figure: hairline border, honest
- *  caption, no re-drawn browser chrome. */
+ *  the actual web UI and cropped to the region that carries the content —
+ *  dead window space is cut, nothing is redrawn. Rendered as a plain figure:
+ *  hairline image rule, honest caption, no re-drawn chrome. */
 const FILES: Record<AppVisualKind, { src: string; w: number; h: number }> = {
-  chat: { src: '/screens/chat.webp', w: 1600, h: 1000 },
-  thread: { src: '/screens/chat-thread.webp', w: 1060, h: 1000 },
-  agent: { src: '/screens/work.webp', w: 1600, h: 1000 },
-  memory: { src: '/screens/memory.webp', w: 1600, h: 720 },
-  space: { src: '/screens/install.webp', w: 1600, h: 500 },
+  chat: { src: '/screens/chat-stitch.webp', w: 1600, h: 810 },
+  thread: { src: '/screens/thread-stitch.webp', w: 1060, h: 580 },
+  work: { src: '/screens/work-tasks.webp', w: 1140, h: 400 },
+  memory: { src: '/screens/memory-cards.webp', w: 1600, h: 470 },
+  install: { src: '/screens/install.webp', w: 1600, h: 500 },
 };
 
 export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
@@ -29,3 +29,4 @@ export default function AppVisual(props: { kind: AppVisualKind }): JSX.Element {
     </figure>
   );
 }
+

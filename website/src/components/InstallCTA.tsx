@@ -16,6 +16,7 @@ export default function InstallCTA() {
   return (
     <Section
       id='install'
+      index='05'
       class='install'
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}

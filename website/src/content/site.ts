@@ -1,18 +1,19 @@
 /**
- * Bilingual content dictionary for the Takos landing site.
+ * Bilingual content dictionary for the Takos site.
  *
- * `ja` is the source-of-truth voice (Takos is JP-first); `en` mirrors it for
- * discoverability. Both locales are prerendered as separate routes (`/` and
- * `/en/`). Keep product nouns (chat / agent / memory / Workspace, installable apps,
- * Takosumi, Installation) identical across locales — only the connective prose
- * is translated. Do NOT describe Takosumi concepts as Takos features, and do
- * not soften the platform-readiness launch gate (see AGENTS.md 中核原則).
+ * The page is a product document, not a landing funnel: a factual head
+ * (name, descriptor, spec), then numbered sections that trace one real run
+ * through the actual UI. 'ja' is the source-of-truth voice (Takos is
+ * JP-first); 'en' mirrors it. Keep product nouns (chat / agent / memory /
+ * Workspace, installable apps, Takosumi) identical across locales. Do NOT
+ * describe Takosumi concepts as Takos features, and do not soften the
+ * platform-readiness launch gate (see AGENTS.md 中核原則).
  */
 
 export type Locale = "ja" | "en";
 export const LOCALES: readonly Locale[] = ["ja", "en"];
 
-/** Inline rich-text segment. `code` renders <code>, `em` renders the accent. */
+/** Inline rich-text segment. 'code' renders <code>, 'em' renders the accent. */
 export interface Seg {
   readonly t: string;
   readonly code?: boolean;
@@ -20,17 +21,19 @@ export interface Seg {
 }
 export type Rich = readonly Seg[];
 
-export interface TitleLine {
-  readonly t: string;
-}
-
 export interface Item {
   readonly title: string;
   readonly body: string;
 }
 
+/** Term/definition row used by the head spec and the data section. */
+export interface DefRow {
+  readonly term: string;
+  readonly def: string;
+}
+
 /** Which real screen the AppVisual component renders (public/screens). */
-export type AppVisualKind = "chat" | "thread" | "agent" | "memory" | "space";
+export type AppVisualKind = "chat" | "thread" | "work" | "memory" | "install";
 
 /** Alt text + caption for one real screenshot. */
 export interface VisualCopy {
@@ -39,7 +42,7 @@ export interface VisualCopy {
 }
 
 /** One step of the run sequence — the same request moving through surfaces.
- *  `key` selects which real-UI visual the Run section renders. */
+ *  'key' selects which real-UI visual the Run section renders. */
 export interface RunStep {
   readonly key: AppVisualKind;
   readonly name: string;
@@ -51,12 +54,6 @@ export interface AppItem {
   readonly tag: string;
   readonly role: string;
   readonly body: string;
-}
-
-export interface CompareRow {
-  readonly label: string;
-  readonly us: string;
-  readonly them: string;
 }
 
 export interface InstallCard {
@@ -75,27 +72,21 @@ export interface Strings {
     readonly ogDescription: string;
   };
   readonly nav: {
-    readonly why: string;
-    readonly features: string;
-    readonly workspace: string;
+    readonly run: string;
     readonly apps: string;
-    readonly docs: string;
+    readonly data: string;
     readonly install: string;
+    readonly docs: string;
     readonly openMenu: string;
     readonly closeMenu: string;
   };
-  readonly hero: {
-    readonly title: readonly TitleLine[];
+  readonly head: {
+    readonly tagline: string;
     readonly lede: Rich;
     readonly useTakos: string;
     readonly github: string;
-    readonly spec: readonly string[];
-    readonly cloneHint: string;
-  };
-  readonly why: {
-    readonly title: string;
-    readonly lede: Rich;
-    readonly points: readonly Item[];
+    readonly docs: string;
+    readonly spec: readonly DefRow[];
   };
   readonly run: {
     readonly title: string;
@@ -112,12 +103,10 @@ export interface Strings {
     readonly lede: string;
     readonly items: readonly AppItem[];
   };
-  readonly compare: {
+  readonly data: {
     readonly title: string;
-    readonly lede: string;
-    readonly colUs: string;
-    readonly colThem: string;
-    readonly rows: readonly CompareRow[];
+    readonly lede: Rich;
+    readonly rows: readonly DefRow[];
   };
   readonly install: {
     readonly title: string;
@@ -141,101 +130,66 @@ const ja: Strings = {
   meta: {
     title: "Takos",
     description:
-      "Takos は self-hostable な chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
+      "Takos は self-hostable な chat & agent product。chat で頼むと agent が tool を呼んで仕事を進め、task と成果物は Workspace に残り、やり取りは memory に蓄積する。office / computer / social などの installable apps を Capsule として追加でき、OpenTofu module で self-host できる AGPL の OSS。",
     ogTitle: "Takos",
     ogDescription:
-      "Self-hostable な chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
+      "Self-hosted AI workspace。chat で頼むと agent が tool を呼んで仕事を進める。全部、自分のサーバーの中で。OpenTofu module で self-host、AGPL の OSS。",
   },
   nav: {
-    why: "なぜ Takos",
-    features: "使い方",
-    workspace: "Workspace",
-    apps: "Installable apps",
+    run: "使い方",
+    apps: "Apps",
+    data: "データ",
+    install: "導入",
     docs: "Docs",
-    install: "Install",
     openMenu: "メニューを開く",
     closeMenu: "メニューを閉じる",
   },
-  hero: {
-    title: [{ t: "Self-hosted AI workspace." }],
+  head: {
+    tagline: "Self-hosted AI workspace.",
     lede: [
-      {
-        t: "chat で頼むと agent が tool を呼んで仕事を進め、成果とやり取りが memory に残る。その全部を、",
-      },
+      { t: "chat で頼むと、agent が tool を呼んで仕事を進める。task と成果物は Workspace に残り、やり取りは memory に蓄積する。その全部を、" },
       { t: "自分のサーバーの中で", em: true },
-      { t: " 動かせます。ログインしてすぐ始められます。" },
+      { t: " 動かせる。" },
     ],
-    useTakos: "Takos を使う",
+    useTakos: "使う",
     github: "GitHub",
+    docs: "Docs",
     spec: [
-      "AGPL-3.0",
-      "chat",
-      "agent",
-      "memory",
-      "workspace",
-      "installable apps",
-      "MCP tools",
-    ],
-    cloneHint: "または source から",
-  },
-  why: {
-    title: "データは自分のサーバーに残る",
-    lede: [
-      {
-        t: "ここまでの run で起きたこと — 依頼の内容、tool が触れた file、残った docs、積み上がった memory — は全部 ",
-      },
-      { t: "あなたのサーバーの中", em: true },
-      {
-        t: " にあります。AI が日常のインフラになるなら、誰と話したか・何を覚えさせたかが他社のサーバーに溜まり続けるのは、おかしい。",
-      },
-    ],
-    points: [
-      {
-        title: "データ主権",
-        body: "会話・memory・file は自分の VM / cloud の中に置かれ、いつでも丸ごと export して別の環境へ移せる。",
-      },
-      {
-        title: "ロックインしない",
-        body: "deploy は OpenTofu module として宣言。現在の supported adapter は Cloudflare で、別の実行基盤は adapter を足せる。",
-      },
-      {
-        title: "fork できる自由",
-        body: "AGPL でコードは全部 public。自分の用途に合わせて機能を足しても外しても自由。",
-      },
+      { term: "license", def: "AGPL-3.0" },
+      { term: "upstream", def: "github.com/tako0614/takos" },
+      { term: "engine", def: "takos-agent-engine (Rust)" },
+      { term: "runtime", def: "Cloudflare Workers — OpenTofu module" },
+      { term: "install", def: "Takosumi Capsule · Git URL · OpenTofu" },
     ],
   },
   run: {
     title: "使い方",
-    lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過です。",
+    lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過。",
     steps: [
       {
         key: "thread",
         name: "Chat で頼む",
         connect:
-          "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼んで動き始める。",
+          "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼ぶ。",
       },
       {
-        key: "agent",
+        key: "work",
         name: "Work board で進む",
         connect:
-          "同じ job が Work Tasks に task として載り、In Progress から Run completed まで状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の agent engine が担う。",
+          "job は Work Tasks に task として載り、状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の agent engine が担う。",
       },
       {
         key: "memory",
-        name: "docs に残り、Memory に効く",
+        name: "docs に残り、memory に効く",
         connect:
-          "成果物は install した takos-office の docs に file として残り、やり取りは Memory に蓄積する。次の会話は続きから始まる。",
+          "成果物は install した takos-office の docs に file として残り、やり取りは memory に蓄積する。次の会話は続きから始まる。",
       },
     ],
   },
   workspace: {
     title: "Workspace",
     lede: [
-      { t: "この run が起きている場所が Workspace。" },
-      { t: "Workspace ごとに分離・権限管理", em: true },
-      {
-        t: " され、必要な app を選んで追加できる。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。",
-      },
+      { t: "run が起きている場所。" },
     ],
     points: [
       "Workspace ごとに分離・権限管理",
@@ -245,13 +199,14 @@ const ja: Strings = {
   },
   apps: {
     title: "Installable apps",
-    lede: "Apps 画面の「Add from Git URL」から Capsule を install すると、Workspace に tile が並び、その app が公開する tool が MCP 経由で agent の toolbox に加わる。さっきの run で docs に保存できたのも、install 済みの takos-office の tool だった。",
+    lede:
+      "Apps 画面の「Add from Git URL」から Capsule を install すると、Workspace に tile が並び、その app が公開する tool が MCP 経由で agent の toolbox に加わる。さっきの run で docs に保存できたのも、install 済みの takos-office の tool だった。",
     items: [
       {
         name: "takos-office",
         tag: "office",
         role: "docs / slide / sheet",
-        body: "文書 (docs)・プレゼン (slide)・表計算 (sheet) を 1 つの worker に統合した office suite。MCP 経由で agent が直接ファイルを編集でき、Google Docs / Slides / Sheets の代替を自分の Workspace の中で完結させる。",
+        body: "文書 (docs)・プレゼン (slide)・表計算 (sheet) を 1 つの worker に統合した office suite。MCP 経由で agent が file を直接編集でき、Google Docs / Slides / Sheets の代替を自分の Workspace の中で完結させる。",
       },
       {
         name: "takos-computer",
@@ -263,42 +218,25 @@ const ja: Strings = {
         name: "yurucommu",
         tag: "social",
         role: "ActivityPub social",
-        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product で、通常の Capsule として Workspace に追加できる。data は自分の中に置いたまま外と繋がれる。",
+        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product で、通常の Capsule として Workspace に追加できる。",
       },
     ],
   },
-  compare: {
-    title: "SaaS chat との違い",
-    lede: "自分のサーバーで動かす Takos と、提供元に預ける SaaS chat の典型的な違い。data が誰のものか、という観点で並べています (すべての SaaS に当てはまるわけではありません)。",
-    colUs: "Takos (self-host)",
-    colThem: "SaaS chat (預ける)",
+  data: {
+    title: "データの所在",
+    lede: [
+      {
+        t: "run で起きたこと — 依頼の内容、tool が触れた file、残った docs、積み上がった memory — は全部 ",
+      },
+      { t: "あなたのサーバーの中", em: true },
+      { t: " にある。" },
+    ],
     rows: [
-      {
-        label: "data の所在",
-        us: "自分の VM / cloud",
-        them: "ベンダーのサーバー",
-      },
-      {
-        label: "memory / 履歴",
-        us: "自分の Workspace に保持",
-        them: "提供元が保持・学習に利用しうる",
-      },
-      {
-        label: "ベンダーロックイン",
-        us: "いつでも export・移行",
-        them: "移行は困難なことが多い",
-      },
-      {
-        label: "カスタマイズ",
-        us: "AGPL で fork 自由",
-        them: "提供される範囲のみ",
-      },
-      { label: "Federation", us: "ActivityPub で接続", them: "基本クローズド" },
-      {
-        label: "料金 (self-host)",
-        us: "ソフトは無料 (基盤費のみ)",
-        them: "seat / 従量課金",
-      },
+      { term: "会話・memory・file", def: "自分のサーバー内の Workspace に保存される" },
+      { term: "export", def: "いつでも丸ごと export して別の環境へ移せる" },
+      { term: "実行基盤", def: "Cloudflare adapter (OpenTofu module)。別の基盤は adapter を追加できる" },
+      { term: "federation", def: "ActivityPub で他の Takos・fediverse と接続" },
+      { term: "license", def: "AGPL-3.0 — fork・改変は自由" },
     ],
   },
   install: {
@@ -306,50 +244,48 @@ const ja: Strings = {
     lede: [
       { t: "リンクを押すと " },
       { t: "Takosumi", code: true },
-      {
-        t: " の導入画面が開きます。中身を確認して自分の場所に入れ、そのまま使えます。",
-      },
+      { t: " の導入画面が開く。中身を確認して自分の場所に入れ、そのまま使える。" },
     ],
     cards: [
       {
         kind: "use",
         title: "すぐ使う",
-        body: "いちばん簡単な入口。ログインして、画面の案内にそって進むだけで Takos を始められます。一般公開の準備が整うまでは、案内の途中でいったん止まります。",
-        cta: "すぐ使う",
+        body: "ログインして画面の案内にそって進むだけで始められる。一般公開の準備が整うまでは、案内の途中でいったん止まる。",
+        cta: "使う",
       },
       {
         kind: "git",
-        title: "リンクから入れる",
-        body: "ボタンを押すと導入画面が開き、入れるアプリと入れる先が分かりやすく表示されます。中身を確認してそのまま導入。エンジニアでなくてもここから始められます（取得元の細かい設定は折りたたみの中にあります）。",
-        cta: "リンクから入れる",
+        title: "Capsule として入れる",
+        body: "導入画面に、入れる app と入れる先が表示される。中身を確認してそのまま導入できる。",
+        cta: "入れる",
       },
       {
         kind: "self",
         title: "自分のサーバーで動かす",
-        body: "自分のインフラで動かしたい人向け。Git の release tag を固定して、依存パッケージを入れ、OpenTofu の plan を確認してから apply します。クラウドの種類などは自分で選べます。",
+        body: "自分のインフラで動かしたい人向け。release tag を固定し、依存を入れ、OpenTofu の plan を確認してから apply する。",
       },
     ],
   },
   visuals: {
     chat: {
       alt: "Takos の実画面: chat での依頼に agent が tool を実行し、docs にファイルを保存して返答している",
-      caption: "chat での依頼と、agent による tool 実行の結果",
+      caption: "chat — 依頼から tool 実行、返答まで",
     },
     thread: {
-      alt: "Takos の実画面: chat スレッドで agent が tool 実行の進行を返している",
-      caption: "chat スレッド。依頼への tool 実行がその場で進む",
+      alt: "Takos の実画面: chat スレッドで agent が tool 実行の結果を返している",
+      caption: "chat thread — 依頼への tool 実行がその場で進む",
     },
-    agent: {
-      alt: "Takos の実画面: エージェント設定の仕事タブに、予定・進行中・完了の task が並んでいる",
-      caption: "エージェント設定の「仕事」タブ。task が状態で並ぶ",
+    work: {
+      alt: "Takos の実画面: Work Tasks に予定・進行中・完了の task が並んでいる",
+      caption: "Work Tasks — task が状態で並ぶ",
     },
     memory: {
-      alt: "Takos の実画面: メモリ一覧にエピソード・知識・手順のカードが並んでいる",
-      caption: "memory 一覧。種別フィルタと評価つきで残る",
+      alt: "Takos の実画面: memory 一覧にエピソード・知識・手順のカードが並んでいる",
+      caption: "memory — 種別フィルタと評価つきで残る",
     },
-    space: {
+    install: {
       alt: "Takos の実画面: install 画面に Git URL・OpenTofu・Takosumi Run・Capsule の導入経路が並んでいる",
-      caption: "install 画面。Git URL / OpenTofu / Capsule から入れる",
+      caption: "install — Git URL / OpenTofu / Capsule から入れる",
     },
   },
   footer: {
@@ -372,104 +308,69 @@ const en: Strings = {
   meta: {
     title: "Takos",
     description:
-      "Takos is a self-hostable chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on your own substrate — the current supported adapter is Cloudflare — and your history and memory are stored on your own server. Open source under AGPL.",
+      "Takos is a self-hostable chat & agent product. Ask in chat and the agent calls tools to get work done; tasks and artifacts stay in the Workspace, and the exchange accrues in memory — all on your own server. Installable apps (office / computer / social) attach as Capsules. OpenTofu module, AGPL.",
     ogTitle: "Takos",
     ogDescription:
-      "A self-hostable AI chat & agent. Your history and memory are stored on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
+      "Self-hosted AI workspace. Ask in chat and the agent runs the tools. Everything stays on your own server. OpenTofu module, AGPL.",
   },
   nav: {
-    why: "Why Takos",
-    features: "How it runs",
-    workspace: "Workspace",
-    apps: "Installable apps",
-    docs: "Docs",
+    run: "How it works",
+    apps: "Apps",
+    data: "Data",
     install: "Install",
+    docs: "Docs",
     openMenu: "Open menu",
     closeMenu: "Close menu",
   },
-  hero: {
-    title: [{ t: "Self-hosted AI workspace." }],
+  head: {
+    tagline: "Self-hosted AI workspace.",
     lede: [
       {
-        t: "Ask in chat and the agent calls tools to get it done; the work and the exchange accrue in memory. All of it runs ",
+        t: "Ask in chat and the agent calls tools to get the work done. Tasks and artifacts stay in the Workspace; the exchange accrues in memory. All of it runs ",
       },
       { t: "on a server you own", em: true },
-      { t: ". Log in and start in seconds." },
+      { t: "." },
     ],
-    useTakos: "Use Takos",
+    useTakos: "Use it",
     github: "GitHub",
+    docs: "Docs",
     spec: [
-      "AGPL-3.0",
-      "chat",
-      "agent",
-      "memory",
-      "workspace",
-      "installable apps",
-      "MCP tools",
-    ],
-    cloneHint: "or build from source",
-  },
-  why: {
-    title: "Your data stays on your server",
-    lede: [
-      {
-        t: "Everything in that run — the request, the files the tools touched, the saved docs, the accumulated memory — stays ",
-      },
-      { t: "inside your server", em: true },
-      {
-        t: ". If AI is becoming everyday infrastructure, who you talked to and what you taught it shouldn’t keep piling up on someone else’s.",
-      },
-    ],
-    points: [
-      {
-        title: "Data sovereignty",
-        body: "Conversations, memory, and files sit inside your own VM or cloud, and you can export everything and move anytime.",
-      },
-      {
-        title: "No lock-in",
-        body: "Deploy is declared as a plain OpenTofu module. The current supported adapter is Cloudflare; other substrates can be added as adapters.",
-      },
-      {
-        title: "Freedom to fork",
-        body: "AGPL, with all code public. Fork it for your needs — add features or remove them.",
-      },
+      { term: "license", def: "AGPL-3.0" },
+      { term: "upstream", def: "github.com/tako0614/takos" },
+      { term: "engine", def: "takos-agent-engine (Rust)" },
+      { term: "runtime", def: "Cloudflare Workers — OpenTofu module" },
+      { term: "install", def: "Takosumi Capsule · Git URL · OpenTofu" },
     ],
   },
   run: {
-    title: "Using Takos",
-    lede: "Follow one request through Takos. Chat, the Work board, and Memory aren’t separate features — they’re one run in progress.",
+    title: "How it works",
+    lede:
+      "One request, followed through Takos. Chat, the Work board, and memory are not separate features — they are stages of a single run.",
     steps: [
       {
         key: "thread",
-        name: "Ask in Chat",
+        name: "Ask in chat",
         connect:
-          "Write what you want in plain words. Cloud LLMs and local models switch within the same thread, and the agent starts calling tools on the spot.",
+          "Write what you want in plain words. Cloud LLMs and local models switch inside the same thread, and the agent calls tools on the spot.",
       },
       {
-        key: "agent",
-        name: "It progresses on the Work board",
+        key: "work",
+        name: "It moves on the Work board",
         connect:
-          "The same job lands on Work Tasks and moves from In Progress to Run completed. A Rust agent engine handles the tool calls and multi-step execution.",
+          "The job lands on Work Tasks and is tracked by state. A Rust agent engine handles the tool calls and multi-step execution.",
       },
       {
         key: "memory",
-        name: "Kept in docs, carried by Memory",
+        name: "Saved to docs, carried by memory",
         connect:
-          "The artifact stays as a file in docs — here, via the installed takos-office — and the exchange accrues in Memory. The next chat starts where this one left off.",
+          "Artifacts stay as files in docs — here, via the installed takos-office — and the exchange accrues in memory. The next chat starts where this one left off.",
       },
     ],
   },
   workspace: {
-    title: "Workspaces",
+    title: "Workspace",
     lede: [
-      { t: "A Workspace is where this run happens. " },
-      {
-        t: "Each Workspace is isolated, with its own permissions",
-        em: true,
-      },
-      {
-        t: ", and you add the apps you need to it. Connect to other Takos and the fediverse over ActivityPub when you want.",
-      },
+      { t: "Where the run happens." },
     ],
     points: [
       "Isolation & permissions per Workspace",
@@ -479,7 +380,8 @@ const en: Strings = {
   },
   apps: {
     title: "Installable apps",
-    lede: "Install a Capsule from “Add from Git URL” on the Apps screen: a tile joins the Workspace, and the tools the app publishes join the agent’s toolbox over MCP. The docs save in the run above worked because an installed takos-office tool was already in the toolbox.",
+    lede:
+      "Install a Capsule from “Add from Git URL” on the Apps screen: a tile joins the Workspace, and the tools the app publishes join the agent's toolbox over MCP. The docs save in the run above worked because an installed takos-office tool was already in the toolbox.",
     items: [
       {
         name: "takos-office",
@@ -501,93 +403,70 @@ const en: Strings = {
       },
     ],
   },
-  compare: {
-    title: "Differences from SaaS chat",
-    lede: "How running Takos on your own server differs from delegating to a SaaS provider — typical trade-offs framed around who owns the data (not true of every product).",
-    colUs: "Takos (self-host)",
-    colThem: "SaaS chat (delegated)",
+  data: {
+    title: "Where the data lives",
+    lede: [
+      {
+        t: "Everything in a run — the request, the files the tools touched, the saved docs, the accumulated memory — stays ",
+      },
+      { t: "inside your server", em: true },
+      { t: "." },
+    ],
     rows: [
-      {
-        label: "Where data lives",
-        us: "Your own VM / cloud",
-        them: "The vendor’s servers",
-      },
-      {
-        label: "Memory / history",
-        us: "Kept in your Workspace",
-        them: "Held by the provider, may train on it",
-      },
-      {
-        label: "Vendor lock-in",
-        us: "Export / migrate anytime",
-        them: "Migration is often hard",
-      },
-      {
-        label: "Customization",
-        us: "Fork freely under AGPL",
-        them: "Only what is offered",
-      },
-      {
-        label: "Federation",
-        us: "Connected via ActivityPub",
-        them: "Mostly closed",
-      },
-      {
-        label: "Price (self-host)",
-        us: "Software is free (infra only)",
-        them: "Per-seat / usage billing",
-      },
+      { term: "chats, memory, files", def: "stored in a Workspace on your own server" },
+      { term: "export", def: "export everything and move to another substrate anytime" },
+      { term: "runtime", def: "Cloudflare adapter (OpenTofu module); other substrates can be added as adapters" },
+      { term: "federation", def: "connects to other Takos and the fediverse over ActivityPub" },
+      { term: "license", def: "AGPL-3.0 — fork and modify freely" },
     ],
   },
   install: {
     title: "Install",
     lede: [
-      { t: "Press the link and " },
+      { t: "Following the link opens the " },
       { t: "Takosumi", code: true },
-      {
-        t: "'s install screen opens. Review what's inside, add it to your own place, and start using it.",
-      },
+      { t: " install screen. Review what's inside, add it to your own place, and start using it." },
     ],
     cards: [
       {
         kind: "use",
         title: "Just use it",
-        body: "The easiest way in. Log in and follow the on-screen guide to start Takos. Until the public launch is ready, the guide pauses partway through.",
-        cta: "Just use it",
+        body: "Log in and follow the on-screen guide to start Takos. Until the public launch is ready, the guide pauses partway through.",
+        cta: "Use it",
       },
       {
         kind: "git",
-        title: "Install from a link",
-        body: "The button opens the install screen showing, in plain terms, the app you are adding and where it goes. Review it and install. You do not need to be an engineer to start here (the finer source settings live inside a fold-out).",
-        cta: "Install from a link",
+        title: "Install as a Capsule",
+        body: "The install screen shows the app and where it goes. Review it and install — no engineering required to start here.",
+        cta: "Install",
       },
       {
         kind: "self",
         title: "Run it on your own server",
-        body: "For people who want to run it on their own infrastructure. Pin the Git release tag, install dependencies, review an OpenTofu plan, and then apply it. You choose the cloud and the rest yourself.",
+        body: "For people who want their own infrastructure. Pin the Git release tag, install dependencies, review an OpenTofu plan, then apply.",
       },
     ],
   },
   visuals: {
     chat: {
       alt: "Actual Takos screen: a chat request where the agent ran tools and saved a file to docs",
-      caption: "A chat request and the agent's tool-run result",
+      caption: "chat — request to tool run to reply",
     },
     thread: {
-      alt: "Actual Takos screen: a chat thread with the agent reporting tool-run progress",
-      caption: "A chat thread — tool runs progress in place",
+      alt: "Actual Takos screen: a chat thread with the agent reporting tool-run results",
+      caption: "chat thread — tool runs answer in place",
     },
-    agent: {
-      alt: "Actual Takos screen: the agent settings Work tab listing planned, in-progress, and completed tasks",
-      caption: "The Work tab in agent settings — tasks listed by state",
+    work: {
+      alt: "Actual Takos screen: Work Tasks listing planned, in-progress, and completed tasks",
+      caption: "Work Tasks — tasks listed by state",
     },
     memory: {
       alt: "Actual Takos screen: the memory list with episode, knowledge, and procedure cards",
-      caption: "The memory list — kept with type filters and ratings",
+      caption: "memory — kept with type filters and ratings",
     },
-    space: {
+    install: {
       alt: "Actual Takos screen: the install surface listing Git URL, OpenTofu, Takosumi Run, and Capsule sources",
-      caption: "The install surface — from Git URL, OpenTofu, or Capsule",
+      caption: "install — from Git URL, OpenTofu, or Capsule",
     },
   },
   footer: {

@@ -5,17 +5,16 @@ import { CloudProvider } from '~/lib/cloud';
 import Seo from './Seo';
 import JsonLd from './JsonLd';
 import Nav from './Nav';
-import Hero from './Hero';
+import Head from './Head';
 import Run from './Run';
 import Workspace from './Workspace';
 import BundledApps from './BundledApps';
-import Why from './Why';
-import Comparison from './Comparison';
+import Data from './Data';
 import InstallCTA from './InstallCTA';
 import Footer from './Footer';
 import AdringWidget from './AdringWidget';
 
-/** The full landing page, rendered once per locale by the route shells. */
+/** The full document page, rendered once per locale by the route shells. */
 export default function Home(props: { locale: Locale }): JSX.Element {
   return (
     <LocaleProvider locale={props.locale}>
@@ -23,12 +22,11 @@ export default function Home(props: { locale: Locale }): JSX.Element {
         <Seo locale={props.locale} />
         <Nav />
         <main>
-          <Hero />
+          <Head />
           <Run />
           <Workspace />
           <BundledApps />
-          <Why />
-          <Comparison />
+          <Data />
           <InstallCTA />
         </main>
         <Footer />
@@ -38,3 +36,4 @@ export default function Home(props: { locale: Locale }): JSX.Element {
     </LocaleProvider>
   );
 }
+

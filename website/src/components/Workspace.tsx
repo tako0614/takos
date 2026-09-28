@@ -11,13 +11,14 @@ export default function Workspace(): JSX.Element {
   return (
     <Section
       id='workspace'
+      index='02'
       title={t.workspace.title}
       lede={<RichText value={t.workspace.lede} />}
     >
       <ul class='ws-points'>
         <For each={t.workspace.points}>{(p) => <li>{p}</li>}</For>
       </ul>
-      <AppVisual kind='space' />
+      <AppVisual kind='install' />
     </Section>
   );
 }
