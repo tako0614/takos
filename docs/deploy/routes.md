@@ -1,40 +1,28 @@
-# ルーティング
+# ルートとドメイン
 
-Takos は `takos/deploy/opentofu/cloudflare` と 1 回の wrangler artifact upload で
-デプロイします。立ち上がった worker が Takos の product route を公開し、外部の
-Takosumi Accounts / deploy-control / dashboard / OpenTofu runner を利用します。
-実行記録は Takosumi が Run / StateVersion / Output として残します。
+Takos は `deploy/opentofu/cloudflare` の OpenTofu module と、wrangler での
+artifact upload という 2 段でデプロイします。できあがる worker が product の
+route を提供し、外部の Takosumi Accounts / deploy-control / dashboard / OpenTofu
+runner の surface を消費します。
 
-## 流れ
+## worker が持つ route
 
-1. Takos の OpenTofu module を実行し、worker artifact を upload します。
-2. 外部の Takosumi Accounts / deploy-control から Workspace とアプリの Capsule を
-   作ります。
-3. provider の所有者を選んで plan を実行し、`plan` Run の差分と警告を確認します。
-4. 確認した plan を apply します。成功した `apply` Run が StateVersion と
-   Output を記録します。
-5. 課金、OIDC client、ドメイン、dashboard は Takos の product 面ではなく
-   Takosumi Accounts plane の管轄です。
+- トップ (`/`) — browser の product UI
+- `/auth/oidc/login`、`/auth/oidc/callback`、`/auth/logout` —
+  Takosumi Accounts issuer への OIDC consumer route
+- その他の product API route — chat、Workspace、アプリの操作
 
-## install の形
+`BASE_URL` が worker の public origin です。認証は外部の Takosumi Accounts
+origin（`TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL`）へ投げます。
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
+## ドメイン
 
-apply の要求は plan 段階で確認済みの `plan` Run を参照します。Takos と Takosumi の
-分担は [Takos の概念](/platform/)を参照してください。
+production / staging の host 名と custom domain は、Takosumi の deploy 設定と
+Cloudflare の route 設定で決まります。`takos/` shell から本番 deploy を直接進めず、
+operator-local の secret store と operations runbook で管理してください。
 
-## 関連ページ
+## 次に読む
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [セルフホスト概要](/deploy/)
+- [初回セットアップ](/operator/bootstrap)
+- [実行場所](/deploy/namespaces)

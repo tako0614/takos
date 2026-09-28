@@ -1,29 +1,25 @@
 # takos-computer
 
-takos-computer は、AI エージェントが MCP 経由で使うサンドボックス実行環境です。
-Cloudflare Workers + Containers の上で動き、サンドボックスコンテナと、worker 側の
-ダッシュボード / プロキシ層に分かれています。利用者が Takos Workspace に明示的に
-install する普通の Capsule アプリで、MCP 対応のエージェントホストなら Takos 以外からも
-利用できます。
+takos-computer は、agent が使えるコンテナ化サンドボックス実行環境を、MCP と簡易
+ダッシュボードで公開する Capsule アプリです。Cloudflare Workers + Containers 上で動き、
+セッションごとに隔離された環境でコマンド実行やファイル操作を任せられます。
 
 ## できること
 
-- エージェント専用のサンドボックスセッションを作り、状態を確認し、破棄できます
-- サンドボックス内でシェルコマンドを実行できます
-- サンドボックスのファイルを読む・書く・一覧する・メタデータを取得できます
-- 実行中プロセスの一覧と停止ができます
-- ダッシュボードからセッションの様子を確認できます
+- agent 専用のサンドボックスセッションを作り、状態を確認し、破棄する
+- サンドボックス内でシェルコマンドを実行する
+- サンドボックスのファイルを読む・書く・一覧する・メタデータを取得する
+- 実行中プロセスの一覧と停止
+- ダッシュボードからセッションの様子を確認する
 
-## Runtime contract
+## 境界
 
-サンドボックス / MCP の公開面は Takos 固有の結合を持ちません。install は他の
-Capsule アプリと同じく、Git リポジトリを Source として登録し、reviewed な
-plan / apply の Run を通して行います。実行記録は Takosumi が Run / StateVersion /
-Output として残します。
+サンドボックス / MCP 表面は Takos 固有の結合を持たず、任意の MCP 対応エージェント
+ホストから使えます。Workspace には利用者が明示的に install する通常の Capsule App で、
+Takosumi 上で動作します。
 
-## 関連ページ
+## 次に読む
 
-- [Installable Apps](/platform/featured-apps)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [takos-computer repository](https://github.com/tako0614/takos-computer)
+- [Bundled Apps](/platform/featured-apps)
+- [ツールと接続](/apps/mcp)

@@ -1,41 +1,33 @@
 # シンプルな Worker
 
-最小の例です。Worker を 1 つデプロイする OpenTofu module を、Git URL と ref だけ
-指定して install します。module 側に Takos 専用の宣言は要りません。
+1 つの Cloudflare Worker と、その公開 URL を返すだけの最小の Capsule module です。
 
-## 流れ
+## Module
 
-1. OpenTofu module を持つ Git リポジトリの URL と ref を選びます。
-2. Capsule を作り、plan を実行します。`plan` Run として差分と警告が記録されるので、
-   内容を確認します。
-3. 確認した plan を apply します。`apply` Run として記録され、成功すると
-   StateVersion と Output が更新されます。
-4. 消すときは `destroy_plan` の確認を経て `destroy_apply` まで進み、同じく履歴に残ります。
+```hcl
+resource "cloudflare_workers_script" "app" {
+  account_id  = var.account_id
+  script_name = "example-worker"
+  content     = file("${path.module}/worker.ts")
+}
 
-接続 (credential) は ProviderConnection が参照を持ち、ProviderBinding が module の
-provider ごとにどの接続を使うかを解決します。OIDC client、課金、ドメインは
-Takosumi Accounts plane の管轄です。
-
-## install の形
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main",
-    "path": "."
-  }
+output "url" {
+  description = "Worker の公開 origin"
+  value       = cloudflare_workers_script.app.url
 }
 ```
 
-これで module を指す Capsule ができます。以後の typed Run が実行記録として
-積み上がります。Takos と Takosumi の分担は [Takos の概念](/platform/)を参照してください。
+## install の流れ
 
-## 関連ページ
+1. この module を持つ repository の Git URL / ref で Capsule を作る。
+2. `plan` Run で変更と policy 判定を確認し、承認して `apply` する。
+3. 成功すると StateVersion と `url` Output が記録される。
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+Output の名前は module 側の自由です。service として公開する場合は、
+Takosumi 側の Interface mapping がその名前を明示的に選びます。
+
+## 次に読む
+
+- [MCP Server の例](/examples/mcp-server)
+- [OpenTofu Output とランタイム Interface](/deploy/runtime-interfaces)
+- [Git URL から install](/platform/store)

@@ -1,43 +1,46 @@
 # OIDC 設定
 
-self-host の Takos は、外部の Takosumi Accounts plane を OIDC issuer として
-サインインします。OIDC client の設定はアカウント側の policy であり、
-Takosumi Accounts plane が所有します。Takos 側が持つのは issuer への接続設定だけです。
+Self-host では、外部の Takosumi Accounts plane が OIDC issuer になります。
+Takos product routes は OIDC consumer として振る舞い、OIDC client の設定そのものは
+account-plane policy として Takosumi Accounts plane が所有します。
 
-## 必要な環境変数
+## 設定の流れ
 
-| 変数 | 必須 | 内容 |
-| --- | --- | --- |
-| `OIDC_ISSUER_URL` | yes | Takosumi Accounts の issuer URL |
-| `OIDC_CLIENT_ID` | yes | issuer に登録した client の ID |
-| `OIDC_CLIENT_SECRET` | optional | confidential client の場合だけ使う secret。public client では送らず、生成する場合は `--confidential-oidc` を指定する (runtime secret として投入) |
-| `OIDC_REDIRECT_URI` | yes | 登録した callback URL |
-| `OIDC_DISCOVERY_URL` | optional | discovery document の URL (issuer から導ける場合は省略可) |
+1. Takos の OpenTofu Capsule（`deploy/opentofu/cloudflare`）を install し、
+   **Capsule** を作る。接続した Cloudflare account に product graph が materialize される。
+2. **`plan` type Run** を実行し、記録された plan・diff・warning を確認する。
+3. 確認した plan を **`apply` type Run** として適用する。成功した apply が
+   **StateVersion** と **Output** を記録する。
+4. Accounts plane が Takos product routes へ OIDC consumer metadata を投影する:
+   `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、`OIDC_REDIRECT_URI`（confidential client の
+   `OIDC_CLIENT_SECRET` は operator が secret store から別途設定する）。
 
-callback のパスは `/auth/oidc/callback` です。issuer 側の client には、その
-URL を redirect URI として登録します。
+## Takos が受ける route
 
-## サインインの流れ
+- `/auth/oidc/login` — issuer への認証開始
+- `/auth/oidc/callback` — UserInfo を検証し、app-local session を作る
+- `/auth/logout` — session の破棄
 
-1. 利用者が `/auth/oidc/login` を開くと、worker は issuer の
-   authorization endpoint へリダイレクトします。PKCE は S256、state は短命の
-   HttpOnly cookie にも置き、callback で state が一致しない応答を拒否します。
-2. 要求する scope は `openid profile email offline_access capsules:read
-   capsules:write` です。
-3. callback で code を token に交換し、profile を解決して session を作ります。
+Takos の dynamic client は public PKCE client を標準とし、
+`openid profile email offline_access capsules:read capsules:write` を要求します。
+callback は UserInfo の `takosumi.workspace_id` と一意で一致する
+`workspace_memberships` を検証した場合だけ session を発行します。
 
-## 確認とつまずきやすいところ
+## install 対象の形
 
-- client ID / redirect URI（secret を使う場合は secret も）は issuer に登録した値と完全一致させます。
-- `OIDC_CLIENT_SECRET` は runtime secret として扱い、公開の Output や
-  リポジトリには書きません。値の形式と投入順序は
-  [ランタイムシークレット](/deploy/runtime-secrets)を参照してください。
-- 公開 hosted install 向けの OIDC client は operator の承認後に account plane
-  が開きます。開くまでは同じ流れを rehearsal / self-host 環境で確認できます。
+Takosumi に渡す install 対象は普通の OpenTofu Capsule です。
 
-## 関連ページ
+```hcl
+module "takos" {
+  source = "github.com/tako0614/takos//deploy/opentofu/cloudflare"
+}
+```
 
-- [オペレーター向けガイド](/operator/)
-- [アカウントモデル](/operator/account-model)
-- [Deploy overview](/deploy/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+adapter を選ぶと typed Runs を経て StateVersion と Output が更新され、
+非 secret の endpoint は Output として記録されます。
+
+## 次に読む
+
+- [初回セットアップ](/operator/bootstrap) — env 一覧を含む前提条件
+- [アカウントモデル](/operator/account-model) — 認証の所有権
+- [OIDC 連携](/apps/oidc-consumer) — install したアプリ側の OIDC

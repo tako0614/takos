@@ -1,40 +1,42 @@
 # マルチサービス構成
 
-複数のサービスを 1 つの graph として持つ module の例です。リポジトリ内の module
-path を指定して、対象の module を正確に選びます。
+1 つの Capsule に複数の service surface をまとめる構成の例です。
+たとえば API worker と object storage を同じ module で provision し、
+それぞれの Output を返します。
 
-## 流れ
+## Module
 
-1. OpenTofu module を持つ Git リポジトリの URL / ref / module path を選びます。
-2. Capsule を作り plan を実行します。module と ProviderConnection /
-   ProviderBinding / policy に対する `plan` Run が記録されます。
-3. 確認した plan を apply します。`apply` Run として記録され、成功すると
-   StateVersion と Output が更新されます。
+```hcl
+resource "cloudflare_workers_script" "api" {
+  account_id  = var.account_id
+  script_name = "example-api"
+  content     = file("${path.module}/api.ts")
+}
 
-接続 (credential) は ProviderConnection が参照を持ち、ProviderBinding が module の
-provider ごとに接続を解決します。アカウントの policy、credential、OIDC client、
-課金、ドメインは Takosumi Accounts plane の管轄です。
+resource "cloudflare_r2_bucket" "objects" {
+  account_id = var.account_id
+  name       = "example-objects"
+}
 
-## install の形
+output "api_url" {
+  description = "API の公開 origin"
+  value       = cloudflare_workers_script.api.url
+}
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "gitUrl": "https://github.com/example/app.git",
-    "ref": "main",
-    "modulePath": "deploy/opentofu/cloudflare"
-  }
+output "bucket_name" {
+  description = "object 保存先 bucket"
+  value       = cloudflare_r2_bucket.objects.name
 }
 ```
 
-Capsule の作成は module 参照を記録し、以後の typed Run が ProviderConnection /
-ProviderBinding / policy に対する `plan` / `apply` の記録を積み上げます。
-Takos と Takosumi の分担は [Takos の概念](/platform/)を参照してください。
+## まとめても分けてもよい
 
-## 関連ページ
+複数 surface を 1 つの Capsule にまとめると plan / apply が 1 回で済みます。
+別 Capsule に分けると、それぞれの Interface / InterfaceBinding を独立に
+管理できます。takos-storage と takos-office のように「storage を提供する
+Capsule」と「それを使う Capsule」に分ける構成が、first-party の普通の形です。
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+## 次に読む
+
+- [OpenTofu Output とランタイム Interface](/deploy/runtime-interfaces)
+- [Bundled Apps](/platform/featured-apps)

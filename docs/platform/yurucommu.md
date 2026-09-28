@@ -1,29 +1,26 @@
 # yurucommu
 
-yurucommu は、フィード、ストーリー、プロフィール、コミュニティ、ダイレクト
-メッセージをひとつにまとめた SNS です。ActivityPub (異なる SNS サーバー同士を
-つなぐ共通仕様) に対応し、ほかのサーバーのユーザーともやり取りできます。
-Takos Workspace には普通の Capsule アプリとして明示的に install します。
+yurucommu は、フィード・ストーリー・プロフィール・コミュニティ・DM をひとつにまとめた
+self-hostable な ActivityPub SNS です。Takos の Workspace に Capsule として install
+すると、その Workspace から独立した SNS が自分のサーバー上で動きます。
 
-## 主な機能
+## Capsule としての位置づけ
 
-- フィードへの投稿、返信、リアクション、検索
-- 画像や動画を使ったストーリー
-- 公開範囲を選べるプロフィールとコミュニティ
-- ユーザーやコミュニティとのダイレクトメッセージ
-- ActivityPub による、別の対応サーバーとのフォローや投稿配送
+- 独立した product で、Takos の部品ではありません。Takos に install しなくても
+  plain OpenTofu module として単独で deploy できます。
+- Capsule として install すると、ActivityPub で他のサーバーや fediverse と
+  連合する SNS が Workspace に追加されます。
+- UI、API、リアルタイム配信は同梱の fullstack Worker が 1 つの origin で提供します。
 
-## 運用先の選び方
+## やり取りの形
 
-yurucommu が所有するのは必要な役割と接続名です。Takosumi ではトップレベルで
-Takoform または Cloudflare のデプロイ adapter を選び、そのあとに別の
-ProviderConnection で接続先を選びます。Takoform の接続先は Host としての
-Takoserver、Cloudflare の接続先は利用者が接続した Cloudflare アカウントで、
-D1、R2、Workers KV、Queues がデータの置き場所になります。
+- 投稿・返信・リアクション・検索・DM・コミュニティ・通知は yurucommu 自身の UI で行います。
+- agent からの操作は、yurucommu が公開する MCP ツール経由で行えます。
+- ActivityPub のフォロー・配送は外部サーバーとも成立します。
 
-## 関連ページ
+## 次に読む
 
-- [Installable Apps](/platform/featured-apps)
-- [Install paths](/apps/install-paths)
-- [yurucommu ドキュメント](https://yurucommu.com/help/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [yurucommu プロダクト](https://yurucommu.com/)
+- [yurucommu repository](https://github.com/tako0614/yurucommu)
+- [Git URL から install](/platform/store)
+- [Bundled Apps](/platform/featured-apps)

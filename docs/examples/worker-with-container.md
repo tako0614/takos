@@ -1,39 +1,34 @@
 # Worker + Container
 
-Container 実行を伴う module の例です。実行環境そのものは module の宣言ではなく、
-policy が provider の許可リスト、state backend、Cloudflare Container 実行を解決します。
+container 対応の Durable Object class を持つ Worker の例です。
+takos-computer のような隔離実行環境を持つアプリがこの形を使います。
 
-## 流れ
+## Module
 
-1. OpenTofu module を持つ Git リポジトリ (URL / ref / module path) を選びます。
-2. Capsule を作り plan を実行し、`plan` Run の差分・警告・policy 結果を確認します。
-3. 確認した plan を apply します。`apply` Run として記録され、成功すると
-   StateVersion と Output が更新されます。
+```hcl
+resource "cloudflare_workers_script" "app" {
+  account_id  = var.account_id
+  script_name = "example-worker-container"
+  content     = file("${path.module}/worker.ts")
 
-接続 (credential) は ProviderConnection が参照を持ち、ProviderBinding が module の
-provider ごとに接続を解決します。アカウントの policy、credential、OIDC client、
-課金、ドメインは Takosumi Accounts plane の管轄です。
+  bindings = [{
+    name       = "SANDBOX"
+    type       = "durable_object_namespace"
+    class_name = "SandboxSession"
+  }]
+}
 
-## install の形
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main",
-    "path": "."
-  }
+output "url" {
+  description = "Worker の公開 origin"
+  value       = cloudflare_workers_script.app.url
 }
 ```
 
-plan は `plan` Run を作り、確認した plan が `apply` Run として適用されます。
-Takos と Takosumi の分担は [Takos の概念](/platform/)を参照してください。
+Durable Object class と container image は module の worker 実装側で宣言します。
+container の起動条件や image の pin は Capsule の deploy 事実として扱い、
+OpenTofu plan で差分を確認してから apply します。
 
-## 関連ページ
+## 次に読む
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [takos-computer](/platform/takos-computer) — この形を使う first-party アプリ
+- [実行場所](/deploy/namespaces)

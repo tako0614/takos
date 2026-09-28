@@ -1,25 +1,11 @@
 # サンプル集
 
-アプリの種類ごとに、Capsule の install がどう進むかを例で示します。どの例でも
-流れは同じです。Git リポジトリを Source として登録し、plan の差分を確認してから
-apply し、結果は Run / StateVersion / Output として Takosumi に残ります。
+Takosumi に install できる OpenTofu Capsule module の最小構成例です。
+どれも普通の OpenTofu module で、module が返すのは deploy の事実（通常の Output）
+だけです。service として公開する形は Takosumi 側の Interface / InterfaceBinding が持ちます。
 
-## 例の一覧
-
-| 例 | 見せること |
-| --- | --- |
-| [シンプルな Worker](/examples/simple-worker) | 最小構成の install。Git URL と ref だけで始める |
-| [Worker + DB](/examples/worker-with-db) | DB の非 secret な識別子または endpoint を module の Output から参照する |
-| [Worker + Container](/examples/worker-with-container) | Container 実行を伴う module を policy 経由で動かす |
-| [MCP Server](/examples/mcp-server) | mcp.server Interface、InterfaceBinding、endpoint mapping、delivery を扱う |
-| [マルチサービス構成](/examples/multi-service) | module path を指定して複数サービスの graph を install する |
-
-アプリの探し方と install の入口は [Capsule を発見して install する](/platform/store)、
-外部ツールの接続は [ツールと接続](/apps/mcp) を参照してください。
-
-## 関連ページ
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [シンプルな Worker](/examples/simple-worker) — 1 つの Worker と公開 URL だけの最小 module
+- [Worker + DB](/examples/worker-with-db) — D1 を binding として持つ Worker
+- [Worker + Container](/examples/worker-with-container) — container 対応の Durable Object を持つ Worker
+- [MCP Server](/examples/mcp-server) — MCP endpoint を Interface として公開する module
+- [マルチサービス構成](/examples/multi-service) — 複数の service を 1 つの Capsule にまとめる構成

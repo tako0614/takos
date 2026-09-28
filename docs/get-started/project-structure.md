@@ -1,25 +1,25 @@
 # プロジェクト構成
 
-Takos は AI workspace の配布です。利用者が触る主な要素は Workspace、chat、agent、
-memory、Git、アプリの起動、MCP tools です。アプリや追加の runtime service は
-Git URL から入る OpenTofu Capsule として install され、外部の Takosumi control
-plane が Capsule / Run / StateVersion / Output / Capsule output projection を管理します。
+Takos は AI workspace distribution です。ユーザー向けの主な構成要素は Workspace、
+chat、agent、memory、Git、app launcher、MCP tools です。アプリや追加の runtime
+service は Git URL から入る OpenTofu Capsule として install され、外部の Takosumi
+control plane が Capsule / Run / StateVersion / Output / Capsule output projection を
+管理します。
 
-## 使い方の流れ
+## 動く流れ
 
-1. Workspace を作り、chat、memory、Git、tool を使います。
-2. アプリやサービスは、OpenTofu Capsule の Git URL / ref / module path を選んで
-   install します。
-3. Takosumi の `plan` Run を確認し、保存された plan を承認してから `apply` します。
-4. Takos は秘密でない Output と Capsule output projection の記録を読み、アプリの
-   起動項目、MCP tool、file handler、ストレージ、Git、agent runtime の capability を
-   表示します。
-5. アカウント、課金、OIDC client、dashboard、provider credential、state、監査の
-   記録は外部の Takosumi control plane に残ります。
+1. Workspace を作り、chat・memory・Git・tool を使う。
+2. アプリや service は Git URL / ref と module path を選んで OpenTofu Capsule として install する。
+3. Takosumi の `plan` Run を確認し、保存された plan を承認してから `apply` する。
+4. Takos は非 secret の output と Capsule output projection の記録を読み、
+   app launcher の項目、MCP tool、file handler、storage、Git、agent runtime の
+   capability を表示する。
+5. account、billing、OIDC client、dashboard、provider credential、state、
+   audit evidence は外部の Takosumi control plane に残る。
 
 ## Capsule の形
 
-Capsule はデプロイする OpenTofu module を指します。
+Capsule は deploy する OpenTofu module を参照します。
 
 ```json
 {
@@ -32,11 +32,13 @@ Capsule はデプロイする OpenTofu module を指します。
 }
 ```
 
-plan / apply の要求は Capsule と確認済みの `plan` Run を参照します。Takos と
-Takosumi の分担は [Takos の概念](/platform/)を参照してください。
+plan / apply のリクエストは Capsule と reviewed `plan` Run を参照します。
+Takos product routes は Takosumi deploy-control API または Takosumi Accounts の
+dashboard flow を呼び、product 固有の deployment surface を別に持ちません。
+境界の全体像は [Takos の概念](/platform/) を参照してください。
 
-## 関連ページ
+## 次に読む
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [セルフホスト概要](/deploy/)
+- [インストール方法](/apps/install-paths)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

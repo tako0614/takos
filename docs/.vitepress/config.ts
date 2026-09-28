@@ -1,6 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { defineConfig } from "vitepress";
 
 function canReadGitTimestamps(): boolean {
@@ -13,40 +11,6 @@ function canReadGitTimestamps(): boolean {
 
 const enableLastUpdated = canReadGitTimestamps();
 
-// Pages rarely carry a frontmatter description. Fall back to the first prose
-// paragraph of the Markdown source so a shared link describes the actual page
-// rather than repeating the site blurb.
-function firstParagraph(srcDir: string, relativePath: string): string | undefined {
-  try {
-    const raw = readFileSync(path.join(srcDir, relativePath), "utf8");
-    const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-    for (const line of body.split("\n")) {
-      const text = line.trim();
-      if (
-        text === "" ||
-        text.startsWith("#") ||
-        text.startsWith("<") ||
-        text.startsWith("```") ||
-        text.startsWith("---") ||
-        text.startsWith(":::") ||
-        text.startsWith("|")
-      )
-        continue;
-      const plain = text
-        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-        .replace(/<[^>]+>/g, "")
-        .replace(/\{#[^}]+\}/g, "")
-        .replace(/[*_`~]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (plain !== "") return plain.slice(0, 200);
-    }
-  } catch {
-    // Fall back to the site-level description below.
-  }
-  return undefined;
-}
-
 export default defineConfig({
   lang: "ja",
   title: "Takos Docs",
@@ -57,8 +21,6 @@ export default defineConfig({
   srcExclude: ["**/_*.md", "contributing/**", "releases/**"],
   themeConfig: {
     siteTitle: "Takos Docs",
-    // Same logo tile as the takos.jp landing (website/public/logo.png).
-    logo: "/logo.png",
     search: {
       provider: "local",
     },
@@ -82,7 +44,7 @@ export default defineConfig({
           { text: "通知", link: "/get-started/notifications" },
           { text: "プロジェクト構成", link: "/get-started/project-structure" },
           { text: "ローカル開発", link: "/get-started/local-development" },
-          { text: "ローカルシェル", link: "/get-started/local-shell" },
+          { text: "Local Shell", link: "/get-started/local-shell" },
         ],
       },
       {
@@ -99,9 +61,9 @@ export default defineConfig({
         text: "Operator",
         items: [
           { text: "概要", link: "/operator/" },
-          { text: "OIDC 設定", link: "/operator/oidc-setup" },
-          { text: "アカウントモデル", link: "/operator/account-model" },
-          { text: "初回セットアップ", link: "/operator/bootstrap" },
+          { text: "OIDC Setup", link: "/operator/oidc-setup" },
+          { text: "Account Model", link: "/operator/account-model" },
+          { text: "Bootstrap", link: "/operator/bootstrap" },
         ],
       },
       {
@@ -115,25 +77,12 @@ export default defineConfig({
           { text: "ルートとドメイン", link: "/deploy/routes" },
           { text: "環境と変数", link: "/deploy/environment" },
           { text: "ランタイムシークレット", link: "/deploy/runtime-secrets" },
-          {
-            text: "スキーマ自動適用と縮退モード",
-            link: "/deploy/runtime-schema-and-capabilities",
-          },
           { text: "デプロイ手順", link: "/deploy/deploy" },
           {
-            text: "release artifact の公開",
+            text: "Release artifact publication",
             link: "/deploy/release-artifact",
           },
-          {
-            text: "First-install owner contract",
-            link: "/deploy/first-install-owner-contract",
-          },
-          { text: "本番デプロイレーン", link: "/deploy/production-lane" },
-          {
-            text: "サイトとドキュメント",
-            link: "/deploy/site-and-docs",
-          },
-          { text: "Run の履歴", link: "/deploy/deploy-group" },
+          { text: "実行履歴", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },
           { text: "ロールバック", link: "/deploy/rollback" },
@@ -145,27 +94,27 @@ export default defineConfig({
         items: [
           { text: "概要", link: "/architecture/" },
           {
-            text: "システムアーキテクチャ",
+            text: "System Architecture",
             link: "/architecture/system-architecture",
           },
-          { text: "サービストポロジー", link: "/architecture/service-topology" },
-          { text: "Takos アプリの Interface", link: "/architecture/app-interface" },
+          { text: "Service Topology", link: "/architecture/service-topology" },
+          { text: "Takos App Interface", link: "/architecture/app-interface" },
           {
-            text: "Capsule の runtime Interface",
+            text: "Capsule Runtime Projection",
             link: "/architecture/capsule-runtime-projection",
           },
-          { text: "アプリメタデータの境界", link: "/architecture/app-metadata" },
-          { text: "ランタイム / エージェント", link: "/architecture/runtime-service" },
+          { text: "App Metadata", link: "/architecture/app-metadata" },
+          { text: "Runtime / Agent", link: "/architecture/runtime-service" },
           {
-            text: "内部トラスト境界",
+            text: "Internal Trust Boundaries",
             link: "/architecture/internal-trust-boundaries",
           },
-          { text: "アーキテクチャ図", link: "/architecture/diagrams" },
+          { text: "Diagrams", link: "/architecture/diagrams" },
         ],
       },
       {
-        text: "パフォーマンス",
-        items: [{ text: "ベースライン", link: "/performance/baseline" }],
+        text: "Performance",
+        items: [{ text: "Baseline", link: "/performance/baseline" }],
       },
       {
         text: "Legal",
@@ -236,14 +185,14 @@ export default defineConfig({
         text: "プラットフォーム",
         items: [
           { text: "概要", link: "/platform/" },
-          { text: "Workspace", link: "/platform/spaces" },
-          { text: "Thread / Run / Artifact", link: "/platform/threads-and-runs" },
-          { text: "update / rollback / export", link: "/platform/upgrade-export" },
+          { text: "Space", link: "/platform/spaces" },
+          { text: "Threads and Runs", link: "/platform/threads-and-runs" },
+          { text: "Upgrade / Export", link: "/platform/upgrade-export" },
           { text: "Git URL から install", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
-          { text: "おすすめアプリ", link: "/platform/featured-apps" },
+          { text: "Bundled Apps", link: "/platform/featured-apps" },
           {
-            text: "リソースガバナンス",
+            text: "Resource Governance",
             link: "/platform/resource-governance",
           },
           { text: "takos-office", link: "/platform/takos-office" },
@@ -257,7 +206,7 @@ export default defineConfig({
           { text: "概要", link: "/reference/" },
           { text: "用語集", link: "/reference/glossary" },
           { text: "API", link: "/reference/api" },
-          { text: "データベース所有権", link: "/reference/database" },
+          { text: "Database Ownership", link: "/reference/database" },
         ],
       },
       {
@@ -270,7 +219,7 @@ export default defineConfig({
             text: "Worker + Container",
             link: "/examples/worker-with-container",
           },
-          { text: "MCP サーバー", link: "/examples/mcp-server" },
+          { text: "MCP Server", link: "/examples/mcp-server" },
           { text: "マルチサービス構成", link: "/examples/multi-service" },
         ],
       },
@@ -293,53 +242,6 @@ export default defineConfig({
     darkModeSwitchLabel: "テーマ切替",
     lightModeSwitchTitle: "ライトモード",
     darkModeSwitchTitle: "ダークモード",
-    notFound: {
-      title: "ページがありません",
-      quote: "URLが正しいか確認するか、検索から探してください。",
-      linkText: "トップへ",
-    },
-    footer: {
-      message: "AGPL-3.0-only",
-      copyright: "© Takos contributors",
-    },
-    editLink: {
-      pattern: "https://github.com/tako0614/takos/edit/main/docs/:path",
-      text: "GitHub でこのページを編集",
-    },
   },
-  head: [
-    ["meta", { name: "theme-color", content: "#dc2626" }],
-    ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
-    ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:site_name", content: "Takos Docs" }],
-    ["meta", { name: "twitter:card", content: "summary_large_image" }],
-  ],
-  transformHead({ pageData, siteConfig, title, description }) {
-    const route = pageData.relativePath
-      .replace(/(^|\/)index\.md$/u, "$1")
-      .replace(/\.md$/u, "");
-    const ogDescription = pageData.frontmatter?.description
-      ? description
-      : (siteConfig?.srcDir
-          ? firstParagraph(siteConfig.srcDir, pageData.relativePath)
-          : undefined) ?? description;
-    const pageUrl = new URL(route, "https://docs.takos.jp/").href;
-    return [
-      ["meta", { property: "og:title", content: title }],
-      ["meta", { property: "og:description", content: ogDescription }],
-      ["meta", { property: "og:locale", content: "ja_JP" }],
-      ["meta", { property: "og:url", content: pageUrl }],
-      ["meta", { property: "og:image", content: "https://docs.takos.jp/og.png" }],
-      ["meta", { property: "og:image:type", content: "image/png" }],
-      ["meta", { property: "og:image:width", content: "1200" }],
-      ["meta", { property: "og:image:height", content: "630" }],
-      ["link", { rel: "canonical", href: pageUrl }],
-      ["meta", { name: "twitter:title", content: title }],
-      ["meta", { name: "twitter:description", content: ogDescription }],
-      ["meta", { name: "twitter:image", content: "https://docs.takos.jp/og.png" }],
-    ];
-  },
-  sitemap: {
-    hostname: "https://docs.takos.jp/",
-  },
+  head: [["meta", { name: "theme-color", content: "#dc2626" }]],
 });

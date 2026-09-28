@@ -1,48 +1,33 @@
 # Takos の概念
 
-Takos は、AI エージェントへの依頼とその成果物を一か所にまとめるワークスペースです。
-chat、agent、memory、Workspace、アプリの追加は Takos が受け持ち、アプリの install や
-インフラの実行履歴は Takosumi が Source / Capsule / Run / StateVersion / Output として記録します。
+Takos は、OpenTofu ネイティブな AI Workspace distribution です。利用者が触れる
+chat、エージェント、メモリ、Workspace、アプリランチャーを Takos が持ち、その背後の
+実行・記録は外部の Takosumi 管理プレーンが持ちます。
 
-## 現在の流れ
+## どこに境界があるか
 
-1. `deploy/opentofu` 配下の adapter と worker artifact で、Takos の配布構成をデプロイします。
-2. 立ち上がった worker が Takos の product route を公開し、外部の Takosumi Accounts /
-   deploy-control / dashboard / OpenTofu runner を利用します。
-3. Takos Workspace を作り、利用者が Capsule アプリを plan / apply の Run で明示的に追加します。
-4. インフラの credential、OIDC client、課金、ドメイン、アカウントの policy は
-   Takosumi Accounts plane が持ちます。
+| ソフトウェア | 持つもの |
+| --- | --- |
+| Takos | chat、agent、memory、Workspace、app launcher、file handler、UI surface、MCP 接続 |
+| Takosumi | Workspace / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output の authority、Accounts plane（OIDC・課金・ダッシュボード） |
 
-## Takos と Takosumi の境界
+アプリや実行基盤は Capsule の Output と Takos runtime contract を通じて見えます。
+Takos 自身は deployment authority を持たず、アプリの install やインフラの変更は
+Takosumi の deploy control plane または Accounts plane の install flow を呼びます。
 
-Takos が持つのは利用者向けのワークスペース体験です (chat、agent、memory、Workspace、
-アプリの起動)。Git、ストレージ、agent runtime、file handler、UI、MCP は Capsule の
-Output と Takos の runtime contract 経由で公開されます。
+## どう動くか
 
-Takosumi は Workspace / Project / Capsule / Source / ProviderConnection / ProviderBinding /
-Run / StateVersion / Output の権限を持ち、Takosumi Accounts plane がアカウントの
-policy、課金、OIDC を管理します。この分担の詳細は
-[内部トラスト境界](/architecture/internal-trust-boundaries)を参照してください。
+1. `deploy/product-resources.json` が Takos の論理トポロジーを宣言し、
+   `deploy/opentofu/cloudflare` が現在の product-graph adapter として具体リソースへ写像する。
+2. Takosumi がその module を普通の OpenTofu Capsule として install し、
+   `plan` type Run → `apply` type Run → StateVersion / Output として記録する。
+3. Workspace が作られ、利用者は Capsule アプリを plan / apply の Run を通じて
+   明示的に追加する。
 
-## API の形
+## 次に読む
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-この形で作られた Capsule は typed Run として記録されます。Takos の product route は
-Takosumi の deploy control plane または account-plane の install flow を呼び、独自の
-deploy 権限は持ちません。
-
-## 関連ページ
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
-- [Takosumi API](https://takosumi.com/docs/reference/api)
+- [Space](/platform/spaces) — Workspace の中身
+- [Threads and Runs](/platform/threads-and-runs) — 依頼が実行になるまで
+- [Git URL から install](/platform/store) — アプリの追加方法
+- [Bundled Apps](/platform/featured-apps) — first-party の Capsule アプリ
+- [セルフホスト概要](/deploy/) — operator として動かす場合

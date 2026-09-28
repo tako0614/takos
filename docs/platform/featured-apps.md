@@ -1,28 +1,23 @@
-# おすすめアプリ (featured apps)
+# Bundled Apps
 
-featured apps は、Takos の配布側が「まずこれを」と用意するアプリのカタログです。
-並ぶのはすべて普通の Capsule アプリで、Git リポジトリから Takosumi の reviewed な
-Run を通して install されます。Takos だけの特別なアプリ形式はありません。
+Workspace には、必要なアプリだけを明示的に追加します。first-party の Capsule アプリは
+どれも普通の installable product で、Workspace 作成時に自動追加されるものはありません。
 
-## カタログの中身
+## 主な Capsule アプリ
 
-各エントリは表示名、アイコン、Git の repository URL と ref、並び順、有効フラグを持ちます。
-preinstall が立ったエントリは、Workspace 作成時の「デフォルトアプリを install」
-設定が有効なときに自動で追加されます。それ以外は Apps 画面から利用者が選んで追加します。
-
-カタログは配布側の設定です。どのエントリも install の実行権限を変えず、通常の
-plan / apply の確認はそのまま行われます。
-
-## first-party の例
-
-| アプリ | 内容 |
+| アプリ | 何をするか |
 | --- | --- |
-| [takos-office](/platform/takos-office) | 文書・スライド・表計算を 1 つの worker にまとめた office suite |
-| [takos-computer](/platform/takos-computer) | エージェントが MCP 経由で使うサンドボックス実行環境 |
-| [yurucommu](/platform/yurucommu) | ActivityPub 対応のセルフホスト SNS |
+| [takos-office](/platform/takos-office) | docs・slide・sheet を 1 worker に統合した office suite。agent が MCP 経由でファイルを直接編集できる |
+| [takos-computer](/platform/takos-computer) | agent から呼べる computer use 環境。ブラウザ操作やコマンド実行を隔離コンテナで任せられる |
+| takos-storage | `storage.object` 相当の HTTP object API と drive / MCP を提供する standalone Capsule。ファイルの実体を自分の環境に置く |
+| takos-git | 標準 `git clone` / `fetch` / `push` が使える collaborative Git hosting。R2 を data plane に使う |
+| [yurucommu](/platform/yurucommu) | self-hosted ActivityPub SNS。fediverse に繋がる独立 product |
 
-## 関連ページ
+## どう見つけて入れるか
 
-- [Capsule を発見して install する](/platform/store)
-- [Install paths](/apps/install-paths)
-- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+アプリは Apps 画面の「Add from Git URL」から Capsule として install します。
+install に成功すると Workspace に tile が並び、そのアプリが公開する tool が
+MCP 経由で agent の toolbox に加わります。
+
+一覧と install の流れは [Git URL から install](/platform/store) 、
+公開される tool の扱いは [ツールと接続](/apps/mcp) を参照してください。
