@@ -1,16 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Takos — self-hosted AI workspace">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Takos — self-hosted chat &amp; agent workspace">
   <rect width="1200" height="630" fill="#0a0a0a"/>
 
   <!-- logo tile (pixel octopus) -->
   <image href="../logo.png" x="96" y="200" width="180" height="180" style="image-rendering: pixelated"/>
 
-  <!-- wordmark + descriptor -->
+  <!-- wordmark + factual descriptor -->
   <text x="320" y="292" font-family="'Bricolage Grotesque', system-ui, sans-serif" font-size="118" font-weight="800" fill="#fafafa" letter-spacing="-4">Takos</text>
-  <text x="324" y="360" font-family="'Bricolage Grotesque', system-ui, sans-serif" font-size="42" font-weight="600" fill="#a3a3a3">Self-hosted AI workspace.</text>
-
-  <!-- spec line -->
-  <text x="324" y="436" font-family="'JetBrains Mono', monospace" font-size="24" fill="#6b6b6b">chat  agent  memory  workspace  installable apps  MCP tools</text>
+  <text x="324" y="360" font-family="'Bricolage Grotesque', system-ui, sans-serif" font-size="40" font-weight="600" fill="#a3a3a3">Self-hosted chat &amp; agent workspace.</text>
 
   <!-- footer line -->
-  <text x="96" y="566" font-family="'JetBrains Mono', monospace" font-size="26" fill="#6b6b6b">AGPL-3.0 · open source · takos.jp</text>
+  <text x="96" y="566" font-family="'JetBrains Mono', monospace" font-size="26" fill="#6b6b6b">AGPL-3.0 · github.com/tako0614/takos · takos.jp</text>
 </svg>

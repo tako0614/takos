@@ -84,21 +84,26 @@ section h2 {
   margin: 0 0 var(--tg-s-4);
   font-weight: 700;
 }
-section h2 + .lede {
+section h2 + .intro {
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-base);
   margin: 0 0 var(--tg-s-6);
   max-width: 64ch;
 }
 
-/* Text links — the only action style on this page. */
-.link-go {
+/* Primary action — one real button per context; everything else is a link. */
+.btn {
+  display: inline-block;
+  background: var(--tg-accent);
+  color: var(--tg-accent-fg);
   font-weight: 600;
   font-size: var(--tg-fs-sm);
-  color: var(--tg-fg);
+  padding: 0.6em 1.15em;
+  border-radius: var(--tg-r-sm);
 }
-.link-go:hover {
-  color: var(--tg-accent);
+.btn:hover {
+  background: var(--tg-accent-hover);
+  color: var(--tg-accent-fg);
 }
 
 /* ===== Nav — transparent over hero, blurred fill after scroll ===== */
@@ -198,6 +203,14 @@ section h2 + .lede {
   font-weight: 600;
   margin-left: var(--tg-s-2);
   white-space: nowrap;
+  background: var(--tg-accent);
+  color: var(--tg-accent-fg);
+  padding: 0.45em 0.95em;
+  border-radius: var(--tg-r-sm);
+}
+.nav-use:hover {
+  background: var(--tg-accent-hover);
+  color: var(--tg-accent-fg);
 }
 
 /* Mobile disclosure menu — <details>/<summary>, zero JS, SSR-safe. */
@@ -250,104 +263,44 @@ section h2 + .lede {
   }
 }
 
-/* ===== Document head — factual opening, then the real screen ===== */
-.doc-head {
+/* ===== Page head — name, one factual paragraph, fact line, links, then the
+ *  real app window at full width. No tagline, no spec table. ===== */
+.page-head {
   padding-top: calc(var(--tg-nav-h) + var(--tg-s-8));
-  padding-bottom: var(--tg-s-8);
-  border-top: none;
 }
-.doc-title {
+.page-title {
   font-family: var(--tg-font-display);
-  font-size: clamp(2.2rem, 4.6vw, 3.4rem);
+  font-size: clamp(2rem, 4vw, 2.6rem);
   line-height: 1;
   letter-spacing: -0.03em;
   font-weight: 800;
   margin: 0;
 }
-.doc-tagline {
-  font-size: var(--tg-fs-lg);
-  font-weight: 500;
-  color: var(--tg-fg);
-  margin: var(--tg-s-3) 0 0;
-}
-.doc-lede {
-  color: var(--tg-fg-muted);
+.page-desc {
   font-size: var(--tg-fs-base);
-  max-width: 60ch;
+  max-width: 62ch;
   margin: var(--tg-s-5) 0 0;
 }
-.intro-links {
+.page-facts {
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  color: var(--tg-fg-subtle);
+  margin: var(--tg-s-3) 0 0;
+}
+.page-actions {
   display: flex;
   gap: var(--tg-s-5);
   flex-wrap: wrap;
-  align-items: baseline;
-  margin: var(--tg-s-4) 0 0;
+  align-items: center;
+  margin: var(--tg-s-5) 0 0;
 }
-.doc-head .viz {
-  margin-top: var(--tg-s-7);
-}
-
-/* ===== Section grid — clause number in the margin, body beside it ===== */
-.doc-grid {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  column-gap: var(--tg-s-6);
-}
-.doc-index {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
-  letter-spacing: 0.08em;
-  padding-top: 0.5em;
-}
-.doc-body {
-  min-width: 0;
-}
-@media (max-width: 720px) {
-  .doc-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .doc-index {
-    padding-top: 0;
-    padding-bottom: var(--tg-s-1);
-  }
-}
-
-/* ===== Term/definition rows — spec list in the head, fact rows in Data ===== */
-.spec-list,
-.def-list {
-  margin: var(--tg-s-6) 0 0;
-  border-top: 1px solid var(--tg-line);
-}
-.spec-row,
-.def-row {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: var(--tg-s-2) var(--tg-s-5);
-  align-items: baseline;
-  padding: var(--tg-s-3) 0;
-  border-bottom: 1px solid var(--tg-line);
-}
-.spec-row dt,
-.def-row dt {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
-  letter-spacing: 0.04em;
-  font-weight: 500;
-}
-.spec-row dd,
-.def-row dd {
-  margin: 0;
+.page-actions a:not(.btn) {
   font-size: var(--tg-fs-sm);
-  color: var(--tg-fg);
+  font-weight: 500;
+  color: var(--tg-fg-muted);
 }
-@media (max-width: 720px) {
-  .spec-row,
-  .def-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
+.page-actions a:not(.btn):hover {
+  color: var(--tg-fg);
 }
 
 /* CodeBlock */
@@ -412,49 +365,32 @@ footer.site .copy {
 }
 
 /* ===== Takos-specific additions ===== */
-.feature-tag {
-  display: inline-block;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
-  margin-left: var(--tg-s-2);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
-  vertical-align: middle;
-}
-
-/* Install — three plain ways in, separated by hairlines. */
-.install-options {
+/* Install — three plain ways in. */
+.install-item {
   margin-top: var(--tg-s-6);
-  border-top: 1px solid var(--tg-line);
 }
-.install-row {
-  padding: var(--tg-s-5) 0;
-  border-bottom: 1px solid var(--tg-line);
+.install-item + .install-item {
+  margin-top: var(--tg-s-7);
 }
-.install-row h3 {
+.install-item h3 {
   font-family: var(--tg-font-display);
   font-size: var(--tg-fs-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0 0 var(--tg-s-2);
 }
-.install-row p {
+.install-item p {
   color: var(--tg-fg-muted);
   margin: 0 0 var(--tg-s-3);
   max-width: 64ch;
 }
-.install-row .codeblock {
+.install-item .link {
+  font-size: var(--tg-fs-sm);
+  font-weight: 500;
+}
+.install-item .codeblock {
   margin-top: var(--tg-s-3);
 }
-/* Inline accent emphasis (RichText `em` segments) */
-.em {
-  font-style: normal;
-  color: var(--tg-fg);
-  font-weight: 700;
-}
-
 /* ===== Language toggle ===== */
 .lang-toggle {
   width: auto;
@@ -503,137 +439,65 @@ footer.site .container {
   }
 }
 
-/* ===== Run — one request traced through the real surfaces it touches ===== */
-/* Compact note left, actual UI crop right — three stages of the same run. */
-.run-steps {
-  list-style: none;
-  margin: var(--tg-s-6) 0 0;
-  padding: 0;
-  border-top: 1px solid var(--tg-line);
+/* ===== Run — one request through the surfaces it actually touches ===== */
+/* Heading, one sentence, then the real UI it happens on. */
+.step {
+  margin-top: var(--tg-s-7);
 }
-.run-step {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--tg-s-4) var(--tg-s-6);
-  align-items: start;
-  padding: var(--tg-s-5) 0;
-  border-bottom: 1px solid var(--tg-line);
-}
-.run-step-copy {
-  min-width: 0;
-}
-.run-num {
-  display: block;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  font-weight: 500;
-  color: var(--tg-fg-subtle);
-  letter-spacing: 0.08em;
-  margin-bottom: var(--tg-s-1);
-}
-.run-step h3 {
+.step h3 {
   font-family: var(--tg-font-display);
   font-size: var(--tg-fs-base);
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0 0 var(--tg-s-2);
 }
-.run-connect {
+.step p {
   margin: 0;
   color: var(--tg-fg-muted);
   font-size: var(--tg-fs-sm);
-  max-width: 52ch;
-}
-@media (max-width: 880px) {
-  .run-step {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ===== Workspace — the stage the run happens on ===== */
-.ws-points {
-  list-style: none;
-  margin: 0 0 var(--tg-s-6);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-2);
-}
-.ws-points li {
-  color: var(--tg-fg);
-  font-size: var(--tg-fs-base);
-}
-.ws-points li::before {
-  content: '—';
-  color: var(--tg-fg-subtle);
-  margin-right: var(--tg-s-2);
+  max-width: 64ch;
 }
 
 /* Real screenshots of the running takos app (public/screens, captured from
- * the actual web UI). Plain figures: a 1px image rule and a caption line —
- * no boxed frame, no re-drawn chrome. */
-.viz {
-  margin: 0;
-}
-.appviz-shot img {
+ * the actual web UI). Full width, full brightness, a 1px rule to separate
+ * from the page — no frame chrome, no caption. */
+.shot {
   display: block;
   width: 100%;
   height: auto;
   border: 1px solid var(--tg-line);
   border-radius: var(--tg-r-sm);
-}
-.appviz-caption {
-  padding: var(--tg-s-2) 2px 0;
-  font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
+  margin-top: var(--tg-s-5);
 }
 
-/* ===== Installable apps — spec list, hairline rows ===== */
-.app-list {
-  list-style: none;
-  margin: var(--tg-s-6) 0 0;
-  padding: 0;
-  border-top: 1px solid var(--tg-line);
+/* ===== Plain lists — apps and data facts ===== */
+.app-list,
+.fact-list {
+  margin: var(--tg-s-5) 0 0;
+  padding-left: 1.4em;
 }
-.app-row {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--tg-s-3) var(--tg-s-6);
-  align-items: baseline;
-  padding: var(--tg-s-5) 0;
-  border-bottom: 1px solid var(--tg-line);
+.app-list li,
+.fact-list li {
+  margin: var(--tg-s-3) 0;
+  color: var(--tg-fg-muted);
 }
-.app-row-id {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--tg-s-1) var(--tg-s-3);
-  min-width: 0;
+.app-list li::marker,
+.fact-list li::marker {
+  color: var(--tg-fg-subtle);
 }
 .app-name {
   font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-lg);
+  font-size: var(--tg-fs-base);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+  color: var(--tg-fg);
 }
-.app-role {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
+.app-name::after {
+  content: ' — ';
   color: var(--tg-fg-subtle);
-  letter-spacing: 0.04em;
+  font-weight: 400;
 }
 .app-body {
-  margin: 0;
-  color: var(--tg-fg-muted);
   font-size: var(--tg-fs-sm);
-}
-@media (max-width: 880px) {
-  .app-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--tg-s-1);
-    padding: var(--tg-s-4) 0;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,22 +1,21 @@
 import { For } from 'solid-js';
 import Section from './Section';
+import AppVisual from './AppVisual';
 import { useT } from '~/lib/i18n';
 
-/** First-party installable apps as a spec list — hairline rows, not cards. */
+/** First-party installable apps — the real install screen, then a plain list
+ *  of what exists. */
 export default function BundledApps() {
   const t = useT();
   return (
-    <Section id='apps' index='03' title={t.apps.title} lede={t.apps.lede}>
+    <Section id='apps' title={t.apps.title} lede={t.apps.lede}>
+      <AppVisual kind='install' />
       <ul class='app-list'>
         <For each={t.apps.items}>
           {(a) => (
-            <li class='app-row'>
-              <div class='app-row-id'>
-                <span class='app-name'>{a.name}</span>
-                <span class='feature-tag'>{a.tag}</span>
-                <span class='app-role'>{a.role}</span>
-              </div>
-              <p class='app-body'>{a.body}</p>
+            <li>
+              <span class='app-name'>{a.name}</span>
+              <span class='app-body'>{a.body}</span>
             </li>
           )}
         </For>

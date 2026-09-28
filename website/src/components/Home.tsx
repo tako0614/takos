@@ -7,7 +7,6 @@ import JsonLd from './JsonLd';
 import Nav from './Nav';
 import Head from './Head';
 import Run from './Run';
-import Workspace from './Workspace';
 import BundledApps from './BundledApps';
 import Data from './Data';
 import InstallCTA from './InstallCTA';
@@ -24,7 +23,6 @@ export default function Home(props: { locale: Locale }): JSX.Element {
         <main>
           <Head />
           <Run />
-          <Workspace />
           <BundledApps />
           <Data />
           <InstallCTA />
@@ -36,4 +34,3 @@ export default function Home(props: { locale: Locale }): JSX.Element {
     </LocaleProvider>
   );
 }
-

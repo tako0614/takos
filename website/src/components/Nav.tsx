@@ -43,7 +43,7 @@ export default function Nav() {
           </a>
           <LangToggle class='nav-icon-desk' />
           <a class='nav-use' href={cloud().useTakos} rel='noopener'>
-            {t.head.useTakos} →
+            {t.head.useTakos}
           </a>
           <details class='nav-menu'>
             <summary class='nav-icon nav-menu-toggle' aria-label={t.nav.openMenu}>

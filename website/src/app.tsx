@@ -12,7 +12,7 @@ export default function App() {
     <Router
       root={(props) => (
         <MetaProvider>
-          <Title>Takos | an AI agent on your own server</Title>
+          <Title>Takos</Title>
           <Suspense>{props.children}</Suspense>
         </MetaProvider>
       )}

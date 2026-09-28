@@ -2,9 +2,8 @@ import { type JSX, Show } from 'solid-js';
 
 interface Props {
   id?: string;
-  /** Margin number rendered left of the body (document clause numbering). */
-  index?: string;
   title?: string;
+  /** One plain intro sentence under the heading. */
   lede?: JSX.Element;
   class?: string;
   children: JSX.Element;
@@ -13,21 +12,15 @@ interface Props {
 export default function Section(props: Props): JSX.Element {
   return (
     <section id={props.id} class={props.class}>
-      <div class='container doc-grid'>
-        <span class='doc-index' aria-hidden='true'>
-          {props.index}
-        </span>
-        <div class='doc-body'>
-          <Show when={props.title}>
-            <h2>{props.title}</h2>
-          </Show>
-          <Show when={props.lede}>
-            <p class='lede'>{props.lede}</p>
-          </Show>
-          {props.children}
-        </div>
+      <div class='container'>
+        <Show when={props.title}>
+          <h2>{props.title}</h2>
+        </Show>
+        <Show when={props.lede}>
+          <p class='intro'>{props.lede}</p>
+        </Show>
+        {props.children}
       </div>
     </section>
   );
 }
-
