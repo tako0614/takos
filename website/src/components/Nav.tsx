@@ -29,7 +29,7 @@ export default function Nav() {
   return (
     <header class='nav' classList={{ 'is-scrolled': scrolled() }}>
       <div class='nav-inner container'>
-        <Wordmark variant='inkdrop' />
+        <Wordmark />
         <nav class='nav-links' aria-label='Primary'>
           <For each={links()}>
             {(l) => <a href={l.href} rel={l.external ? 'noopener' : undefined}>{l.label}</a>}
