@@ -26,7 +26,7 @@ export interface Seg {
 export type Rich = readonly Seg[];
 
 /** Which real screen the AppVisual component renders (public/screens). */
-export type AppVisualKind = "chat" | "thread" | "work" | "memory" | "install";
+export type AppVisualKind = "chat" | "thread" | "work" | "memory";
 
 /** One step of the run sequence — the same request moving through surfaces.
  *  'key' selects which real-UI visual the Run section renders. */
@@ -224,9 +224,6 @@ const ja: Strings = {
     memory: {
       alt: "Takos の実画面: memory 一覧にエピソード・知識・手順のカードが並んでいる",
     },
-    install: {
-      alt: "Takos の実画面: install 画面に Git URL・OpenTofu・Takosumi Run・Capsule の導入経路が並んでいる",
-    },
   },
   footer: {
     copyright: "© Takos contributors — AGPL · Powered by Takosumi.",
@@ -366,9 +363,6 @@ const en: Strings = {
     },
     memory: {
       alt: "Actual Takos screen: the memory list with episode, knowledge, and procedure cards",
-    },
-    install: {
-      alt: "Actual Takos screen: the install surface listing Git URL, OpenTofu, Takosumi Run, and Capsule sources",
     },
   },
   footer: {
