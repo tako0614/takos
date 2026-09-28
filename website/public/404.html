@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="dark" />
     <title>ページが見つかりません | Takos</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <style>
@@ -14,54 +14,55 @@
         display: grid;
         place-items: center;
         padding: 2rem;
-        background: #00a0e4;
-        color: #16120e;
+        background: #09090b;
+        color: #fafafa;
         font-family:
-          'Bricolage Grotesque Variable', 'Bricolage Grotesque', -apple-system,
-          BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
-          'Segoe UI', Roboto, sans-serif;
+          -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN',
+          'Yu Gothic UI', 'Segoe UI', Roboto, sans-serif;
       }
-      .card {
-        background: #fdfcf8;
-        border: 4px solid #16120e;
-        box-shadow: 10px 10px 0 rgba(22, 18, 14, 0.9);
-        padding: 2.6rem 3rem;
-        max-width: 34rem;
+      main { max-width: 30rem; }
+      img {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: block;
+        margin-bottom: 1.5rem;
       }
       .code {
         font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 0.85rem;
-        color: #ed1b24;
+        font-size: 0.8rem;
+        color: #71717a;
         letter-spacing: 0.08em;
       }
       h1 {
-        font-size: 1.6rem;
-        font-weight: 700;
-        margin: 0.6rem 0 0.8rem;
+        font-size: 1.35rem;
+        font-weight: 600;
+        margin: 0.5rem 0 0.7rem;
       }
       p {
-        color: #4a4237;
-        line-height: 1.7;
+        color: #a1a1aa;
+        font-size: 0.92rem;
+        line-height: 1.75;
       }
       a {
         display: inline-block;
         margin-top: 1.4rem;
-        background: #ed1b24;
-        color: #fdfcf8;
-        font-weight: 700;
-        padding: 0.7em 1.4em;
-        text-decoration: none;
-        border: 3px solid #16120e;
-        box-shadow: 4px 4px 0 #16120e;
+        color: #fafafa;
+        font-size: 0.92rem;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-color: #3f3f46;
       }
+      a:hover { color: #53c1f0; }
     </style>
   </head>
   <body>
-    <div class="card">
-      <span class="code">404</span>
+    <main>
+      <img src="/logo.png" alt="" />
+      <p class="code">404</p>
       <h1>ページが見つかりません</h1>
-      <p>URL を確認するか、トップページから移動してください。</p>
-      <a href="/">Takos トップへ</a>
-    </div>
+      <p>URL が変わったか、ページが移動した可能性があります。</p>
+      <a href="/">トップへ戻る</a>
+    </main>
   </body>
 </html>
