@@ -32,7 +32,7 @@ export default function Seo(props: { locale: Locale }): JSX.Element {
       <Meta property='og:locale' content={isJa ? 'ja_JP' : 'en_US'} />
       <Meta property='og:locale:alternate' content={isJa ? 'en_US' : 'ja_JP'} />
       <Meta property='og:image' content={OG_IMAGE} />
-      <Meta property='og:image:alt' content='Takos | an AI agent on your own server' />
+      <Meta property='og:image:alt' content='Takos' />
 
       <Meta name='twitter:card' content='summary_large_image' />
       <Meta name='twitter:title' content={m.ogTitle} />
