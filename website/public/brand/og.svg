@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Takos — self-hosted chat &amp; agent workspace">
-  <!-- Source sketch for og.png. The shipped image is rendered from the
-       same composition (bitmap Takos wordmark, mark's blue field, paper
-       panel, pixel tako swimming, bubble squares) via the site renderer. -->
-  <rect width="1200" height="630" fill="#00a0e4"/>
-  <image href="tako.png" x="770" y="95" width="330" height="330" style="image-rendering: pixelated"/>
-  <text x="96" y="250" font-family="monospace" font-size="150" fill="#16120e">Takos</text>
-  <rect x="96" y="310" width="640" height="130" fill="#fdfcf8" stroke="#16120e" stroke-width="4"/>
-  <text x="124" y="360" font-family="system-ui, sans-serif" font-size="30" font-weight="600" fill="#16120e">Self-hostable chat &amp; agent product.</text>
-  <text x="124" y="408" font-family="system-ui, sans-serif" font-size="30" font-weight="600" fill="#16120e">データは全部、自分のサーバーの中。</text>
-  <text x="100" y="586" font-family="monospace" font-size="24" fill="#16120e">AGPL-3.0 · github.com/tako0614/takos · takos.jp</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Takos — self-hostable chat &amp; agent product">
+  <!-- Source sketch for og.png, rendered via the site renderer.
+       Same surface as the page: the product's dark zinc ground, the
+       mark living only on its own icon tile. -->
+  <rect width="1200" height="630" fill="#09090b"/>
+  <rect x="0.5" y="0.5" width="1199" height="629" fill="none" stroke="#27272a"/>
+  <image href="../logo.png" x="96" y="120" width="132" height="132" style="image-rendering: pixelated"/>
+  <text x="96" y="340" font-family="monospace" font-size="120" font-weight="700" fill="#fafafa">Takos</text>
+  <text x="96" y="430" font-family="system-ui, sans-serif" font-size="34" fill="#a1a1aa">Self-hostable chat &amp; agent product.</text>
+  <text x="96" y="478" font-family="system-ui, sans-serif" font-size="34" fill="#a1a1aa">データは全部、自分のサーバーの中。</text>
+  <text x="96" y="572" font-family="monospace" font-size="24" fill="#71717a">AGPL-3.0 · github.com/tako0614/takos · takos.jp</text>
 </svg>
