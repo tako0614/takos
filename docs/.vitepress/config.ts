@@ -243,5 +243,12 @@ export default defineConfig({
     lightModeSwitchTitle: "ライトモード",
     darkModeSwitchTitle: "ダークモード",
   },
-  head: [["meta", { name: "theme-color", content: "#dc2626" }]],
+  head: [
+    ["meta", { name: "theme-color", content: "#dc2626" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Takos Docs" }],
+    ["meta", { property: "og:image", content: "https://docs.takos.jp/og.png" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:image", content: "https://docs.takos.jp/og.png" }],
+  ],
 });
