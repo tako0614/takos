@@ -1,11 +1,14 @@
 /**
  * Bilingual content dictionary for the Takos site.
  *
- * The page is product evidence, not a document about the product: a short
- * factual head, then full-width real UI screenshots carrying the content,
- * with plain sentences and lists between them. No tagline, no spec tables,
- * no section numbering, no ornamental apparatus — earlier "product document"
- * styling read as generated template regardless of costume.
+ * The page is the workspace, annotated. Real UI screenshots run to the
+ * viewport edge — no frames, no card chrome — and short captions sit in
+ * the margin like someone pointing at the screen. The hero carries mono
+ * labels pinned to the regions they name; the tour below uses the UI's
+ * own region names (chat / Work board / memory), not marketing titles.
+ * No numbered feature steps, no repeated h2 chrome, no centered-column
+ * monotony — the earlier "document column of sections" still read as a
+ * generated LP template.
  *
  * 'ja' is the source-of-truth voice (Takos is JP-first); 'en' mirrors it.
  * Keep product nouns (chat / agent / memory / Workspace, installable apps,
@@ -28,12 +31,21 @@ export type Rich = readonly Seg[];
 /** Which real screen the AppVisual component renders (public/screens). */
 export type AppVisualKind = "chat" | "thread" | "work" | "memory";
 
-/** One step of the run sequence — the same request moving through surfaces.
- *  'key' selects which real-UI visual the Run section renders. */
-export interface RunStep {
+/** A mono label pinned to a region of the hero screenshot. x/y are
+ *  percentages of the image box. */
+export interface HeroLabel {
+  readonly t: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** One tour station — a real UI region, its own name, and one short
+ *  caption. 'key' selects the screenshot AppVisual renders. */
+export interface Station {
   readonly key: AppVisualKind;
+  readonly eyebrow: string;
   readonly name: string;
-  readonly connect: string;
+  readonly body: string;
 }
 
 export interface AppItem {
@@ -57,7 +69,7 @@ export interface Strings {
     readonly ogDescription: string;
   };
   readonly nav: {
-    readonly run: string;
+    readonly workspace: string;
     readonly apps: string;
     readonly data: string;
     readonly install: string;
@@ -72,11 +84,11 @@ export interface Strings {
     readonly github: string;
     readonly docs: string;
   };
-  readonly run: {
-    readonly title: string;
-    readonly lede: string;
-    readonly steps: readonly RunStep[];
+  readonly hero: {
+    readonly caption: string;
+    readonly labels: readonly HeroLabel[];
   };
+  readonly stations: readonly Station[];
   readonly apps: {
     readonly title: string;
     readonly lede: string;
@@ -114,7 +126,7 @@ const ja: Strings = {
       "Self-hosted chat & agent workspace。chat で依頼すると agent が tool を呼んで仕事を進め、成果物と memory は自分のサーバー内の Workspace に残る。AGPL-3.0 · OpenTofu module。",
   },
   nav: {
-    run: "使い方",
+    workspace: "画面",
     apps: "Apps",
     data: "データ",
     install: "導入",
@@ -132,30 +144,37 @@ const ja: Strings = {
     github: "GitHub",
     docs: "Docs",
   },
-  run: {
-    title: "使い方",
-    lede: "ひとつの依頼が Takos の中をどう進むか。chat・Work board・Memory は別々の機能ではなく、1 本の run の途中経過。",
-    steps: [
-      {
-        key: "thread",
-        name: "Chat で頼む",
-        connect:
-          "やりたいことをそのまま書く。クラウドの LLM もローカルモデルも同じスレッドで切り替えられ、agent がその場で tool を呼ぶ。",
-      },
-      {
-        key: "work",
-        name: "Work board で進める",
-        connect:
-          "job は Work Tasks に task として載り、状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の agent engine が担う。",
-      },
-      {
-        key: "memory",
-        name: "docs に残り、memory に効く",
-        connect:
-          "成果物は install した takos-office の docs に file として残り、やり取りは memory に蓄積する。次の会話は続きから始まる。",
-      },
+  hero: {
+    caption:
+      "実際の Workspace の画面。見えているものは全部、自分のサーバーの中にある。",
+    labels: [
+      { t: "workspace", x: 41, y: 4 },
+      { t: "run", x: 63, y: 7.5 },
+      { t: "chat", x: 55, y: 88 },
+      { t: "スレッド", x: 9.5, y: 52 },
+      { t: "memory", x: 15.5, y: 17 },
     ],
   },
+  stations: [
+    {
+      key: "thread",
+      eyebrow: "chat",
+      name: "頼む",
+      body: "やりたいことをそのまま書く。cloud の LLM も local model も同じスレッドで切り替え、agent がその場で tool を呼ぶ。",
+    },
+    {
+      key: "work",
+      eyebrow: "Work board",
+      name: "進む",
+      body: "job は task として board に載り、状態で追える。tool 呼び出しと複数ステップの実行は Rust 製の takos-agent-engine が担う。",
+    },
+    {
+      key: "memory",
+      eyebrow: "memory",
+      name: "残る",
+      body: "成果物は file、やり取りは memory として Workspace に蓄積する。次の会話はここの続きから始まる。",
+    },
+  ],
   apps: {
     title: "Installable apps",
     lede:
@@ -251,7 +270,7 @@ const en: Strings = {
       "Self-hosted chat & agent workspace. Ask in chat and the agent runs the tools; artifacts and memory stay in the Workspace on your own server. AGPL-3.0 · OpenTofu module.",
   },
   nav: {
-    run: "How it works",
+    workspace: "Screens",
     apps: "Apps",
     data: "Data",
     install: "Install",
@@ -271,31 +290,37 @@ const en: Strings = {
     github: "GitHub",
     docs: "Docs",
   },
-  run: {
-    title: "How it works",
-    lede:
-      "One request, followed through Takos. Chat, the Work board, and memory are not separate features — they are stages of a single run.",
-    steps: [
-      {
-        key: "thread",
-        name: "Ask in chat",
-        connect:
-          "Write what you want in plain words. Cloud LLMs and local models switch inside the same thread, and the agent calls tools on the spot.",
-      },
-      {
-        key: "work",
-        name: "It moves on the Work board",
-        connect:
-          "The job lands on Work Tasks and is tracked by state. A Rust agent engine handles the tool calls and multi-step execution.",
-      },
-      {
-        key: "memory",
-        name: "Saved to docs, carried by memory",
-        connect:
-          "Artifacts stay as files in docs — here, via the installed takos-office — and the exchange accrues in memory. The next chat starts where this one left off.",
-      },
+  hero: {
+    caption:
+      "The actual Workspace screen. Everything visible lives inside your own server.",
+    labels: [
+      { t: "workspace", x: 41, y: 4 },
+      { t: "run", x: 63, y: 7.5 },
+      { t: "chat", x: 55, y: 88 },
+      { t: "threads", x: 9.5, y: 52 },
+      { t: "memory", x: 15.5, y: 17 },
     ],
   },
+  stations: [
+    {
+      key: "thread",
+      eyebrow: "chat",
+      name: "Ask",
+      body: "Write what you want in plain words. Cloud LLMs and local models switch inside the same thread, and the agent calls tools on the spot.",
+    },
+    {
+      key: "work",
+      eyebrow: "Work board",
+      name: "Track",
+      body: "The job lands on the board as a task and is tracked by state. Tool calls and multi-step runs are handled by takos-agent-engine, written in Rust.",
+    },
+    {
+      key: "memory",
+      eyebrow: "memory",
+      name: "Keep",
+      body: "Artifacts stay as files and the exchange accrues as memory inside the Workspace. The next chat picks up where this one ended.",
+    },
+  ],
   apps: {
     title: "Installable apps",
     lede:

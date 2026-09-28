@@ -1,14 +1,13 @@
-import type { JSX } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import AppVisual from './AppVisual';
 import RichText from './RichText';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
 
-/** Page head — identity in the product's own voice: the icon tile (the
- *  mark on its own field, exactly as the app ships it), the bitmap
- *  wordmark, one factual paragraph and a mono fact line at reading
- *  measure. Then the real app window fills the container — the product
- *  is the pitch, not a slogan under it. */
+/** Page head — identity in the product's own voice: the icon tile, the
+ *  bitmap wordmark, one factual paragraph and a mono fact line. Then the
+ *  real app window runs edge to edge, with mono chips pinned to the
+ *  regions they name — the product is the pitch, annotated. */
 export default function Head(): JSX.Element {
   const t = useT();
   const cloud = useCloudUrls();
@@ -43,7 +42,22 @@ export default function Head(): JSX.Element {
           </a>
         </div>
         <div class='head-shot'>
-          <AppVisual kind='chat' hero />
+          <div class='hero-frame'>
+            <AppVisual kind='chat' hero />
+            <ul class='hero-labels' aria-hidden='true'>
+              <For each={t.hero.labels}>
+                {(l) => (
+                  <li
+                    class='hero-chip'
+                    style={{ left: l.x + '%', top: l.y + '%' }}
+                  >
+                    {l.t}
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+          <p class='hero-cap'>{t.hero.caption}</p>
         </div>
       </div>
     </section>

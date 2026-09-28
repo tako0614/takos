@@ -18,11 +18,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* ===== The site is the product's own surface. One dark zinc document
- * reads top to bottom: a compact identity block, then the real app
- * window, then the same surfaces a request actually touches. No hero
- * grammar, no card grids, no ornament — text at reading measure, real
- * screens at container width. ===== */
+/* ===== The site is the workspace, annotated. Real screens run to the
+ * viewport edge with no frame chrome; text sits in the margin like
+ * captions. Section headers are quiet mono spec labels with a rule —
+ * instrument-panel voice, not marketing display type. The mark's red
+ * stays inside the icon tile only; the water blue is the one accent.
+ * ===== */
+
+html {
+  overflow-x: clip;
+}
+body {
+  overflow-x: clip;
+}
 
 a {
   color: inherit;
@@ -73,24 +81,24 @@ main {
 section {
   padding: var(--tg-s-8) 0 0;
 }
+/* Quiet spec label + a rule — the page's only section chrome. */
 section h2 {
-  font-family: var(--tg-font-display);
-  font-size: 1.35rem;
-  line-height: var(--tg-lh-tight);
-  margin: 0 0 var(--tg-s-4);
-  font-weight: 400;
-  color: var(--tg-fg);
-  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: var(--tg-s-4);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--tg-fg-3);
+  margin: 0 0 var(--tg-s-6);
+  line-height: 1;
 }
-/* The tako's red, as a single pixel — the only square left on the page. */
-section h2::before {
+section h2::after {
   content: '';
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: var(--tg-s-3);
-  background: var(--tg-red);
-  vertical-align: 0.08em;
+  flex: 1;
+  height: 1px;
+  background: var(--tg-border);
 }
 section h2 + .intro {
   color: var(--tg-fg-2);
@@ -258,35 +266,36 @@ section h2 + .intro {
 
 /* ===== Page head — identity, then the product itself.
  * Icon tile + bitmap wordmark + one factual paragraph at reading
- * measure; the real app window fills the container below. */
+ * measure; below, the real app window breaks out of the container and
+ * runs to both viewport edges, with mono chips naming its regions. */
 .page-head {
-  padding-top: calc(var(--tg-nav-h) + var(--tg-s-8));
+  padding-top: calc(var(--tg-nav-h) + var(--tg-s-9));
 }
 .head-id {
   display: flex;
   align-items: center;
   gap: var(--tg-s-4);
-  margin-bottom: var(--tg-s-5);
+  margin-bottom: var(--tg-s-6);
 }
 .head-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
   flex: none;
 }
 .page-title {
   font-family: var(--tg-font-display);
-  font-size: 2rem;
+  font-size: 2.6rem;
   line-height: 1;
   margin: 0;
   color: var(--tg-fg);
   letter-spacing: 0.01em;
 }
 .page-desc {
-  font-size: var(--tg-fs-base);
+  font-size: var(--tg-fs-lg);
   color: var(--tg-fg-2);
-  max-width: var(--tg-prose);
-  margin: 0 0 var(--tg-s-4);
+  max-width: 56ch;
+  margin: 0 0 var(--tg-s-5);
 }
 .page-desc strong,
 .page-desc .em {
@@ -317,56 +326,147 @@ section h2 + .intro {
   color: var(--tg-link);
 }
 
-/* The product itself — the real window, framed like the app's own
- * surface: one hairline, one radius, one low shadow. */
+/* The product itself — full-bleed, frameless, annotated. The image's own
+ * panel borders are the only frame; the page's surface continues around
+ * it. */
 .head-shot {
-  margin-top: var(--tg-s-7);
+  margin-top: var(--tg-s-8);
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+.hero-frame {
+  position: relative;
 }
 .shot {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--tg-border);
-  border-radius: var(--tg-radius);
-  box-shadow: var(--tg-shadow-shot);
 }
 .shot-hero {
-  max-height: 74vh;
-  object-fit: cover;
-  object-position: top left;
+  width: 100%;
+  height: auto;
 }
 
-/* ===== Run — one request followed through the surfaces it touches.
- * A single document column: stage index, the surface's real name, one
- * sentence, then the real screen. Read top to bottom like a thread. */
-.step {
-  margin-top: var(--tg-s-7);
-  border-top: 1px solid var(--tg-border);
-  padding-top: var(--tg-s-6);
+/* Region chips — the mono labels a person would point at while showing
+ * you the app. Positioned over the real screen, hidden on small screens
+ * where they would crowd the UI. */
+.hero-labels {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
 }
-.step:first-of-type {
-  border-top: 0;
-  margin-top: var(--tg-s-4);
-  padding-top: 0;
+.hero-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--tg-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--tg-fg-2);
+  background: rgba(9, 9, 11, 0.78);
+  border: 1px solid var(--tg-border-strong);
+  border-radius: 5px;
+  padding: 3px 9px 3px 7px;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.step-index {
+.hero-chip::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--tg-field);
+  flex: none;
+}
+.hero-cap {
   font-family: var(--tg-font-mono);
   font-size: var(--tg-fs-xs);
   color: var(--tg-fg-3);
+  margin: var(--tg-s-4) 0 0;
+  padding: 0 var(--tg-s-5);
+}
+@media (min-width: 1440px) {
+  .hero-cap {
+    padding: 0;
+    max-width: var(--tg-container);
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ===== Stations — the workspace region by region. A caption margin on
+ * one side, the real screen bleeding off the other viewport edge and
+ * dissolving into the page surface. Alternating sides. */
+.stations {
+  padding: var(--tg-s-7) 0 0;
+}
+.station {
+  display: grid;
+  grid-template-columns: minmax(0, 288px) minmax(0, 1fr);
+  gap: var(--tg-s-6);
+  align-items: center;
+  padding: var(--tg-s-7) 0 var(--tg-s-7)
+    max(var(--tg-s-5), calc((100vw - var(--tg-container)) / 2 + var(--tg-s-5)));
+}
+.station:first-of-type {
+  padding-top: var(--tg-s-5);
+}
+.station-r {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 288px);
+  padding: var(--tg-s-7)
+    max(var(--tg-s-5), calc((100vw - var(--tg-container)) / 2 + var(--tg-s-5)))
+    var(--tg-s-7) 0;
+}
+.station-r .st-shot {
+  order: -1;
+}
+.st-eyebrow {
   display: block;
-  margin-bottom: var(--tg-s-2);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  letter-spacing: 0.16em;
+  color: var(--tg-fg-3);
+  margin-bottom: var(--tg-s-3);
 }
-.step h3 {
-  font-size: var(--tg-fs-lg);
+.st-name {
+  font-size: 1.9rem;
   font-weight: 600;
-  margin: 0 0 var(--tg-s-2);
+  margin: 0 0 var(--tg-s-3);
   color: var(--tg-fg);
+  letter-spacing: 0.01em;
 }
-.step p {
-  margin: 0 0 var(--tg-s-5);
+.st-body {
+  margin: 0;
   color: var(--tg-fg-2);
   font-size: var(--tg-fs-sm);
-  max-width: var(--tg-prose);
+  max-width: 44ch;
+}
+.st-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.station:not(.station-r) .st-shot img {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 calc(100% - 72px),
+    transparent
+  );
+  mask-image: linear-gradient(to right, #000 calc(100% - 72px), transparent);
+}
+.station-r .st-shot img {
+  -webkit-mask-image: linear-gradient(
+    to left,
+    #000 calc(100% - 72px),
+    transparent
+  );
+  mask-image: linear-gradient(to left, #000 calc(100% - 72px), transparent);
 }
 
 /* ===== Hairline lists — rows like the app's own lists, not cards ===== */
@@ -394,28 +494,22 @@ section h2 + .intro {
   color: var(--tg-fg-2);
 }
 
+/* Where the data lives — a two-column hairline grid of facts, spec-sheet
+ * style. */
 .fact-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--tg-s-7);
   border-top: 1px solid var(--tg-border);
-  max-width: var(--tg-prose);
 }
 .fact-list li {
-  position: relative;
-  padding: var(--tg-s-4) 0 var(--tg-s-4) var(--tg-s-6);
+  padding: var(--tg-s-4) 0;
   border-bottom: 1px solid var(--tg-border);
   color: var(--tg-fg-2);
   font-size: var(--tg-fs-sm);
-}
-.fact-list li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 1.55em;
-  width: 7px;
-  height: 7px;
-  background: var(--tg-red);
 }
 
 /* ===== Install — three rows, then one terminal ===== */
@@ -556,11 +650,30 @@ footer.site .copy {
     gap: var(--tg-s-1);
   }
   .head-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 9px;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
   }
   .page-title {
-    font-size: 1.6rem;
+    font-size: 1.9rem;
+  }
+  .hero-labels {
+    display: none;
+  }
+  .station,
+  .station-r {
+    grid-template-columns: 1fr;
+    gap: var(--tg-s-5);
+    padding: var(--tg-s-7) var(--tg-s-5);
+  }
+  .station-r .st-shot {
+    order: 0;
+  }
+  .st-shot {
+    margin-left: calc(0px - var(--tg-s-5));
+    margin-right: calc(0px - var(--tg-s-5));
+  }
+  .fact-list {
+    grid-template-columns: 1fr;
   }
 }

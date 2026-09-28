@@ -19,7 +19,7 @@ export default function Nav() {
   });
 
   const links = () => [
-    { href: '#run', label: t.nav.run },
+    { href: '#workspace', label: t.nav.workspace },
     { href: '#apps', label: t.nav.apps },
     { href: '#data', label: t.nav.data },
     { href: '#install', label: t.nav.install },

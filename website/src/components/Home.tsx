@@ -6,7 +6,7 @@ import Seo from './Seo';
 import JsonLd from './JsonLd';
 import Nav from './Nav';
 import Head from './Head';
-import Run from './Run';
+import Stations from './Stations';
 import BundledApps from './BundledApps';
 import Data from './Data';
 import InstallCTA from './InstallCTA';
@@ -22,7 +22,7 @@ export default function Home(props: { locale: Locale }): JSX.Element {
         <Nav />
         <main>
           <Head />
-          <Run />
+          <Stations />
           <BundledApps />
           <Data />
           <InstallCTA />
