@@ -10,47 +10,46 @@ html {
 }
 body {
   font-family: var(--tg-font-body);
-  background: var(--tg-field);
-  color: var(--tg-on-field);
+  background: var(--tg-bg);
+  color: var(--tg-fg);
   line-height: var(--tg-lh-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* ===== The page is the mark's field. The product logo is a red pixel
- * tako on #00a0e4 water — so the site IS that water: flat blue, floating
- * bubble pixels, paper panels framed in ink, real app screenshots cast
- * like sprites with hard offset shadows. Type hierarchy: DotGothic16
- * bitmap face for display, quiet sans for reading. ===== */
+/* ===== The site is the product's own surface. One dark zinc document
+ * reads top to bottom: a compact identity block, then the real app
+ * window, then the same surfaces a request actually touches. No hero
+ * grammar, no card grids, no ornament — text at reading measure, real
+ * screens at container width. ===== */
 
 a {
   color: inherit;
   text-decoration: none;
-  transition: color 120ms ease;
-}
-a:hover {
-  color: var(--tg-accent-hover);
 }
 
 ::selection {
-  background: var(--tg-accent);
-  color: var(--tg-accent-fg);
+  background: var(--tg-field);
+  color: var(--tg-bg);
 }
 
 code, pre {
   font-family: var(--tg-font-mono);
 }
 code {
-  font-size: 0.92em;
-  background: var(--tg-ink);
-  color: var(--tg-code-fg);
-  padding: 0.12em 0.42em;
+  font-size: 0.9em;
+  background: var(--tg-surface);
+  border: 1px solid var(--tg-border);
+  border-radius: 4px;
+  color: var(--tg-fg);
+  padding: 0.1em 0.4em;
 }
 pre code {
   background: none;
+  border: 0;
   padding: 0;
-  font-size: 0.94em;
+  font-size: inherit;
 }
 
 button {
@@ -71,98 +70,53 @@ main {
   padding: 0 var(--tg-s-5);
 }
 
-/* ===== Pixel furniture ===== */
-
-/* Paper panel on the water — ink frame, stepped corners, sprite shadow. */
-.px-panel {
-  background: var(--tg-paper);
-  color: var(--tg-fg);
-  border: 3px solid var(--tg-ink);
-  clip-path: var(--tg-cut-sm);
-}
-.px-shadow {
-  filter: drop-shadow(var(--tg-shadow-px));
-}
-.px-shadow-sm {
-  filter: drop-shadow(var(--tg-shadow-px-sm));
-}
-
-/* Bubbles — the tako's water made visible: white pixel squares drifting. */
-.bubbles {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.bubbles i {
-  position: absolute;
-  display: block;
-  background: var(--tg-bubble);
-  image-rendering: pixelated;
-  animation: bubble-drift 5s ease-in-out infinite alternate;
-}
-@keyframes bubble-drift {
-  from { transform: translateY(0); }
-  to { transform: translateY(-14px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bubbles i { animation: none; }
-}
-
 section {
-  padding: var(--tg-s-8) 0;
-  position: relative;
+  padding: var(--tg-s-8) 0 0;
 }
 section h2 {
   font-family: var(--tg-font-display);
-  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
-  line-height: 1.15;
+  font-size: 1.35rem;
+  line-height: var(--tg-lh-tight);
   margin: 0 0 var(--tg-s-4);
   font-weight: 400;
-  color: var(--tg-ink);
+  color: var(--tg-fg);
+  letter-spacing: 0.01em;
 }
-/* Section marker — a single tako-red pixel, stepped like the mark's corners. */
+/* The tako's red, as a single pixel — the only square left on the page. */
 section h2::before {
   content: '';
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 9px;
+  height: 9px;
   margin-right: var(--tg-s-3);
-  background: var(--tg-accent);
-  clip-path: var(--tg-cut-sm);
-  vertical-align: baseline;
+  background: var(--tg-red);
+  vertical-align: 0.08em;
 }
 section h2 + .intro {
-  color: var(--tg-on-field);
-  font-size: var(--tg-fs-base);
+  color: var(--tg-fg-2);
+  font-size: var(--tg-fs-sm);
   margin: 0 0 var(--tg-s-6);
-  max-width: 62ch;
+  max-width: var(--tg-prose);
 }
 
-/* Primary action — one red sprite button per context; else plain links. */
+/* The one solid action — the product's primary button: light pill on
+ * dark ground, like 開始 in the Work board. */
 .btn {
   display: inline-block;
-  background: var(--tg-accent);
-  color: var(--tg-accent-fg);
-  font-weight: 700;
+  background: var(--tg-fg);
+  color: var(--tg-bg);
+  font-weight: 600;
   font-size: var(--tg-fs-sm);
-  padding: 0.75em 1.5em;
-  border: 3px solid var(--tg-ink);
-  box-shadow: 5px 5px 0 var(--tg-ink);
-  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+  padding: 0.55em 1.2em;
+  border-radius: 8px;
+  transition: background 140ms ease;
 }
 .btn:hover {
-  background: var(--tg-accent-hover);
-  color: var(--tg-accent-fg);
-  transform: translate(2px, 2px);
-  box-shadow: 3px 3px 0 var(--tg-ink);
-}
-.btn:active {
-  transform: translate(5px, 5px);
-  box-shadow: 0 0 0 var(--tg-ink);
+  background: var(--tg-link);
+  color: var(--tg-bg);
 }
 
-/* ===== Nav — transparent on the water, solid + ink rule after scroll ===== */
+/* ===== Nav — the app's own top bar: flat ground, one hairline ===== */
 .nav {
   position: fixed;
   top: 0;
@@ -170,14 +124,11 @@ section h2 + .intro {
   right: 0;
   z-index: 50;
   height: var(--tg-nav-h);
-  background: transparent;
-  border-bottom: 3px solid transparent;
-  transition: background 160ms ease, border-color 160ms ease;
-  color: var(--tg-ink);
-}
-.nav.is-scrolled {
-  background: var(--tg-field);
-  border-bottom-color: var(--tg-ink);
+  background: rgba(9, 9, 11, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--tg-border);
+  color: var(--tg-fg);
 }
 .nav-inner {
   height: 100%;
@@ -187,45 +138,38 @@ section h2 + .intro {
   gap: var(--tg-s-5);
 }
 
-/* Wordmark — the brand tile + name in the bitmap face. */
+/* Wordmark — the icon tile + the name in the bitmap face. */
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: var(--tg-s-2);
-  color: inherit;
+  gap: var(--tg-s-3);
+  color: var(--tg-fg);
   font-family: var(--tg-font-display);
 }
 .wordmark-mark {
   display: block;
-  border: 2px solid var(--tg-ink);
-  clip-path: var(--tg-cut-sm);
+  border-radius: 7px;
   object-fit: cover;
   flex: none;
-  image-rendering: pixelated;
 }
 .wordmark-text {
-  font-size: var(--tg-fs-xl);
+  font-size: 1.15rem;
 }
 
-/* Nav links */
 .nav-links {
   display: flex;
   align-items: center;
   gap: var(--tg-s-5);
 }
 .nav-links a {
-  color: inherit;
-  opacity: 0.8;
+  color: var(--tg-fg-2);
   font-size: var(--tg-fs-sm);
-  font-weight: 600;
-  transition: opacity 120ms ease;
+  transition: color 140ms ease;
 }
 .nav-links a:hover {
-  opacity: 1;
-  color: inherit;
+  color: var(--tg-fg);
 }
 
-/* Right-side actions */
 .nav-actions {
   display: flex;
   align-items: center;
@@ -235,37 +179,33 @@ section h2 + .intro {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  gap: 5px;
   height: 36px;
+  padding: 0 var(--tg-s-2);
   background: transparent;
-  color: inherit;
-  border: 2px solid transparent;
-  opacity: 0.8;
-  transition: opacity 120ms ease, background 120ms ease;
+  color: var(--tg-fg-2);
+  border-radius: 8px;
+  transition: color 140ms ease, background 140ms ease;
 }
 .nav-icon:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.25);
-  border-color: var(--tg-ink);
+  color: var(--tg-fg);
+  background: var(--tg-surface);
 }
 
 .nav-use {
   font-size: var(--tg-fs-sm);
-  font-weight: 700;
+  font-weight: 600;
   margin-left: var(--tg-s-2);
   white-space: nowrap;
-  background: var(--tg-accent);
-  color: var(--tg-accent-fg);
+  background: var(--tg-fg);
+  color: var(--tg-bg);
   padding: 0.45em 1em;
-  border: 2px solid var(--tg-ink);
-  box-shadow: 3px 3px 0 var(--tg-ink);
-  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+  border-radius: 8px;
+  transition: background 140ms ease;
 }
 .nav-use:hover {
-  background: var(--tg-accent-hover);
-  color: var(--tg-accent-fg);
-  transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0 var(--tg-ink);
+  background: var(--tg-link);
+  color: var(--tg-bg);
 }
 
 /* Mobile disclosure menu — <details>/<summary>, zero JS, SSR-safe. */
@@ -286,23 +226,22 @@ section h2 + .intro {
   top: calc(100% + var(--tg-s-2));
   right: 0;
   min-width: 200px;
-  padding: var(--tg-s-4);
-  gap: var(--tg-s-3);
-  background: var(--tg-paper);
-  border: 3px solid var(--tg-ink);
-  clip-path: var(--tg-cut-sm);
-  box-shadow: 6px 6px 0 var(--tg-ink);
+  padding: var(--tg-s-3);
+  gap: var(--tg-s-1);
+  background: var(--tg-surface);
+  border: 1px solid var(--tg-border-strong);
+  border-radius: var(--tg-radius);
+  box-shadow: var(--tg-shadow-shot);
 }
 .nav-menu-panel a {
-  color: var(--tg-fg);
-  opacity: 0.85;
-  font-size: var(--tg-fs-base);
-  font-weight: 500;
-  padding: var(--tg-s-1) 0;
+  color: var(--tg-fg-2);
+  font-size: var(--tg-fs-sm);
+  padding: var(--tg-s-2) var(--tg-s-3);
+  border-radius: 6px;
 }
 .nav-menu-panel a:hover {
-  opacity: 1;
-  color: var(--tg-accent);
+  color: var(--tg-fg);
+  background: var(--tg-surface-2);
 }
 
 @media (max-width: 720px) {
@@ -313,49 +252,51 @@ section h2 + .intro {
     display: inline-flex;
   }
   .nav-icon {
-    width: 44px;
-    height: 44px;
+    height: 42px;
   }
 }
 
-/* ===== Page head — the mark swims in its own field.
- * The tako tile melts into the water (same #00a0e4), the name sets in
- * the bitmap face, the factual paragraph sits on a paper panel. */
+/* ===== Page head — identity, then the product itself.
+ * Icon tile + bitmap wordmark + one factual paragraph at reading
+ * measure; the real app window fills the container below. */
 .page-head {
-  padding-top: calc(var(--tg-nav-h) + var(--tg-s-7));
-  overflow: hidden;
-  position: relative;
+  padding-top: calc(var(--tg-nav-h) + var(--tg-s-8));
 }
-.head-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.head-id {
+  display: flex;
   align-items: center;
-  gap: var(--tg-s-8);
-  position: relative;
+  gap: var(--tg-s-4);
+  margin-bottom: var(--tg-s-5);
+}
+.head-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  flex: none;
 }
 .page-title {
   font-family: var(--tg-font-display);
-  font-size: clamp(3.6rem, 9vw, 7rem);
+  font-size: 2rem;
   line-height: 1;
-  margin: 0 0 var(--tg-s-6);
-  color: var(--tg-ink);
-}
-.head-mark {
-  width: clamp(180px, 24vw, 300px);
-  height: auto;
-  image-rendering: pixelated;
-  flex: none;
+  margin: 0;
+  color: var(--tg-fg);
+  letter-spacing: 0.01em;
 }
 .page-desc {
-  font-size: clamp(1.02rem, 1.4vw, 1.18rem);
-  max-width: 52ch;
-  margin: 0 0 var(--tg-s-5);
-  padding: var(--tg-s-5) var(--tg-s-6);
+  font-size: var(--tg-fs-base);
+  color: var(--tg-fg-2);
+  max-width: var(--tg-prose);
+  margin: 0 0 var(--tg-s-4);
+}
+.page-desc strong,
+.page-desc .em {
+  color: var(--tg-fg);
+  font-weight: 600;
 }
 .page-facts {
   font-family: var(--tg-font-mono);
   font-size: var(--tg-fs-xs);
-  color: var(--tg-on-field);
+  color: var(--tg-fg-3);
   margin: 0 0 var(--tg-s-5);
 }
 .page-actions {
@@ -366,236 +307,193 @@ section h2 + .intro {
 }
 .page-actions a:not(.btn) {
   font-size: var(--tg-fs-sm);
-  font-weight: 600;
-  color: var(--tg-on-field);
+  color: var(--tg-fg-2);
   text-decoration: underline;
   text-underline-offset: 4px;
-  text-decoration-thickness: 2px;
+  text-decoration-color: var(--tg-border-strong);
+  transition: color 140ms ease;
 }
 .page-actions a:not(.btn):hover {
-  color: var(--tg-ink);
+  color: var(--tg-link);
 }
 
-/* The product itself, cast like a sprite — the real app window starts at
- * the text column's left edge and runs off the right edge of the screen. */
+/* The product itself — the real window, framed like the app's own
+ * surface: one hairline, one radius, one low shadow. */
 .head-shot {
-  margin-top: var(--tg-s-8);
-  padding-left: max(
-    var(--tg-s-5),
-    calc((100vw - var(--tg-container)) / 2 + var(--tg-s-5))
-  );
+  margin-top: var(--tg-s-7);
 }
-
-/* Real screenshots — ink frame, stepped edge, hard cast shadow. */
 .shot {
   display: block;
   width: 100%;
   height: auto;
-  border: 4px solid var(--tg-ink);
-  clip-path: var(--tg-cut-lg);
-  filter: drop-shadow(10px 10px 0 rgba(22, 18, 14, 0.9));
-  margin-top: var(--tg-s-5);
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius);
+  box-shadow: var(--tg-shadow-shot);
 }
 .shot-hero {
-  margin-top: 0;
-  width: 100%;
-  max-height: 76vh;
+  max-height: 74vh;
   object-fit: cover;
   object-position: top left;
 }
 
-/* ===== Run — one request through the surfaces it actually touches.
- * Alternating text / screenshot columns: the run reads left to right,
- * then folds back — a path through the water, not a stack of cards. */
+/* ===== Run — one request followed through the surfaces it touches.
+ * A single document column: stage index, the surface's real name, one
+ * sentence, then the real screen. Read top to bottom like a thread. */
 .step {
   margin-top: var(--tg-s-7);
-  display: grid;
-  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
-  gap: var(--tg-s-7);
-  align-items: start;
+  border-top: 1px solid var(--tg-border);
+  padding-top: var(--tg-s-6);
 }
-.step:nth-child(even) {
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
-}
-.step:nth-child(even) .shot {
-  order: -1;
+.step:first-of-type {
+  border-top: 0;
+  margin-top: var(--tg-s-4);
+  padding-top: 0;
 }
 .step-index {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-3xl);
-  color: var(--tg-accent);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-xs);
+  color: var(--tg-fg-3);
   display: block;
-  line-height: 1;
-  margin-bottom: var(--tg-s-3);
-  text-shadow: 3px 3px 0 rgba(22, 18, 14, 0.9);
+  margin-bottom: var(--tg-s-2);
 }
 .step h3 {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-2xl);
-  font-weight: 400;
-  margin: 0 0 var(--tg-s-3);
-  color: var(--tg-ink);
+  font-size: var(--tg-fs-lg);
+  font-weight: 600;
+  margin: 0 0 var(--tg-s-2);
+  color: var(--tg-fg);
 }
 .step p {
-  margin: 0;
-  color: var(--tg-on-field);
-}
-.step .shot {
-  margin-top: 0;
+  margin: 0 0 var(--tg-s-5);
+  color: var(--tg-fg-2);
+  font-size: var(--tg-fs-sm);
+  max-width: var(--tg-prose);
 }
 
-/* ===== Apps — first-party capsules, white tiles on the water ===== */
+/* ===== Hairline lists — rows like the app's own lists, not cards ===== */
 .app-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--tg-s-5);
+  border-top: 1px solid var(--tg-border);
 }
 .app-list li {
-  padding: var(--tg-s-5) var(--tg-s-5) var(--tg-s-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-3);
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--tg-s-5);
+  align-items: baseline;
+  padding: var(--tg-s-4) 0;
+  border-bottom: 1px solid var(--tg-border);
 }
 .app-name {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-xl);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-fs-sm);
   color: var(--tg-fg);
 }
 .app-body {
   font-size: var(--tg-fs-sm);
-  color: var(--tg-fg-muted);
+  color: var(--tg-fg-2);
 }
 
-/* ===== Data — the facts, pinned on a panel ===== */
-.fact-panel {
-  padding: var(--tg-s-6) var(--tg-s-7);
-  max-width: 860px;
-}
 .fact-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--tg-s-4);
+  border-top: 1px solid var(--tg-border);
+  max-width: var(--tg-prose);
 }
 .fact-list li {
   position: relative;
-  padding-left: var(--tg-s-6);
-  color: var(--tg-fg);
+  padding: var(--tg-s-4) 0 var(--tg-s-4) var(--tg-s-6);
+  border-bottom: 1px solid var(--tg-border);
+  color: var(--tg-fg-2);
+  font-size: var(--tg-fs-sm);
 }
 .fact-list li::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0.55em;
-  width: 10px;
-  height: 10px;
-  background: var(--tg-accent);
+  top: 1.55em;
+  width: 7px;
+  height: 7px;
+  background: var(--tg-red);
 }
 
-/* ===== Install — three doors, one terminal ===== */
-.install-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--tg-s-5);
+/* ===== Install — three rows, then one terminal ===== */
+.install-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--tg-border);
 }
 .install-item {
-  padding: var(--tg-s-5) var(--tg-s-6);
-}
-.install-item:nth-child(3) {
-  grid-column: 1 / -1;
+  padding: var(--tg-s-5) 0;
+  border-bottom: 1px solid var(--tg-border);
 }
 .install-item h3 {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-xl);
-  font-weight: 400;
-  margin: 0 0 var(--tg-s-3);
+  font-size: var(--tg-fs-base);
+  font-weight: 600;
+  margin: 0 0 var(--tg-s-2);
   color: var(--tg-fg);
 }
 .install-item p {
-  color: var(--tg-fg-muted);
+  color: var(--tg-fg-2);
   font-size: var(--tg-fs-sm);
   margin: 0 0 var(--tg-s-4);
-}
-.install-item .btn {
-  margin-top: var(--tg-s-1);
+  max-width: var(--tg-prose);
 }
 .install-item .link {
-  font-weight: 700;
+  font-size: var(--tg-fs-sm);
   color: var(--tg-fg);
   text-decoration: underline;
   text-underline-offset: 4px;
-  text-decoration-thickness: 2px;
+  text-decoration-color: var(--tg-border-strong);
+  transition: color 140ms ease;
 }
 .install-item .link:hover {
-  color: var(--tg-accent);
+  color: var(--tg-link);
 }
 
-/* Terminal — the one dark surface: a console window with pixel lights. */
+/* Terminal — the app's code surface: near-black, one hairline. */
 .codeblock {
   background: var(--tg-code-bg);
   color: var(--tg-code-fg);
-  border: 3px solid var(--tg-ink);
-  clip-path: var(--tg-cut-sm);
-  filter: drop-shadow(8px 8px 0 rgba(22, 18, 14, 0.9));
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius);
   font-size: var(--tg-fs-xs);
-  line-height: 1.8;
+  line-height: 1.9;
   overflow-x: auto;
-}
-.code-terminal {
-  padding-top: 34px;
-  position: relative;
-}
-.code-terminal::before {
-  content: '';
-  position: absolute;
-  top: 12px;
-  left: 16px;
-  width: 10px;
-  height: 10px;
-  background: var(--tg-accent);
-  box-shadow:
-    18px 0 0 var(--tg-paper),
-    36px 0 0 var(--tg-field);
 }
 .codeblock pre {
   margin: 0;
-  padding: var(--tg-s-4) var(--tg-s-5) var(--tg-s-5);
+  padding: var(--tg-s-4) var(--tg-s-5);
   font-family: var(--tg-font-mono);
 }
 .codeblock .k {
-  color: var(--tg-accent-hover);
+  color: var(--tg-code-key);
 }
 .codeblock .c {
-  color: #7d746a;
+  color: var(--tg-code-muted);
 }
 .codeblock .s {
   color: #8fd3ff;
 }
 
-/* ===== Ad slot — sits on the water like the rest ===== */
+/* ===== Ad slot — quiet, out of the way ===== */
 .ad-slot {
-  padding: 0 0 var(--tg-s-7);
+  padding: var(--tg-s-8) 0 0;
 }
 .ad-slot aside {
   margin: 0 auto;
 }
 
-/* ===== Footer — deep water: the page sinks to the field's dark floor. */
+/* ===== Footer — one hairline, the mark, the links ===== */
 footer.site {
-  background: var(--tg-field-deep);
-  color: var(--tg-on-deep);
-  border-top: 4px solid var(--tg-ink);
-  padding: var(--tg-s-8) 0 var(--tg-s-7);
-  position: relative;
-  overflow: hidden;
+  border-top: 1px solid var(--tg-border);
+  margin-top: var(--tg-s-8);
+  padding: var(--tg-s-6) 0;
+  color: var(--tg-fg-2);
 }
 footer.site .container {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -605,35 +503,31 @@ footer.site .container {
 .footer-brand {
   display: flex;
   align-items: center;
-  gap: var(--tg-s-4);
+  gap: var(--tg-s-3);
 }
 .footer-brand-text {
   display: flex;
   flex-direction: column;
-  gap: var(--tg-s-1);
+  gap: 2px;
 }
 .footer-word {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-2xl);
-  color: #fff;
+  font-size: 1.1rem;
+  color: var(--tg-fg);
   line-height: 1.1;
 }
 .footer-word:hover {
-  color: #fff;
+  color: var(--tg-fg);
 }
 .footer-mark {
-  width: 72px;
-  height: auto;
-  image-rendering: pixelated;
-  border: 3px solid var(--tg-ink);
-  clip-path: var(--tg-cut-sm);
-}
-footer.site .wordmark {
-  color: var(--tg-on-deep);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex: none;
 }
 footer.site .copy {
-  color: rgba(244, 248, 250, 0.75);
-  font-size: var(--tg-fs-sm);
+  color: var(--tg-fg-3);
+  font-size: var(--tg-fs-xs);
 }
 .footer-meta {
   display: flex;
@@ -647,48 +541,26 @@ footer.site .copy {
   flex-wrap: wrap;
 }
 .footer-meta a {
-  color: var(--tg-on-deep);
-  opacity: 0.85;
+  color: var(--tg-fg-2);
   font-size: var(--tg-fs-sm);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  transition: color 140ms ease;
 }
 .footer-meta a:hover {
-  opacity: 1;
-  color: #fff;
-}
-footer.site .lang-toggle {
-  color: var(--tg-on-deep);
-}
-footer.site .bubbles i {
-  background: rgba(244, 248, 250, 0.3);
+  color: var(--tg-fg);
 }
 
 /* ===== Mobile ===== */
-@media (max-width: 900px) {
-  .head-grid {
+@media (max-width: 720px) {
+  .app-list li {
     grid-template-columns: 1fr;
+    gap: var(--tg-s-1);
   }
-  .head-mark {
-    order: -1;
-    width: 140px;
+  .head-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
   }
-  .step,
-  .step:nth-child(even) {
-    grid-template-columns: 1fr;
-    gap: var(--tg-s-4);
-  }
-  .step:nth-child(even) .shot {
-    order: 0;
-  }
-  .app-list {
-    grid-template-columns: 1fr;
-  }
-  .install-grid {
-    grid-template-columns: 1fr;
-  }
-  .fact-panel {
-    padding: var(--tg-s-5);
+  .page-title {
+    font-size: 1.6rem;
   }
 }

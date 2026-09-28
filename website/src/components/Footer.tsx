@@ -1,11 +1,10 @@
 import { For } from 'solid-js';
-import Bubbles from './Bubbles';
 import LangToggle from './LangToggle';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
 
-/** Deep water — the page sinks to the field's dark floor: the mark tile,
- *  the word, the links, white type on deep blue, dimmer bubbles. */
+/** One hairline, the icon tile, the links — the page ends the way the
+ *  app's own chrome would. */
 export default function Footer() {
   const t = useT();
   const cloud = useCloudUrls();
@@ -14,10 +13,9 @@ export default function Footer() {
 
   return (
     <footer class='site'>
-      <Bubbles />
       <div class='container'>
         <div class='footer-brand'>
-          <img class='footer-mark' src='/brand/tako.png' alt='' width='578' height='547' decoding='async' />
+          <img class='footer-mark' src='/logo.png' alt='' width='36' height='36' decoding='async' />
           <div class='footer-brand-text'>
             <a href='/' class='footer-word'>Takos</a>
             <span class='copy'>{t.footer.copyright}</span>

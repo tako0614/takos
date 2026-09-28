@@ -1,17 +1,18 @@
-/* ===== Takos design tokens — the mark's field, made structural.
+/* ===== Takos design tokens — the product's own dark surface.
  *
- * The product logo is pixel art: a red tako on a vivid blue field
- * (#00a0e4 + #ed1b24 + black outline). The site lives on that field —
- * the whole page is the water the mark swims in. Text sits on white
- * panels framed in ink; the real app screenshots float in ink frames
- * with hard offset shadows, like sprites on a Famicom screen.
+ * The site wears the app's real palette instead of a costume: zinc dark
+ * (#09090b ground, #18181b panels, #27272a hairlines, #fafafa/#a1a1aa
+ * type), the same 10px radii the app uses, JetBrains Mono for code and
+ * facts, a system sans for body — the same face the product ships.
  *
- * Display type is DotGothic16 — a real Japanese bitmap font — subset to
- * the glyphs the site uses (public/fonts/dotgothic16-subset.woff2).
- * If a new heading shows missing glyphs, extend the subset.
- *
- * No gradients, no glass, no rounded-default cards: flat fields,
- * stepped pixel corners, hard shadows. */
+ * The pixel brand lives exactly where the product puts it: the icon
+ * tile (logo.png — the red tako on its own #00a0e4 field) and the
+ * DotGothic16 bitmap face, subset and self-hosted, reserved for the
+ * wordmark and section titles. The tile's blue, lightened for dark
+ * ground (#53c1f0), is the one accent — links and active states only.
+ * The tako's red stays inside the mark, surfacing only as tiny square
+ * markers. No water page, no bubbles, no sprite shadows, no cut
+ * corners: those read as costume over the real surface. */
 
 @font-face {
   font-family: 'DotGothic16';
@@ -22,28 +23,29 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* ===== Palette — flat fields, sampled from the mark ===== */
-  --tg-field: #00a0e4;        /* the mark's water */
-  --tg-field-deep: #065a80;   /* deep water — the closing band */
-  --tg-paper: #fdfcf8;        /* panel white */
-  --tg-ink: #16120e;          /* outline black */
-  --tg-ink-soft: #4a4237;
-  --tg-line: #16120e;
+  /* ===== Palette — the app's zinc ground ===== */
+  --tg-bg: #09090b;
+  --tg-surface: #18181b;
+  --tg-surface-2: #27272a;
+  --tg-border: #27272a;
+  --tg-border-strong: #3f3f46;
 
-  --tg-fg: #16120e;           /* text sits on paper panels */
-  --tg-fg-muted: #4a4237;
-  --tg-fg-subtle: #6b6152;
-  --tg-on-field: #16120e;     /* short ink text directly on the water */
-  --tg-on-deep: #f4f8fa;
+  --tg-fg: #fafafa;
+  --tg-fg-2: #a1a1aa;
+  --tg-fg-3: #71717a;
 
-  --tg-accent: #ed1b24;       /* tako red */
-  --tg-accent-hover: #ff3b30;
-  --tg-accent-fg: #fdfcf8;
-  --tg-code-bg: #16120e;
-  --tg-code-fg: #f4f1e6;
-  --tg-bubble: rgba(255, 255, 255, 0.55);
+  --tg-field: #00a0e4;        /* the mark's water — tile + accents only */
+  --tg-link: #53c1f0;         /* field blue, lightened for dark ground */
+  --tg-red: #ed1b24;          /* tako red — tiny markers only */
+
+  --tg-code-bg: #0c0c0f;
+  --tg-code-fg: #e4e4e7;
+  --tg-code-muted: #71717a;
+  --tg-code-key: #53c1f0;
+
+  --tg-shadow-shot: 0 24px 48px -16px rgba(0, 0, 0, 0.72);
 
   /* Spacing scale */
   --tg-s-1: 4px;
@@ -55,12 +57,9 @@
   --tg-s-7: 48px;
   --tg-s-8: 64px;
   --tg-s-9: 96px;
-  --tg-s-10: 128px;
 
-  /* Typography */
+  /* Typography — the product's own faces */
   --tg-font-body:
-    'Bricolage Grotesque Variable',
-    'Bricolage Grotesque',
     -apple-system,
     BlinkMacSystemFont,
     'Hiragino Kaku Gothic ProN',
@@ -69,7 +68,6 @@
     Roboto,
     sans-serif;
   --tg-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* Display = the bitmap font the mark implies. Falls back cleanly. */
   --tg-font-display: 'DotGothic16', var(--tg-font-body);
 
   --tg-fs-xs: 0.78rem;
@@ -78,51 +76,13 @@
   --tg-fs-lg: 1.13rem;
   --tg-fs-xl: 1.31rem;
   --tg-fs-2xl: 1.6rem;
-  --tg-fs-3xl: 2rem;
-  --tg-fs-4xl: 2.6rem;
-  --tg-fs-5xl: 3.4rem;
-  --tg-fs-6xl: clamp(3rem, 7vw, 5.6rem);
 
-  --tg-lh-tight: 1.15;
-  --tg-lh-snug: 1.35;
-  --tg-lh-body: 1.7;
-
-  /* Hard offset shadow — sprites never blur. */
-  --tg-shadow-px: 8px 8px 0 rgba(22, 18, 14, 0.9);
-  --tg-shadow-px-sm: 4px 4px 0 rgba(22, 18, 14, 0.9);
+  --tg-lh-tight: 1.2;
+  --tg-lh-body: 1.75;
 
   /* Layout */
-  --tg-container: 1120px;
-  --tg-nav-h: 64px;
-}
-
-/* Stepped pixel corners — two-step cut for panels, three-step for big
- * surfaces. Applied via clip-path; pair with a drop-shadow wrapper to
- * keep the offset shadow on the clipped silhouette. */
-:root {
-  --tg-cut-sm: polygon(
-    0 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0,
-    calc(100% - 8px) 0, calc(100% - 8px) 4px, calc(100% - 4px) 4px,
-    calc(100% - 4px) 8px, 100% 8px,
-    100% calc(100% - 8px), calc(100% - 4px) calc(100% - 8px),
-    calc(100% - 4px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px),
-    calc(100% - 8px) 100%,
-    8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px),
-    4px calc(100% - 8px), 0 calc(100% - 8px)
-  );
-  --tg-cut-lg: polygon(
-    0 16px, 4px 16px, 4px 12px, 8px 12px, 8px 8px, 12px 8px, 12px 4px,
-    16px 4px, 16px 0,
-    calc(100% - 16px) 0, calc(100% - 16px) 4px, calc(100% - 12px) 4px,
-    calc(100% - 12px) 8px, calc(100% - 8px) 8px, calc(100% - 8px) 12px,
-    calc(100% - 4px) 12px, calc(100% - 4px) 16px, 100% 16px,
-    100% calc(100% - 16px), calc(100% - 4px) calc(100% - 16px),
-    calc(100% - 4px) calc(100% - 12px), calc(100% - 8px) calc(100% - 12px),
-    calc(100% - 8px) calc(100% - 8px), calc(100% - 12px) calc(100% - 8px),
-    calc(100% - 12px) calc(100% - 4px), calc(100% - 16px) calc(100% - 4px),
-    calc(100% - 16px) 100%,
-    16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px),
-    12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px),
-    4px calc(100% - 12px), 4px calc(100% - 16px), 0 calc(100% - 16px)
-  );
+  --tg-container: 1040px;
+  --tg-prose: 68ch;
+  --tg-nav-h: 56px;
+  --tg-radius: 10px;
 }

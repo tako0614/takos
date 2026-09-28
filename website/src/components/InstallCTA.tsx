@@ -20,10 +20,10 @@ export default function InstallCTA() {
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >
-      <div class='install-grid'>
+      <ul class='install-list'>
         <For each={t.install.cards}>
           {(c) => (
-            <div class='install-item px-panel px-shadow-sm'>
+            <li class='install-item'>
               <h3>{c.title}</h3>
               <p>{c.body}</p>
               <Show
@@ -58,10 +58,10 @@ export default function InstallCTA() {
                   {c.cta}
                 </a>
               </Show>
-            </div>
+            </li>
           )}
         </For>
-      </div>
+      </ul>
     </Section>
   );
 }
