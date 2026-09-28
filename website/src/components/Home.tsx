@@ -26,9 +26,11 @@ export default function Home(props: { locale: Locale }): JSX.Element {
           <BundledApps />
           <Data />
           <InstallCTA />
+          <div class='ad-slot'>
+            <AdringWidget />
+          </div>
         </main>
         <Footer />
-        <AdringWidget />
         <JsonLd locale={props.locale} />
       </CloudProvider>
     </LocaleProvider>

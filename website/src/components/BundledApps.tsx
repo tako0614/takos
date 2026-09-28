@@ -2,7 +2,7 @@ import { For } from 'solid-js';
 import Section from './Section';
 import { useT } from '~/lib/i18n';
 
-/** First-party installable apps — a plain list of what exists. */
+/** First-party installable apps — white tiles on the water. */
 export default function BundledApps() {
   const t = useT();
   return (
@@ -10,7 +10,7 @@ export default function BundledApps() {
       <ul class='app-list'>
         <For each={t.apps.items}>
           {(a) => (
-            <li>
+            <li class='px-panel px-shadow-sm'>
               <span class='app-name'>{a.name}</span>
               <span class='app-body'>{a.body}</span>
             </li>

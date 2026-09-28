@@ -10,55 +10,19 @@ html {
 }
 body {
   font-family: var(--tg-font-body);
-  background: var(--tg-bg);
-  color: var(--tg-fg);
+  background: var(--tg-field);
+  color: var(--tg-on-field);
   line-height: var(--tg-lh-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'ss01', 'ss02';
 }
 
-/* ===== Takos design language: the pixel tako mark, made structural.
- * The product logo is pixel art — a red tako on a blue field. The site
- * carries that identity as a real shape language instead of generic
- * rounded rectangles: every interactive block and every real screenshot
- * is cut with stepped "pixel" corners, primary actions cast a hard
- * offset shadow, and section markers echo the mark's geometry
- * (blue field square + red tako pixel). */
-
-:root {
-  --tako-blue: #00a0e4; /* field blue sampled from the brand mark */
-
-  /* Two-step stepped corner cut — the "pixel" edge. */
-  --tg-cut-sm: polygon(
-    0 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0,
-    calc(100% - 8px) 0, calc(100% - 8px) 4px, calc(100% - 4px) 4px,
-    calc(100% - 4px) 8px, 100% 8px,
-    100% calc(100% - 8px), calc(100% - 4px) calc(100% - 8px),
-    calc(100% - 4px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px),
-    calc(100% - 8px) 100%,
-    8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px),
-    4px calc(100% - 8px), 0 calc(100% - 8px)
-  );
-
-  /* Three-step stepped cut for large surfaces (screenshots, hero mark). */
-  --tg-cut-lg: polygon(
-    0 16px, 4px 16px, 4px 12px, 8px 12px, 8px 8px, 12px 8px, 12px 4px,
-    16px 4px, 16px 0,
-    calc(100% - 16px) 0, calc(100% - 16px) 4px, calc(100% - 12px) 4px,
-    calc(100% - 12px) 8px, calc(100% - 8px) 8px, calc(100% - 8px) 12px,
-    calc(100% - 4px) 12px, calc(100% - 4px) 16px, 100% 16px,
-    100% calc(100% - 16px), calc(100% - 4px) calc(100% - 16px),
-    calc(100% - 4px) calc(100% - 12px), calc(100% - 8px) calc(100% - 12px),
-    calc(100% - 8px) calc(100% - 8px), calc(100% - 12px) calc(100% - 8px),
-    calc(100% - 12px) calc(100% - 4px), calc(100% - 16px) calc(100% - 4px),
-    calc(100% - 16px) 100%,
-    16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px),
-    12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px),
-    4px calc(100% - 12px), 4px calc(100% - 16px), 0 calc(100% - 16px)
-  );
-}
+/* ===== The page is the mark's field. The product logo is a red pixel
+ * tako on #00a0e4 water — so the site IS that water: flat blue, floating
+ * bubble pixels, paper panels framed in ink, real app screenshots cast
+ * like sprites with hard offset shadows. Type hierarchy: DotGothic16
+ * bitmap face for display, quiet sans for reading. ===== */
 
 a {
   color: inherit;
@@ -71,7 +35,7 @@ a:hover {
 
 ::selection {
   background: var(--tg-accent);
-  color: #fff;
+  color: var(--tg-accent-fg);
 }
 
 code, pre {
@@ -79,7 +43,7 @@ code, pre {
 }
 code {
   font-size: 0.92em;
-  background: var(--tg-code-bg);
+  background: var(--tg-ink);
   color: var(--tg-code-fg);
   padding: 0.12em 0.42em;
 }
@@ -107,64 +71,98 @@ main {
   padding: 0 var(--tg-s-5);
 }
 
+/* ===== Pixel furniture ===== */
+
+/* Paper panel on the water — ink frame, stepped corners, sprite shadow. */
+.px-panel {
+  background: var(--tg-paper);
+  color: var(--tg-fg);
+  border: 3px solid var(--tg-ink);
+  clip-path: var(--tg-cut-sm);
+}
+.px-shadow {
+  filter: drop-shadow(var(--tg-shadow-px));
+}
+.px-shadow-sm {
+  filter: drop-shadow(var(--tg-shadow-px-sm));
+}
+
+/* Bubbles — the tako's water made visible: white pixel squares drifting. */
+.bubbles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bubbles i {
+  position: absolute;
+  display: block;
+  background: var(--tg-bubble);
+  image-rendering: pixelated;
+  animation: bubble-drift 5s ease-in-out infinite alternate;
+}
+@keyframes bubble-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-14px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubbles i { animation: none; }
+}
+
 section {
   padding: var(--tg-s-8) 0;
   position: relative;
 }
-/* Sections sit on a shared hairline grid — the page's rhythm. */
-main > section + section {
-  border-top: 1px solid var(--tg-line);
-}
 section h2 {
   font-family: var(--tg-font-display);
-  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
   line-height: 1.15;
-  letter-spacing: -0.02em;
   margin: 0 0 var(--tg-s-4);
-  font-weight: 800;
+  font-weight: 400;
+  color: var(--tg-ink);
 }
-/* Section marker — the mark's geometry: blue field square + red tako pixel. */
+/* Section marker — a single tako-red pixel, stepped like the mark's corners. */
 section h2::before {
   content: '';
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   margin-right: var(--tg-s-3);
-  background: var(--tako-blue);
-  box-shadow: 18px -12px 0 -7px var(--tg-accent);
+  background: var(--tg-accent);
+  clip-path: var(--tg-cut-sm);
+  vertical-align: baseline;
 }
 section h2 + .intro {
-  color: var(--tg-fg-muted);
+  color: var(--tg-on-field);
   font-size: var(--tg-fs-base);
   margin: 0 0 var(--tg-s-6);
-  max-width: 64ch;
+  max-width: 62ch;
 }
 
-/* Primary action — one real button per context; everything else is a link.
- * Pixel-cut with a hard offset shadow, like the mark dropped onto paper. */
+/* Primary action — one red sprite button per context; else plain links. */
 .btn {
   display: inline-block;
   background: var(--tg-accent);
   color: var(--tg-accent-fg);
   font-weight: 700;
   font-size: var(--tg-fs-sm);
-  padding: 0.75em 1.4em;
-  clip-path: var(--tg-cut-sm);
-  box-shadow: 5px 5px 0 #7f1d1d;
-  transition: transform 100ms ease, box-shadow 100ms ease, background 120ms ease;
+  padding: 0.75em 1.5em;
+  border: 3px solid var(--tg-ink);
+  box-shadow: 5px 5px 0 var(--tg-ink);
+  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
 }
 .btn:hover {
   background: var(--tg-accent-hover);
   color: var(--tg-accent-fg);
   transform: translate(2px, 2px);
-  box-shadow: 3px 3px 0 #7f1d1d;
+  box-shadow: 3px 3px 0 var(--tg-ink);
 }
 .btn:active {
   transform: translate(5px, 5px);
-  box-shadow: 0 0 0 #7f1d1d;
+  box-shadow: 0 0 0 var(--tg-ink);
 }
 
-/* ===== Nav — transparent over hero, blurred fill after scroll ===== */
+/* ===== Nav — transparent on the water, solid + ink rule after scroll ===== */
 .nav {
   position: fixed;
   top: 0;
@@ -173,16 +171,13 @@ section h2 + .intro {
   z-index: 50;
   height: var(--tg-nav-h);
   background: transparent;
-  border-bottom: 1px solid transparent;
-  transition: background 200ms ease, border-color 200ms ease;
-  color: #fafafa;
+  border-bottom: 3px solid transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+  color: var(--tg-ink);
 }
 .nav.is-scrolled {
-  background: color-mix(in srgb, var(--tg-bg) 80%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border-bottom-color: var(--tg-line);
-  color: var(--tg-fg);
+  background: var(--tg-field);
+  border-bottom-color: var(--tg-ink);
 }
 .nav-inner {
   height: 100%;
@@ -192,25 +187,24 @@ section h2 + .intro {
   gap: var(--tg-s-5);
 }
 
-/* Wordmark — real brand tile + name, pixel-cut like everything else. */
+/* Wordmark — the brand tile + name in the bitmap face. */
 .wordmark {
   display: inline-flex;
   align-items: center;
   gap: var(--tg-s-2);
-  font-weight: 800;
   color: inherit;
   font-family: var(--tg-font-display);
 }
 .wordmark-mark {
   display: block;
+  border: 2px solid var(--tg-ink);
   clip-path: var(--tg-cut-sm);
   object-fit: cover;
   flex: none;
   image-rendering: pixelated;
 }
 .wordmark-text {
-  font-size: var(--tg-fs-lg);
-  letter-spacing: -0.015em;
+  font-size: var(--tg-fs-xl);
 }
 
 /* Nav links */
@@ -221,9 +215,9 @@ section h2 + .intro {
 }
 .nav-links a {
   color: inherit;
-  opacity: 0.75;
+  opacity: 0.8;
   font-size: var(--tg-fs-sm);
-  font-weight: 500;
+  font-weight: 600;
   transition: opacity 120ms ease;
 }
 .nav-links a:hover {
@@ -245,16 +239,14 @@ section h2 + .intro {
   height: 36px;
   background: transparent;
   color: inherit;
-  border: 1px solid transparent;
-  opacity: 0.75;
-  transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease;
+  border: 2px solid transparent;
+  opacity: 0.8;
+  transition: opacity 120ms ease, background 120ms ease;
 }
 .nav-icon:hover {
   opacity: 1;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
-.nav.is-scrolled .nav-icon:hover {
-  background: var(--tg-bg-subtle);
+  background: rgba(255, 255, 255, 0.25);
+  border-color: var(--tg-ink);
 }
 
 .nav-use {
@@ -264,12 +256,16 @@ section h2 + .intro {
   white-space: nowrap;
   background: var(--tg-accent);
   color: var(--tg-accent-fg);
-  padding: 0.5em 1em;
-  clip-path: var(--tg-cut-sm);
+  padding: 0.45em 1em;
+  border: 2px solid var(--tg-ink);
+  box-shadow: 3px 3px 0 var(--tg-ink);
+  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
 }
 .nav-use:hover {
   background: var(--tg-accent-hover);
   color: var(--tg-accent-fg);
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--tg-ink);
 }
 
 /* Mobile disclosure menu — <details>/<summary>, zero JS, SSR-safe. */
@@ -292,10 +288,10 @@ section h2 + .intro {
   min-width: 200px;
   padding: var(--tg-s-4);
   gap: var(--tg-s-3);
-  background: var(--tg-bg-elev);
-  border: 1px solid var(--tg-line);
+  background: var(--tg-paper);
+  border: 3px solid var(--tg-ink);
   clip-path: var(--tg-cut-sm);
-  box-shadow: var(--tg-shadow-lg);
+  box-shadow: 6px 6px 0 var(--tg-ink);
 }
 .nav-menu-panel a {
   color: var(--tg-fg);
@@ -322,63 +318,66 @@ section h2 + .intro {
   }
 }
 
-/* ===== Page head — brand mark + name, one factual paragraph, the fact
- *  line, the links — then the real app window bleeding to the edge. ===== */
+/* ===== Page head — the mark swims in its own field.
+ * The tako tile melts into the water (same #00a0e4), the name sets in
+ * the bitmap face, the factual paragraph sits on a paper panel. */
 .page-head {
   padding-top: calc(var(--tg-nav-h) + var(--tg-s-7));
   overflow: hidden;
+  position: relative;
 }
-.head-brand {
-  display: flex;
+.head-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--tg-s-5);
-}
-.head-mark {
-  width: 104px;
-  height: auto;
-  image-rendering: pixelated;
-  clip-path: var(--tg-cut-lg);
-  flex: none;
+  gap: var(--tg-s-8);
+  position: relative;
 }
 .page-title {
   font-family: var(--tg-font-display);
-  font-size: clamp(3.4rem, 8vw, 6.2rem);
+  font-size: clamp(3.6rem, 9vw, 7rem);
   line-height: 1;
-  letter-spacing: -0.04em;
-  font-weight: 800;
-  margin: 0;
+  margin: 0 0 var(--tg-s-6);
+  color: var(--tg-ink);
+}
+.head-mark {
+  width: clamp(180px, 24vw, 300px);
+  height: auto;
+  image-rendering: pixelated;
+  flex: none;
 }
 .page-desc {
-  font-size: clamp(1.05rem, 1.5vw, 1.25rem);
-  color: var(--tg-fg);
-  max-width: 56ch;
-  margin: var(--tg-s-6) 0 0;
+  font-size: clamp(1.02rem, 1.4vw, 1.18rem);
+  max-width: 52ch;
+  margin: 0 0 var(--tg-s-5);
+  padding: var(--tg-s-5) var(--tg-s-6);
 }
 .page-facts {
   font-family: var(--tg-font-mono);
   font-size: var(--tg-fs-xs);
-  color: var(--tg-fg-subtle);
-  margin: var(--tg-s-4) 0 0;
+  color: var(--tg-on-field);
+  margin: 0 0 var(--tg-s-5);
 }
 .page-actions {
   display: flex;
   gap: var(--tg-s-5);
   flex-wrap: wrap;
   align-items: center;
-  margin: var(--tg-s-6) 0 0;
 }
 .page-actions a:not(.btn) {
   font-size: var(--tg-fs-sm);
-  font-weight: 500;
-  color: var(--tg-fg-muted);
+  font-weight: 600;
+  color: var(--tg-on-field);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
 }
 .page-actions a:not(.btn):hover {
-  color: var(--tg-fg);
+  color: var(--tg-ink);
 }
 
-/* The product itself is the hero: the real app window starts at the text
- * column's left edge and runs off the right edge of the viewport —
- * an asymmetric composition instead of a centered template block. */
+/* The product itself, cast like a sprite — the real app window starts at
+ * the text column's left edge and runs off the right edge of the screen. */
 .head-shot {
   margin-top: var(--tg-s-8);
   padding-left: max(
@@ -386,260 +385,310 @@ section h2 + .intro {
     calc((100vw - var(--tg-container)) / 2 + var(--tg-s-5))
   );
 }
-.shot-hero {
+
+/* Real screenshots — ink frame, stepped edge, hard cast shadow. */
+.shot {
+  display: block;
   width: 100%;
   height: auto;
+  border: 4px solid var(--tg-ink);
+  clip-path: var(--tg-cut-lg);
+  filter: drop-shadow(10px 10px 0 rgba(22, 18, 14, 0.9));
+  margin-top: var(--tg-s-5);
+}
+.shot-hero {
+  margin-top: 0;
+  width: 100%;
   max-height: 76vh;
   object-fit: cover;
   object-position: top left;
 }
 
-/* Real screenshots of the running takos app (public/screens, captured from
- * the actual web UI). Full width, full brightness, pixel-cut edge — no
- * frame chrome, no caption. */
-.shot {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--tg-line);
-  clip-path: var(--tg-cut-lg);
-  margin-top: var(--tg-s-5);
-}
-.shot-hero {
-  margin-top: 0;
-}
-
-/* ===== Run — one request through the surfaces it actually touches ===== */
-/* Heading, one sentence, then the real UI it happens on. */
+/* ===== Run — one request through the surfaces it actually touches.
+ * Alternating text / screenshot columns: the run reads left to right,
+ * then folds back — a path through the water, not a stack of cards. */
 .step {
   margin-top: var(--tg-s-7);
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  gap: var(--tg-s-7);
+  align-items: start;
+}
+.step:nth-child(even) {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
+}
+.step:nth-child(even) .shot {
+  order: -1;
+}
+.step-index {
+  font-family: var(--tg-font-display);
+  font-size: var(--tg-fs-3xl);
+  color: var(--tg-accent);
+  display: block;
+  line-height: 1;
+  margin-bottom: var(--tg-s-3);
+  text-shadow: 3px 3px 0 rgba(22, 18, 14, 0.9);
 }
 .step h3 {
   font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-xl);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--tg-s-2);
-}
-.step h3::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: var(--tg-s-2);
-  background: var(--tg-accent);
+  font-size: var(--tg-fs-2xl);
+  font-weight: 400;
+  margin: 0 0 var(--tg-s-3);
+  color: var(--tg-ink);
 }
 .step p {
   margin: 0;
-  color: var(--tg-fg-muted);
-  font-size: var(--tg-fs-sm);
-  max-width: 64ch;
+  color: var(--tg-on-field);
+}
+.step .shot {
+  margin-top: 0;
 }
 
-/* CodeBlock */
-.codeblock {
-  background: var(--tg-code-bg);
-  color: var(--tg-code-fg);
-  border: 1px solid var(--tg-line);
-  clip-path: var(--tg-cut-sm);
-  padding: var(--tg-s-5);
-  overflow-x: auto;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-sm);
-  line-height: 1.7;
-  text-align: left;
-}
-.codeblock .c {
-  color: var(--tg-fg-subtle);
-}
-.codeblock .s {
-  color: var(--tg-success);
-}
-.codeblock .n {
-  color: var(--tg-warn);
-}
-.codeblock .k {
-  color: var(--tg-fg-subtle);
-  font-weight: 600;
-}
-
-.code-terminal {
-  font-size: var(--tg-fs-xs);
-}
-.code-terminal pre {
-  margin: 0;
-}
-
-/* ===== Plain lists — apps and data facts, square pixel markers ===== */
-.app-list,
-.fact-list {
-  margin: var(--tg-s-5) 0 0;
-  padding: 0;
+/* ===== Apps — first-party capsules, white tiles on the water ===== */
+.app-list {
   list-style: none;
-}
-.fact-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--tg-s-3) var(--tg-s-8);
-}
-@media (max-width: 720px) {
-  .fact-list {
-    grid-template-columns: 1fr;
-  }
-}
-.app-list li,
-.fact-list li {
-  position: relative;
-  padding-left: var(--tg-s-5);
-  margin: var(--tg-s-3) 0;
-  color: var(--tg-fg-muted);
-}
-.fact-list li {
   margin: 0;
-}
-.app-list li::before,
-.fact-list li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.52em;
-  width: 8px;
-  height: 8px;
-  background: var(--tg-accent);
-}
-.app-name {
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-base);
-  font-weight: 700;
-  color: var(--tg-fg);
-}
-.app-name::after {
-  content: ' — ';
-  color: var(--tg-fg-subtle);
-  font-weight: 400;
-}
-.app-body {
-  font-size: var(--tg-fs-sm);
-}
-
-/* Install — three plain ways in. */
-.install-item {
-  margin-top: var(--tg-s-6);
-}
-.install-item + .install-item {
-  margin-top: var(--tg-s-7);
-}
-.install-item h3 {
-  font-family: var(--tg-font-display);
-  font-size: var(--tg-fs-lg);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--tg-s-2);
-}
-.install-item p {
-  color: var(--tg-fg-muted);
-  margin: 0 0 var(--tg-s-3);
-  max-width: 64ch;
-}
-.install-item .link {
-  font-size: var(--tg-fs-sm);
-  font-weight: 500;
-}
-.install-item .codeblock {
-  margin-top: var(--tg-s-3);
-}
-
-/* Inline accent emphasis (RichText 'em' segments) */
-.em {
-  font-style: normal;
-  color: var(--tg-accent);
-  font-weight: 600;
-}
-
-/* ===== Language toggle ===== */
-.lang-toggle {
-  width: auto;
-  gap: 6px;
-  padding: 0 10px;
-  font-family: var(--tg-font-mono);
-  font-size: var(--tg-fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-.lang-toggle-text {
-  line-height: 1;
-}
-
-@media (max-width: 720px) {
-  .nav-icon-desk {
-    display: none;
-  }
-  .head-mark {
-    width: 72px;
-  }
-  .shot-hero {
-    max-height: 60vh;
-  }
-}
-
-/* ===== Footer ===== */
-footer.site {
-  border-top: 1px solid var(--tg-line);
-  padding: var(--tg-s-7) 0;
-  color: var(--tg-fg-muted);
-  font-size: var(--tg-fs-sm);
-}
-footer.site .container {
+  padding: 0;
   display: grid;
-  gap: var(--tg-s-6);
-}
-@media (min-width: 720px) {
-  footer.site .container {
-    grid-template-columns: 1fr auto;
-    align-items: end;
-  }
-}
-footer.site nav {
-  display: flex;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--tg-s-5);
-  flex-wrap: wrap;
 }
-footer.site nav a:hover {
-  color: var(--tg-fg);
-}
-footer.site .copy {
-  font-size: var(--tg-fs-xs);
-}
-.footer-brand {
+.app-list li {
+  padding: var(--tg-s-5) var(--tg-s-5) var(--tg-s-6);
   display: flex;
   flex-direction: column;
   gap: var(--tg-s-3);
 }
-.footer-meta {
+.app-name {
+  font-family: var(--tg-font-display);
+  font-size: var(--tg-fs-xl);
+  color: var(--tg-fg);
+}
+.app-body {
+  font-size: var(--tg-fs-sm);
+  color: var(--tg-fg-muted);
+}
+
+/* ===== Data — the facts, pinned on a panel ===== */
+.fact-panel {
+  padding: var(--tg-s-6) var(--tg-s-7);
+  max-width: 860px;
+}
+.fact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--tg-s-4);
-  align-items: flex-start;
 }
-@media (min-width: 720px) {
-  .footer-meta {
-    align-items: flex-end;
-  }
+.fact-list li {
+  position: relative;
+  padding-left: var(--tg-s-6);
+  color: var(--tg-fg);
 }
-
-/* Focus */
-:focus-visible {
-  outline: 2px solid var(--tg-accent);
-  outline-offset: 3px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    transition: none !important;
-    animation: none !important;
-  }
-  html {
-    scroll-behavior: auto;
-  }
+.fact-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 10px;
+  height: 10px;
+  background: var(--tg-accent);
 }
 
+/* ===== Install — three doors, one terminal ===== */
+.install-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tg-s-5);
+}
+.install-item {
+  padding: var(--tg-s-5) var(--tg-s-6);
+}
+.install-item:nth-child(3) {
+  grid-column: 1 / -1;
+}
+.install-item h3 {
+  font-family: var(--tg-font-display);
+  font-size: var(--tg-fs-xl);
+  font-weight: 400;
+  margin: 0 0 var(--tg-s-3);
+  color: var(--tg-fg);
+}
+.install-item p {
+  color: var(--tg-fg-muted);
+  font-size: var(--tg-fs-sm);
+  margin: 0 0 var(--tg-s-4);
+}
+.install-item .btn {
+  margin-top: var(--tg-s-1);
+}
+.install-item .link {
+  font-weight: 700;
+  color: var(--tg-fg);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+.install-item .link:hover {
+  color: var(--tg-accent);
+}
+
+/* Terminal — the one dark surface: a console window with pixel lights. */
+.codeblock {
+  background: var(--tg-code-bg);
+  color: var(--tg-code-fg);
+  border: 3px solid var(--tg-ink);
+  clip-path: var(--tg-cut-sm);
+  filter: drop-shadow(8px 8px 0 rgba(22, 18, 14, 0.9));
+  font-size: var(--tg-fs-xs);
+  line-height: 1.8;
+  overflow-x: auto;
+}
+.code-terminal {
+  padding-top: 34px;
+  position: relative;
+}
+.code-terminal::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: var(--tg-accent);
+  box-shadow:
+    18px 0 0 var(--tg-paper),
+    36px 0 0 var(--tg-field);
+}
+.codeblock pre {
+  margin: 0;
+  padding: var(--tg-s-4) var(--tg-s-5) var(--tg-s-5);
+  font-family: var(--tg-font-mono);
+}
+.codeblock .k {
+  color: var(--tg-accent-hover);
+}
+.codeblock .c {
+  color: #7d746a;
+}
+.codeblock .s {
+  color: #8fd3ff;
+}
+
+/* ===== Ad slot — sits on the water like the rest ===== */
+.ad-slot {
+  padding: 0 0 var(--tg-s-7);
+}
+.ad-slot aside {
+  margin: 0 auto;
+}
+
+/* ===== Footer — deep water: the page sinks to the field's dark floor. */
+footer.site {
+  background: var(--tg-field-deep);
+  color: var(--tg-on-deep);
+  border-top: 4px solid var(--tg-ink);
+  padding: var(--tg-s-8) 0 var(--tg-s-7);
+  position: relative;
+  overflow: hidden;
+}
+footer.site .container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tg-s-6);
+  flex-wrap: wrap;
+}
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-s-4);
+}
+.footer-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tg-s-1);
+}
+.footer-word {
+  font-family: var(--tg-font-display);
+  font-size: var(--tg-fs-2xl);
+  color: #fff;
+  line-height: 1.1;
+}
+.footer-word:hover {
+  color: #fff;
+}
+.footer-mark {
+  width: 72px;
+  height: auto;
+  image-rendering: pixelated;
+  border: 3px solid var(--tg-ink);
+  clip-path: var(--tg-cut-sm);
+}
+footer.site .wordmark {
+  color: var(--tg-on-deep);
+}
+footer.site .copy {
+  color: rgba(244, 248, 250, 0.75);
+  font-size: var(--tg-fs-sm);
+}
+.footer-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-s-5);
+  flex-wrap: wrap;
+}
+.footer-meta nav {
+  display: flex;
+  gap: var(--tg-s-5);
+  flex-wrap: wrap;
+}
+.footer-meta a {
+  color: var(--tg-on-deep);
+  opacity: 0.85;
+  font-size: var(--tg-fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.footer-meta a:hover {
+  opacity: 1;
+  color: #fff;
+}
+footer.site .lang-toggle {
+  color: var(--tg-on-deep);
+}
+footer.site .bubbles i {
+  background: rgba(244, 248, 250, 0.3);
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 900px) {
+  .head-grid {
+    grid-template-columns: 1fr;
+  }
+  .head-mark {
+    order: -1;
+    width: 140px;
+  }
+  .step,
+  .step:nth-child(even) {
+    grid-template-columns: 1fr;
+    gap: var(--tg-s-4);
+  }
+  .step:nth-child(even) .shot {
+    order: 0;
+  }
+  .app-list {
+    grid-template-columns: 1fr;
+  }
+  .install-grid {
+    grid-template-columns: 1fr;
+  }
+  .fact-panel {
+    padding: var(--tg-s-5);
+  }
+}

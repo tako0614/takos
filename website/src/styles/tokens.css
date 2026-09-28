@@ -1,37 +1,49 @@
+/* ===== Takos design tokens — the mark's field, made structural.
+ *
+ * The product logo is pixel art: a red tako on a vivid blue field
+ * (#00a0e4 + #ed1b24 + black outline). The site lives on that field —
+ * the whole page is the water the mark swims in. Text sits on white
+ * panels framed in ink; the real app screenshots float in ink frames
+ * with hard offset shadows, like sprites on a Famicom screen.
+ *
+ * Display type is DotGothic16 — a real Japanese bitmap font — subset to
+ * the glyphs the site uses (public/fonts/dotgothic16-subset.woff2).
+ * If a new heading shows missing glyphs, extend the subset.
+ *
+ * No gradients, no glass, no rounded-default cards: flat fields,
+ * stepped pixel corners, hard shadows. */
+
+@font-face {
+  font-family: 'DotGothic16';
+  src: url('/fonts/dotgothic16-subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* ===== Palette — dark-only. Near-black base + 朱 red UI accent. =====
-   * No light mode. Decorative ink splats were removed from this surface
-   * (2026-09): the brand mark lives in the wordmark; decorative ink is
-   * documented in takos-control/docs/reference/design-language.md.
-   */
+  /* ===== Palette — flat fields, sampled from the mark ===== */
+  --tg-field: #00a0e4;        /* the mark's water */
+  --tg-field-deep: #065a80;   /* deep water — the closing band */
+  --tg-paper: #fdfcf8;        /* panel white */
+  --tg-ink: #16120e;          /* outline black */
+  --tg-ink-soft: #4a4237;
+  --tg-line: #16120e;
 
-  --tg-bg: #0a0a0a;
-  --tg-bg-elev: #141414;
-  --tg-bg-subtle: #1a1a1a;
-  --tg-fg: #fafafa;
-  --tg-fg-muted: #a3a3a3;
-  --tg-fg-subtle: #8f8f8f;
-  --tg-line: #262626;
-  --tg-line-strong: #3f3f3f;
-  --tg-code-bg: #141414;
-  --tg-code-fg: #fafafa;
+  --tg-fg: #16120e;           /* text sits on paper panels */
+  --tg-fg-muted: #4a4237;
+  --tg-fg-subtle: #6b6152;
+  --tg-on-field: #16120e;     /* short ink text directly on the water */
+  --tg-on-deep: #f4f8fa;
 
-  --tg-accent: #ef4444; /* 朱 red — UI accent */
-  --tg-accent-hover: #f87171;
-  --tg-accent-fg: #0a0a0a;
-  --tg-accent-soft: #2a0a0a;
-  /* Accent TEXT (small) on the dark base. */
-  --tg-accent-text: #fca5a5;
-
-  --tg-grad-from: #fafafa;
-  --tg-grad-mid: #ef4444;
-  --tg-grad-to: #dc2626;
-
-  --tg-success: #16a34a;
-  --tg-warn: #ea580c;
-  --tg-danger: #dc2626;
+  --tg-accent: #ed1b24;       /* tako red */
+  --tg-accent-hover: #ff3b30;
+  --tg-accent-fg: #fdfcf8;
+  --tg-code-bg: #16120e;
+  --tg-code-fg: #f4f1e6;
+  --tg-bubble: rgba(255, 255, 255, 0.55);
 
   /* Spacing scale */
   --tg-s-1: 4px;
@@ -57,7 +69,8 @@
     Roboto,
     sans-serif;
   --tg-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --tg-font-display: var(--tg-font-body);
+  /* Display = the bitmap font the mark implies. Falls back cleanly. */
+  --tg-font-display: 'DotGothic16', var(--tg-font-body);
 
   --tg-fs-xs: 0.78rem;
   --tg-fs-sm: 0.88rem;
@@ -68,25 +81,48 @@
   --tg-fs-3xl: 2rem;
   --tg-fs-4xl: 2.6rem;
   --tg-fs-5xl: 3.4rem;
-  --tg-fs-6xl: clamp(2.8rem, 6vw, 5rem);
+  --tg-fs-6xl: clamp(3rem, 7vw, 5.6rem);
 
   --tg-lh-tight: 1.15;
   --tg-lh-snug: 1.35;
   --tg-lh-body: 1.7;
 
-  /* Shadows — neutral, dark base */
-  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
-  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
-
-  /* Radii */
-  --tg-r-sm: 6px;
-  --tg-r-md: 10px;
-  --tg-r-lg: 16px;
-  --tg-r-xl: 24px;
-  --tg-r-full: 999px;
+  /* Hard offset shadow — sprites never blur. */
+  --tg-shadow-px: 8px 8px 0 rgba(22, 18, 14, 0.9);
+  --tg-shadow-px-sm: 4px 4px 0 rgba(22, 18, 14, 0.9);
 
   /* Layout */
   --tg-container: 1120px;
   --tg-nav-h: 64px;
+}
+
+/* Stepped pixel corners — two-step cut for panels, three-step for big
+ * surfaces. Applied via clip-path; pair with a drop-shadow wrapper to
+ * keep the offset shadow on the clipped silhouette. */
+:root {
+  --tg-cut-sm: polygon(
+    0 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0,
+    calc(100% - 8px) 0, calc(100% - 8px) 4px, calc(100% - 4px) 4px,
+    calc(100% - 4px) 8px, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 4px) calc(100% - 8px),
+    calc(100% - 4px) calc(100% - 4px), calc(100% - 8px) calc(100% - 4px),
+    calc(100% - 8px) 100%,
+    8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px),
+    4px calc(100% - 8px), 0 calc(100% - 8px)
+  );
+  --tg-cut-lg: polygon(
+    0 16px, 4px 16px, 4px 12px, 8px 12px, 8px 8px, 12px 8px, 12px 4px,
+    16px 4px, 16px 0,
+    calc(100% - 16px) 0, calc(100% - 16px) 4px, calc(100% - 12px) 4px,
+    calc(100% - 12px) 8px, calc(100% - 8px) 8px, calc(100% - 8px) 12px,
+    calc(100% - 4px) 12px, calc(100% - 4px) 16px, 100% 16px,
+    100% calc(100% - 16px), calc(100% - 4px) calc(100% - 16px),
+    calc(100% - 4px) calc(100% - 12px), calc(100% - 8px) calc(100% - 12px),
+    calc(100% - 8px) calc(100% - 8px), calc(100% - 12px) calc(100% - 8px),
+    calc(100% - 12px) calc(100% - 4px), calc(100% - 16px) calc(100% - 4px),
+    calc(100% - 16px) 100%,
+    16px 100%, 16px calc(100% - 4px), 12px calc(100% - 4px),
+    12px calc(100% - 8px), 8px calc(100% - 8px), 8px calc(100% - 12px),
+    4px calc(100% - 12px), 4px calc(100% - 16px), 0 calc(100% - 16px)
+  );
 }

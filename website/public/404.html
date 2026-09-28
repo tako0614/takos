@@ -4,98 +4,64 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <meta name="color-scheme" content="dark" />
-    <title>ページが見つかりません - Takos</title>
+    <meta name="color-scheme" content="light" />
+    <title>ページが見つかりません | Takos</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <style>
-      :root {
-        --tg-bg: #0a0a0a;
-        --tg-fg: #fafafa;
-        --tg-fg-muted: #a3a3a3;
-        --tg-accent: #ef4444;
-        --tg-accent-text: #fca5a5;
-        --tg-border: #262626;
-      }
       * { box-sizing: border-box; margin: 0; }
       body {
         min-height: 100vh;
         display: grid;
         place-items: center;
         padding: 2rem;
-        background:
-          radial-gradient(circle at 85% 10%, rgb(239 68 68 / 10%), transparent 40%),
-          radial-gradient(circle at 10% 90%, rgb(59 130 246 / 8%), transparent 40%),
-          var(--tg-bg);
-        color: var(--tg-fg);
+        background: #00a0e4;
+        color: #16120e;
         font-family:
           'Bricolage Grotesque Variable', 'Bricolage Grotesque', -apple-system,
           BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
           'Segoe UI', Roboto, sans-serif;
-        text-align: center;
+      }
+      .card {
+        background: #fdfcf8;
+        border: 4px solid #16120e;
+        box-shadow: 10px 10px 0 rgba(22, 18, 14, 0.9);
+        padding: 2.6rem 3rem;
+        max-width: 34rem;
       }
       .code {
-        font-family:
-          'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace,
-          Menlo, Consolas, monospace;
+        font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
         font-size: 0.85rem;
-        letter-spacing: 0.2em;
-        color: var(--tg-accent-text);
-        text-transform: uppercase;
+        color: #ed1b24;
+        letter-spacing: 0.08em;
       }
       h1 {
-        margin: 0.9rem 0 0.8rem;
-        font-size: clamp(2.2rem, 6vw, 3.4rem);
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin: 0.6rem 0 0.8rem;
       }
       p {
-        max-width: 30rem;
-        margin: 0 auto;
-        color: var(--tg-fg-muted);
-        font-size: 1rem;
-        line-height: 1.8;
-      }
-      p.en {
-        margin-top: 0.4rem;
-        font-size: 0.85rem;
-      }
-      nav {
-        margin-top: 2rem;
-        display: flex;
-        gap: 0.75rem;
-        justify-content: center;
-        flex-wrap: wrap;
+        color: #4a4237;
+        line-height: 1.7;
       }
       a {
         display: inline-block;
-        padding: 0.65rem 1.4rem;
-        border-radius: 0.5rem;
-        font-size: 0.92rem;
-        font-weight: 600;
+        margin-top: 1.4rem;
+        background: #ed1b24;
+        color: #fdfcf8;
+        font-weight: 700;
+        padding: 0.7em 1.4em;
         text-decoration: none;
-        color: var(--tg-fg);
-        border: 1px solid var(--tg-border);
+        border: 3px solid #16120e;
+        box-shadow: 4px 4px 0 #16120e;
       }
-      a:hover { border-color: var(--tg-fg-muted); }
-      a.primary {
-        background: var(--tg-accent);
-        border-color: var(--tg-accent);
-        color: #fff;
-      }
-      a.primary:hover { filter: brightness(1.1); }
     </style>
   </head>
   <body>
-    <main>
-      <p class="code">404 · not found</p>
+    <div class="card">
+      <span class="code">404</span>
       <h1>ページが見つかりません</h1>
-      <p>お探しのページは移動したか、存在しません。</p>
-      <p class="en">The page you are looking for has moved or does not exist.</p>
-      <nav>
-        <a class="primary" href="/">Takos トップへ</a>
-        <a href="https://docs.takos.jp/">Docs</a>
-      </nav>
-    </main>
+      <p>URL を確認するか、トップページから移動してください。</p>
+      <a href="/">Takos トップへ</a>
+    </div>
   </body>
 </html>

@@ -20,46 +20,48 @@ export default function InstallCTA() {
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >
-      <For each={t.install.cards}>
-        {(c) => (
-          <div class='install-item'>
-            <h3>{c.title}</h3>
-            <p>{c.body}</p>
-            <Show
-              when={c.kind !== 'self'}
-              fallback={
-                <CodeBlock terminal>
-                  <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
-                  <span class='k'>$</span> cd takos{'\n'}
-                  <span class='k'>$</span> git fetch --tags origin{'\n'}
-                  <span class='k'>$</span> git checkout --detach {TAKOS_INSTALL_REF}{'\n'}
-                  <span class='k'>$</span> git rev-parse --verify {TAKOS_INSTALL_REF}{'\n'}
-                  <span class='k'>$</span> bun install --frozen-lockfile{'\n'}
-                  <span class='k'>$</span> bun run build:opentofu-worker-artifact{'\n'}
-                  <span class='k'>$</span> install -d -m 700 "$HOME/.config/takos"{'\n'}
-                  <span class='k'>$</span> cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$HOME/.config/takos/takos.tfvars"{'\n'}
-                  <span class='k'>$</span> chmod 600 "$HOME/.config/takos/takos.tfvars"{'\n'}
-                  <span class='k'>$</span> <span class='c'># edit external tfvars before planning</span>{'\n'}
-                  <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare init -input=false{'\n'}
-                  <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false \{'\n'}
-                  {'    '}-var-file="$HOME/.config/takos/takos.tfvars" \{'\n'}
-                  {'    '}-out="$HOME/.config/takos/takos.tfplan"{'\n'}
-                  <span class='k'>$</span> tofu show "$HOME/.config/takos/takos.tfplan"{'\n'}
-                  <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"
-                </CodeBlock>
-              }
-            >
-              <a
-                class={c.kind === 'use' ? 'btn' : 'link'}
-                href={href(c.kind)}
-                rel='noopener'
+      <div class='install-grid'>
+        <For each={t.install.cards}>
+          {(c) => (
+            <div class='install-item px-panel px-shadow-sm'>
+              <h3>{c.title}</h3>
+              <p>{c.body}</p>
+              <Show
+                when={c.kind !== 'self'}
+                fallback={
+                  <CodeBlock terminal>
+                    <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
+                    <span class='k'>$</span> cd takos{'\n'}
+                    <span class='k'>$</span> git fetch --tags origin{'\n'}
+                    <span class='k'>$</span> git checkout --detach {TAKOS_INSTALL_REF}{'\n'}
+                    <span class='k'>$</span> git rev-parse --verify {TAKOS_INSTALL_REF}{'\n'}
+                    <span class='k'>$</span> bun install --frozen-lockfile{'\n'}
+                    <span class='k'>$</span> bun run build:opentofu-worker-artifact{'\n'}
+                    <span class='k'>$</span> install -d -m 700 "$HOME/.config/takos"{'\n'}
+                    <span class='k'>$</span> cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$HOME/.config/takos/takos.tfvars"{'\n'}
+                    <span class='k'>$</span> chmod 600 "$HOME/.config/takos/takos.tfvars"{'\n'}
+                    <span class='k'>$</span> <span class='c'># edit external tfvars before planning</span>{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare init -input=false{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false \{'\n'}
+                    {'    '}-var-file="$HOME/.config/takos/takos.tfvars" \{'\n'}
+                    {'    '}-out="$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu show "$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"
+                  </CodeBlock>
+                }
               >
-                {c.cta}
-              </a>
-            </Show>
-          </div>
-        )}
-      </For>
+                <a
+                  class={c.kind === 'use' ? 'btn' : 'link'}
+                  href={href(c.kind)}
+                  rel='noopener'
+                >
+                  {c.cta}
+                </a>
+              </Show>
+            </div>
+          )}
+        </For>
+      </div>
     </Section>
   );
 }
