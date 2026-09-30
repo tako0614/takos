@@ -1,7 +1,7 @@
 # Takos GA: execute the exact portable test inventory
 
 Date: 2026-09-30 UTC
-Status: complete source gate verified / exact-head CI and integration pending
+Status: complete source gate and exact-head CI verified / integration pending
 Owner: Takos dedicated session
 Required for: production_or_release; verification provenance
 Grants production mutation authority: false
@@ -50,3 +50,9 @@ execution. All other phases, including OpenTofu and the required Rust/Worker
 recovery proof, passed; exit 0 is recorded in
 `tmp/ga-sse-recovery/notifier-restore-check.log`. The source inventory was not
 reduced to obtain this result. Exact new-head CI remains a separate readback.
+
+Exact commit `f5207eb193d71f28a2fc1895e2a213a725bddf82` passed remote CI at
+2026-09-30 22:01:54 UTC:
+https://github.com/tako0614/takos/actions/runs/36782775728 . The raw log confirms
+1,335 tests / 228 files and the child-process canonical/poison marker result.
+This does not qualify later changes or deployment.

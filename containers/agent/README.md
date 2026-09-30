@@ -160,10 +160,10 @@ local sibling checkout は release source authority には使いません。
 ## Portable qualification
 
 product root の `bun run check` は、この wrapper の formatting、全 target / feature の
-compile、default / all-feature Clippy、default / mock-LLM tests と production executable
+compile、default / all-feature Clippy、default / mock-LLM tests と production feature構成のdebug executable
 build も必須で実行します。compiler は `rust-toolchain.toml` の Rust 1.94.0 に固定し、
 Docker builder と一致しない場合は失敗します。
-続けて、その production executable と実 Worker RPC handler / ToolExecutor を接続する
+続けて、そのdebug executableと実 Worker RPC handler / ToolExecutor を接続する
 process recovery proof を実行します。現行 migration をすべて適用した新しい SQLite で
 `create_artifact` の結果を commit した後、HTTP acknowledgement を保留して旧 process を
 終了し、新 lease / process が同じ operation key の結果から完了することを確認します。
@@ -204,6 +204,30 @@ model/provider credential を使わず、tool allowlist は test process の
 proof は executable を専用 context へコピーし、同じ digest の bytes を両 process で
 実行します。300秒の watchdog と gate の360秒の process-group 上限で自身の child を
 終了・reap します。この必須 proof の process supervision は POSIX が対象です。
+
+Dockerfileの実imageを確認するときは、固定commitとexact engine pinから作成した
+Linux/amd64 OCI layoutを別に用意し、local OCI proofを明示的に実行します。
+検証済みのumoci/runc executableとContainerを起動できるlocal環境が必要です。
+
+```sh
+bun scripts/prove-agent-container-recovery.ts \
+  --layout /absolute/oci-layout \
+  --reference image-tag \
+  --source-commit "FULL_BUILD_SOURCE_COMMIT" \
+  --expected-manifest-digest "sha256:MANIFEST_DIGEST" \
+  --umoci /absolute/verified-umoci \
+  --runc /absolute/runc
+```
+
+path、tagとplaceholderは実際のbuild記録の値へ置き換えます。
+
+manifest/config/layerとuncompressed diff IDを照合し、imageのUID/GID10001、Cmd、
+workdir、両instanceで同じagent bytesを確認します。実initのPID/start timeを記録し、
+旧initと自身のrunc stateが消えた後だけleaseを更新して、同じWorker/SQLite/tool復旧assertionを
+通します。中断・停止失敗は成功扱いせず、自身のcontextと診断を残します。
+imageにrevision labelが無ければsource commitはoperatorが与えたbuild記録として報告します。
+local OCIの証拠は公開済みimage、Cloudflare/Host Container backend、queue、Accounts、
+稼働環境のmodel/proxy/notifierの資格確認へ流用しません。
 
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。

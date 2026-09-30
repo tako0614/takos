@@ -25,6 +25,18 @@ import type { Env } from "../src/worker/shared/types/index.ts";
 type Json = Record<string, unknown>;
 type Identity = { runId: string; serviceId: string; leaseVersion: number };
 type RequestTrace = { path: string; identity: string; body: Json; status: number };
+export type RecoveryInstance = {
+  log: { value: string };
+  isAlive: () => boolean | Promise<boolean>;
+  stop: () => Promise<number>;
+};
+export type RecoveryRuntime = {
+  prepare: (context: string) => Promise<void>;
+  launch: (port: number, token: string, register: (instance: RecoveryInstance) => void, isTimedOut: () => boolean) => Promise<RecoveryInstance>;
+  limitation?: string;
+  evidence?: () => Json;
+  cleanup?: () => Promise<void>;
+};
 
 const PHASE_MS = 45_000;
 const RUN_MS = 150_000;
@@ -94,7 +106,7 @@ async function freeLoopbackPort(): Promise<number> {
   return port;
 }
 
-function safeChildEnv(port: number, startToken: string): Record<string, string> {
+export function safeChildEnv(port: number, startToken: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const key of ["PATH", "HOME", "SSL_CERT_FILE", "SSL_CERT_DIR"]) {
     const value = process.env[key];
@@ -126,13 +138,13 @@ async function drain(stream: ReadableStream<Uint8Array> | null, sink: { value: s
 }
 
 type Child = ReturnType<typeof Bun.spawn>;
-async function launch(
+async function launchBinary(
   binary: string,
   port: number,
   token: string,
-  registerChild: (child: Child) => void,
+  registerInstance: (instance: RecoveryInstance) => void,
   isTimedOut: () => boolean,
-): Promise<{ child: Child; log: { value: string } }> {
+): Promise<RecoveryInstance> {
   requireValue(!isTimedOut(), "overall deadline expired before wrapper launch");
   const child = Bun.spawn([binary], {
     env: safeChildEnv(port, token),
@@ -142,8 +154,13 @@ async function launch(
   });
   // Register before the first await: the watchdog must see even a child whose
   // health check has not yet finished and whose launch has not returned.
-  registerChild(child);
   const log = { value: "" };
+  const instance: RecoveryInstance = {
+    log,
+    isAlive: () => child.exitCode === null,
+    stop: () => stopBinary(child),
+  };
+  registerInstance(instance);
   const noteDrainFailure = (error: unknown) => {
     log.value = `${log.value}\nlog drain failed: ${String(error)}`.slice(-MAX_LOG_BYTES);
   };
@@ -158,20 +175,19 @@ async function launch(
         const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(800) });
         if (response.ok) {
           requireValue(!isTimedOut(), "overall deadline expired during wrapper startup");
-          return { child, log };
+          return instance;
         }
       } catch { /* listener is starting */ }
       await Bun.sleep(100);
     }
     throw new Error(`wrapper did not bind loopback port ${port}: ${log.value}`);
   } catch (error) {
-    await stop(child);
+    await instance.stop();
     throw error;
   }
 }
 
-async function stop(child: Child | undefined): Promise<number | undefined> {
-  if (!child) return undefined;
+async function stopBinary(child: Child): Promise<number> {
   if (child.exitCode === null) child.kill("SIGKILL");
   return await withTimeout(child.exited, "reap wrapper", 10_000);
 }
@@ -204,7 +220,7 @@ type ProofWatchdog = {
   abort: () => Promise<void>;
 };
 
-export async function proveAgentWorkerRecovery(options: { binary: string; root: string }): Promise<Json> {
+export async function proveAgentWorkerRecovery(options: { binary?: string; root: string; runtime?: RecoveryRuntime }): Promise<Json> {
   const watchdog: ProofWatchdog = { timedOut: false, abort: async () => undefined };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -223,20 +239,27 @@ export async function proveAgentWorkerRecovery(options: { binary: string; root: 
   }
 }
 
-async function runAgentWorkerRecovery(options: { binary: string; root: string }, watchdog: ProofWatchdog): Promise<Json> {
+async function runAgentWorkerRecovery(options: { binary?: string; root: string; runtime?: RecoveryRuntime }, watchdog: ProofWatchdog): Promise<Json> {
   // The bridge and model fixture are always loopback. Do not let an operator
   // proxy setting redirect even this proof's own local fetches.
   for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]) delete process.env[key];
   process.env.NO_PROXY = "localhost,127.0.0.1,::1";
   process.env.no_proxy = process.env.NO_PROXY;
   const { root, binary } = options;
-  requireValue(isAbsolute(binary) && (await stat(binary)).isFile(), "--binary must name an existing file");
+  requireValue(options.runtime || (binary && isAbsolute(binary) && (await stat(binary)).isFile()), "--binary must name an existing file");
   requireValue((await stat(join(root, "db/migrations-control/migrations"))).isDirectory(), "--root must name the Takos checkout with control migrations");
   await mkdir(join(root, "tmp"), { recursive: true });
   const context = join(root, "tmp", `agent-worker-recovery-${randomUUID()}`);
   await mkdir(context);
   watchdog.context = context;
   const localBinary = join(context, "takos-agent");
+  const runtime: RecoveryRuntime = options.runtime ?? {
+    async prepare() {
+      await copyFile(binary!, localBinary);
+      await chmod(localBinary, 0o700);
+    },
+    launch: (port, token, register, isTimedOut) => launchBinary(localBinary, port, token, register, isTimedOut),
+  };
   let binarySHA256 = "";
   const dbFile = join(context, "recovery.sqlite");
   const oldIdentity: Identity = { runId: `run_${randomUUID()}`, serviceId: `service_old_${randomUUID()}`, leaseVersion: 7 };
@@ -257,9 +280,9 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
   const releaseOldAcknowledgement = deferred<void>();
   let holdFirstAcknowledgement = true;
   let oldAcknowledgementReleased = false;
-  let oldChild: Child | undefined;
-  let newChild: Child | undefined;
-  const children = new Set<Child>();
+  let oldChild: RecoveryInstance | undefined;
+  let newChild: RecoveryInstance | undefined;
+  const children = new Set<RecoveryInstance>();
   let oldLog = { value: "" };
   let newLog = { value: "" };
   let server: ReturnType<typeof Bun.serve> | undefined;
@@ -272,7 +295,7 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
   let abortPromise: Promise<void> | undefined;
   watchdog.abort = () => abortPromise ??= (async () => {
     releaseOldAcknowledgement.resolve();
-    const stopped = await Promise.allSettled([...children].map((child) => stop(child)));
+    const stopped = await Promise.allSettled([...children].map((child) => child.stop()));
     const failures = stopped.flatMap((result, index) => result.status === "rejected"
       ? [`wrapper ${index + 1} reap: ${String(result.reason)}`]
       : []);
@@ -281,13 +304,18 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
     } catch (error) {
       failures.push(`bridge stop: ${String(error)}`);
     }
+    try {
+      await runtime.cleanup?.();
+    } catch (error) {
+      failures.push(`runtime cleanup: ${String(error)}`);
+    }
     if (failures.length > 0) throw new Error(failures.join("; "));
   })();
   try {
-    phase = "copy reviewed executable";
-    await copyFile(binary, localBinary);
-    await chmod(localBinary, 0o700);
-    binarySHA256 = await binarySha256(localBinary);
+    phase = "prepare reviewed executable";
+    await runtime.prepare(context);
+    binarySHA256 = options.runtime ? String(runtime.evidence?.().binarySHA256 ?? "") : await binarySha256(localBinary);
+    requireValue(/^[a-f0-9]{64}$/u.test(binarySHA256), "runtime did not attest executable SHA-256");
     requireValue(!watchdog.timedOut, "overall deadline expired while preparing executable");
     phase = "migrate and seed";
     dbBinding = await withTimeout(createSqliteSqlDatabase(dbFile, join(root, "db/migrations-control/migrations")), "full SQLite migrations", RUN_MS);
@@ -359,7 +387,8 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
 
     phase = "first process";
     const oldPort = await freeLoopbackPort();
-    ({ child: oldChild, log: oldLog } = await launch(localBinary, oldPort, startToken, (child) => children.add(child), () => watchdog.timedOut));
+    oldChild = await runtime.launch(oldPort, startToken, (child) => children.add(child), () => watchdog.timedOut);
+    oldLog = oldChild.log;
     requireValue(!watchdog.timedOut, "overall deadline expired before first start");
     await start(oldPort, startToken, bridgeBase, oldToken, oldIdentity);
     await withTimeout(operationCommitted.promise, "first committed tool operation", RUN_MS);
@@ -386,7 +415,7 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
     requireValue(modelInputs.length === 1, "old process called model more than once");
 
     phase = "kill and reclaim";
-    const oldExit = await stop(oldChild);
+    const oldExit = await oldChild.stop();
     requireValue(typeof oldExit === "number", "old OS process did not exit");
     requireValue(!watchdog.timedOut, "overall deadline expired before lease reclaim");
     await db.update(runs).set({ serviceId: newIdentity.serviceId, leaseVersion: 8, serviceHeartbeat: new Date().toISOString() }).where(and(eq(runs.id, oldIdentity.runId), eq(runs.serviceId, oldIdentity.serviceId), eq(runs.leaseVersion, 7)));
@@ -425,13 +454,14 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
     phase = "replacement process";
     requireValue(!watchdog.timedOut, "overall deadline expired before replacement");
     const newPort = await freeLoopbackPort();
-    ({ child: newChild, log: newLog } = await launch(localBinary, newPort, startToken, (child) => children.add(child), () => watchdog.timedOut));
+    newChild = await runtime.launch(newPort, startToken, (child) => children.add(child), () => watchdog.timedOut);
+    newLog = newChild.log;
     requireValue(!watchdog.timedOut, "overall deadline expired before replacement start");
     await start(newPort, startToken, bridgeBase, newToken, newIdentity);
     const deadline = Date.now() + RUN_MS;
     let completed = await db.select().from(runs).where(eq(runs.id, oldIdentity.runId)).get();
     while (completed?.status !== "completed" && Date.now() < deadline) {
-      if (newChild.exitCode !== null) throw new Error(`replacement process exited (${newChild.exitCode}): ${newLog.value}`);
+      if (!await newChild.isAlive()) throw new Error(`replacement process exited: ${newLog.value}`);
       await Bun.sleep(100);
       completed = await db.select().from(runs).where(eq(runs.id, oldIdentity.runId)).get();
     }
@@ -461,13 +491,16 @@ async function runAgentWorkerRecovery(options: { binary: string; root: string },
     requireValue(!watchdog.timedOut, "overall deadline expired before final proof");
     succeeded = true;
     result = {
-      ok: true, proof: "real Worker handlers, SQLite migrations, ToolExecutor, compiled Rust process restart",
-      limitation: "Local bridge substitutes production proxy-token verification and RUN_NOTIFIER is a local stub; Accounts, Container/image, queue, SSE delivery, and live deployment are untested.",
+      ok: true, proof: options.runtime
+        ? "real Worker handlers, SQLite migrations, ToolExecutor, OCI container init restart"
+        : "real Worker handlers, SQLite migrations, ToolExecutor, compiled Rust process restart",
+      limitation: runtime.limitation ?? "Local bridge substitutes production proxy-token verification and RUN_NOTIFIER is a local stub; Accounts, Container/image, queue, SSE delivery, and live deployment are untested.",
       binarySHA256, checkpoint: { graph: checkpoint.graph_id, node: checkpoint.current_node, loopId: checkpoint.loop_id },
       tool: { attempts: toolAttempts.length, operationKey, completedOperations: finalOperations.length, artifacts: finalArtifacts.length },
       modelCalls: modelInputs.length, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cachedInputTokens: usage.cacheReadTokens },
       terminal: { status: completed.status, leaseVersion: completed.leaseVersion, messages: finalMessages.length, completedEvents: 1, checkpointCleared: true },
       staleRpcStatuses: staleBodies.map(([endpoint]) => ({ endpoint, status: 409 })),
+      ...(options.runtime ? { runtime: runtime.evidence?.() } : {}),
     };
   } catch (error) {
     primaryFailure = new Error(`agent Worker recovery proof failed in ${phase}; context=${context}; oldLogs=${oldLog.value.slice(-3000)}; newLogs=${newLog.value.slice(-3000)}; cause=${error instanceof Error ? error.message : String(error)}`);

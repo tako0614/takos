@@ -59,7 +59,7 @@ container は run-scoped executor、engine は library とする。
 | Thread → Run | `agentContainers` capability、固定 model、DB と versioned `RUN_QUEUE`、executor dispatch と terminal status | `agent-proof.test.ts` 等の component tests。現在の artifact に結び付いた queue/container 実行は未確認 |
 | MCP admission | `mcp.server/2025-11-25`、declared/resolved endpoint、streamable-http、現在の Ready Principal binding と `mcp.invoke` | runtime-interface/exposure tests。live Interface/Binding revision、tools/list と tools/call は未確認 |
 | Tool safety | Worker catalog/schema/policy と correlated operation ledger、side effect の不確定 outcome は再実行しない | `idempotency-uncertain.test.ts` 等。実 remote backend での proof は未確認 |
-| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | mock RPC の wrapper tests に加え、実 Worker handlers / full migration SQLite / Rust executable process の中断・再開を確認。toolは2回RPC・1回成果物、旧lease4RPCは409、新leaseでatomic completion。実 Container / queue / proxy authentication / remote backend は未確認 |
+| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | mock RPC の wrapper tests に加え、実 Worker handlers / full migration SQLite / Rust executable process の中断・再開を確認。同じassertionを固定Dockerfile imageの2つのlocal OCI initでも確認。toolは2回RPC・1回成果物、旧lease4RPCは409、新leaseでatomic completion。published image / native・Host Container backend / queue / proxy authentication / remote backend は未確認 |
 | 観測と復旧 | 永続 timeline の cursor replay、terminal closure、実 binding/resource/image/version readback、監視と復旧 | 今回 SSE 15 tests を追加・確認。実 Redis/offload、負荷、alert、restore drill は未確認 |
 
 正本: [runtime service](../docs/architecture/runtime-service.md)、
@@ -232,14 +232,32 @@ SQLite/process復旧proofを通過した。既存debt lint 112/TypeScript 98は�
 詳細は [状態復元ledger](TASK-takos-ga-notifier-restore-20260930.md) と
 [テスト対象ledger](TASK-takos-ga-portable-selection-20260930.md)。
 
+その code commit `f5207eb193d71f28a2fc1895e2a213a725bddf82` の
+[CI](https://github.com/tako0614/takos/actions/runs/36782775728) も
+2026-09-30 22:01:54 UTCに成功し、1,335 tests/228 files、新しい回帰と実Worker復旧proofを
+raw logで確認した。docs buildも成功。後続Container proof差分にはこの結果を流用しない。
+
 R2 put成功後のDO state保存失敗、legacy KVの1値128 KiB上限、壊れたstate形状の検証は
 この修正で解除していない。immutable flush intentとchunked stateのschema/rollback設計は
 次のTakos内作業であり、実backendのatomic storage契約・失敗復旧は主との資格確認が必要。
 容量の全segment列挙問題も残る。共有契約の変更は行っていない。
 
-実Container artifact資格確認は専用HDD builderで準備中。Dockerfileのlocked release buildを
+実Container artifact資格確認は専用HDD builderで進行中。Dockerfileのlocked release buildを
 維持し、Cargoの既定同時jobを2へ制限するbuild argumentを追加・独立review・実RUN probeで
-確認した。image本体は、検証済みcommitを固定してからbuildする。
+確認した。検証済みcommit `f5207eb19` とengine pinの固定treeからimage buildが成功した。
+manifestは `sha256:4fba7740a515e902a67a623c9ff2ac4c4afd73e442a80abe4e47957e8d86f3e8`、
+全config/layerの物理digestも照合済み。umociのpreflight bundleはimageのUID/GID10001と
+Cmd/workdirを保持する。二つの実local OCI initで中断・再開proofも成功した。
+UID/GID10001と同じimage bytesを保持し、旧initのPID/start ticksとrunc stateが消えてから
+leaseを更新する。tool呼出し2回/成果物1個、usage24/8/3、4 durable messages、completed
+event1個、新leaseだけのatomic completion、旧lease4RPCの409と無変更を確認した。
+終了後は両initと自身のstateの消失を確認済み。13件のfault testsでprepare/create中断、
+PID再利用/zombie、停止失敗、null一覧、stdout/stderrを確認し、独立reviewもclear。
+初回実行のrunc empty-list不備は失敗ログを保持して修正した。local candidateを公開済みimageや
+native/Host backendの証拠へ昇格させない。専用builderはbuild後に停止・reap済み。
+この追加sourceの全体gateも1,348 Bun tests/229 files/7,770 assertions、20 OpenTofu tests、
+Rust default96/mock169、全phaseと既存の実Worker/debug-process復旧proofまで成功した。
+既存debtはlint112/TypeScript98で変わらず、未申告0。exact new-head CIは別途照合する。
 既存Docker daemon/他担当BuildKit/他worktreeは変更していない。現行public descriptorの
 旧imageを今回のbytesの証拠として代用しない。詳細は
 [Container資格ledger](TASK-takos-ga-container-qualification-20260930.md)。
