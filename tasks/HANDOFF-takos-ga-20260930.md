@@ -173,6 +173,13 @@ code commit `4159b8895c58e6097ecfc221cf1592c459334800` を PR #126 に push 済�
 2026-09-30 20:31:13 UTC に成功し、実 Worker/SQL/process proof の実行を確認した。
 merge / published image / deploy は未実施。元の Takos UI dirty と engine 候補差分は
 再照合して保全を確認した。この worktree は code commit 時点で clean。
+記録だけの head `b1939ccc9` は既存の SessionDO env-builder 統合テストが9.2秒かかり、
+既定5秒の上限で [CI失敗](https://github.com/tako0614/takos/actions/runs/36773414829)。
+全 migration を含むこのテストだけ30秒の明示上限に変更し、state / alarm解放の
+assertion はすべて維持した。runtime / identity / schema は変えない。
+変更後の focused test は1/1成功。complete gate も同じ件数で再成功し、実 Worker/SQL
+復旧 proof まで確認した。独立 review でこの対象限定の上限を確認済み。
+最新の CI は PR head と照合し、古い成功 run を最終HEADへ流用しない。
 詳細は [実Worker復旧ledger](TASK-takos-ga-worker-wrapper-recovery-20260930.md)。
 
 次の独立作業は Node SSE の subscriber/history 規模別容量確認と、実 Container artifact の

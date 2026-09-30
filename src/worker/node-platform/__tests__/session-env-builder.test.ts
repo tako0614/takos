@@ -24,6 +24,8 @@ const ENV_KEYS = [
   "NODE_ENV",
 ] as const;
 
+// This integration bootstraps all control migrations on fresh file-backed
+// SQLite; its disk work needs an explicit bound beyond Bun's 5-second default.
 test("Node env builder wires the real SessionDO on the in-memory local path", async () => {
   const previous = Object.fromEntries(
     ENV_KEYS.map((key) => [key, getEnv(key)]),
@@ -68,4 +70,4 @@ test("Node env builder wires the real SessionDO on the in-memory local path", as
     }
     await rm(dataDir, { recursive: true, force: true });
   }
-});
+}, 30_000);

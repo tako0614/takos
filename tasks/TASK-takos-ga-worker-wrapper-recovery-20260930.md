@@ -100,3 +100,25 @@ proof. Raw remote log and exact-head readback are retained in ignored
 `tmp/ga-sse-recovery/worker-recovery-ci.log` and
 `tmp/ga-sse-recovery/worker-recovery-ci-readback.json`. CI qualifies these source bytes; it is not
 Container publication, release or deploy evidence. Merge remains with integration.
+
+## Subsequent integration-test lifetime correction
+
+The documentation-only head `b1939ccc953428a4d53187f509fdc2da868723a4` failed
+[CI](https://github.com/tako0614/takos/actions/runs/36773414829) solely because the
+existing real SessionDO env-builder integration exceeded Bun's default
+5-second test limit: the whole test took 9,198 ms. It includes fresh SQLite
+migrations, platform setup and disposal; those phases were not separately timed.
+The same test passed in 1,259 ms in the preceding code CI and 644 ms locally.
+The log reports a timeout, with no failed OIDC-state or alarm-cleanup assertion.
+CI I/O variance is a plausible inference, not a measured performance root cause.
+
+`session-env-builder.test.ts` now gives this integration an explicit bounded
+30-second lifetime. Every existing state and timer-disposal assertion remains;
+no runtime, migration, SessionDO or identity behavior changes. This mitigates
+the integration test's default-limit failure; it is not a runtime performance fix.
+The focused test passed under Bun 1.3.14 (1 test / 3 assertions). The complete
+`bun run check` passed again after this correction, with the same 1,326 Bun /
+20 OpenTofu / 96 default Rust / 169 mock Rust tests and the required real
+Worker/process proof. Raw log: ignored `tmp/ga-sse-recovery/startup-bound-check.log`.
+Independent review approved the targeted lifetime without changing assertions.
+The current PR-head CI must also qualify the resulting change before handoff.
