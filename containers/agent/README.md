@@ -160,6 +160,10 @@ product root の `bun run check` は、この wrapper の formatting、全 targe
 compile、default / all-feature Clippy、default / mock-LLM tests と production executable
 build も必須で実行します。compiler は `rust-toolchain.toml` の Rust 1.94.0 に固定し、
 Docker builder と一致しない場合は失敗します。
+続けて、その production executable と実 Worker RPC handler / ToolExecutor を接続する
+process recovery proof を実行します。現行 migration をすべて適用した新しい SQLite で
+`create_artifact` の結果を commit した後、HTTP acknowledgement を保留して旧 process を
+終了し、新 lease / process が同じ operation key の結果から完了することを確認します。
 
 初回は exact toolchain と locked dependencies を準備します。
 
@@ -186,6 +190,17 @@ tool operation の acknowledgement 前に旧 executor を中断します。新 l
 idempotency key の cached outcome から完了することと、billable model の outcome が不明な
 checkpoint は再発行せず failed completion にすることを検証します。
 これは実 Worker ledger、Container image、稼働環境の interruption / restart の証拠とは別です。
+
+必須の `scripts/prove-agent-worker-recovery.ts` は、上記 wrapper-only fixture に加え、
+実 SQL operation ledger、artifact の一度だけの作成、checkpoint / transcript / usage と
+新 lease の atomic completion を検証します。proxy token の検証と model は localhost の
+test bridge が代用し、notifier は test sink です。Container image、queue dispatch、実 Accounts
+login、remote SQL / R2 / Redis、Host admission の資格確認は別に残ります。
+model/provider credential を使わず、tool allowlist は test process の
+`create_artifact` だけに限定します。失敗時は ignored context と診断を残します。
+proof は executable を専用 context へコピーし、同じ digest の bytes を両 process で
+実行します。300秒の watchdog と gate の360秒の process-group 上限で自身の child を
+終了・reap します。この必須 proof の process supervision は POSIX が対象です。
 
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。

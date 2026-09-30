@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, rmdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -19,6 +19,8 @@ export type AgentWrapperCommandRunner = (options: {
   args: readonly string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+  isolateProcessGroup?: boolean;
 }) => AgentWrapperCommandResult | Promise<AgentWrapperCommandResult>;
 
 export type AgentWrapperGateOptions = Readonly<{
@@ -35,12 +37,17 @@ type EnginePin = Readonly<{
   commit: string;
 }>;
 
-const runProcess: AgentWrapperCommandRunner = ({ command, args, cwd, env }) => {
+const PROCESS_GROUP_CLEANUP_TIMEOUT_MS = 5_000;
+const PROOF_TIMEOUT_MS = 360_000;
+
+export const runAgentWrapperCommand: AgentWrapperCommandRunner = (options) => {
+  if (options.isolateProcessGroup) return runIsolatedProcess(options);
+  const { command, args, cwd, env } = options;
   const result = spawnSync(command, [...args], {
     cwd,
     env,
     encoding: "utf8",
-    stdio: command === "cargo" ? "inherit" : "pipe",
+    stdio: command === "cargo" || command === process.execPath ? "inherit" : "pipe",
   });
   return {
     status: result.status ?? 1,
@@ -48,6 +55,113 @@ const runProcess: AgentWrapperCommandRunner = ({ command, args, cwd, env }) => {
     stderr: result.stderr ?? result.error?.message ?? "",
   };
 };
+
+export function assertPosixProcessGroupSupport(platform: NodeJS.Platform): void {
+  if (platform === "win32") {
+    throw new Error(
+      "worker recovery proof requires POSIX process-group supervision; Windows is unsupported",
+    );
+  }
+}
+
+async function runIsolatedProcess(options: Parameters<AgentWrapperCommandRunner>[0]) {
+  const { command, args, cwd, env, timeoutMs } = options;
+  assertPosixProcessGroupSupport(process.platform);
+  if (!timeoutMs || timeoutMs < 1) {
+    throw new Error("isolated agent wrapper process requires a positive timeout");
+  }
+  const child = spawn(command, [...args], {
+    cwd,
+    env,
+    detached: true,
+    stdio: "inherit",
+    windowsHide: true,
+  });
+  const pid = child.pid;
+  let spawnError: Error | undefined;
+  let timeoutSignalError: string | undefined;
+  let timedOut = false;
+  child.once("error", (error) => {
+    spawnError = error;
+  });
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    if (pid === undefined) return;
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+        timeoutSignalError = `could not stop timed out proof process ${pid}: ${String(error)}`;
+      }
+    }
+  }, timeoutMs);
+  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolveExit) => {
+      child.once("close", (code, signal) => resolveExit({ code, signal }));
+    },
+  );
+  clearTimeout(timeout);
+
+  const processGroupIssue = pid !== undefined
+    ? await cleanOwnedProcessGroup(pid, exit.code === 0 && !timedOut)
+    : undefined;
+  const diagnostics = [
+    spawnError?.message ?? "",
+    timedOut ? `proof process exceeded its ${timeoutMs} ms timeout` : "",
+    timeoutSignalError ?? "",
+    processGroupIssue ?? "",
+  ].filter(Boolean).join("\n");
+  const code = typeof exit.code === "number" ? exit.code : 1;
+  return {
+    status: code === 0 && (timedOut || timeoutSignalError || processGroupIssue) ? 1 : code,
+    stdout: "",
+    stderr: diagnostics,
+  };
+}
+
+async function cleanOwnedProcessGroup(
+  pid: number,
+  rejectIfLive: boolean,
+): Promise<string | undefined> {
+  let live: boolean;
+  try {
+    process.kill(-pid, 0);
+    live = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return undefined;
+    if ((error as NodeJS.ErrnoException).code === "EPERM") live = true;
+    else return `could not inspect proof process group ${pid}: ${String(error)}`;
+  }
+  if (!live) return undefined;
+
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+      return `could not kill proof process group ${pid}: ${String(error)}`;
+    }
+  }
+
+  const deadline = Date.now() + PROCESS_GROUP_CLEANUP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(-pid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+        return rejectIfLive
+          ? `successful proof left process group ${pid} running; the group was terminated`
+          : undefined;
+      }
+      if ((error as NodeJS.ErrnoException).code !== "EPERM") {
+        return `could not verify proof process group ${pid} cleanup: ${String(error)}`;
+      }
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+  }
+  return `proof process group ${pid} remained live after SIGKILL`;
+}
+
+const runProcess = runAgentWrapperCommand;
 
 export async function runAgentWrapperGate(
   options: AgentWrapperGateOptions = {},
@@ -144,10 +258,11 @@ export async function runAgentWrapperGate(
       delete cargoEnv[key];
     }
     cargoEnv.RUSTUP_AUTO_INSTALL = "0";
-    cargoEnv.CARGO_TARGET_DIR = resolve(
+    const cargoTargetDir = resolve(
       env.CARGO_TARGET_DIR ?? join(root, "tmp/agent-wrapper-target"),
     );
-    cargoTargetDirectory = cargoEnv.CARGO_TARGET_DIR;
+    cargoEnv.CARGO_TARGET_DIR = cargoTargetDir;
+    cargoTargetDirectory = cargoTargetDir;
     cargoEnv.CARGO_BUILD_JOBS ??= "2";
     await mkdir(cargoEnv.CARGO_TARGET_DIR, { recursive: true });
 
@@ -210,6 +325,26 @@ export async function runAgentWrapperGate(
         label: phase.label,
       });
     }
+    const executable = join(
+      cargoTargetDir,
+      "debug",
+      process.platform === "win32" ? "takos-agent.exe" : "takos-agent",
+    );
+    await runChecked(runner, {
+      command: process.execPath,
+      args: [
+        join(root, "scripts/prove-agent-worker-recovery.ts"),
+        "--binary",
+        executable,
+        "--root",
+        root,
+      ],
+      cwd: root,
+      env: cargoEnv,
+      timeoutMs: PROOF_TIMEOUT_MS,
+      isolateProcessGroup: true,
+      label: "prove Takos agent worker recovery",
+    });
     succeeded = true;
   } finally {
     if (succeeded) {
@@ -310,6 +445,8 @@ async function runChecked(
     cwd: string;
     env: NodeJS.ProcessEnv;
     label: string;
+    timeoutMs?: number;
+    isolateProcessGroup?: boolean;
   },
 ): Promise<string> {
   const result = await runner(options);

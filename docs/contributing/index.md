@@ -33,7 +33,10 @@ Rust agent wrapper も product gate の必須対象です。初回は
 `containers/agent/engine-source.json` の exact Git object が sibling
 `takos-agent-engine` に必要です。別の配置は `TAKOS_AGENT_ENGINE_REPOSITORY` で指定します。
 gate は engine の dirty files を使わず、offline で compile / lint / tests / executable build
-を実行します。詳細は [agent wrapper の検証手順](../../containers/agent/README.md#portable-qualification)
+を実行します。続けて実 Worker handler と全 migration 適用済み SQLite に接続し、
+旧 executable process の終了から新 lease の tool 再開・atomic completion まで検証します。
+model と proxy token は test bridge が代用します。詳細は
+[agent wrapper の検証手順](../../containers/agent/README.md#portable-qualification)
 を参照してください。
 
 live service、operator-private state、readiness evidence、recovery drill は別の

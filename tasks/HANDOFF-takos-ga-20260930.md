@@ -59,7 +59,7 @@ container は run-scoped executor、engine は library とする。
 | Thread → Run | `agentContainers` capability、固定 model、DB と versioned `RUN_QUEUE`、executor dispatch と terminal status | `agent-proof.test.ts` 等の component tests。現在の artifact に結び付いた queue/container 実行は未確認 |
 | MCP admission | `mcp.server/2025-11-25`、declared/resolved endpoint、streamable-http、現在の Ready Principal binding と `mcp.invoke` | runtime-interface/exposure tests。live Interface/Binding revision、tools/list と tools/call は未確認 |
 | Tool safety | Worker catalog/schema/policy と correlated operation ledger、side effect の不確定 outcome は再実行しない | `idempotency-uncertain.test.ts` 等。実 remote backend での proof は未確認 |
-| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | Worker tests は保存/lease turnover/uncertain/R2 を検査。Rust wrapper の実 engine checkpoint を使う localhost fixture で冪等 tool の再開とモデル境界の安全停止を検証。実 Worker + container 中断から再開までの統合 E2E は未確認 |
+| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | mock RPC の wrapper tests に加え、実 Worker handlers / full migration SQLite / Rust executable process の中断・再開を確認。toolは2回RPC・1回成果物、旧lease4RPCは409、新leaseでatomic completion。実 Container / queue / proxy authentication / remote backend は未確認 |
 | 観測と復旧 | 永続 timeline の cursor replay、terminal closure、実 binding/resource/image/version readback、監視と復旧 | 今回 SSE 15 tests を追加・確認。実 Redis/offload、負荷、alert、restore drill は未確認 |
 
 正本: [runtime service](../docs/architecture/runtime-service.md)、
@@ -115,7 +115,14 @@ runtime/API は変更しない。差分 SHA-256 は SSE ledger に記録した�
 この専用 worktree の ignored qualification context に base を archive し、候補差分を
 適用して library の complete `bun run check` を確認した。Rust 1.97.1、MSRV 1.85.0、
 Bun 1.4.0 で format / Clippy / rustdoc / compile / 212 tests / build が成功。
-候補の owning commit や consumer の採用は未完了。
+その後、この専用 worktree 内の独立 canonical clone に同じ差分を採用した。
+owning commit `d1ec9a3616bb905aaf0eb8f53310faf745abe4cc`、
+[engine draft PR #4](https://github.com/tako0614/takos-agent-engine/pull/4) を作成済み。
+採用先で再度 complete gate を Bun 1.3.14 / Rust 1.97.1 / MSRV 1.85.0 で確認し、
+212 tests と全 phase が成功。その exact commit の
+[CI](https://github.com/tako0614/takos-agent-engine/actions/runs/36768782117) も
+2026-09-30 19:55:32 UTC に成功。元の候補 worktree は未commit差分を同じhashで保全した。
+merge は統合待ち。詳細は [engine採用ledger](TASK-takos-ga-engine-adoption-20260930.md)。
 
 Takos image の engine source pin は `containers/agent/engine-source.json` の
 `c4c3c9f0ffc3956a917b8da38f97671dbd3aea2d`。
@@ -142,9 +149,30 @@ code commit `04d883e297a46b7ccf6006ec147e98a66ae6ef77` を PR #126 に push 済�
 2026-09-30 19:35:02 UTC に成功し、exact engine checkout と Rust 1.94.0 の全 gate を確認した。
 CI の結果は対象 commit と照合する。release / image / deploy の証拠にはしない。
 
-次の独立作業は、wrapper と実 Worker を通した中断後再開の local proof、Node SSE の
-subscriber/history 規模別容量確認。engine候補もこの Takos 専任が引き継ぐが、元 worktree
-を保全したまま owning repo の commit / PR を作る作業はまだ残る。
+追加の必須 `scripts/prove-agent-worker-recovery.ts` は、実 Worker dispatch / ToolExecutor / SQL
+operation ledger と、同じ executable bytes から起動した2つの OS process を通す。
+tool の SQL commit 後に HTTP acknowledgement を保留して旧 process を終了し、
+新 lease が保存済み checkpoint の同じ operation key / loop ID から完了する。
+1 artifact / 1 completed operation、2 model calls、usage 24/8/3、4 durable messages、
+1 completed event、checkpoint clear を focused proof で確認した。
+モデル・proxy token は local fixture、notifier は no-op sink であり、SSE 配信の証拠にはしない。
+proof 全体の watchdog と gate の POSIX process-group 上限も必須。独立 review の
+cleanup / executable provenance / late child registration 指摘を修正した。
+追加後の complete `bun run check` も Bun 1.3.14 で成功。
+1,326 Bun tests / 6,751 assertions、20 OpenTofu tests、Rust default 96 / mock 169
+tests、全 static/type/compile/Clippy/build と実 Worker/process proof を確認した。
+lint 112 / TypeScript 98 の既存 debt は変わらず、未申告は0件。
+gate が実行した executable digest は
+`a7670d6d9c09a35588338ca7029cdaad186aa694ad78e4a60f69f799191c8ce6`。
+これは debug executable の local proof であり、published image digest ではない。
+独立 final review の具体的な P1/P2 は残っていない。exact-head CI は別途確認する。
+docs build も成功した。ログはこの worktree の ignored
+`tmp/ga-sse-recovery/worker-recovery-{check,docs-build}.log` に保持する。
+詳細は [実Worker復旧ledger](TASK-takos-ga-worker-wrapper-recovery-20260930.md)。
+
+次の独立作業は Node SSE の subscriber/history 規模別容量確認と、実 Container artifact の
+中断後再開資格確認。engine候補の owning commit / PR は作成・検証済みで、
+元 worktree を保全したまま統合へ戻す。test-only のため image pin は更新しない。
 通常の Node executor event は一秒 polling に依存し、一部通知だけが即 wakeup する。
 offload/DO read の subscriber 数に応じた負荷を GA 解除済みとは扱わない。
 native/mobile、published/deployed identity、実 user journey、監視/復旧は未検証。
