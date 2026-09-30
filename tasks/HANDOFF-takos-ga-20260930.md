@@ -180,15 +180,33 @@ assertion はすべて維持した。runtime / identity / schema は変えない
 変更後の focused test は1/1成功。complete gate も同じ件数で再成功し、実 Worker/SQL
 復旧 proof まで確認した。独立 review でこの対象限定の上限を確認済み。
 最新の CI は PR head と照合し、古い成功 run を最終HEADへ流用しない。
+対象限定の上限変更 commit `00ffa2f44cb9c01c40de2c917ff97d5d593e93a0` の
+[CI](https://github.com/tako0614/takos/actions/runs/36774446313) は
+2026-09-30 20:45:23 UTC に成功した。後続差分の証拠には流用しない。
 詳細は [実Worker復旧ledger](TASK-takos-ga-worker-wrapper-recovery-20260930.md)。
 
+容量調査中に、terminal event 150 の後で event ID から閉じた segment 2 に戻り、
+次の境界で151–200を捨てる RunNotifier の欠落を再現した。live index と incoming index
+を最後の成功 flush より先へ正規化し、既存の旧bufferも次のkeyへ保存する。
+13件の focused test で warm/cold/旧state/連続terminal/保存失敗の再試行、閉じたgzip
+bytesの不変性と cursor page を検証した。独立 review の具体的P1/P2は残っていない。
+この追加差分の complete `bun run check` もBun 1.3.14で成功した。
+1,331 Bun tests / 7,590 assertions、20 OpenTofu tests、Rust default 96 / mock 169、
+全phaseと実Worker/SQLite/process復旧proofを実行。lint 112 / TypeScript 98 の既存debtは
+変わらず、未申告は0件。exact new-head CIは別途照合し、PR #126へ結果を記録する。
+既に消えた履歴の復元と、put成功後にDO state保存だけ失敗する境界は未検証。
+詳細と主への契約提案は [offload integrity ledger](TASK-takos-ga-offload-integrity-20260930.md)。
+
 次の独立作業は Node SSE の subscriber/history 規模別容量確認と、実 Container artifact の
-中断後再開資格確認。engine候補の owning commit / PR は作成・検証済みで、
+中断後再開資格確認。engine候補の owning commit / PR は作成・検証済み。
 元 worktree を保全したまま統合へ戻す。test-only のため image pin は更新しない。
 通常の Node executor event は一秒 polling に依存し、一部通知だけが即 wakeup する。
 offload/DO read の subscriber 数に応じた負荷を GA 解除済みとは扱わない。
 offload helper は各 page/poll で run の全 segment keys を list してから cursor で絞る。
-末尾 reconnect でも過去 segment 数に応じた listing が発生するため、次は paginated
-bucket fixture で列挙回数を測り、既存 cursor/order/gap 契約を保った bounded read を検証する。
-これは source 調査結果であり、容量測定や修正の完了ではない。
+末尾100件を読む local paginated bucket の回数測定では、過去1,000 / 10,000 / 50,000
+segmentに対してlist 1 / 10 / 50回、body GETは各1回。backend latencyや実subscriber
+負荷の証拠ではない。native R2はprefix/opaque cursorを提供するがseek-keyは提供せず、
+SQLのlast_event_idもobject commit境界ではない。共通のexact backendでordered range-list
+を資格確認するか、durable archive indexの失敗・復旧authorityを主で決める提案を記録した。
+共有契約の変更とHost専用分岐は追加していない。今回の欠落修正は全列挙の容量問題を解決しない。
 native/mobile、published/deployed identity、実 user journey、監視/復旧は未検証。

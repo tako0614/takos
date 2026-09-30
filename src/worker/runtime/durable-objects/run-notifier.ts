@@ -357,7 +357,17 @@ export class RunNotifierDO extends NotifierBase {
       created_at: emittedAt,
     };
 
-    const segmentIndex = segmentIndexForEventId(eventId);
+    // A terminal flush may close a partial logical segment. Never return to
+    // that immutable key, including when restoring a legacy pending buffer
+    // whose live index was reset to an already-flushed segment.
+    this.r2SegmentIndex = Math.max(
+      this.r2SegmentIndex,
+      this.r2LastFlushedSegmentIndex + 1,
+    );
+    const segmentIndex = Math.max(
+      segmentIndexForEventId(eventId),
+      this.r2LastFlushedSegmentIndex + 1,
+    );
     if (segmentIndex !== this.r2SegmentIndex) {
       const prevBuffer = this.r2SegmentBuffer;
       const prevIndex = this.r2SegmentIndex;

@@ -3,6 +3,14 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "../../infra/db/schema.ts";
+import {
+  getRunEventsAfterFromR2,
+  buildRunEventSegmentKey,
+  listRunEventSegmentIndexes,
+  readRunEventSegmentFromR2,
+  writeRunEventSegmentToR2,
+} from "../../application/services/offload/run-events.ts";
+import { createInMemoryObjectStore } from "../../local-platform/in-memory-r2.ts";
 import { buildSanitizedDOHeaders } from "./do-header-utils.ts";
 import { RunNotifierDO } from "./run-notifier.ts";
 
@@ -53,24 +61,24 @@ const acceptedOwnerWitness: RejectedOwnerWitness = {
   witnessStatus: "active",
 };
 
-function createDurableObjectState() {
-  const values = new Map<string, unknown>();
+function createDurableObjectState(values = new Map<string, unknown>()) {
   let pending: Promise<unknown> = Promise.resolve();
   const state = {
     storage: {
       async get<T>(key: string): Promise<T | undefined> {
-        return values.get(key) as T | undefined;
+        const value = values.get(key);
+        return value === undefined ? undefined : structuredClone(value) as T;
       },
       async put(
         keyOrEntries: string | Record<string, unknown>,
         value?: unknown,
       ): Promise<void> {
         if (typeof keyOrEntries === "string") {
-          values.set(keyOrEntries, value);
+          values.set(keyOrEntries, structuredClone(value));
           return;
         }
         for (const [key, entry] of Object.entries(keyOrEntries)) {
-          values.set(key, entry);
+          values.set(key, structuredClone(entry));
         }
       },
       async setAlarm(): Promise<void> {},
@@ -93,11 +101,18 @@ function createDurableObjectState() {
   };
   return {
     binding: state as never,
+    values,
     ready: () => pending,
   };
 }
 
-async function createNotifierFixture(witness: RejectedOwnerWitness) {
+async function createNotifierFixture(
+  witness: RejectedOwnerWitness,
+  options: {
+    bucket?: ReturnType<typeof createInMemoryObjectStore>;
+    storageValues?: Map<string, unknown>;
+  } = {},
+) {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(`
     CREATE TABLE accounts (
@@ -169,10 +184,56 @@ async function createNotifierFixture(witness: RejectedOwnerWitness) {
   ]);
 
   const db = drizzle(client, { schema });
-  const state = createDurableObjectState();
-  const notifier = new RunNotifierDO(state.binding, { DB: db } as never);
+  const state = createDurableObjectState(options.storageValues);
+  const notifier = new RunNotifierDO(state.binding, {
+    DB: db,
+    ...(options.bucket ? { TAKOS_OFFLOAD: options.bucket } : {}),
+  } as never);
   await state.ready();
-  return { client, notifier };
+  return { client, notifier, bucket: options.bucket, storageValues: state.values, db };
+}
+
+async function emitRunEvent(
+  notifier: RunNotifierDO,
+  eventId: number,
+  type = "run.progress",
+): Promise<void> {
+  const response = await notifier.fetch(
+    new Request("https://run-notifier.test/emit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type,
+        data: { sequence: eventId, payload: `event-${eventId}` },
+        ...(eventId === 1 ? { runId: "run-1" } : {}),
+      }),
+    }),
+  );
+  expect(response.status).toBe(200);
+}
+
+async function expectArchivedRunEvents(
+  bucket: ReturnType<typeof createInMemoryObjectStore>,
+): Promise<void> {
+  expect(await listRunEventSegmentIndexes(bucket, "run-1")).toContain(1);
+  expect((await readRunEventSegmentFromR2(bucket, "run-1", 1))?.map((e) => e.event_id))
+    .toEqual(Array.from({ length: 100 }, (_, index) => index + 1));
+  expect((await readRunEventSegmentFromR2(bucket, "run-1", 2))?.map((e) => e.event_id))
+    .toEqual(Array.from({ length: 50 }, (_, index) => index + 101));
+  const events = await getRunEventsAfterFromR2(bucket, "run-1", 0, 250);
+  expect(events.map((event) => event.event_id)).toEqual(
+    Array.from({ length: 200 }, (_, index) => index + 1),
+  );
+  expect(events.map((event) => JSON.parse(event.data).sequence)).toEqual(
+    Array.from({ length: 200 }, (_, index) => index + 1),
+  );
+  expect(events.map((event) => JSON.parse(event.data).payload)).toEqual(
+    Array.from({ length: 200 }, (_, index) => `event-${index + 1}`),
+  );
+  expect((await getRunEventsAfterFromR2(bucket, "run-1", 150, 17)).map((e) => e.event_id))
+    .toEqual(Array.from({ length: 17 }, (_, index) => index + 151));
+  expect((await getRunEventsAfterFromR2(bucket, "run-1", 167, 17)).map((e) => e.event_id))
+    .toEqual(Array.from({ length: 17 }, (_, index) => index + 168));
 }
 
 async function primeNotifierRunId(
@@ -324,4 +385,188 @@ test("Run WebSocket transport strips forged run identity and injects the route r
     `${import.meta.dir}/../../server/routes/runs/routes.ts`,
   ).text();
   expect(routeSource).toContain('"X-WS-Run-Id": runId');
+});
+
+test("R2 run-event offload retains post-terminal events through the next segment boundary", async () => {
+  const bucket = createInMemoryObjectStore();
+  const { client, notifier } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket },
+  );
+  try {
+    for (let eventId = 1; eventId <= 150; eventId += 1) {
+      const type = eventId === 150 ? "completed" : "run.progress";
+      await emitRunEvent(notifier, eventId, type);
+    }
+    const closedSegmentKey = buildRunEventSegmentKey("run-1", 2);
+    const closedSegmentBefore = await bucket.get(closedSegmentKey);
+    expect(closedSegmentBefore).not.toBeNull();
+    const closedSegmentBytesBefore = await closedSegmentBefore!.arrayBuffer();
+
+    for (let eventId = 151; eventId <= 200; eventId += 1) {
+      await emitRunEvent(notifier, eventId, "run.progress");
+    }
+
+    const closedSegmentAfter = await bucket.get(closedSegmentKey);
+    expect(closedSegmentAfter).not.toBeNull();
+    expect(Array.from(new Uint8Array(await closedSegmentAfter!.arrayBuffer())))
+      .toEqual(Array.from(new Uint8Array(closedSegmentBytesBefore)));
+
+    await expectArchivedRunEvents(bucket);
+  } finally {
+    client.close();
+  }
+});
+
+test("R2 run-event offload loads a persisted legacy buffer without losing its pending events", async () => {
+  const bucket = createInMemoryObjectStore();
+  const persistedEvent = (eventId: number, type = "run.progress") => ({
+    event_id: eventId,
+    type,
+    data: JSON.stringify({ sequence: eventId, payload: `event-${eventId}` }),
+    created_at: `t-event-${eventId}`,
+  });
+  await writeRunEventSegmentToR2(
+    bucket,
+    "run-1",
+    1,
+    Array.from({ length: 100 }, (_, index) => persistedEvent(index + 1)),
+  );
+  await writeRunEventSegmentToR2(
+    bucket,
+    "run-1",
+    2,
+    [
+      ...Array.from({ length: 49 }, (_, index) => persistedEvent(index + 101)),
+      persistedEvent(150, "completed"),
+    ],
+  );
+  const pendingLegacyEvents = Array.from({ length: 49 }, (_, index) =>
+    persistedEvent(index + 151)
+  );
+  const serializedStorage = new Map<string, unknown>([["bufferState", {
+    eventBuffer: [],
+    eventIdCounter: 199,
+    runId: "run-1",
+    r2SegmentIndex: 2,
+    r2SegmentBuffer: pendingLegacyEvents,
+    r2LastFlushedSegmentIndex: 2,
+    usageSegmentIndex: 1,
+    usageSegmentBuffer: [],
+    usageLastFlushedSegmentIndex: 0,
+    emitDedupKeys: [],
+  }]]);
+  const { client, notifier } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket, storageValues: structuredClone(serializedStorage) },
+  );
+  try {
+    await emitRunEvent(notifier, 200, "run.progress");
+
+    await expectArchivedRunEvents(bucket);
+  } finally {
+    client.close();
+  }
+});
+
+test("R2 run-event offload survives a real cold replacement after a mid-segment terminal event", async () => {
+  const bucket = createInMemoryObjectStore();
+  const { client, notifier, storageValues, db } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket },
+  );
+  try {
+    for (let eventId = 1; eventId <= 150; eventId += 1) {
+      await emitRunEvent(
+        notifier,
+        eventId,
+        eventId === 150 ? "completed" : "run.progress",
+      );
+    }
+
+    const replacementState = createDurableObjectState(
+      structuredClone(storageValues),
+    );
+    const replacement = new RunNotifierDO(replacementState.binding, {
+      DB: db,
+      TAKOS_OFFLOAD: bucket,
+    } as never);
+    await replacementState.ready();
+    for (let eventId = 151; eventId <= 200; eventId += 1) {
+      await emitRunEvent(replacement, eventId, "run.progress");
+    }
+
+    await expectArchivedRunEvents(bucket);
+  } finally {
+    client.close();
+  }
+});
+
+test("R2 run-event offload retains events when terminal events arrive consecutively", async () => {
+  const bucket = createInMemoryObjectStore();
+  const { client, notifier } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket },
+  );
+  try {
+    for (let eventId = 1; eventId <= 200; eventId += 1) {
+      await emitRunEvent(
+        notifier,
+        eventId,
+        eventId === 150 || eventId === 151 ? "completed" : "run.progress",
+      );
+    }
+
+    await expectArchivedRunEvents(bucket);
+  } finally {
+    client.close();
+  }
+});
+
+test("R2 run-event offload retries a failed boundary write without losing buffered events", async () => {
+  const bucket = createInMemoryObjectStore();
+  const segmentThreeKey = buildRunEventSegmentKey("run-1", 3);
+  let failNextSegmentThreePut = false;
+  let injectedFailureCount = 0;
+  const flakyBucket = {
+    ...bucket,
+    async put(...args: Parameters<typeof bucket.put>) {
+      const [key] = args;
+      if (key === segmentThreeKey && failNextSegmentThreePut) {
+        failNextSegmentThreePut = false;
+        injectedFailureCount += 1;
+        throw new Error("injected segment-three write failure");
+      }
+      return bucket.put(...args);
+    },
+  } as ReturnType<typeof createInMemoryObjectStore>;
+  const { client, notifier } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket: flakyBucket },
+  );
+  try {
+    for (let eventId = 1; eventId <= 150; eventId += 1) {
+      await emitRunEvent(
+        notifier,
+        eventId,
+        eventId === 150 ? "completed" : "run.progress",
+      );
+    }
+    failNextSegmentThreePut = true;
+    await emitRunEvent(notifier, 151, "completed");
+    expect(injectedFailureCount).toBe(1);
+    for (let eventId = 152; eventId <= 200; eventId += 1) {
+      await emitRunEvent(notifier, eventId, "run.progress");
+    }
+
+    const events = await getRunEventsAfterFromR2(bucket, "run-1", 0, 250);
+    expect(events.map((event) => event.event_id)).toEqual(
+      Array.from({ length: 200 }, (_, index) => index + 1),
+    );
+    expect(events.map((event) => JSON.parse(event.data).sequence)).toEqual(
+      Array.from({ length: 200 }, (_, index) => index + 1),
+    );
+  } finally {
+    client.close();
+  }
 });
