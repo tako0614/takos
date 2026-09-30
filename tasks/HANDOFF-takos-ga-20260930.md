@@ -137,9 +137,14 @@ fixture ledger は1回だけ操作を実行し、履歴とusageを保持して�
 compile / Clippy / executable / web / Worker build を確認した。docs build も成功。
 lint 112件 / TypeScript 98件の既存 debt は残り、未申告は0件。
 独立レビューの fixture 競合と child proof の未実行/無期限待機を修正し、再確認済み。
+code commit `04d883e297a46b7ccf6006ec147e98a66ae6ef77` を PR #126 に push 済み。
+その expanded [CI run](https://github.com/tako0614/takos/actions/runs/36766362568) も
+2026-09-30 19:35:02 UTC に成功し、exact engine checkout と Rust 1.94.0 の全 gate を確認した。
+CI の結果は対象 commit と照合する。release / image / deploy の証拠にはしない。
 
 次の独立作業は、wrapper と実 Worker を通した中断後再開の local proof、Node SSE の
-subscriber/history 規模別容量確認。engine候補の owning commit / 統合は library owner と調整する。
+subscriber/history 規模別容量確認。engine候補もこの Takos 専任が引き継ぐが、元 worktree
+を保全したまま owning repo の commit / PR を作る作業はまだ残る。
 通常の Node executor event は一秒 polling に依存し、一部通知だけが即 wakeup する。
 offload/DO read の subscriber 数に応じた負荷を GA 解除済みとは扱わない。
-native/mobile、追加差分の remote CI、published/deployed identity、実 user journey、監視/復旧は未検証。
+native/mobile、published/deployed identity、実 user journey、監視/復旧は未検証。

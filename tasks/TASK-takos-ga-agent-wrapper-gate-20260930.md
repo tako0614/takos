@@ -82,9 +82,13 @@ handler now keeps its own payload; child proofs require the exact one passing
 test and kill/reap a stalled child after 45 seconds. No material P1/P2 remains
 in the reviewed change. The review did not itself run the full gate.
 
-Previous PR head `a89bc5267baedecea9ddf8ba9ce98e823ba15564` has a successful
-remote CI run. That run does not qualify this expanded Rust gate; current-head
-CI must be read back after push. No release artifact or image was published.
+Code commit `04d883e297a46b7ccf6006ec147e98a66ae6ef77` was pushed to draft
+[Takos PR #126](https://github.com/tako0614/takos/pull/126). Its complete expanded
+[CI run](https://github.com/tako0614/takos/actions/runs/36766362568) succeeded
+at 2026-09-30 19:35:02 UTC, including exact engine checkout, Rust 1.94.0 setup,
+locked dependency preparation and the required product gate. This is the
+current code qualification, distinct from the earlier SSE-only head's CI.
+No release artifact or image was published.
 
 ## Remaining boundary
 
