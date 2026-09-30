@@ -41,26 +41,17 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
       }
     }
 
-    if (!sseNotifier) {
-      const stream = createRunObservationSseStream(
-        c.env,
-        runId,
-        access.run.status,
-        lastEventId ?? 0,
-      );
-
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-        },
-      });
-    }
-
-    // Subscribe to the run channel
-    const channel = `run:${runId}`;
-    const stream = sseNotifier.subscribe(channel, lastEventId);
+    // Subscribe before reading the persisted timeline so commits during replay
+    // wake the next read. Process-local/Redis history only signals availability;
+    // SQL/object-store observation owns replay, ordering and terminal closure.
+    const notifications = sseNotifier?.subscribe(`run:${runId}`, lastEventId);
+    const stream = createRunObservationSseStream(
+      c.env,
+      runId,
+      access.run.status,
+      lastEventId ?? 0,
+      { notifications },
+    );
 
     return new Response(stream, {
       headers: {
