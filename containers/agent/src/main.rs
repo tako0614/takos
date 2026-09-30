@@ -1348,6 +1348,7 @@ mod tests {
     use takos_agent_engine::model::{ConversationMessage, ConversationRole, ToolCallRequest};
     use takos_agent_engine::{ExecutionProfile, SessionResponse};
     use tokio::sync::Mutex;
+    use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
     fn tool(name: &str) -> ToolDefinition {
@@ -1743,19 +1744,202 @@ mod tests {
         base_url: String,
         requests: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
         checkpoint_fatal_error: bool,
+        recovery: Option<Arc<RecoveryFixture>>,
+    }
+
+    // This is an RPC-contract fixture for the real Rust wrapper and engine;
+    // it does not substitute for an integration run against the TS Worker.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum RecoveryMode {
+        SafeStopAfterTool,
+        CachedToolOperation,
+    }
+
+    struct RecoveryFixture {
+        mode: RecoveryMode,
+        durable: Mutex<RecoveryDurable>,
+        saved_after_tool: Notify,
+        release_old_save: Notify,
+        operation_recorded: Notify,
+        release_old_operation: Notify,
+    }
+
+    struct RecoveryDurable {
+        active_lease: u32,
+        checkpoint: Option<serde_json::Value>,
+        usage: serde_json::Value,
+        model_calls: usize,
+        tool_calls: usize,
+        physical_tool_calls: usize,
+        operation_key: Option<String>,
+    }
+
+    impl RecoveryFixture {
+        fn new(mode: RecoveryMode) -> Self {
+            Self {
+                mode,
+                durable: Mutex::new(RecoveryDurable {
+                    active_lease: 7,
+                    checkpoint: None,
+                    usage: serde_json::json!({
+                        "inputTokens": 0, "outputTokens": 0, "cachedInputTokens": 0
+                    }),
+                    model_calls: 0,
+                    tool_calls: 0,
+                    physical_tool_calls: 0,
+                    operation_key: None,
+                }),
+                saved_after_tool: Notify::new(),
+                release_old_save: Notify::new(),
+                operation_recorded: Notify::new(),
+                release_old_operation: Notify::new(),
+            }
+        }
     }
 
     async fn agent_e2e_handler(
         State(state): State<AgentE2eState>,
         request: Request<Body>,
-    ) -> Json<serde_json::Value> {
+    ) -> Response {
         let path = request.uri().path().to_string();
+        let authorization = request
+            .headers()
+            .get(AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
         let body = to_bytes(request.into_body(), 1024 * 1024)
             .await
             .expect("e2e request body");
         let payload = serde_json::from_slice::<serde_json::Value>(&body)
             .unwrap_or_else(|_| serde_json::json!({}));
-        state.requests.lock().await.push((path.clone(), payload));
+        state
+            .requests
+            .lock()
+            .await
+            .push((path.clone(), payload.clone()));
+
+        if let Some(recovery) = &state.recovery {
+            let mut durable = recovery.durable.lock().await;
+            if path != "/v1/chat/completions"
+                && authorization.as_deref()
+                    != Some(if durable.active_lease == 7 {
+                        "Bearer token-lease-7"
+                    } else {
+                        "Bearer token-lease-8"
+                    })
+            {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({ "error": "lease_lost" })),
+                )
+                    .into_response();
+            }
+            if path.ends_with("/engine-checkpoint-load") {
+                return Json(serde_json::json!({
+                    "checkpoint": durable.checkpoint,
+                    "usage": durable.usage
+                }))
+                .into_response();
+            }
+            if path.ends_with("/engine-checkpoint-save") {
+                assert_eq!(payload["leaseVersion"], durable.active_lease);
+                assert_eq!(payload["checkpointProtocolVersion"], 2);
+                durable.checkpoint = Some(payload["checkpoint"].clone());
+                durable.usage = payload["usage"].clone();
+                let after_tool = payload["checkpoint"]["state_json"]["last_completed_node"]
+                    == "execute_tools"
+                    && payload["checkpoint"]["state_json"]["tool_results"]
+                        .as_array()
+                        .is_some_and(|results| !results.is_empty());
+                let hold_old_save = recovery.mode == RecoveryMode::SafeStopAfterTool
+                    && after_tool
+                    && durable.active_lease == 7;
+                drop(durable);
+                if hold_old_save {
+                    recovery.saved_after_tool.notify_one();
+                    recovery.release_old_save.notified().await;
+                }
+                return Json(serde_json::json!({})).into_response();
+            }
+            if path == "/v1/chat/completions" {
+                durable.model_calls += 1;
+                let response = if durable.model_calls == 1 {
+                    let (tool_name, arguments) = match recovery.mode {
+                        RecoveryMode::SafeStopAfterTool => (
+                            "web_fetch",
+                            "{\"url\":\"https://example.invalid/recovery\"}",
+                        ),
+                        RecoveryMode::CachedToolOperation => (
+                            "create_artifact",
+                            "{\"name\":\"fixture-artifact\",\"content\":\"local fixture\"}",
+                        ),
+                    };
+                    serde_json::json!({
+                        "choices": [{"message": {
+                            "content": null,
+                            "tool_calls": [{
+                                "id": "call-recovery-1",
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": arguments
+                                }
+                            }]
+                        }}],
+                        "usage": {"prompt_tokens": 11, "completion_tokens": 3,
+                            "prompt_tokens_details": {"cached_tokens": 2}}
+                    })
+                } else {
+                    serde_json::json!({
+                        "choices": [{"message": {
+                            "content": "recovered answer", "tool_calls": []
+                        }}],
+                        "usage": {"prompt_tokens": 13, "completion_tokens": 5,
+                            "prompt_tokens_details": {"cached_tokens": 1}}
+                    })
+                };
+                return Json(response).into_response();
+            }
+            if path.ends_with("/tool-execute") {
+                durable.tool_calls += 1;
+                assert_eq!(payload["toolCall"]["id"], "call-recovery-1");
+                if recovery.mode == RecoveryMode::CachedToolOperation {
+                    assert_eq!(payload["toolCall"]["name"], "create_artifact");
+                    let key = payload["idempotencyKey"]
+                        .as_str()
+                        .filter(|key| !key.is_empty())
+                        .expect("engine must send a durable operation key");
+                    let first_attempt = durable.operation_key.is_none();
+                    match &durable.operation_key {
+                        Some(previous) => {
+                            assert_eq!(key, previous, "replacement operation key drifted")
+                        }
+                        None => {
+                            durable.operation_key = Some(key.to_string());
+                            durable.physical_tool_calls += 1;
+                        }
+                    }
+                    drop(durable);
+                    if first_attempt {
+                        recovery.operation_recorded.notify_one();
+                        recovery.release_old_operation.notified().await;
+                    }
+                    return Json(serde_json::json!({
+                        "tool_call_id": "call-recovery-1",
+                        "output": "fixture artifact committed once",
+                        "error": null
+                    }))
+                    .into_response();
+                }
+                assert_eq!(payload["toolCall"]["name"], "web_fetch");
+                return Json(serde_json::json!({
+                    "tool_call_id": "call-recovery-1",
+                    "output": "fixture page content",
+                    "error": null
+                }))
+                .into_response();
+            }
+        }
 
         let response = match path.as_str() {
             "/api/internal/v1/agent-control/run-bootstrap" => serde_json::json!({
@@ -1771,9 +1955,22 @@ mod tests {
                 "maxToolRounds": 2,
                 "temperature": 0
             }),
-            "/api/internal/v1/agent-control/tool-catalog" => {
-                serde_json::json!({ "tools": [] })
-            }
+            "/api/internal/v1/agent-control/tool-catalog" => serde_json::json!({
+                "tools": match state.recovery.as_ref().map(|fixture| fixture.mode) {
+                    Some(RecoveryMode::SafeStopAfterTool) => vec![serde_json::json!({
+                        "name": "web_fetch", "description": "Read a fixture page",
+                        "parameters": {"type": "object"},
+                        "risk_level": "low", "side_effects": false
+                    })],
+                    Some(RecoveryMode::CachedToolOperation) => vec![serde_json::json!({
+                        "name": "create_artifact", "description": "Write a fixture artifact",
+                        "parameters": {"type": "object"},
+                        "risk_level": "low", "side_effects": true,
+                        "durable_idempotency": true
+                    })],
+                    None => vec![]
+                }
+            }),
             "/api/internal/v1/agent-control/conversation-history" => serde_json::json!({
                 "history": [
                     { "role": "system", "content": "thread summary" },
@@ -1814,7 +2011,7 @@ mod tests {
             }),
             _ => serde_json::json!({}),
         };
-        Json(response)
+        Json(response).into_response()
     }
 
     #[tokio::test]
@@ -1828,6 +2025,7 @@ mod tests {
             base_url: format!("http://{address}"),
             requests: requests.clone(),
             checkpoint_fatal_error: false,
+            recovery: None,
         };
         let app = Router::new()
             .fallback(post(agent_e2e_handler))
@@ -1902,6 +2100,433 @@ mod tests {
             .any(|(path, _)| path.ends_with("/update-run-status")));
     }
 
+    fn run_isolated_recovery_test(test_name: &str, allowed_tool: &str) {
+        // The allowlist is process configuration. Keep it out of concurrently
+        // running tests and prove libtest actually selected this exact case.
+        let exact_name = format!("tests::{test_name}");
+        let mut child = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args(["--exact", &exact_name, "--nocapture"])
+            .env("TAKOS_WRAPPER_RECOVERY_CHILD", "1")
+            .env("TAKOS_AGENT_TOOL_ALLOWLIST", allowed_tool)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("isolated recovery test process");
+        let deadline = std::time::Instant::now() + Duration::from_secs(45);
+        loop {
+            if child
+                .try_wait()
+                .expect("poll isolated recovery test")
+                .is_some()
+            {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().expect("kill stalled isolated recovery test");
+                let output = child
+                    .wait_with_output()
+                    .expect("reap stalled isolated recovery test");
+                panic!(
+                    "isolated recovery proof timed out after 45s:\n{}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let output = child
+            .wait_with_output()
+            .expect("collect isolated recovery test output");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success()
+                && stdout.contains("running 1 test")
+                && stdout.contains(&format!("test {exact_name} ... ok"))
+                && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated recovery proof did not run exactly one passing test:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_run_replacement_safe_stops_after_completed_tool_at_model_boundary() {
+        if std::env::var_os("TAKOS_WRAPPER_RECOVERY_CHILD").is_none() {
+            run_isolated_recovery_test(
+                "execute_run_replacement_safe_stops_after_completed_tool_at_model_boundary",
+                "web_fetch",
+            );
+            return;
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("recovery listener");
+        let address = listener.local_addr().expect("recovery address");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let recovery = Arc::new(RecoveryFixture::new(RecoveryMode::SafeStopAfterTool));
+        let state = AgentE2eState {
+            base_url: format!("http://{address}"),
+            requests: requests.clone(),
+            checkpoint_fatal_error: false,
+            recovery: Some(recovery.clone()),
+        };
+        let app = Router::new()
+            .fallback(post(agent_e2e_handler))
+            .with_state(state.clone());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("recovery server");
+        });
+        let _server_guard = super::AbortOnDrop(Some(server));
+        let first_payload = StartPayload {
+            run_id: "run-replacement".to_string(),
+            worker_id: "service-replacement".to_string(),
+            service_id: Some("service-replacement".to_string()),
+            model: Some("gpt-e2e".to_string()),
+            lease_version: Some(7),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-old".to_string()),
+            checkpoint_protocol_version: Some(2),
+            control_rpc_base_url: state.base_url.clone(),
+            control_rpc_token: "token-lease-7".to_string(),
+        };
+
+        let old_run = tokio::spawn(execute_run(first_payload.clone(), CancellationToken::new()));
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            recovery.saved_after_tool.notified(),
+        )
+        .await
+        .expect("first executor must save a completed tool result");
+        let first_checkpoint = {
+            let durable = recovery.durable.lock().await;
+            assert_eq!(durable.model_calls, 1);
+            assert_eq!(durable.tool_calls, 1);
+            assert_eq!(
+                durable.usage,
+                serde_json::json!({
+                    "inputTokens": 11, "outputTokens": 3, "cachedInputTokens": 2
+                })
+            );
+            let checkpoint = durable.checkpoint.clone().expect("persisted checkpoint");
+            assert_eq!(checkpoint["graph_id"], "external-context-v1");
+            assert_eq!(
+                checkpoint["current_node"],
+                "run_model_external_context_after_tools"
+            );
+            assert_eq!(checkpoint["status"], "running");
+            assert_eq!(
+                checkpoint["state_json"]["execution_profile"],
+                "external_context"
+            );
+            assert_eq!(
+                checkpoint["state_json"]["last_completed_node"],
+                "execute_tools"
+            );
+            assert_eq!(
+                checkpoint["state_json"]["tool_results"][0]["tool_call_id"],
+                "call-recovery-1"
+            );
+            checkpoint
+        };
+
+        // Simulate loss of the old executor while its durable save is committed
+        // but its HTTP acknowledgement is withheld. A fresh token and lease
+        // must load that exact graph. The next node is a model call, whose
+        // previous outcome is ambiguous; c4 deliberately safe-stops there.
+        old_run.abort();
+        assert!(old_run.await.expect_err("old run aborted").is_cancelled());
+        recovery.durable.lock().await.active_lease = 8;
+        recovery.release_old_save.notify_one();
+        let stale_client = ControlRpcClient::new(&first_payload).expect("old RPC client");
+        let stale_error = stale_client
+            .heartbeat()
+            .await
+            .expect_err("old token fenced");
+        assert!(crate::control_rpc::is_run_authority_lost(
+            stale_error.as_ref()
+        ));
+
+        let replacement_payload = StartPayload {
+            lease_version: Some(8),
+            executor_container_id: Some("container-new".to_string()),
+            control_rpc_token: "token-lease-8".to_string(),
+            ..first_payload
+        };
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            execute_run(replacement_payload, CancellationToken::new()),
+        )
+        .await
+        .expect("replacement run timeout")
+        .expect("replacement run completes");
+
+        let durable = recovery.durable.lock().await;
+        assert_eq!(
+            durable.model_calls, 1,
+            "the ambiguous model node must not be replayed"
+        );
+        assert_eq!(
+            durable.tool_calls, 1,
+            "completed remote tool must not replay"
+        );
+        assert_eq!(
+            durable.checkpoint.as_ref().expect("persisted checkpoint"),
+            &first_checkpoint
+        );
+        drop(durable);
+        let requests = requests.lock().await;
+        let loads: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/engine-checkpoint-load"))
+            .collect();
+        assert_eq!(
+            loads.len(),
+            3,
+            "replacement reloads the checkpoint for the failed transcript"
+        );
+        assert_eq!(loads[1].1["leaseVersion"], 8);
+        assert_eq!(loads[1].1["checkpointProtocolVersion"], 2);
+        assert_eq!(loads[2].1["leaseVersion"], 8);
+        let models: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path == "/v1/chat/completions")
+            .collect();
+        assert_eq!(
+            models.len(),
+            1,
+            "replacement must not repeat billable model call"
+        );
+        let completions: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/complete-run"))
+            .collect();
+        assert_eq!(completions.len(), 1, "old executor must not finalize");
+        let completion = &completions[0].1;
+        assert_eq!(completion["leaseVersion"], 8);
+        assert_eq!(completion["status"], "failed");
+        assert!(completion["output"].is_null());
+        assert!(completion["error"].as_str().is_some_and(|error| {
+            error.contains("run_model_external_context_after_tools")
+                && error.contains("billable completion")
+        }));
+        assert_eq!(
+            completion["usage"],
+            serde_json::json!({
+                "inputTokens": 11, "outputTokens": 3, "cachedInputTokens": 2
+            })
+        );
+        let transcript = completion["messages"]
+            .as_array()
+            .expect("terminal transcript");
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "assistant" && message["tool_calls"][0]["id"] == "call-recovery-1"
+        }));
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "tool"
+                && message["tool_call_id"] == "call-recovery-1"
+                && message["content"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("fixture page content"))
+        }));
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "assistant"
+                && message["content"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("failed before it could produce a response"))
+        }));
+    }
+
+    #[tokio::test]
+    async fn execute_run_replacement_recovers_cached_tool_operation() {
+        if std::env::var_os("TAKOS_WRAPPER_RECOVERY_CHILD").is_none() {
+            run_isolated_recovery_test(
+                "execute_run_replacement_recovers_cached_tool_operation",
+                "create_artifact",
+            );
+            return;
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("recovery listener");
+        let address = listener.local_addr().expect("recovery address");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let recovery = Arc::new(RecoveryFixture::new(RecoveryMode::CachedToolOperation));
+        let state = AgentE2eState {
+            base_url: format!("http://{address}"),
+            requests: requests.clone(),
+            checkpoint_fatal_error: false,
+            recovery: Some(recovery.clone()),
+        };
+        let app = Router::new()
+            .fallback(post(agent_e2e_handler))
+            .with_state(state.clone());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("recovery server");
+        });
+        let _server_guard = super::AbortOnDrop(Some(server));
+        let first_payload = StartPayload {
+            run_id: "run-cached-operation".to_string(),
+            worker_id: "service-cached-operation".to_string(),
+            service_id: Some("service-cached-operation".to_string()),
+            model: Some("gpt-e2e".to_string()),
+            lease_version: Some(7),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-old".to_string()),
+            checkpoint_protocol_version: Some(2),
+            control_rpc_base_url: state.base_url.clone(),
+            control_rpc_token: "token-lease-7".to_string(),
+        };
+
+        let old_run = tokio::spawn(execute_run(first_payload.clone(), CancellationToken::new()));
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            recovery.operation_recorded.notified(),
+        )
+        .await
+        .expect("first operation must commit in fake ledger");
+        let first_checkpoint = {
+            let durable = recovery.durable.lock().await;
+            assert_eq!(durable.model_calls, 1);
+            assert_eq!(durable.tool_calls, 1);
+            assert_eq!(durable.physical_tool_calls, 1);
+            assert_eq!(
+                durable.usage,
+                serde_json::json!({
+                    "inputTokens": 11, "outputTokens": 3, "cachedInputTokens": 2
+                })
+            );
+            assert!(durable
+                .operation_key
+                .as_ref()
+                .is_some_and(|key| !key.is_empty()));
+            let checkpoint = durable.checkpoint.clone().expect("persisted checkpoint");
+            assert_eq!(checkpoint["graph_id"], "external-context-v1");
+            assert_eq!(checkpoint["current_node"], "execute_tools");
+            assert_eq!(checkpoint["status"], "running");
+            assert_eq!(
+                checkpoint["state_json"]["execution_profile"],
+                "external_context"
+            );
+            assert_eq!(
+                checkpoint["state_json"]["pending_tool_calls"][0]["id"],
+                "call-recovery-1"
+            );
+            assert_eq!(
+                checkpoint["state_json"]["tool_results"],
+                serde_json::json!([])
+            );
+            checkpoint
+        };
+
+        // The fake Worker commits the operation before withholding its HTTP
+        // acknowledgement. Replacement re-enters the real execute_tools node;
+        // its second RPC attempt must carry the same key and read one result.
+        old_run.abort();
+        assert!(old_run.await.expect_err("old run aborted").is_cancelled());
+        recovery.durable.lock().await.active_lease = 8;
+        recovery.release_old_operation.notify_one();
+        let stale_client = ControlRpcClient::new(&first_payload).expect("old RPC client");
+        let stale_error = stale_client
+            .heartbeat()
+            .await
+            .expect_err("old token fenced");
+        assert!(crate::control_rpc::is_run_authority_lost(
+            stale_error.as_ref()
+        ));
+
+        let replacement_payload = StartPayload {
+            lease_version: Some(8),
+            executor_container_id: Some("container-new".to_string()),
+            control_rpc_token: "token-lease-8".to_string(),
+            ..first_payload
+        };
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            execute_run(replacement_payload, CancellationToken::new()),
+        )
+        .await
+        .expect("replacement run timeout")
+        .expect("replacement run completes");
+
+        let durable = recovery.durable.lock().await;
+        assert_eq!(durable.model_calls, 2);
+        assert_eq!(durable.tool_calls, 2, "old and replacement RPC attempts");
+        assert_eq!(durable.physical_tool_calls, 1, "fake ledger commits once");
+        assert_eq!(
+            durable.checkpoint.as_ref().expect("final checkpoint")["loop_id"],
+            first_checkpoint["loop_id"]
+        );
+        drop(durable);
+        let requests = requests.lock().await;
+        let loads: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/engine-checkpoint-load"))
+            .collect();
+        assert_eq!(loads.len(), 2);
+        assert_eq!(loads[0].1["leaseVersion"], 7);
+        assert_eq!(loads[1].1["leaseVersion"], 8);
+        assert_eq!(loads[1].1["checkpointProtocolVersion"], 2);
+        let tool_attempts: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/tool-execute"))
+            .collect();
+        assert_eq!(tool_attempts.len(), 2);
+        assert_eq!(tool_attempts[0].1["leaseVersion"], 7);
+        assert_eq!(tool_attempts[1].1["leaseVersion"], 8);
+        assert_eq!(
+            tool_attempts[0].1["idempotencyKey"],
+            tool_attempts[1].1["idempotencyKey"]
+        );
+        let models: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path == "/v1/chat/completions")
+            .collect();
+        assert_eq!(models.len(), 2);
+        let resumed_messages = models[1].1["messages"].as_array().expect("model messages");
+        assert!(resumed_messages.iter().any(|message| {
+            message["role"] == "assistant" && message["tool_calls"][0]["id"] == "call-recovery-1"
+        }));
+        assert!(resumed_messages.iter().any(|message| {
+            message["role"] == "tool"
+                && message["tool_call_id"] == "call-recovery-1"
+                && message["content"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("fixture artifact committed once"))
+        }));
+        let completions: Vec<_> = requests
+            .iter()
+            .filter(|(path, _)| path.ends_with("/complete-run"))
+            .collect();
+        assert_eq!(completions.len(), 1, "old executor must not finalize");
+        let completion = &completions[0].1;
+        assert_eq!(completion["leaseVersion"], 8);
+        assert_eq!(completion["status"], "completed");
+        assert_eq!(completion["output"], "recovered answer");
+        assert_eq!(
+            completion["usage"],
+            serde_json::json!({
+                "inputTokens": 24, "outputTokens": 8, "cachedInputTokens": 3
+            })
+        );
+        let transcript = completion["messages"]
+            .as_array()
+            .expect("terminal transcript");
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "assistant" && message["tool_calls"][0]["id"] == "call-recovery-1"
+        }));
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "tool"
+                && message["tool_call_id"] == "call-recovery-1"
+                && message["content"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("fixture artifact committed once"))
+        }));
+        assert!(transcript.iter().any(|message| {
+            message["role"] == "assistant" && message["content"] == "recovered answer"
+        }));
+    }
+
     #[tokio::test]
     async fn recovered_uncertain_side_effect_terminalizes_without_model_or_tool_replay() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1913,6 +2538,7 @@ mod tests {
             base_url: format!("http://{address}"),
             requests: requests.clone(),
             checkpoint_fatal_error: true,
+            recovery: None,
         };
         let app = Router::new()
             .fallback(post(agent_e2e_handler))

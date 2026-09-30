@@ -100,12 +100,15 @@ for this integrated verification, matching the handoff toolchain.
 
 The inherited agent-engine candidate adds 62 test lines in
 `ga-takos-agent-engine-20260930/src/engine/session_engine.rs`; it is a separate,
-uncommitted test-only result at engine base `0a1216b`. It has not been copied,
-committed or given a full gate/consumer qualification by this session.
+uncommitted test-only result at engine base `0a1216b`. At that handoff it had not
+been copied, committed or given a full gate/consumer qualification by this
+session. A later isolated full-gate qualification is now recorded in
+[the wrapper ledger](TASK-takos-ga-agent-wrapper-gate-20260930.md); the original
+candidate is still uncommitted and is not the image's engine pin.
 The inherited diff was read and identified by SHA-256
 `83978e18d6df79d7b0632c9bf52748a2ea5e69884771fc514024216cde32f0e1`.
-Its previously reported 1/1 focused test is prior worker evidence, not a new
-verification here. Integration of this library change remains separate.
+Its previously reported 1/1 focused test is prior worker evidence. Integration
+of this library change remains separate.
 
 Node executor events normally rely on the one-second durable poll; only paths
 that emit to the SSE notifier wake immediately. Object-store enumeration and

@@ -154,6 +154,39 @@ canonical `tako0614/takos-agent-engine` remote から一時 build context へ fe
 Docker build 内の `cargo build --locked --release` で wrapper compatibility を検証します。
 local sibling checkout は release source authority には使いません。
 
+## Portable qualification
+
+product root の `bun run check` は、この wrapper の formatting、全 target / feature の
+compile、default / all-feature Clippy、default / mock-LLM tests と production executable
+build も必須で実行します。compiler は `rust-toolchain.toml` の Rust 1.94.0 に固定し、
+Docker builder と一致しない場合は失敗します。
+
+初回は exact toolchain と locked dependencies を準備します。
+
+```sh
+rustup toolchain install 1.94.0 --profile minimal --component rustfmt --component clippy
+bun run prepare:agent-wrapper
+bun run check:agent-wrapper
+```
+
+engine source は既定の sibling Git repository から `engine-source.json` の exact commit
+を archive します。別の配置では `TAKOS_AGENT_ENGINE_REPOSITORY` で Git repository を指定します。
+dirty / untracked engine files は取り込みません。wrapper source と engine archive を
+product root の ignored `tmp/agent-wrapper-gate` に複製して検証し、成功時はその生成 context
+だけを除去します。失敗時は調査用に残します。Cargo cache は既定の
+`tmp/agent-wrapper-target` または `CARGO_TARGET_DIR` に保持します。
+
+gate は locked / offline で実行し、engine fetch や toolchain の自動 install はしません。
+pin、toolchain、cached dependencies が不足した場合は skip せず失敗します。
+`prepare:agent-wrapper` は locked Cargo dependencies の取得だけを行います。
+model provider key は Cargo child environment に渡しません。
+
+replacement tests は実 wrapper / pinned engine と localhost の model / RPC fixture を使い、
+tool operation の acknowledgement 前に旧 executor を中断します。新 lease が同じ
+idempotency key の cached outcome から完了することと、billable model の outcome が不明な
+checkpoint は再発行せず failed completion にすることを検証します。
+これは実 Worker ledger、Container image、稼働環境の interruption / restart の証拠とは別です。
+
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。
 

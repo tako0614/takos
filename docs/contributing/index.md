@@ -27,6 +27,15 @@ bun run check:workspace -- --task TASK-0003
 bun run check:workspace -- --all
 ```
 
+Rust agent wrapper も product gate の必須対象です。初回は
+`containers/agent/rust-toolchain.toml` の exact toolchain と rustfmt / Clippy を install し、
+`bun run prepare:agent-wrapper` で locked Cargo dependencies を取得します。
+`containers/agent/engine-source.json` の exact Git object が sibling
+`takos-agent-engine` に必要です。別の配置は `TAKOS_AGENT_ENGINE_REPOSITORY` で指定します。
+gate は engine の dirty files を使わず、offline で compile / lint / tests / executable build
+を実行します。詳細は [agent wrapper の検証手順](../../containers/agent/README.md#portable-qualification)
+を参照してください。
+
 live service、operator-private state、readiness evidence、recovery drill は別の
 credential boundary と cadence を持ち、product check や release approval に
 混ぜません。

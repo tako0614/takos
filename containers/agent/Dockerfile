@@ -1,4 +1,4 @@
-FROM rust:1.94-bookworm AS builder
+FROM rust:1.94.0-bookworm AS builder
 
 WORKDIR /work/takos/containers/agent
 

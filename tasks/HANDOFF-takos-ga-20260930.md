@@ -40,7 +40,11 @@ Takos 全体の GA は未完了。この引継ぎは source と実環境の証�
 format/drift/schema/static/type/architecture/build phase が通過。
 既存 ledger の lint 112件、TypeScript 98件は残るが、未申告 diagnostic は0件。
 配置文書変更後の `bun run docs:build` も成功。独立 Sol review で具体的な
-P1/correctness P2 は指摘されなかった。remote CI、release、deploy の証拠ではない。
+P1/correctness P2 は指摘されなかった。draft PR は
+[Takos #126](https://github.com/tako0614/takos/pull/126)。commit `a89bc5267baedecea9ddf8ba9ce98e823ba15564`
+の remote `bun run check` も 2026-09-30 18:37:50 UTC に成功した
+([CI run](https://github.com/tako0614/takos/actions/runs/36759733899))。
+これ以降の追加差分の CI、release、deploy の証拠へ流用しない。
 
 ## 製品の確認 journey
 
@@ -55,7 +59,7 @@ container は run-scoped executor、engine は library とする。
 | Thread → Run | `agentContainers` capability、固定 model、DB と versioned `RUN_QUEUE`、executor dispatch と terminal status | `agent-proof.test.ts` 等の component tests。現在の artifact に結び付いた queue/container 実行は未確認 |
 | MCP admission | `mcp.server/2025-11-25`、declared/resolved endpoint、streamable-http、現在の Ready Principal binding と `mcp.invoke` | runtime-interface/exposure tests。live Interface/Binding revision、tools/list と tools/call は未確認 |
 | Tool safety | Worker catalog/schema/policy と correlated operation ledger、side effect の不確定 outcome は再実行しない | `idempotency-uncertain.test.ts` 等。実 remote backend での proof は未確認 |
-| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | `executor-control-rpc-checkpoint.test.ts` は保存/lease turnover/uncertain/R2 を検査。container 中断から再開までの統合 E2E は未確認 |
+| Checkpoint → executor replacement | lease-CAS checkpoint、protocol v2、inline 上限超過時 `TAKOS_OFFLOAD`。旧 executor を止め、新 lease が prior checkpoint から再開する | Worker tests は保存/lease turnover/uncertain/R2 を検査。Rust wrapper の実 engine checkpoint を使う localhost fixture で冪等 tool の再開とモデル境界の安全停止を検証。実 Worker + container 中断から再開までの統合 E2E は未確認 |
 | 観測と復旧 | 永続 timeline の cursor replay、terminal closure、実 binding/resource/image/version readback、監視と復旧 | 今回 SSE 15 tests を追加・確認。実 Redis/offload、負荷、alert、restore drill は未確認 |
 
 正本: [runtime service](../docs/architecture/runtime-service.md)、
@@ -107,18 +111,35 @@ closure の admit/activate readback と create/update/delete、HTTP/WSS、復旧
 `ga-takos-agent-engine-20260930` の `src/engine/session_engine.rs` を照合済み。
 base `0a1216b22d8d175c0735dadef54573eadc252d2a` に62行の履歴 regression test追加。
 runtime/API は変更しない。差分 SHA-256 は SSE ledger に記録した。
-未commitの候補を別 worktree で保持し、コピーや重複実装はしていない。
-短期worker報告の focused 1/1 と rustfmt は引継ぎ証拠であり、今回の full gate ではない。
+未commitの候補を外部 worktree で保持し、そこは変更していない。
+この専用 worktree の ignored qualification context に base を archive し、候補差分を
+適用して library の complete `bun run check` を確認した。Rust 1.97.1、MSRV 1.85.0、
+Bun 1.4.0 で format / Clippy / rustdoc / compile / 212 tests / build が成功。
+候補の owning commit や consumer の採用は未完了。
 
 Takos image の engine source pin は `containers/agent/engine-source.json` の
 `c4c3c9f0ffc3956a917b8da38f97671dbd3aea2d`。
 その pin から候補 base までの committed diff は4つの文書だけだった。
 `scripts/release-artifact-deploy.ts` は exact pin を fetch して image context を作る。
-最新 main という理由だけで pin を変更しない。Rust library full gate、wrapper の
-consumer check、mock-LLMを含む実行境界の qualification は別に残る。
+最新 main という理由だけで pin を変更しない。今回の wrapper gate はこの exact pin を
+Git archive し、現在の wrapper source と Rust 1.94.0 で検証する。候補の62行の追加 test
+を image に混入させない。root `bun run check` / CI に wrapper の default / mock-LLM
+tests、compile / Clippy / production executable build を追加した。
 
-次の独立作業は、engine候補の isolated qualification、wrapper と Worker を通した
-中断後再開の local proof、Node SSE の subscriber/history 規模別容量確認。
+新たな2つの replacement proof は、実 checkpoint を保存して acknowledgement 前に旧
+executor task を中断し、新 lease を渡す。`execute_tools` では2回のRPCが同じkeyを使い、
+fixture ledger は1回だけ操作を実行し、履歴とusageを保持して完了する。
+`run_model_external_context_after_tools` は pinned engine の `RecoveryUnsafe` 契約に従い、
+追加model / toolなしで failed atomic completion する。実Worker ledgerの証拠ではない。
+詳細は [wrapper task ledger](TASK-takos-ga-agent-wrapper-gate-20260930.md)。
+追加後の root `bun run check` は CI と同じ Bun 1.3.14 で成功。
+1,322 Bun tests、20 OpenTofu tests、wrapper default 96 tests、mock-LLM 169 tests、
+compile / Clippy / executable / web / Worker build を確認した。docs build も成功。
+lint 112件 / TypeScript 98件の既存 debt は残り、未申告は0件。
+独立レビューの fixture 競合と child proof の未実行/無期限待機を修正し、再確認済み。
+
+次の独立作業は、wrapper と実 Worker を通した中断後再開の local proof、Node SSE の
+subscriber/history 規模別容量確認。engine候補の owning commit / 統合は library owner と調整する。
 通常の Node executor event は一秒 polling に依存し、一部通知だけが即 wakeup する。
 offload/DO read の subscriber 数に応じた負荷を GA 解除済みとは扱わない。
-native/mobile、remote CI、published/deployed identity、実 user journey、監視/復旧は未検証。
+native/mobile、追加差分の remote CI、published/deployed identity、実 user journey、監視/復旧は未検証。
