@@ -149,6 +149,9 @@ Docker image は ecosystem root から作成します。
 docker build -f takos/containers/agent/Dockerfile -t takos-agent .
 ```
 
+Cargo の同時build jobは既定2です。必要な環境では
+`--build-arg CARGO_BUILD_JOBS=<jobs>` で調整できます。
+
 release artifact publisher は `containers/agent/engine-source.json` の exact commit を
 canonical `tako0614/takos-agent-engine` remote から一時 build context へ fetch し、
 Docker build 内の `cargo build --locked --release` で wrapper compatibility を検証します。

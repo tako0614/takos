@@ -61,11 +61,18 @@ const acceptedOwnerWitness: RejectedOwnerWitness = {
   witnessStatus: "active",
 };
 
-function createDurableObjectState(values = new Map<string, unknown>()) {
+function createDurableObjectState(
+  values = new Map<string, unknown>(),
+  options: { failGetKey?: string } = {},
+) {
   let pending: Promise<unknown> = Promise.resolve();
+  let concurrencyQueue: Promise<unknown> = Promise.resolve();
   const state = {
     storage: {
       async get<T>(key: string): Promise<T | undefined> {
+        if (key === options.failGetKey) {
+          throw new Error(`injected durable storage read failure for ${key}`);
+        }
         const value = values.get(key);
         return value === undefined ? undefined : structuredClone(value) as T;
       },
@@ -87,7 +94,8 @@ function createDurableObjectState(values = new Map<string, unknown>()) {
       },
     },
     blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
-      const operation = Promise.resolve().then(callback);
+      const operation = concurrencyQueue.then(callback);
+      concurrencyQueue = operation.then(() => undefined, () => undefined);
       pending = operation;
       return operation;
     },
@@ -565,6 +573,131 @@ test("R2 run-event offload retries a failed boundary write without losing buffer
     );
     expect(events.map((event) => JSON.parse(event.data).sequence)).toEqual(
       Array.from({ length: 200 }, (_, index) => index + 1),
+    );
+  } finally {
+    client.close();
+  }
+});
+
+test("RunNotifier refuses emits when restoring durable state fails without overwriting its archive", async () => {
+  const bucket = createInMemoryObjectStore();
+  const { client, notifier, storageValues, db } = await createNotifierFixture(
+    acceptedOwnerWitness,
+    { bucket },
+  );
+  try {
+    for (let eventId = 1; eventId <= 100; eventId += 1) {
+      await emitRunEvent(
+        notifier,
+        eventId,
+        eventId === 100 ? "completed" : "run.progress",
+      );
+    }
+
+    const segmentKey = buildRunEventSegmentKey("run-1", 1);
+    const bytesBefore = await (await bucket.get(segmentKey))!.arrayBuffer();
+    const durableStateBefore = structuredClone(
+      storageValues.get("bufferState"),
+    );
+    const failedRestoreState = createDurableObjectState(
+      structuredClone(storageValues),
+      { failGetKey: "bufferState" },
+    );
+    const replacement = new RunNotifierDO(failedRestoreState.binding, {
+      DB: db,
+      TAKOS_OFFLOAD: bucket,
+    } as never);
+
+    let initializationError: string | undefined;
+    try {
+      await failedRestoreState.ready();
+    } catch (error) {
+      initializationError = error instanceof Error ? error.message : String(error);
+    }
+
+    let emitOutcome:
+      | { status: number; body: unknown }
+      | { error: string };
+    try {
+      const response = await replacement.fetch(
+        new Request("https://run-notifier.test/emit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: "completed",
+            data: { sequence: "replacement-terminal" },
+            runId: "run-1",
+          }),
+        }),
+      );
+      emitOutcome = { status: response.status, body: await response.json() };
+    } catch (error) {
+      emitOutcome = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    const durableStateAfter = failedRestoreState.values.get("bufferState");
+    const bytesAfter = await (await bucket.get(segmentKey))!.arrayBuffer();
+    const archivedEvents = await getRunEventsAfterFromR2(
+      bucket,
+      "run-1",
+      0,
+      200,
+    );
+    console.log("restore-failure regression evidence", JSON.stringify({
+      initializationError,
+      emitOutcome,
+      durableStatePreserved: JSON.stringify(durableStateAfter) ===
+        JSON.stringify(durableStateBefore),
+      archiveBytesPreserved: Array.from(new Uint8Array(bytesAfter)).join(",") ===
+        Array.from(new Uint8Array(bytesBefore)).join(","),
+      archivedEventIds: archivedEvents.map((event) => event.event_id),
+    }));
+
+    expect("status" in emitOutcome && emitOutcome.status === 200).toBe(false);
+    expect(durableStateAfter).toEqual(durableStateBefore);
+    expect(Array.from(new Uint8Array(bytesAfter))).toEqual(
+      Array.from(new Uint8Array(bytesBefore)),
+    );
+    expect(archivedEvents.map((event) => event.event_id)).toEqual(
+      Array.from({ length: 100 }, (_, index) => index + 1),
+    );
+
+    const recoveredState = createDurableObjectState(
+      structuredClone(failedRestoreState.values),
+    );
+    const recoveredNotifier = new RunNotifierDO(recoveredState.binding, {
+      DB: db,
+      TAKOS_OFFLOAD: bucket,
+    } as never);
+    await recoveredState.ready();
+    const recoveredEmit = await recoveredNotifier.fetch(
+      new Request("https://run-notifier.test/emit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          type: "completed",
+          data: { sequence: 101 },
+          runId: "run-1",
+        }),
+      }),
+    );
+    expect((await recoveredEmit.json()).eventId).toBe(101);
+    const finalSegmentOne = await bucket.get(segmentKey);
+    expect(Array.from(new Uint8Array(await finalSegmentOne!.arrayBuffer())))
+      .toEqual(Array.from(new Uint8Array(bytesBefore)));
+    expect(await listRunEventSegmentIndexes(bucket, "run-1")).toEqual([1, 2]);
+    expect((await readRunEventSegmentFromR2(bucket, "run-1", 2))?.map((e) => e.event_id))
+      .toEqual([101]);
+    const recoveredArchive = await getRunEventsAfterFromR2(
+      bucket,
+      "run-1",
+      0,
+      200,
+    );
+    expect(recoveredArchive.map((event) => event.event_id)).toEqual(
+      Array.from({ length: 101 }, (_, index) => index + 1),
     );
   } finally {
     client.close();

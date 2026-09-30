@@ -193,7 +193,10 @@ bytesの不変性と cursor page を検証した。独立 review の具体的P1/
 この追加差分の complete `bun run check` もBun 1.3.14で成功した。
 1,331 Bun tests / 7,590 assertions、20 OpenTofu tests、Rust default 96 / mock 169、
 全phaseと実Worker/SQLite/process復旧proofを実行。lint 112 / TypeScript 98 の既存debtは
-変わらず、未申告は0件。exact new-head CIは別途照合し、PR #126へ結果を記録する。
+変わらず、未申告は0件。code commit `bbb92a2afa408f4a4010d77858dac28baa98cec9` の
+[CI](https://github.com/tako0614/takos/actions/runs/36777999424) は
+2026-09-30 21:16:49 UTC に成功し、PR #126 の当時のheadと照合済み。
+この成功を後続差分の証拠へ流用しない。
 既に消えた履歴の復元と、put成功後にDO state保存だけ失敗する境界は未検証。
 詳細と主への契約提案は [offload integrity ledger](TASK-takos-ga-offload-integrity-20260930.md)。
 
@@ -210,3 +213,33 @@ SQLのlast_event_idもobject commit境界ではない。共通のexact backend�
 を資格確認するか、durable archive indexの失敗・復旧authorityを主で決める提案を記録した。
 共有契約の変更とHost専用分岐は追加していない。今回の欠落修正は全列挙の容量問題を解決しない。
 native/mobile、published/deployed identity、実 user journey、監視/復旧は未検証。
+
+## 状態復元と検証対象の追加修正
+
+状態読込の失敗を空の状態として受け入れる別の欠落を再現した。既存100件のarchiveを
+持つRunNotifierのcold起動でreadが失敗すると、旧sourceはterminal emitをID 1として
+HTTP 200で受け、segment 1を上書きする。初期化Promiseの失敗を保持・再throwし、
+fetch/alarm/hibernation callbackを復元完了まで待たせる変更で、既存stateとgzip bytesを
+保護した。実RunNotifierを含む19 focused testsは成功、同じ最終testを旧sourceへ適用した
+red proofは16成功/3失敗。独立reviewの具体的P1/P2は残っていない。
+
+このred proofをignored tmpへ残した全体gateで、Gitの正しい対象227ファイルをBunの
+path filterが405ファイルへ広げるrunner不備も発見した。実helperへ`./`付きのfile pathを
+渡し、ignored同名testがthrowする子process回帰で確認した。探索・quarantine・対象testは
+削減していない。旧source archiveを残したまま全体gateは1,335 Bun tests/228 files/
+7,699 assertions、20 OpenTofu tests、Rust default 96/mock 169、全phaseと実Worker/
+SQLite/process復旧proofを通過した。既存debt lint 112/TypeScript 98は変わらず、未申告0。
+詳細は [状態復元ledger](TASK-takos-ga-notifier-restore-20260930.md) と
+[テスト対象ledger](TASK-takos-ga-portable-selection-20260930.md)。
+
+R2 put成功後のDO state保存失敗、legacy KVの1値128 KiB上限、壊れたstate形状の検証は
+この修正で解除していない。immutable flush intentとchunked stateのschema/rollback設計は
+次のTakos内作業であり、実backendのatomic storage契約・失敗復旧は主との資格確認が必要。
+容量の全segment列挙問題も残る。共有契約の変更は行っていない。
+
+実Container artifact資格確認は専用HDD builderで準備中。Dockerfileのlocked release buildを
+維持し、Cargoの既定同時jobを2へ制限するbuild argumentを追加・独立review・実RUN probeで
+確認した。image本体は、検証済みcommitを固定してからbuildする。
+既存Docker daemon/他担当BuildKit/他worktreeは変更していない。現行public descriptorの
+旧imageを今回のbytesの証拠として代用しない。詳細は
+[Container資格ledger](TASK-takos-ga-container-qualification-20260930.md)。

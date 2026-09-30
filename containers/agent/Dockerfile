@@ -1,5 +1,7 @@
 FROM rust:1.94.0-bookworm AS builder
 
+ARG CARGO_BUILD_JOBS=2
+
 WORKDIR /work/takos/containers/agent
 
 COPY takos/containers/agent/Cargo.toml takos/containers/agent/Cargo.lock ./

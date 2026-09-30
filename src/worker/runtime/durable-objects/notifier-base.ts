@@ -121,6 +121,7 @@ export function toWsEnvelope(input: {
 
 export abstract class NotifierBase {
   protected state: DurableObjectStateBinding;
+  private readonly initialized: Promise<void>;
   /**
    * Active WebSocket connections keyed by connection id. Exposed for
    * Durable Object tests that need to assert connection accounting or
@@ -139,7 +140,7 @@ export abstract class NotifierBase {
 
   constructor(state: DurableObjectStateBinding) {
     this.state = state;
-    this.state.blockConcurrencyWhile(async () => {
+    this.initialized = this.state.blockConcurrencyWhile(async () => {
       try {
         await this.loadPersistedState();
         // Rebuild connections map from hibernated WebSockets
@@ -157,9 +158,16 @@ export abstract class NotifierBase {
           e instanceof Error ? e.message : String(e),
           { module: this.moduleName },
         );
-        this.resetState();
+        // A failed read is not an absent state. Preserve the rejection so the
+        // platform retires this instance instead of reusing event IDs or owner
+        // state from fresh defaults.
+        throw e;
       }
     });
+    // Local bindings may not observe the constructor's returned promise. Keep
+    // the original rejected readiness for every entrypoint without generating
+    // an unhandled rejection before the first request arrives.
+    void this.initialized.catch(() => {});
   }
 
   /**
@@ -171,20 +179,12 @@ export abstract class NotifierBase {
   /** Persist the full in-memory state to DO storage. */
   protected abstract persistState(): Promise<void>;
 
-  /**
-   * Reset state to defaults when storage load fails.
-   * Subclasses should reset their own fields and call super.
-   */
-  protected resetState(): void {
-    this.eventBuffer = [];
-    this.eventIdCounter = 0;
-  }
-
   // ---------------------------------------------------------------------------
   // Alarm – heartbeat + stale connection cleanup
   // ---------------------------------------------------------------------------
 
   async alarm(): Promise<void> {
+    await this.initialized;
     cleanupStaleConnections(this.connections);
     broadcastHeartbeat(this.connections);
     if (this.connections.size > 0) {
@@ -197,6 +197,7 @@ export abstract class NotifierBase {
   // ---------------------------------------------------------------------------
 
   async fetch(request: Request): Promise<Response> {
+    await this.initialized;
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -426,6 +427,7 @@ export abstract class NotifierBase {
     ws: WebSocketLike,
     message: string | ArrayBuffer,
   ): Promise<void> {
+    await this.initialized;
     const extendedWs = ws as ExtendedWebSocket;
     extendedWs.lastActivity = Date.now();
 
@@ -451,6 +453,7 @@ export abstract class NotifierBase {
   }
 
   async webSocketClose(ws: WebSocketLike): Promise<void> {
+    await this.initialized;
     const extendedWs = ws as ExtendedWebSocket;
     if (extendedWs.connectionId) {
       this.connections.delete(extendedWs.connectionId);
@@ -458,6 +461,7 @@ export abstract class NotifierBase {
   }
 
   async webSocketError(ws: WebSocketLike, error: unknown): Promise<void> {
+    await this.initialized;
     const extendedWs = ws as ExtendedWebSocket;
     if (extendedWs.connectionId) {
       logError(

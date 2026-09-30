@@ -10,7 +10,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 import {
   canRunTestSelection,
@@ -159,13 +159,18 @@ export async function discoverTestFiles(repositoryRoot: string): Promise<string[
   return [...new Set(files)].sort();
 }
 
-async function runTests(
+export async function runTests(
   files: readonly string[],
   output: "inherit" | "ignore",
+  repositoryRoot = root,
 ): Promise<boolean> {
   if (files.length === 0) return false;
-  const child = Bun.spawn(["bun", "test", ...files], {
-    cwd: root,
+  const explicitPaths = files.map((file) => isAbsolute(file)
+    ? file
+    : `./${file.replace(/^(?:\.\/)+/u, "")}`
+  );
+  const child = Bun.spawn([process.execPath, "test", ...explicitPaths], {
+    cwd: repositoryRoot,
     stdin: "ignore",
     stdout: output,
     stderr: output,

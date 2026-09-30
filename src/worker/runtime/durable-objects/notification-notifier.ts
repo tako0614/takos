@@ -44,11 +44,6 @@ export class NotificationNotifierDO extends NotifierBase {
     });
   }
 
-  protected override resetState(): void {
-    super.resetState();
-    this.userId = null;
-  }
-
   // ---------------------------------------------------------------------------
   // Auth
   // ---------------------------------------------------------------------------
