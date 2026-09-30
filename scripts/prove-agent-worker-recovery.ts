@@ -9,6 +9,7 @@ import { and, eq } from "drizzle-orm";
 import {
   accountMemberships,
   accounts,
+  authIdentities,
   artifacts,
   getDb,
   messages,
@@ -322,6 +323,7 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
     requireValue(!watchdog.timedOut, "overall deadline expired while migrating SQLite");
     const db = getDb(dbBinding);
     await db.insert(accounts).values({ id: accountId, type: "user", status: "active", name: "Proof User", slug: `proof-user-${randomUUID()}`, ownerAccountId: accountId, createdAt: now, updatedAt: now });
+    await db.insert(authIdentities).values({ id: `identity_${randomUUID()}`, userId: accountId, provider: "oidc", providerSub: "https://accounts.example.test#recovery-proof-owner", linkedAt: now, lastLoginAt: now });
     await db.insert(accounts).values({ id: workspaceId, type: "team", status: "active", name: "Proof Workspace", slug: `proof-space-${randomUUID()}`, ownerAccountId: accountId, createdAt: now, updatedAt: now });
     await db.insert(accountMemberships).values({ id: `membership_${randomUUID()}`, accountId: workspaceId, memberId: accountId, role: "owner", status: "active", createdAt: now, updatedAt: now });
     await db.insert(threads).values({ id: threadId, accountId: workspaceId, title: "Recovery proof", nextMessageSequence: 1, createdAt: now, updatedAt: now });
@@ -332,6 +334,8 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
     const bridgeBase = `http://127.0.0.1:${bridgePort}`;
     const env = {
       DB: dbBinding,
+      OIDC_ISSUER_URL: "https://accounts.example.test",
+      OIDC_OWNER_SUBJECT: "recovery-proof-owner",
       ENVIRONMENT: "development",
       OPENAI_API_KEY: modelKey,
       OPENAI_BASE_URL: `${bridgeBase}/v1`,

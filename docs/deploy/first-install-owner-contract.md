@@ -1,5 +1,9 @@
 # First-install owner contract
 
+Takos は各自が自分用に deploy する、インスタンス所有者が 1 人のソフトウェアです。
+この文書の owner contract は release operation の担当境界を表します。
+複数の所有ユーザーを収容する契約や、最初の訪問者に所有権を与える入口ではありません。
+
 Takos の first install coordinator が呼ぶ product-owned seam は
 `bun run deploy -- --contract` の `ownerContracts` にあります。これは Takos を install
 する default path ではなく、operator が選んだ Cloudflare integration target に対する
@@ -157,6 +161,11 @@ exact 3 application、healthy detail 3 件、active rollout 0 を返します。
 owner-session を受け取りません。owner-session は次の functional proof だけの authority です。
 
 ## Authenticated functional proof
+
+先に operator が `OIDC_ISSUER_URL` と `OIDC_OWNER_SUBJECT` で所有者の exact issuer/sub を
+固定します。Cloudflare module では public app config の `env` に subject を渡します。
+未設定、別 subject、旧別ユーザーの session や Run は所有者として受け付けません。
+既存の別 profile や Workspace を自動削除・統合しません。
 
 先に operator が通常の OIDC login と必要な human MFA を完了します。Takos の
 `__Host-tp_session` cookie の **value だけ**を repository 外の canonical `0600` file に

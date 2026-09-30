@@ -3,7 +3,8 @@
 > このページでわかること: Takos Workspace の正本 (正とする情報) モデルと、旧 `space` 永続化語彙の境界。
 
 Takos の **Workspace** は chat、agent、memory、Git repository、app launcher、MCP tools をまとめる
-private な作業領域です。認証済みの一つの外部 subject は Takos 内の一つの Principal に対応し、その Principal は
+private な作業領域です。各自が自分用にデプロイしたインスタンスの所有者は1人です。
+固定した所有者の外部 subject は Takos 内の一つの Principal に対応し、その Principal は
 default Workspace と追加作成した複数の Workspace を所有できます。
 
 ```txt
@@ -13,6 +14,9 @@ external subject
        ├─ private Workspace
        └─ private Workspace
 ```
+
+外部の通信相手、共有リンクの受信者、接続先アプリの参加者は、インスタンス所有者ではありません。
+それぞれの通信・共有契約を保ったまま、所有者の private Workspace と区別します。
 
 各 Workspace の authority は一つの Principal だけが持ちます。Takos Workspace は共同利用、招待、権限段階、
 owner transfer を持ちません。agent や service は独立した Workspace owner ではなく、実行時にその Principal の

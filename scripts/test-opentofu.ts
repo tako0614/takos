@@ -209,6 +209,16 @@ async function assertRuntimeSecretBindings(): Promise<void> {
       ["inherited", inherited],
     ] as const) {
       assertNoSecretMaterialInPlan(name, plan);
+      const ownerBindings = workerVersionBindings(plan).filter(
+        (binding) => binding.name === "OIDC_OWNER_SUBJECT",
+      );
+      if (
+        ownerBindings.length !== 1 ||
+        ownerBindings[0]?.type !== "plain_text" ||
+        ownerBindings[0]?.text !== "plan-proof-owner-subject"
+      ) {
+        throw new Error(`${name} plan must project the exact single-owner subject as public app config`);
+      }
     }
 
     const absentNames = bindingNames(workerVersionBindings(absent));
@@ -310,6 +320,7 @@ async function createRuntimeSecretPlan(
       "-var=environment=staging",
       "-var=opentofu_plan_mode=true",
       `-var=runtime_secrets_provisioned=${provisioned ? "true" : "false"}`,
+      '-var=env={OIDC_OWNER_SUBJECT="plan-proof-owner-subject"}',
       // Dropping the bindings is a first-install-only act, so the plan that
       // proves the absent shape has to carry the same acknowledgement an
       // operator would type.

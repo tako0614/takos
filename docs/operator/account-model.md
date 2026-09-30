@@ -2,6 +2,10 @@
 
 > このページでわかること: Takos のアカウント・認証の所有権がどこにあるか。
 
+Takos は各自が自分用にデプロイする、インスタンス所有者1人のソフトウェアです。1人の所有者は
+複数の private Workspace を持てます。外部の通信相手、共有リンクの受信者、MCP 接続先は
+インスタンス所有者ではありません。
+
 Takos product routes は OIDC consumer であり、credential issuer / billing owner にはなりません。外部 Takosumi
 Accounts plane が OIDC issuer と client projection を所有し、Takos はその subject から
 app-local profile / session を作ります。
@@ -21,16 +25,32 @@ plane の upstream IdP として接続し、Takos runtime の `OIDC_ISSUER_URL` 
 
 ## OIDC Identity Resolution
 
-Takos app の OIDC callback は、実装上この順序で user を解決します。
+operator は公開 login を有効にする前に `OIDC_OWNER_SUBJECT` を設定します。これは
+`OIDC_ISSUER_URL` の issuer が、このインスタンスの所有者へ返す正確な `sub` です。
+email、username、親 Workspace の membership、最初にログインした人から所有者を推測しません。
+未設定・不正な設定は login を拒否します。
 
-1. `auth_identities` に `provider = oidc` かつ `provider_sub = <issuer>#<sub>` がある場合、その `user_id` の active
-   account を使う
-2. 未リンクの `(issuer, sub)` は、同じ verified email の既存 profile があっても別の app-local profile を作る
-3. 新しい profile に `auth_identities(provider=oidc)` を作り、以後は `<issuer>#<sub>` だけで解決する
+1. OIDC callback は署名・state・nonce・PKCE・UserInfo を検証し、固定した `(issuer, sub)` と
+   一致する所有者だけを受け入れる。別 subject の profile、委任token、session を作らない
+2. 所有者の `auth_identities(provider=oidc, provider_sub=<issuer>#<sub>)` を解決する。
+   未導入なら、その identity と app-local profile を同じ atomic write group で作る
+3. Accounts bearer/PAT と既存 cookie session でも同じ所有者を確認する。旧 version の
+   別ユーザーの row や session が残っていても、所有者としての access を認めない
+4. キュー済み・実行中の Run と未完了 MCP OAuth callback も、同じ現在の所有者を
+   確認する。旧別ユーザーの Workspace owner 権限だけでは実行を継続しない
 
-email は再利用・移管され得るため account merge key にしません。`email_verified = true` は verified snapshot として
-保存できることだけを示し、既存profileへの自動linkを許可しません。verified / unverified のどちらも表示・監査用
-snapshotとして扱い、identity ownership は `(issuer, sub)` だけで決めます。
+email は再利用・移管され得るため account merge key にしません。`email_verified = true` は
+表示・監査用の verified snapshot を保存できることだけを示します。既存profileへの自動linkや、
+別 subject を所有者へ読み替える根拠にはしません。旧 profile、外部相手のデータ、Workspaceを
+自動で削除・merge・所有権移管することもありません。
+identity の識別と client ごとの subject は
+[OpenID Connect Core の5.7節・8節](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability) に従います。
+
+この設定は Takos の公開アプリ設定であり、upstream account の作成や権限付与を行いません。
+issuer/subject の変更は operator が行う所有者境界の変更です。既存データを別 identity に
+渡す操作ではなく、旧 session の失効、データ保全、明示した復旧・移管の検証が別途必要です。
+別 client が異なる pairwise subject を返す場合も自動 alias は作りません。Accounts/mobile の
+exact client と subject の対応は導入時に確認します。
 
 ## Capsule API delegation
 
@@ -55,6 +75,7 @@ Workspaceを作るたびにTakosumi Workspaceを増やしません。
 
 - Takosumi Accounts plane の issuer が `OIDC_ISSUER_URL` の `/.well-known/openid-configuration` で解決できること
 - `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` / public `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` が capability と登録済み client に一致すること
+- `OIDC_OWNER_SUBJECT` が所有者の正確な issuer-bound subject であること。公開 login 前に固定し、別 subject の browser/bearer と旧 cookie が拒否されること
 - 登録済み client が `openid profile email offline_access capsules:read capsules:write` を許可し、UserInfo が単一の親
   Workspace claim (`takosumi.workspace_id`) と、それに一致する一意な `workspace_memberships` を返すこと
 - `ENCRYPTION_KEY` が設定され、委任tokenの平文がlog、OpenTofu state、Outputに出ないこと
@@ -93,4 +114,4 @@ bun run docs:build
 rollback は backup を使った短期復旧に限定します。OIDC identity の state は `auth_identities` を正とします。
 
 - deploy を戻す場合も Takosumi Accounts issuer / Capsule Run ledger は維持する
-- user merge を取り消す場合は `auth_identities` の対象 row を削除し、次回 login で verified email linking をやり直す
+- 所有者 pin と `auth_identities` の対応を保全する。verified email による再link、別subjectの自動admission、旧versionへの無確認のdowngradeで復旧しない

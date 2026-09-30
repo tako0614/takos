@@ -115,13 +115,11 @@ export async function provisionOidcUser(
   const db = getDb(dbBinding);
 
   // Account identity is keyed STRICTLY on the (issuer, sub) pair via
-  // authIdentities (the caller already matched on it before reaching here, so
-  // this function only ever runs for a brand-new subject). Email is a
-  // transferable / reusable profile attribute and MUST NOT auto-link a new
-  // subject onto an existing account: an IdP that reissues a verified email
-  // under a new sub (email change, address re-registration) would otherwise let
-  // an attacker log in AS the original account. Each new subject therefore gets
-  // its OWN account.
+  // authIdentities. Admission callers permit only the operator-pinned
+  // issuer/sub. Email is a
+  // transferable profile attribute and MUST NOT link a newly pinned subject
+  // onto an existing account. Retained legacy accounts remain separate until
+  // the operator deliberately resolves their records.
   let email = profile.email ?? null;
   if (email) {
     const emailOwner = await db.select({ id: accounts.id }).from(accounts)

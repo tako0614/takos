@@ -15,19 +15,7 @@ import {
   isTakosumiAccountsBearerCandidate,
 } from "./bearer-token-classification.ts";
 import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
-
-function normalizeConfiguredUrl(value: string | undefined): string | undefined {
-  const raw = value?.trim();
-  if (!raw) return undefined;
-  try {
-    const url = new URL(raw);
-    url.hash = "";
-    url.search = "";
-    return url.toString().replace(/\/+$/, "");
-  } catch {
-    return undefined;
-  }
-}
+import { configuredOwner } from "../../application/services/identity/owner-admission.ts";
 
 const readCompatibleScopes = new Set([
   "openid",
@@ -157,13 +145,16 @@ export async function resolveAccountsBearerFromHeader<
   const dbBinding = deps.getPlatformServices(c).sql?.binding;
   if (!dbBinding) return { kind: "no-db" };
 
-  const issuer = normalizeConfiguredUrl(
-    deps.getPlatformConfig(c).oidcIssuerUrl,
-  );
+  const config = deps.getPlatformConfig(c);
+  const owner = configuredOwner({
+    issuer: config.oidcIssuerUrl,
+    subject: config.oidcOwnerSubject,
+  });
+  if (!owner) return { kind: "invalid" };
 
   const selfBearer = await deps.resolveSelfIssuedBearer({
     authorizationHeader,
-    issuer: issuer ?? null,
+    issuer: owner.issuer,
     db: dbBinding,
     env: c.env,
   });

@@ -15,6 +15,7 @@ import {
 } from "./accounts-bearer.ts";
 import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
+import { isActiveOwnerAccount } from "../../application/services/identity/owner-admission.ts";
 
 import {
   AuthenticationError,
@@ -35,6 +36,7 @@ export const oauthAuthDeps = {
   resolveSelfIssuedBearer,
   getPlatformServices,
   getPlatformConfig,
+  isActiveOwnerAccount,
 };
 
 export interface OAuthContext {

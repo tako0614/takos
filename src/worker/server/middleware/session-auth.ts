@@ -2,6 +2,11 @@ import type { Context } from "hono";
 import type { Env, Session, User } from "../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 import type { getSession } from "../../application/services/identity/session.ts";
+import {
+  configuredOwner,
+  isActiveOwnerAccount,
+} from "../../application/services/identity/owner-admission.ts";
+import { getPlatformConfig } from "../../platform/accessors.ts";
 import type { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
 import type {
   getCachedUser,
@@ -38,6 +43,8 @@ export interface CookieSessionResolverDeps {
   isSessionRevoked: typeof isSessionRevoked;
   getCachedUser: typeof getCachedUser;
   isValidUserId: typeof isValidUserId;
+  getPlatformConfig: typeof getPlatformConfig;
+  isActiveOwnerAccount: typeof isActiveOwnerAccount;
 }
 
 /**
@@ -47,8 +54,8 @@ export interface CookieSessionResolverDeps {
  * yields `ok`. Session rotation is intentionally NOT done here — `requireAuth`
  * layers rotation on top of an `ok` result; `requireAnyAuth` does not rotate.
  *
- * The `dbBinding`-guard preserves prior behavior: when no SQL binding is
- * configured the revocation check is skipped (there is no blacklist to read).
+ * With no SQL binding, revocation cannot be read and owner identity cannot be
+ * proven, so a cached user is never admitted.
  */
 export async function resolveCookieSession<TVariables extends object>(
   c: Context<{ Bindings: Env; Variables: TVariables }>,
@@ -77,6 +84,15 @@ export async function resolveCookieSession<TVariables extends object>(
 
   const user = await deps.getCachedUser(c, session.user_id);
   if (!user) return { kind: "user-not-found" };
+  const config = deps.getPlatformConfig(c);
+  const owner = configuredOwner({
+    issuer: config.oidcIssuerUrl,
+    subject: config.oidcOwnerSubject,
+  });
+  if (
+    !input.dbBinding || !owner ||
+    !await deps.isActiveOwnerAccount(input.dbBinding, owner, user.id)
+  ) return { kind: "user-not-found" };
 
   return { kind: "ok", user, session: session as Session };
 }

@@ -160,6 +160,7 @@ export interface Env
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
   OIDC_ISSUER_URL?: string;
+  OIDC_OWNER_SUBJECT?: string;
   OIDC_DISCOVERY_URL?: string;
   OIDC_CLIENT_ID?: string;
   /**

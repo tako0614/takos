@@ -1,7 +1,7 @@
 # Takos GA: notifier state validation before journal migration
 
 Date: 2026-09-30 UTC
-Status: focused_source_verified / complete gate and integration pending
+Status: source_reviewed / deployment and integration pending
 Owner: Takos dedicated session
 Required for: persisted_schema, production_or_release
 Grants production mutation authority: false
@@ -114,3 +114,11 @@ deadline; cleanup is bounded, checks the owned process group and rejects success
 with a live descendant. No proof processes or private fixture directories remain.
 No native quota or multi-key atomicity probe was performed. Complete source gate
 and exact committed CI are recorded in the dedicated integration result.
+
+Local complete-gate attempt reached static/type, 1,409 portable tests, 20 OpenTofu
+tests and all Rust compile/Clippy/default+mock-feature phases. Mandatory debug
+Worker recovery then exceeded its unchanged 150-second full-SQLite migration
+deadline. The proof process was supervised and the failed context/log retained.
+The separate owner-fenced OCI recovery on the same source completed successfully.
+Do not report the local composite gate as green; exact committed CI readback is
+recorded separately in PR126 and the dedicated integration result.

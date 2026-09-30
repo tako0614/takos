@@ -261,3 +261,67 @@ Rust default96/mock169、全phaseと既存の実Worker/debug-process復旧proof�
 既存Docker daemon/他担当BuildKit/他worktreeは変更していない。現行public descriptorの
 旧imageを今回のbytesの証拠として代用しない。詳細は
 [Container資格ledger](TASK-takos-ga-container-qualification-20260930.md)。
+
+## Single-owner alignment and notifier state guard — 2026-09-30 follow-up
+
+User's product premise is authoritative: each person deploys Takos for themselves,
+one instance owner. Multiple private Workspaces, public/password share recipients,
+external communication and MCP counterparties remain separate concepts. The
+existing private-Workspace owner witness was coherent; generic admission of every
+new OIDC subject and cached legacy cookie was not.
+
+The operator now pins OIDC_OWNER_SUBJECT against OIDC_ISSUER_URL before login.
+Callback, opaque bearer/PAT, existing cookie, pending MCP callback, queued/active
+Run control and delayed app-owner device push use that boundary. Missing/invalid
+pin refuses admission. Former-owner device delivery settles the outbox and retains
+its notification/pusher rows; missing config retains pending delivery for retry.
+No first-public-visitor enrollment, email merge, Workspace-membership owner guess,
+new upstream client grants, credential issuer or automatic subject alias is added.
+
+Both auth provisioning paths use one account+identity batch. Real libsql owner and
+legacy-profile regressions, cookie-cache status changes, a second Principal's valid
+private Workspace/Run, and pending MCP/push delivery are covered. Current tests
+against pinned 3b79815 production source reproduce eight failures in those entry
+boundaries (34 pass / 8 fail); the auxiliary new helper is present only because new
+tests import it, and the old production paths never invoke it. The current API
+scope fixture carries the owner pin so its scope assertions still execute; rejected
+UserInfo/id-token tests also prove their upstream requests actually run.
+
+Notifier snapshots are completely validated before installing state; only absent
+undefined is fresh. Legacy unversioned and schema1 continue, future/malformed
+versions fail closed across fetch/alarm/hibernation. Safe sequence and segment
+limits refuse invalid requests before mutation. Native workerd legacy-KV/local-R2
+proof reproduces old-source future/null/false overwrite, then proves current state
+and gzip conservation plus actual eviction/counter/dedup recovery. It does not
+qualify native storage quota or remote SQL/R2 semantics.
+
+Complete check and exact-commit CI evidence are returned in the dedicated result
+file and PR126. Local OCI recovery was rerun with the current owner-fenced Worker
+handlers and the previously frozen f5207eb image manifest 4fba7740...: two tool
+attempts retain one operation/artifact, completion lease8 and four stale RPC409s.
+Image build inputs and engine pin remain unchanged; this is not an image rebuilt
+from the whole current Worker commit. The earlier artifact's proof-source hashes
+remain historical; the new ignored container-owner-recovery.log records this rerun.
+
+Remaining integration work: establish the owner's exact registered-client sub
+before exposing login, confirm browser/mobile pairwise subject behavior with
+Accounts, and select/admit/activate the exact product resources on the target
+backend. identity.oidc's four existing public fields are unchanged; the owner pin
+is Takos app configuration, already projected by the existing OpenTofu env map.
+The source guard is a prerequisite for a future durable journal, not a deployed
+rollback fence. R2-write/state-write failure, immutable flush intent, payload chunks
+and byte budgets, archive listing capacity, published images and live user
+journey/recovery/monitoring remain open.
+
+See TASK-takos-ga-single-owner-20260930.md and
+TASK-takos-ga-notifier-state-guard-20260930.md. No original/other worktree, shared
+contract, production target, billing authority or external resource was changed.
+
+Local gate qualification boundary: the current complete check attempt passes
+1,409 portable tests / 231 files / 8,888 assertions, 20 OpenTofu tests, declared
+lint112/types98 with zero new diagnostics, and all Rust phases, then stops at
+the mandatory debug proof's full-SQLite migration deadline150s. HDD journal
+commit wait was observed. The same owner's OCI recovery succeeds separately.
+No deadline or assertion was weakened. Full committed CI is the separate complete
+gate evidence; the local composite failure log is retained and must not be called
+green. Current docs build succeeds.
