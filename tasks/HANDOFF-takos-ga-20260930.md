@@ -165,9 +165,14 @@ lint 112 / TypeScript 98 の既存 debt は変わらず、未申告は0件。
 gate が実行した executable digest は
 `a7670d6d9c09a35588338ca7029cdaad186aa694ad78e4a60f69f799191c8ce6`。
 これは debug executable の local proof であり、published image digest ではない。
-独立 final review の具体的な P1/P2 は残っていない。exact-head CI は別途確認する。
+独立 final review の具体的な P1/P2 は残っていない。
 docs build も成功した。ログはこの worktree の ignored
 `tmp/ga-sse-recovery/worker-recovery-{check,docs-build}.log` に保持する。
+code commit `4159b8895c58e6097ecfc221cf1592c459334800` を PR #126 に push 済み。
+その exact-head [CI](https://github.com/tako0614/takos/actions/runs/36772813753) も
+2026-09-30 20:31:13 UTC に成功し、実 Worker/SQL/process proof の実行を確認した。
+merge / published image / deploy は未実施。元の Takos UI dirty と engine 候補差分は
+再照合して保全を確認した。この worktree は code commit 時点で clean。
 詳細は [実Worker復旧ledger](TASK-takos-ga-worker-wrapper-recovery-20260930.md)。
 
 次の独立作業は Node SSE の subscriber/history 規模別容量確認と、実 Container artifact の
@@ -175,4 +180,8 @@ docs build も成功した。ログはこの worktree の ignored
 元 worktree を保全したまま統合へ戻す。test-only のため image pin は更新しない。
 通常の Node executor event は一秒 polling に依存し、一部通知だけが即 wakeup する。
 offload/DO read の subscriber 数に応じた負荷を GA 解除済みとは扱わない。
+offload helper は各 page/poll で run の全 segment keys を list してから cursor で絞る。
+末尾 reconnect でも過去 segment 数に応じた listing が発生するため、次は paginated
+bucket fixture で列挙回数を測り、既存 cursor/order/gap 契約を保った bounded read を検証する。
+これは source 調査結果であり、容量測定や修正の完了ではない。
 native/mobile、published/deployed identity、実 user journey、監視/復旧は未検証。

@@ -1,7 +1,7 @@
 # Takos GA: SQL-backed Worker and wrapper process recovery
 
 Date: 2026-09-30 UTC
-Status: source and local integration verified / CI and integration pending
+Status: source, local integration and CI verified / integration pending
 Owner: Takos dedicated session
 Required for: production_or_release (required product-gate expansion)
 Grants production mutation authority: false
@@ -91,3 +91,12 @@ tests passed 10/10 with 392 assertions, including a timed-out leader and its
 recorded descendant, a successful leader leaving a descendant, and explicit
 Windows rejection before spawn. Windows process-tree qualification is not
 provided; the mandatory proof fails closed there.
+
+Owning Takos code commit: `4159b8895c58e6097ecfc221cf1592c459334800`.
+Draft [Takos PR #126](https://github.com/tako0614/takos/pull/126).
+Its exact-commit complete [CI run](https://github.com/tako0614/takos/actions/runs/36772813753)
+succeeded at 2026-09-30 20:31:13 UTC, including the required real Worker/process
+proof. Raw remote log and exact-head readback are retained in ignored
+`tmp/ga-sse-recovery/worker-recovery-ci.log` and
+`tmp/ga-sse-recovery/worker-recovery-ci-readback.json`. CI qualifies these source bytes; it is not
+Container publication, release or deploy evidence. Merge remains with integration.
