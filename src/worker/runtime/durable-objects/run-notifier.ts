@@ -25,11 +25,11 @@ import {
   type EmitResult,
   jsonResponse,
   NotifierBase,
-  type RingBufferEvent,
   toWsEnvelope,
   type WebSocketLike,
 } from "./notifier-base.ts";
 import { MAX_CONNECTIONS } from "./do-header-utils.ts";
+import { NOTIFIER_STATE_VERSION, parseRunNotifierState } from "./notifier-state.ts";
 
 const MAX_RUN_ID_LENGTH = 64;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -76,38 +76,26 @@ export class RunNotifierDO extends NotifierBase {
   // ---------------------------------------------------------------------------
 
   protected async loadPersistedState(): Promise<void> {
-    const stored = await this.state.storage.get<{
-      eventBuffer: RingBufferEvent[];
-      eventIdCounter: number;
-      runId: string | null;
-      r2SegmentIndex?: number;
-      r2SegmentBuffer?: PersistedRunEvent[];
-      r2LastFlushedSegmentIndex?: number;
-      usageSegmentIndex?: number;
-      usageSegmentBuffer?: PersistedUsageEvent[];
-      usageLastFlushedSegmentIndex?: number;
-      emitDedupKeys?: Array<[string, number]>;
-    }>("bufferState");
-    if (stored) {
+    const stored = parseRunNotifierState(
+      await this.state.storage.get<unknown>("bufferState"),
+    );
+    if (stored !== null) {
       this.eventBuffer = stored.eventBuffer;
       this.eventIdCounter = stored.eventIdCounter;
       this.runId = stored.runId;
-      this.r2SegmentIndex = stored.r2SegmentIndex ?? this.r2SegmentIndex;
-      this.r2SegmentBuffer = stored.r2SegmentBuffer ?? this.r2SegmentBuffer;
-      this.r2LastFlushedSegmentIndex = stored.r2LastFlushedSegmentIndex ??
-        this.r2LastFlushedSegmentIndex;
-      this.usageSegmentIndex = stored.usageSegmentIndex ??
-        this.usageSegmentIndex;
-      this.usageSegmentBuffer = stored.usageSegmentBuffer ??
-        this.usageSegmentBuffer;
-      this.usageLastFlushedSegmentIndex = stored.usageLastFlushedSegmentIndex ??
-        this.usageLastFlushedSegmentIndex;
-      this.emitDedupKeys = new Map(stored.emitDedupKeys ?? []);
+      this.r2SegmentIndex = stored.r2SegmentIndex;
+      this.r2SegmentBuffer = stored.r2SegmentBuffer;
+      this.r2LastFlushedSegmentIndex = stored.r2LastFlushedSegmentIndex;
+      this.usageSegmentIndex = stored.usageSegmentIndex;
+      this.usageSegmentBuffer = stored.usageSegmentBuffer;
+      this.usageLastFlushedSegmentIndex = stored.usageLastFlushedSegmentIndex;
+      this.emitDedupKeys = new Map(stored.emitDedupKeys);
     }
   }
 
   protected async persistState(): Promise<void> {
     await this.state.storage.put("bufferState", {
+      schemaVersion: NOTIFIER_STATE_VERSION,
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       runId: this.runId,
@@ -245,6 +233,11 @@ export class RunNotifierDO extends NotifierBase {
       [key: string]: unknown;
     },
   ): Promise<Response | null> {
+    if (RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType) &&
+      this.usageSegmentBuffer.length > 0 &&
+      this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) {
+      return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);
+    }
     if (input.runId !== undefined) {
       if (!isValidRunId(input.runId)) {
         return jsonResponse({ success: false, error: "Invalid runId" }, 400);
@@ -556,10 +549,16 @@ export class RunNotifierDO extends NotifierBase {
     metadata?: unknown;
   }): Promise<Response> {
     return this.state.blockConcurrencyWhile(async () => {
-      if (
-        !this.runId && typeof input.runId === "string" && input.runId.trim()
-      ) {
-        this.runId = input.runId.trim();
+      if (input.runId !== undefined) {
+        if (!isValidRunId(input.runId)) {
+          return jsonResponse({ success: false, error: "Invalid runId" }, 400);
+        }
+        if (this.runId && input.runId !== this.runId) {
+          return jsonResponse({ success: false, error: "runId mismatch" }, 409);
+        }
+      }
+      if (this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) {
+        return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);
       }
 
       const meterType = typeof input.meter_type === "string"
@@ -586,6 +585,10 @@ export class RunNotifierDO extends NotifierBase {
       const metadataStr = input.metadata === undefined
         ? null
         : this.stringifyPersistedData(input.metadata);
+
+      if (!this.runId && input.runId !== undefined) {
+        this.runId = input.runId;
+      }
 
       this.usageSegmentBuffer.push({
         meter_type: meterType,

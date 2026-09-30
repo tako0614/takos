@@ -432,7 +432,7 @@ test("R2 run-event offload loads a persisted legacy buffer without losing its pe
     event_id: eventId,
     type,
     data: JSON.stringify({ sequence: eventId, payload: `event-${eventId}` }),
-    created_at: `t-event-${eventId}`,
+    created_at: new Date(Date.UTC(2026, 8, 30, 0, 0, eventId)).toISOString(),
   });
   await writeRunEventSegmentToR2(
     bucket,

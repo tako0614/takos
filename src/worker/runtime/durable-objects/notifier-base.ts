@@ -216,6 +216,9 @@ export abstract class NotifierBase {
       } catch {
         return jsonResponse({ error: "Invalid JSON" }, 400);
       }
+      if (body === null || typeof body !== "object" || Array.isArray(body)) {
+        return jsonResponse({ error: "Invalid event" }, 400);
+      }
       return this.handleEmit(
         body as {
           type: string;
@@ -498,15 +501,25 @@ export abstract class NotifierBase {
       }
 
       const serializedData = JSON.stringify(input.data);
+      if (serializedData === undefined) {
+        return jsonResponse({ success: false, error: "Data is required" }, 400);
+      }
       if (serializedData.length >= 1_048_576) {
         return jsonResponse({ success: false, error: "Data too large" }, 400);
+      }
+
+      const preferredEventId = parseEventId(input.event_id);
+      if (preferredEventId !== null && !Number.isSafeInteger(preferredEventId)) {
+        return jsonResponse({ success: false, error: "Invalid event ID" }, 400);
+      }
+      if (this.eventIdCounter === Number.MAX_SAFE_INTEGER) {
+        return jsonResponse({ success: false, error: "Event sequence exhausted" }, 503);
       }
 
       // Domain-specific validation before mutating state
       const rejection = await this.validateEmit(input);
       if (rejection) return rejection;
 
-      const preferredEventId = parseEventId(input.event_id);
       const counter = { value: this.eventIdCounter };
       const eventId = addToRingBuffer(
         this.eventBuffer,

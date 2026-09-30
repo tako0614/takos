@@ -4,9 +4,9 @@ import {
   type EmitResult,
   NotifierBase,
   parseReplayCursor,
-  type RingBufferEvent,
   toWsEnvelope,
 } from "./notifier-base.ts";
+import { NOTIFIER_STATE_VERSION, parseNotificationNotifierState } from "./notifier-state.ts";
 
 /** User-scoped notification streaming (WebSocket + ring buffer replay). */
 export class NotificationNotifierDO extends NotifierBase {
@@ -24,12 +24,10 @@ export class NotificationNotifierDO extends NotifierBase {
   // ---------------------------------------------------------------------------
 
   protected async loadPersistedState(): Promise<void> {
-    const stored = await this.state.storage.get<{
-      eventBuffer: RingBufferEvent[];
-      eventIdCounter: number;
-      userId: string | null;
-    }>("bufferState");
-    if (stored) {
+    const stored = parseNotificationNotifierState(
+      await this.state.storage.get<unknown>("bufferState"),
+    );
+    if (stored !== null) {
       this.eventBuffer = stored.eventBuffer;
       this.eventIdCounter = stored.eventIdCounter;
       this.userId = stored.userId;
@@ -38,6 +36,7 @@ export class NotificationNotifierDO extends NotifierBase {
 
   protected async persistState(): Promise<void> {
     await this.state.storage.put("bufferState", {
+      schemaVersion: NOTIFIER_STATE_VERSION,
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       userId: this.userId,
@@ -64,7 +63,7 @@ export class NotificationNotifierDO extends NotifierBase {
     _url: URL,
   ): Promise<{ reject?: Response; tags?: string[] }> {
     const headerUserId = request.headers.get("X-WS-User-Id");
-    if (!headerUserId) {
+    if (!headerUserId?.trim()) {
       return { reject: new Response("Unauthorized", { status: 401 }) };
     }
 
