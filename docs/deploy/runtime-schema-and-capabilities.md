@@ -1,8 +1,9 @@
 # スキーマ自動適用と縮退モード
 
 Cloudflare provider は D1 migration の実行、Vectorize index、Container application
-を表現できません。Vectorize index と Container application は、既定では動かず使い捨て環境
-向けの mode でしか有効にならない Takos 所有の bridge が補います
+を表現できません。Vectorize index と Container application は、Takos 所有の
+[本番デプロイレーン](/deploy/production-lane)の `--vectorize` と `--apply` が補います。
+OpenTofu module 内には、既定で無効の optional bridge もあります
 ([セルフホスト](/deploy/) の「Cloudflare provider gap bridge」を参照)。D1 migration は
 bridge の責務ではなくなり、どの install path でも Worker 自身が適用します。
 
