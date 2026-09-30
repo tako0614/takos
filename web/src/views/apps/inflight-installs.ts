@@ -9,6 +9,18 @@
  */
 import { type Accessor, createResource } from "solid-js";
 
+import {
+  type CapsuleWireStatus,
+  capsulePresentation,
+} from "../../../../src/contracts/external/takosumi-capsule-status.ts";
+
+/**
+ * `stale` is takos's own presentation state, not a Takosumi status: a Capsule
+ * that is serving while its source has moved on. It is the one value here that
+ * does not come from the published vocabulary, and it is named as such.
+ */
+const STALE_DISPLAY_STATE = "stale";
+
 export interface CapsuleServiceSummary {
   readonly id: string;
   readonly capability: string;
@@ -21,7 +33,8 @@ export interface CapsuleServiceSummary {
 export interface WorkspaceCapsule {
   readonly id: string;
   readonly name: string;
-  readonly status: string;
+  /** The published Takosumi status, or the `stale` presentation state. */
+  readonly status: CapsuleWireStatus;
   readonly freshness: string | null;
   readonly environment: string;
   readonly sourceUrl: string | null;
@@ -36,21 +49,6 @@ export type InflightCapsule = Pick<
   WorkspaceCapsule,
   "id" | "name" | "status" | "environment"
 >;
-
-/** Statuses worth surfacing as "in flight / needs attention" (not active). */
-const INFLIGHT_STATUSES = new Set([
-  "pending",
-  "queued",
-  "installing",
-  "planning",
-  "applying",
-  "in_progress",
-  "stale",
-  "error",
-  "failed",
-]);
-
-const ACTIVE_STATUSES = new Set(["active", "deployed", "ready"]);
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -121,10 +119,18 @@ function parseService(value: unknown): CapsuleServiceSummary | null {
   };
 }
 
-function presentedStatus(status: string, freshness: string | null): string {
-  const normalized = status.toLowerCase();
-  if (freshness === "stale" && ACTIVE_STATUSES.has(normalized)) return "stale";
-  return status;
+function presentedStatus(
+  status: string,
+  freshness: string | null,
+): CapsuleWireStatus {
+  const normalized = status.trim().toLowerCase();
+  if (
+    freshness === STALE_DISPLAY_STATE &&
+    capsulePresentation(normalized) === "active"
+  ) {
+    return STALE_DISPLAY_STATE;
+  }
+  return normalized;
 }
 
 export function parseCapsulesResponse(
@@ -169,7 +175,9 @@ export function parseCapsulesResponse(
 export function isInflightCapsule(
   capsule: Pick<WorkspaceCapsule, "status">,
 ): boolean {
-  return INFLIGHT_STATUSES.has(capsule.status.toLowerCase());
+  const status = capsule.status.trim().toLowerCase();
+  if (status === STALE_DISPLAY_STATE) return true;
+  return capsulePresentation(status) === "inflight";
 }
 
 async function fetchCapsules(

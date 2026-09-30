@@ -7,6 +7,8 @@ import {
 } from "@takos/test/assert";
 import { getTableName } from "drizzle-orm";
 
+import { adaptEdgeSqlBinding } from "../../../../platform/adapters/edge-sql.ts";
+import type { EdgeSqlStatement } from "../../../../shared/types/bindings.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 import {
   clearFeaturedAppCatalogCache,
@@ -43,6 +45,16 @@ function tableName(table: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+async function runFakeBatch(
+  statements: Array<{ run(): Promise<unknown> }>,
+): Promise<unknown[]> {
+  const results = [];
+  for (const statement of statements) {
+    results.push(await statement.run());
+  }
+  return results;
 }
 
 function objectRecord(value: unknown, field: string): Record<string, unknown> {
@@ -870,6 +882,124 @@ test("saveFeaturedAppCatalogEntries rejects duplicate names before mutating the 
   }
 });
 
+test("catalog save and clear use one edge.sql transaction without transaction-control SQL", async () => {
+  clearFeaturedAppCatalogCache();
+  const executeCalls: string[] = [];
+  const queryCalls: string[] = [];
+  const transactions: Array<readonly EdgeSqlStatement[]> = [];
+  const binding = adaptEdgeSqlBinding({
+    async execute(statement) {
+      executeCalls.push(statement);
+      const error = new Error(
+        `edge.sql runtime rejects transaction-control SQL: ${statement}`,
+      );
+      error.name = "sql_error";
+      throw error;
+    },
+    async query(statement) {
+      queryCalls.push(statement);
+      return { rows: [], rowsWritten: 0 };
+    },
+    async transaction(statements) {
+      transactions.push(statements);
+      return {
+        results: statements.map(() => ({ rows: [], rowsWritten: 0 })),
+      };
+    },
+  });
+  const env = makeEnv({
+    DB: binding,
+    TAKOS_FEATURED_APPS_PREINSTALL: "true",
+  });
+  const entries = Array.from({ length: 8 }, (_, index) => ({
+    name: `edge-app-${index}`,
+    title: `Edge App ${index}`,
+    repositoryUrl: `https://example.com/edge-app-${index}.git`,
+  }));
+
+  await saveFeaturedAppCatalogEntries(env, entries, {
+    timestamp: "2026-09-05T00:00:00.000Z",
+  });
+  await clearFeaturedAppCatalogEntries(env, {
+    timestamp: "2026-09-05T00:01:00.000Z",
+  });
+
+  assertEquals(executeCalls, []);
+  assertEquals(queryCalls, []);
+  assertEquals(
+    transactions.map((statements) => statements.length),
+    [6, 4],
+  );
+  assertEquals(
+    [
+      transactions[0]?.[3]?.params?.length,
+      transactions[0]?.[4]?.params?.length,
+    ],
+    [98, 14],
+  );
+  assert(
+    transactions.flat().every((statement) =>
+      (statement.params?.length ?? 0) <= 100
+    ),
+  );
+});
+
+test("an oversized edge.sql catalog fails before Host mutation and keeps the prior cache", async () => {
+  clearFeaturedAppCatalogCache();
+  const transactions: Array<readonly EdgeSqlStatement[]> = [];
+  const binding = adaptEdgeSqlBinding({
+    async execute(statement) {
+      throw new Error(`unexpected execute: ${statement}`);
+    },
+    async query(statement) {
+      throw new Error(`cache miss after failed save: ${statement}`);
+    },
+    async transaction(statements) {
+      transactions.push(statements);
+      return {
+        results: statements.map(() => ({ rows: [], rowsWritten: 0 })),
+      };
+    },
+  });
+  const env = makeEnv({
+    DB: binding,
+    TAKOS_FEATURED_APPS_PREINSTALL: "true",
+  });
+  await saveFeaturedAppCatalogEntries(
+    env,
+    [{
+      name: "prior-app",
+      title: "Prior App",
+      repositoryUrl: "https://example.com/prior-app.git",
+    }],
+    { timestamp: "2026-09-05T00:00:00.000Z" },
+  );
+  assertEquals(transactions.length, 1);
+  transactions.length = 0;
+
+  const oversized = Array.from({ length: 673 }, (_, index) => ({
+    name: `oversized-app-${index}`,
+    title: `Oversized App ${index}`,
+    repositoryUrl: `https://example.com/oversized-app-${index}.git`,
+  }));
+  const failure = await assertRejects(() =>
+    saveFeaturedAppCatalogEntries(env, oversized, {
+      timestamp: "2026-09-05T00:01:00.000Z",
+    })
+  );
+
+  assert(failure instanceof Error);
+  assert(
+    failure.message.includes(
+      "101 statements exceed the edge.sql limit of 100",
+    ),
+    failure.message,
+  );
+  assertEquals(transactions, []);
+  const cached = await resolveFeaturedAppCatalogForBootstrap(env);
+  assertEquals(cached.map((entry) => entry.name), ["prior-app"]);
+});
+
 test("saveFeaturedAppCatalogEntries replaces persisted repositories and warms cache", async () => {
   const originalGetDb = featuredAppCatalogDeps.getDb;
   clearFeaturedAppCatalogCache();
@@ -878,6 +1008,7 @@ test("saveFeaturedAppCatalogEntries replaces persisted repositories and warms ca
   let selectCalled = false;
   let inserted: Array<Record<string, unknown>> = [];
   const db = {
+    batch: runFakeBatch,
     delete: (table: unknown) =>
       isFeaturedAppCatalogConfigTable(table)
         ? {
@@ -987,6 +1118,7 @@ test("clearFeaturedAppCatalogEntries disables DB catalog and requeues blocked jo
   const insertedConfigs: Array<Record<string, unknown>> = [];
   const jobUpdates: Array<Record<string, unknown>> = [];
   const db = {
+    batch: runFakeBatch,
     delete: (table: unknown) =>
       isFeaturedAppCatalogConfigTable(table)
         ? {
@@ -1871,6 +2003,7 @@ test("saveFeaturedAppCatalogEntries invalidates the cache before reseeding fresh
   const originalGetDb = featuredAppCatalogDeps.getDb;
   clearFeaturedAppCatalogCache();
   const db = {
+    batch: runFakeBatch,
     delete: (table: unknown) =>
       isFeaturedAppCatalogConfigTable(table)
         ? { where: () => ({ run: async () => undefined }) }
@@ -1938,6 +2071,7 @@ test("clearFeaturedAppCatalogEntries invalidates the cache before reseeding empt
   const originalGetDb = featuredAppCatalogDeps.getDb;
   clearFeaturedAppCatalogCache();
   const db = {
+    batch: runFakeBatch,
     delete: (table: unknown) =>
       isFeaturedAppCatalogConfigTable(table)
         ? { where: () => ({ run: async () => undefined }) }

@@ -38,7 +38,24 @@ variable "executor_capacity" {
 }
 
 variable "runtime_secrets_provisioned" {
-  description = "True when the five Takos runtime secret bindings already exist on the target Worker, so the Worker Version can carry them forward with the `inherit` binding type instead of resending a value this module must never hold."
+  description = "True when the five Takos runtime secret bindings already exist on the target Worker, so the Worker Version can carry them forward with the `inherit` binding type instead of resending a value this module must never hold. Defaults to true: a Worker Version's binding list is complete, so a routine apply with this false would publish a version without ENCRYPTION_KEY and make every payload encrypted under it unreadable. Setting it false requires the exact first_install_acknowledgement."
+  type        = bool
+  default     = true
+}
+
+variable "first_install_acknowledgement" {
+  description = "Exact acknowledgement that this apply is a first install with no runtime secret values yet: FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS. It is the only way to publish a Worker Version that does not bind the five runtime secrets. Clear it after supplying the values."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.first_install_acknowledgement == "" || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "first_install_acknowledgement must be empty or exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS."
+  }
+}
+
+variable "vector_index_provisioned" {
+  description = "True when the Vectorize index this module names already exists in the account, so the Worker Version may bind it. False binds no `VECTORIZE`, which is the declared `vectorSearch: disabled` degraded mode rather than a binding pointed at nothing."
   type        = bool
   default     = false
 }
@@ -155,7 +172,7 @@ variable "env" {
       for name, value in var.env :
       can(regex("^[A-Z_][A-Z0-9_]{0,127}$", name)) &&
       !can(regex("(SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_?KEY|API_?KEY)", upper(name))) &&
-      !contains([
+      !contains(concat([
         "TAKOSUMI_ACCOUNTS_URL",
         "OIDC_ISSUER_URL",
         "OIDC_CLIENT_ID",
@@ -182,12 +199,7 @@ variable "env" {
         "EXECUTOR_CONTAINER_TIER2",
         "EXECUTOR_CONTAINER_TIER3",
         "TAKOS_EGRESS",
-        "ENCRYPTION_KEY",
-        "TAKOS_AGENT_START_TOKEN",
-        "TAKOS_INTERNAL_API_SECRET",
-        "PLATFORM_PRIVATE_KEY",
-        "PLATFORM_PUBLIC_KEY",
-      ], name)
+      ], local.runtime_secret_binding_names), name)
     ])
     error_message = "env keys must be uppercase Worker plain-text variable names and must not be secret-like or reserved by the Takos Cloudflare module."
   }

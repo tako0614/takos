@@ -1,7 +1,18 @@
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import { For, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import {
+  agentExecutionEnabled,
+  loadRuntimeCapabilities,
+  runtimeCapabilities,
+} from "../../store/runtime-capabilities.ts";
 
 interface ChatInputBarProps {
   input: string;
@@ -43,9 +54,18 @@ export function ChatInputBar(props: ChatInputBarProps) {
     props.input;
     autoResizeTextarea();
   });
+  // A deployment whose OpenTofu apply left no agent container cannot execute a
+  // run, and the server refuses one with CAPABILITY_UNAVAILABLE. Withdraw the
+  // send affordance and say why, instead of accepting a message that dies.
+  // Unknown means available, so a failed probe never disables a working chat.
+  const agentAvailable = () => agentExecutionEnabled(runtimeCapabilities());
+  onMount(() => {
+    void loadRuntimeCapabilities();
+  });
   const sendDisabled = () =>
     (!props.input.trim() && props.attachedFiles.length === 0) ||
-    props.isLoading;
+    props.isLoading ||
+    !agentAvailable();
 
   // Create object URLs for image thumbnails and revoke on cleanup
   const objectUrls = createMemo(() => {
@@ -197,7 +217,12 @@ export function ChatInputBar(props: ChatInputBarProps) {
                     : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
                 }`}
                 disabled={sendDisabled()}
-                aria-label={t("send")}
+                title={agentAvailable()
+                  ? undefined
+                  : t("agentExecutionUnavailable")}
+                aria-label={agentAvailable()
+                  ? t("send")
+                  : t("agentExecutionUnavailable")}
               >
                 <Icons.Send class="w-5 h-5" />
               </button>

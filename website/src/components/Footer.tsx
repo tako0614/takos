@@ -1,9 +1,10 @@
 import { For } from 'solid-js';
-import Wordmark from './brand/Wordmark';
 import LangToggle from './LangToggle';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
 
+/** One hairline, the icon tile, the links — the page ends the way the
+ *  app's own chrome would. */
 export default function Footer() {
   const t = useT();
   const cloud = useCloudUrls();
@@ -14,9 +15,11 @@ export default function Footer() {
     <footer class='site'>
       <div class='container'>
         <div class='footer-brand'>
-          <Wordmark variant='inkdrop' size={22} />
-          <p class='footer-tagline'>{t.footer.tagline}</p>
-          <span class='copy'>{t.footer.copyright}</span>
+          <img class='footer-mark' src='/logo.png' alt='' width='36' height='36' decoding='async' />
+          <div class='footer-brand-text'>
+            <a href='/' class='footer-word'>Takos</a>
+            <span class='copy'>{t.footer.copyright}</span>
+          </div>
         </div>
         <div class='footer-meta'>
           <nav aria-label='Footer'>

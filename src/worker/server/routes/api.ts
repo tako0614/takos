@@ -19,6 +19,7 @@ import notifications from "./notifications/index.ts";
 import { registerAppApiRoutes } from "./apps/index.ts";
 import shortcuts, { shortcutGroupRoutes } from "./shortcuts/index.ts";
 import me from "./me/index.ts";
+import runtime from "./runtime.ts";
 import setup from "./setup.ts";
 import agentTasks from "./agent-tasks/index.ts";
 import authApi from "./auth-api.ts";
@@ -301,6 +302,8 @@ export function createApiRouter({
   apiRouter.use("/agent-tasks/*", scopedApiAuth);
   apiRouter.use("/setup", scopedApiAuth);
   apiRouter.use("/setup/*", scopedApiAuth);
+  apiRouter.use("/runtime", scopedApiAuth);
+  apiRouter.use("/runtime/*", scopedApiAuth);
   apiRouter.use("/shortcuts", scopedApiAuth);
   apiRouter.use("/shortcuts/*", scopedApiAuth);
   apiRouter.use("/notifications", scopedApiAuth);
@@ -313,6 +316,7 @@ export function createApiRouter({
   // 5. Route mounting
   // ================================================================
   apiRouter.route("/setup", setup);
+  apiRouter.route("/runtime", runtime);
   apiRouter.route("/me", me);
   apiRouter.route("/spaces", spacesBase);
   apiRouter.route("/spaces", spacesStorage);

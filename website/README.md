@@ -20,15 +20,22 @@ The primary CTA resolves to the Takosumi platform worker install prefill route:
 https://app.takosumi.com/install?git=<takos-git-url>&ref=<immutable-release>&path=<module-path>&name=takos
 ```
 
-The fallback currently targets the next immutable Takos release, `v0.12.8`.
-Before publishing a website build, verify that the GitHub tag exists, points to
-the reviewed release commit, and contains the Cloudflare module plus the
-credential-free source build below. Never publish this CTA while the tag is
-missing or movable:
+The fallback ref is not a literal anyone edits. It is the package version,
+projected into `src/lib/takos-release.generated.ts` by
+`bun run generate:website-release-ref` and checked by `bun run check`. Advancing
+the published ref is therefore exactly one act: bump the package version and cut
+that release.
+
+Because a version bump lands before its release, `bun run deploy -- takos-site`
+asks `origin` whether the tag exists and refuses to publish while it does not —
+otherwise every Install click and the self-host runbook's `git checkout` would
+fail. `--status` reports the same thing as drift.
+
+An operator may still override the whole deep link for a staging platform:
 
 ```sh
 VITE_TAKOS_INSTALL_GIT_URL=https://github.com/tako0614/takos.git
-VITE_TAKOS_INSTALL_REF=v0.12.8
+VITE_TAKOS_INSTALL_REF=v0.0.0-your-tag
 VITE_TAKOS_INSTALL_MODULE_PATH=deploy/opentofu/cloudflare
 ```
 
@@ -52,7 +59,9 @@ the Git tree:
 
 ```sh
 set -eu
-release=v0.12.8
+# The tag takos.jp links to. `bun run check` keeps this equal to the package
+# version, and the takos-site deploy refuses to publish while it is unreleased.
+release=v0.12.7
 git clone https://github.com/tako0614/takos.git takos
 cd takos
 git fetch --tags origin
@@ -106,8 +115,15 @@ the main repository.
 
 ## Deploy
 
+The landing site is published by the repository's one deploy entrypoint, as the
+`takos-site` surface. Do not run `wrangler pages deploy` by hand: the entrypoint
+is what refuses a dirty production worktree, runs the scoped gate that builds
+these bytes, records the deployment it is replacing, and reads the published
+pages back.
+
 ```sh
-wrangler pages deploy .output/public --project-name takos-landing
+bun run deploy -- takos-site --status --environment production
+bun run deploy -- takos-site --apply  --environment production --execute
 ```
 
 Production custom domains for this Pages project are:
@@ -118,12 +134,16 @@ www.takos.jp
 ```
 
 Both domains must be registered under the `takos-landing` Pages project and
-their DNS records should point at `takos-landing.pages.dev`. The public CTA must
-continue to resolve to `https://app.takosumi.com/install?...` with a release tag
-or commit SHA, not a moving ref such as `main`.
+their DNS records should point at `takos-landing.pages.dev`. Creating the
+project and attaching those domains is provisioning and DNS, which the deploy
+surface deliberately does not do. The public CTA must continue to resolve to
+`https://app.takosumi.com/install?...` with a release tag or commit SHA, not a
+moving ref such as `main`.
 
-The docs site deploys from `takos/docs/` to the `takos-docs` Pages project. Keep landing deploys and docs deploys
-separate unless an operator explicitly chooses to combine them at the Cloudflare routing layer.
+The docs site is the separate `takos-docs` surface, published from `takos/docs/`
+to the `takos-docs` Pages project on `docs.takos.jp`. Landing deploys and docs
+deploys stay separate; see `docs/deploy/site-and-docs.md` for both surfaces and
+the first-deploy sequence.
 
 ## Local mirror
 

@@ -1,6 +1,6 @@
 # Self-Host E2E Proof
 
-> このページでわかること: self-host distribution と local Compose の current
+> このページでわかること: self-host distribution とローカルの Docker Compose の current
 > proof。
 
 Self-host static proof uses the portable source gate:

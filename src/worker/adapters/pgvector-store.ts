@@ -107,6 +107,10 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
   const table = config.tableName ?? DEFAULT_TABLE;
 
   return {
+    // Lets runtime capability reporting name this backend without sniffing the
+    // process; see `platform/runtime-capabilities.ts`.
+    backend: "pgvector" as const,
+
     // -- query() -----------------------------------------------------------
     async query(
       vector: number[],

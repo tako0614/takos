@@ -31,6 +31,10 @@ import {
   InternalError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
+import {
+  requireVectorSearch,
+  resolveRuntimeCapabilities,
+} from "../../../platform/runtime-capabilities.ts";
 
 export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const user = c.get("user");
@@ -46,7 +50,9 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const totalFilesResult = await db
     .select({ count: count() })
     .from(files)
-    .where(and(eq(files.accountId, spaceId), ne(files.origin, "system")))
+    .where(
+      and(eq(files.accountId, access.space.id), ne(files.origin, "system")),
+    )
     .get();
   const totalFiles = totalFilesResult?.count ?? 0;
   const indexedFilesResult = await db
@@ -54,7 +60,7 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
     .from(files)
     .where(
       and(
-        eq(files.accountId, spaceId),
+        eq(files.accountId, access.space.id),
         ne(files.origin, "system"),
         isNotNull(files.indexedAt),
       ),
@@ -64,26 +70,26 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
   const chunkCountResult = await db
     .select({ count: count() })
     .from(chunks)
-    .where(eq(chunks.accountId, spaceId))
+    .where(eq(chunks.accountId, access.space.id))
     .get();
   const chunkCount = chunkCountResult?.count ?? 0;
   const nodeCountResult = await db
     .select({ count: count() })
     .from(nodes)
-    .where(eq(nodes.accountId, spaceId))
+    .where(eq(nodes.accountId, access.space.id))
     .get();
   const nodeCount = nodeCountResult?.count ?? 0;
   const edgeCountResult = await db
     .select({ count: count() })
     .from(edges)
-    .where(eq(edges.accountId, spaceId))
+    .where(eq(edges.accountId, access.space.id))
     .get();
   const edgeCount = edgeCountResult?.count ?? 0;
   const latestJob =
     (await db
       .select()
       .from(indexJobs)
-      .where(eq(indexJobs.accountId, spaceId))
+      .where(eq(indexJobs.accountId, access.space.id))
       .orderBy(desc(indexJobs.createdAt))
       .get()) ?? null;
 
@@ -95,6 +101,7 @@ export async function handleIndexStatus(c: IndexContext): Promise<Response> {
     edges: edgeCount,
     latestJob,
     vectorize_available: isEmbeddingsAvailable(c.env),
+    vector_search: resolveRuntimeCapabilities(c.env).vectorSearch,
   });
 }
 
@@ -110,9 +117,10 @@ export async function handleVectorizeIndex(
     throw new NotFoundError("Workspace");
   }
 
-  if (!isEmbeddingsAvailable(c.env)) {
-    throw new BadRequestError("Vectorize not available");
-  }
+  // Vector indexing IS this endpoint. Without an index there is nothing
+  // reduced to fall back to, so it answers with the stable capability error
+  // instead of the 400 it used to send for an install-level condition.
+  requireVectorSearch(c.env);
 
   const jobId = generateId();
   if (c.env.INDEX_QUEUE) {
@@ -121,12 +129,12 @@ export async function handleVectorizeIndex(
         version: INDEX_QUEUE_MESSAGE_VERSION,
         jobId,
         deliveryId: indexJobDeliveryId(jobId),
-        spaceId,
+        spaceId: access.space.id,
         type: "vectorize",
         timestamp: Date.now(),
       };
       await c.env.INDEX_QUEUE.send(message);
-      logInfo(`Vectorize job ${jobId} enqueued for workspace ${spaceId}`, {
+      logInfo(`Vectorize job ${jobId} enqueued for workspace ${access.space.id}`, {
         module: "index_queue",
       });
     } catch (err) {
@@ -144,13 +152,13 @@ export async function handleVectorizeIndex(
     scheduleBackground(
       c,
       embeddingsService
-        .indexWorkspace(spaceId, c.env.TENANT_SOURCE, {
+        .indexWorkspace(access.space.id, c.env.TENANT_SOURCE, {
           forceReindex: body.force_reindex,
         })
         .catch((err) =>
           logError("Vectorize index error", err, {
             action: "vectorize_index",
-            spaceId,
+            spaceId: access.space.id,
           }),
         ),
     );
@@ -159,7 +167,7 @@ export async function handleVectorizeIndex(
   return c.json(
     {
       message: "Vectorize indexing started",
-      space_id: spaceId,
+      space_id: access.space.id,
       job_id: jobId,
     },
     202,
@@ -181,7 +189,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
     .from(indexJobs)
     .where(
       and(
-        eq(indexJobs.accountId, spaceId),
+        eq(indexJobs.accountId, access.space.id),
         inArray(indexJobs.status, ["queued", "running"]),
       ),
     )
@@ -195,7 +203,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
     .from(files)
     .where(
       and(
-        eq(files.accountId, spaceId),
+        eq(files.accountId, access.space.id),
         ne(files.origin, "system"),
         inArray(files.kind, ["source", "config", "doc"]),
       ),
@@ -209,7 +217,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
     .insert(indexJobs)
     .values({
       id: jobId,
-      accountId: spaceId,
+      accountId: access.space.id,
       type: "full",
       status: "queued",
       totalFiles: fileCount,
@@ -230,7 +238,7 @@ export async function handleRebuildIndex(c: IndexContext): Promise<Response> {
       logError("Index job error", err, {
         action: "index_rebuild",
         jobId,
-        spaceId,
+        spaceId: access.space.id,
       }),
     ),
   );
@@ -261,7 +269,9 @@ export async function handleIndexFile(
   const file = await db
     .select()
     .from(files)
-    .where(and(eq(files.accountId, spaceId), eq(files.path, body.path)))
+    .where(
+      and(eq(files.accountId, access.space.id), eq(files.path, body.path)),
+    )
     .get();
   if (!file) {
     throw new NotFoundError("File");
@@ -273,7 +283,7 @@ export async function handleIndexFile(
     .insert(indexJobs)
     .values({
       id: jobId,
-      accountId: spaceId,
+      accountId: access.space.id,
       type: "file",
       targetId: file.id,
       status: "queued",
@@ -289,7 +299,7 @@ export async function handleIndexFile(
     indexFile(
       c.env.DB,
       c.env.TENANT_SOURCE,
-      spaceId,
+      access.space.id,
       file.id,
       jobId,
       createEmbeddingsService(c.env) ?? undefined,
@@ -297,7 +307,7 @@ export async function handleIndexFile(
       logError("Index file error", err, {
         action: "index_file",
         jobId,
-        spaceId,
+        spaceId: access.space.id,
         fileId: file.id,
       }),
     ),

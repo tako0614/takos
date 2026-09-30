@@ -1,4 +1,4 @@
-# Local Shell Runbook
+# ローカルシェルの手順
 
 > このページでわかること: クローンしたばかりの状態から Takos
 > のローカルシェルを起動するまでの手順。
@@ -14,7 +14,7 @@ submodule 初期化は不要です。
 bun run doctor
 ```
 
-必要なツール、canonical layout の状態、compose のサービスセット、ポート、内部 URL
+必要なツール、canonical layout の状態、Docker Compose のサービスセット、ポート、内部 URL
 環境変数などを確認します。
 
 CI やスクリプトから使う場合は strict モードで:
@@ -23,7 +23,7 @@ CI やスクリプトから使う場合は strict モードで:
 bun run check
 ```
 
-## 3. compose 設定を確認
+## 3. Docker Compose 設定を確認
 
 ```sh
 bun run local:config
@@ -48,7 +48,7 @@ bun run local:down   # 停止
 
 ## 各プロダクトのコマンド
 
-プロダクト固有のチェックは canonical owner から実行します:
+プロダクト固有のチェックは、そのプロダクトを所有する repo から実行します:
 
 ```sh
 cd . && bun run ...               # Takos Worker / validators

@@ -111,11 +111,16 @@ locals {
       { new_sqlite_classes = ["TakosRuntimeContainer", "ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] },
       { deleted_classes = ["TakosRuntimeContainer"] },
     ]
-    container_bindings = [
+    # Container classes are part of the executor runtime only when the
+    # provider-gap bridge actually provisions their backing applications.
+    # Keep the Durable Object migration steps above independent: off-mode
+    # installs still advance the DO migration history without advertising an
+    # executor binding that cannot run.
+    container_bindings = local.provider_gap_bridge_enabled ? [
       { name = "EXECUTOR_CONTAINER", class_name = "ExecutorContainerTier1" },
       { name = "EXECUTOR_CONTAINER_TIER2", class_name = "ExecutorContainerTier2" },
       { name = "EXECUTOR_CONTAINER_TIER3", class_name = "ExecutorContainerTier3" },
-    ]
+    ] : []
   }
 
   # The release builder owns these files at the app module root. This child
@@ -128,8 +133,6 @@ locals {
   worker_module_file_path            = "${local.app_module_root}/${local.worker_module_path}"
   worker_assets_directory            = var.plan_mode ? "fixtures/assets" : ".takos-build/assets"
   worker_assets_directory_path       = "${local.app_module_root}/${local.worker_assets_directory}"
-  migration_set_path                 = var.plan_mode ? "fixtures/migrations" : ".takos-build/migrations"
-  migration_set_directory_path       = "${local.app_module_root}/${local.migration_set_path}"
   container_desired_config_path      = var.plan_mode ? "fixtures/container-desired.json" : ".takos-build/container-desired.json"
   container_desired_config_file_path = "${local.app_module_root}/${local.container_desired_config_path}"
   bridge_helper_path                 = var.plan_mode ? "fixtures/takos-cloudflare-opentofu-bridge.ts" : ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts"
@@ -178,62 +181,9 @@ locals {
     } : {},
   )
 
-  queue_consumers = {
-    runs = {
-      queue_key        = "runs"
-      dlq_key          = "runs_dlq"
-      batch_size       = 1
-      max_wait_time_ms = 1000
-      max_retries      = 5
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    runs_dlq = {
-      queue_key        = "runs_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    index_jobs = {
-      queue_key        = "index_jobs"
-      dlq_key          = "index_jobs_dlq"
-      batch_size       = 5
-      max_wait_time_ms = 60000
-      max_retries      = 2
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    index_jobs_dlq = {
-      queue_key        = "index_jobs_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    notification_push = {
-      queue_key        = "notification_push"
-      dlq_key          = "notification_push_dlq"
-      batch_size       = 5
-      max_wait_time_ms = 5000
-      max_retries      = 5
-      max_concurrency  = 5
-      retry_delay      = 5
-    }
-    notification_push_dlq = {
-      queue_key        = "notification_push_dlq"
-      dlq_key          = null
-      batch_size       = 10
-      max_wait_time_ms = 60000
-      max_retries      = 100
-      max_concurrency  = 5
-      retry_delay      = 600
-    }
-  }
+  # queue_consumers is generated into queue-consumers.generated.tf from
+  # scripts/queue-consumer-contract.ts, which the Worker's own queue policy
+  # modules feed. wrangler.toml's consumer blocks come from the same contract.
 
   schedules = {
     maintenance_quarter_hour = {
@@ -252,18 +202,20 @@ locals {
   # deploy/TAKOSUMI_DEPLOY.md forbids. The request for host-minted values is
   # declared in .well-known/takosumi.json as `secret.generated` bindings; the
   # RSA pair is operator-supplied because no generated-secret shape expresses it.
-  runtime_secret_binding_names = [
-    "ENCRYPTION_KEY",
-    "TAKOS_AGENT_START_TOKEN",
-    "TAKOS_INTERNAL_API_SECRET",
-    "PLATFORM_PRIVATE_KEY",
-    "PLATFORM_PUBLIC_KEY",
-  ]
+  # runtime_secret_binding_names is generated into
+  # runtime-secret-names.generated.tf from
+  # src/worker/shared/config/runtime-secrets.ts, which the Worker itself reads.
   # `inherit` carries a binding forward from the Worker's previous version
   # without sending its value, so a later apply cannot silently drop a secret
-  # that was supplied out of band. A first install has no previous version to
-  # inherit from, so the names are bound only once the operator confirms they
-  # exist through runtime_secrets_provisioned.
+  # that was supplied out of band. A Worker Version's binding list is complete,
+  # so omitting these five names does not leave them alone: it publishes a
+  # version without ENCRYPTION_KEY, and every AES-256-GCM payload written under
+  # it — MCP OAuth tokens, registry credentials, environment snapshots —
+  # becomes unreadable. That is why the names are bound by default and why
+  # dropping them takes a deliberate acknowledgement rather than one boolean.
+  #
+  # The one apply that legitimately cannot inherit is the very first, before
+  # any value exists. It is declared, not defaulted.
   runtime_secret_binding_targets = var.runtime_secrets_provisioned ? local.runtime_secret_binding_names : []
   runtime_secret_bindings = [
     for name in local.runtime_secret_binding_targets : {
@@ -279,7 +231,19 @@ locals {
     }
   ]
 
-  provider_gap_bridge_enabled   = var.cloudflare_provider_gap_bridge_mode != "off"
+  provider_gap_bridge_enabled = var.cloudflare_provider_gap_bridge_mode != "off"
+
+  # A `VECTORIZE` binding is only honest when something actually created the
+  # index. The Cloudflare provider has no Vectorize resource, so on the
+  # ordinary provider path the index can only come from outside this module;
+  # the bridge lanes create it themselves. Binding it unconditionally is what
+  # made `resolveRuntimeCapabilities` answer `vectorSearch: vectorize` on a
+  # deployment whose every vector call fails, instead of the declared
+  # `vectorSearch: disabled` degraded mode.
+  vector_index_available = local.provider_gap_bridge_enabled || var.vector_index_provisioned
+  vector_bindings = local.vector_index_available ? [
+    { name = "VECTORIZE", type = "vectorize", index_name = local.vectorize.index_name },
+  ] : []
   bridge_acknowledgement_digest = sha256(var.cloudflare_provider_gap_bridge_acknowledgement)
 
   # Evaluating file digests only when the bridge is opted in keeps ordinary
@@ -288,9 +252,6 @@ locals {
     ["worker/index.js:${filesha256(local.worker_module_file_path)}"],
     [for file in sort(tolist(fileset(local.worker_assets_directory_path, "**"))) : "assets/${file}:${filesha256("${local.worker_assets_directory_path}/${file}")}"]
   ))) : "bridge-disabled"
-  migration_set_digest = local.provider_gap_bridge_enabled ? sha256(join("|", [
-    for file in sort(tolist(fileset(local.migration_set_directory_path, "**/*.sql"))) : "${file}:${filesha256("${local.migration_set_directory_path}/${file}")}"
-  ])) : "bridge-disabled"
   container_desired_config_digest = local.provider_gap_bridge_enabled ? filesha256(local.container_desired_config_file_path) : "bridge-disabled"
   container_rendered_input_digest = local.provider_gap_bridge_enabled ? sha256(jsonencode({
     template_digest = local.container_desired_config_digest
@@ -309,7 +270,6 @@ locals {
   product_resource_digest         = sha256(jsonencode(local.product_resource_names))
   bridge_triggers = {
     account_id               = var.account_id
-    d1_database_id           = cloudflare_d1_database.this["db"].id
     provider_gap_bridge_mode = var.cloudflare_provider_gap_bridge_mode
     bridge_acknowledgement   = local.bridge_acknowledgement_digest
     helper                   = local.bridge_helper_digest
@@ -319,7 +279,6 @@ locals {
     container_desired_config = local.container_desired_config_digest
     container_rendered_input = local.container_rendered_input_digest
     vector_desired_config    = local.vector_desired_config_digest
-    migration_set            = local.migration_set_digest
     product_resources        = local.product_resource_digest
   }
   # The capability preflight intentionally carries only activation metadata
@@ -341,11 +300,9 @@ locals {
       TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH                  = local.bridge_helper_path
       TAKOS_CLOUDFLARE_ACCOUNT_ID                          = var.account_id
       TAKOS_CLOUDFLARE_WORKER_NAME                         = local.service_runtime_name
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID                      = cloudflare_d1_database.this["db"].id
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME                   = local.vectorize.index_name
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS             = tostring(local.vectorize.dimensions)
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC                 = local.vectorize.metric
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH                  = local.migration_set_path
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH                  = local.worker_assets_directory
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH       = local.container_desired_config_path
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH                = local.worker_module_path
@@ -402,6 +359,11 @@ resource "cloudflare_queue" "this" {
   depends_on = [terraform_data.provider_gap_capability]
 }
 
+# The bridge modes gate exactly three imperative Cloudflare operations the
+# provider cannot express: Vectorize index creation, the container-enabled
+# Durable Object bootstrap upload, and Container application reconciliation.
+# D1 schema is no longer part of that set; the Worker applies its embedded
+# migration set at runtime, so no Apply-time step mutates durable data.
 resource "terraform_data" "provider_gap_contract" {
   input = {
     mode                   = var.cloudflare_provider_gap_bridge_mode
@@ -428,6 +390,26 @@ resource "terraform_data" "provider_gap_contract" {
     precondition {
       condition     = var.cloudflare_provider_gap_bridge_mode == "disposable-production" || var.cloudflare_provider_gap_bridge_acknowledgement == ""
       error_message = "cloudflare_provider_gap_bridge_acknowledgement must be empty unless disposable-production bridge mode is selected."
+    }
+
+    precondition {
+      condition     = !var.vector_index_provisioned || !local.provider_gap_bridge_enabled
+      error_message = "vector_index_provisioned declares an externally created Vectorize index; the provider-gap bridge creates and owns the index itself, so exactly one of them may claim it."
+    }
+
+    # A Worker Version's binding list is complete, so an apply with
+    # runtime_secrets_provisioned = false publishes a version without
+    # ENCRYPTION_KEY and leaves every payload encrypted under it unreadable.
+    # The one apply that legitimately cannot inherit is the first, before any
+    # value exists, and it has to say so.
+    precondition {
+      condition     = var.runtime_secrets_provisioned || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+      error_message = "runtime_secrets_provisioned = false drops every runtime secret binding from the next Worker Version, including ENCRYPTION_KEY. Only a first install may do that, and it must set first_install_acknowledgement = \"FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS\"."
+    }
+
+    precondition {
+      condition     = !var.runtime_secrets_provisioned || var.first_install_acknowledgement == ""
+      error_message = "first_install_acknowledgement must be empty once runtime_secrets_provisioned is true; leaving it set would carry a first-install waiver into ordinary applies."
     }
   }
 }
@@ -620,7 +602,6 @@ resource "cloudflare_worker_version" "app" {
       { name = "RUN_QUEUE", type = "queue", queue_name = cloudflare_queue.this["runs"].queue_name },
       { name = "INDEX_QUEUE", type = "queue", queue_name = cloudflare_queue.this["index_jobs"].queue_name },
       { name = "TAKOS_NOTIFICATION_PUSH_QUEUE", type = "queue", queue_name = cloudflare_queue.this["notification_push"].queue_name },
-      { name = "VECTORIZE", type = "vectorize", index_name = local.vectorize.index_name },
       { name = "AI", type = "ai" },
       { name = "SESSION_DO", type = "durable_object_namespace", class_name = "SessionDO" },
       { name = "RUN_NOTIFIER", type = "durable_object_namespace", class_name = "RunNotifierDO" },
@@ -629,6 +610,7 @@ resource "cloudflare_worker_version" "app" {
       { name = "ROUTING_DO", type = "durable_object_namespace", class_name = "RoutingDO" },
       { name = "TAKOS_EGRESS", type = "service", service = local.service_runtime_name, entrypoint = "TakosEgressEntrypoint" },
     ],
+    local.vector_bindings,
     [for binding in local.durable_object_lifecycle.container_bindings : {
       name       = binding.name
       type       = "durable_object_namespace"
@@ -719,7 +701,7 @@ resource "terraform_data" "provider_gap_post" {
   }
 
   # The helper only removes provider-gap objects that can be proven to belong
-  # to this worker. It does not pretend to roll back D1 data or cron state.
+  # to this worker. It never reads or rolls back D1 data or cron state.
   provisioner "local-exec" {
     when        = destroy
     working_dir = self.input.TAKOS_CLOUDFLARE_APP_MODULE_WORKING_DIR

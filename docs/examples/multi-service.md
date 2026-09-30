@@ -1,37 +1,42 @@
-# Multi-Service 構成
+# マルチサービス構成
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+1 つの Capsule に複数の service surface をまとめる構成の例です。
+たとえば API worker と object storage を同じ module で provision し、
+それぞれの Output を返します。
 
-## Current Flow
+## Module
 
-1. Create a Capsule from a Git URL/ref pointing at an OpenTofu module.
-2. Trigger a plan; Takosumi records a plan Run against the reviewed module and ProviderConnection / ProviderBinding / policy.
-3. Apply the reviewed plan; Takosumi records an apply Run and, on success, updates StateVersion and Output.
-4. ProviderConnections hold credential references, ProviderBindings resolve each provider (plus optional alias) the module uses, and policy resolves provider allowlists, state backend, and Cloudflare Container execution for each run.
-5. Account-plane policy, credentials, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
+```hcl
+resource "cloudflare_workers_script" "api" {
+  account_id  = var.account_id
+  script_name = "example-api"
+  content     = file("${path.module}/api.ts")
+}
 
-## Takos Boundary
+resource "cloudflare_r2_bucket" "objects" {
+  account_id = var.account_id
+  name       = "example-objects"
+}
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are projected from Capsule outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions. Takosumi Accounts plane owns account-plane policy, billing, OIDC, and the dashboard.
+output "api_url" {
+  description = "API の公開 origin"
+  value       = cloudflare_workers_script.api.url
+}
 
-## API Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "gitUrl": "https://github.com/example/app.git",
-    "ref": "main",
-    "modulePath": "deploy/opentofu/cloudflare"
-  }
+output "bucket_name" {
+  description = "object 保存先 bucket"
+  value       = cloudflare_r2_bucket.objects.name
 }
 ```
 
-Creating the Capsule records the module reference; subsequent typed Runs record `plan` type Run / `apply` type Run entries against the bound ProviderConnection / ProviderBinding / policy. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow instead of exposing a separate product-local deployment surface.
+## まとめても分けてもよい
 
-## References
+複数 surface を 1 つの Capsule にまとめると plan / apply が 1 回で済みます。
+別 Capsule に分けると、それぞれの Interface / InterfaceBinding を独立に
+管理できます。takos-storage と takos-office のように「storage を提供する
+Capsule」と「それを使う Capsule」に分ける構成が、first-party の普通の形です。
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+## 次に読む
+
+- [OpenTofu Output とランタイム Interface](/deploy/runtime-interfaces)
+- [Bundled Apps](/platform/featured-apps)

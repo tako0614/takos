@@ -17,6 +17,7 @@ export const common = {
   logout: "Sign out",
   all: "All",
   notFound: "Not found",
+  password: "Password",
   passwordRequired: "Password required",
   enterPasswordToView: "Enter the password to view this shared thread.",
   unlock: "Unlock",

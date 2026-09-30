@@ -40,6 +40,7 @@ import {
 } from "../../application/tools/executor.ts";
 import { AGENT_DISABLED_CUSTOM_TOOLS } from "../../application/tools/tool-policy.ts";
 import type { ToolCall } from "../../application/tools/tool-definitions.ts";
+import type { RuntimeMcpInterfaceConfig } from "../../application/tools/mcp-tools.ts";
 import { listSkillTemplates } from "../../application/services/agent/skill-templates.ts";
 import { listMcpServers } from "../../application/services/platform/mcp.ts";
 import {
@@ -71,17 +72,7 @@ async function runtimeMcpInterfaceConfig(
   env: Env,
   userId: string,
   dependencies: RemoteToolExecutorFactoryDependencies,
-): Promise<
-  | {
-      workspaceId: string;
-      request: {
-        baseUrl: string;
-        token: string;
-        subjectId: string;
-      };
-    }
-  | undefined
-> {
+): Promise<RuntimeMcpInterfaceConfig | undefined> {
   const issuer = nonEmptyString(env.OIDC_ISSUER_URL);
   const clientId = nonEmptyString(env.OIDC_CLIENT_ID);
   const encryptionKey = nonEmptyString(env.ENCRYPTION_KEY);

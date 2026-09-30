@@ -1,37 +1,34 @@
 # Worker + Container
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+container 対応の Durable Object class を持つ Worker の例です。
+takos-computer のような隔離実行環境を持つアプリがこの形を使います。
 
-## Current Flow
+## Module
 
-1. Create a Capsule from an OpenTofu Capsule repository (Git URL/ref or module path).
-2. Trigger a plan; Takosumi records a `plan` type Run with the reviewed plan, warnings, and policy decision.
-3. Apply the reviewed plan; Takosumi records an `apply` type Run, and on success records `StateVersion` and `Output`.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) the module uses, and policy resolves provider allowlists, state backend, and Cloudflare Container execution for each run.
-5. Account-plane policy, credentials, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
+```hcl
+resource "cloudflare_workers_script" "app" {
+  account_id  = var.account_id
+  script_name = "example-worker-container"
+  content     = file("${path.module}/worker.ts")
 
-## Takos Boundary
+  bindings = [{
+    name       = "SANDBOX"
+    type       = "durable_object_namespace"
+    class_name = "SandboxSession"
+  }]
+}
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Its provider-gap bridge is off by default, so ordinary production provider applies leave unsupported Cloudflare gaps unresolved; disposable E2E runs must select a reviewed bridge mode explicitly. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
-
-## API Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main",
-    "path": "."
-  }
+output "url" {
+  description = "Worker の公開 origin"
+  value       = cloudflare_workers_script.app.url
 }
 ```
 
-A plan produces a `plan` type Run, and the reviewed plan is applied as an `apply` type Run. Takos product routes should call the Takosumi deploy control plane or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
+Durable Object class と container image は module の worker 実装側で宣言します。
+container の起動条件や image の pin は Capsule の deploy 事実として扱い、
+OpenTofu plan で差分を確認してから apply します。
 
-## References
+## 次に読む
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [takos-computer](/platform/takos-computer) — この形を使う first-party アプリ
+- [実行場所](/deploy/namespaces)

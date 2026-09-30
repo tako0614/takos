@@ -55,6 +55,7 @@ export const chat = {
   runStatus_failed: "失敗",
   runStatus_cancelled: "中止",
   cancelRun: "中止",
+  agentExecutionUnavailable: "この配置にはエージェント実行環境が無いため、実行を開始できません。",
   cancellingRun: "中止中...",
 
   // Live tool call status labels

@@ -17,6 +17,7 @@ export const common = {
   logout: "ログアウト",
   all: "すべて",
   notFound: "見つかりません",
+  password: "パスワード",
   passwordRequired: "パスワードが必要です",
   enterPasswordToView:
     "共有されたスレッドを表示するにはパスワードを入力してください。",

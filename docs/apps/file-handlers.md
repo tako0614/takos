@@ -1,39 +1,24 @@
-# File Handlers
+# ファイルを開くアプリ
 
-File handlers let installed apps open or edit selected file types from a Workspace. Takos discovers them through
-Capsule output projection, not through a Takos-specific manifest.
+install したアプリは、Workspace 内の特定のファイル種別を開いたり編集したりする
+file handler を提供できます。Takos はこれを Takos 固有の manifest ではなく、
+Capsule の output projection を通じて発見します。
 
-## Current Flow
+## 見つかるまでの流れ
 
-1. Install an app Capsule from Git.
-2. Review and apply the Takosumi plan.
-3. The app exposes non-secret service metadata with a capability such as `interface.file.handler`.
-4. Takos reads the bound export and shows the handler for matching files in the Workspace.
-5. Runtime authority, when needed, comes from the deployed runtime/account-plane boundary rather than OpenTofu output values.
+1. アプリを Git から Capsule として install し、Takosumi の plan を確認して apply する。
+2. アプリが `interface.file.handler` のような capability として、非 secret の
+   service metadata を公開する。
+3. Takos は bind された export を読み、Workspace 内で対応するファイルに
+   その handler を表示する。
+4. 実行に必要な権限は、OpenTofu の output 値ではなく deploy された
+   runtime / account-plane の境界から供給される。
 
-## Takos Boundary
+たとえば takos-office は `.docx` / `.pptx` / `.xlsx` の handler を公開し、
+Workspace のファイルを対応するエディタで開けます。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) for the applied OpenTofu Capsule, while Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists and state handling. The Takosumi Accounts plane owns account-plane policy (OIDC / billing / dashboard).
+## 次に読む
 
-## Install Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "source": "github.com/example/takos//deploy/opentofu/cloudflare",
-    "ref": "main"
-  }
-}
-```
-
-Selecting an adapter runs a `plan` type Run and then an `apply` type Run, which records StateVersion and
-non-sensitive endpoints as Output. Takos product routes rely on the Takosumi deploy-control ledger and
-Capsule output projection instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [takos-office](/platform/takos-office) — handler を公開する first-party アプリ
+- [インストール方法](/apps/install-paths)
+- [ツールと接続](/apps/mcp)

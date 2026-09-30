@@ -52,21 +52,6 @@ const imageContent = {
   configDigest: digest("f"),
   layerDigests: [digest("1"), digest("2")],
 } as const;
-const releaseRuntime = {
-  verifyPortableWorkerSourceIdentity: async (
-    _root: string,
-    _tag: string,
-    archiveDigest: string,
-  ) => {
-    if (
-      archiveDigest !==
-        "sha256:85f349b2c180f7a0475872fbe0830d2c253156edb681398caf63e7be6de5b5fb"
-    ) {
-      throw new Error("portable source fixture does not select the archive");
-    }
-  },
-} as const;
-
 async function packageVersion(): Promise<string> {
   const packageJson = JSON.parse(
     await readFile(join(import.meta.dir, "../package.json"), "utf8"),
@@ -612,7 +597,6 @@ test("publish dry-run verifies prepared bytes and performs no tag/release mutati
         evidence: publishEvidence,
         execute: false,
       },
-      releaseRuntime,
     );
 
     expect(result).toMatchObject({
@@ -869,36 +853,6 @@ test("publish rejects an oversized descriptor before any release provider call",
   }
 });
 
-test("publish rejects portable source input drift before any release provider call", async () => {
-  const root = await mkdtemp(join(tmpdir(), "takos-release-artifact-test-"));
-  const stub = installReadOnlyCommandStub(commit);
-  try {
-    const version = await packageVersion();
-    const fixture = await publishFixture(root, version);
-    await expect(
-      runReleaseArtifact(
-        {
-          phase: "publish",
-          tag: `v${version}`,
-          prepareEvidence: fixture.prepareEvidence,
-          evidence: join(root, "publish.json"),
-          execute: true,
-        },
-        {
-          ...releaseRuntime,
-          verifyPortableWorkerSourceIdentity: async () => {
-            throw new Error("portable source release input drifted");
-          },
-        },
-      ),
-    ).rejects.toThrow("portable source release input drifted");
-    expectNoReleaseProviderCalls(stub.calls);
-  } finally {
-    stub.restore();
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
 type PublishFixture = Awaited<ReturnType<typeof publishFixture>>;
 
 async function publishFixture(root: string, version: string) {
@@ -1060,7 +1014,6 @@ async function expectPublishDescriptorRejection(
         evidence: join(dirname(fixture.prepareEvidence), "publish.json"),
         execute: true,
       },
-      releaseRuntime,
     ),
   ).rejects.toThrow(expected);
 }

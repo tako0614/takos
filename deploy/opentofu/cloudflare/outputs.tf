@@ -15,6 +15,11 @@ output "service_runtime_name" {
   value       = module.platform.service_runtime_name
 }
 
+output "deployment_environment" {
+  description = "Takos product environment bound into retained first-install release evidence."
+  value       = module.platform.deployment_environment
+}
+
 output "url" {
   description = "Canonical public URL supplied through the required public_url input."
   value       = module.platform.launch_url
@@ -53,6 +58,11 @@ output "worker_env" {
 output "cloudflare_d1_database_id" {
   description = "D1 database ID for the DB binding (cloudflare target)."
   value       = module.platform.d1_database_id
+}
+
+output "cloudflare_d1_database_name" {
+  description = "D1 database name for the DB binding (cloudflare target)."
+  value       = module.platform.d1_database_name
 }
 
 output "cloudflare_d1_database_ids" {
@@ -140,11 +150,6 @@ output "container_rendered_input_digest" {
   value       = module.platform.container_rendered_input_digest
 }
 
-output "migration_set_digest" {
-  description = "Stable digest of the D1 migration set."
-  value       = module.platform.migration_set_digest
-}
-
 output "bridge_helper_digest" {
   description = "Stable digest of the optional provider-gap bridge executable."
   value       = module.platform.bridge_helper_digest
@@ -163,4 +168,14 @@ output "runtime_secret_binding_names" {
 output "runtime_secrets_provisioned" {
   description = "Whether the Worker Version carries the runtime secret bindings forward with the inherit binding type."
   value       = module.platform.runtime_secrets_provisioned
+}
+
+output "vector_search_capability" {
+  description = "Vector search capability this deployment will report: `vectorize` or `disabled`."
+  value       = module.platform.vector_search_capability
+}
+
+output "vector_index_provisioned" {
+  description = "Whether an externally created Vectorize index was declared for the ordinary provider path."
+  value       = module.platform.vector_index_provisioned
 }

@@ -55,6 +55,8 @@ export const chat = {
   runStatus_failed: "Failed",
   runStatus_cancelled: "Cancelled",
   cancelRun: "Cancel",
+  agentExecutionUnavailable:
+    "This deployment has no agent runtime, so runs cannot start.",
   cancellingRun: "Cancelling...",
 
   // Live tool call status labels

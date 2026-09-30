@@ -294,9 +294,15 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
   expect(cloudflareHclWithoutComments).toContain(
     "account_id               = var.account_id",
   );
-  expect(cloudflareHclWithoutComments).toContain(
-    'd1_database_id           = cloudflare_d1_database.this["db"].id',
+  // The Worker migrates its own schema at runtime, so no bridge phase may
+  // carry a D1 database identity or a migration set into an Apply-time step.
+  expect(cloudflareHclWithoutComments).not.toContain(
+    "TAKOS_CLOUDFLARE_D1_DATABASE_ID",
   );
+  expect(cloudflareHclWithoutComments).not.toContain(
+    "TAKOS_CLOUDFLARE_MIGRATION_SET_PATH",
+  );
+  expect(cloudflareHclWithoutComments).not.toContain("migration_set_digest");
   for (const resourceBody of [
     providerGapPre.body,
     providerGapCleanup.body,
@@ -355,15 +361,17 @@ test("the Cloudflare adapter establishes Durable Object migrations before bindin
   }
 });
 
-test("Cloudflare provider-gap phases bind account and realized D1 ownership into replacement triggers", () => {
+test("Cloudflare provider-gap phases bind account and content identity into replacement triggers", () => {
   const triggerStart = cloudflareHclWithoutComments.indexOf("bridge_triggers = {");
   expect(triggerStart).toBeGreaterThanOrEqual(0);
   const triggerEnd = cloudflareHclWithoutComments.indexOf("\n  }", triggerStart);
   expect(triggerEnd).toBeGreaterThan(triggerStart);
   const triggerBody = cloudflareHclWithoutComments.slice(triggerStart, triggerEnd);
   expect(triggerBody).toContain("account_id               = var.account_id");
+  expect(triggerBody).not.toContain("d1_database_id");
+  expect(triggerBody).not.toContain("migration_set");
   expect(triggerBody).toContain(
-    'd1_database_id           = cloudflare_d1_database.this["db"].id',
+    "vector_desired_config    = local.vector_desired_config_digest",
   );
   for (const name of ["provider_gap_pre", "provider_gap_cleanup", "provider_gap_post"]) {
     const resource = cloudflareResourceBlocks.find(

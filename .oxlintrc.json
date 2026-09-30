@@ -1,0 +1,14 @@
+{
+  "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "eslint/no-unassigned-vars": "off",
+    "unicorn/no-invalid-fetch-options": "off"
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**"
+  ]
+}

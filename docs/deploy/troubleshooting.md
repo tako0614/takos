@@ -38,7 +38,7 @@ redirect URI は文字列が完全一致する必要があります。ローカ�
 
 1. 応答の request ID を控える
 2. 同じ request ID の Worker ログを探す
-3. D1 migration が適用されているか確認する
+3. `GET /internal/runtime/status` で schema が `ready` か確認する
 4. binding 名と実際のリソース ID を確認する
 5. 一覧 API の入力件数が D1 / SQLite の変数上限を超えていないか確認する
 

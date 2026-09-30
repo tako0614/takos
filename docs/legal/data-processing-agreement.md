@@ -256,7 +256,7 @@ contract structure.
 - GDPR Regulation (EU) 2016/679, including Article 28:
   <https://eur-lex.europa.eu/eli/reg/2016/679/oj>
 - CCPA / CPRA regulations, Section 7051:
-  <https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf>
+  <https://cppa.ca.gov/regulations/pdf/ccpa_statute_eff_20260101.pdf>
 - Cloudflare sub-processors:
   <https://www.cloudflare.com/gdpr/subprocessors/cloudflare-services/>
 - Stripe DPA: <https://stripe.com/legal/dpa>

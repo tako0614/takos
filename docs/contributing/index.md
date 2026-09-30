@@ -5,7 +5,7 @@
 ## アーキテクチャ
 
 - [`current-state.md`](./current-state.md) — Takos product shell と external Takosumi control plane の実装スナップショット。
-- [`api-surface.md`](./api-surface.md) — Takos product routes と、Takos が消費する Takosumi deploy-control /
+- [`api-surface.md`](./api-surface.md) — Takos product routes と、Takos が利用する Takosumi deploy-control /
   account-plane surface。
 - Takosumi deploy topology notes (`takosumi/docs/operations/deploy-topology-notes.md`)
   — hosted operator / self-host distribution の deploy target と ownership boundary。
@@ -31,6 +31,27 @@ live service、operator-private state、readiness evidence、recovery drill は�
 credential boundary と cadence を持ち、product check や release approval に
 混ぜません。
 
+### 宣言済み debt ledger
+
+type check、lint、portable test は対象を絞り込みません。3 つの gate はいずれも
+repository 全体を対象にし、残っている例外だけを `quality/` の ledger に
+書き出します。
+
+| Ledger | Gate | 意味 |
+| --- | --- | --- |
+| [`quality/typescript-debt.json`](../../quality/typescript-debt.json) | `bun run check:types` | `tsconfig.check.json` と `web/tsconfig.json` を全量 compile し、ここに数えていない diagnostic を拒否します。 |
+| [`quality/lint-debt.json`](../../quality/lint-debt.json) | `bun run check:lint` | oxlint (`.oxlintrc.json`) の finding のうち、ここに数えていないものを拒否します。 |
+| [`quality/test-quarantine.json`](../../quality/test-quarantine.json) | `bun run test` / `bun run check:test-quarantine` | portable gate から除外する、現在失敗する tracked test file を理由付きで宣言します。 |
+| [`quality/test-online.json`](../../quality/test-online.json) | `bun run test:online` | public network や operator-owned online evidence が必要で、portable gate から除外する test file を理由付きで宣言します。 |
+
+件数は countdown です。増えれば gate が落ち、減っても ledger を下げるまで落ちます。
+0 になった entry は削除します。quarantine は「今は失敗する」という主張なので、
+`bun run check:test-quarantine` が該当 file を実行し、通ってしまったものを拒否します。
+
+online evidence は portable gate に混ぜません。`bun run test:online` または
+`bun scripts/run-portable-tests.ts --online` を明示的に実行してください。
+`--list` は選択された file だけを表示し、test process を起動しません。
+
 利用者向け docs を変更する場合は、[`documentation-style.md`](./documentation-style.md)
 の順序と用語ルールに従い、`bun run docs:build` も実行します。
 
@@ -39,14 +60,15 @@ credential boundary と cadence を持ち、product check や release approval �
 - [`smoke.md`](./smoke.md) — Takos product root の portable gate と focused local smoke。
 - [`runtime-agent-api-smoke.md`](./runtime-agent-api-smoke.md) — runtime-agent API の Takosumi test path。
 - [`router-config-smoke.md`](./router-config-smoke.md) — router config contract の Takosumi test path。
-- [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke と local Compose proof。
-- [`compose-smoke.md`](./compose-smoke.md) — `bun run local:*` による current Compose smoke。
+- [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke とローカルの Docker Compose proof。
+- [`compose-smoke.md`](./compose-smoke.md) — `bun run local:*` による現在の Docker Compose smoke。
 - [`git-source-smoke.md`](./git-source-smoke.md) — `takosumi` の Git URL install / source proof。
 - [`postgres-storage-smoke.md`](./postgres-storage-smoke.md) — SQL storage / migration proof。
 - [`redis-queue-smoke.md`](./redis-queue-smoke.md) — queue / background worker proof。
 - [`object-storage-smoke.md`](./object-storage-smoke.md) — object-store / R2 export artifact proof。
 - [`docker-provider-smoke.md`](./docker-provider-smoke.md) — Docker / self-host proof。
 - [`compose-real-smoke.md`](./compose-real-smoke.md) — 実 Docker Compose を起動する local proof。
+- [`real-backend-e2e-plan.md`](./real-backend-e2e-plan.md) — source gate と real infrastructure proof の分け方と、各 live path。
 
 ## Operator-owned Infrastructure
 

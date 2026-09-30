@@ -11,7 +11,7 @@ export default function Nav() {
 
   onMount(() => {
     const onScroll = () => {
-      setScrolled(globalThis.scrollY > globalThis.innerHeight * 0.7);
+      setScrolled(globalThis.scrollY > 24);
     };
     onScroll();
     globalThis.addEventListener('scroll', onScroll, { passive: true });
@@ -19,16 +19,17 @@ export default function Nav() {
   });
 
   const links = () => [
-    { href: '#why', label: t.nav.why },
-    { href: '#features', label: t.nav.features },
+    { href: '#workspace', label: t.nav.workspace },
     { href: '#apps', label: t.nav.apps },
+    { href: '#data', label: t.nav.data },
+    { href: '#install', label: t.nav.install },
     { href: 'https://docs.takos.jp/', label: t.nav.docs, external: true },
   ];
 
   return (
     <header class='nav' classList={{ 'is-scrolled': scrolled() }}>
       <div class='nav-inner container'>
-        <Wordmark variant='inkdrop' />
+        <Wordmark />
         <nav class='nav-links' aria-label='Primary'>
           <For each={links()}>
             {(l) => <a href={l.href} rel={l.external ? 'noopener' : undefined}>{l.label}</a>}
@@ -41,8 +42,8 @@ export default function Nav() {
             </svg>
           </a>
           <LangToggle class='nav-icon-desk' />
-          <a class='btn btn-primary nav-cta' href={cloud().useTakos} rel='noopener'>
-            {t.hero.useTakos}
+          <a class='nav-use' href={cloud().useTakos} rel='noopener'>
+            {t.head.useTakos}
           </a>
           <details class='nav-menu'>
             <summary class='nav-icon nav-menu-toggle' aria-label={t.nav.openMenu}>

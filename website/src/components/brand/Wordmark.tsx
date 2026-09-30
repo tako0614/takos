@@ -1,8 +1,6 @@
 import type { JSX } from 'solid-js';
 
 interface Props {
-  /** Retained for API compatibility; the mark is now the takos.jp logo image. */
-  variant?: 'geometric' | 'inkdrop';
   size?: number;
   class?: string;
 }

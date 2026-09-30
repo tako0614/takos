@@ -8,7 +8,6 @@ import {
   bridgeFailurePayload,
   cloudflareApiFailureDetail,
   containerRows,
-  migrationFiles,
   pendingDurableObjectMigration,
   runBridge,
   validateCloudflareProviderGapBridgeActivation,
@@ -100,14 +99,11 @@ test("pre-worker Containers capability 404 fails before any mutation", async () 
   const directory = await mkdtemp("takos-cloudflare-bridge-capability-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
     const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
     const { mkdir } = await import("node:fs/promises");
-    await mkdir(migrationDirectory);
     await mkdir(assetsDirectory);
-    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
     await writeFile(artifactPath, "export default {};\n");
     await writeFile(bootstrapPath, "export class ExecutorContainerTier1 {}; export default {};\n");
@@ -116,11 +112,9 @@ test("pre-worker Containers capability 404 fails before any mutation", async () 
       TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-staging-embeddings",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: bootstrapPath,
@@ -172,7 +166,7 @@ test("pre-worker Containers capability 404 fails before any mutation", async () 
   }
 });
 
-test("capability-preflight accepts an empty envelope without D1 or Worker inputs", async () => {
+test("capability-preflight accepts an empty envelope without Worker inputs", async () => {
   const calls: Array<{ method: string; url: string }> = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input);
@@ -274,12 +268,9 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
   try {
     const absoluteDirectory = resolve(directory);
     const moduleDirectory = join(absoluteDirectory, "module");
-    const migrationDirectory = join(moduleDirectory, "migrations");
     const artifactPath = join(moduleDirectory, "worker.js");
     const { mkdir } = await import("node:fs/promises");
     await mkdir(moduleDirectory);
-    await mkdir(migrationDirectory);
-    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
     // The live Worker remains the normal authority even if the bounded
     // fallback receipt is malformed. The receipt must not be read eagerly.
@@ -317,11 +308,9 @@ test("cleanup accepts CF1609 exact-ID absence after a successful DELETE", async 
       TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos-cleanup",
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-embeddings",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_CONTENT: desiredConfig,
       TAKOS_CLOUDFLARE_RECOVERY_STATE_PATH: "../terraform.tfstate",
@@ -981,15 +970,11 @@ async function createStateRecoveryFixture(
     : options.cwdShape === "module-symlink"
       ? join(absoluteDirectory, "module")
       : storedModuleDirectory;
-  const storedMigrationDirectory = join(storedModuleDirectory, "migrations");
-  const migrationDirectory = join(moduleDirectory, "migrations");
   const artifactPath = join(moduleDirectory, "worker.js");
   const { mkdir } = await import("node:fs/promises");
   await mkdir(storedModuleDirectory);
-  await mkdir(storedMigrationDirectory);
   await mkdir(join(storedModuleDirectory, ".takos-build", "assets"), { recursive: true });
   await mkdir(join(storedModuleDirectory, "modules", "platform"), { recursive: true });
-  await writeFile(join(storedMigrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
   await writeFile(join(storedModuleDirectory, "worker.js"), "export default {};\n");
   await writeFile(join(storedModuleDirectory, ".takos-build", "assets", "index.html"), "ok\n");
   await writeFile(
@@ -1012,11 +997,9 @@ async function createStateRecoveryFixture(
     TAKOS_CLOUDFLARE_BRIDGE_HELPER_PATH: ".takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
     TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
     TAKOS_CLOUDFLARE_WORKER_NAME: "takos-recovery",
-    TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
     TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-recovery-embeddings",
     TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
     TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-    TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
     TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: ".takos-build/assets",
     TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: ".takos-build/container-desired.json",
     TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
@@ -1345,16 +1328,12 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
   const directory = await mkdtemp("takos-cloudflare-bridge-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
     const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
     const { mkdir } = await import("node:fs/promises");
-    await mkdir(migrationDirectory);
     await mkdir(assetsDirectory);
     await mkdir(join(assetsDirectory, "a"));
-    await writeFile(join(migrationDirectory, "0043_ap_followers.sql"), "CREATE TABLE ap_followers (id TEXT);\n");
-    await writeFile(join(migrationDirectory, "0043_store_network_inventory_metadata.sql"), "CREATE TABLE store_network (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
     await writeFile(join(assetsDirectory, "a", "child.js"), "export const nested = true;\n");
     await writeFile(join(assetsDirectory, "a.txt"), "root asset\n");
@@ -1363,17 +1342,14 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
       bootstrapPath,
       "export class ExecutorContainerTier1 {}; export default {};\n",
     );
-    const migrationSet = await migrationFiles(migrationDirectory);
     const env: Record<string, string> = {
       TAKOS_CLOUDFLARE_PROVIDER_GAP_BRIDGE_MODE: "staging",
       TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-staging-embeddings",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_DURABLE_OBJECT_BOOTSTRAP_PATH: bootstrapPath,
@@ -1385,8 +1361,6 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     let vectorExists = false;
     let durableObjectMigrationTag: string | undefined;
     let workerVersionBindings: readonly Record<string, unknown>[] = [];
-    const ledger = new Map<string, string>();
-    let imports = 0;
     const calls: string[] = [];
     const durableObjectUploads: Array<{
       metadata: Record<string, unknown>;
@@ -1466,23 +1440,6 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
         vectorExists = true;
         return envelope({});
       }
-      if (url.endsWith("/d1/database/d1-1/query")) {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { sql?: string };
-        if (body.sql?.startsWith("SELECT name")) {
-          return envelope([{ success: true, results: [...ledger].map(([name, checksum]) => ({ name, checksum })) }]);
-        }
-        return envelope([{ success: true, results: [] }]);
-      }
-      if (url.endsWith("/d1/database/d1-1/import")) {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { action?: string };
-        if (body.action === "init") {
-          imports += 1;
-          const migration = migrationSet[imports - 1];
-          if (!migration) throw new Error("unexpected migration import");
-          ledger.set(migration.name, `sha256:${migration.sha256}`);
-          return envelope({ status: "complete" });
-        }
-      }
       return envelope({ error: "unexpected" }, 500);
     };
     const first = await runBridge("pre-worker", { env, cwd: directory, fetchImpl });
@@ -1495,13 +1452,11 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     ).toBeGreaterThan(0);
     expect(first.vector.status).toBe("created");
     expect(first.durableObjects.status).toBe("migrated");
-    expect(first.d1.applied).toEqual([
-      "0043_ap_followers.sql",
-      "0043_store_network_inventory_metadata.sql",
-    ]);
+    expect(first).not.toHaveProperty("d1");
+    expect(first.digests).not.toHaveProperty("migrationDigest");
+    expect(calls.every((call) => !call.includes("/d1/database/"))).toBe(true);
     expect(first.digests.desiredDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(first.digests.helperDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
-    expect(first.digests.migrationDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
     const hash = (value: string) => createHash("sha256").update(value).digest("hex");
     const expectedWorkerArtifactDigest = hash([
       `worker/index.js:${hash("export default {};\n")}`,
@@ -1557,7 +1512,6 @@ test("pre-worker reconciliation is idempotent and exposes stable digests without
     expect(second.vector.status).toBe("present");
     expect(second.durableObjects.status).toBe("present");
     expect(second.changed).toBe(false);
-    expect(imports).toBe(2);
     expect(durableObjectUploads).toHaveLength(2);
     expect(calls.every((call) => !call.includes(env.CLOUDFLARE_API_TOKEN))).toBe(true);
     await writeFile(join(assetsDirectory, "asset-only.js"), "export const changed = true;\n");
@@ -1574,17 +1528,13 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
   const directory = await mkdtemp("takos-cloudflare-bridge-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
     const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const configPath = join(absoluteDirectory, "containers.json");
     const { mkdir } = await import("node:fs/promises");
-    await mkdir(migrationDirectory);
     await mkdir(assetsDirectory);
-    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(artifactPath, "export default {};\n");
     await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
-    const migrationSet = await migrationFiles(migrationDirectory);
     await writeFile(
       configPath,
       JSON.stringify({
@@ -1623,11 +1573,9 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: accountId,
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos",
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-embeddings",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: configPath,
@@ -1671,7 +1619,6 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       });
     });
     let vectorExists = true;
-    let d1LedgerExists = true;
     let firstTier1ListIsNotReady = true;
     let containerCreateIsNotReady = false;
     const deletedContainerIds = new Set<string>();
@@ -1706,16 +1653,6 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
         return vectorExists
           ? envelope({ name: "takos-embeddings", config: { dimensions: 768, metric: "cosine" } })
           : envelope({ error: "missing" }, 404);
-      }
-      if (url.endsWith("/d1/database/d1-1/query")) {
-        const sql = (body as { sql?: string } | undefined)?.sql ?? "";
-        if (sql.startsWith("SELECT name")) {
-          if (!d1LedgerExists) {
-            return envelope({ success: false, errors: [{ code: 9000, message: "no such table" }] });
-          }
-          return envelope([{ success: true, results: [{ name: "0001_schema.sql", checksum: `sha256:${migrationSet[0]!.sha256}` }] }]);
-        }
-        return envelope([{ success: true, results: [] }]);
       }
       if (method === "GET" && url.endsWith("/containers/applications")) {
         return new Response(JSON.stringify([]), {
@@ -1948,13 +1885,6 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
     for (const row of replacementConfig.applications) row.image = replacementImage;
     await writeFile(configPath, JSON.stringify(replacementConfig));
 
-    // A partial pre-worker run may have created provider-gap resources before
-    // the D1 ledger table existed. Recovery must still reach ownership-proven
-    // cleanup and must not issue the bare ledger SELECT first.
-    d1LedgerExists = false;
-    const d1QueryCallsBeforeCleanup = calls.filter(({ url }) =>
-      url.includes("/d1/database/d1-1/query"),
-    ).length;
     const cleanup = await runBridge("recovery-cleanup", {
       env: {
         ...changedInputEnv,
@@ -1974,9 +1904,7 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
       "takos-executor-tier3",
     ]);
     expect(cleanup.changed).toBe(true);
-    expect(
-      calls.filter(({ url }) => url.includes("/d1/database/d1-1/query")),
-    ).toHaveLength(d1QueryCallsBeforeCleanup);
+    expect(calls.every(({ url }) => !url.includes("/d1/database/"))).toBe(true);
     const cleanupAgain = await runBridge("recovery-cleanup", {
       env: changedInputEnv,
       cwd: directory,
@@ -2017,19 +1945,16 @@ test("post-worker reconciliation uses the raw Containers applications endpoint, 
   }
 });
 
-test("pre-worker proves Vectorize ownership on the bootstrap version before a D1 ledger failure", async () => {
+test("pre-worker proves Vectorize ownership on the bootstrap version", async () => {
   const directory = await mkdtemp("takos-cloudflare-bridge-test-");
   try {
     const absoluteDirectory = resolve(directory);
-    const migrationDirectory = join(absoluteDirectory, "migrations");
     const assetsDirectory = join(absoluteDirectory, "assets");
     const artifactPath = join(absoluteDirectory, "worker.js");
     const bootstrapPath = join(absoluteDirectory, "durable-object-migration-bootstrap.js");
     const containerPath = join(absoluteDirectory, "containers.json");
     const { mkdir } = await import("node:fs/promises");
-    await mkdir(migrationDirectory);
     await mkdir(assetsDirectory);
-    await writeFile(join(migrationDirectory, "0001_schema.sql"), "CREATE TABLE users (id TEXT);\n");
     await writeFile(join(assetsDirectory, "index.js"), "export const asset = true;\n");
     await writeFile(artifactPath, "export default {};\n");
     await writeFile(bootstrapPath, "export class ExecutorContainerTier1 {}; export default {};\n");
@@ -2069,11 +1994,9 @@ test("pre-worker proves Vectorize ownership on the bootstrap version before a D1
       TAKOS_CLOUDFLARE_ENVIRONMENT: "staging",
       TAKOS_CLOUDFLARE_ACCOUNT_ID: "account-1",
       TAKOS_CLOUDFLARE_WORKER_NAME: "takos-staging",
-      TAKOS_CLOUDFLARE_D1_DATABASE_ID: "d1-1",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_NAME: "takos-staging-embeddings",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_DIMENSIONS: "768",
       TAKOS_CLOUDFLARE_VECTOR_INDEX_METRIC: "cosine",
-      TAKOS_CLOUDFLARE_MIGRATION_SET_PATH: migrationDirectory,
       TAKOS_CLOUDFLARE_WORKER_ARTIFACT_PATH: artifactPath,
       TAKOS_CLOUDFLARE_WORKER_ASSETS_PATH: assetsDirectory,
       TAKOS_CLOUDFLARE_CONTAINER_DESIRED_CONFIG_PATH: containerPath,
@@ -2156,22 +2079,14 @@ test("pre-worker proves Vectorize ownership on the bootstrap version before a D1
         vectorExists = true;
         return envelope({});
       }
-      if (url.endsWith("/d1/database/d1-1/query")) {
-        const sql = ((calls.at(-1)?.body ?? {}) as { sql?: string }).sql ?? "";
-        if (sql.startsWith("CREATE TABLE")) {
-          return envelope({ success: false, errors: [{ code: 9000, message: "ledger create failed" }] });
-        }
-        throw new Error(`unexpected D1 query: ${sql}`);
-      }
       if (url.includes("/containers/applications?name=") && method === "GET") {
         return envelope([]);
       }
       return envelope({ error: `unexpected ${method} ${url}` }, 500);
     };
 
-    await expect(runBridge("pre-worker", { env, cwd: directory, fetchImpl })).rejects.toThrow(
-      "cloudflare_d1_query_failed",
-    );
+    const preWorker = await runBridge("pre-worker", { env, cwd: directory, fetchImpl });
+    expect(preWorker.vector.status).toBe("created");
     expect(vectorExists).toBe(true);
     expect(uploads).toHaveLength(2);
     expect(
@@ -2187,34 +2102,33 @@ test("pre-worker proves Vectorize ownership on the bootstrap version before a D1
     const firstUpload = uploadCallIndexes[0] ?? -1;
     const vectorCreate = calls.findIndex(({ method, url }) => method === "POST" && url.endsWith("/vectorize/v2/indexes"));
     const proofUpload = uploadCallIndexes[1] ?? -1;
-    const d1Create = calls.findIndex(({ method, url, body }) => method === "POST" && url.endsWith("/d1/database/d1-1/query") && typeof body === "object" && body !== null && "sql" in body && String((body as { sql: string }).sql).startsWith("CREATE TABLE"));
     expect(firstUpload).toBeGreaterThanOrEqual(0);
     expect(vectorCreate).toBeGreaterThan(firstUpload);
     expect(proofUpload).toBeGreaterThan(vectorCreate);
-    expect(d1Create).toBeGreaterThan(proofUpload);
 
-    const d1CallsBeforeCleanup = calls.filter(({ url }) => url.includes("/d1/database/d1-1/query")).length;
     const cleanup = await runBridge("recovery-cleanup", { env, cwd: directory, fetchImpl });
     expect(cleanup.vector.status).toBe("deleted");
     expect(cleanup.containers.deleted).toEqual([]);
-    expect(calls.filter(({ url }) => url.includes("/d1/database/d1-1/query"))).toHaveLength(d1CallsBeforeCleanup);
+    expect(calls.every(({ url }) => !url.includes("/d1/database/"))).toBe(true);
     expect(calls.some(({ method, url }) => method === "DELETE" && url.endsWith("/vectorize/v2/indexes/takos-staging-embeddings"))).toBe(true);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
 });
 
-test("migration collection ignores policy Markdown and preserves duplicate version names", async () => {
-  const directory = await mkdtemp("takos-cloudflare-bridge-test-");
-  try {
-    await (await import("node:fs/promises")).mkdir(join(directory, "nested"));
-    await writeFile(join(directory, "MIGRATION_SAFETY.md"), "policy\n");
-    await writeFile(join(directory, "0043_a.sql"), "select 1;\n");
-    await writeFile(join(directory, "0043_b.sql"), "select 2;\n");
-    const files = await migrationFiles(directory);
-    expect(files.map((file) => file.name)).toEqual(["0043_a.sql", "0043_b.sql"]);
-    expect(files[0]?.sha256).not.toBe(files[1]?.sha256);
-  } finally {
-    await rm(directory, { force: true, recursive: true });
+test("the bridge helper carries no D1 migration surface", async () => {
+  const helper = await readFile(
+    new URL("./takos-cloudflare-opentofu-bridge.ts", import.meta.url),
+    "utf8",
+  );
+  for (const token of [
+    "_takos_opentofu_migrations",
+    "d1Import",
+    "d1Query",
+    "migrationSetPath",
+    "TAKOS_CLOUDFLARE_MIGRATION_SET_PATH",
+    "TAKOS_CLOUDFLARE_D1_DATABASE_ID",
+  ]) {
+    expect(helper).not.toContain(token);
   }
 });

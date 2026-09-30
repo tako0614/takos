@@ -55,7 +55,34 @@ variable "executor_capacity" {
 }
 
 variable "runtime_secrets_provisioned" {
-  description = "Set to true only after the five Takos runtime secrets (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, PLATFORM_PUBLIC_KEY) already exist on the target Worker. This module never holds a runtime secret value, so it binds them with the Cloudflare `inherit` binding type, which carries an existing value forward without sending it. A first install has nothing to inherit: leave this false, apply, supply the five values out of band, then set it to true and apply again."
+  description = "Whether the five Takos runtime secrets (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY, PLATFORM_PUBLIC_KEY) already exist on the target Worker. This module never holds a runtime secret value, so it binds them with the Cloudflare `inherit` binding type, which carries an existing value forward without sending it. It defaults to true because a Worker Version's binding list is complete: an apply with this false publishes a version with no ENCRYPTION_KEY, and everything encrypted under it stays unreadable. Only a first install has nothing to inherit, and it must say so through first_install_acknowledgement."
+  type        = bool
+  default     = true
+}
+
+variable "first_install_acknowledgement" {
+  description = "Exact acknowledgement that this apply is a first install with no runtime secret values yet: FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS. Required whenever runtime_secrets_provisioned is false, and it must be empty otherwise. Supply the five values out of band after the first apply, clear this, and apply again."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.first_install_acknowledgement == "" || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "first_install_acknowledgement must be empty or exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS."
+  }
+
+  validation {
+    condition     = var.runtime_secrets_provisioned || var.first_install_acknowledgement == "FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS"
+    error_message = "runtime_secrets_provisioned = false drops every runtime secret binding from the next Worker Version, including ENCRYPTION_KEY, and everything encrypted under it stays unreadable. Only a first install may do that, and it must set first_install_acknowledgement = \"FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS\"."
+  }
+
+  validation {
+    condition     = !var.runtime_secrets_provisioned || var.first_install_acknowledgement == ""
+    error_message = "first_install_acknowledgement must be empty once runtime_secrets_provisioned is true; leaving it set would carry a first-install waiver into ordinary applies."
+  }
+}
+
+variable "vector_index_provisioned" {
+  description = "Set to true only when the Vectorize index named by the `cloudflare_vectorize_index_name` Output already exists in this account. The Cloudflare provider cannot create a Vectorize index, so this module cannot create one on the ordinary provider path; binding `VECTORIZE` to an index that does not exist would make the Worker report `vectorSearch: vectorize` and then fail inside every vector call. Left false, the Worker Version omits the binding and the deployment runs in the declared `vectorSearch: disabled` mode. The provider-gap bridge creates the index itself and turns the binding on without this input."
   type        = bool
   default     = false
 }
@@ -117,7 +144,7 @@ variable "env" {
       for name, value in var.env :
       can(regex("^[A-Z_][A-Z0-9_]{0,127}$", name)) &&
       !can(regex("(SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_?KEY|API_?KEY)", upper(name))) &&
-      !contains([
+      !contains(concat([
         "TAKOSUMI_ACCOUNTS_URL",
         "OIDC_ISSUER_URL",
         "OIDC_CLIENT_ID",
@@ -144,12 +171,7 @@ variable "env" {
         "EXECUTOR_CONTAINER_TIER2",
         "EXECUTOR_CONTAINER_TIER3",
         "TAKOS_EGRESS",
-        "ENCRYPTION_KEY",
-        "TAKOS_AGENT_START_TOKEN",
-        "TAKOS_INTERNAL_API_SECRET",
-        "PLATFORM_PRIVATE_KEY",
-        "PLATFORM_PUBLIC_KEY",
-      ], name)
+      ], local.runtime_secret_binding_names), name)
     ])
     error_message = "env keys must be uppercase Worker plain-text variable names and must not be secret-like or reserved by the Takos module."
   }

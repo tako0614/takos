@@ -1,8 +1,11 @@
-# Architecture Diagrams
+# アーキテクチャ図
 
-**Takos owns one provider-neutral resource contract and one current product-graph adapter.** The Cloudflare provider-gap bridge is off by default; ordinary production provider applies leave unsupported gaps unresolved, and disposable E2E runs must select a reviewed mode explicitly. Takosumi installs and applies `deploy/opentofu/cloudflare` as an ordinary Capsule, recording **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve the provider to an explicit ProviderConnection, and policy resolves provider allowlists and state handling.
+**Takos は 1 つの provider-neutral resource contract と 1 つの現行 product-graph adapter を持ちます。**
+Cloudflare provider-gap bridge は既定で無効、Takosumi は
+`deploy/opentofu/cloudflare` を普通の Capsule として install・apply し、
+**Capsule → Run → StateVersion → Output** を記録します。
 
-## Deploy flow (Takosumi run ledger)
+## Deploy flow（Takosumi の run ledger）
 
 ```mermaid
 flowchart LR
@@ -22,9 +25,10 @@ flowchart LR
   RP -. owns execution & credentials .-> AP
 ```
 
-The Cloudflare adapter provisions D1 / KV / R2 / Queues and uses Wrangler for runtime-only wiring. It does not change the product contract.
+Cloudflare adapter は D1 / KV / R2 / Queues を provision し、runtime だけの配線に
+Wrangler を使います。product contract 自体は変えません。
 
-## Direct Cloudflare runtime profile (one Worker)
+## Direct Cloudflare runtime profile（1 つの Worker）
 
 ```mermaid
 flowchart TB
@@ -44,18 +48,15 @@ flowchart TB
   Op -- signed envelope (tier 3) --> W
 ```
 
-This diagram is the direct Cloudflare adapter, not the provider-neutral product contract. A Takoform host projects the same logical bindings and agent service through its own backend. Trust boundaries are properties of the selected, Takosumi-applied topology and are validated by the reviewed plan. See
-[Internal trust boundaries](./internal-trust-boundaries.md) for the canonical decision on tier 1 (binding boundary),
-tier 2 (per-run capability token), and tier 3 (signed-request envelope).
+この図は direct Cloudflare adapter であり、provider-neutral の product contract ではありません。
+Takoform host は同じ論理 binding と agent service を自分の backend で投影します。
+trust boundary は選択され Takosumi が apply したトポロジーの性質であり、reviewed plan で
+検証されます。tier 1（binding boundary）、tier 2（per-run capability token）、
+tier 3（signed-request envelope）の正本は
+[Internal trust boundaries](./internal-trust-boundaries.md) を参照してください。
 
-## Boundary
+## 次に読む
 
-Takos owns the product surface (chat, agent, memory, Workspaces, Git service profile UX, bundled-app launcher metadata,
-file-handler metadata, MCP-facing product metadata). Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the ProviderConnection / ProviderBinding / policy-owned execution. The Takosumi Accounts plane owns
-account-plane policy: account, billing, OIDC, and dashboard.
-
-## References
-
-- [Deploy overview](/deploy/)
+- [システムアーキテクチャ](/architecture/system-architecture)
 - [Internal trust boundaries](./internal-trust-boundaries.md)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [セルフホスト概要](/deploy/)

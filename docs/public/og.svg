@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Takos Docs">
+  <defs>
+    <radialGradient id="bloom" cx="100%" cy="0%" r="95%">
+      <stop offset="0%" stop-color="#dc2626" stop-opacity="0.5" />
+      <stop offset="40%" stop-color="#7c1010" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#0a0a0a" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a0a" />
+      <stop offset="0.55" stop-color="#7c1010" />
+      <stop offset="1" stop-color="#dc2626" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0a0a0a" />
+  <rect width="1200" height="630" fill="url(#bloom)" />
+  <g transform="translate(96,120) scale(2.6)">
+    <rect x="6" y="6" width="30" height="10" rx="2.5" fill="url(#mark)" opacity="0.55" />
+    <rect x="9" y="19" width="30" height="10" rx="2.5" fill="url(#mark)" opacity="0.78" />
+    <rect x="12" y="32" width="30" height="10" rx="2.5" fill="url(#mark)" />
+  </g>
+  <text x="96" y="400" font-family="'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif" font-size="132" font-weight="800" letter-spacing="-5" fill="#fafafa">Takos</text>
+  <text x="98" y="470" font-family="'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif" font-size="42" font-weight="600" fill="#a3a3a3">Docs</text>
+  <text x="98" y="528" font-family="ui-monospace,'JetBrains Mono',monospace" font-size="26" letter-spacing="1" fill="#ff8a7a">AI work · files, git, memory, apps</text>
+</svg>

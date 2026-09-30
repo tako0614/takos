@@ -1,3 +1,5 @@
+import { TAKOS_INSTALL_REF } from "./takos-release.generated.ts";
+
 // The Takosumi platform worker hosts the account-plane, dashboard, and
 // dashboard-owned install prefill entrypoint on its bare origin:
 // app.takosumi.com in production, app.takosumi.test in local-substrate. Takos
@@ -11,11 +13,12 @@ const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
 // Takos ships its current product-graph OpenTofu adapter under deploy/opentofu;
 // the deep link points the install wizard at that module path inside the repo
 // so the Capsule resolves to the module root rather than the repo root.
-// Fallback must resolve to an immutable release because takos.jp can be built
-// without operator env overrides. Publish and verify the GitHub immutable
-// release before deploying a website build that names its tag; never use a
-// moving branch ref.
-const DEFAULT_TAKOS_REF = "v0.12.8";
+// The fallback ref must resolve to an immutable release because takos.jp can
+// be built without operator env overrides, so it is not a literal anyone
+// advances by hand: it is the package version, projected by
+// scripts/generate-website-release-ref.ts, and the takos-site deploy surface
+// refuses to publish while that tag does not exist on origin.
+const DEFAULT_TAKOS_REF = TAKOS_INSTALL_REF;
 const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/cloudflare";
 
 function installUrl(host: string): string {

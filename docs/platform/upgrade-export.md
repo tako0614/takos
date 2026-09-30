@@ -1,23 +1,23 @@
-# Capsule Update / Rollback / Export
+# Capsule の update / rollback / export
 
-このページは、Takos 上の installed app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本は
+このページは、Takos 上の installed app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本 (正とする情報) は
 Takosumi control plane の Workspace / Project / Capsule / Source / Run / StateVersion / Output / AuditEvent です。provider access は
 ProviderBinding が provider (+ optional alias) を explicit ProviderConnection に解決します。runtime surface は
 Interface、runtime authorization は InterfaceBinding が正本です。Output は apply evidence であり、runtime registry や
 OIDC / billing / secret delivery schema ではありません。
 
-## Authority Split
+## 権限の分担
 
 | 操作                              | 正本                                                                              | 補足                                                                                      |
 | --------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Capsule create / plan / apply flow      | 作成は compatibility check と明示確認後。`/install` は prefill link。                     |
-| ローカル作業 tree の upload       | `takosumi deploy ./dir` -> upload-origin Source snapshot -> `POST /api/v1/deploy` | developer / operator helper。標準 product flow は Git URL install。                       |
+| Git URL から install              | dashboard `/install?git=...` -> `/new` -> Source / Capsule plan / apply flow      | API では `POST /internal/v1/sources`、Source sync、`POST /internal/v1/capsules/:capsuleId/plan`、`POST /internal/v1/apply-runs` を使います。作成は compatibility check と明示確認後。`/install` は prefill link。 |
+| ローカル作業 tree の upload       | 現在の CLI / API に local tree upload surface はありません                           | Git URL、ref、module path を Source として登録し、commit に固定した Snapshot から plan / apply へ進みます。 |
 | update                            | Source sync -> plan Run -> approval -> apply Run -> StateVersion / Output         | exact Run id と Workspace / Capsule fence を保った通常のRun flow。                        |
-| rollback                          | retained StateVersion/source identity -> rollback plan -> approval -> apply Run   | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作る。 |
-| export / import                   | operator runbook + canonical Source / Capsule / StateVersion / Output reads       | portability handoff。secret/OIDC/runtime credential valueは移植せずtarget側で再発行する。 |
-| runtime discovery / authorization | Interface / InterfaceBinding                                                      | Output名やAccounts固有projectionから権限を推測しない。                                    |
+| rollback                          | retained StateVersion/source identity -> rollback plan -> approval -> apply Run   | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作ります。 |
+| export / import                   | operator runbook + 正本の Source / Capsule / StateVersion / Output の read       | portability handoff。secret/OIDC/runtime credential valueは移植せずtarget 側で再発行します。 |
+| runtime discovery / authorization | Interface / InterfaceBinding                                                      | Output名やAccounts固有projectionから権限を推測しません。                                    |
 
-## Update Flow
+## Update の流れ
 
 Update は既存 Capsule の Source ref を変え、通常の plan / apply flow をもう一度通します。
 
@@ -53,8 +53,9 @@ backup / restore Run、または operator-owned data restorer evidence で扱い
 
 ## Export / Import
 
-Export は Capsule を別 operator / self-host へ移すための portability handoff です。canonical ledgerのreadとoperator runbookを
-組み合わせ、retired projection APIを別のdeploy authorityとして再導入しません。
+Export は Capsule を別 operator / self-host へ移すための portability handoff です。現在の Source / Capsule /
+StateVersion / Output を API で読み、operator runbook と組み合わせます。別の deploy authority や local-tree upload
+surface を持つ projection API はありません。
 
 Export bundle に入れてよいもの:
 
@@ -74,23 +75,25 @@ Export bundle に入れないもの:
 target 側のoperatorは OIDC client、pairwise subject、InterfaceBinding由来のruntime authority、runtime secret、billing設定を再発行します。
 data dump / restore が必要な app は、その Capsule または operator runbook が restore contract を持つ必要があります。
 
-## CLI Boundary
+## CLI の境界
 
-公開の標準導線は dashboard の Git URL install です。CLI は補助です。
+公開の標準導線は dashboard の Git URL install です。現在の CLI は Run の確認と operator 管理用の補助操作を提供します。
 
 ```bash
-takosumi deploy ./my-capsule --space @me --name my-app --provider cloudflare=conn_cf
-takosumi plan ./my-capsule --space @me --name my-app
 takosumi status <run-id>
 takosumi logs <run-id>
+takosumi connections list
+takosumi install-configs patch <install-config-id> --file <install-config-patch.json>
 ```
 
-`takosumi internal installations export ...` / `takosumi internal installations import ...` は legacy-named operator / development helper であり、
-通常の install / update / rollback product path として公開しません。operator runbookではcanonical ledger readとtarget側の再設定を扱います。
+Source / Capsule の plan / apply は dashboard または上記の deploy-control API で行います。CLI に local tree の
+upload、plan、export、import の操作はありません。`installations` domain は廃止済みで、呼び出すとエラーになります。
+移行先では Git URL から Source / Capsule を作り直し、plan / apply と target 側の credential、OIDC、InterfaceBinding を
+再設定します。operator runbook では正本の ledger の read と target 側の再設定を扱います。
 
-## Current Revision Boundary
+## 現在の revision の境界
 
-Update / rollback / export は canonical deploy-control ledgerを正本にします。current implementation では、
+Update / rollback / export は deploy-control ledger を正本にします。current implementation では、
 Source snapshot / plan digest / dependency evidence / base StateVersion / Output を pin した reviewed apply が
 新しい StateVersion / Output revision を作る唯一の update authority です。runtime discoveryはInterface、認可はInterfaceBinding、
 commercial billing / usage ingestはoperator extensionとして分離します。Accounts の記録操作もアプリの更新とは別に扱い、
@@ -101,15 +104,15 @@ operator review です。provider data copy、schema migration の巻き戻し�
 subject の移植は current guarantee としては扱わないため、必要な場合は Capsule 側 contract または operator-owned restore evidence
 で別途扱います。
 
-## Status Boundary
+## Status の境界
 
 Capsule の public status は `pending` / `active` / `stale` / `error` / `disabled` / `destroyed` に固定します。
 `upgrading` / `rolling-back` / `exporting` / `importing` / `materializing` は operation phase や event payload の hint であり、
 public status enum ではありません。
 
-## References
+## 関連ページ
 
 - [Install paths](../apps/install-paths.md)
 - [Deploy overview](/deploy/)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi API](https://takosumi.com/docs/reference/api)
 - [Takosumi CLI](https://takosumi.com/docs/reference/cli)

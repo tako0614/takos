@@ -8,17 +8,12 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { REQUIRED_RUNTIME_SECRET_NAMES as RUNTIME_SECRET_BINDING_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const moduleRoot = join(root, "deploy", "opentofu", "cloudflare");
 const fixtureRoot = join(moduleRoot, "fixtures", "generated-root");
 
-const RUNTIME_SECRET_BINDING_NAMES = [
-  "ENCRYPTION_KEY",
-  "TAKOS_AGENT_START_TOKEN",
-  "TAKOS_INTERNAL_API_SECRET",
-  "PLATFORM_PRIVATE_KEY",
-  "PLATFORM_PUBLIC_KEY",
-] as const;
 
 await runTofu(
   ["init", "-backend=false", "-input=false", "-lockfile=readonly", "-no-color"],
@@ -216,21 +211,23 @@ async function assertRuntimeSecretBindings(): Promise<void> {
       assertNoSecretMaterialInPlan(name, plan);
     }
 
-    const absentNames = workerVersionBindings(absent)
-      .map((binding) => binding.name)
-      .filter((binding) =>
-        (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding),
-      );
+    const absentNames = bindingNames(workerVersionBindings(absent));
     if (absentNames.length !== 0) {
       throw new Error(
         `runtime_secrets_provisioned = false must bind no runtime secret name; found ${absentNames.join(", ")}`,
       );
     }
 
-    const inheritedBindings = workerVersionBindings(inherited).filter((binding) =>
-      (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(binding.name),
+    await assertUnacknowledgedRuntimeSecretDropRefused(planRoot);
+
+    const inheritedBindings = workerVersionBindings(inherited).filter(
+      (binding) =>
+        typeof binding.name === "string" &&
+        (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(
+          binding.name,
+        ),
     );
-    const inheritedNames = inheritedBindings.map((binding) => binding.name).sort();
+    const inheritedNames = bindingNames(inheritedBindings).sort();
     const expectedNames = [...RUNTIME_SECRET_BINDING_NAMES].sort();
     if (
       inheritedNames.length !== expectedNames.length ||
@@ -253,6 +250,47 @@ async function assertRuntimeSecretBindings(): Promise<void> {
   }
 }
 
+/**
+ * The one apply that may publish a Worker Version without the runtime secret
+ * bindings is the first, before any value exists. Prove the module refuses the
+ * same shape without the acknowledgement, so a routine apply cannot reach it.
+ */
+async function assertUnacknowledgedRuntimeSecretDropRefused(
+  planRoot: string,
+): Promise<void> {
+  const planPath = join(planRoot, "unacknowledged.plan");
+  const attempt = Bun.spawn([
+    "tofu",
+    "plan",
+    "-refresh=false",
+    "-input=false",
+    "-lock=false",
+    "-no-color",
+    `-out=${planPath}`,
+    "-var=project_name=takos-runtime-secret-unacknowledged",
+    "-var=public_url=https://takos-runtime-secret-unacknowledged.example.com",
+    "-var=environment=staging",
+    "-var=opentofu_plan_mode=true",
+    "-var=runtime_secrets_provisioned=false",
+    '-var=cloudflare={account_id="00000000000000000000000000000000"}',
+  ], { cwd: moduleRoot, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(attempt.stdout).text(),
+    new Response(attempt.stderr).text(),
+    attempt.exited,
+  ]);
+  if (exitCode === 0) {
+    throw new Error(
+      "runtime_secrets_provisioned = false must be refused without first_install_acknowledgement",
+    );
+  }
+  if (!`${stdout}${stderr}`.includes("first_install_acknowledgement")) {
+    throw new Error(
+      "the refusal must name first_install_acknowledgement so an operator knows the only way through",
+    );
+  }
+}
+
 async function createRuntimeSecretPlan(
   planRoot: string,
   name: string,
@@ -272,6 +310,14 @@ async function createRuntimeSecretPlan(
       "-var=environment=staging",
       "-var=opentofu_plan_mode=true",
       `-var=runtime_secrets_provisioned=${provisioned ? "true" : "false"}`,
+      // Dropping the bindings is a first-install-only act, so the plan that
+      // proves the absent shape has to carry the same acknowledgement an
+      // operator would type.
+      ...(provisioned
+        ? []
+        : [
+          "-var=first_install_acknowledgement=FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS",
+        ]),
       '-var=cloudflare={account_id="00000000000000000000000000000000"}',
     ],
     moduleRoot,
@@ -316,6 +362,18 @@ function isValueBearingSecretBinding(binding: Record<string, unknown>): boolean 
   return ["text", "key_base64", "key_jwk"].some(
     (field) => binding[field] !== undefined && binding[field] !== null,
   );
+}
+
+/** The runtime-secret binding names present in a plan's Worker version. */
+function bindingNames(
+  bindings: readonly Record<string, unknown>[],
+): string[] {
+  return bindings
+    .map((binding) => binding.name)
+    .filter((name): name is string => typeof name === "string")
+    .filter((name) =>
+      (RUNTIME_SECRET_BINDING_NAMES as readonly string[]).includes(name),
+    );
 }
 
 function workerVersionBindings(plan: unknown): Record<string, unknown>[] {

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import { REQUIRED_RUNTIME_SECRET_NAMES } from "../../worker/shared/config/runtime-secrets.ts";
 
@@ -17,18 +17,28 @@ const installCtaSource = await readFile(
   new URL("website/src/components/InstallCTA.tsx", root),
   "utf8",
 );
+const websiteReleaseSource = await readFile(
+  new URL("website/src/lib/takos-release.generated.ts", root),
+  "utf8",
+);
 const modules = {
   "deploy/opentofu/cloudflare": await readFile(
     new URL("deploy/opentofu/cloudflare/variables.tf", root),
     "utf8",
   ),
 };
+// The name set is projected from src/worker/shared/config/runtime-secrets.ts
+// into a generated local, so the module reads it rather than restating it.
+const platformSecretNamesSource = await readFile(
+  new URL(
+    "deploy/opentofu/cloudflare/modules/platform/runtime-secret-names.generated.tf",
+    root,
+  ),
+  "utf8",
+);
 const platformModuleSource = await readFile(
   new URL("deploy/opentofu/cloudflare/modules/platform/main.tf", root),
   "utf8",
-);
-const retiredTakoformEntries = await readdir(
-  new URL("deploy/opentofu/takoform/", root),
 );
 
 test("Takos publishes repository install hints and service declarations", () => {
@@ -58,7 +68,6 @@ test("Takos publishes repository install hints and service declarations", () => 
     "deploy/opentofu/cloudflare/.takos-build/worker/index.js",
     "deploy/opentofu/cloudflare/.takos-build/assets",
     "deploy/opentofu/cloudflare/.takos-build/bridge/takos-cloudflare-opentofu-bridge.ts",
-    "deploy/opentofu/cloudflare/.takos-build/migrations",
     "deploy/opentofu/cloudflare/.takos-build/container-desired.json",
     "deploy/opentofu/cloudflare/.takos-build/manifest.json",
   ]);
@@ -143,17 +152,19 @@ test("Takos publishes repository install hints and service declarations", () => 
   );
   expect(cloudflareVariable).not.toMatch(/\n\s+default\s+=/);
   expect(cloudflareVariable).toMatch(/\n\s+account_id\s+=\s+string/);
-
-  expect(retiredTakoformEntries.filter((name) => /\.(?:tf|tofu)(?:\.json)?$/u.test(name))).toEqual([]);
-  expect(retiredTakoformEntries).toEqual(expect.arrayContaining([
-    "main.tf.history",
-    "outputs.tf.history",
-  ]));
 });
 
 test("the repository source and website CTA use one exact Takos release", () => {
-  const candidateTag = "v0.12.8";
+  // The published ref is a relation, not a literal: it is the package version,
+  // and the generated module the website imports has to agree with it. The
+  // literal this replaced sat at v0.12.8 against a package at 0.12.7, so the
+  // next website build would have shipped an install link and a self-host
+  // runbook naming a tag that resolves nowhere.
+  const candidateTag = `v${packageJson.version}`;
   expect(packageJson.takosRelease.version).toBe(packageJson.version);
+  expect(websiteReleaseSource).toContain(
+    `export const TAKOS_INSTALL_REF = "${candidateTag}";`,
+  );
   expect(websiteCloudUrlSource).toContain(
     'const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git"',
   );
@@ -161,8 +172,9 @@ test("the repository source and website CTA use one exact Takos release", () => 
     'url.searchParams.set("git", takosInstallGitUrl());',
   );
   expect(websiteCloudUrlSource).toContain(
-    `const DEFAULT_TAKOS_REF = "${candidateTag}"`,
+    "const DEFAULT_TAKOS_REF = TAKOS_INSTALL_REF;",
   );
+  expect(websiteCloudUrlSource).not.toMatch(/DEFAULT_TAKOS_REF = "/u);
   expect(websiteCloudUrlSource).toContain(
     'const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu/cloudflare"',
   );
@@ -174,8 +186,8 @@ test("the repository source and website CTA use one exact Takos release", () => 
   const selfHostSequence = [
     "git clone https://github.com/tako0614/takos.git",
     "git fetch --tags origin",
-    "git checkout --detach v0.12.8",
-    "git rev-parse --verify v0.12.8",
+    "git checkout --detach {TAKOS_INSTALL_REF}",
+    "git rev-parse --verify {TAKOS_INSTALL_REF}",
     "bun install --frozen-lockfile",
     "bun run build:opentofu-worker-artifact",
     'install -d -m 700 "$HOME/.config/takos"',
@@ -375,7 +387,7 @@ test("no two requirements deliver to the same variable or binding", () => {
  * has to name all five, because it binds them without holding a value.
  */
 test("the OpenTofu module names every runtime secret, including the operator-supplied pair", () => {
-  const declared = platformModuleSource.match(
+  const declared = platformSecretNamesSource.match(
     /runtime_secret_binding_names\s*=\s*\[([^\]]*)\]/u,
   );
   expect(declared).not.toBeNull();

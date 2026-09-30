@@ -1,36 +1,26 @@
 # yurucommu
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+yurucommu は、フィード・ストーリー・プロフィール・コミュニティ・DM をひとつにまとめた
+self-hostable な ActivityPub SNS です。Takos の Workspace に Capsule として install
+すると、その Workspace から独立した SNS が自分のサーバー上で動きます。
 
-## Current Flow
+## Capsule としての位置づけ
 
-1. Choose a Git URL/ref for the OpenTofu Capsule repository.
-2. Create a `plan` type Run and review its proposed changes, warnings, and run ledger entry.
-3. Apply the reviewed plan as an `apply` type Run, which records a StateVersion and Output on success.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution for the run.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
+- 独立した product で、Takos の部品ではありません。Takos に install しなくても
+  plain OpenTofu module として単独で deploy できます。
+- Capsule として install すると、ActivityPub で他のサーバーや fediverse と
+  連合する SNS が Workspace に追加されます。
+- UI、API、リアルタイム配信は同梱の fullstack Worker が 1 つの origin で提供します。
 
-## Takos Boundary
+## やり取りの形
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and run ledger evidence. Takosumi Accounts plane owns account-plane policy, billing, OIDC, and the dashboard.
+- 投稿・返信・リアクション・検索・DM・コミュニティ・通知は yurucommu 自身の UI で行います。
+- agent からの操作は、yurucommu が公開する MCP ツール経由で行えます。
+- ActivityPub のフォロー・配送は外部サーバーとも成立します。
 
-## API Shape
+## 次に読む
 
-```json
-{
-  "spaceId": "space_1",
-  "repository": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-`apply` type Run requests reference the reviewed `plan` type Run returned by the plan step. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [yurucommu プロダクト](https://yurucommu.com/)
+- [yurucommu repository](https://github.com/tako0614/yurucommu)
+- [Git URL から install](/platform/store)
+- [Bundled Apps](/platform/featured-apps)

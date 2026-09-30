@@ -1,6 +1,5 @@
 export type ClaimType = "fact" | "preference" | "decision" | "observation";
 export type ClaimStatus = "active" | "superseded" | "retracted";
-export type ClaimRelation = string;
 
 export interface Claim {
   id: string;

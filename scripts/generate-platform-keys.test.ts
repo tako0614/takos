@@ -1,16 +1,23 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  chmod,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
   rm,
   stat,
+  symlink,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { validateRuntimeSecrets } from "../src/worker/shared/config/runtime-secrets.ts";
+import {
+  REQUIRED_RUNTIME_SECRET_NAMES,
+  validateRuntimeSecrets,
+} from "../src/worker/shared/config/runtime-secrets.ts";
 
 const SOURCE_ROOT = resolve(import.meta.dir, "..");
 const GENERATOR = resolve(import.meta.dir, "generate-platform-keys.ts");
@@ -18,13 +25,6 @@ const RUNTIME_SECRETS_FILENAME = "takos-runtime-secrets.json";
 
 // The default public-client bundle must produce every required runtime name,
 // not just its key pair.
-const REQUIRED_RUNTIME_SECRET_NAMES = [
-  "ENCRYPTION_KEY",
-  "PLATFORM_PRIVATE_KEY",
-  "PLATFORM_PUBLIC_KEY",
-  "TAKOS_AGENT_START_TOKEN",
-  "TAKOS_INTERNAL_API_SECRET",
-] as const;
 
 type RuntimeSecretName = (typeof REQUIRED_RUNTIME_SECRET_NAMES)[number];
 
@@ -243,6 +243,36 @@ test("preserves no-overwrite behavior for confidential OIDC and runtime JSON", a
       true,
     );
     expect(digest(await readFile(runtimePath, "utf8"))).toBe(runtimeDigest);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("creates the canonical secret directory owner-only for first-install custody", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-platform-private-dir-"));
+  const outputDir = join(root, "secrets");
+  try {
+    const result = await runGenerator(outputDir);
+    expect(result.exitCode).toBe(0);
+    expect((await stat(outputDir)).mode & 0o777).toBe(0o700);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses a symlinked output directory even with force", async () => {
+  const root = await mkdtemp(join(tmpdir(), "takos-platform-symlink-dir-"));
+  const realDir = join(root, "real");
+  const outputDir = join(root, "secrets");
+  try {
+    await mkdir(realDir);
+    await writeFile(join(realDir, ".keep"), "keep");
+    await chmod(realDir, 0o700);
+    await symlink(realDir, outputDir, "dir");
+    const result = await runGenerator(outputDir, "--force");
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toMatch(/symbolic link|canonical/u);
+    expect((await readdir(realDir)).sort()).toEqual([".keep"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,4 +1,5 @@
 import * as runtime from "./runtime.ts";
+import { validateTestInventory } from "./test-inventory.ts";
 
 type CheckFailure = {
   path: string;
@@ -6,6 +7,10 @@ type CheckFailure = {
 };
 
 const TAKOS_BOUNDARY_PATH = "deploy/TAKOSUMI_DEPLOY.md";
+const TEST_QUARANTINE_PATH = "quality/test-quarantine.json";
+const TEST_ONLINE_PATH = "quality/test-online.json";
+const ONLINE_TEST_PATH =
+  "scripts/__tests__/takoserver-fetch-tracer.online.test.ts";
 
 const REQUIRED_DOCS = [
   "README.md",
@@ -48,6 +53,9 @@ const RETIRED_PATHS = [
   "web/src/types/group.ts",
   "web/src/types/worker.ts",
   "web/src/views/app/space/DeployPanel.tsx",
+  "web/src/hooks/useReposData.ts",
+  "scripts/generate-takoform-schema-bundle.ts",
+  "scripts/takoform-schema-bundle.test.ts",
 ] as const;
 
 const RETIRED_DIRS = [
@@ -64,6 +72,9 @@ const RETIRED_DIRS = [
   "src/worker/server/routes/resources",
   "src/worker/server/routes/workers",
   "web/src/views/workers",
+  "web/src/views/repos",
+  "deploy/opentofu/takoform",
+  "deploy/distribution-contract",
 ] as const;
 
 const PACKAGE_FORBIDDEN_MARKERS = [
@@ -229,6 +240,63 @@ async function validateRetiredPaths(failures: CheckFailure[]): Promise<void> {
   }
 }
 
+async function trackedTestFiles(failures: CheckFailure[]): Promise<string[]> {
+  const listed = await runtime.runCommand("git", { args: ["ls-files", "-z"] });
+  if (!listed.success) {
+    failures.push({
+      path: ".git",
+      message: "Unable to list tracked files for test inventory validation.",
+    });
+    return [];
+  }
+  return new TextDecoder()
+    .decode(listed.stdout)
+    .split("\0")
+    .filter((path) => /(?:\.test\.tsx?|_test\.ts)$/u.test(path))
+    .sort();
+}
+
+function parseJson(
+  path: string,
+  text: string,
+  failures: CheckFailure[],
+): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    failures.push({
+      path,
+      message: `Unable to parse the test inventory: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    });
+    return undefined;
+  }
+}
+
+function packageScriptValue(
+  packageText: string,
+  name: string,
+): unknown {
+  try {
+    const parsed = JSON.parse(packageText) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) return undefined;
+    const scripts = (parsed as { readonly scripts?: unknown }).scripts;
+    if (
+      typeof scripts !== "object" ||
+      scripts === null ||
+      Array.isArray(scripts)
+    ) return undefined;
+    return (scripts as Record<string, unknown>)[name];
+  } catch {
+    return undefined;
+  }
+}
+
 async function main(): Promise<void> {
   const failures: CheckFailure[] = [];
   const docs = new Map<string, string>();
@@ -273,13 +341,82 @@ async function main(): Promise<void> {
         "Portable build must traverse the real Worker module graph through bun run worker:build.",
     });
   }
-  if (
-    !/"test:product-contracts"\s*:\s*"[^"]*capsules_test\.ts/.test(packageText)
-  ) {
+  const capsuleProductPath = "src/worker/server/routes/capsules_test.ts";
+  const quarantineText = await readRequired(TEST_QUARANTINE_PATH, failures);
+  const onlineText = await readRequired(TEST_ONLINE_PATH, failures);
+  const quarantineValue = parseJson(
+    TEST_QUARANTINE_PATH,
+    quarantineText,
+    failures,
+  );
+  const onlineValue = parseJson(
+    TEST_ONLINE_PATH,
+    onlineText,
+    failures,
+  );
+  const inventoryValidation = validateTestInventory(
+    await trackedTestFiles(failures),
+    quarantineValue,
+    onlineValue,
+  );
+  for (const issue of inventoryValidation.issues) failures.push(issue);
+  const quarantinedFiles = new Set(
+    inventoryValidation.inventory.quarantined,
+  );
+  const onlineFiles = new Set(inventoryValidation.inventory.online);
+  for (const [path, files] of [
+    [TEST_QUARANTINE_PATH, quarantinedFiles],
+    [TEST_ONLINE_PATH, onlineFiles],
+  ] as const) {
+    for (const file of files) {
+      if (await pathExists(file)) continue;
+      failures.push({
+        path,
+        message: `${file} names a test path that does not exist.`,
+      });
+    }
+  }
+  if (!onlineFiles.has(ONLINE_TEST_PATH)) {
+    failures.push({
+      path: TEST_ONLINE_PATH,
+      message: `${ONLINE_TEST_PATH} must be listed as online evidence.`,
+    });
+  }
+  if (quarantinedFiles.has(capsuleProductPath)) {
+    failures.push({
+      path: TEST_QUARANTINE_PATH,
+      message:
+        "Portable tests must exercise the canonical Capsule and Interface product path; " +
+        `${capsuleProductPath} is quarantined.`,
+    });
+  }
+  if (!/"test"\s*:\s*"bun scripts\/run-portable-tests\.ts/.test(packageText)) {
     failures.push({
       path: "package.json",
       message:
-        "Portable tests must exercise the canonical Capsule and Interface product path.",
+        "Portable tests must run through scripts/run-portable-tests.ts so every tracked test file is either run or quarantined with a reason.",
+    });
+  }
+  if (!/"test:online"\s*:\s*"bun scripts\/run-portable-tests\.ts --online"/.test(packageText)) {
+    failures.push({
+      path: "package.json",
+      message:
+        "Online evidence must run through scripts/run-portable-tests.ts --online.",
+    });
+  }
+  const onlineTracerCommand =
+    "bun test scripts/__tests__/takoserver-fetch-tracer.online.test.ts";
+  for (const script of [
+    "takoserver:fetch-tracer:online-evidence",
+    "test:takoserver-fetch-tracer:online",
+  ] as const) {
+    if (packageScriptValue(packageText, script) === onlineTracerCommand) {
+      continue;
+    }
+    failures.push({
+      path: "package.json",
+      message:
+        `${script} must run only ${onlineTracerCommand}.`,
     });
   }
 

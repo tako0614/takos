@@ -11,7 +11,7 @@ allowlist は Takosumi deploy-control plane の ProviderConnection / ProviderBin
 
 - `../takosumi` は Takosumi public contract、OpenTofu-native deploy control
   API、Capsule / Run / StateVersion / Output の run
-  ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を消費する。
+  ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を呼び出す。
 - `takos/deploy/cloudflare` と `takos/deploy/opentofu/cloudflare` は current
   Cloudflare adapter の artifact を所有する。旧Takoform Provider 1.x treeは
   current install authorityを持たない。

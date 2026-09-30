@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun
 import * as runtime from "./runtime.ts";
+import { REQUIRED_RUNTIME_SECRET_NAMES } from "../src/worker/shared/config/runtime-secrets.ts";
 
 type CheckResult = {
   name: string;
@@ -9,16 +10,14 @@ type CheckResult = {
 
 const checks: CheckResult[] = [];
 
-const RUNTIME_SECRET_BINDING_NAMES = [
-  'ENCRYPTION_KEY',
-  'PLATFORM_PRIVATE_KEY',
-  'PLATFORM_PUBLIC_KEY',
-  'TAKOS_AGENT_START_TOKEN',
-  'TAKOS_INTERNAL_API_SECRET',
-];
+const RUNTIME_SECRET_BINDING_NAMES = REQUIRED_RUNTIME_SECRET_NAMES;
 
 const PLATFORM_MODULE_PATH =
   'deploy/opentofu/cloudflare/modules/platform/main.tf';
+// The name set itself is projected from the Worker's own contract, so the
+// module reads it from a generated local rather than retyping it.
+const PLATFORM_SECRET_NAMES_PATH =
+  'deploy/opentofu/cloudflare/modules/platform/runtime-secret-names.generated.tf';
 const REPOSITORY_MANIFEST_PATH = '.well-known/takosumi.json';
 
 /**
@@ -216,7 +215,8 @@ async function checkOutputsExposeNoSecret(): Promise<void> {
 async function checkRuntimeSecretBindingContract(): Promise<void> {
   const failures: string[] = [];
   const platform = await readText(PLATFORM_MODULE_PATH);
-  const declared = platform.match(
+  const projected = await readText(PLATFORM_SECRET_NAMES_PATH);
+  const declared = projected.match(
     /runtime_secret_binding_names\s*=\s*\[([^\]]*)\]/,
   );
   const moduleBindings = declared
@@ -226,10 +226,12 @@ async function checkRuntimeSecretBindingContract(): Promise<void> {
     (name) => !moduleBindings.includes(name),
   );
   if (!declared) {
-    failures.push(`${PLATFORM_MODULE_PATH} declares no runtime_secret_binding_names`);
+    failures.push(
+      `${PLATFORM_SECRET_NAMES_PATH} declares no runtime_secret_binding_names`,
+    );
   } else if (missing.length > 0) {
     failures.push(
-      `${PLATFORM_MODULE_PATH} does not name ${missing.join(', ')}`,
+      `${PLATFORM_SECRET_NAMES_PATH} does not name ${missing.join(', ')}`,
     );
   }
   if (!/type\s*=\s*"inherit"/.test(platform)) {

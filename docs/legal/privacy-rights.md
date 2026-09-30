@@ -105,7 +105,7 @@ allows preference storage for language, theme, and device-local UI choices.
 ## Sources
 
 - GDPR Article 6: https://eur-lex.europa.eu/eli/reg/2016/679/oj
-- CCPA / CPRA regulations: https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf
+- CCPA / CPRA regulations: https://cppa.ca.gov/regulations/pdf/ccpa_statute_eff_20260101.pdf
 - Cloudflare Data Localization Suite:
   https://developers.cloudflare.com/data-localization/
 - Stripe Privacy Center: https://stripe.com/privacy

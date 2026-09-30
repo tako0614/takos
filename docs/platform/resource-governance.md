@@ -3,7 +3,7 @@
 > このページでわかること: Takos のリソース管理・アクセス制御・課金連携の仕組み。
 
 リソースガバナンスは、リソースの
-CRUD、アクセス制御、ランタイム設定、課金ゲートの組み合わせで構成されています。
+CRUD、アクセス制御、ランタイム設定、usage 計測の組み合わせで構成されています。
 
 ## 管理対象
 
@@ -20,7 +20,7 @@ Takos は次の面を別々に管理します。
 
 ### リソース
 
-`/api/resources` がリソース操作の基点です。
+リソース操作の基点となる公開 API はまだありません。設計上の責務は次のとおりです。
 
 - リソースの CRUD
 - access grant (`/access`)
@@ -51,22 +51,16 @@ service / worker ごとにランタイム設定・リミット・フラグを持
 - リソース binding
 - ランタイムフラグ / 設定 / リミット
 
-## billing ゲート
+## billing とレート制限
 
-リクエストパスごとに billing / plan ゲートをかけています。
+Takos app の router には billing / plan ゲートを載せていません。商用の
+billing ポリシーは Takosumi Accounts / Cloud 側が適用します。Takos app
+側が持つのは次の 2 つです。
 
-| ゲート                             | パス                                                               |
-| ---------------------------------- | ------------------------------------------------------------------ |
-| ベクトル検索                       | `/api/spaces/:spaceId/search*`                                     |
-| Embeddings / index                 | `/api/spaces/:spaceId/index*`                                      |
-| セッション実行時間                 | `/api/sessions*`                                                   |
-| Service / WFP の usage             | `/api/services*`                                                   |
-| Agent ランタイム + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*` |
-
-agent 系では次の制限も併用します。
-
-- 週次のランタイムリミット
-- 入力トークンの billing ゲート
+- usage の計測: `app_usage_events` に記録し、`app_usage_rollups` に
+  集約します (agent の入力トークン数を含む)
+- リクエストのレート制限: sliding window / token bucket の
+  Durable Object (`RateLimiterDO`)
 
 ## Usage / billing データモデル
 

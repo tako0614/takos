@@ -27,10 +27,11 @@ export const repository = {
   appsCapsuleReadyOutputs: "{ready}/{total} outputs ready",
   appsCapsuleUpdated: "Updated {date}",
   appsCapsuleSecret: "secret",
-  installStatusPending: "Pending",
+  installStatusPlanning: "Planning",
+  installStatusRecovering: "Recovering",
+  installStatusOutage: "Outage",
   installStatusInstalling: "Installing",
   installStatusStale: "Stale",
-  installStatusError: "Error",
   installStatusFailed: "Failed",
 
   // Branches

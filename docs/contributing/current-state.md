@@ -50,14 +50,14 @@ and Cloudflare distribution artifacts.
 }
 ```
 
-A Capsule points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, and `destroy_apply` runs are recorded as typed Run entries. Takos product routes should call the Takosumi deploy control API or Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
+A Capsule points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, and `destroy_apply` runs are recorded as typed Run entries. Takos product routes should call the Takosumi API or Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi concepts](https://takosumi.com/docs/concepts/)
+- [Takosumi API](https://takosumi.com/docs/reference/api)
 
 ## Portable Verification Boundary
 

@@ -33,7 +33,7 @@ export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
   const db = getDb(c.env.DB);
   const edgeRows = await db.select().from(edges).where(
     and(
-      eq(edges.accountId, spaceId),
+      eq(edges.accountId, access.space.id),
       or(eq(edges.sourceId, nodeId), eq(edges.targetId, nodeId)),
     ),
   ).limit(limit).all();

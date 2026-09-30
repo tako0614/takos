@@ -13,7 +13,7 @@ Takos は、AI エージェントに作業を頼み、その結果をファイ�
 - 必要なアプリを Git URL から追加して、Apps 画面から開く
 - MCP サーバーを接続し、そのツールをエージェントから使う
 - エージェントの回答が完了または失敗したときに通知を受け取る
-- Takosumi Cloud などの Takoform 対応ホストへ配置する
+- Takosumi Hosted などの Takoform 対応ホストへ配置する
 - 必要なら自分の Cloudflare アカウントへ直接セルフホストする
 
 **Workspace** は、会話、ファイル、リポジトリ、メモリ、アプリ、接続をまとめる作業場所です。新しい Workspace にアプリは自動追加されません。必要なものだけを選んで追加します。
@@ -74,9 +74,7 @@ commit の OpenTofu tree を走査し、通常の module と
  hints / service 宣言を導入画面に反映します。Takos の現在の supported adapter は
 `deploy/opentofu/cloudflare` で、Takos の product resource graph を宣言します。Cloudflare provider がまだ表現できない
 gap は通常の production provider apply では解決されず、source graph の完全な反映が必要な disposable E2E だけ
-明示的に provider-gap bridge を有効にします。旧
-`deploy/opentofu/takoform` tree は現行 Form 群で全 graph を表せないため、新規 install
-には使いません。`install.modules` のキーは、Git/OpenTofu tree で実在を確認した module
+明示的に provider-gap bridge を有効にします。`install.modules` のキーは、Git/OpenTofu tree で実在を確認した module
 path に紐づく補助 metadata であり、候補の作成・順序付け・既定値の決定はしません。候補の
 選択は Git URL、ref、module path と tree scan が担います。takos.jp の直接 CTA も、この
 Git URL install 導線を使います。

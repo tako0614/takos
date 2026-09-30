@@ -1,14 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "src/worker/platform-utils/**/*.ts",
-    "src/contracts/public/**/*.ts",
-    "src/contracts/**/*.ts"
+    "src/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": [
-    "**/__tests__/**",
-    "**/*_test.ts",
-    "**/*.test.ts",
     "**/dist/**",
     "node_modules",
     "**/node_modules"

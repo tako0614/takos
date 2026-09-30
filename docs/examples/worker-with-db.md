@@ -1,36 +1,46 @@
 # Worker + DB
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+D1 database を binding として持つ Worker の例です。database は module が
+provision し、worker は binding 経由で参照します。
 
-## Current Flow
+## Module
 
-1. Create a Capsule from a Git URL/ref for the OpenTofu Capsule repo.
-2. Run a plan and review the resulting `plan` type Run, its proposed changes, and warnings.
-3. Apply the reviewed plan; the apply is recorded as an `apply` type Run against that `plan` type Run.
-4. A successful `apply` type Run writes a new StateVersion and Output, which surfaces the database connection details produced by the module; destroy is recorded as `destroy_plan` followed by `destroy_apply`.
-5. Connections hold external credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit ProviderConnection provider connection, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. OIDC clients, billing, domains, and the dashboard belong to the Takosumi Accounts plane.
+```hcl
+resource "cloudflare_d1_database" "db" {
+  account_id = var.account_id
+  name       = "example-db"
+}
 
-## Takos Boundary
+resource "cloudflare_workers_script" "app" {
+  account_id  = var.account_id
+  script_name = "example-worker-db"
+  content     = file("${path.module}/worker.ts")
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions. Takosumi Accounts plane owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
+  bindings = [{
+    name = "DB"
+    type = "d1"
+    id   = cloudflare_d1_database.db.id
+  }]
+}
 
-## API Shape
+output "url" {
+  description = "Worker の公開 origin"
+  value       = cloudflare_workers_script.app.url
+}
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "gitUrl": "https://github.com/example/app.git",
-    "ref": "main"
-  }
+output "database_name" {
+  description = "D1 database 名"
+  value       = cloudflare_d1_database.db.name
 }
 ```
 
-A plan request creates a `plan` type Run; the apply request references that `plan` type Run so only a reviewed plan is applied. Takos product routes should call the Takosumi deploy control plane or the external Takosumi Accounts flow instead of exposing a separate product-local deployment surface.
+## install の流れ
 
-## References
+Worker だけの例と同じです。plan → 確認 → apply で、D1 と binding を含む
+StateVersion / Output が記録されます。既存データの引っ越し（migration や
+data copy）は install の scope 外です。
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+## 次に読む
+
+- [Worker + Container](/examples/worker-with-container)
+- [ランタイムシークレット](/deploy/runtime-secrets)

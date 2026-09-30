@@ -1,39 +1,22 @@
 # ロールバック
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+rollback は、Capsule が保持している成功済みの StateVersion を基準に、新しい
+reviewed Run / StateVersion / Output を作る control-plane の操作です。
+Run ledger は append-only なので、巻き戻しも「過去に戻す」のではなく
+新しい reviewed Run として記録されます。
 
-## Current Flow
+## 巻き戻せるもの・巻き戻せないもの
 
-1. Create a Capsule from a Git URL/ref pointing at the OpenTofu module.
-2. Trigger a `plan` type Run and review its plan summary, diff, and policy decision.
-3. Approve the reviewed plan to start an `apply` type Run; a successful `apply` type Run updates the StateVersion and Output.
-4. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection, and policy resolves provider allowlists, state backend, and Cloudflare Container execution used by each typed Runs.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, and domains belong to the Takosumi Accounts plane; Takosumi records the run ledger and audit trail.
+- worker artifact や module 参照は、対象の commit / descriptor を固定して
+  再 apply すれば前の状態に戻せます。
+- provider の data copy や schema migration の巻き戻しは、現在の rollback の
+  保証範囲ではありません。provider-gap bridge が作った D1 のデータも
+  destroy では巻き戻しません。
+- runtime secret は OpenTofu state の外にあるため、secret だけを戻す操作は
+  `wrangler secret put` で再投入します。
 
-## Takos Boundary
+## 次に読む
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and the audit trail. Takosumi Accounts plane owns account-plane policy, billing, OIDC, and the dashboard.
-
-## API Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "gitUrl": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-A `plan` type Run is reviewed before its plan is approved into an `apply` type Run. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
-
-provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。Rollback は Capsule の
-retained successful StateVersion を基準に、新しい reviewed Run / StateVersion / Output を作る control-plane 操作です。
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [デプロイ手順](/deploy/deploy)
+- [トラブルシューティング](/deploy/troubleshooting)
+- [Takosumi deploy model](https://takosumi.com/docs/reference/model)

@@ -1,39 +1,33 @@
 # Takos の概念
 
-Takos is the OpenTofu-native AI Workspace distribution managed by external Takosumi control plane. Takos Workspaces provide
-the user-facing chat, agents, memory, Git, files, and app launcher experience. Takosumi owns the OpenTofu
-Source / Project / Capsule / Run / StateVersion / Output authority behind that Workspace.
+Takos は、OpenTofu ネイティブな AI Workspace distribution です。利用者が触れる
+chat、エージェント、メモリ、Workspace、アプリランチャーを Takos が持ち、その背後の
+実行・記録は外部の Takosumi 管理プレーンが持ちます。
 
-## Current Flow
+## どこに境界があるか
 
-1. Deploy the Takos distribution topology with the selected adapter under `deploy/opentofu` and the worker artifact.
-2. The worker exposes Takos product routes and consumes external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner services.
-3. Create a Takos Workspace; users explicitly add Capsule apps through plan/apply Runs.
-4. Infrastructure lifecycle credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
+| ソフトウェア | 持つもの |
+| --- | --- |
+| Takos | chat、agent、memory、Workspace、app launcher、file handler、UI surface、MCP 接続 |
+| Takosumi | Workspace / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output の authority、Accounts plane（OIDC・課金・ダッシュボード） |
 
-## Takos Boundary
+アプリや実行基盤は Capsule の Output と Takos runtime contract を通じて見えます。
+Takos 自身は deployment authority を持たず、アプリの install やインフラの変更は
+Takosumi の deploy control plane または Accounts plane の install flow を呼びます。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi owns Workspace / Project / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output authority. The Takosumi Accounts plane owns account-plane policy,
-billing, and OIDC.
+## どう動くか
 
-## API Shape
+1. `deploy/product-resources.json` が Takos の論理トポロジーを宣言し、
+   `deploy/opentofu/cloudflare` が現在の product-graph adapter として具体リソースへ写像する。
+2. Takosumi がその module を普通の OpenTofu Capsule として install し、
+   `plan` type Run → `apply` type Run → StateVersion / Output として記録する。
+3. Workspace が作られ、利用者は Capsule アプリを plan / apply の Run を通じて
+   明示的に追加する。
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
+## 次に読む
 
-A Capsule created this way is materialized through typed Runs. Takos product routes call the Takosumi deploy
-control plane or the Takosumi account-plane install flow instead of exposing a separate deployment authority.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Space](/platform/spaces) — Workspace の中身
+- [Threads and Runs](/platform/threads-and-runs) — 依頼が実行になるまで
+- [Git URL から install](/platform/store) — アプリの追加方法
+- [Bundled Apps](/platform/featured-apps) — first-party の Capsule アプリ
+- [セルフホスト概要](/deploy/) — operator として動かす場合

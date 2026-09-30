@@ -1,6 +1,6 @@
 # Local Compose Smoke
 
-> このページでわかること: Takos local Compose stack の current smoke。
+> このページでわかること: Takos のローカル Docker Compose stack の current smoke。
 
 Takos local stack は `compose.local.yml` と `bun run local:*` を使います。
 
@@ -20,6 +20,6 @@ bun run local:smoke
 bun run local:down
 ```
 
-実行時の env file は `TAKOS_LOCAL_ENV_FILE` で差し替えます。Docker / Compose
+実行時の env file は `TAKOS_LOCAL_ENV_FILE` で差し替えます。Docker Compose
 実行は operator-owned local proof であり、portable product checkや公式release
 authorityとは分けて扱います。

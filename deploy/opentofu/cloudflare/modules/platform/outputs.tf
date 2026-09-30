@@ -14,6 +14,11 @@ output "service_runtime_name" {
   value       = local.service_runtime_name
 }
 
+output "deployment_environment" {
+  description = "Takos product environment bound into retained first-install release evidence."
+  value       = var.environment
+}
+
 output "launch_url" {
   description = "Canonical public Takos URL when public_url or workers_subdomain is supplied."
   value       = local.launch_url
@@ -152,11 +157,6 @@ output "container_rendered_input_digest" {
   value       = local.container_rendered_input_digest
 }
 
-output "migration_set_digest" {
-  description = "Stable digest of the D1 migration set used by the optional provider-gap bridge."
-  value       = local.migration_set_digest
-}
-
 output "bridge_helper_digest" {
   description = "Stable digest of the optional provider-gap bridge executable."
   value       = local.bridge_helper_digest
@@ -178,4 +178,17 @@ output "runtime_secret_binding_names" {
 output "runtime_secrets_provisioned" {
   description = "Whether the Worker Version carries the runtime secret bindings forward with the inherit binding type."
   value       = var.runtime_secrets_provisioned
+}
+
+# The Worker decides `vectorSearch` from the bindings it actually has, so this
+# Output states the same answer at plan time: an operator reads the degraded
+# mode from the plan instead of discovering it from a failing vector call.
+output "vector_search_capability" {
+  description = "Vector search capability this deployment will report: `vectorize` when the Worker Version binds VECTORIZE, `disabled` when no lane creates the index."
+  value       = local.vector_index_available ? "vectorize" : "disabled"
+}
+
+output "vector_index_provisioned" {
+  description = "Whether an externally created Vectorize index was declared for the ordinary provider path."
+  value       = var.vector_index_provisioned
 }

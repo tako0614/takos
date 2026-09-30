@@ -1,44 +1,51 @@
+/* ===== Takos design tokens — the product's own dark surface.
+ *
+ * The site wears the app's real palette instead of a costume: zinc dark
+ * (#09090b ground, #18181b panels, #27272a hairlines, #fafafa/#a1a1aa
+ * type), the same 10px radii the app uses, JetBrains Mono for code and
+ * facts, a system sans for body — the same face the product ships.
+ *
+ * The pixel brand lives exactly where the product puts it: the icon
+ * tile (logo.png — the red tako on its own #00a0e4 field) and the
+ * DotGothic16 bitmap face, subset and self-hosted, reserved for the
+ * wordmark and section titles. The tile's blue, lightened for dark
+ * ground (#53c1f0), is the one accent — links and active states only.
+ * The tako's red stays inside the mark, surfacing only as tiny square
+ * markers. No water page, no bubbles, no sprite shadows, no cut
+ * corners: those read as costume over the real surface. */
+
+@font-face {
+  font-family: 'DotGothic16';
+  src: url('/fonts/dotgothic16-subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
 
-  /* ===== Palette — dark-only. Black base + 朱 red UI accent. =====
-   * No light mode. Decorative blue/red ink lives in --tg-ink-* (used only by
-   * InkSplash / SplatField) and is separate from the red UI accent.
-   * Canonical source: docs/reference/design-language.md
-   */
+  /* ===== Palette — the app's zinc ground ===== */
+  --tg-bg: #09090b;
+  --tg-surface: #18181b;
+  --tg-surface-2: #27272a;
+  --tg-border: #27272a;
+  --tg-border-strong: #3f3f46;
 
-  --tg-bg: #0a0a0a;
-  --tg-bg-elev: #141414;
-  --tg-bg-subtle: #1a1a1a;
   --tg-fg: #fafafa;
-  --tg-fg-muted: #a3a3a3;
-  --tg-fg-subtle: #6b6b6b;
-  --tg-line: #262626;
-  --tg-line-strong: #3f3f3f;
-  --tg-code-bg: #141414;
-  --tg-code-fg: #fafafa;
+  --tg-fg-2: #a1a1aa;
+  --tg-fg-3: #71717a;
 
-  --tg-accent: #ef4444; /* 朱 red — UI accent */
-  --tg-accent-hover: #f87171;
-  --tg-accent-fg: #0a0a0a;
-  --tg-accent-soft: #2a0a0a;
-  /* Accent TEXT (small) on the dark base. */
-  --tg-accent-text: #fca5a5;
+  --tg-field: #00a0e4;        /* the mark's water — tile + accents only */
+  --tg-link: #53c1f0;         /* field blue, lightened for dark ground */
+  --tg-red: #ed1b24;          /* tako red — tiny markers only */
 
-  --tg-grad-from: #fafafa;
-  --tg-grad-mid: #ef4444;
-  --tg-grad-to: #dc2626;
+  --tg-code-bg: #0c0c0f;
+  --tg-code-fg: #e4e4e7;
+  --tg-code-muted: #71717a;
+  --tg-code-key: #53c1f0;
 
-  /* Decorative ink — pure decoration, NOT role-bound. InkSplash / SplatField only.
-   * main blob = -deep, droplets = bright (two-tone depth without blur). */
-  --tg-ink-blue: #3b82f6;
-  --tg-ink-blue-deep: #2563eb;
-  --tg-ink-red: #ff3b3b;
-  --tg-ink-red-deep: #dc2626;
-
-  --tg-success: #16a34a;
-  --tg-warn: #ea580c;
-  --tg-danger: #dc2626;
+  --tg-shadow-shot: 0 24px 48px -16px rgba(0, 0, 0, 0.72);
 
   /* Spacing scale */
   --tg-s-1: 4px;
@@ -50,12 +57,9 @@
   --tg-s-7: 48px;
   --tg-s-8: 64px;
   --tg-s-9: 96px;
-  --tg-s-10: 128px;
 
-  /* Typography */
+  /* Typography — the product's own faces */
   --tg-font-body:
-    'Bricolage Grotesque Variable',
-    'Bricolage Grotesque',
     -apple-system,
     BlinkMacSystemFont,
     'Hiragino Kaku Gothic ProN',
@@ -64,7 +68,7 @@
     Roboto,
     sans-serif;
   --tg-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --tg-font-display: var(--tg-font-body);
+  --tg-font-display: 'DotGothic16', var(--tg-font-body);
 
   --tg-fs-xs: 0.78rem;
   --tg-fs-sm: 0.88rem;
@@ -72,28 +76,13 @@
   --tg-fs-lg: 1.13rem;
   --tg-fs-xl: 1.31rem;
   --tg-fs-2xl: 1.6rem;
-  --tg-fs-3xl: 2rem;
-  --tg-fs-4xl: 2.6rem;
-  --tg-fs-5xl: 3.4rem;
-  --tg-fs-6xl: clamp(2.8rem, 6vw, 5rem);
 
-  --tg-lh-tight: 1.15;
-  --tg-lh-snug: 1.35;
-  --tg-lh-body: 1.7;
-
-  /* Shadows — neutral, dark base */
-  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
-  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
-
-  /* Radii */
-  --tg-r-sm: 6px;
-  --tg-r-md: 10px;
-  --tg-r-lg: 16px;
-  --tg-r-xl: 24px;
-  --tg-r-full: 999px;
+  --tg-lh-tight: 1.2;
+  --tg-lh-body: 1.75;
 
   /* Layout */
-  --tg-container: 1120px;
-  --tg-nav-h: 64px;
+  --tg-container: 1040px;
+  --tg-prose: 68ch;
+  --tg-nav-h: 56px;
+  --tg-radius: 10px;
 }

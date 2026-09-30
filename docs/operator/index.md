@@ -1,36 +1,27 @@
-# オペレーター向けガイド
+# Operator 向けガイド
 
-Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+Takos を自分の環境で動かす operator 向けのページです。利用者として使う場合は
+[スタートガイド](/get-started/) を参照してください。
 
-## Current Flow
+## operator が担うもの
 
-1. Choose a Git URL/ref pointing at a OpenTofu Capsule repo, and a ProviderConnection / ProviderBinding / policy.
-2. Run a plan; Takosumi records a `plan` type Run with the reviewed plan, changes, warnings, and policy decision.
-3. Apply the reviewed plan; Takosumi records an `apply` type Run, and a successful apply records StateVersion and Output.
-4. Destroy is recorded as `destroy_plan` followed by approved `destroy_apply` against the same Capsule, keeping the run ledger append-only.
-5. Connections hold credential references, ProviderBindings bind each provider (plus optional alias) used by the module to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, execution image/resource limits, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, domains, and implementation bindings belong to the Takosumi Accounts plane.
+- Takos distribution worker と、それを provision する OpenTofu module の運用
+- Takosumi Accounts plane（OIDC issuer、client projection）との接続
+- app-local secret と外部 credential の管理（secret store は repo の外）
+- Workspace と install される Capsule アプリの運用ポリシー
 
-## Takos Boundary
+アカウント・認証の authority は Takos ではなく外部の Takosumi Accounts plane にあり、
+Takos product routes は OIDC consumer として振る舞います。self-host では operator が
+運用する Accounts origin が issuer です。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Its provider-gap bridge is off by default, so ordinary production provider applies leave unsupported Cloudflare gaps unresolved; disposable E2E runs must select a reviewed bridge mode explicitly. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
+## このセクション
 
-## API Shape
+- [初回セットアップ](/operator/bootstrap) — 新規に立ち上げるときの Web ベース確認と env 一覧
+- [アカウントモデル](/operator/account-model) — アカウント・認証の所有権がどこにあるか
+- [OIDC Setup](/operator/oidc-setup) — OIDC client の投影と callback の設定
 
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
+## 次に読む
 
-A plan produces a `plan` type Run; applying the reviewed plan produces an `apply` type Run that records StateVersion and Output. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane flow instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [セルフホスト概要](/deploy/)
+- [環境と変数](/deploy/environment)
+- [トラブルシューティング](/deploy/troubleshooting)

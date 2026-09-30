@@ -11,6 +11,26 @@ a new forward migration instead.
 
 The first guarded migration prefix is `0063`.
 
+## Naming and ordering
+
+A migration's file name is its identity in the applied ledger. The Worker
+records `_takos_opentofu_migrations` by name, and adopts the `d1_migrations`
+and `_takos_self_host_migrations` ledgers by name too. **Renaming an applied
+migration makes every live database apply it a second time**, so a mistake in
+the sequence is recorded rather than corrected.
+
+- A file name is `NNNN_lower_snake_case.sql` with exactly four digits.
+- Two migrations may not share a prefix.
+- The sequence may not skip a number.
+- The applied order is the file-name order, which for four-digit zero-padded
+  prefixes is the same as the numeric order. The gate refuses any directory
+  where those two orders differ.
+
+The directory already contains two shared prefixes (`0043`, `0055`) and a gap
+(`0100`-`0105`) from before this rule. Both are declared, with the reason they
+cannot be corrected, in [`ORDERING.json`](./ORDERING.json). The gate refuses a
+new one, and refuses an entry there that no longer describes the directory.
+
 ## Required marker
 
 Every migration with prefix `0063` or later must include exactly one safety

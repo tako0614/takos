@@ -4,31 +4,26 @@ import CodeBlock from './CodeBlock';
 import RichText from './RichText';
 import { useCloudUrls } from '~/lib/cloud';
 import { useT } from '~/lib/i18n';
-import { reveal } from '~/lib/interactions';
 import type { InstallCard } from '~/content/site';
+import { TAKOS_INSTALL_REF } from '~/lib/takos-release.generated';
 
 export default function InstallCTA() {
   const t = useT();
   const cloud = useCloudUrls();
-  void reveal;
 
   const href = (kind: InstallCard['kind']) => (kind === 'use' ? cloud().useTakos : cloud().install);
 
   return (
     <Section
       id='install'
-      class='end-cta'
+      class='install'
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >
-      <div class='install-options'>
+      <ul class='install-list'>
         <For each={t.install.cards}>
-          {(c, i) => (
-            <div
-              class='install-card reveal'
-              classList={{ 'install-card-highlight': c.kind === 'use' }}
-              use:reveal={i() * 80}
-            >
+          {(c) => (
+            <li class='install-item'>
               <h3>{c.title}</h3>
               <p>{c.body}</p>
               <Show
@@ -38,8 +33,8 @@ export default function InstallCTA() {
                     <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
                     <span class='k'>$</span> cd takos{'\n'}
                     <span class='k'>$</span> git fetch --tags origin{'\n'}
-                    <span class='k'>$</span> git checkout --detach v0.12.8{'\n'}
-                    <span class='k'>$</span> git rev-parse --verify v0.12.8{'\n'}
+                    <span class='k'>$</span> git checkout --detach {TAKOS_INSTALL_REF}{'\n'}
+                    <span class='k'>$</span> git rev-parse --verify {TAKOS_INSTALL_REF}{'\n'}
                     <span class='k'>$</span> bun install --frozen-lockfile{'\n'}
                     <span class='k'>$</span> bun run build:opentofu-worker-artifact{'\n'}
                     <span class='k'>$</span> install -d -m 700 "$HOME/.config/takos"{'\n'}
@@ -47,25 +42,26 @@ export default function InstallCTA() {
                     <span class='k'>$</span> chmod 600 "$HOME/.config/takos/takos.tfvars"{'\n'}
                     <span class='k'>$</span> <span class='c'># edit external tfvars before planning</span>{'\n'}
                     <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare init -input=false{'\n'}
-                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false -var-file="$HOME/.config/takos/takos.tfvars" -out="$HOME/.config/takos/takos.tfplan"{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare plan -input=false \{'\n'}
+                    {'    '}-var-file="$HOME/.config/takos/takos.tfvars" \{'\n'}
+                    {'    '}-out="$HOME/.config/takos/takos.tfplan"{'\n'}
                     <span class='k'>$</span> tofu show "$HOME/.config/takos/takos.tfplan"{'\n'}
                     <span class='k'>$</span> tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"
                   </CodeBlock>
                 }
               >
                 <a
-                  class={`btn ${c.kind === 'use' ? 'btn-primary' : 'btn-secondary'}`}
+                  class={c.kind === 'use' ? 'btn' : 'link'}
                   href={href(c.kind)}
                   rel='noopener'
                 >
                   {c.cta}
-                  {c.kind === 'use' ? ' →' : ''}
                 </a>
               </Show>
-            </div>
+            </li>
           )}
         </For>
-      </div>
+      </ul>
     </Section>
   );
 }

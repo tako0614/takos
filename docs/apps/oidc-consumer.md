@@ -1,46 +1,21 @@
-# OIDC Consumer
+# OIDC 連携
 
-Installed apps can consume the Takosumi issuer when the operator account plane has projected an OIDC client
-for that app. This is an installed-service identity projection, not a generic third-party login marketplace.
+install したアプリは、operator の account plane がそのアプリ向けに OIDC client を
+投影した場合に、Takosumi issuer を利用できます。これは install されたサービスへの
+identity projection であり、汎用の third-party ログイン市場ではありません。
 
-## Current Flow
+## 流れ
 
-1. Install an app Capsule from Git and review/apply the Takosumi plan.
-2. The account plane records the OIDC client projection for that Capsule/app when the operator policy allows it.
-3. Takos shows the app in the Workspace with the projected sign-in material.
-4. Revocation and rotation are handled by the account plane and recorded as audit evidence.
-5. Generic third-party consent/client registry behavior is out of scope until that product surface is explicitly built.
+1. アプリを Git から Capsule として install し、Takosumi の plan を確認して apply する。
+2. operator の policy が許す場合、account plane がその Capsule / アプリ向けの
+   OIDC client projection を記録する。
+3. Takos は Workspace 内で、投影されたサインイン情報を持つアプリとして表示する。
+4. 失効とローテーションは account plane が扱い、audit evidence として記録される。
 
-## Takos Boundary
+汎用の third-party consent / client registry の挙動は、その product surface が
+明示的に作られるまでは対象外です。
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts. `deploy/product-resources.json` is the provider-neutral resource authority; `deploy/opentofu/cloudflare` is the current product-graph adapter. Its provider-gap bridge is off by default, so ordinary production provider applies leave unsupported Cloudflare gaps unresolved; disposable E2E runs must select a reviewed bridge mode explicitly. Takosumi runs it as an ordinary OpenTofu module and records Capsule / Run / StateVersion / Output state, policy decisions, and audit evidence. The former Provider 1.x Takoform projection is not a current install surface.
+## 次に読む
 
-## Install Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "module": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-A `plan` type Run records the plan to review; an `apply` type Run references the approved plan and records StateVersion
-and Output on success. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow
-instead of exposing a separate product-local deployment surface.
-
-## References
-
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
-
-## Public Hosted Availability
-
-OIDC clients for public hosted installs are opened by the operator account plane
-only after operator approval. Until public hosted access is opened, the same
-OIDC flow can be verified in operator rehearsal or self-host environments; new
-public signups stay closed.
+- [OIDC Setup](/operator/oidc-setup) — operator 側の設定
+- [アカウントモデル](/operator/account-model) — 認証の所有権

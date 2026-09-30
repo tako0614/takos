@@ -82,7 +82,7 @@ export default defineConfig({
             text: "Release artifact publication",
             link: "/deploy/release-artifact",
           },
-          { text: "複数サービス", link: "/deploy/deploy-group" },
+          { text: "実行履歴", link: "/deploy/deploy-group" },
           { text: "Git ソース", link: "/deploy/store-deploy" },
           { text: "実行場所", link: "/deploy/namespaces" },
           { text: "ロールバック", link: "/deploy/rollback" },
@@ -243,5 +243,12 @@ export default defineConfig({
     lightModeSwitchTitle: "ライトモード",
     darkModeSwitchTitle: "ダークモード",
   },
-  head: [["meta", { name: "theme-color", content: "#dc2626" }]],
+  head: [
+    ["meta", { name: "theme-color", content: "#dc2626" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Takos Docs" }],
+    ["meta", { property: "og:image", content: "https://docs.takos.jp/og.png" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:image", content: "https://docs.takos.jp/og.png" }],
+  ],
 });

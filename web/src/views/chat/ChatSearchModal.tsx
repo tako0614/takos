@@ -1,4 +1,10 @@
-import { createEffect, createSignal, type JSX, onCleanup } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import { For, Show } from "solid-js";
 import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
 import { useI18n } from "../../store/i18n.ts";
@@ -6,6 +12,11 @@ import { rpc, rpcJson, rpcPath } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Input } from "../../components/ui/Input.tsx";
 import { Modal } from "../../components/ui/Modal.tsx";
+import {
+  loadRuntimeCapabilities,
+  runtimeCapabilities,
+  vectorSearchEnabled,
+} from "../../store/runtime-capabilities.ts";
 
 type SpaceSearchResult = {
   kind: "keyword" | "semantic";
@@ -148,6 +159,18 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
   const [searchType, setSearchType] = createSignal<
     "all" | "keyword" | "semantic"
   >("all");
+  // An install without a vector index cannot answer a semantic query, so the
+  // option is withdrawn rather than offered and then refused. Unknown means
+  // available: never hide a working feature because a probe failed.
+  const semanticAvailable = () => vectorSearchEnabled(runtimeCapabilities());
+  onMount(() => {
+    void loadRuntimeCapabilities();
+  });
+  createEffect(() => {
+    if (!semanticAvailable() && searchType() === "semantic") {
+      setSearchType("all");
+    }
+  });
   const [debouncedQuery, setDebouncedQuery] = createSignal("");
   createEffect(() => {
     const q = query();
@@ -232,7 +255,9 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
           >
             <option value="all">{t("searchTypeAll")}</option>
             <option value="keyword">{t("searchTypeKeyword")}</option>
-            <option value="semantic">{t("searchTypeSemantic")}</option>
+            <Show when={semanticAvailable()}>
+              <option value="semantic">{t("searchTypeSemantic")}</option>
+            </Show>
           </select>
         </div>
 

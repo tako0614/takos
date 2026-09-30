@@ -1,8 +1,11 @@
 # Takos GA: durable SSE recovery
 
 Date: 2026-09-30 UTC
-Status: in progress
+Status: active
 Owner: Takos dedicated session
+Required for: `production_or_release`
+Grants mutation authority: false
+Repository mutation scope: `takos` only
 Worktree: `/root/hdd/takos-dev/worktrees/takos-ga-20260930-1737`
 Base: `43b5fe68c7c7e1d09d0ee053d2ff9ebc618f1fc2`
 
@@ -64,6 +67,13 @@ Read `/root/hdd/takos-dev/handoffs/takos-ga-owner-20260930.md` and the control
 product source. Neither SSE implementation file differs from the starting
 checkout. Integrate that main deliberately in this branch before calling the
 current source gate verified. Preserve the original detached UI work.
+
+The current main was intentionally merged into this branch. Its modern portable
+test discovery finds both SSE test files automatically; the `test` command is
+kept exactly as main defines it. `test:run-observation` remains a focused command.
+Integrated `check:lint` and `check:types` pass with zero undeclared findings
+(existing ledgers: 112 lint and 98 TypeScript diagnostics). Bun 1.4.0 is used
+for this integrated verification, matching the handoff toolchain.
 
 The inherited agent-engine candidate adds 62 test lines in
 `ga-takos-agent-engine-20260930/src/engine/session_engine.rs`; it is a separate,

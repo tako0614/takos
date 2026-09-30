@@ -1,39 +1,53 @@
 # システムアーキテクチャ
 
-**Premise: Takos is a provider-neutral OpenTofu-native AI workspace distribution.** `deploy/product-resources.json` owns the required resource and runtime-connection graph. `deploy/opentofu/cloudflare` is the current product-graph adapter; its provider-gap bridge is off by default, so ordinary production provider applies do not silently reconcile unsupported Cloudflare gaps. A disposable E2E that needs those gaps must select the reviewed bridge mode matching its exact environment. Takosumi installs it as an **OpenTofu Capsule** and records **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit ProviderConnection, and policy resolves provider allowlists and state handling. Install metadata comes from the repository Git identity and its `/.well-known/takosumi.json`.
+**前提: Takos は provider-neutral で OpenTofu ネイティブな AI workspace distribution です。**
+`deploy/product-resources.json` が必要なリソースと runtime 接続の graph を所有し、
+`deploy/opentofu/cloudflare` が現在の product-graph adapter です。provider-gap bridge は
+既定で無効なため、通常の production provider apply は未対応の gap を暗黙に解決しません。
+それらが必要な disposable E2E は、環境に合った reviewed bridge mode を明示的に選びます。
+Takosumi はこれを **OpenTofu Capsule** として install し、
+**Capsule → Run → StateVersion → Output** を記録します。Connections は credential
+reference を保持し、ProviderBindings は provider（+ optional alias）ごとに明示的な
+ProviderConnection を解決し、policy は provider allowlist と state 扱いを解決します。
+install の metadata は repository の Git identity と `/.well-known/takosumi.json` から来ます。
 
-## Current Flow
+## 動く流れ
 
-1. Takos declares its logical topology in `deploy/product-resources.json`; `deploy/opentofu/cloudflare` maps it to concrete resources.
-2. Takosumi creates a **Capsule** from that module (Git URL/ref + module path) under a **ProviderConnection / ProviderBinding / policy**.
-3. A **`plan` type Run** computes the OpenTofu plan; a reviewer approves it.
-4. The reviewed plan is applied as an **`apply` type Run**; a successful apply records **StateVersion** and **Output** (including the non-secret service URLs / binding map).
-5. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and workload placement. Account-plane policy — billing, OIDC clients, domains, and dashboard — belongs to the Takosumi Accounts plane.
+1. Takos が `deploy/product-resources.json` で論理トポロジーを宣言し、
+   `deploy/opentofu/cloudflare` が具体リソースへ写像する。
+2. Takosumi がその module から **Capsule** を作る（Git URL / ref + module path、
+   ProviderConnection / ProviderBinding / policy の下）。
+3. **`plan` type Run** が OpenTofu plan を計算し、reviewer が承認する。
+4. 承認済み plan が **`apply` type Run** として適用され、成功した apply が
+   **StateVersion** と **Output**（非 secret の service URL / binding map を含む）を記録する。
 
-## Takos Boundary
+## 境界
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the policy decisions that authorize each run. The Takosumi Accounts plane owns account-plane policy: billing, OIDC, domains, and dashboard.
+Takos が持つのは利用者向け workspace 体験です: chat、agent、memory、Workspace、
+app launcher。Git、storage、agent runtime、file handler、UI surface、MCP は
+Capsule Output と Takos runtime contract を通じて公開されます。Takosumi は run ledger
+（Capsule / Run / StateVersion / Output）と各 run を許可した policy 判定を記録します。
+Takosumi Accounts plane は account-plane policy（billing、OIDC、domains、dashboard）を持ちます。
 
-Takos is not a special Takosumi shape. Its current Cloudflare adapter composes
-Workers, D1, KV, R2, Queues, Vectorize, Containers, and Durable Objects from the
-product-owned graph. The former Provider 1.x Takoform projection is retained as
-source history only; it cannot honestly express the required product graph with
-the current Form vocabulary.
-The module does not create a generic tool/runtime container. Computer access,
-browser automation, and Git Actions are separate capabilities installed or
-connected through the same ordinary Capsule and Interface contracts.
-Do not introduce a `takosumi_takos` catch-all resource; add a new generic
-service form only when Takos and third-party apps both need semantics that the
-existing shapes cannot express.
+Takos は Takosumi にとって特別な形ではありません。現在の Cloudflare adapter は
+Workers、D1、KV、R2、Queues、Vectorize、Containers、Durable Objects を product 所有の
+graph から組み立てます。旧 Provider 1.x の Takoform projection は source history として
+残るだけで、現在の Form vocabulary では必要な product graph を正直に表現できません。
 
-## Materialization
+module は汎用の tool / runtime container を作りません。computer へのアクセス、
+browser automation、Git Actions は、同じ普通の Capsule と Interface contract を通じて
+install・接続される別の capability です。`takosumi_takos` のような catch-all
+resource は導入せず、Takos と third-party アプリの両方が必要とし既存の形では表せない
+semantics があるときだけ、新しい generic service form を追加します。
 
-The Cloudflare `wrangler.toml` is an artifact/runtime configuration inside the adapter. It is not the resource authority.
+## 実体化
 
-## References
+Cloudflare `wrangler.toml` は adapter 内部の artifact / runtime 設定であり、
+resource authority ではありません。
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Internal trust boundaries](./internal-trust-boundaries)
+## 次に読む
+
+- [セルフホスト概要](/deploy/)
+- [インストール方法](/apps/install-paths)
+- [Internal trust boundaries](./internal-trust-boundaries.md)
 - [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
