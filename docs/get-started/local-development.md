@@ -7,7 +7,9 @@ Docker Compose を使って、Takos の全サービスをローカルで動か�
 
 ## 必要なもの
 
-- Bun 1.x
+- Linux（必須native回帰試験は `/proc` で実workerdの実行ファイルを確認するため、現在Linux hostで検証）
+- Bun 1.3.14（repo gate / Worker build）
+- Node.js 26.1.0（native D1 回帰試験の Miniflare host、CI と同じ固定版）
 - Docker (current stable)
 - Docker Compose V2
 
@@ -41,7 +43,7 @@ docker compose --env-file .env.local -f compose.local.yml up --build -d
 ## 動作確認
 
 ```bash
-bun run check          # ツールと canonical layout の診断
+bun run check          # format / lint / types / tests / Rust / build の全gate
 bun run local:config   # compose 設定のレンダリング確認
 bun run local:e2e      # public API -> queue -> agent container の実 Run E2E
 bun run validate:agent-local-proof # component + 上記の実 Run 証跡
@@ -56,6 +58,35 @@ Docker daemon を使えない場合、`validate:agent-local-proof` は live proo
 `local-compose-public-api-run` を `unavailable` として理由を表示します。Docker を使わない component 確認だけを明示的に
 行う場合は `bun run validate:agent-local-proof:components` を使えますが、出力の `complete` は `false` であり実 Run 証跡には
 なりません。
+
+### Native D1 の回帰試験
+
+`bun run check` の portable tests は、installed Miniflare/workerd を別の Node process
+で実行する必須試験を含みます。単独で実行する場合:
+
+```bash
+bun test scripts/prove-run-usage-native.test.ts
+```
+
+Worker の bundle は実行中の Bun で作成し、compatibility date / flags は
+`deploy/cloudflare/wrangler.toml` を読みます。空の native D1 に production の全embedded
+migrationを既定budgetで適用し、ledger / checksum、終端Runとusage witnessの同時rollback、
+同一completionの重複防止、usage batchのrollbackとnative DO置換後のcold retryを検証します。
+configured owner / OIDC / private Workspaceのauthorityが不変であることも確認します。
+schemaは最大2回の明示したadmission requestで確認します。初回がpendingなら、ledgerが
+正しいprefixでclaimを解放したことを確認し、返された5秒のretry hintを待って1回だけ継続します。
+初回の状態と継続前後のledgerを記録し、全migrationがreadyになってからcached再入場を確認します。
+native runtimeが無い場合、failed / applying、進捗なし、2回目もpendingなら失敗し、
+skipやstorage置換はしません。各migration budgetと内外の試験期限は変えません。
+
+各試験の状態は `tmp/native-run-usage-proof/` の新規directoryに隔離します。内側70秒、
+process / stdout / stderr全体75秒の期限を設け、所有するprocess groupを終了確認します。
+成功時は実runtime identityとsource / bundle / input hashesをlogへ出し、fixtureを削除します。
+失敗時は同directoryに診断を保持し、pathを表示します。
+
+これはlocal native D1 / DO / R2の証拠です。hosted backendのalarm / quota / concurrency、
+native backendとcompiled process / Containerの結合、実owner導入や全instance
+backup / restoreは別に検証します。
 
 ## ローカルで起動するサービス
 

@@ -35,6 +35,12 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Setup native proof Node host
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pinned: v6.2.0
+        with:
+          node-version: 26.1.0
+          package-manager-cache: false
+
       - name: Resolve pinned agent build inputs
         id: agent-inputs
         working-directory: takos
