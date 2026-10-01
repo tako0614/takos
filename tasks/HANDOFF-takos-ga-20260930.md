@@ -12,18 +12,23 @@ key/digest/元ID、旧opaque結果を保持し、受理データとreceiptを同
 private503/受理済み状態不変。offline候補はsource5 plan/進捗/stage/GCを保持し、旧大容量
 sourceは全identity semantic digestで隔離schema5候補へ変換する。
 
-旧f6dのcapacity拒否をbehavioral redに再現。容量2cases/95assertionsは3.64秒で成功し、
-fixture/16node/alarm/既定5秒を維持した。復旧8/215、index6/51、既存archive13/324、
+旧f6dのcapacity拒否をbehavioral redに再現。容量fixtureのraw head/chunk不変検証は
+3cases/98assertionsで2.47秒成功。fixture/16node/alarm/既定5秒を維持した。
+復旧8/215、index6/51、既存archive13/324、
 converter35/453も成功。10,243旧identityと元bytes保持を確認した。実native KV/R2/
 production alarmは13.486秒でcold進捗保持・391identity・再送/衝突・warm破損503/
 actorと受理済み状態不変を確認。初回のcold進捗観測失敗は原因未確定として別に保持する。
 
-凍結12fileの独立reviewに確定P1/P2無し。最終local fullgateは1,632tests/252files/
-11,816assertions、20OpenTofu、全Rust、実Worker/fullSQLite/process復旧と両build成功。
-native guard41.406s/observer200、docs3.30s、types98/lint111未申告0。既存native guardの
+凍結12fileの独立reviewに確定P1/P2無し。容量観測差分も独立reviewで検証の弱体化無し。
+最終local fullgateは1,633tests/252files/11,819assertions、20OpenTofu、全Rust、
+実Worker/fullSQLite/process復旧と両build成功。容量2.121s、native guard46.641s/
+observer200、docs3.30s（docbytes不変）、types98/lint111未申告0。既存native guardの
 正常legacy fixtureはbuilding fence/無変更とbounded移行を明示検証するよう適応し、
 不正state/fault/cold/期限の検査を維持した。最初の失敗gate/準備失敗も別ログに保持する。
-exact commit/CIは専任HDD result参照。schema4 readerへsourceだけ戻しても復旧できない。
+最初のreceipt commit c339は容量テストの5秒超過でCI失敗。exactfixtureの反復復号が
+約1.25秒を占めたため、rawhead/参照chunk不変と最後の全体認証へ観測を最適化した。
+追加negativecaseで検出を確認し、件数/期限/意味を維持した。runtimeのbytesは同じ。
+exact最新commit/CIは専任HDD result参照。schema4 readerへのsource-only rollbackでは復旧しない。
 target quota/alarm/SQL/Container、公開artifact、全instance/実owner-client復旧は未検証。
 詳細: [long Run receipt task](TASK-takos-ga-long-run-receipt-20261001.md)。
 

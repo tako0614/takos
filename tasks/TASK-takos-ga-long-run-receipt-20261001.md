@@ -238,3 +238,63 @@ increases were added. Schema5 needs a matching retained reader/node/progress/hea
 or reviewed forward repair; source-only rollback to f6d's schema4 reader cannot
 serve it. Commit/push/exact CI, target quota/lifecycle/SQL, published artifact
 and whole-instance restore remain separate evidence boundaries.
+
+## Exact c339 CI failure — 2026-10-01 13:10 UTC
+
+The source-qualified change was committed/pushed as
+`c339f67089e256e7954a693dc9842cf2ac840ba4` with 16 matching files and a clean
+tree. Exact-head CI run36866129244 failed: 1,631 tests passed, while capacity
+integration exceeded the unchanged 5-second deadline (5000.67ms). The same
+source/fixture passed local fullgate, but that does not qualify CI. No blind
+rerun, test count reduction, timeout increase or 16-node/alarm relaxation is
+used. Runtime and fixture validation work are being profiled separately before
+an evidence-backed bounded optimization. Raw CI failure is `ci-failed-c339.log`.
+Current CI-qualified candidate remains f6d; c339 is not ready for integration.
+
+## Capacity observation optimization — 2026-10-01 13:25 UTC
+
+Read-only production profiling (equivalent5.03MiB/150node source) measured about
+0.79 seconds. Exact fixture profiling retained8,542 receipts/5,242,368 bytes/
+155nodes/11alarms and measured3.33 seconds; repeatedly decoding the same source
+head before/after ten sidecar-only batches cost about1.25 seconds.
+
+The test now captures an independent canonical raw head and every referenced
+primitive journal-chunk value in its Map-backed fixture. Sidecar-only steps
+must preserve those values exactly, proving the source arrays have not changed
+without repeatedly decompressing/parsing the5MiB head. Initial/plan/final head
+changes still use the production loader. Newly staged prefixes are authenticated
+incrementally, with a complete prefix/closure verification at switch and the
+same cold duplicate/conflict/IDs/totals/no-LIST checks. A negative case changes
+a referenced chunk while keeping head JSON unchanged and requires detection.
+This qualifies portable raw values, not native backend serialization/quota.
+
+Runtime, converter and native guard bytes remain unchanged from c339. The same
+near-reserve fixture, source identities,16node/alarm/cursor and plan-derived
+alarm bounds, source retention and default5-second deadline remain. Focused
+capacity passed3cases/98assertions in2.47seconds (original95 plus3negative-case
+assertions); recovery8/215 remains green and scopedlint/format/diffchecks pass.
+The test is frozen asSHA `f798a43eaa63390f99bb36cd43f4466d840b99a8da88df13b29de20820ac693f`.
+Independent review, updated fullgate, new commit and exact CI are pending.
+Logs/profile: `capacity-tests/{ci-timeout-stage-profile,capacity-final-rerun,
+recovery-final-rerun,assigned-tests-oxlint-final}.log` and `perf-production.log`.
+
+## Final observation qualification — 2026-10-01 13:34 UTC
+
+The independent narrow review found no concrete P1/P2 or material assertion
+weakening; frozen capacity SHA matched before/after. Raw-value immutability,
+the changed-chunk negative case, original source/identity checks, incremental
+new-prefix and final full-prefix/closure/cold authentication all remain. Report:
+`final-review-capacity-observation.md`. Runtime/converter/guard source is
+unchanged, so earlier exact native receipt/guard/source reviews remain applicable.
+
+Updated complete `bun run check` exited0:1,633 tests/252 files/11,819 assertions,
+20 OpenTofu, all Rust and mandatory Worker/process/build phases passed. Capacity
+ran2.121 seconds; native guard46.641 seconds/observer200. Types98/lint111 remain
+with0 undeclared; source format1209. Documentation bytes are unchanged from the
+successful3.30-second build. Final local Rust debug SHA is
+`964bcf7a8b3a44b6e0f8debe5d9f3297b1367058308f7b86c71235b2dd638f32`;
+keep it separate from prior and future CI debug artifacts. Final log:
+`full-check-after-observation.log`, SHA
+`842c243ca653063ffad4e763be262b7f0c85096184233aca18a50c1ebb0bb840`.
+The new test/metadata commit and exact-head CI are recorded in the dedicated
+HDD result; c339's failed CI is retained and is not rewritten as success.

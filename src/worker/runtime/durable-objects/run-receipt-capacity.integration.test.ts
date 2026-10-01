@@ -15,6 +15,7 @@ import {
   RECEIPT_BOOTSTRAP_STAGE_NODES,
   type ReceiptBulkPlan,
   validateReceiptBootstrapPrefix,
+  visitReceiptIndexClosure,
 } from "./run-receipt-index.ts";
 import { RunNotifierDO } from "./run-notifier.ts";
 
@@ -26,6 +27,7 @@ const EMIT_LAST = "emit-history-last";
 const USAGE_FIRST = "usage-history-first";
 const USAGE_LAST = "usage-history-last";
 const RECEIPT_NODE_PREFIX = "run-receipt-v1/nodes/";
+const JOURNAL_CHUNK_PREFIX = "notifier-v2/chunks/";
 
 type ReceiptSnapshot = {
   schemaVersion: 4;
@@ -213,65 +215,110 @@ async function rawSnapshot(storage: ReturnType<typeof durableState>["storage"]) 
   return await loadNotifierSnapshot(storage as never, "run") as Record<string, unknown>;
 }
 
+// These are exact values from the portable Map-backed fixture, not native DO
+// serialization or quota evidence.
+type HeadWitness = { headJson: string; chunks: Array<{ key: string; value: string }> };
+
+async function captureHeadWitness(storage: ReturnType<typeof durableState>["storage"]): Promise<HeadWitness> {
+  const head = await storage.get<unknown>("bufferState");
+  if (!head || typeof head !== "object" || Array.isArray(head)) {
+    throw new Error("Expected a persisted notifier head");
+  }
+  const value = head as { snapshot?: { chunks?: unknown[] }; blobs?: Array<{ chunks?: unknown[] }> };
+  const hashes = [
+    ...(Array.isArray(value.snapshot?.chunks) ? value.snapshot.chunks : []),
+    ...(Array.isArray(value.blobs) ? value.blobs.flatMap((blob) =>
+      Array.isArray(blob.chunks) ? blob.chunks : []) : []),
+  ];
+  const chunks: HeadWitness["chunks"] = [];
+  for (const digest of new Set(hashes)) {
+    if (typeof digest !== "string") throw new Error("Invalid notifier chunk reference");
+    const key = JOURNAL_CHUNK_PREFIX + digest;
+    const chunk = await storage.get<unknown>(key);
+    if (typeof chunk !== "string") throw new Error("Missing referenced notifier chunk");
+    // Save only primitive content, never an alias to mutable fixture storage.
+    chunks.push({ key, value: chunk });
+  }
+  return { headJson: JSON.stringify(head), chunks };
+}
+
+async function headMatchesWitness(
+  storage: ReturnType<typeof durableState>["storage"], witness: HeadWitness,
+): Promise<boolean> {
+  const head = await storage.get<unknown>("bufferState");
+  if (JSON.stringify(head) !== witness.headJson) return false;
+  for (const chunk of witness.chunks) {
+    if (await storage.get<unknown>(chunk.key) !== chunk.value) return false;
+  }
+  return true;
+}
+
 async function finishReceiptMigration(
   f: Awaited<ReturnType<typeof currentFixture>>, maximumSteps: number,
   source: ReceiptSnapshot,
   prepared: Awaited<ReturnType<typeof prepareReceiptBootstrap>>,
 ) {
+  // Decode source once before bootstrap. Subsequent sidecar-only alarms must
+  // retain this exact head and each immutable chunk until the root switch.
+  const initial = await rawSnapshot(f.state.storage);
+  expect(initial.emitReceipts).toEqual(source.emitReceipts);
+  expect(initial.usageReceipts).toEqual(source.usageReceipts);
+  let headWitness: HeadWitness | null = null;
+  let headCursor = 0;
+  let validatedCursor = 0;
   for (let step = 0; step < maximumSteps; step++) {
-    const before = await rawSnapshot(f.state.storage);
-    const index = before.receiptIndex as {
-      phase?: unknown;
-      bootstrapStage?: { cursor?: unknown; plan?: ReceiptBulkPlan } | null;
-    } | undefined;
-    if (index?.phase === "ready") return step;
-    const beforeStage = index?.bootstrapStage ?? null;
-    const beforeProgress = beforeStage?.plan
-      ? await readReceiptBootstrapProgress(f.state.storage as never, beforeStage.plan)
-      : { cursor: 0, json: null };
-    const beforeCursor = Math.max(
-      typeof beforeStage?.cursor === "number" ? beforeStage.cursor : 0,
-      beforeProgress.cursor,
-    );
-    if (beforeStage) {
-      await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, beforeCursor);
+    if (!headWitness) {
+      f.state.resetReceiptNodePutCalls();
+      await f.notifier.alarm();
+      expect(f.state.receiptNodePutCalls()).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
+      const after = await rawSnapshot(f.state.storage);
+      const next = after.receiptIndex as {
+        phase?: unknown;
+        bootstrapStage?: { cursor?: unknown; plan?: ReceiptBulkPlan } | null;
+      } | undefined;
+      expect(next?.phase).toBe("building");
+      expect(next?.bootstrapStage?.cursor).toBe(0);
+      expect(next?.bootstrapStage?.plan).toEqual(prepared.plan);
+      expect(after.emitReceipts).toEqual(source.emitReceipts);
+      expect(after.usageReceipts).toEqual(source.usageReceipts);
+      headWitness = await captureHeadWitness(f.state.storage);
+      headCursor = next?.bootstrapStage?.cursor as number;
+      expect(headCursor).toBe(0);
+      continue;
     }
+    expect(await headMatchesWitness(f.state.storage, headWitness)).toBe(true);
+    const beforeProgress = await readReceiptBootstrapProgress(f.state.storage as never, prepared.plan);
+    const beforeCursor = Math.max(headCursor, beforeProgress.cursor);
+    await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, beforeCursor, validatedCursor);
+    validatedCursor = beforeCursor;
     f.state.resetReceiptNodePutCalls();
     await f.notifier.alarm();
     expect(f.state.receiptNodePutCalls()).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
-    const after = await rawSnapshot(f.state.storage);
-    const next = after.receiptIndex as {
-      phase?: unknown;
-      bootstrapStage?: { cursor?: unknown; plan?: ReceiptBulkPlan } | null;
-    } | undefined;
-    if (next?.phase !== "ready") {
-      expect(after.emitReceipts).toHaveLength(source.emitReceipts.length);
-      expect(after.usageReceipts).toHaveLength(source.usageReceipts.length);
+    if (await headMatchesWitness(f.state.storage, headWitness)) {
+      const progress = await readReceiptBootstrapProgress(f.state.storage as never, prepared.plan);
+      const afterCursor = Math.max(headCursor, progress.cursor);
+      await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, afterCursor, validatedCursor);
+      expect(afterCursor).toBeGreaterThanOrEqual(beforeCursor);
+      expect(afterCursor - beforeCursor).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
+      validatedCursor = afterCursor;
+      continue;
     }
-    const nextStage = next?.bootstrapStage ?? null;
-    if (beforeStage && nextStage) {
-      const progress = await readReceiptBootstrapProgress(f.state.storage as never, nextStage.plan!);
-      const nextCursor = Math.max(
-        typeof nextStage.cursor === "number" ? nextStage.cursor : 0,
-        progress.cursor,
-      );
-      await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, nextCursor);
-      expect(nextCursor).toBeGreaterThanOrEqual(beforeCursor);
-      expect(nextCursor - beforeCursor).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
-    } else if (!beforeStage && nextStage) {
-      const progress = await readReceiptBootstrapProgress(f.state.storage as never, nextStage.plan!);
-      const nextCursor = Math.max(
-        typeof nextStage.cursor === "number" ? nextStage.cursor : 0,
-        progress.cursor,
-      );
-      await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, nextCursor);
-      expect(nextCursor).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
-    } else if (beforeStage && next?.phase === "ready") {
-      const total = beforeStage.plan?.writeHashes.length;
-      expect(typeof total).toBe("number");
-      await validateReceiptBootstrapPrefix(f.state.storage as never, prepared, total as number);
-      expect((total as number) - beforeCursor).toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
-    }
+
+    const persisted = await rawSnapshot(f.state.storage);
+    const index = persisted.receiptIndex as { phase?: unknown; root: { entries: number } } | undefined;
+    if (index?.phase !== "ready") throw new Error("Notifier head changed before receipt root switch");
+    expect(persisted.emitReceipts).toEqual([]);
+    expect(persisted.usageReceipts).toEqual([]);
+    expect(index.root.entries).toBe(source.emitReceipts.length + source.usageReceipts.length);
+    expect(prepared.plan.writeHashes.length - beforeCursor)
+      .toBeLessThanOrEqual(RECEIPT_BOOTSTRAP_STAGE_NODES);
+    // Authenticate the complete staged prefix and installed closure only at
+    // the root-switch boundary; intermediate batches are incremental.
+    await validateReceiptBootstrapPrefix(f.state.storage as never, prepared,
+      prepared.plan.writeHashes.length);
+    expect(await visitReceiptIndexClosure(f.state.storage as never, index.root as never))
+      .toBe(index.root.entries);
+    return step + 1;
   }
   throw new Error("receipt migration did not reach ready within bounded alarm steps");
 }
@@ -285,6 +332,20 @@ test("schema-4 capacity fixture is a real serialized head at the reserve boundar
   expect(snapshot.emitReceipts.at(-1)?.key).toBe(EMIT_LAST);
   expect(snapshot.usageReceipts.map(({ requestId }) => requestId)).toEqual([USAGE_FIRST, USAGE_LAST]);
   expect(snapshot.emitReceipts.length + snapshot.usageReceipts.length).toBeGreaterThan(5_000);
+});
+
+test("head witness detects changed raw stored chunk strings while head JSON is unchanged", async () => {
+  const f = await currentFixture(makeSnapshot());
+  try {
+    const witness = await captureHeadWitness(f.state.storage);
+    expect(witness.chunks.length).toBeGreaterThan(0);
+    const chunk = witness.chunks[0]!;
+    f.state.values.set(chunk.key, chunk.value + "changed");
+    expect(JSON.stringify(await f.state.storage.get("bufferState"))).toBe(witness.headJson);
+    expect(await headMatchesWitness(f.state.storage, witness)).toBe(false);
+  } finally {
+    // This fixture is in-memory; no external cleanup is required.
+  }
 });
 
 const NEW_EMIT = { runId: RUN_ID, type: "progress", data: { step: "after-migration" },
