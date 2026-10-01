@@ -52,16 +52,103 @@ function notificationSnapshot(counter = 0): Record<string, unknown> {
 function fixtureSource(): string {
   const runImport = JSON.stringify(join(root, "src/worker/runtime/durable-objects/run-notifier.ts"));
   const notificationImport = JSON.stringify(join(root, "src/worker/runtime/durable-objects/notification-notifier.ts"));
+  const journalImport = JSON.stringify(join(root, "src/worker/runtime/durable-objects/notifier-journal.ts"));
   return `import { RunNotifierDO } from ${runImport};
 import { NotificationNotifierDO } from ${notificationImport};
+import { loadNotifierSnapshot } from ${journalImport};
 
 class Harness {
-  constructor(state, env, Notifier) {
+  constructor(state, env, Notifier, kind) {
     this.state = state;
     this.env = env;
     this.Notifier = Notifier;
+    this.kind = kind;
     this.notifier = undefined;
     this.instanceId = crypto.randomUUID();
+  }
+  createNotifier() {
+    const nativeStorage = this.state.storage;
+    const nativeBucket = this.env.TAKOS_OFFLOAD;
+    const readHeadFault = async () => {
+      const key = await nativeStorage.get("proof/head-fault-key");
+      if (typeof key !== "string") return null;
+      const object = await nativeBucket.get(key);
+      return object ? await object.json() : null;
+    };
+    const writeHeadFault = async fault => {
+      const key = await nativeStorage.get("proof/head-fault-key");
+      if (typeof key !== "string") throw new Error("missing native fault control key");
+      await nativeBucket.put(key, JSON.stringify(fault));
+    };
+    const bind = (target, property) => {
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    };
+    const storage = new Proxy(nativeStorage, {
+      get(target, property) {
+        if (property === "setAlarm") return async when => {
+          // Keep this probe's automatic recovery outside its bounded cold
+          // replacement window. The explicit alarm call below still invokes
+          // the real notifier method after native eviction.
+          if (await nativeStorage.get("proof/head-fault-key") ||
+            await nativeStorage.get("proof/create-race")) {
+            return nativeStorage.setAlarm(Date.now() + 120_000);
+          }
+          return nativeStorage.setAlarm(when);
+        };
+        if (property === "put") return async (key, value) => {
+          if (key === "bufferState") {
+            const fault = await readHeadFault();
+            if (fault?.armed && fault.successfulR2Puts > 0 && !fault.fired) {
+              await writeHeadFault({ ...fault, fired: true, headFailures: 1 });
+              throw new Error("injected storage head put failure after real R2 success");
+            }
+          }
+          return nativeStorage.put(key, value);
+        };
+        return bind(target, property);
+      }
+    });
+    const state = new Proxy(this.state, {
+      get(target, property) {
+        return property === "storage" ? storage : bind(target, property);
+      }
+    });
+    const bucket = nativeBucket && new Proxy(nativeBucket, {
+      get(target, property) {
+        if (property === "put") return async (key, value, options) => {
+          const race = await nativeStorage.get("proof/create-race");
+          if (race?.armed && !race.injected && race.key === key && options?.onlyIf) {
+            const bytes = Uint8Array.from(atob(race.bytesBase64), char => char.charCodeAt(0));
+            await target.put(key, bytes);
+            await nativeStorage.put("proof/create-race", { ...race, injected: true,
+              competingBytes: bytes.byteLength });
+          }
+          const result = await target.put(key, value, options);
+          const fault = await readHeadFault();
+          if (fault?.armed && result !== null) {
+            await writeHeadFault({ ...fault, successfulR2Puts: fault.successfulR2Puts + 1 });
+          }
+          if (race?.armed && race.key === key) {
+            const recorded = await nativeStorage.get("proof/create-race");
+            await nativeStorage.put("proof/create-race", { ...recorded,
+              conditionalReturnedNull: result === null });
+          }
+          return result;
+        };
+        return bind(target, property);
+      }
+    });
+    const env = new Proxy(this.env, {
+      get(target, property) {
+        return property === "TAKOS_OFFLOAD" ? bucket : bind(target, property);
+      }
+    });
+    return new this.Notifier(state, env);
+  }
+  async alarm() {
+    this.notifier ??= this.createNotifier();
+    await this.notifier.alarm();
   }
   async fetch(request) {
     const url = new URL(request.url);
@@ -75,7 +162,50 @@ class Harness {
       const value = await this.state.storage.get("bufferState");
       return Response.json({ exists: value !== undefined, value: value ?? null, instanceId: this.instanceId });
     }
-    this.notifier ??= new this.Notifier(this.state, this.env);
+    if (url.pathname === "/control/snapshot") {
+      return Response.json({ value: await loadNotifierSnapshot(this.state.storage, this.kind) });
+    }
+    if (url.pathname === "/control/chunks") {
+      const chunks = await this.state.storage.list({ prefix: "notifier-v2/chunks/", limit: 256 });
+      return Response.json({ count: chunks.size, maxSerializedBytes: Math.max(0, ...Array.from(chunks.values(),
+        value => new TextEncoder().encode(JSON.stringify(value)).length)) });
+    }
+    if (url.pathname === "/control/quota") {
+      let rejected = false;
+      let detail = "";
+      try { await this.state.storage.put("quota-proof", "x".repeat(133120)); }
+      catch (error) { rejected = true; detail = String(error); }
+      const value = await this.state.storage.get("quota-proof");
+      return Response.json({ rejected, detail, absent: value === undefined,
+        storedBytes: typeof value === "string" ? new TextEncoder().encode(value).length : 0 });
+    }
+    if (url.pathname === "/control/arm-head-fault") {
+      if (this.notifier) return new Response("already loaded", { status: 409 });
+      const key = "proof-controls/head-fault/" + crypto.randomUUID() + ".json";
+      await this.env.TAKOS_OFFLOAD.put(key, JSON.stringify({
+        armed: true, fired: false, successfulR2Puts: 0, headFailures: 0,
+      }));
+      await this.state.storage.put("proof/head-fault-key", key);
+      return Response.json({ armed: true });
+    }
+    if (url.pathname === "/control/head-fault") {
+      const key = await this.state.storage.get("proof/head-fault-key");
+      const object = typeof key === "string" ? await this.env.TAKOS_OFFLOAD.get(key) : null;
+      return Response.json({ value: object ? await object.json() : null });
+    }
+    if (url.pathname === "/control/arm-create-race") {
+      if (this.notifier) return new Response("already loaded", { status: 409 });
+      const { key, bytesBase64 } = await request.json();
+      await this.state.storage.put("proof/create-race", {
+        armed: true, injected: false, key, bytesBase64, competingBytes: 0,
+        conditionalReturnedNull: null,
+      });
+      return Response.json({ armed: true });
+    }
+    if (url.pathname === "/control/create-race") {
+      return Response.json({ value: await this.state.storage.get("proof/create-race") });
+    }
+    this.notifier ??= this.createNotifier();
     if (url.pathname.startsWith("/invoke/")) {
       const ws = { send() {}, close() {} };
       switch (url.pathname) {
@@ -93,10 +223,10 @@ class Harness {
   }
 }
 export class RunHarness extends Harness {
-  constructor(state, env) { super(state, env, RunNotifierDO); }
+  constructor(state, env) { super(state, env, RunNotifierDO, "run"); }
 }
 export class NotificationHarness extends Harness {
-  constructor(state, env) { super(state, env, NotificationNotifierDO); }
+  constructor(state, env) { super(state, env, NotificationNotifierDO, "notification"); }
 }
 export default {
   async fetch(request, env) {
@@ -178,6 +308,99 @@ async function archivedBytes(mf: MiniflareInstance, runId: string): Promise<Uint
   return new Uint8Array(await object.arrayBuffer());
 }
 
+async function controlValue<T>(mf: MiniflareInstance, name: string, path: string): Promise<T> {
+  const response = await request(mf, "run", name, path);
+  assert(response.status === 200, `${name}${path}: control status ${response.status}`);
+  return (await response.json() as { value: T }).value;
+}
+
+async function decodedRunState(mf: MiniflareInstance, name: string): Promise<Record<string, unknown>> {
+  return await controlValue<Record<string, unknown>>(mf, name, "/control/snapshot");
+}
+
+async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
+  const name = `run-head-retry-${randomUUID().slice(0, 8)}`;
+  await seed(mf, "run", name, runSnapshot(name));
+  const armed = await request(mf, "run", name, "/control/arm-head-fault");
+  assert(armed.status === 200, "run/head-retry: fault was not armed");
+  const first = await request(mf, "run", name, "/do/emit", {
+    type: "completed", data: { attempt: "first" }, runId: name, dedup_key: "head-retry-first",
+  });
+  const fault = await controlValue<{
+    fired: boolean; successfulR2Puts: number; headFailures: number;
+  }>(mf, name, "/control/head-fault");
+  const firstArchive = await archivedBytes(mf, name);
+  const pending = await decodedRunState(mf, name);
+  assert(first.status === 200 && (await first.json() as { eventId?: number }).eventId === 1,
+    "run/head-retry: emit was not durably accepted before best-effort drain");
+  assert(fault.fired && fault.successfulR2Puts === 1 && fault.headFailures === 1,
+    `run/head-retry: exact R2-then-head fault was not observed: ${JSON.stringify(fault)}`);
+  assert(pending.eventIdCounter === 1 &&
+    (pending.flushIntents as unknown[]).length === 1 &&
+    (pending.r2SegmentBuffer as unknown[]).length === 1,
+    "run/head-retry: committed pending intent missing after head fault");
+  const beforeId = (await inspectDetails(mf, "run", name)).instanceId;
+  await evict(mf, "run", name);
+  const afterId = (await inspectDetails(mf, "run", name)).instanceId;
+  assert(beforeId !== afterId, "run/head-retry: native eviction did not replace object");
+  const retry = await request(mf, "run", name, "/invoke/alarm");
+  assert(retry.status === 200, `run/head-retry: cold retry status ${retry.status}`);
+  const settled = await decodedRunState(mf, name);
+  const retryArchive = await archivedBytes(mf, name);
+  assert(hash(retryArchive) === hash(firstArchive), "run/head-retry: existing gzip changed on cold retry");
+  assert(settled.eventIdCounter === 1 &&
+    (settled.flushIntents as unknown[]).length === 0 &&
+    (settled.r2SegmentBuffer as unknown[]).length === 0 &&
+    settled.r2LastFlushedSegmentIndex === 1,
+    "run/head-retry: cold retry did not durably retire exact intent");
+  console.error(JSON.stringify({ witness: "current/head-failure-cold-retry", firstHttp: first.status,
+    retryHttp: retry.status, fault, beforeInstance: beforeId, afterInstance: afterId,
+    archiveFirstSha256: hash(firstArchive), archiveAfterSha256: hash(retryArchive),
+    archiveBytes: firstArchive.byteLength }));
+  return "run/head-failure-cold-retry: real R2 put succeeded, injected head put failed once, cold retry preserved exact gzip and retired intent";
+}
+
+async function proveConditionalCreateRace(mf: MiniflareInstance, competing: Uint8Array): Promise<string> {
+  const name = `run-create-race-${randomUUID().slice(0, 8)}`;
+  const key = `runs/${name}/events/000001.jsonl.gz`;
+  await seed(mf, "run", name, runSnapshot(name));
+  const armed = await request(mf, "run", name, "/control/arm-create-race", {
+    key, bytesBase64: Buffer.from(competing).toString("base64"),
+  });
+  assert(armed.status === 200, "run/create-race: fault was not armed");
+  const emit = await request(mf, "run", name, "/do/emit", {
+    type: "completed", data: { intended: true }, runId: name,
+  });
+  const race = await controlValue<{
+    injected: boolean; competingBytes: number; conditionalReturnedNull: boolean | null;
+  }>(mf, name, "/control/create-race");
+  const archived = await archivedBytes(mf, name);
+  const pending = await decodedRunState(mf, name);
+  console.error(JSON.stringify({ witness: "current/conditional-create-race", emitHttp: emit.status,
+    injected: race.injected, competingBytes: race.competingBytes,
+    conditionalReturnedNull: race.conditionalReturnedNull,
+    competingSha256: hash(competing), archivedSha256: hash(archived),
+    pendingIntents: (pending.flushIntents as unknown[]).length }));
+  assert(emit.status === 200 && race.injected && race.competingBytes === competing.byteLength,
+    "run/create-race: did not place competing bytes immediately before native conditional put");
+  assert(race.conditionalReturnedNull === true,
+    "run/create-race: native conditional put did not report failed precondition");
+  assert(hash(archived) === hash(competing), "run/create-race: native conditional create overwrote competing bytes");
+  assert(pending.eventIdCounter === 1 && (pending.flushIntents as unknown[]).length === 1,
+    "run/create-race: pending intent was not durably retained");
+  const beforeId = (await inspectDetails(mf, "run", name)).instanceId;
+  await evict(mf, "run", name);
+  const afterId = (await inspectDetails(mf, "run", name)).instanceId;
+  assert(beforeId !== afterId, "run/create-race: native eviction did not replace object");
+  const retry = await request(mf, "run", name, "/invoke/alarm");
+  assert(retry.status === 200, "run/create-race: cold retry alarm failed");
+  const after = await decodedRunState(mf, name);
+  assert(hash(await archivedBytes(mf, name)) === hash(competing) &&
+    (after.flushIntents as unknown[]).length === 1,
+    "run/create-race: cold retry overwrote competitor or lost pending intent");
+  return "run/conditional-create-race: native onlyIf refused overwrite; competing gzip intact and current intent retained across eviction";
+}
+
 async function proveRejected(
   mf: MiniflareInstance,
   kind: Kind,
@@ -248,11 +471,18 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
     data: { proof: true },
     ...(kind === "run" ? { runId: name, dedup_key: "fresh-key" } : {}),
   });
-  assert(emitted.status === 200, `${kind}: healthy emit status ${emitted.status}`);
+  if (emitted.status !== 200) {
+    throw new Error(`${kind}: healthy emit status ${emitted.status}: ${await emitted.text()}`);
+  }
   assert((await emitted.json() as { eventId?: number }).eventId === 101, `${kind}: expected event 101`);
-  const persisted = await inspect(mf, kind, name) as Record<string, unknown>;
-  assert(persisted.schemaVersion === 1 && persisted.eventIdCounter === 101, `${kind}: v1 counter not persisted`);
+  const head = await inspect(mf, kind, name) as Record<string, unknown>;
+  const decoded = await request(mf, kind, name, "/control/snapshot");
+  assert(decoded.status === 200, `${kind}: journal snapshot unreadable`);
+  const persisted = (await decoded.json() as { value: Record<string, unknown> }).value;
+  assert(head.schemaVersion === 2 && persisted.eventIdCounter === 101, `${kind}: v2 journal counter not persisted`);
   if (kind === "run") {
+    const drained = await request(mf, kind, name, "/invoke/alarm");
+    assert(drained.status === 200, "run: committed archive intent did not drain");
     assert(hash(await archivedBytes(mf, name)) === hash(archive), "run: historical archive changed");
     const bucket = await nativeBucket(mf);
     assert(await bucket.get(`runs/${name}/events/000002.jsonl.gz`) !== null, "run: new segment 2 absent");
@@ -266,24 +496,70 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
     `${kind}: cold replacement lost counter`);
   if (kind === "run") {
     const duplicate = await request(mf, kind, name, "/do/emit", {
-      type: "run.progress", data: { proof: true }, runId: name, dedup_key: "fresh-key",
+      type: "completed", data: { proof: true }, runId: name, dedup_key: "fresh-key",
     });
     assert(duplicate.status === 200 && (await duplicate.json() as { duplicate?: boolean }).duplicate === true,
       "run: cold replacement lost dedup");
     assert(hash(await archivedBytes(mf, name)) === hash(archive), "run: cold replacement changed original archive");
   }
-  return `${kind}/historical-unversioned: event 101 persisted as v1 and survived native eviction${kind === "run" ? ", dedup and R2 retained" : ""}`;
+  return `${kind}/historical-unversioned: event 101 persisted as v2 and survived native eviction${kind === "run" ? ", dedup and R2 retained" : ""}`;
 }
 
-async function baselineSources(): Promise<Map<string, string>> {
+async function proveChunkedState(mf: MiniflareInstance): Promise<string> {
+  const name = `notification-chunks-${randomUUID().slice(0, 8)}`;
+  const text = "🐙".repeat(50_000);
+  await seed(mf, "notification", name, notificationSnapshot());
+  const emitted = await request(mf, "notification", name, "/do/emit", {
+    type: "notification.created", data: { text },
+  });
+  assert(emitted.status === 200, `native chunked emit status ${emitted.status}`);
+  const chunksResponse = await request(mf, "notification", name, "/control/chunks");
+  const chunks = await chunksResponse.json() as { count: number; maxSerializedBytes: number };
+  const head = await inspect(mf, "notification", name) as {
+    schemaVersion: number; snapshot: { bytes: number; chunks: string[] };
+  };
+  assert(head.schemaVersion === 2 && head.snapshot.bytes > 200_000 &&
+    head.snapshot.chunks.length >= 4 && chunks.count >= 2 &&
+    chunks.count <= head.snapshot.chunks.length && chunks.maxSerializedBytes < 90 * 1024,
+    `native journal did not split large UTF-8 payload into bounded values: ${JSON.stringify(chunks)}`);
+  const before = (await inspectDetails(mf, "notification", name)).instanceId;
+  await evict(mf, "notification", name);
+  const after = (await inspectDetails(mf, "notification", name)).instanceId;
+  assert(before !== after, "native chunk proof did not replace the instance");
+  const events = await request(mf, "notification", name, "/do/events");
+  const replay = await events.json() as { events: Array<{ data: { text: string } }>; lastEventId: number };
+  assert(events.status === 200 && replay.lastEventId === 1 && replay.events[0]?.data.text === text,
+    "large native chunked payload changed through eviction");
+  return `notification/chunks: 200000 UTF-8 payload bytes retained through eviction; ${chunks.count} chunks; max serialized value ${chunks.maxSerializedBytes} bytes`;
+}
+
+async function proveNativeQuota(mf: MiniflareInstance): Promise<string> {
+  const name = `notification-quota-${randomUUID().slice(0, 8)}`;
+  const response = await request(mf, "notification", name, "/control/quota");
+  const result = await response.json() as { rejected: boolean; absent: boolean; detail: string; storedBytes: number };
+  assert(response.status === 200 && (result.rejected
+    ? result.absent && result.storedBytes === 0 && result.detail.includes("131072")
+    : !result.absent && result.storedBytes === 133120),
+    `native quota probe returned inconsistent write/read evidence: ${JSON.stringify(result)}`);
+  return result.rejected
+    ? "notification/quota: local legacy KV rejected oversized serialized value before mutation; production quota remains unqualified"
+    : "notification/quota: local workerd accepted 133120 bytes despite useSQLite:false; production quota remains unqualified";
+}
+
+async function baselineSources(mode: "baseline-red" | "journal-baseline-red"): Promise<Map<string, string>> {
   const files = [
     "src/worker/runtime/durable-objects/notifier-base.ts",
     "src/worker/runtime/durable-objects/run-notifier.ts",
     "src/worker/runtime/durable-objects/notification-notifier.ts",
+    ...(mode === "journal-baseline-red"
+      ? ["src/worker/runtime/durable-objects/notifier-state.ts"] : []),
   ];
+  const commit = mode === "journal-baseline-red"
+    ? "fff1ff92276ffcf516521abd75c336c04712ab4b"
+    : "3b79815f96b986eea138534f337c9580f49ab2d2";
   const result = new Map<string, string>();
   for (const file of files) {
-    const child = Bun.spawnSync(["git", "show", `3b79815f96b986eea138534f337c9580f49ab2d2:${file}`], {
+    const child = Bun.spawnSync(["git", "show", `${commit}:${file}`], {
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
@@ -341,8 +617,49 @@ async function proveBaselineRegression(mf: MiniflareInstance, archive: Uint8Arra
   return observations;
 }
 
+async function proveJournalBaselineRegression(mf: MiniflareInstance): Promise<string[]> {
+  const name = `run-journal-baseline-${randomUUID().slice(0, 8)}`;
+  await seed(mf, "run", name, runSnapshot(name));
+  const armed = await request(mf, "run", name, "/control/arm-head-fault");
+  assert(armed.status === 200, "journal baseline: head fault was not armed");
+  const first = await request(mf, "run", name, "/do/emit", {
+    type: "completed", data: { attempt: "first" }, runId: name,
+  });
+  const fault = await controlValue<{
+    fired: boolean; successfulR2Puts: number; headFailures: number;
+  }>(mf, name, "/control/head-fault");
+  const archiveFirst = await archivedBytes(mf, name);
+  const stateAfterFault = await inspect(mf, "run", name);
+  const beforeId = (await inspectDetails(mf, "run", name)).instanceId;
+  await evict(mf, "run", name);
+  const afterId = (await inspectDetails(mf, "run", name)).instanceId;
+  const second = await request(mf, "run", name, "/do/emit", {
+    type: "completed", data: { attempt: "second" }, runId: name,
+  });
+  const archiveSecond = await archivedBytes(mf, name);
+  const stateAfterSecond = await inspect(mf, "run", name);
+  // Emit raw native observations before asserting the expected red witness.
+  console.error(JSON.stringify({ baseline: "fff1ff92276ffcf516521abd75c336c04712ab4b",
+    witness: "R2-success-head-failure-cold-overwrite", firstHttp: first.status,
+    firstBody: await first.text(), secondHttp: second.status, secondBody: await second.text(),
+    fault, beforeInstance: beforeId, afterInstance: afterId,
+    stateAfterFaultSha256: hash(new TextEncoder().encode(JSON.stringify(stateAfterFault))),
+    stateAfterSecondSha256: hash(new TextEncoder().encode(JSON.stringify(stateAfterSecond))),
+    archiveFirstSha256: hash(archiveFirst), archiveSecondSha256: hash(archiveSecond),
+    archiveFirstBytes: archiveFirst.byteLength, archiveSecondBytes: archiveSecond.byteLength }));
+  assert(fault.fired && fault.successfulR2Puts === 1 && fault.headFailures === 1,
+    "journal baseline: R2 success then head failure not reached");
+  assert(beforeId !== afterId, "journal baseline: native cold replacement not observed");
+  assert(JSON.stringify(stateAfterFault) === JSON.stringify(runSnapshot(name)),
+    "journal baseline: failed head unexpectedly committed event");
+  assert(second.status === 200, `journal baseline: cold second emit status ${second.status}`);
+  assert(hash(archiveFirst) !== hash(archiveSecond),
+    "journal baseline: cold retry did not overwrite first archived gzip");
+  return ["fff1ff9/head-failure-cold-overwrite: R2 put succeeded before injected head failure; cold second emit overwrote first gzip at same key"];
+}
+
 export async function proveNotifierStateGuard(
-  mode: "current" | "baseline-red" = "current",
+  mode: "current" | "baseline-red" | "journal-baseline-red" = "current",
 ): Promise<{ runtime: string; observations: string[] }> {
   const tempParent = join(root, "tmp");
   await mkdir(tempParent, { recursive: true });
@@ -369,7 +686,7 @@ export async function proveNotifierStateGuard(
   try {
     const entry = join(temp, "fixture.ts");
     await writeFile(entry, fixtureSource());
-    const oldSources = mode === "baseline-red" ? await baselineSources() : undefined;
+    const oldSources = mode === "current" ? undefined : await baselineSources(mode);
     const built = await Bun.build({
       entrypoints: [entry],
       outdir: temp,
@@ -415,6 +732,12 @@ export async function proveNotifierStateGuard(
         observations: await proveBaselineRegression(mf, archive),
       };
     }
+    if (mode === "journal-baseline-red") {
+      return {
+        runtime: "Miniflare 4 / native workerd / legacy KV DO / local R2 / fff1ff9 source",
+        observations: await proveJournalBaselineRegression(mf),
+      };
+    }
     const observations: string[] = [];
     for (const kind of ["run", "notification"] as const) {
       const base = kind === "run" ? runSnapshot("unused") : notificationSnapshot();
@@ -430,6 +753,10 @@ export async function proveNotifierStateGuard(
       }
       observations.push(await proveHealthy(mf, kind, archive));
     }
+    observations.push(await proveChunkedState(mf));
+    observations.push(await proveNativeQuota(mf));
+    observations.push(await proveHeadFailureRetry(mf));
+    observations.push(await proveConditionalCreateRace(mf, archive));
     return { runtime: "Miniflare 4 / native workerd / legacy KV DO / local R2", observations };
   } finally {
     try {
@@ -443,9 +770,12 @@ export async function proveNotifierStateGuard(
 
 if (import.meta.main) {
   try {
-    assert(Bun.argv.length === 2 || (Bun.argv.length === 3 && Bun.argv[2] === "--baseline-red"),
-      "usage: bun scripts/prove-notifier-state-guard.ts [--baseline-red]");
-    console.log(JSON.stringify(await proveNotifierStateGuard(Bun.argv[2] === "--baseline-red" ? "baseline-red" : "current"), null, 2));
+    assert(Bun.argv.length === 2 || (Bun.argv.length === 3 &&
+      (Bun.argv[2] === "--baseline-red" || Bun.argv[2] === "--journal-baseline-red")),
+      "usage: bun scripts/prove-notifier-state-guard.ts [--baseline-red|--journal-baseline-red]");
+    console.log(JSON.stringify(await proveNotifierStateGuard(Bun.argv[2] === "--baseline-red"
+      ? "baseline-red" : Bun.argv[2] === "--journal-baseline-red"
+      ? "journal-baseline-red" : "current"), null, 2));
   } catch (error) {
     console.error(error instanceof Error ? error.stack : String(error));
     process.exitCode = 1;

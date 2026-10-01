@@ -1,8 +1,8 @@
 {
   "note": "Declared lint debt. `bun run check:lint` runs oxlint over src, web/src, scripts and website/src and refuses any finding that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. Rule selection lives in .oxlintrc.json.",
   "totals": {
-    "files": 57,
-    "diagnostics": 112
+    "files": 56,
+    "diagnostics": 111
   },
   "files": {
     "scripts/build-worker-release-artifact.ts": 1,
@@ -17,7 +17,6 @@
     "src/worker/application/services/agent/prompt-budget.ts": 1,
     "src/worker/application/services/maintenance/scheduled-cron.ts": 5,
     "src/worker/application/services/notifications/pushers.ts": 1,
-    "src/worker/application/services/notifications/service.ts": 1,
     "src/worker/application/services/platform/__tests__/mcp-registry.test.ts": 1,
     "src/worker/application/services/platform/mcp/registry-sources.ts": 1,
     "src/worker/application/services/source/__tests__/featured-app-catalog.test.ts": 1,

@@ -22,6 +22,7 @@ import {
   safeClose,
   scheduleCleanupAlarm,
 } from "./do-header-utils.ts";
+import { collectNotifierGarbage } from "./notifier-journal.ts";
 
 export { type ExtendedWebSocket, jsonResponse, type RingBufferEvent };
 
@@ -122,6 +123,7 @@ export function toWsEnvelope(input: {
 export abstract class NotifierBase {
   protected state: DurableObjectStateBinding;
   private readonly initialized: Promise<void>;
+  private recoveryFailure: unknown;
   /**
    * Active WebSocket connections keyed by connection id. Exposed for
    * Durable Object tests that need to assert connection accounting or
@@ -137,6 +139,7 @@ export abstract class NotifierBase {
 
   /** Maximum concurrent WebSocket connections for this notifier type. */
   protected abstract readonly maxConnections: number;
+  protected readonly journalKind: "run" | "notification" | null = null;
 
   constructor(state: DurableObjectStateBinding) {
     this.state = state;
@@ -179,16 +182,44 @@ export abstract class NotifierBase {
   /** Persist the full in-memory state to DO storage. */
   protected abstract persistState(): Promise<void>;
 
+  protected async awaitInitialized(): Promise<void> {
+    await this.initialized;
+    if (this.recoveryFailure) throw this.recoveryFailure;
+  }
+
+  /** A rejected write may have committed. Reload before allowing another operation. */
+  protected async recoverPersistedState(error: unknown): Promise<void> {
+    try {
+      await this.loadPersistedState();
+    } catch (reloadError) {
+      this.recoveryFailure = new AggregateError(
+        [error, reloadError], "Notifier journal reload failed; instance is unavailable",
+      );
+      throw this.recoveryFailure;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Alarm – heartbeat + stale connection cleanup
   // ---------------------------------------------------------------------------
 
   async alarm(): Promise<void> {
-    await this.initialized;
+    await this.awaitInitialized();
+    if (this.journalKind) {
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        await collectNotifierGarbage(this.state.storage, this.journalKind!);
+      });
+    }
     cleanupStaleConnections(this.connections);
     broadcastHeartbeat(this.connections);
     if (this.connections.size > 0) {
-      await this.state.storage.setAlarm(Date.now() + HEARTBEAT_INTERVAL_MS);
+      const now = Date.now();
+      const next = now + HEARTBEAT_INTERVAL_MS;
+      const current = await this.state.storage.getAlarm();
+      if (current === null || current <= now || current > next) {
+        await this.state.storage.setAlarm(next);
+      }
     }
   }
 
@@ -197,7 +228,7 @@ export abstract class NotifierBase {
   // ---------------------------------------------------------------------------
 
   async fetch(request: Request): Promise<Response> {
-    await this.initialized;
+    await this.awaitInitialized();
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -430,7 +461,7 @@ export abstract class NotifierBase {
     ws: WebSocketLike,
     message: string | ArrayBuffer,
   ): Promise<void> {
-    await this.initialized;
+    await this.awaitInitialized();
     const extendedWs = ws as ExtendedWebSocket;
     extendedWs.lastActivity = Date.now();
 
@@ -456,7 +487,7 @@ export abstract class NotifierBase {
   }
 
   async webSocketClose(ws: WebSocketLike): Promise<void> {
-    await this.initialized;
+    await this.awaitInitialized();
     const extendedWs = ws as ExtendedWebSocket;
     if (extendedWs.connectionId) {
       this.connections.delete(extendedWs.connectionId);
@@ -464,7 +495,7 @@ export abstract class NotifierBase {
   }
 
   async webSocketError(ws: WebSocketLike, error: unknown): Promise<void> {
-    await this.initialized;
+    await this.awaitInitialized();
     const extendedWs = ws as ExtendedWebSocket;
     if (extendedWs.connectionId) {
       logError(
@@ -492,7 +523,9 @@ export abstract class NotifierBase {
       [key: string]: unknown;
     },
   ): Promise<Response> {
-    return this.state.blockConcurrencyWhile(async () => {
+    let committedEventId: number | undefined;
+    const response = await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
       if (
         typeof input.type !== "string" || input.type.length === 0 ||
         input.type.length > 256
@@ -509,31 +542,45 @@ export abstract class NotifierBase {
       }
 
       const preferredEventId = parseEventId(input.event_id);
-      if (preferredEventId !== null && !Number.isSafeInteger(preferredEventId)) {
+      if (input.event_id !== undefined &&
+        ((typeof input.event_id !== "number" &&
+          (typeof input.event_id !== "string" || !/^\d+$/.test(input.event_id))) ||
+          preferredEventId === null || !Number.isSafeInteger(Number(input.event_id)) ||
+          Number(input.event_id) <= 0)) {
         return jsonResponse({ success: false, error: "Invalid event ID" }, 400);
-      }
-      if (this.eventIdCounter === Number.MAX_SAFE_INTEGER) {
-        return jsonResponse({ success: false, error: "Event sequence exhausted" }, 503);
       }
 
       // Domain-specific validation before mutating state
       const rejection = await this.validateEmit(input);
       if (rejection) return rejection;
+      if (this.eventIdCounter === Number.MAX_SAFE_INTEGER) {
+        return jsonResponse({ success: false, error: "Event sequence exhausted" }, 503);
+      }
 
       const counter = { value: this.eventIdCounter };
+      const prospectiveBuffer = this.eventBuffer.slice();
       const eventId = addToRingBuffer(
-        this.eventBuffer,
+        prospectiveBuffer,
         counter,
         input.type,
         input.data,
         preferredEventId,
       );
+      const capacityRejection = await this.validateEmitCapacity(input, prospectiveBuffer, eventId);
+      if (capacityRejection) return capacityRejection;
+      this.eventBuffer = prospectiveBuffer;
       this.eventIdCounter = counter.value;
 
-      // Let the subclass perform domain-specific side effects and build the broadcast message
-      const result = await this.processEmit(input, eventId);
-
-      await this.persistState();
+      let result: EmitResult;
+      try {
+        // Prepare local journal state only. Remote effects follow the commit.
+        result = await this.processEmit(input, eventId);
+        await this.persistState();
+      } catch (error) {
+        await this.recoverPersistedState(error);
+        throw error;
+      }
+      committedEventId = eventId;
 
       const clientCount = this.broadcastMessage(result.broadcastMessage);
 
@@ -544,7 +591,33 @@ export abstract class NotifierBase {
         ...result.extraResponse,
       });
     });
+    if (committedEventId !== undefined) {
+      // External I/O must not hold blockConcurrencyWhile's 30-second lock.
+      const postCommit = this.afterPersistedEmit(input, committedEventId).catch((error) => {
+        // The accepted event is already durable; a projection/flush failure
+        // cannot revoke it. Domain recovery owns the pending work and alarm.
+        logWarn("Notifier post-commit work deferred", {
+          module: this.moduleName, detail: error instanceof Error ? error.message : String(error),
+        });
+      });
+      if (this.state.waitUntil) this.state.waitUntil(postCommit);
+      else await postCommit;
+    }
+    return response;
   }
+
+  protected async validateEmitCapacity(
+    _input: { type: string; data: unknown; [key: string]: unknown },
+    _prospectiveBuffer: RingBufferEvent[],
+    _eventId: number,
+  ): Promise<Response | null> {
+    return null;
+  }
+
+  protected async afterPersistedEmit(
+    _input: { type: string; data: unknown; [key: string]: unknown },
+    _eventId: number,
+  ): Promise<void> {}
 
   /**
    * Domain-specific validation before mutating state.

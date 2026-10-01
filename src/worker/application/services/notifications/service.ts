@@ -13,7 +13,6 @@ import {
 } from "../../../shared/utils/index.ts";
 
 import { logInfo, logWarn } from "../../../shared/utils/logger.ts";
-import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -132,7 +131,13 @@ async function emitNotificationCreated(
       },
     }),
   });
-  await stub.fetch(request);
+  const response = await stub.fetch(request);
+  if (!response.ok) throw new Error(`Notification hint rejected (${response.status})`);
+  const result: unknown = await response.json();
+  if (!result || typeof result !== "object" ||
+    (result as Record<string, unknown>).success !== true) {
+    throw new Error("Notification hint was not accepted");
+  }
 }
 
 export async function getNotificationsMutedUntil(
@@ -651,14 +656,11 @@ export async function createNotification(
   if (dataStr.length > MAX_NOTIFICATION_DATA_SIZE) {
     logWarn("Notification data exceeds size limit, truncating payload", {
       module: "notifications",
-      ...{
-        type: input.type,
-        size: dataStr.length,
-      },
+      type: input.type,
+      size: dataStr.length,
     });
   }
 
-  let inserted = true;
   try {
     const insert = db.insert(notifications).values({
       id,
@@ -675,14 +677,9 @@ export async function createNotification(
       emailError: null,
     });
     if (options.notificationId) {
-      const result = await insert.onConflictDoNothing({
+      await insert.onConflictDoNothing({
         target: notifications.id,
       });
-      if (affectedRowCount(result) === 0) {
-        // A fixed-id replay may mean the inbox row committed before Queue.send.
-        // Re-enqueue the same event id; delivery is intentionally at-least-once.
-        inserted = false;
-      }
     } else {
       await insert;
     }
@@ -693,7 +690,10 @@ export async function createNotification(
     throw err;
   }
 
-  if (inserted && wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
+  // A fixed-ID retry can follow an ambiguous notifier head commit. Re-emit the
+  // same notification ID. A replay-horizon receipt keeps its delivery cursor
+  // stable; after retirement it is a new refresh hint for the same SQL inbox row.
+  if (wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
     try {
       const stub = getNotificationNotifierStub(env, input.userId);
       if (stub) {

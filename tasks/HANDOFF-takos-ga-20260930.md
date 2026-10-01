@@ -325,3 +325,50 @@ commit wait was observed. The same owner's OCI recovery succeeds separately.
 No deadline or assertion was weakened. Full committed CI is the separate complete
 gate evidence; the local composite failure log is retained and must not be called
 green. Current docs build succeeds.
+
+
+## Durable notifier journal — 2026-10-01
+
+Takos-private v2 state now uses immutable64KiB chunks, exact gzip flush intents
+and one verified head. R2 success followed by head failure no longer loses the
+committed pending prefix or permits cold replay to overwrite it. Legacy-only
+semantic adoption persists observed actual gzip bytes before finalization; new
+v2 intents require raw-byte equality and conditional create/readback. Serialized
+finalization retains later accepts. Ambiguous heads reload before further work;
+failed reads or bad shapes retain data and refuse operations. Capacity8MiB/128
+refs rejects before ID advancement; accepted pending entries are not evicted.
+Alarms are armed before pending publication and before staging; verified cleanup
+removes only unreferenced internal copies, including idle failed-stage orphans.
+No shared schema/binding/Form or deployed data conversion is performed.
+
+The single owner's notification DO keeps100 replay-horizon receipts keyed first
+by canonical SQL notification_id. Arbitrarily old refresh hints may replay with
+new cursors; the SQL inbox remains one fixed-ID row. Actual libsql verifies both
+ambiguous cold retry and retired replay keep the exact original row. The long-lived
+stream does not permanently exhaust receipts. Run/usage receipts remain bounded
+by capacity and are not evicted; usage retry identity is optional and caller-owned.
+The architecture entry now explicitly repeats the personal single-owner premise,
+multiple private Workspaces and independent external participants/shares.
+
+Complete local bun run check now succeeds:1,438tests/236files/9,017assertions,
+20OpenTofu tests/plans, all Rust phases(default96/mockaggregate169), required
+real Worker/full SQLite/ToolExecutor/debug-process recovery, Web+Worker builds.
+Native18-scenario journal/guard proof passes34.16s. Source type debt98 is unchanged,
+lint debt111 is reduced by one; zero undeclared diagnostics. Docs build succeeds;
+independent review findings are resolved. Test timeouts and assertions unchanged.
+Actual fff1ff922 native old-source witness reproduces R2-success/head-failure/cold
+same-key gzip overwrite with hashes; current native cold retry conserves gzip.
+Native conditional-create conflict returnsnull and keeps competing bytes/pending.
+The local KV quota probe accepts133120bytes, so production quotas are unqualified.
+
+These close the earlier source-level intent/chunk/budget/save-window items, not
+GA or live backend qualification. Main must establish single-key durable head,
+authoritative reads/conditional create, actual quotas/alarm/restart and retained
+guard-aware rollback artifact on the exact admitted backend. Current Takos S3/GCS/
+in-memory put adapters ignore onlyIf; do not claim that guarantee there. Long Run
+receipt exhaustion/performance, archive listing, owner-sub/pairwise mobile-sub,
+exact Form/Interface/Binding closure, published image and live journey/monitor/
+restore remain open. No other worktree, original UI/engine dirty data, common
+contract, billing, grants, production deploy, image publication or merge changed.
+See TASK-takos-ga-notifier-journal-20261001.md; exact new commit/CI are recorded in
+/root/hdd/takos-dev/handoffs/takos-ga-dedicated-result-20260930.md and draftPR126.

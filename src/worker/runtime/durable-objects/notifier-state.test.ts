@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { DurableObjectStateBinding } from "../../shared/types/bindings.ts";
 
 import {
   buildRunEventSegmentKey,
@@ -8,6 +9,7 @@ import {
 import { createInMemoryObjectStore } from "../../local-platform/in-memory-r2.ts";
 import { NotificationNotifierDO } from "./notification-notifier.ts";
 import { RunNotifierDO } from "./run-notifier.ts";
+import { loadNotifierSnapshot } from "./notifier-journal.ts";
 
 type StorageFixture = ReturnType<typeof createDurableObjectState>;
 type Notifier = RunNotifierDO | NotificationNotifierDO;
@@ -293,7 +295,9 @@ test("RunNotifierDO rejects legacy corruption without overwriting an existing co
 });
 
 async function expectReady(factory: Factory, stored: unknown) {
-  const durable = createDurableObjectState(new Map([["bufferState", stored]]));
+  const durable = createDurableObjectState(stored instanceof Map
+    ? structuredClone(stored)
+    : new Map([["bufferState", stored]]));
   const notifier = factory(durable.binding);
   await durable.ready();
   const state = await notifier.fetch(new Request("https://notifier.test/state"));
@@ -301,7 +305,7 @@ async function expectReady(factory: Factory, stored: unknown) {
   return { durable, notifier };
 }
 
-test("both notifier classes accept legacy optional fields omitted and resume after persisted schemaVersion 1", async () => {
+test("both notifier classes accept legacy optional fields omitted and resume from the complete chunked journal", async () => {
   const { run, notification } = createFactories();
   const legacyRun = await expectReady(run, {
     eventBuffer: [validRingEvent(1)],
@@ -329,8 +333,9 @@ test("both notifier classes accept legacy optional fields omitted and resume aft
     body: JSON.stringify({ type: "run.progress", data: { sequence: 3 }, event_id: 3 }),
   }));
   expect(runEmit.status).toBe(200);
-  expect(versionedRun.durable.values.get("bufferState")).toMatchObject({ schemaVersion: 1, eventIdCounter: 3 });
-  const resumedRun = await expectReady(run, versionedRun.durable.values.get("bufferState"));
+  expect(versionedRun.durable.values.get("bufferState")).toMatchObject({ schemaVersion: 2, kind: "run" });
+  expect(await loadNotifierSnapshot((versionedRun.durable.binding as DurableObjectStateBinding).storage, "run")).toMatchObject({ eventIdCounter: 3 });
+  const resumedRun = await expectReady(run, versionedRun.durable.values);
   const resumedRunEvents = await resumedRun.notifier.fetch(new Request("https://notifier.test/events?after=2"));
   expect(await resumedRunEvents.json()).toMatchObject({ lastEventId: 3, events: [{ id: 3 }] });
 
@@ -353,8 +358,9 @@ test("both notifier classes accept legacy optional fields omitted and resume aft
     body: JSON.stringify({ type: "notification.created", data: { sequence: 3 }, event_id: 3 }),
   }));
   expect(notificationEmit.status).toBe(200);
-  expect(versionedNotification.durable.values.get("bufferState")).toMatchObject({ schemaVersion: 1, eventIdCounter: 3 });
-  const resumedNotification = await expectReady(notification, versionedNotification.durable.values.get("bufferState"));
+  expect(versionedNotification.durable.values.get("bufferState")).toMatchObject({ schemaVersion: 2, kind: "notification" });
+  expect(await loadNotifierSnapshot((versionedNotification.durable.binding as DurableObjectStateBinding).storage, "notification")).toMatchObject({ eventIdCounter: 3 });
+  const resumedNotification = await expectReady(notification, versionedNotification.durable.values);
   const resumedNotificationEvents = await resumedNotification.notifier.fetch(new Request("https://notifier.test/events?after=2"));
   expect(await resumedNotificationEvents.json()).toMatchObject({ lastEventId: 3, events: [{ id: 3 }] });
 });
@@ -411,7 +417,7 @@ test("RunNotifier usage rejects wrong identities and invalid units without bindi
   for (const input of [
     { initialRun: "run-legacy_1", runId: "other-run", units: 1, status: 409 },
     { initialRun: null, runId: "bad/run", units: 1, status: 400 },
-    { initialRun: null, runId: "valid-run", units: 0, status: 200 },
+    { initialRun: null, runId: "valid-run", units: 0, status: 400 },
   ]) {
     const { durable, notifier } = await expectReady(run, validRunState({ runId: input.initialRun }));
     const before = structuredClone(durable.values.get("bufferState"));
