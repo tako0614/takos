@@ -56,6 +56,17 @@ adapter が Workspace access を認めるのは、次のすべてが同時に成
 旧 row に別の値を追加したり、owner witness を偽装したりしても authority は増えません。suspended row や不一致 row は
 access を拒否します。
 
+## 個人データの export
+
+`GET /api/me/privacy/export` は本人の default account の SQL データに加え、
+同じ owner gate で解決した追加 Workspace の SQL repository / thread / message /
+Run / memory row と、現在読み取れる Workspace の概要を含みます。
+legacy default witness が未修復でも、従来の本人データの export を維持します。
+別の所有者や外部参加者の Workspace を membership
+だけで読み取ることはありません。所有 thread 内の通信内容は保持します。
+対象と秘匿情報の除外、SQL export と全 instance backup の違いは
+[個人データの権利](../legal/privacy-rights.md#private-workspace-scope)を参照してください。
+
 ## Git の状態
 
 Workspace の作成時に空の default repository は自動作成しません。`POST /api/spaces` と

@@ -1,5 +1,7 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
+import type { Workspace } from "../../../../core/workspaces/index.ts";
+import { createSqlWorkspacePersistence } from "../../../adapters/workspaces/index.ts";
 import type { User } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { generateId } from "../../../shared/utils/index.ts";
@@ -56,6 +58,7 @@ export type DataSubjectExport = PrivacyAccessSummary & {
   readonly settings: unknown;
   readonly metadata: unknown[];
   readonly memberships: unknown[];
+  readonly workspaces: readonly Workspace[];
   readonly auth: {
     readonly identities: unknown[];
     readonly sessions: unknown[];
@@ -124,6 +127,14 @@ function normalizeSubject(user: User) {
     username: user.username,
     display_name: user.name,
   };
+}
+
+function compareDescending(left: string, right: string): number {
+  return left === right ? 0 : left > right ? -1 : 1;
+}
+
+function appendRows<T>(target: T[], rows: readonly T[]): void {
+  for (const row of rows) target.push(row);
 }
 
 function safeReason(value: string | null | undefined): string | null {
@@ -230,28 +241,58 @@ export async function buildDataSubjectExport(
   const appUsageRollupRows = await db.select().from(appUsageRollups).where(
     eq(appUsageRollups.ownerAccountId, user.id),
   ).orderBy(desc(appUsageRollups.updatedAt)).all();
-  const repositoryRows = await db.select().from(repositories).where(
-    eq(repositories.accountId, user.id),
-  ).orderBy(desc(repositories.updatedAt)).all();
-  const threadRows = await db.select().from(threads).where(
-    eq(threads.accountId, user.id),
-  ).orderBy(desc(threads.updatedAt)).all();
-  const threadIds = threadRows.map((thread) => thread.id);
-  const messageRows = threadIds.length > 0
-    ? await db.select().from(messages).where(
-      inArray(messages.threadId, threadIds),
-    )
-      .orderBy(messages.threadId, messages.sequence)
-      .all()
-    : [];
-  const runRows = threadIds.length > 0
-    ? await db.select().from(runs).where(inArray(runs.threadId, threadIds))
-      .orderBy(desc(runs.createdAt))
-      .all()
-    : [];
-  const memoryRows = await db.select().from(memories).where(
-    eq(memories.accountId, user.id),
-  ).orderBy(desc(memories.updatedAt)).all();
+  const workspaces = await createSqlWorkspacePersistence(d1).listForPrincipal(
+    user.id,
+  );
+  // The personal export has always included the subject's default account
+  // data, including legacy profiles whose default owner witness needs repair.
+  // Additional Workspace IDs require the current owner gate.
+  const workspaceIds = new Set([user.id, ...workspaces.map((row) => row.id)]);
+  const repositoryRows: Array<typeof repositories.$inferSelect> = [];
+  const threadRows: Array<typeof threads.$inferSelect> = [];
+  const messageRows: Array<typeof messages.$inferSelect> = [];
+  const runRows: Array<typeof runs.$inferSelect> = [];
+  const memoryRows: Array<typeof memories.$inferSelect> = [];
+
+  // Keep bind counts independent of the number of Workspaces and threads.
+  // The existing Workspace gate supplies the owner scope; thread subqueries
+  // keep message/Run reads in that scope without a growing array of IDs.
+  for (const workspaceId of workspaceIds) {
+    const ownedThreadIds = db.select({ id: threads.id }).from(threads).where(
+      eq(threads.accountId, workspaceId),
+    );
+    const [workspaceRepos, workspaceThreads, workspaceMessages, workspaceRuns,
+      workspaceMemories] = await Promise.all([
+        db.select().from(repositories).where(
+          eq(repositories.accountId, workspaceId),
+        ).all(),
+        db.select().from(threads).where(
+          eq(threads.accountId, workspaceId),
+        ).all(),
+        db.select().from(messages).where(
+          inArray(messages.threadId, ownedThreadIds),
+        ).all(),
+        db.select().from(runs).where(and(
+          eq(runs.accountId, workspaceId),
+          inArray(runs.threadId, ownedThreadIds),
+        )).all(),
+        db.select().from(memories).where(
+          eq(memories.accountId, workspaceId),
+        ).all(),
+      ]);
+    appendRows(repositoryRows, workspaceRepos);
+    appendRows(threadRows, workspaceThreads);
+    appendRows(messageRows, workspaceMessages);
+    appendRows(runRows, workspaceRuns);
+    appendRows(memoryRows, workspaceMemories);
+  }
+  repositoryRows.sort((a, b) => compareDescending(a.updatedAt, b.updatedAt));
+  threadRows.sort((a, b) => compareDescending(a.updatedAt, b.updatedAt));
+  messageRows.sort((a, b) =>
+    compareDescending(b.threadId, a.threadId) || a.sequence - b.sequence
+  );
+  runRows.sort((a, b) => compareDescending(a.createdAt, b.createdAt));
+  memoryRows.sort((a, b) => compareDescending(a.updatedAt, b.updatedAt));
   const notificationRows = await db.select().from(notifications).where(
     eq(notifications.recipientAccountId, user.id),
   ).orderBy(desc(notifications.createdAt)).all();
@@ -263,6 +304,7 @@ export async function buildDataSubjectExport(
     settings,
     metadata,
     memberships,
+    workspaces,
     auth: {
       identities: sanitizeAuthIdentities(identityRows),
       sessions: sessionRows,
