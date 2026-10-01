@@ -82,7 +82,7 @@ test("D1 commits the control-owned terminal status and event in one batch", asyn
   );
   assertEquals(transition.committed, true);
   assertEquals(transition.eventId, 8);
-  assertEquals(captured.length, 4);
+  assertEquals(captured.length, 5);
   assertEquals(captured[0].queryText.includes('UPDATE "runs"'), true);
   assertEquals(
     captured[1].queryText.includes('INSERT INTO "index_jobs"'),
@@ -90,11 +90,13 @@ test("D1 commits the control-owned terminal status and event in one batch", asyn
   );
   assertEquals(captured[1].boundValues.includes("info_unit"), true);
   assertEquals(captured[2].boundValues.includes("thread_context"), true);
+  assertEquals(captured[3].queryText.includes('INSERT INTO "run_usage_projection_outbox"'), true);
+  assertEquals(captured[3].boundValues.includes(transition.completionKey), true);
   assertEquals(
-    captured[3].queryText.includes('INSERT INTO "run_events"'),
+    captured[4].queryText.includes('INSERT INTO "run_events"'),
     true,
   );
-  assertEquals(captured[3].queryText.includes('r."completion_key" = ?'), true);
+  assertEquals(captured[4].queryText.includes('r."completion_key" = ?'), true);
 });
 
 test("completed transition commits its user-notification outbox in the same batch", async () => {
@@ -124,7 +126,7 @@ test("completed transition commits its user-notification outbox in the same batc
   });
 
   assertEquals(transition.committed, true);
-  assertEquals(captured.length, 5);
+  assertEquals(captured.length, 6);
   assertEquals(captured[0].queryText.includes('"usage" = ?'), true);
   assertEquals(
     captured[3].queryText.includes('INSERT INTO "run_notification_outbox"'),
@@ -134,8 +136,9 @@ test("completed transition commits its user-notification outbox in the same batc
     captured[3].boundValues.includes(transition.completionKey),
     true,
   );
+  assertEquals(captured[4].queryText.includes('INSERT INTO "run_usage_projection_outbox"'), true);
   assertEquals(
-    captured[4].queryText.includes('INSERT INTO "run_events"'),
+    captured[5].queryText.includes('INSERT INTO "run_events"'),
     true,
   );
 });
@@ -224,6 +227,11 @@ test("a lost failed transition conditions the notification outbox on the same CA
   assertEquals(Boolean(outbox), true);
   assertEquals(outbox?.queryText.includes('r."completion_key" = ?'), true);
   assertEquals(outbox?.boundValues.includes(transition.completionKey), true);
+  const usageOutbox = captured.find((item) =>
+    item.queryText.includes('INSERT INTO "run_usage_projection_outbox"'),
+  );
+  assertEquals(usageOutbox?.queryText.includes('r."completion_key" = ?'), true);
+  assertEquals(usageOutbox?.boundValues.includes(transition.completionKey), true);
 });
 
 test("a committed cancellation deletes only its captured R2 checkpoint", async () => {

@@ -182,11 +182,29 @@ test("scheduled recovery dispatches the durable terminal index outbox independen
     targetId: "run-1",
     timestamp: (sentMessages[0] as { timestamp: number }).timestamp,
   });
-  assertEquals(prepareCalls.length, 3);
+  assertEquals(prepareCalls.length, 4);
   assertStringIncludes(prepareCalls[0].sql.toLowerCase(), "index_jobs");
   assertStringIncludes(prepareCalls[1].sql.toLowerCase(), "update");
   assertStringIncludes(
     prepareCalls[2].sql.toLowerCase(),
     "run_notification_outbox",
   );
+  assertStringIncludes(
+    prepareCalls[3].sql.toLowerCase(),
+    "run_usage_projection_outbox",
+  );
+});
+
+test("scheduled usage recovery runs without INDEX_QUEUE and EXECUTOR_HOST", async () => {
+  const { db, prepareCalls } = createFakeSqlDatabaseBinding([
+    { rawRows: [] }, { rawRows: [] }, { rawRows: [] },
+  ]);
+  const env = {
+    DB: db,
+    RUN_NOTIFIER: {},
+    RUN_QUEUE: { send: async () => {} },
+  } as unknown as RunnerEnv;
+  await handleScheduled({} as never, env);
+  assertEquals(prepareCalls.some((call) =>
+    call.sql.includes("run_usage_projection_outbox")), true);
 });

@@ -11,6 +11,7 @@ import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
 import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
 import { dispatchTerminalIndexOutbox } from "../../application/services/run-notifier/index-outbox.ts";
 import { dispatchRunNotificationOutbox } from "../../application/services/notifications/run-outbox.ts";
+import { dispatchRunUsageProjectionOutbox } from "../../application/services/app-usage/run-projection-outbox.ts";
 import {
   dispatchNotificationPushOutbox,
   NOTIFICATION_PUSH_OUTBOX_STALE_TRANSPORT_MS,
@@ -232,6 +233,25 @@ export async function handleScheduled(
     await dispatchRunNotificationOutbox(env, { staleBefore: staleThreshold });
   } catch (error) {
     logError("Failed to dispatch Run notification outbox", error, {
+      module: "runner_cron",
+    });
+  }
+
+  // SQL usage projection is independent of search and notification handoff.
+  try {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        dispatchRunUsageProjectionOutbox(env, { staleBefore: staleThreshold }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Terminal usage outbox cron deadline exceeded")), 30_000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } catch (error) {
+    logError("Failed to dispatch terminal usage projection outbox", error, {
       module: "runner_cron",
     });
   }

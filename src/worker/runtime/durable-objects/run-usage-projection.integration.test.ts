@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
 import { createClient } from "@libsql/client";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../../infra/db/schema.ts";
 import type { Env } from "../../shared/types/index.ts";
@@ -7,6 +10,14 @@ import { createInMemoryObjectStore } from "../../local-platform/in-memory-r2.ts"
 import { gzipCompressString } from "../../shared/utils/gzip.ts";
 import { persistNotifierSnapshot, loadNotifierSnapshot } from "./notifier-journal.ts";
 import { RunNotifierDO } from "./run-notifier.ts";
+import { createSqliteSqlDatabase } from "../../local-platform/persistent-d1.ts";
+import { completeRunAtomically } from "../../application/services/agent/complete-run.ts";
+import { transitionRunTerminalAtomically } from "../../application/services/run-notifier/terminal-transition.ts";
+import { dispatchRunUsageProjectionOutbox } from "../../application/services/app-usage/run-projection-outbox.ts";
+import { projectRunUsageSnapshot } from "../../application/services/app-usage/usage-recorder.ts";
+import { getDb, accounts, authIdentities, threads, runs, runUsageProjectionOutbox, appUsageEvents } from "../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import type { RunnerEnv } from "../../shared/types/index.ts";
 
 const RUN_ID = "accepted-usage-integration";
 const CREATED_AT = "2026-10-01T00:00:00.000Z";
@@ -50,8 +61,10 @@ function durableState(values = new Map<string, unknown>()) {
 async function fixture(options: { loseFirstSqlAck?: boolean; holdFirstSqlBatch?: boolean } = {}) {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(`
-    CREATE TABLE runs (id TEXT PRIMARY KEY, account_id TEXT, usage TEXT NOT NULL, last_event_id INTEGER NOT NULL DEFAULT 0);
-    CREATE TABLE accounts (id TEXT PRIMARY KEY, owner_account_id TEXT);
+    CREATE TABLE runs (id TEXT PRIMARY KEY, account_id TEXT, status TEXT NOT NULL DEFAULT 'running', completion_key TEXT, usage TEXT NOT NULL, last_event_id INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE accounts (id TEXT PRIMARY KEY, owner_account_id TEXT, status TEXT NOT NULL DEFAULT 'active');
+    CREATE TABLE auth_identities (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, provider TEXT NOT NULL, provider_sub TEXT NOT NULL);
+    CREATE TABLE run_usage_projection_assertions (id TEXT PRIMARY KEY, valid INTEGER NOT NULL);
     CREATE TABLE app_usage_events (id TEXT PRIMARY KEY, idempotency_key TEXT UNIQUE,
       owner_account_id TEXT NOT NULL, scope_type TEXT NOT NULL, space_id TEXT,
       meter_type TEXT NOT NULL, units REAL NOT NULL, reference_id TEXT, reference_type TEXT,
@@ -64,6 +77,10 @@ async function fixture(options: { loseFirstSqlAck?: boolean; holdFirstSqlBatch?:
   `);
   await client.execute({ sql: "INSERT INTO accounts (id, owner_account_id) VALUES (?, ?)",
     args: ["usage-workspace", "actual-owner"] });
+  await client.execute({ sql: "INSERT INTO accounts (id, owner_account_id) VALUES (?, NULL)",
+    args: ["actual-owner"] });
+  await client.execute({ sql: "INSERT INTO auth_identities (id, user_id, provider, provider_sub) VALUES (?, ?, 'oidc', ?)",
+    args: ["owner-identity", "actual-owner", "https://owner.example#owner-subject"] });
   await client.execute({ sql: "INSERT INTO runs (id, account_id, usage) VALUES (?, ?, ?)",
     args: [RUN_ID, "usage-workspace", JSON.stringify({ inputTokens: 1000 })] });
   const bucket = createInMemoryObjectStore();
@@ -94,7 +111,8 @@ async function fixture(options: { loseFirstSqlAck?: boolean; holdFirstSqlBatch?:
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
-  const env = { DB: db, TAKOS_OFFLOAD: bucket } as unknown as Env;
+  const env = { DB: db, TAKOS_OFFLOAD: bucket,
+    OIDC_ISSUER_URL: "https://owner.example", OIDC_OWNER_SUBJECT: "owner-subject" } as unknown as Env;
   const make = () => new RunNotifierDO(state.binding, env);
   const notifier = make();
   await (notifier as unknown as { initialized: Promise<void> }).initialized;
@@ -408,4 +426,137 @@ test("an unrepresentable positive increment is rejected before durable acknowled
     expect(after.usageSegmentBuffer).toEqual(before.usageSegmentBuffer);
     expect(after.usageReceipts).toEqual(before.usageReceipts);
   } finally { f.close(); }
+});
+
+test("terminal SQL without accepted emit replays through a cold real RunNotifier exactly once", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "takos-usage-outbox-"));
+  const binding = await createSqliteSqlDatabase(
+    join(directory, "app.sqlite"),
+    join(process.cwd(), "db/migrations-control/migrations"),
+  );
+  try {
+    const db = getDb(binding);
+    const now = new Date().toISOString();
+    const ownerId = "outbox-owner";
+    const participantId = "external-participant";
+    const spaceId = "outbox-space";
+    const threadId = "outbox-thread";
+    const runId = "outbox-run";
+    await db.insert(accounts).values({ id: ownerId, type: "user", status: "active",
+      name: "Owner", slug: ownerId, ownerAccountId: ownerId,
+      createdAt: now, updatedAt: now });
+    await db.insert(authIdentities).values({ id: "outbox-oidc", userId: ownerId,
+      provider: "oidc", providerSub: "https://owner.example#owner-subject",
+      linkedAt: now, lastLoginAt: now });
+    await db.insert(accounts).values({ id: participantId, type: "user", status: "active",
+      name: "Participant", slug: participantId, createdAt: now, updatedAt: now });
+    await db.insert(accounts).values({ id: spaceId, type: "team", status: "active",
+      name: "Private Space", slug: spaceId, ownerAccountId: ownerId,
+      createdAt: now, updatedAt: now });
+    await db.insert(threads).values({ id: threadId, accountId: spaceId,
+      title: "Outbox recovery", createdAt: now, updatedAt: now });
+    await db.insert(runs).values({ id: runId, accountId: spaceId,
+      requesterAccountId: participantId, threadId, status: "running",
+      serviceId: "outbox-service", leaseVersion: 1,
+      agentType: "default", model: "gpt-local", input: "{}", createdAt: now });
+    const completionInput = {
+      runId, threadId, serviceId: "outbox-service", leaseVersion: 1,
+      status: "completed" as const, usage: { inputTokens: 2000, outputTokens: 0 },
+      messages: [], terminalEvent: { status: "completed" },
+    };
+    await binding.exec(`CREATE TRIGGER reject_usage_witness
+      BEFORE INSERT ON run_usage_projection_outbox
+      BEGIN SELECT RAISE(ABORT, 'injected usage witness failure'); END;`);
+    await expect(completeRunAtomically(binding, completionInput)).rejects.toThrow();
+    expect((await db.select().from(runs).where(eq(runs.id, runId)).get())?.status).toBe("running");
+    expect((await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).all())).toHaveLength(0);
+    await binding.exec("DROP TRIGGER reject_usage_witness");
+    const terminal = await completeRunAtomically(binding, completionInput);
+    expect(terminal.committed).toBe(true);
+    for (const status of ["failed", "cancelled"] as const) {
+      const controlRunId = `outbox-${status}`;
+      await db.insert(runs).values({ id: controlRunId, accountId: spaceId,
+        threadId, status: "queued", agentType: "default", model: "gpt-local",
+        input: "{}", createdAt: now });
+      const control = await transitionRunTerminalAtomically(binding, {
+        runId: controlRunId, status, expectedStatuses: ["queued"],
+        completedAt: now, usage: { inputTokens: status === "failed" ? 200 : 0 },
+        eventType: status === "failed" ? "error" : "cancelled",
+        terminalEvent: { status },
+      });
+      expect(control.committed).toBe(true);
+      expect(await db.select().from(runUsageProjectionOutbox)
+        .where(eq(runUsageProjectionOutbox.runId, controlRunId)).get())
+        .toMatchObject({ completionKey: control.completionKey, runStatus: status,
+          workspaceId: spaceId, ownerAccountId: ownerId, deliveryStatus: "queued" });
+      const loser = await transitionRunTerminalAtomically(binding, {
+        runId: controlRunId, status: "completed", expectedStatuses: ["queued"],
+        completedAt: now, eventType: "completed", terminalEvent: { status: "completed" },
+      });
+      expect(loser.committed).toBe(false);
+    }
+    const witness = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).get();
+    expect(witness).toMatchObject({ completionKey: terminal.completionKey,
+      workspaceId: spaceId, ownerAccountId: ownerId, deliveryStatus: "queued" });
+    const exactRetry = await completeRunAtomically(binding, completionInput);
+    expect(exactRetry).toMatchObject({ committed: true, idempotent: true,
+      completionKey: terminal.completionKey });
+    expect((await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).all())).toHaveLength(1);
+
+    const state = durableState();
+    const bucket = createInMemoryObjectStore();
+    const notifierEnv = { DB: binding, TAKOS_OFFLOAD: bucket,
+      OIDC_ISSUER_URL: "https://owner.example", OIDC_OWNER_SUBJECT: "owner-subject" } as unknown as Env;
+    const make = () => new RunNotifierDO(state.binding, notifierEnv);
+    let cold = make();
+    await (cold as unknown as { initialized: Promise<void> }).initialized;
+    let requests = 0;
+    const namespace = {
+      idFromName: (id: string) => id,
+      get: (id: string) => ({ fetch: async (request: Request) => {
+        expect(id).toBe(runId);
+        requests++;
+        const response = await cold.fetch(request);
+        if (requests === 1) {
+          expect(await response.clone().json()).toMatchObject({ success: true });
+          throw new Error("injected lost HTTP acknowledgement");
+        }
+        return response;
+      } }),
+    };
+    const dispatchEnv = { DB: binding, RUN_NOTIFIER: namespace,
+      OIDC_ISSUER_URL: "https://owner.example", OIDC_OWNER_SUBJECT: "owner-subject" } as unknown as RunnerEnv;
+    expect(await dispatchRunUsageProjectionOutbox(dispatchEnv)).toBe(0);
+    const failedWitness = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).get();
+    expect(failedWitness).toMatchObject({ deliveryStatus: "queued", lastError: "Error: injected lost HTTP acknowledgement" });
+    expect((await db.select().from(appUsageEvents)
+      .where(eq(appUsageEvents.idempotencyKey, `run:${runId}:llm_tokens_input`)).all()).length).toBe(1);
+    cold = make();
+    await (cold as unknown as { initialized: Promise<void> }).initialized;
+    expect(await dispatchRunUsageProjectionOutbox(dispatchEnv, {
+      now: new Date(Date.now() + 86_400_000).toISOString(),
+    })).toBe(1);
+    const events = await db.select().from(appUsageEvents)
+      .where(eq(appUsageEvents.idempotencyKey, `run:${runId}:llm_tokens_input`)).all();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ ownerAccountId: ownerId,
+      spaceId, units: 2 });
+    // The wrapped D1-shaped client must use the same atomic native batch as
+    // the raw binding used by the DO, even on an idempotent cold replay.
+    await projectRunUsageSnapshot(db, runId, {}, {
+      providerSub: "https://owner.example#owner-subject",
+    });
+    expect((await db.select().from(appUsageEvents)
+      .where(eq(appUsageEvents.idempotencyKey, `run:${runId}:llm_tokens_input`)).all())).toHaveLength(1);
+    expect((await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).get())?.deliveryStatus).toBe("done");
+    expect(requests).toBe(2);
+  } finally {
+    binding.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });

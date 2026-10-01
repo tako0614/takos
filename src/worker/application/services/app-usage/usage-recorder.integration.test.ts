@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { getDb } from "../../../infra/db/index.ts";
 import * as schema from "../../../infra/db/schema.ts";
 import {
-  projectRunUsageSnapshot,
+  projectRunUsageSnapshot as projectRunUsageSnapshotWithAuthority,
   recordAppUsage,
   recordRunUsageBatch,
 } from "./usage-recorder.ts";
@@ -30,6 +30,11 @@ import type { AppUsageRecordInput } from "./usage-types.ts";
 const ACCOUNT_ID = "usage-owner";
 const RUN_ID = "usage-run";
 const CREATED_AT = "2026-10-01T00:00:00.000Z";
+const OWNER_PROVIDER_SUB = "https://owner.example#owner-subject";
+const projectRunUsageSnapshot = (
+  ...args: Parameters<typeof projectRunUsageSnapshotWithAuthority> extends
+    [infer B, infer R, infer T, ...unknown[]] ? [B, R, T] : never
+) => projectRunUsageSnapshotWithAuthority(...args, { providerSub: OWNER_PROVIDER_SUB });
 
 type SqlExecutor = (
   sql: string,
@@ -277,11 +282,21 @@ async function createFixture(options: {
     CREATE TABLE runs (
       id TEXT PRIMARY KEY NOT NULL,
       account_id TEXT,
+      status TEXT NOT NULL DEFAULT 'running',
+      completion_key TEXT,
       usage TEXT NOT NULL DEFAULT '{}'
     );
     CREATE TABLE accounts (
       id TEXT PRIMARY KEY NOT NULL,
-      owner_account_id TEXT
+      owner_account_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active'
+    );
+    CREATE TABLE auth_identities (
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+      provider TEXT NOT NULL, provider_sub TEXT NOT NULL
+    );
+    CREATE TABLE run_usage_projection_assertions (
+      id TEXT PRIMARY KEY, valid INTEGER NOT NULL
     );
   `);
   const db = drizzle(client, { schema });
@@ -293,6 +308,17 @@ async function createFixture(options: {
   await client.execute({
     sql: "INSERT INTO accounts (id, owner_account_id) VALUES (?, ?)",
     args: [workspaceId, options.ownerAccountId ?? null],
+  });
+  const principalId = options.ownerAccountId ?? workspaceId;
+  if (principalId !== workspaceId) {
+    await client.execute({
+      sql: "INSERT INTO accounts (id, owner_account_id) VALUES (?, NULL)",
+      args: [principalId],
+    });
+  }
+  await client.execute({
+    sql: "INSERT INTO auth_identities (id, user_id, provider, provider_sub) VALUES (?, ?, 'oidc', ?)",
+    args: ["fixture-owner-identity", principalId, OWNER_PROVIDER_SUB],
   });
 
   const env = {
@@ -1365,6 +1391,83 @@ test("Run projection rejects when the run does not exist", async () => {
     await expect(projectRunUsageSnapshot(fixture.db, "missing-run", {})).rejects.toThrow();
     expect(await fixture.count("app_usage_events")).toBe(0);
     expect(await fixture.count("app_usage_rollups")).toBe(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("atomic meter group fences a terminal CAS and recorded owner even with zero meters", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.client.executeMultiple(`
+      CREATE TABLE run_usage_projection_outbox (
+        id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE,
+        completion_key TEXT NOT NULL, run_status TEXT NOT NULL,
+        workspace_id TEXT NOT NULL, owner_account_id TEXT NOT NULL,
+        delivery_status TEXT NOT NULL DEFAULT 'queued',
+        claim_token TEXT, claimed_at TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at TEXT, last_error TEXT, projected_revision INTEGER,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+    `);
+    // The active Run becomes terminal after the prefetch but before the
+    // transactional assertion. It cannot project under active-run rules.
+    let race = async () => {
+      await fixture.client.execute({
+        sql: "UPDATE runs SET status = 'completed', completion_key = 'terminal-key' WHERE id = ?",
+        args: [RUN_ID],
+      });
+    };
+    const racingDb = new Proxy(fixture.db, {
+      get(target, key, receiver) {
+        if (key === "batch") return async (statements: Parameters<typeof target.batch>[0]) => {
+          await race();
+          return target.batch(statements);
+        };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    await expect(projectRunUsageSnapshot(racingDb, RUN_ID, {
+      embedding_count: 2,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {})).rejects.toThrow(
+      "Terminal Run usage authority witness is unavailable",
+    );
+    await fixture.client.execute({
+      sql: `INSERT INTO run_usage_projection_outbox
+        (id, run_id, completion_key, run_status, workspace_id, owner_account_id,
+         created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?, ?, ?)`,
+      args: ["run-usage-projection:terminal-key", RUN_ID, "terminal-key",
+        ACCOUNT_ID, ACCOUNT_ID, CREATED_AT, CREATED_AT],
+    });
+    // Zero-meter projections still validate the owner in the SQL group.
+    race = async () => {
+      await fixture.client.execute({
+        sql: "UPDATE accounts SET owner_account_id = 'former-owner' WHERE id = ?",
+        args: [ACCOUNT_ID],
+      });
+    };
+    await expect(projectRunUsageSnapshot(racingDb, RUN_ID, {})).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    await fixture.client.execute({
+      sql: "UPDATE accounts SET owner_account_id = NULL WHERE id = ?",
+      args: [ACCOUNT_ID],
+    });
+    await fixture.client.execute({
+      sql: "UPDATE runs SET usage = ? WHERE id = ?",
+      args: [JSON.stringify({ inputTokens: 1000 }), RUN_ID],
+    });
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, {});
+    expect(await fixture.meterUnits("app_usage_events")).toEqual([
+      { meterType: "llm_tokens_input", units: 1 },
+    ]);
+    const assertionRows = await fixture.client.execute(
+      "SELECT COUNT(*) AS count FROM run_usage_projection_assertions",
+    );
+    expect(Number(assertionRows.rows[0]?.count)).toBe(0);
   } finally {
     await fixture.close();
   }

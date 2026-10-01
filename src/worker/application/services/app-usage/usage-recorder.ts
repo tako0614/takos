@@ -6,6 +6,7 @@ import {
   appUsageRollups,
   getDb,
   runs,
+  runUsageProjectionOutbox,
 } from "../../../infra/db/index.ts";
 import type { Database } from "../../../infra/db/index.ts";
 import { executeAtomicStatements } from "../../../infra/db/client.ts";
@@ -18,6 +19,7 @@ import {
   type AppUsageRecordInput,
   type AppUsageRecordResult,
 } from "./usage-types.ts";
+import { UsageProjectionBlockedError, type RunUsageProjectionWitness } from "./run-projection-outbox.ts";
 
 type AppUsageDb = SqlDatabaseBinding | Database;
 type UsageStatements = ReturnType<Parameters<typeof executeAtomicStatements>[1]>;
@@ -33,14 +35,28 @@ async function executeUsageStatements(
   build: (db: Database) => UsageStatements,
 ): Promise<void> {
   if (isSqlBinding(binding)) {
-    await executeAtomicStatements(binding, build);
+    if (binding.withTransaction) {
+      await executeAtomicStatements(binding, build);
+    } else {
+      // Drizzle D1's batch mapper does not expose a prepared `stmt` for
+      // parameterized raw db.run(sql) items. The platform binding's batch is
+      // atomic and accepts the same compiled queries directly.
+      const statements = build(getDb(binding));
+      const prepared = statements.map((statement) => {
+        const query = (statement as unknown as {
+          _prepare(): { getQuery(): { sql: string; params: unknown[] } };
+        })._prepare().getQuery();
+        return binding.prepare(query.sql).bind(...query.params);
+      });
+      await binding.batch(prepared);
+    }
     return;
   }
   // A wrapped stateful binding's batch can be sequential. Preserve its
   // dedicated transaction instead of accidentally bypassing withTransaction.
   const client = "$client" in binding ? binding.$client : undefined;
   if (isSqlBinding(client)) {
-    await executeAtomicStatements(client, build);
+    await executeUsageStatements(client, build);
     return;
   }
   // Already-wrapped libsql and edge.sql clients provide native atomic batches.
@@ -361,6 +377,7 @@ export async function projectRunUsageSnapshot(
   binding: AppUsageDb,
   runId: string,
   totals: Readonly<Partial<Record<AppUsageMeterType, number>>>,
+  authority: { providerSub?: string; witness?: RunUsageProjectionWitness } = {},
 ): Promise<void> {
   // Snapshot all caller-owned values and the month anchor before the first
   // await so a suspended SQL transaction cannot observe later mutations.
@@ -368,7 +385,8 @@ export async function projectRunUsageSnapshot(
   const timestamp = new Date().toISOString();
   const db = getDb(binding);
   const run = await db
-    .select({ usage: runs.usage, accountId: runs.accountId })
+    .select({ usage: runs.usage, accountId: runs.accountId,
+      status: runs.status, completionKey: runs.completionKey })
     .from(runs)
     .where(eq(runs.id, runId))
     .get();
@@ -378,6 +396,30 @@ export async function projectRunUsageSnapshot(
     .from(accounts).where(eq(accounts.id, run.accountId)).get();
   if (!workspace) throw new Error("Run usage workspace is unavailable");
   const ownerAccountId = workspace.ownerAccountId || run.accountId;
+  const terminal = ["completed", "failed", "cancelled"].includes(run.status);
+  let witness: RunUsageProjectionWitness | undefined;
+  if (terminal) {
+    const stored = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, runId)).get();
+    if (!stored || !run.completionKey || !authority.providerSub ||
+      stored.completionKey !== run.completionKey ||
+      stored.runStatus !== run.status ||
+      stored.workspaceId !== run.accountId ||
+      stored.ownerAccountId !== ownerAccountId ||
+      (authority.witness && (
+        authority.witness.id !== stored.id ||
+        authority.witness.runId !== stored.runId ||
+        authority.witness.completionKey !== stored.completionKey ||
+        authority.witness.runStatus !== stored.runStatus ||
+        authority.witness.workspaceId !== stored.workspaceId ||
+        authority.witness.ownerAccountId !== stored.ownerAccountId
+      ))) {
+      throw new UsageProjectionBlockedError("Terminal Run usage authority witness is unavailable or changed");
+    }
+    witness = stored;
+  } else if (authority.witness) {
+    throw new UsageProjectionBlockedError("Terminal Run usage witness no longer matches the Run");
+  }
 
   const aggregated = new Map<AppUsageMeterType, number>();
   let usage: { inputTokens?: number; outputTokens?: number };
@@ -424,8 +466,24 @@ export async function projectRunUsageSnapshot(
     id: appUsageEvents.id,
     idempotencyKey: appUsageEvents.idempotencyKey,
     createdAt: appUsageEvents.createdAt,
+    ownerAccountId: appUsageEvents.ownerAccountId,
+    scopeType: appUsageEvents.scopeType,
+    spaceId: appUsageEvents.spaceId,
+    meterType: appUsageEvents.meterType,
+    referenceId: appUsageEvents.referenceId,
+    referenceType: appUsageEvents.referenceType,
   }).from(appUsageEvents).where(inArray(appUsageEvents.idempotencyKey, keys)).all();
   const existingByKey = new Map(existingRows.map((row) => [row.idempotencyKey, row]));
+  for (const row of existingRows) {
+    if (row.ownerAccountId !== ownerAccountId || row.scopeType !== "space" ||
+      row.spaceId !== run.accountId || row.referenceId !== runId ||
+      row.referenceType !== "run" ||
+      row.idempotencyKey !== `run:${runId}:${row.meterType}`) {
+      throw new UsageProjectionBlockedError(
+        `Canonical Run usage meter identity conflicts with recorded owner: ${row.meterType}`,
+      );
+    }
+  }
   const events = meters.flatMap((meterType) => {
     const units = aggregated.get(meterType) ?? 0;
     const existing = existingByKey.get(`run:${runId}:${meterType}`);
@@ -451,7 +509,75 @@ export async function projectRunUsageSnapshot(
       existingIdAtPrefetch: existing?.id ?? null,
     }];
   });
-  if (!events.length) return;
-  await executeUsageStatements(binding, (transactionDb) =>
-    usageProjectionStatements(transactionDb, events));
+  for (const event of events) {
+    const rollup = await db.select({ spaceId: appUsageRollups.spaceId })
+      .from(appUsageRollups).where(and(
+        eq(appUsageRollups.ownerAccountId, event.ownerAccountId),
+        eq(appUsageRollups.scopeType, event.scopeType),
+        eq(appUsageRollups.scopeId, event.scopeId),
+        eq(appUsageRollups.meterType, event.meterType),
+        eq(appUsageRollups.periodStart, event.periodStart),
+      )).get();
+    if (rollup && rollup.spaceId !== event.spaceId) {
+      throw new UsageProjectionBlockedError(
+        `Canonical Run usage rollup space identity conflicts: ${event.meterType}`,
+      );
+    }
+  }
+  if (!authority.providerSub) {
+    throw new UsageProjectionBlockedError("Configured owner identity is unavailable");
+  }
+  const assertionId = crypto.randomUUID();
+  const expectedStatus = run.status;
+  const expectedCompletionKey = run.completionKey;
+  const workspaceId = run.accountId;
+  await executeUsageStatements(binding, (transactionDb) => {
+    // These no-op writes lock the rows whose identity authorizes the meter
+    // group. A concurrent owner transfer, pin change, or terminal CAS must
+    // serialize before or after this group, including on READ COMMITTED SQL.
+    const locks = [
+      transactionDb.run(sql`UPDATE runs SET usage = usage WHERE id = ${runId}`),
+      transactionDb.run(sql`UPDATE accounts SET owner_account_id = owner_account_id
+        WHERE id = ${workspaceId}`),
+      transactionDb.run(sql`UPDATE accounts SET status = status
+        WHERE id = ${ownerAccountId}`),
+      transactionDb.run(sql`UPDATE auth_identities SET provider_sub = provider_sub
+        WHERE user_id = ${ownerAccountId} AND provider = 'oidc'
+          AND provider_sub = ${authority.providerSub!}`),
+    ];
+    // Missing or changed authority writes NULL into a NOT NULL column. The
+    // transient row and every meter write roll back together; it is deleted
+    // before a successful commit. This also fences zero-meter projections.
+    const valid = sql`EXISTS (
+      SELECT 1 FROM runs AS r
+      JOIN accounts AS space ON space.id = r.account_id
+      JOIN accounts AS principal ON principal.id = ${ownerAccountId}
+      JOIN auth_identities AS identity ON identity.user_id = principal.id
+      WHERE r.id = ${runId}
+        AND r.status = ${expectedStatus}
+        AND r.account_id = ${workspaceId}
+        AND r.completion_key IS NOT DISTINCT FROM ${expectedCompletionKey}
+        AND COALESCE(NULLIF(space.owner_account_id, ''), space.id) = ${ownerAccountId}
+        AND principal.status = 'active'
+        AND identity.provider = 'oidc'
+        AND identity.provider_sub = ${authority.providerSub!}
+        AND (${terminal ? sql`EXISTS (
+          SELECT 1 FROM run_usage_projection_outbox AS witness
+          WHERE witness.id = ${witness!.id}
+            AND witness.run_id = r.id
+            AND witness.completion_key = r.completion_key
+            AND witness.run_status = r.status
+            AND witness.workspace_id = r.account_id
+            AND witness.owner_account_id = ${ownerAccountId}
+        )` : sql`r.status NOT IN ('completed', 'failed', 'cancelled')`})
+    )`;
+    return [
+      ...locks,
+      transactionDb.run(sql`INSERT INTO run_usage_projection_assertions (id, valid)
+        VALUES (${assertionId}, CASE WHEN ${valid} THEN 1 ELSE NULL END)`),
+      ...usageProjectionStatements(transactionDb, events),
+      transactionDb.run(sql`DELETE FROM run_usage_projection_assertions
+        WHERE id = ${assertionId}`),
+    ];
+  });
 }

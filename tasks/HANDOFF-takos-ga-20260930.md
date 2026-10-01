@@ -3,7 +3,34 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: quality 子プロセスの完了確認 — 2026-10-01
+## 最新の追加: terminal usage projection outbox — 2026-10-01
+
+terminal SQL CASと同じtransactionへimmutable owner/Workspace/completion witnessを
+保存し、検索やrequesterの有無と独立したcron claim/retryで使用量を回復する。
+private DO RPCはrevisionを永続化し、通常/alarm/0meter投影も同じSQL groupで
+Run/Workspace/Principal/設定済OIDC行をlockして権限証拠を検証する。旧ownerの移管はしない。
+0110はadditive migrationであり、新codeより先に適用する。productionへは未適用。
+
+113 focused tests（8files/426assertions、dispatcher23含む）と実SQLiteのterminal CAS→
+emit未受理→cold DO→ACK喪失→同じcanonical meter一件の結合テストは成功。
+SQL待機を含む期限後のclaim確定もstale再回収でき、確認済みidentity衝突の修復理由を保存する。
+byte-exact890のproducerでSQL確定後のmeter欠落をbehavioral redに再現した。
+隔離PostgreSQL16.14では旧890の4競合を
+再現し、現在の4row-lockと8事前変更rollbackを確認した。SQL dialectの限定変換を含む
+local captured-query proofであり、共通backend資格ではない。
+凍結20fileの独立最終reviewで残る確定P1/P2無し。必須local fullgateは1,603tests/
+249files/11,127assertions、20OpenTofu、全Rust、実Worker/fullSQLite/process復旧と
+両buildまで成功。types98/lint111未申告0、native guard47.161s/observer200、docs3.28s。
+別の実native workerd/D1 fixtureも通常投影とtyped409、途中meter失敗の全rollback→
+native DO eviction後のcold retry（canonical meter各一件、done attempts2/revision3）に成功。
+最終fault proof20.382s、限定fixture DDL+exact0110でありfull migration/live資格ではない。
+通常/409の旧harness SHAは記録のみ、最終fault harnessは保存済み。失敗した準備を成功に
+数えない。全source hashは検証後も一致。exact commit・CIは専任HDD resultを参照する。
+詳細: [terminal usage task](TASK-takos-ga-terminal-usage-outbox-20261001.md)。
+receipt容量対策は設計済み・未実装。実client/owner/mobile、backend/alarm/Container、
+公開artifact、全instance user journey/restore/monitoringは残り、全体GAを解除しない。
+
+## 前段の追加: quality 子プロセスの完了確認 — 2026-10-01
 
 必須 type/lint gate が捨てていた終了状態を検証する。固定 tool の通常診断終了値
 （TypeScript2/oxlint1）と正常完了0を区別し、signal/想定外終了値/通常値と矛盾する出力/
@@ -21,9 +48,9 @@ native42.656s/observer200、docs build3.59s、types98/lint111未申告0。
 exact新commit CIの結果は専任HDD resultに記録する。
 詳細: [quality process task](TASK-takos-ga-quality-process-20261001.md)。
 
-source/runtime課題も継続: 未受理terminal notifier emitではSQL usageだけが永続化し、
+この前段時点のsource/runtime課題: 未受理terminal notifier emitではSQL usageだけが永続化し、
 DO dirtyが無いため投影が回復しない。検索info_unit jobの成功/DLQと使用量を結び付けず、
-terminal CASと原子的な専用outbox、独立claim/retry/readbackが必要で、まだ未実装。
+terminal CASと原子的な専用outbox、独立claim/retry/readbackが必要だった。上段で修正済み。
 長Run receiptはinline配列・snapshot容量とO(N)処理が限界。bounded head delta＋認証済
 receipt tree/再開可能な移行/GC/converter対応が必要で、key evictionやR2からのID推測は
 しない。このquality修正でruntime/基盤/live/全体GAを完了とはしない。

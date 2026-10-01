@@ -14,6 +14,7 @@ import {
   getDb,
   messages,
   runEvents,
+  runUsageProjectionOutbox,
   runs,
   threads,
   toolOperations,
@@ -475,6 +476,8 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
     const finalOperations = await db.select().from(toolOperations).where(eq(toolOperations.runId, oldIdentity.runId));
     const finalMessages = await db.select().from(messages).where(eq(messages.threadId, threadId));
     const finalEvents = await db.select().from(runEvents).where(eq(runEvents.runId, oldIdentity.runId));
+    const finalUsageWitnesses = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, oldIdentity.runId));
     const toolAttempts = trace.filter((item) => item.path === agentControlRpcPath("tool-execute") && item.status === 200);
     const checkpointLoads = trace.filter((item) => item.path === agentControlRpcPath("engine-checkpoint-load"));
     const replacementCheckpointSaves = trace.filter((item) => item.path === agentControlRpcPath("engine-checkpoint-save") && item.identity === newIdentity.serviceId && item.status === 200);
@@ -492,6 +495,13 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
     requireValue(finalizations.length === 1 && finalizations[0]?.identity === newIdentity.serviceId, "terminal commit was not owned solely by replacement");
     requireValue(finalMessages.length === 4 && finalMessages.some((item) => item.role === "assistant" && item.content === "recovered answer") && finalMessages.some((item) => item.role === "tool" && item.toolCallId === "call-recovery-1"), "durable terminal transcript has missing or duplicate messages");
     requireValue(finalEvents.filter((item) => item.type === "completed").length === 1, "expected one durable terminal event");
+    requireValue(finalUsageWitnesses.length === 1 &&
+      finalUsageWitnesses[0]?.completionKey === completed.completionKey &&
+      finalUsageWitnesses[0]?.runStatus === "completed" &&
+      finalUsageWitnesses[0]?.workspaceId === workspaceId &&
+      finalUsageWitnesses[0]?.ownerAccountId === accountId &&
+      finalUsageWitnesses[0]?.deliveryStatus === "queued",
+    "replacement did not commit exactly one owner-bound terminal usage witness");
     requireValue(!watchdog.timedOut, "overall deadline expired before final proof");
     succeeded = true;
     result = {

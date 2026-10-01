@@ -88,6 +88,39 @@ affected rollup を一定の順に lock してから event を更新・月次合
 このローカル source 検証とは別に、実 backend の transaction／concurrency と remote
 alarm、producer retry identity、SQL token と raw token の重複方針を確認する必要があります。
 
+## SQL 終了確定後の usage 回復
+
+終了 SQL が確定した後で notifier への emit が未受理になると、DO に dirty revision が
+ありません。この場合は DO alarm だけを回復経路にできません。terminal transaction は
+完了・失敗・キャンセルのいずれでも、同じ winning Run／status／completion key に対する
+`run_usage_projection_outbox` を保存します。要求した利用者の有無や検索の可否で省略しません。
+Workspace と Principal owner の証拠も保存し、CAS に負けた処理は行を作りません。
+
+cron は検索・embedding・通知処理とは別に、期限が来た queued 行と古い dispatching claim
+を一定数だけ回収します。claim token が一致する処理だけが完了・再試行状態を更新します。
+SQL／RPC／応答 body の各待機を5秒、dispatch全体を30秒の残り時間で制限します。
+期限後にSQLが確定したclaimも、古いclaimの再回収と同じ固定keyで回復します。
+private `/usage-project` の成功は SQL 投影と DO の projected revision が確定した証拠です。
+通信・SQL 応答の喪失や process 停止では同じ要求を再試行し、固定 Run／meter 行を
+累積 MAX で回復します。done 行も保存し、再試行待ち・所有境界の不一致を成功と扱いません。
+
+投影は記録済み owner／Workspace／terminal witness を SQL の同じ transaction 内で検証
+します。dispatcher が RPC 前に確認するだけでは、確認と保存の間の所有状態変更を防げません。
+通常の自動投影と alarm もこの境界に従い、0 メーターでも証拠の確認を省きません。
+古い owner の使用量を新しい owner に移管せず、現在の exact issuer／subject と active
+Principal、Workspace の所有証拠が一致しない場合は修復が必要です。usage 回復は tool
+実行を再認可する操作ではなく、外部参加者を新しい所有者として登録する操作でもありません。
+固定meter／rollupの所有境界が違う場合も移管せず、確認済みの衝突だけをprivate RPCの
+修復codeでblockedにします。SQL制約エラー全般を恒久障害とはみなしません。outboxには
+制限した理由を保存し、一時障害のqueued/backoffと修復待ちを区別します。
+
+追加 migration `0110` を新 Worker より先に適用する必要があります。本作業は source と
+ローカル fixture の検証であり、本番 migration を実行しません。以前の terminal 全件を
+cron や migration から自動で backfill せず、証拠のない履歴は明示した cohort の inventory
+と修復が必要です。code rollback でも outbox と未完了要求を保存します。古い Worker が
+追加 table を無視できることは、所有者証拠を検証できることの証明ではありません。
+rollback は証拠対応の artifact、または投影と writer を止めた forward repair を使います。
+
 ## 通知の長期利用と容量
 
 `notification.new` は `notification_id` による SQL inbox の更新ヒントです。
@@ -123,4 +156,5 @@ artifact が実際に保存・配備された証明はまだありません。�
 実装の検証記録は `tasks/TASK-takos-ga-notifier-journal-20261001.md` と
 `tasks/TASK-takos-ga-run-archive-index-20261001.md` と
 `tasks/TASK-takos-ga-archive-candidate-20261001.md` と
-`tasks/TASK-takos-ga-accepted-usage-20261001.md` にあります。
+`tasks/TASK-takos-ga-accepted-usage-20261001.md` と
+`tasks/TASK-takos-ga-terminal-usage-outbox-20261001.md` にあります。

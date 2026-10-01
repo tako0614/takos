@@ -22,6 +22,8 @@ import {
 } from "../../application/services/offload/usage-events.ts";
 import { gzipCompressString, gzipDecompressToString } from "../../shared/utils/gzip.ts";
 import { projectRunUsageSnapshot } from "../../application/services/app-usage/usage-recorder.ts";
+import { UsageProjectionBlockedError, type RunUsageProjectionWitness } from "../../application/services/app-usage/run-projection-outbox.ts";
+import { configuredOwner } from "../../application/services/identity/owner-admission.ts";
 import { logWarn } from "../../shared/utils/logger.ts";
 import {
   type EmitResult,
@@ -135,6 +137,7 @@ export class RunNotifierDO extends NotifierBase {
   protected readonly maxConnections = MAX_CONNECTIONS;
 
   private db: SqlDatabaseBinding;
+  private ownerProviderSub: string | undefined;
   private offloadBucket: ObjectStoreBinding | undefined;
   private runId: string | null = null;
   private r2SegmentIndex = 1;
@@ -162,6 +165,9 @@ export class RunNotifierDO extends NotifierBase {
   constructor(state: DurableObjectStateBinding, env: Env) {
     super(state);
     this.db = env.DB;
+    this.ownerProviderSub = configuredOwner({
+      issuer: env.OIDC_ISSUER_URL, subject: env.OIDC_OWNER_SUBJECT,
+    })?.providerSub;
     this.offloadBucket = env.TAKOS_OFFLOAD;
   }
 
@@ -346,7 +352,7 @@ export class RunNotifierDO extends NotifierBase {
       return this.handleUsageSnapshot(url);
     }
     if (path === "/usage-project" && request.method === "POST") {
-      return this.handleUsageProject(url);
+      return this.handleUsageProject(request, url);
     }
     if (path !== "/usage" || request.method !== "POST") return null;
     return (async () => {
@@ -378,9 +384,26 @@ export class RunNotifierDO extends NotifierBase {
     });
   }
 
-  private async handleUsageProject(url: URL): Promise<Response> {
+  private async handleUsageProject(request: Request, url: URL): Promise<Response> {
     const runId = url.searchParams.get("runId");
     if (!isValidRunId(runId)) return jsonResponse({ error: "Invalid runId" }, 400);
+    let witness: RunUsageProjectionWitness | undefined;
+    if (request.body && request.headers.get("content-type")?.includes("application/json")) {
+      let body: unknown;
+      try { body = await request.json(); }
+      catch { return jsonResponse({ error: "Invalid JSON" }, 400); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+        !("witness" in body) || !body.witness ||
+        typeof body.witness !== "object" || Array.isArray(body.witness)) {
+        return jsonResponse({ error: "Invalid usage witness" }, 400);
+      }
+      const fields = body.witness as Record<string, unknown>;
+      if (!["id", "runId", "completionKey", "runStatus", "workspaceId", "ownerAccountId"]
+        .every((key) => typeof fields[key] === "string" && !!fields[key])) {
+        return jsonResponse({ error: "Invalid usage witness" }, 400);
+      }
+      witness = fields as unknown as RunUsageProjectionWitness;
+    }
     await this.awaitInitialized();
     if (this.runId && this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
     const unavailable = await this.ensureUsageLedger(runId);
@@ -399,10 +422,12 @@ export class RunNotifierDO extends NotifierBase {
     });
     try {
       if (this.projectionPromise) await this.projectionPromise;
-      await this.projectUsage();
+      await this.projectUsage(witness);
     } catch (error) {
       return jsonResponse({ success: false,
-        error: error instanceof Error ? error.message : String(error) }, 503);
+        error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof UsageProjectionBlockedError ? { code: "usage_authority_blocked" } : {}) },
+        error instanceof UsageProjectionBlockedError ? 409 : 503);
     }
     return this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
@@ -410,7 +435,7 @@ export class RunNotifierDO extends NotifierBase {
       if (this.usageLedger.projectedRevision < this.usageLedger.revision) {
         return jsonResponse({ success: false, error: "Usage projection remains dirty" }, 503);
       }
-      return jsonResponse({ success: true, revision: this.usageLedger.projectedRevision });
+      return jsonResponse({ success: true, runId, revision: this.usageLedger.projectedRevision });
     });
   }
 
@@ -857,16 +882,18 @@ export class RunNotifierDO extends NotifierBase {
     return work;
   }
 
-  private async projectUsage(): Promise<void> {
+  private async projectUsage(witness?: RunUsageProjectionWitness): Promise<void> {
     const captured = await this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
       if (!this.runId || this.usageLedger?.phase !== "ready" ||
-        this.usageLedger.projectedRevision >= this.usageLedger.revision) return null;
+        (!witness && this.usageLedger.projectedRevision >= this.usageLedger.revision)) return null;
       return { runId: this.runId, revision: this.usageLedger.revision,
         totals: { ...this.usageLedger.totals } };
     });
     if (!captured) return;
-    await withRemoteDeadline(projectRunUsageSnapshot(this.db, captured.runId, captured.totals),
+    await withRemoteDeadline(projectRunUsageSnapshot(this.db, captured.runId, captured.totals, {
+      providerSub: this.ownerProviderSub, witness,
+    }),
       "SQL Run usage projection");
     await this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();

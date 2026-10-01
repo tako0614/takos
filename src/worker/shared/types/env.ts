@@ -114,6 +114,7 @@ export type RunnerEnv = DbEnv & AiEnv & {
   RUN_NOTIFIER: DurableNamespaceBinding;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
   OIDC_ISSUER_URL?: string;
+  OIDC_OWNER_SUBJECT?: string;
   OIDC_CLIENT_ID?: string;
   ENCRYPTION_KEY?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
