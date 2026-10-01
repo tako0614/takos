@@ -49,13 +49,15 @@ building 中は新規受理と flush を止めます。無効 key、重複範囲
 破損 body はデータを保って repair にします。通信障害・読取期限切れは再試行対象です。
 32768 個を超える cursor、圧縮・展開とも 8 MiB を超える segment は自動移行の対象外です。
 旧 reader の展開上限は 200 MiB だったため、合法な大きい旧 segment にもこの制限が及びます。
-その変換・restore の道具と実環境検証は未完了です。
+大きい旧 segment は [オフライン候補の道具](run-archive-candidate.md) で再分割できます。
+実環境の export、全インスタンスの restore、対象 backend の資格確認は未完了です。
 
 実環境の切替前に旧 writer と遅延書込を止め、元 head・R2・SQL witness の copy を照合して
 保存する必要があります。大きい旧 segment の forward repair は、その copy をオフラインで
-分割し、ID/type/data/時刻を保った各 gzip の件数・範囲・digest を検証してから、既存 key を
-上書きしない候補へ配置し、対応する schema3 head を検証する手順が必要です。現在の code は
-この変換や本番 head の置換を実行しません。移行が証明するのは現存検証済み body と既知の
+分割し、ID/type/data/時刻を保った各 gzip の件数・範囲・digest を検証します。オフラインの
+道具は Run 一件の schema3 head と gzip を新しい隔離 namespace 用に作り、cold reader で
+全件を照合します。同じ論理 key の bytes が変わるため、元 bucket／prefix に適用できません。
+upload、本番 head の置換、他 Run を含む切替は実行しません。移行が証明するのは現存検証済み body と既知の
 pending/ring の対応であり、過去の消失復元や SQL 全 witness の照合ではありません。
 
 ## 通知の長期利用と容量
@@ -91,4 +93,5 @@ artifact が実際に保存・配備された証明はまだありません。�
 実環境の restore 完了ではありません。
 
 実装の検証記録は `tasks/TASK-takos-ga-notifier-journal-20261001.md` と
-`tasks/TASK-takos-ga-run-archive-index-20261001.md` にあります。
+`tasks/TASK-takos-ga-run-archive-index-20261001.md` と
+`tasks/TASK-takos-ga-archive-candidate-20261001.md` にあります。

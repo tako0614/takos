@@ -45,6 +45,7 @@ API、agent、tool、storageなどの製品ロジックは中立bindingを使い
 | [サービス構成](/architecture/service-topology)           | ローカル環境のサービスとポート  |
 | [エージェント実行](/architecture/runtime-service)        | 実行、ツール、メモリ            |
 | [履歴と通知の復旧](/architecture/notifier-journal)       | 保存、再送、容量、後戻りの境界  |
+| [旧履歴のオフライン候補](/architecture/run-archive-candidate) | 大容量 gzip の再分割と検証      |
 | [アプリの公開情報](/architecture/app-interface)          | UI、MCP、ファイル形式           |
 | [実行時の接続](/architecture/capsule-runtime-projection) | デプロイ結果から接続を作る方法  |
 | [アプリメタデータ](/architecture/app-metadata)           | 名前、URL、機能の所有者         |

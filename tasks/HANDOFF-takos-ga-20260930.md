@@ -3,7 +3,35 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: Run archive index — 2026-10-01
+## 最新の追加: offline Run archive candidate — 2026-10-01
+
+`scripts/run-archive-candidate.ts` は operator が保存した private export を読み、Run 一件の
+履歴を圧縮・展開それぞれ8 MiB以内の gzip と schema3 ready head に再分割する。
+callerが指定したmanifest SHAを必須とし、ID/type/data/created_at、counter/ring/receipt、
+usage pending/intent/blob と usage object bytes/metadataを保持する。任意SQL witnessは
+不透明なbytesのまま保持し、SQL last_event_idをR2保存範囲とみなさない。
+source head/chunk、既存index、staged insert、既知pending/receiptとの矛盾は拒否する。
+candidateのcold実RunNotifierDOとindexed readerで全件digestを照合してからsealする。
+
+候補は**新しい隔離namespace用**であり、同じcanonical keyに異なるbytesが入る場合がある。
+元bucket/prefixへのin-place applyは禁止。source filesはread-only、出力は新規private
+directoryのみ。symlink/hardlink、path escape、重複inventory、途中のfile変更、既存出力を
+拒否する。apply/upload/deployは実装しない。入力manifestは選んだcopyの整合性であり、
+live snapshotの真正性・完全性を証明しない。全instance/他Run closureとtarget切替は主担当。
+
+実filesystem CLI proofは10,555,545 compressed bytes/14,010,445 expanded bytesの旧gzipを
+用いた。現行production readerは503/repair、変換後は6,283,054と4,272,543 bytesの2gzipに
+分かれ、85eventをcold readerで全件照合できた。元head/gzip/manifest SHAは不変。
+このsynthetic export/local adapterの成功をlive export、backend quota、SQL reconciliation、
+全instance restore、公開/deployed artifactの証拠にしない。
+
+検証・独立review・exact commit/CIは専用HDD resultに記録する。
+詳細: [candidate task](TASK-takos-ga-archive-candidate-20261001.md)、
+[operatorの候補作成手順](../docs/architecture/run-archive-candidate.md)。
+残る長Run receipt、usage50000超、実owner-sub/mobile、target lifecycle、guard-aware retained
+artifactとlive user journey/restoreはGA解除条件のまま。他worktree/主handoff/controlに変更なし。
+
+## 前段の追加: Run archive index — 2026-10-01
 
 Takos 内部の認証済み B+tree 索引を実装した。公開 replay/SSE と InfoUnitIndexer は
 内部 `/archive` を使い、ready 後は R2 全 catalog を列挙せず必要な exact gzip だけ読む。
@@ -22,7 +50,8 @@ R2 1 GETで同じ tail を得た。旧 source の50,000件切捨ては再現せ�
 元の整数 counter から全 ID の存在を推測しない。移行が証明するのは現存 body と既知
 witness であり、過去消失の復元・SQL 全 witness 照合・旧 writer 停止ではない。
 32768 cursor および圧縮/展開8 MiBの上限がある。旧200 MiB readerで読めた大きい
-segment も offline repair が必要で、その変換道具と適用・復旧の検証は未完了。
+segment も offline repair が必要。上記の候補作成道具は追加済みだが、live export・適用・
+全instance復旧の検証は未完了。
 
 独立レビューで index/GC、root/pending の atomicity、reader pagination に残る P1/P2
 は無し。local native workerd で cold `/archive` の exact digest/root を確認する。
