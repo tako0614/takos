@@ -2,7 +2,7 @@
 
 Date: 2026-10-01 UTC
 Owner: Takos dedicated session
-Status: focused native proof and complete gate passed; current-head CI pending
+Status: commit92f6480 native proof/full gate/CI passed; log-chunk full gate passed, CI pending
 Required for: production_or_release verification
 Repository mutation scope: takos only
 Source base: ac5804aedeb80b6ef75b9e04e600961239faaf95
@@ -98,6 +98,35 @@ heavy concurrency stays within two process groups with main-owner priority.
 - No migration budget, existing deadline, declared type/lint debt, quarantine,
   production schema or authority is weakened. Failed diagnostics remain available
   in the test's own isolated output; owned processes are always supervised.
+
+## CI evidence follow-up: complete report chunks
+
+Commit92f6480 passed current-head CI36920598219 with 1,648 tests and all16 steps.
+Its tested merge d6c4a8e503813c70b5081dc85dd25f5f1b3780a3 has tree
+45de97710979afc2c3e9d3e8bf5545c994a7acd8, equal to the committed head.
+The native test passed all internal assertions, but its large JSON report was
+truncated at 65,536 characters in the raw CI log, losing the later hash inventory.
+The wrapper now emits the same report as ordered 4,096-character JSON chunks
+with a full-report SHA256, index and total count. Controller stdout/result-file
+checks and native domain assertions, bounds and cleanup remain unchanged.
+
+Offline execution of the actual changed logger on the saved qualified native
+report produced51 chunks, max4,652 bytes/line, exact reassembly and matching
+SHA256, with all130 source and155 input hashes restored. Independent delta
+review found no confirmed P1/P2. A fresh full gate and committed-head CI/raw-log
+reassembly are pending for this logger follow-up; offline evidence alone does
+not prove GitHub preserves every record. This modifies only the parent-owned
+wrapper and its guide/ledger, within the existing release-verification scope.
+
+The follow-up complete `bun run check` passed at20:44:23 UTC in296.682 seconds,
+including1,648 tests/255 files/11,968 assertions and all remaining gate phases.
+Its native proof passed in40.326 seconds with first-ready106/106. All47 emitted
+chunks were present, maximum envelope4,606 bytes, and reassembled to digest
+2cb173fc5e29a6053bbda77170e9a4e8d8823a6b8829569330e1a402c0a1e7a7
+with all130 source/155 input hashes. All1,572 frozen repository files remained
+unchanged during execution, and the owned process group was absent. Only this
+documentary result/heading update follows the gate. Committed-head CI/raw-log
+reassembly is still pending at this snapshot.
 
 ## Qualification limits
 

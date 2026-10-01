@@ -131,8 +131,20 @@ test("native D1 full schema and terminal usage recover through a cold RunNotifie
     expect(report.sourceHashesAfterRun).toEqual(report.sourceHashesBeforeRun);
     expect(Object.keys(report.bundleInputHashes).length).toBeGreaterThan(0);
     expect(report.bundleInputHashesAfterRun).toEqual(report.bundleInputHashes);
-    // Keep the native result, actual runtime identities and hashes in CI logs.
-    console.log(JSON.stringify(report));
+    // GitHub truncates a log line at 64KiB. Keep the complete native result
+    // in small, ordered records whose digest can be checked after reassembly.
+    const serializedReport = JSON.stringify(report);
+    const reportSha256 = createHash("sha256").update(serializedReport).digest("hex");
+    const chunkSize = 4_096;
+    const chunks = Math.ceil(serializedReport.length / chunkSize);
+    for (let index = 0; index < chunks; index++) {
+      console.log(JSON.stringify({
+        nativeUsageProofReportChunk: {
+          sha256: reportSha256, index, chunks,
+          data: serializedReport.slice(index * chunkSize, (index + 1) * chunkSize),
+        },
+      }));
+    }
     successful = true;
   } catch (error) {
     failed = true;

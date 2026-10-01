@@ -84,6 +84,11 @@ process / stdout / stderr全体75秒の期限を設け、所有するprocess gro
 成功時は実runtime identityとsource / bundle / input hashesをlogへ出し、fixtureを削除します。
 失敗時は同directoryに診断を保持し、pathを表示します。
 
+CIでは全文を `nativeUsageProofReportChunk` の4096文字ごとのJSON recordsで出力し、
+1行64KiBの切り詰めを避けます。読み戻す側は同じSHA256のrecordsを集め、重複・欠落がなく
+indexが0からchunks-1まで揃うことを確認してdataを順番に結合し、全文SHA256を照合します。
+完全なJSONへ復元できてから、runtime / source / bundle / input hashesを証拠として扱います。
+
 これはlocal native D1 / DO / R2の証拠です。hosted backendのalarm / quota / concurrency、
 native backendとcompiled process / Containerの結合、実owner導入や全instance
 backup / restoreは別に検証します。
