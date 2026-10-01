@@ -11,6 +11,7 @@ const root = resolve(import.meta.dir, "..");
 const scriptName = "notifier-native-guard-proof";
 const archiveDate = "2026-09-30T00:00:00.000Z";
 const deadlineMs = 75_000;
+const headFaultNativeError = "Error: injected storage head put failure after real R2 success";
 
 function assert(condition: unknown, detail: string): asserts condition {
   if (!condition) throw new Error(detail);
@@ -331,10 +332,22 @@ async function decodedRunState(mf: MiniflareInstance, name: string): Promise<Rec
   return await controlValue<Record<string, unknown>>(mf, name, "/control/snapshot");
 }
 
-async function settlePostCommit(mf: MiniflareInstance, name: string): Promise<void> {
+async function settlePostCommit(
+  mf: MiniflareInstance,
+  name: string,
+  expectedNativeError?: string,
+): Promise<number> {
   const settled = await request(mf, "run", name, "/control/settled");
-  assert(settled.status === 200,
-    `run/${name}: post-commit lifecycle status${settled.status}: ${await settled.text()}`);
+  const body = await settled.text();
+  if (settled.status !== 200) {
+    // A throwing native blockConcurrencyWhile resets the object and can abort
+    // this concurrent observer. Only the deliberately injected head fault is
+    // admissible; its exact durable witnesses and replacement are checked below.
+    assert(expectedNativeError !== undefined && settled.status === 599 &&
+      (JSON.parse(body) as { nativeError?: unknown }).nativeError === expectedNativeError,
+    `run/${name}: post-commit lifecycle status${settled.status}: ${body}`);
+  }
+  return settled.status;
 }
 
 async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
@@ -342,24 +355,38 @@ async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
   await seed(mf, "run", name, runSnapshot(name));
   const armed = await request(mf, "run", name, "/control/arm-head-fault");
   assert(armed.status === 200, "run/head-retry: fault was not armed");
+  const preFaultId = (await inspectDetails(mf, "run", name)).instanceId;
   const first = await request(mf, "run", name, "/do/emit", {
     type: "completed", data: { attempt: "first" }, runId: name, dedup_key: "head-retry-first",
   });
-  await settlePostCommit(mf, name);
+  assert(first.status === 200 && (await first.json() as { eventId?: number }).eventId === 1,
+    "run/head-retry: emit was not durably accepted before best-effort drain");
+  const lifecycleStatus = await settlePostCommit(mf, name, headFaultNativeError);
   const fault = await controlValue<{
     fired: boolean; successfulR2Puts: number; headFailures: number;
   }>(mf, name, "/control/head-fault");
   const firstArchive = await archivedBytes(mf, name);
   const pending = await decodedRunState(mf, name);
-  assert(first.status === 200 && (await first.json() as { eventId?: number }).eventId === 1,
-    "run/head-retry: emit was not durably accepted before best-effort drain");
   assert(fault.fired && fault.successfulR2Puts === 1 && fault.headFailures === 1,
     `run/head-retry: exact R2-then-head fault was not observed: ${JSON.stringify(fault)}`);
+  const intents = pending.flushIntents as Array<{
+    kind: string; key: string; count: number; blob: { digest: string; bytes: number };
+  }>;
+  const events = pending.r2SegmentBuffer as Array<{ event_id: number; type: string; data: string }>;
+  const ring = pending.eventBuffer as Array<{ id: number; type: string; data: unknown }>;
   assert(pending.eventIdCounter === 1 &&
-    (pending.flushIntents as unknown[]).length === 1 &&
-    (pending.r2SegmentBuffer as unknown[]).length === 1,
+    pending.r2LastFlushedSegmentIndex === 0 &&
+    intents.length === 1 && intents[0]?.kind === "run" && intents[0].count === 1 &&
+    intents[0].key === `runs/${name}/events/000001.jsonl.gz` &&
+    intents[0].blob.digest === hash(firstArchive) && intents[0].blob.bytes === firstArchive.byteLength &&
+    events.length === 1 && events[0]?.event_id === 1 && events[0].type === "completed" &&
+    events[0].data === JSON.stringify({ attempt: "first" }) &&
+    ring.length === 1 && ring[0]?.id === 1 && ring[0].type === "completed" &&
+    JSON.stringify(ring[0].data) === events[0].data,
     "run/head-retry: committed pending intent missing after head fault");
   const beforeId = (await inspectDetails(mf, "run", name)).instanceId;
+  if (lifecycleStatus === 599) assert(beforeId !== preFaultId,
+    "run/head-retry: injected native observer error did not replace the object");
   await evict(mf, "run", name);
   const afterId = (await inspectDetails(mf, "run", name)).instanceId;
   assert(beforeId !== afterId, "run/head-retry: native eviction did not replace object");
@@ -374,10 +401,11 @@ async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
     settled.r2LastFlushedSegmentIndex === 1,
     "run/head-retry: cold retry did not durably retire exact intent");
   console.error(JSON.stringify({ witness: "current/head-failure-cold-retry", firstHttp: first.status,
-    retryHttp: retry.status, fault, beforeInstance: beforeId, afterInstance: afterId,
+    retryHttp: retry.status, lifecycleStatus, fault, preFaultInstance: preFaultId,
+    beforeInstance: beforeId, afterInstance: afterId,
     archiveFirstSha256: hash(firstArchive), archiveAfterSha256: hash(retryArchive),
     archiveBytes: firstArchive.byteLength }));
-  return "run/head-failure-cold-retry: real R2 put succeeded, injected head put failed once, cold retry preserved exact gzip and retired intent";
+  return `run/head-failure-cold-retry: real R2 put succeeded, injected head put failed once, native observer ${lifecycleStatus}, exact head/R2 witness retained, cold retry preserved exact gzip and retired intent`;
 }
 
 async function proveConditionalCreateRace(mf: MiniflareInstance, competing: Uint8Array): Promise<string> {

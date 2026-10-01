@@ -2,7 +2,7 @@
 
 Date: 2026-10-01 UTC
 Owner: dedicated Takos session
-Status: local source gate and bounded independent review verified; target integration remains open
+Status: complete local source gates and bounded final reviews verified; exact new CI pending; target integration remains open
 Source base: 29eda5cd588f3aba2dd7305dee6f5f27f76da777
 Required for: production_or_release
 Mutation scope: Takos source and new local proof files only
@@ -44,7 +44,7 @@ check. Record reviewed commit/PR/exact CI separately from unpublished artifacts
 and unverified live owner/first-install/Run/recovery evidence in the dedicated
 handoff. Long Run receipts and complete usage aggregation remain separate work.
 
-## Verification — 2026-10-01
+## Verification — source163a77d7e, 2026-10-01
 
 The byte-exact29eda5cd5 source with the final regression test returns false200 for
 both missing all bodies and an older-prefix catalog:11pass/2fail. Its RunNotifier
@@ -76,3 +76,34 @@ Evidence: tmp/ga-run-archive-closure-20261001/{baseline-red-final.log,
 focused-final.log,full-check.log,full-check-first-types-failure.log,docs-build.log,
 independent-review-final.md,residual-source-findings.md,protected-before.json}.
 Exact commit/PR/CI and final custody are recorded in the dedicated HDD result.
+
+## Exact CI follow-up — source163a77d7e
+
+Exact CI36818271888 failed only the native head-fault observer: the deliberately
+injected head put exception resets native blockConcurrencyWhile and can abort
+concurrent test-only /control/settled with599 and that exact exception. The native
+contract explicitly resets a DO when this callback throws:
+https://developers.cloudflare.com/durable-objects/api/state/#blockconcurrencywhile.
+This does not establish accepted state loss; no production behavior change is
+indicated by this evidence. Failure log and exact run readback remain retained.
+
+Parent owns scripts/prove-notifier-state-guard.ts and its test for the bounded
+follow-up. Keep the observer strict200 by default. Only the deliberately armed
+head-fault case admits599 with the exact injected nativeError. Require prior
+emit ACK200/id1, pre-emit ID, actual replacement after599, exact fault counters,
+counter/ring/pending and intent key/count/blob bytes/digest, followed by the
+existing independent explicit eviction, alarm retry, equal gzip and intent
+retirement. No generic599, timed polling, sleeps, deadline widening or masking
+native callback exceptions. The independent design review approved this boundary;
+final bounded diff review found no additional confirmed P1/P2. Complete new local gate passes; exact new CI is pending.
+
+Final observer source full gate succeeds:1,504tests/243files/10,544assertions,
+20OpenTofu, all Rust phases, mandatory Worker/fullSQLite/debug-process replacement,
+Web/Worker dry-run builds. Native proof40.060s records observer200 plus exact
+head/R2 witnesses; native599 branch remains for exact new CI confirmation.
+Pinned Bun/priority/jobs and declared types98/lint111 debt are unchanged.
+Final local debug binary SHA0472e68d9b69f3957a79ed0b77f57cb708f144436f4518369b10133e57d6cb43; not a published image.
+Evidence adds full-check-observer-final.log, native-observer-fixed.log and
+independent-review-native-observer-final.md. Failed163a CI remains historical
+failure evidence; do not relabel it as success. Final commit/CI custody is external
+to this ledger so no self-referential commit ID is invented.

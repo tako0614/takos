@@ -12,10 +12,14 @@ counter/ring/pending/frontier と現存 gzip を保持し、再起動後も新�
 合法な segment/event ID 欠番は維持。全過去履歴の完全性・消失復元・live切替の証明ではない。
 
 固定29eda sourceの最終回帰は11pass/2fail、新sourceの実クラス13tests/324assertionsは成功。
-必須全gateも1,504tests/243files/10,543assertions、20OpenTofu、全Rust、native52.319s、
+必須全gateも1,504tests/243files/10,544assertions、20OpenTofu、全Rust、native40.060s、
 実Worker/fullSQLite/process復旧、両buildまで成功。docs build/diff checkと限定独立レビュー
 を確認した。exact commit/PR/CI は dedicated HDD result と
 [task ledger](TASK-takos-ga-archive-closure-20261001.md) に記録する。
+163aのCIでは注入head例外のnative resetが同時の観測requestを599にした。test-only観測は
+このexact例外だけ扱い、ACK200/id1・実instance交換・fault回数・ring/pending/intentの
+key/count/blob digest/bytesを必須にした。一般の599・retry・sleep・deadline緩和・native例外
+隠蔽はない。限定独立レビューと再全gate成功。exact new-head CIは専任結果に記録する。
 共通 binding/API、認証・権限・課金操作、他 worktree、production target は変更しない。
 long Run receipt 容量と usage 完全集計は未解決の別項目として残す。
 

@@ -99,6 +99,9 @@ test("native legacy-KV notifier guard preserves stored state and R2 through cold
       .toContain("production quota remains unqualified");
     expect(result.observations.find((item) => item.startsWith("run/head-failure-cold-retry:")))
       .toContain("cold retry preserved exact gzip and retired intent");
+    expect(result.observations.find((item) => item.startsWith("run/head-failure-cold-retry:")))
+      .toMatch(/native observer (200|599), exact head\/R2 witness retained/);
+    console.log(result.observations.find((item) => item.startsWith("run/head-failure-cold-retry:")));
     expect(result.observations.find((item) => item.startsWith("run/conditional-create-race:")))
       .toContain("competing gzip intact and current intent retained across eviction");
     successful = true;
