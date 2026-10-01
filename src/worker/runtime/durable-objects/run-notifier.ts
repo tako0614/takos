@@ -639,7 +639,8 @@ export class RunNotifierDO extends NotifierBase {
   }
 
   private async advanceArchiveStep(): Promise<void> {
-    if (!this.offloadBucket || !this.runId || this.archive?.phase !== "building") return;
+    const runId = this.runId;
+    if (!this.offloadBucket || !runId || this.archive?.phase !== "building") return;
     // Finish durable work without another R2 read after a cold replacement.
     await this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
@@ -653,7 +654,7 @@ export class RunNotifierDO extends NotifierBase {
     if (!before || before.phase !== "building" || !build) return;
     if (!build.pageLoaded) {
       const page = await withRemoteDeadline(this.offloadBucket.list({
-        prefix: `runs/${this.runId}/events/`, cursor: build.cursor ?? undefined, limit: 32,
+        prefix: `runs/${runId}/events/`, cursor: build.cursor ?? undefined, limit: 32,
       }), "Archive migration list");
       if (page.objects.length > 32) throw new Error("Archive migration page capacity exceeded");
       const keys = page.objects.map((object) => object.key);
@@ -679,6 +680,17 @@ export class RunNotifierDO extends NotifierBase {
         await this.awaitInitialized();
         if (this.archive !== current) return;
         if (!active.truncated) {
+          // Segment keys advance with accepted event IDs. The final committed
+          // segment must exist even if every retained ring event is pending.
+          if (this.r2LastFlushedSegmentIndex > 0) {
+            const final = await queryArchive(this.state.storage, current.root,
+              Math.max(0, current.root.lastEventId - 1), 1);
+            const descriptor = final.descriptors[0];
+            if (!descriptor || descriptor.segmentIndex !== this.r2LastFlushedSegmentIndex ||
+              descriptor.key !== buildRunEventSegmentKey(runId, this.r2LastFlushedSegmentIndex)) {
+              throw new Error("Finalized Run archive segment is missing from legacy index; repair required");
+            }
+          }
           // Retained ring entries outside pending must have a matching archive
           // record. Preferred IDs can jump: absence of an arbitrary ID is not loss.
           for (const event of this.eventBuffer) {
@@ -696,16 +708,16 @@ export class RunNotifierDO extends NotifierBase {
       return;
     }
     const key = active.keys[active.keyIndex]!;
-    const match = key.match(new RegExp(`^runs/${this.runId}/events/(\\d+)\\.jsonl\\.gz$`));
+    const match = key.match(new RegExp(`^runs/${runId}/events/(\\d+)\\.jsonl\\.gz$`));
     const segmentIndex = match ? Number(match[1]) : NaN;
     if (!Number.isSafeInteger(segmentIndex) || segmentIndex < 1 ||
-      key !== buildRunEventSegmentKey(this.runId, segmentIndex)) {
+      key !== buildRunEventSegmentKey(runId, segmentIndex)) {
       throw new Error("Noncanonical legacy archive key; repair required");
     }
     const object = await withRemoteDeadline(this.offloadBucket.get(key), "Archive migration GET");
     if (!object) throw new Error("Legacy archive object disappeared; repair required");
     const bytes = await withRemoteDeadline(readArchiveObjectBytes(object), "Archive migration body");
-    const { plain, descriptor, events } = await inspectRunArchiveSegment(bytes, key, segmentIndex, this.runId);
+    const { plain, descriptor, events } = await inspectRunArchiveSegment(bytes, key, segmentIndex, runId);
     if (descriptor.lastEventId > this.eventIdCounter) throw new Error("Legacy archive exceeds accepted counter; repair required");
     for (const event of events) {
       const ring = this.eventBuffer.find((entry) => entry.id === event.event_id);
@@ -717,7 +729,7 @@ export class RunNotifierDO extends NotifierBase {
       ...events.filter((event) => this.eventBuffer.some((ring) => ring.id === event.event_id)).map((event) => event.event_id)])];
     if (segmentIndex > this.r2LastFlushedSegmentIndex) {
       const intent = this.intent("run");
-      const expectedKey = intent?.key ?? buildRunEventSegmentKey(this.runId,
+      const expectedKey = intent?.key ?? buildRunEventSegmentKey(runId,
         Math.max(this.r2SegmentIndex, this.r2LastFlushedSegmentIndex + 1,
           segmentIndexForEventId(this.r2SegmentBuffer[0]?.event_id ?? 1)));
       const pending = this.r2SegmentBuffer.slice(0, events.length);

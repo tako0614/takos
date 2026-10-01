@@ -3,7 +3,23 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: offline Run archive candidate — 2026-10-01
+## 最新の追加: finalized Run archive migration witness — 2026-10-01
+
+自動移行も、正の `r2LastFlushedSegmentIndex` に対応する最終 key・segment を認証済み
+索引で確認してから ready にする。元 head が確定済みと示す body がなく、リングが全て
+pending に残る場合の false200 を実 RunNotifierDO テストで再現し、修復待ちへ変更した。
+counter/ring/pending/frontier と現存 gzip を保持し、再起動後も新規 emit を503で拒否する。
+合法な segment/event ID 欠番は維持。全過去履歴の完全性・消失復元・live切替の証明ではない。
+
+固定29eda sourceの最終回帰は11pass/2fail、新sourceの実クラス13tests/324assertionsは成功。
+必須全gateも1,504tests/243files/10,543assertions、20OpenTofu、全Rust、native52.319s、
+実Worker/fullSQLite/process復旧、両buildまで成功。docs build/diff checkと限定独立レビュー
+を確認した。exact commit/PR/CI は dedicated HDD result と
+[task ledger](TASK-takos-ga-archive-closure-20261001.md) に記録する。
+共通 binding/API、認証・権限・課金操作、他 worktree、production target は変更しない。
+long Run receipt 容量と usage 完全集計は未解決の別項目として残す。
+
+## 前段の追加: offline Run archive candidate — 2026-10-01
 
 `scripts/run-archive-candidate.ts` は operator が保存した private export を読み、Run 一件の
 履歴を圧縮・展開それぞれ8 MiB以内の gzip と schema3 ready head に再分割する。

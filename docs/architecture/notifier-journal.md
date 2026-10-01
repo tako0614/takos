@@ -47,6 +47,10 @@ counter 以下の全整数が存在するとは仮定しません。
 1 request/alarm は最大 8 step・20 秒の開始判定で処理し、remote read は別途期限を持ちます。
 building 中は新規受理と flush を止めます。無効 key、重複範囲、既知 ring/pending との矛盾、
 破損 body はデータを保って repair にします。通信障害・読取期限切れは再試行対象です。
+正の `r2LastFlushedSegmentIndex` がある場合は、索引の最終 descriptor の key・segment
+番号がその確定 frontier と一致することも完了前に検証します。リングが全て pending に
+残っていても、既知の最終保存済み body の欠落を ready と扱いません。番号の欠番は合法で、
+0 の旧 frontier から過去の完全性は推定しません。未知の中間欠落を復元する検証ではありません。
 32768 個を超える cursor、圧縮・展開とも 8 MiB を超える segment は自動移行の対象外です。
 旧 reader の展開上限は 200 MiB だったため、合法な大きい旧 segment にもこの制限が及びます。
 大きい旧 segment は [オフライン候補の道具](run-archive-candidate.md) で再分割できます。

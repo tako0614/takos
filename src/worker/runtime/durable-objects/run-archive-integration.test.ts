@@ -375,6 +375,84 @@ test("a valid small legacy segment migrates and remains indexed across cold repl
   }
 });
 
+for (const withOlderSegment of [false, true]) {
+  test(`migration refuses a missing finalized segment with ${withOlderSegment ? "an older prefix" : "no archive bodies"} when retained ring is pending`, async () => {
+    const bucket = createArchiveBucket();
+    const pending = [event(250)];
+    const values = new Map<string, unknown>();
+    await seedLegacyState(values, {
+      events: pending, eventIdCounter: 250, lastFlushed: 2, segmentIndex: 3,
+    });
+    const legacyHead = values.get("bufferState") as Record<string, unknown>;
+    legacyHead.r2SegmentBuffer = pending;
+    const older = withOlderSegment ? await seedLegacyObject(bucket, 1, [event(7)]) : null;
+    const fixture = await createFixture({ bucket, values });
+    try {
+      await expectRepair(fixture.notifier, /finalized.*missing/iu);
+      const snapshot = await loadNotifierSnapshot(fixture.store.storage, "run") as {
+        eventIdCounter: number;
+        eventBuffer: unknown[];
+        r2SegmentBuffer: Event[];
+        r2LastFlushedSegmentIndex: number;
+        archive: RunArchiveState;
+      };
+      expect(snapshot.archive.phase).toBe("repair");
+      expect(snapshot.eventIdCounter).toBe(250);
+      expect(snapshot.eventBuffer).toEqual(pending.map(ringEvent));
+      expect(snapshot.r2SegmentBuffer).toEqual(pending);
+      expect(snapshot.r2LastFlushedSegmentIndex).toBe(2);
+      expect((await emit(fixture.notifier, 251)).status).toBe(503);
+      if (older) expect(await bucket.bytes(older.key)).toEqual(older.bytes);
+
+      const readsBeforeAlarm = bucket.counts();
+      await fixture.notifier.alarm();
+      expect(bucket.counts()).toEqual(readsBeforeAlarm);
+      const cold = await createFixture({ bucket, values });
+      try {
+        await expectRepair(cold.notifier, /finalized.*missing/iu);
+        expect((await emit(cold.notifier, 251)).status).toBe(503);
+        const restored = await loadNotifierSnapshot(cold.store.storage, "run");
+        expect(restored).toEqual(snapshot);
+      } finally {
+        cold.close();
+      }
+    } finally {
+      fixture.close();
+    }
+  });
+}
+
+test("migration accepts a witnessed finalized segment with sparse segment and event IDs", async () => {
+  const bucket = createArchiveBucket();
+  const pending = [event(250)];
+  const values = new Map<string, unknown>();
+  await seedLegacyState(values, {
+    events: pending, eventIdCounter: 250, lastFlushed: 9, segmentIndex: 10,
+  });
+  const legacyHead = values.get("bufferState") as Record<string, unknown>;
+  legacyHead.r2SegmentBuffer = pending;
+  await seedLegacyObject(bucket, 1, [event(7)]);
+  await seedLegacyObject(bucket, 9, [event(42)]);
+  const fixture = await createFixture({ bucket, values });
+  try {
+    const page = await queryUntilReady(fixture.notifier);
+    expect((page.descriptors as Array<{ segmentIndex: number }>).map((item) => item.segmentIndex))
+      .toEqual([1, 9]);
+    expect(page.pending).toEqual(pending);
+    const listsAfterReady = bucket.counts().listCalls;
+    const cold = await createFixture({ bucket, values });
+    try {
+      const response = await archiveRequest(cold.notifier);
+      expect(response.status).toBe(200);
+      expect(bucket.counts().listCalls).toBe(listsAfterReady);
+    } finally {
+      cold.close();
+    }
+  } finally {
+    fixture.close();
+  }
+});
+
 test("migration resumes across cold replacements for more than 32 gzip segments and preserves pending history", async () => {
   const bucket = createArchiveBucket();
   const archived = Array.from({ length: 34 }, (_, index) => event(index + 1));
