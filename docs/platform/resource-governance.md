@@ -71,6 +71,16 @@ Takos app は app-local の usage を記録し、課金主体は Takosumi Accoun
 - `app_usage_events`
 - `app_usage_rollups`
 
+新しい usage の event と期間集計は同じ SQL transaction / native batch で
+保存します。同じ冪等キーの再送は集計を増やしません。Run の記録では全メーターを
+まとめて保存し、読取・展開・SQL の失敗を成功として扱いません。内部 run-usage
+応答の `recorded: false` は、記録を再試行する必要があることを示します。
+
+現在の Run 記録は raw usage 50,000件までで、超過を検出すると全メーターの保存を
+拒否します。これは完全集計の GA 条件を満たしたという意味ではありません。
+notifier の pending usage、終了後の追加 usage、過去の部分記録の修復と実 backend
+での検証は未完了です。既存の usage 行をこの変更で再集計・削除することはありません。
+
 billing の所有者は Takosumi Accounts の `takosumi.billing.usage` BillingPort
 です。 Takos app は usage イベントを記録し、billing API は Accounts
 側が提供します。

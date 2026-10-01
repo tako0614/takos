@@ -31,6 +31,10 @@ async function encodedEvents(events: PersistedUsageEvent[]): Promise<ArrayBuffer
   return gzipCompressString(events.map((entry) => JSON.stringify(entry)).join("\n") + "\n");
 }
 
+async function encodedJsonl(jsonl: string): Promise<ArrayBuffer> {
+  return gzipCompressString(jsonl);
+}
+
 function malformedGzip(): ArrayBuffer {
   return new TextEncoder().encode("not gzip").buffer as ArrayBuffer;
 }
@@ -251,5 +255,117 @@ describe("getUsageEventsFromR2", () => {
     } as unknown as ObjectStoreBinding;
     await expect(getUsageEventsFromR2(repeatedCursor, "repeated-cursor"))
       .rejects.toThrow("invalid pagination cursor");
+  });
+
+  test("strict mode rejects non-canonical catalog keys and listed objects that are missing", async () => {
+    const wrongKey = virtualBucket([
+      { key: "runs/strict-key/usage/000000.jsonl.gz/extra", body: await encodedEvents([event(0)]) },
+    ]);
+    await expect(getUsageEventsFromR2(wrongKey.bucket, "strict-key", { strict: true }))
+      .rejects.toThrow("non-canonical key");
+    expect(wrongKey.getKeys).toEqual([]);
+
+    const missing = virtualBucket([
+      { key: usageSegmentKey("strict-missing", 0), missing: true },
+    ]);
+    await expect(getUsageEventsFromR2(missing.bucket, "strict-missing", { strict: true }))
+      .rejects.toThrow("is missing");
+
+    // Default reads retain their historical tolerance for a missing listed object.
+    await expect(getUsageEventsFromR2(missing.bucket, "strict-missing"))
+      .resolves.toEqual([]);
+
+    for (const key of [
+      "runs/strict-unpadded/usage/1.jsonl.gz",
+      "runs/strict-unsafe/usage/9007199254740992.jsonl.gz",
+    ]) {
+      const runId = key.split("/")[1]!;
+      const fixture = virtualBucket([{ key, body: await encodedEvents([event(0)]) }]);
+      await expect(getUsageEventsFromR2(fixture.bucket, runId, { strict: true }))
+        .rejects.toThrow("non-canonical key");
+      expect(fixture.getKeys).toEqual([]);
+    }
+  });
+
+  test("strict mode rejects duplicate catalog keys, including across pages", async () => {
+    const duplicateKey = usageSegmentKey("strict-duplicate", 1);
+    const fixture = virtualBucket([
+      { key: usageSegmentKey("strict-duplicate", 0), body: await encodedEvents([event(0)]) },
+      { key: duplicateKey, body: await encodedEvents([event(1)]) },
+      { key: duplicateKey, body: await encodedEvents([event(2)]) },
+    ], 1);
+
+    await expect(getUsageEventsFromR2(fixture.bucket, "strict-duplicate", { strict: true }))
+      .rejects.toThrow("duplicate key");
+    expect(fixture.getKeys).toEqual([]);
+  });
+
+  test("strict mode rejects empty compressed segments while default mode skips them", async () => {
+    const fixture = virtualBucket([
+      { key: usageSegmentKey("strict-empty", 0), body: await encodedJsonl("") },
+    ]);
+
+    await expect(getUsageEventsFromR2(fixture.bucket, "strict-empty", { strict: true }))
+      .rejects.toThrow("Usage segment is empty");
+    await expect(getUsageEventsFromR2(fixture.bucket, "strict-empty"))
+      .resolves.toEqual([]);
+  });
+
+  test("strict mode rejects malformed JSON and invalid required or optional fields", async () => {
+    const malformedJson = virtualBucket([
+      { key: usageSegmentKey("strict-json", 0), body: await encodedJsonl(`${JSON.stringify(event(0))}\n{bad}\n`) },
+    ]);
+    await expect(getUsageEventsFromR2(malformedJson.bucket, "strict-json", {
+      maxEvents: 1,
+      strict: true,
+    })).rejects.toThrow("Malformed usage event segment line");
+    await expect(getUsageEventsFromR2(malformedJson.bucket, "strict-json"))
+      .resolves.toEqual([event(0)]);
+
+    const invalidPayloads = [
+      { ...event(0), meter_type: "   " },
+      { ...event(0), units: 0 },
+      { ...event(0), units: Number.POSITIVE_INFINITY },
+      { ...event(0), created_at: "not a time" },
+      { ...event(0), reference_type: 3 },
+      { ...event(0), metadata: {} },
+      [],
+      null,
+    ];
+    for (const [index, payload] of invalidPayloads.entries()) {
+      const fixture = virtualBucket([
+        {
+          key: usageSegmentKey("strict-schema", index),
+          body: await encodedJsonl(`${JSON.stringify(payload)}\n`),
+        },
+      ]);
+      await expect(getUsageEventsFromR2(fixture.bucket, "strict-schema", { strict: true }))
+        .rejects.toThrow("invalid schema");
+    }
+
+    const legacySegment = virtualBucket([
+      { key: usageSegmentKey("strict-legacy-zero", 0), body: await encodedEvents([event(0)]) },
+    ]);
+    await expect(getUsageEventsFromR2(legacySegment.bucket, "strict-legacy-zero", { strict: true }))
+      .resolves.toEqual([event(0)]);
+
+    const wideIndex = virtualBucket([
+      {
+        key: usageSegmentKey("strict-wide-index", 1_000_000),
+        body: await encodedEvents([event(0)]),
+      },
+    ]);
+    await expect(getUsageEventsFromR2(wideIndex.bucket, "strict-wide-index", { strict: true }))
+      .resolves.toEqual([event(0)]);
+  });
+
+  test("strict mode accepts unknown nonempty meter tokens", async () => {
+    const futureEvent = { ...event(0), meter_type: "future_meter_v9" };
+    const fixture = virtualBucket([
+      { key: usageSegmentKey("strict-unknown-meter", 1), body: await encodedEvents([futureEvent]) },
+    ]);
+
+    await expect(getUsageEventsFromR2(fixture.bucket, "strict-unknown-meter", { strict: true }))
+      .resolves.toEqual([futureEvent]);
   });
 });

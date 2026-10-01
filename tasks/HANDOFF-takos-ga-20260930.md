@@ -3,7 +3,25 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: finalized Run archive migration witness — 2026-10-01
+## 最新の追加: app-local usage の原子性と失敗応答 — 2026-10-01
+
+event と条件付き rollup を同じ SQL transaction/native batch へ入れ、Run の全メーターも
+まとめて保存する。実 SQLite で旧 event-only 失敗と再試行不能を再現し、新しい部分記録を
+防止した。archive/SQL 失敗・missing Run・50,001件目の検出を既存の recorded:false 応答へ
+伝え、部分集計を成功にしない。strict 読取は opt-in で、不正・欠落・空 body・重複 key を
+拒否する。未知の有効 meter と従来 prefix reader は保持。料金・権限・共通契約・schema
+変更や過去データの修復・削除は無い。
+
+raw/ラップ済 stateful SQL の専用 session、実 edge.sql adapter の atomic group、同時再送、
+入力snapshot、数値 overflow、commit後の不要な read failure を検証した。限定独立レビュー
+の2件を修正し、追加確定P1/P2無し。対象29tests/171assertions、全gate1,527tests/
+244files/10,695assertions、20OpenTofu、全Rust、native38.109s（observer200）、必須
+Worker/fullSQLite/process復旧と両build、docs build/diff checkは成功。
+詳細は [usage task](TASK-takos-ga-usage-sql-atomicity-20261001.md)。exact commit/CI は
+専任 HDD result に記録する。pending/終了後 usage の完全集計、歴史的部分記録の修復、
+producer retry/token重複policy、実 backend 資格は未完了。Takos全体GAの解除ではない。
+
+## 前段の追加: finalized Run archive migration witness — 2026-10-01
 
 自動移行も、正の `r2LastFlushedSegmentIndex` に対応する最終 key・segment を認証済み
 索引で確認してから ready にする。元 head が確定済みと示す body がなく、リングが全て
