@@ -104,6 +104,7 @@ test("privacy export endpoint returns attachment JSON without token secrets", as
     auth: {
       identities: [],
       sessions: [],
+      revocations: [],
     },
     app_usage: { events: [], rollups: [] },
     repositories: [],

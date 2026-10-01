@@ -5,7 +5,9 @@ Cloudflare provider は D1 migration の実行、Vectorize index、Container app
 [本番デプロイレーン](/deploy/production-lane)の `--vectorize` と `--apply` が補います。
 OpenTofu module 内には、既定で無効の optional bridge もあります
 ([セルフホスト](/deploy/) の「Cloudflare provider gap bridge」を参照)。D1 migration は
-bridge の責務ではなくなり、どの install path でも Worker 自身が適用します。
+bridge の責務ではなくなり、native D1 では Worker 自身が適用します。
+node self-host は DB を開く際に適用します。外部管理の `edge.sql` binding は
+その管理者が schema を所有するため、Takos の D1 applier は実行しません。
 
 そのため Takos Worker は次の二つを自分で引き受けます。
 
@@ -20,7 +22,8 @@ Worker は `db/migrations-control/migrations` の SQL を bundle に埋め込ん
 (`src/worker/platform/migrations/migration-set.generated.json`、
 `bun run generate:migration-set` が生成し、`bun run check` が drift を検査します)。
 
-- 最初の request と cron 実行が、未適用の migration を順番に適用します。
+- 最初の request、既知の Queue family、cron 実行が、未適用の migration を
+  順番に適用します。schema が ready になるまで application handler は実行しません。
 - 適用済みの記録は `_takos_opentofu_migrations` に入ります。これは、かつて OpenTofu bridge が
   使っていた table と同じ名前・同じ列・同じ `sha256:<hex>` checksum です。bridge が適用済みの
   database も、そのまま「適用済み」と認識されます。
@@ -46,6 +49,13 @@ schema が未適用または失敗している間、request は HTTP 503 を受�
 
 `error.details` に `state`、`applied`、`total`、失敗時は `failedMigration` と
 `reason` が入ります。
+
+Queue は未収束時に各 message を明示的に retry し、handler の呼び出しや ack を
+行いません。適用中・未適用は schema の retry hint、失敗時は 60 秒待機します。
+cron は domain maintenance、Run 復旧、executor prewarm に進む前に失敗を報告します。
+Queue retry は通常の retry budget を消費し、DLQ にも有限の試行回数があります。
+失敗が継続した場合の無期限保存は保証しません。migration 失敗は運用者が原因を
+修復し、schema readiness を確認してから処理を再開する必要があります。
 
 次の path だけは 503 の対象外で、収束していなくても応答します。
 

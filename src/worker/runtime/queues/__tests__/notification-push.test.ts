@@ -656,7 +656,9 @@ test("unified Worker runtime routes notification push and DLQ queues", async () 
   const db = await freshDb();
   await seedDelivery(db);
   const runtime = createWorkerRuntime(
-    async (env) => ({ bindings: env }) as never,
+    // This handler-routing fixture supplies an already initialized local SQL
+    // database. Native-D1 upgrade admission has a full-migration SQLite suite.
+    async (env) => ({ source: "node", bindings: env }) as never,
   );
   const push = queueMessage({ invalid: true });
   const dlq = queueMessage(body(), 6);

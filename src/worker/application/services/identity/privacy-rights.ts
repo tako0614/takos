@@ -18,6 +18,7 @@ import {
   notifications,
   repositories,
   runs,
+  sessionsRevoked,
   threads,
 } from "../../../infra/db/index.ts";
 import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
@@ -58,6 +59,7 @@ export type DataSubjectExport = PrivacyAccessSummary & {
   readonly auth: {
     readonly identities: unknown[];
     readonly sessions: unknown[];
+    readonly revocations: unknown[];
   };
   readonly app_usage: {
     readonly events: unknown[];
@@ -137,7 +139,6 @@ function sanitizeAuthIdentities(
   return rows.map((row) => ({
     id: row.id,
     provider: row.provider,
-    provider_sub: row.providerSub,
     email_snapshot: row.emailSnapshot,
     email_kind: row.emailKind,
     linked_at: row.linkedAt,
@@ -218,6 +219,11 @@ export async function buildDataSubjectExport(
     expires_at: authSessions.expiresAt,
     created_at: authSessions.createdAt,
   }).from(authSessions).where(eq(authSessions.accountId, user.id)).all();
+  const revocationRows = await db.select({
+    revoked_at: sessionsRevoked.revokedAt,
+    reason: sessionsRevoked.reason,
+    expires_at: sessionsRevoked.expiresAt,
+  }).from(sessionsRevoked).where(eq(sessionsRevoked.userId, user.id)).all();
   const appUsageEventRows = await db.select().from(appUsageEvents).where(
     eq(appUsageEvents.ownerAccountId, user.id),
   ).orderBy(desc(appUsageEvents.createdAt)).all();
@@ -260,6 +266,7 @@ export async function buildDataSubjectExport(
     auth: {
       identities: sanitizeAuthIdentities(identityRows),
       sessions: sessionRows,
+      revocations: revocationRows,
     },
     app_usage: {
       events: appUsageEventRows,

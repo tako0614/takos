@@ -61,6 +61,12 @@ secret は返しません。
 | App-local auth/session metadata | Takos Web/API が持つ session mirror と revocation state だけを返す。provider subject、OIDC identity、billing identity、refresh token ciphertext は返さない |
 | App usage                       | app-local usage event / rollup metadata を返す。Accounts billing account / Stripe identifiers は Takos 側では返さない                                      |
 
+`auth.identities` は app-local link の metadata に限定し、`provider_sub` を
+含みません。`auth.revocations` は本人の app-local subject に関連付けられた
+`revoked_at` / `reason` / `expires_at` を返し、raw session ID を含みません。
+subject の関連付けが無い失効記録や、外部参加者など別 subject の記録は推測して
+本人の export に加えません。この export は全 instance の backup ではありません。
+
 ## Lawful Bases
 
 Takos は processing purpose ごとに lawful basis を分けます。EU / UK GDPR では
