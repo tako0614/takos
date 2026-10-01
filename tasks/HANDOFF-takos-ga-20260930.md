@@ -3,7 +3,32 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: accepted Run usage と single-owner 集計 — 2026-10-01
+## 最新の追加: quality 子プロセスの完了確認 — 2026-10-01
+
+必須 type/lint gate が捨てていた終了状態を検証する。固定 tool の通常診断終了値
+（TypeScript2/oxlint1）と正常完了0を区別し、signal/想定外終了値/通常値と矛盾する出力/
+stderr を拒否する。lint JSON の必須 shape と supplied location を確認し、TypeScript の
+file header/正規の二字単位 indent を除く stdout を拒否する。raw両streamを保持する。
+既存の診断台帳/countdownを変えず、新exemption/quarantineやtimeout変更を加えない。
+
+exact1c33 source の controlled CLI fixture は、declared debt出力後のweb137/lint137と
+正常値でもfatal stdoutが混じるケースをold0/current1に再現。実OOMを発生させた証明でも
+過去CIの実失敗を示す証明でもない。SIGTERM、stderr、壊れたlabel/span、正規multiline、
+台帳vanished/increased/undeclaredの12tests/65assertionsは成功。最終独立レビューに
+新たなblocker無し。全必須 local gate は1,577tests/248files/10,969assertions、
+20OpenTofu、全Rust、必須Worker/fullSQLite/process復旧と両buildまで成功。
+native42.656s/observer200、docs build3.59s、types98/lint111未申告0。
+exact新commit CIの結果は専任HDD resultに記録する。
+詳細: [quality process task](TASK-takos-ga-quality-process-20261001.md)。
+
+source/runtime課題も継続: 未受理terminal notifier emitではSQL usageだけが永続化し、
+DO dirtyが無いため投影が回復しない。検索info_unit jobの成功/DLQと使用量を結び付けず、
+terminal CASと原子的な専用outbox、独立claim/retry/readbackが必要で、まだ未実装。
+長Run receiptはinline配列・snapshot容量とO(N)処理が限界。bounded head delta＋認証済
+receipt tree/再開可能な移行/GC/converter対応が必要で、key evictionやR2からのID推測は
+しない。このquality修正でruntime/基盤/live/全体GAを完了とはしない。
+
+## 前段の追加: accepted Run usage と single-owner 集計 — 2026-10-01
 
 Run accountId は Workspace ID。メーターの所有者は Workspace.ownerAccountId を参照し、
 space_id に Workspace を保持する。旧 wrong-owner 固定行は自動移管せず修復待ちにする。

@@ -60,6 +60,11 @@ repository 全体を対象にし、残っている例外だけを `quality/` の
 0 になった entry は削除します。quarantine は「今は失敗する」という主張なので、
 `bun run check:test-quarantine` が該当 file を実行し、通ってしまったものを拒否します。
 
+type／lint gate は子プロセスの正常な完了も確認します。signal、想定外の終了値、
+診断なしの失敗、壊れた lint JSON report は標準出力・標準エラーを残して拒否します。
+宣言済み診断があっても異常終了を成功にしません。通常の TypeScript diagnostic と
+oxlint finding だけを、上記の同じ件数台帳で比較します。
+
 online evidence は portable gate に混ぜません。`bun run test:online` または
 `bun scripts/run-portable-tests.ts --online` を明示的に実行してください。
 `--list` は選択された file だけを表示し、test process を起動しません。
