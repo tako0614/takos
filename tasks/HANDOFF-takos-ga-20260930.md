@@ -3,6 +3,20 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
+## 最新追加: notifier byte decoding — 2026-10-01
+
+503cのCIは通知refresh1,000回の既存テストが5000.52msで失敗した。local全gateと
+実OCI成功をCI成功と混同しない。全journeyのprofileと同bytes変換の計測に基づき、
+Base64 decode後のUint8Array.from反復を同じ長さのindexed byte copyへ置換した。
+全validation/hash/readback/closure/GCと保存bytes/schemaを維持。通知テスト1,000件/
+5秒のsourceは不変。focused16testsは成功し、通知1.404s、全byte値/padding/chunk境界を
+確認した。変更後の実OCIでも停止後usage回収/ACK喪失/cold再送が成功、全1,040 source
+hash/cleanup一致。独立review clear。必須local全gateも成功（1,634tests/252files/
+11,819assertions、20OpenTofu、全Rust、両build、types98/lint111未申告0）。通知1.601s、
+capacity0.805s/native43.656s、実Worker/fullSQLite/process usage回収も成功。
+新commit/PR/CI readbackは専任HDD resultへ記録する。
+詳細: [byte decoding task](TASK-takos-ga-notifier-byte-decoding-20261001.md)。
+
 ## 最新の資格確認: current Worker and local OCI — 2026-10-01
 
 最新CI検証済みda2e48dd Workerと既存f5207eb imageの実OCI復旧が成功した。

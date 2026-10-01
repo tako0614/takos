@@ -102,6 +102,19 @@ test("notifier journal stages exact large Unicode bytes in bounded immutable chu
   assert.ok(storage.values.size <= ref.chunks.length);
 });
 
+test("notifier journal preserves every byte across padded and split chunks", async () => {
+  for (const length of [256, 257, 258, NOTIFIER_CHUNK_BYTES + 257]) {
+    const storage = createStorage();
+    const source = Uint8Array.from({ length }, (_, index) => index % 256);
+    const ref = await stageNotifierBlob(storage.binding, source);
+    const restored = new Uint8Array(await readNotifierBlob(storage.binding, ref));
+
+    assert.deepEqual(restored, source);
+    assert.equal(ref.bytes, length);
+    assert.equal(ref.chunks.length, Math.ceil(length / NOTIFIER_CHUNK_BYTES));
+  }
+});
+
 test("notifier journal budget rejects snapshots beyond byte and chunk ceilings before staging", async () => {
   const storage = createStorage();
   const tooLarge = { value: "x".repeat(MAX_NOTIFIER_SNAPSHOT_BYTES) };
