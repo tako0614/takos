@@ -123,6 +123,7 @@ export type RunnerEnv = DbEnv & AiEnv & {
 export type IndexerEnv = DbEnv & {
   AI?: AiBinding;
   VECTORIZE?: VectorIndexBinding;
+  RUN_NOTIFIER?: DurableNamespaceBinding;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;

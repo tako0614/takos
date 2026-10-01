@@ -160,12 +160,17 @@ export class InfoUnitIndexer {
   private vectorize?: VectorizeIndex;
   private dbBinding: SqlDatabaseBinding;
   private offloadBucket?: ObjectStoreBinding;
+  private runNotifier?: Env["RUN_NOTIFIER"];
 
-  constructor(env: Pick<Env, "AI" | "VECTORIZE" | "DB" | "TAKOS_OFFLOAD">) {
+  constructor(
+    env: Pick<Env, "AI" | "VECTORIZE" | "DB" | "TAKOS_OFFLOAD"> &
+      Partial<Pick<Env, "RUN_NOTIFIER">>,
+  ) {
     this.ai = env.AI;
     this.vectorize = env.VECTORIZE;
     this.dbBinding = env.DB;
     this.offloadBucket = env.TAKOS_OFFLOAD;
+    this.runNotifier = env.RUN_NOTIFIER;
   }
 
   async indexRun(spaceId: string, runId: string): Promise<void> {
@@ -210,7 +215,11 @@ export class InfoUnitIndexer {
       });
     }
     if (this.offloadBucket) {
-      const offloaded = await sourceServiceDeps.getRunEventsAfterFromR2(
+      if (!this.runNotifier) {
+        throw new Error("RUN_NOTIFIER is required to read indexed Run history");
+      }
+      const offloaded = await sourceServiceDeps.getIndexedRunEventsAfter(
+        this.runNotifier,
         this.offloadBucket,
         runId,
         0,

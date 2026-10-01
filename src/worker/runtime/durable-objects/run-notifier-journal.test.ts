@@ -17,6 +17,7 @@ import {
   stageNotifierBlob,
 } from "./notifier-journal.ts";
 import { parseRunNotifierJournalState } from "./run-notifier-journal-state.ts";
+import { queryArchive, type ArchiveRoot } from "./run-archive-index.ts";
 import { RunNotifierDO } from "./run-notifier.ts";
 
 type PutHook = (key: string, value: unknown) => void | Promise<void>;
@@ -575,9 +576,21 @@ test("a v2 archive intent does not finalize against different gzip bytes with th
   const persisted = await loadNotifierSnapshot(cold.binding.storage, "run") as {
     flushIntents: unknown[];
     r2SegmentBuffer: unknown[];
+    archive: { phase: string; error: string | null; root: ArchiveRoot; stage: unknown };
   };
   assert.equal(persisted.flushIntents.length, 1);
   assert.equal(persisted.r2SegmentBuffer.length, 100);
+  assert.equal(persisted.archive.phase, "repair");
+  assert.match(persisted.archive.error ?? "", /pending witness/);
+  assert.equal(persisted.archive.root.entries, 0);
+  assert.equal(persisted.archive.stage, null);
+  const restarted = createFixture({ values: structuredClone(values), bucket });
+  await restarted.ready();
+  const unavailable = await restarted.notifier.fetch(new Request(
+    "https://journal.test/archive?runId=run-journal&after=0&limit=10",
+  ));
+  assert.equal(unavailable.status, 503);
+  assert.match((await unavailable.json() as { error: string }).error, /pending witness/);
   const after = await bucket.get(segmentKey);
   assert.ok(after);
   assert.deepEqual(new Uint8Array(await after.arrayBuffer()), new Uint8Array(existingBytes));
@@ -596,6 +609,8 @@ test("legacy gzip adoption commits the exact existing bytes before archive final
   }));
   const jsonl = events.map((event) => JSON.stringify(event)).join("\n") + "\n";
   const oldCompressedBytes = gzipSync(jsonl, { level: 1 });
+  const oldDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", oldCompressedBytes)))
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
   const values = new Map<string, unknown>([["bufferState", {
     eventBuffer: [],
     eventIdCounter: 100,
@@ -611,15 +626,29 @@ test("legacy gzip adoption commits the exact existing bytes before archive final
   const bucket = createInMemoryObjectStore();
   const segmentKey = buildRunEventSegmentKey("run-journal", 1);
   await bucket.put(segmentKey, oldCompressedBytes);
-  let v2HeadPuts = 0;
+  let finalHeadFailed = false;
   const fixture = createFixture({ values, bucket, hooks: {
-    beforePut: (key, value) => {
-      if (key === "bufferState" && value && typeof value === "object" &&
-        (value as { schemaVersion?: unknown }).schemaVersion === 2) {
-        v2HeadPuts += 1;
-        if (v2HeadPuts === 3) {
-          throw new Error("injected legacy adoption finalization failure");
-        }
+    beforePut: async (key, value) => {
+      if (finalHeadFailed || key !== "bufferState" || !value || typeof value !== "object" ||
+        (value as { schemaVersion?: unknown }).schemaVersion !== 2) return;
+      // The outer head stays v2 while migration writes additional logical v3
+      // heads. Inspect the candidate with its already staged chunks so the
+      // fault lands on the actual adoption finalization, independent of count.
+      const proposedValues = structuredClone(values);
+      proposedValues.set("bufferState", structuredClone(value));
+      const proposed = await loadNotifierSnapshot(
+        createDurableState(proposedValues).binding.storage, "run",
+      ) as {
+        r2LastFlushedSegmentIndex: number;
+        r2SegmentBuffer: unknown[];
+        flushIntents: unknown[];
+        archive?: { root: { entries: number } };
+      };
+      if (proposed.r2LastFlushedSegmentIndex === 1 &&
+        proposed.r2SegmentBuffer.length === 0 && proposed.flushIntents.length === 0 &&
+        proposed.archive?.root.entries === 1) {
+        finalHeadFailed = true;
+        throw new Error("injected legacy adoption finalization failure");
       }
     },
   } });
@@ -627,21 +656,22 @@ test("legacy gzip adoption commits the exact existing bytes before archive final
 
   await fixture.notifier.alarm();
 
-  assert.equal(v2HeadPuts, 3);
+  assert.equal(finalHeadFailed, true);
   const adopted = await loadNotifierSnapshot(fixture.binding.storage, "run") as {
     flushIntents: Array<{ origin: string; blob: { digest: string } }>;
     r2SegmentBuffer: unknown[];
     r2LastFlushedSegmentIndex: number;
     legacyPendingRunCount: number;
+    archive: { root: ArchiveRoot; stage: unknown };
   };
   assert.equal(adopted.flushIntents.length, 1);
   assert.equal(adopted.flushIntents[0]?.origin, "journal");
-  assert.equal(adopted.flushIntents[0]?.blob.digest,
-    Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", oldCompressedBytes)))
-      .map((byte) => byte.toString(16).padStart(2, "0")).join(""));
+  assert.equal(adopted.flushIntents[0]?.blob.digest, oldDigest);
   assert.equal(adopted.r2SegmentBuffer.length, 100);
   assert.equal(adopted.r2LastFlushedSegmentIndex, 0);
   assert.equal(adopted.legacyPendingRunCount, 100);
+  assert.equal(adopted.archive.root.entries, 0);
+  assert.ok(adopted.archive.stage);
   const afterAdoptionFailure = await bucket.get(segmentKey);
   assert.ok(afterAdoptionFailure);
   assert.deepEqual(new Uint8Array(await afterAdoptionFailure.arrayBuffer()),
@@ -655,10 +685,16 @@ test("legacy gzip adoption commits the exact existing bytes before archive final
     r2SegmentBuffer: unknown[];
     r2LastFlushedSegmentIndex: number;
     legacyPendingRunCount: number;
+    archive: { root: ArchiveRoot; stage: unknown };
   };
   assert.equal(finalized.flushIntents.length, 0);
   assert.equal(finalized.r2SegmentBuffer.length, 0);
   assert.equal(finalized.r2LastFlushedSegmentIndex, 1);
   assert.equal(finalized.legacyPendingRunCount, 0);
+  assert.equal(finalized.archive.root.entries, 1);
+  assert.equal(finalized.archive.stage, null);
+  assert.deepEqual((await queryArchive(cold.binding.storage,
+    finalized.archive.root, 0, 10)).descriptors.map((descriptor) => descriptor.sha256),
+  [oldDigest]);
   assert.deepEqual(await archivedIds(bucket), Array.from({ length: 100 }, (_, index) => index + 1));
 });

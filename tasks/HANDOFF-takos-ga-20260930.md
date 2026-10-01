@@ -3,6 +3,44 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
+## 最新の追加: Run archive index — 2026-10-01
+
+Takos 内部の認証済み B+tree 索引を実装した。公開 replay/SSE と InfoUnitIndexer は
+内部 `/archive` を使い、ready 後は R2 全 catalog を列挙せず必要な exact gzip だけ読む。
+挿入計画を node 書込より先に保存し、root 更新・pending prefix 除去・退役記録を同じ
+外側 v2 head へ保存する。Run の論理 snapshot は3、Notification は2。
+再起動・曖昧な head 保存・GC・途中 cursor・受理前の容量予約を検証している。
+
+50,001 個の実 gzip/key を持つ同じ Map backend で、byte-identical な旧 a841 reader は
+正しい tail event5,000,100 を得るまで51 LIST/1 GET、現在は tree4 point GET/0 LIST と
+R2 1 GETで同じ tail を得た。旧 source の50,000件切捨ては再現せず、その失敗を主張
+しない。実証したのは全 catalog 列挙の仕事量と bounded query の差で、native backend の
+容量・性能資格ではない。test/log/source hash は専用 ignored evidence に記録した。
+
+旧履歴は32 key/page・8 step/request/alarm の building から再開可能に移行する。
+不正 key/body、重複範囲、既知 pending/ring との矛盾はデータを保持して repair にする。
+元の整数 counter から全 ID の存在を推測しない。移行が証明するのは現存 body と既知
+witness であり、過去消失の復元・SQL 全 witness 照合・旧 writer 停止ではない。
+32768 cursor および圧縮/展開8 MiBの上限がある。旧200 MiB readerで読めた大きい
+segment も offline repair が必要で、その変換道具と適用・復旧の検証は未完了。
+
+独立レビューで index/GC、root/pending の atomicity、reader pagination に残る P1/P2
+は無し。local native workerd で cold `/archive` の exact digest/root を確認する。
+ACK と asynchronous offload は別なので、native fault proof は test-only waitUntil barrier
+で処理終了を待ってから観測する。待機は本番 endpoint の追加ではない。
+最終 local `bun run check` は1481 tests/241 files/10387 assertions、20 OpenTofu、全 Rust、
+必須実 Worker/SQLite/ToolExecutor/process recovery と両 build まで成功。native proof は
+20 observations/58.430s。types98/lint111 の既存 debt、未申告0、新 exemption無し。
+初回 alarm が16 stepになる失敗を旧 source で確認し、8 stepへ修正して全体 gateを再実行した。
+Docs build/diff checkも成功。exact commit/CI は専用 HDD result の新 head 記録を参照する。
+
+Main には exact-version cutover/quiescence、遅延 R2 書込/SQL照合、single-key head と
+R2/conditional-create/alarm/restart/quota の target 資格が残る。長 Run receipt、usage
+50000超の集計、owner-sub/mobile-sub、published/deployed image と real user journeyも
+未完了。source成功をこれらの証拠に流用しない。他 worktree/control/主handoff は変更しない。
+詳細: [index task](TASK-takos-ga-run-archive-index-20261001.md)、
+[保存と移行の正本](../docs/architecture/notifier-journal.md)。
+
 ## 担当と保護した作業
 
 - Takos 専任: この `dev/takos-ga-20260930-1737` branch と専用 worktree。

@@ -1,4 +1,5 @@
 import type { NotifierBlobRef } from "./notifier-journal.ts";
+import { parseRunArchiveState, type RunArchiveState } from "./run-archive-maintenance.ts";
 import {
   parseRunNotifierState,
   type RunNotifierState,
@@ -32,6 +33,7 @@ export type RunNotifierJournalState = RunNotifierState & {
   usageReceipts: UsageReceipt[];
   legacyPendingRunCount: number;
   legacyPendingUsageCount: number;
+  archive: RunArchiveState | null;
 };
 
 const BASE_KEYS = [
@@ -156,14 +158,15 @@ function usageReceipts(raw: unknown): UsageReceipt[] {
 export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalState | null {
   if (raw === undefined) return null;
   const value = object(raw, "snapshot");
-  if (value.schemaVersion !== 2) {
+  if (value.schemaVersion !== 2 && value.schemaVersion !== 3) {
     const legacy = parseRunNotifierState(raw);
     return legacy && { ...legacy, flushIntents: [], emitReceipts: [], usageReceipts: [],
       legacyPendingRunCount: legacy.r2SegmentBuffer.length,
-      legacyPendingUsageCount: legacy.usageSegmentBuffer.length };
+      legacyPendingUsageCount: legacy.usageSegmentBuffer.length, archive: null };
   }
   exactKeys(value, ["schemaVersion", ...BASE_KEYS, "flushIntents", "emitReceipts", "usageReceipts",
-    "legacyPendingRunCount", "legacyPendingUsageCount"], "snapshot.fields");
+    "legacyPendingRunCount", "legacyPendingUsageCount",
+    ...(value.schemaVersion === 3 ? ["archive"] : [])], "snapshot.fields");
   const base: Record<string, unknown> = { schemaVersion: 1 };
   for (const key of BASE_KEYS) base[key] = value[key];
   const state = parseRunNotifierState(base);
@@ -179,13 +182,35 @@ export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalSt
   const legacyPendingUsageCount = nonnegativeInt(value.legacyPendingUsageCount, "legacyPendingUsageCount");
   if (legacyPendingRunCount > state.r2SegmentBuffer.length ||
     legacyPendingUsageCount > state.usageSegmentBuffer.length) fail("legacyPending.count");
+  const intents = flushIntents(value.flushIntents, state,
+    legacyPendingRunCount, legacyPendingUsageCount);
+  const archive = value.schemaVersion === 3 ? parseRunArchiveState(value.archive) : null;
+  if (archive) {
+    if (!state.runId || archive.root.lastEventId > state.eventIdCounter) fail("archive.run frontier");
+    if (archive.phase === "ready" && state.r2SegmentBuffer.length > 0 &&
+      state.r2SegmentBuffer[0]!.event_id <= archive.root.lastEventId) fail("archive.pending frontier");
+    const stage = archive.stage;
+    if (stage) {
+      const d = stage.plan.descriptor;
+      if (d.key !== `runs/${state.runId}/events/${String(d.segmentIndex).padStart(6, "0")}.jsonl.gz` ||
+        d.lastEventId > state.eventIdCounter) fail("archive.stage identity");
+      if (stage.purpose === "flush") {
+        const intent = intents.find((entry) => entry.kind === "run");
+        if (!intent || d.key !== intent.key || d.segmentIndex !== intent.segmentIndex ||
+          d.sha256 !== intent.blob.digest || d.bytes !== intent.blob.bytes ||
+          d.count !== intent.count || d.firstEventId !== state.r2SegmentBuffer[0]?.event_id ||
+          d.lastEventId !== state.r2SegmentBuffer[intent.count - 1]?.event_id) fail("archive.stage intent");
+      } else if (!archive.build || archive.build.keys[archive.build.keyIndex] !== d.key ||
+        d.segmentIndex > state.r2LastFlushedSegmentIndex) fail("archive.stage build");
+    }
+  }
   return {
     ...state,
-    flushIntents: flushIntents(value.flushIntents, state,
-      legacyPendingRunCount, legacyPendingUsageCount),
+    flushIntents: intents,
     emitReceipts: emitReceipts(value.emitReceipts, state.eventIdCounter),
     usageReceipts: usageReceipts(value.usageReceipts),
     legacyPendingRunCount,
     legacyPendingUsageCount,
+    archive,
   };
 }

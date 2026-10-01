@@ -3,11 +3,10 @@ import { runEvents } from "../../../infra/db/schema.ts";
 import { and, asc, eq, gt } from "drizzle-orm";
 import type { Env, RunStatus } from "../../../shared/types/index.ts";
 import type { PersistedRunEvent } from "../../../application/services/offload/run-events.ts";
-import { getRunEventsAfterFromR2 } from "../../../application/services/offload/run-events.ts";
+import { getIndexedRunEventsAfter } from "../../../application/services/offload/indexed-run-events.ts";
 import { deriveTerminalStatusFromRunEvent } from "../../../application/services/run-notifier/index.ts";
 import { isRunTerminalStatus } from "../../../application/services/run-notifier/run-events-contract.ts";
 
-import { fetchWithTimeout } from "../../../application/services/execution/run-events.ts";
 import { MAX_EVENTS_PER_RESPONSE } from "../../../shared/config/limits.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 
@@ -38,16 +37,6 @@ const SSE_POLL_INTERVAL_MS = 1000;
 const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 const sseEncoder = new TextEncoder();
 
-function stringifyPersistedData(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    // Circular references or non-serializable values -- coerce to string
-    return String(value);
-  }
-}
-
 function formatRunEvents(
   persisted: PersistedRunEvent[],
   runId: string,
@@ -77,39 +66,6 @@ export function deriveRunStatusFromTimelineEvents(
     }
   }
   return derivedStatus ?? fallbackStatus;
-}
-
-async function getNotifierBufferedEvents(
-  env: Env,
-  runId: string,
-  afterEventId: number,
-): Promise<PersistedRunEvent[]> {
-  const namespace = env.RUN_NOTIFIER;
-  const id = namespace.idFromName(runId);
-  const stub = namespace.get(id);
-  const res = await fetchWithTimeout(
-    stub,
-    new Request(`https://internal.do/events?after=${afterEventId}`, {}),
-  );
-  if (!res.ok) return [];
-  const json = (await res.json()) as {
-    events?: Array<{
-      id: number;
-      type: string;
-      data: unknown;
-      timestamp: number;
-      event_id?: string;
-    }>;
-  };
-  const events = Array.isArray(json.events) ? json.events : [];
-  return events
-    .filter((e) => typeof e?.id === "number" && Number.isFinite(e.id))
-    .map((e) => ({
-      event_id: e.id,
-      type: e.type,
-      data: stringifyPersistedData(e.data),
-      created_at: new Date(e.timestamp).toISOString(),
-    }));
 }
 
 async function fetchRunEventsAfter(
@@ -146,26 +102,17 @@ async function fetchRunEventsAfter(
     });
   }
 
-  // Merge with object store offload segments and DO ring buffer (if available)
+  // The durable index is the replay authority for offloaded history. SQL still
+  // contributes terminal evidence when a notifier write failed after commit.
   if (env.TAKOS_OFFLOAD) {
-    const r2Events = await getRunEventsAfterFromR2(
+    const indexedEvents = await getIndexedRunEventsAfter(
+      env.RUN_NOTIFIER,
       env.TAKOS_OFFLOAD,
       runId,
       afterEventId,
       limit ?? MAX_EVENTS_PER_RESPONSE,
     );
-    for (const e of r2Events) byId.set(e.event_id, e);
-
-    try {
-      const buffered = await getNotifierBufferedEvents(
-        env,
-        runId,
-        afterEventId,
-      );
-      for (const e of buffered) byId.set(e.event_id, e);
-    } catch {
-      // DO buffer unavailable — SQL store and object store data is sufficient
-    }
+    for (const e of indexedEvents) byId.set(e.event_id, e);
   }
 
   const ordered = Array.from(byId.values()).sort(

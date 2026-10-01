@@ -524,31 +524,37 @@ export abstract class NotifierBase {
     },
   ): Promise<Response> {
     let committedEventId: number | undefined;
+    await this.awaitInitialized();
+    if (
+      typeof input.type !== "string" || input.type.length === 0 ||
+      input.type.length > 256
+    ) {
+      return jsonResponse({ success: false, error: "Invalid type" }, 400);
+    }
+
+    const serializedData = JSON.stringify(input.data);
+    if (serializedData === undefined) {
+      return jsonResponse({ success: false, error: "Data is required" }, 400);
+    }
+    if (serializedData.length >= 1_048_576) {
+      return jsonResponse({ success: false, error: "Data too large" }, 400);
+    }
+
+    const preferredEventId = parseEventId(input.event_id);
+    if (input.event_id !== undefined &&
+      ((typeof input.event_id !== "number" &&
+        (typeof input.event_id !== "string" || !/^\d+$/.test(input.event_id))) ||
+        preferredEventId === null || !Number.isSafeInteger(Number(input.event_id)) ||
+        Number(input.event_id) <= 0)) {
+      return jsonResponse({ success: false, error: "Invalid event ID" }, 400);
+    }
+
+    // Domain bootstrap may perform remote I/O. Keep it outside serialization,
+    // after pure request checks and before the final state-dependent validation.
+    const preparation = await this.prepareEmit(input);
+    if (preparation) return preparation;
     const response = await this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
-      if (
-        typeof input.type !== "string" || input.type.length === 0 ||
-        input.type.length > 256
-      ) {
-        return jsonResponse({ success: false, error: "Invalid type" }, 400);
-      }
-
-      const serializedData = JSON.stringify(input.data);
-      if (serializedData === undefined) {
-        return jsonResponse({ success: false, error: "Data is required" }, 400);
-      }
-      if (serializedData.length >= 1_048_576) {
-        return jsonResponse({ success: false, error: "Data too large" }, 400);
-      }
-
-      const preferredEventId = parseEventId(input.event_id);
-      if (input.event_id !== undefined &&
-        ((typeof input.event_id !== "number" &&
-          (typeof input.event_id !== "string" || !/^\d+$/.test(input.event_id))) ||
-          preferredEventId === null || !Number.isSafeInteger(Number(input.event_id)) ||
-          Number(input.event_id) <= 0)) {
-        return jsonResponse({ success: false, error: "Invalid event ID" }, 400);
-      }
 
       // Domain-specific validation before mutating state
       const rejection = await this.validateEmit(input);
@@ -610,6 +616,12 @@ export abstract class NotifierBase {
     _input: { type: string; data: unknown; [key: string]: unknown },
     _prospectiveBuffer: RingBufferEvent[],
     _eventId: number,
+  ): Promise<Response | null> {
+    return null;
+  }
+
+  protected async prepareEmit(
+    _input: { type: string; data: unknown; event_id?: number | string; [key: string]: unknown },
   ): Promise<Response | null> {
     return null;
   }

@@ -92,6 +92,11 @@ function createDurableObjectState(
       async getAlarm(): Promise<number | null> {
         return null;
       },
+      async delete(key: string | string[]): Promise<number> {
+        let deleted = 0;
+        for (const entry of Array.isArray(key) ? key : [key]) if (values.delete(entry)) deleted++;
+        return deleted;
+      },
     },
     blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
       const operation = concurrencyQueue.then(callback);

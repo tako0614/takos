@@ -104,14 +104,14 @@ function createSqlSpy() {
   return { db, calls: () => calls };
 }
 
-function createFactories(bucket = createR2Spy().bucket) {
+function createFactories(bucket: ReturnType<typeof createR2Spy>["bucket"] | null = createR2Spy().bucket) {
   const sql = createSqlSpy();
   return {
     sql,
     run: (state: StorageFixture["binding"]) =>
       new RunNotifierDO(state, {
         DB: sql.db,
-        TAKOS_OFFLOAD: bucket,
+        ...(bucket ? { TAKOS_OFFLOAD: bucket } : {}),
       } as never),
     notification: (state: StorageFixture["binding"]) =>
       new NotificationNotifierDO(state),
@@ -306,7 +306,10 @@ async function expectReady(factory: Factory, stored: unknown) {
 }
 
 test("both notifier classes accept legacy optional fields omitted and resume from the complete chunked journal", async () => {
-  const { run, notification } = createFactories();
+  // This fixture intentionally has only a ring, without any archive body or
+  // pending witness. Verify legacy schema compatibility with offload disabled;
+  // indexed migration independently rejects a missing known archive witness.
+  const { run, notification } = createFactories(null);
   const legacyRun = await expectReady(run, {
     eventBuffer: [validRingEvent(1)],
     eventIdCounter: 1,

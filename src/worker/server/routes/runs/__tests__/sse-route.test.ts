@@ -11,8 +11,12 @@ import { AppError } from "@takos/worker-platform-utils/errors";
 import { createSseNotifierService } from "../../../../worker-emulation/sse-notifier.ts";
 import { createRunSseRouter } from "../sse.ts";
 import { MAX_EVENTS_PER_RESPONSE } from "../../../../shared/config/limits.ts";
+import { gzipCompressString } from "../../../../shared/utils/gzip.ts";
 
-async function fixture(withNotifier = true) {
+async function fixture(
+  withNotifier = true,
+  indexedMessage?: { content: string },
+) {
   const client = createClient({ url: ":memory:" });
   const queries: Array<{ sql: string; params: unknown[] }> = [];
   const db = drizzle(client, {
@@ -121,8 +125,71 @@ async function fixture(withNotifier = true) {
   // A fresh notifier represents the process after restart: SQL survives,
   // process-local notification history does not.
   const notifier = withNotifier ? await createSseNotifierService() : undefined;
+  const archiveEvent = indexedMessage
+    ? {
+        event_id: 42,
+        type: "message",
+        data: JSON.stringify({ content: indexedMessage.content }),
+        created_at: createdAt,
+      }
+    : undefined;
+  const archiveBytes = archiveEvent
+    ? new Uint8Array(await gzipCompressString(`${JSON.stringify(archiveEvent)}\n`))
+    : undefined;
+  const archiveKey = "runs/run-restarted/events/000001.jsonl.gz";
+  const archiveDigest = archiveBytes
+    ? Array.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", archiveBytes)),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      ).join("")
+    : undefined;
+  const runNotifier = archiveEvent && archiveBytes && archiveDigest
+    ? {
+        idFromName: (name: string) => name,
+        get: () => ({
+          fetch: async (request: Request) => {
+            const url = new URL(request.url);
+            expect(url.pathname).toBe("/archive");
+            expect(url.searchParams.get("runId")).toBe("run-restarted");
+            return Response.json({
+              schemaVersion: 1,
+              runId: "run-restarted",
+              descriptors: [{
+                key: archiveKey,
+                segmentIndex: 1,
+                firstEventId: 42,
+                lastEventId: 42,
+                count: 1,
+                sha256: archiveDigest,
+                bytes: archiveBytes.byteLength,
+              }],
+              pending: [],
+              hasMore: false,
+            });
+          },
+        }),
+      }
+    : undefined;
   const env = {
     DB: db,
+    ...(runNotifier ? { RUN_NOTIFIER: runNotifier } : {}),
+    ...(archiveBytes
+      ? {
+          TAKOS_OFFLOAD: {
+            list: async () => {
+              throw new Error("indexed replay must not list R2");
+            },
+            get: async (key: string) => key === archiveKey
+              ? {
+                  key,
+                  size: archiveBytes.byteLength,
+                  body: new Blob([archiveBytes]).stream(),
+                  arrayBuffer: async () => archiveBytes.slice().buffer,
+                }
+              : null,
+          },
+        }
+      : {}),
     PLATFORM: {
       source: "node",
       bindings: {},
@@ -206,6 +273,21 @@ test("Node SSE replays durable completion after notifier restart and closes", as
     );
     expect(text).toContain("id: 43\nevent: completed");
     expect(text.indexOf("id: 42\n")).toBeLessThan(text.indexOf("id: 43\n"));
+  } finally {
+    await f.close();
+  }
+});
+
+test("Node SSE replays indexed archive history and keeps SQL terminal fallback", async () => {
+  const f = await fixture(true, { content: "indexed archived answer" });
+  try {
+    const text = await readTerminalStream(
+      await f.request("", { "Last-Event-ID": "41" }),
+    );
+    expect(text).toContain(
+      'id: 42\nevent: message\ndata: {"content":"indexed archived answer"}',
+    );
+    expect(text).toContain("id: 43\nevent: completed");
   } finally {
     await f.close();
   }

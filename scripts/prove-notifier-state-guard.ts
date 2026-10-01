@@ -64,6 +64,7 @@ class Harness {
     this.Notifier = Notifier;
     this.kind = kind;
     this.notifier = undefined;
+    this.background = new Set();
     this.instanceId = crypto.randomUUID();
   }
   createNotifier() {
@@ -109,8 +110,14 @@ class Harness {
         return bind(target, property);
       }
     });
+    const background = this.background;
     const state = new Proxy(this.state, {
       get(target, property) {
+        if (property === "waitUntil") return operation => {
+          background.add(operation);
+          void operation.finally(() => background.delete(operation)).catch(() => {});
+          return target.waitUntil(operation);
+        };
         return property === "storage" ? storage : bind(target, property);
       }
     });
@@ -161,6 +168,12 @@ class Harness {
     if (url.pathname === "/control/inspect") {
       const value = await this.state.storage.get("bufferState");
       return Response.json({ exists: value !== undefined, value: value ?? null, instanceId: this.instanceId });
+    }
+    if (url.pathname === "/control/settled") {
+      // An ACK precedes asynchronous offload. Wait for its recorded lifecycle
+      // before inspecting a fault; this route exists only in the test harness.
+      while (this.background.size) await Promise.allSettled([...this.background]);
+      return Response.json({ settled: true });
     }
     if (url.pathname === "/control/snapshot") {
       return Response.json({ value: await loadNotifierSnapshot(this.state.storage, this.kind) });
@@ -318,6 +331,12 @@ async function decodedRunState(mf: MiniflareInstance, name: string): Promise<Rec
   return await controlValue<Record<string, unknown>>(mf, name, "/control/snapshot");
 }
 
+async function settlePostCommit(mf: MiniflareInstance, name: string): Promise<void> {
+  const settled = await request(mf, "run", name, "/control/settled");
+  assert(settled.status === 200,
+    `run/${name}: post-commit lifecycle status${settled.status}: ${await settled.text()}`);
+}
+
 async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
   const name = `run-head-retry-${randomUUID().slice(0, 8)}`;
   await seed(mf, "run", name, runSnapshot(name));
@@ -326,6 +345,7 @@ async function proveHeadFailureRetry(mf: MiniflareInstance): Promise<string> {
   const first = await request(mf, "run", name, "/do/emit", {
     type: "completed", data: { attempt: "first" }, runId: name, dedup_key: "head-retry-first",
   });
+  await settlePostCommit(mf, name);
   const fault = await controlValue<{
     fired: boolean; successfulR2Puts: number; headFailures: number;
   }>(mf, name, "/control/head-fault");
@@ -371,6 +391,7 @@ async function proveConditionalCreateRace(mf: MiniflareInstance, competing: Uint
   const emit = await request(mf, "run", name, "/do/emit", {
     type: "completed", data: { intended: true }, runId: name,
   });
+  await settlePostCommit(mf, name);
   const race = await controlValue<{
     injected: boolean; competingBytes: number; conditionalReturnedNull: boolean | null;
   }>(mf, name, "/control/create-race");
@@ -501,8 +522,18 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
     assert(duplicate.status === 200 && (await duplicate.json() as { duplicate?: boolean }).duplicate === true,
       "run: cold replacement lost dedup");
     assert(hash(await archivedBytes(mf, name)) === hash(archive), "run: cold replacement changed original archive");
+    const indexed = await request(mf, kind, name,
+      `/do/archive?runId=${name}&after=99&limit=2`);
+    assert(indexed.status === 200, "run: cold native archive query failed");
+    const page = await indexed.json() as { descriptors: Array<{ key: string; sha256: string;
+      firstEventId: number; lastEventId: number }>; pending: unknown[]; hasMore: boolean };
+    assert(page.descriptors.length === 2 && !page.hasMore && page.pending.length === 0 &&
+      page.descriptors[0]?.key === `runs/${name}/events/000001.jsonl.gz` &&
+      page.descriptors[0]?.sha256 === hash(archive) &&
+      page.descriptors[0]?.lastEventId === 100 && page.descriptors[1]?.firstEventId === 101,
+      "run: native indexed root/digest changed through eviction");
   }
-  return `${kind}/historical-unversioned: event 101 persisted as v2 and survived native eviction${kind === "run" ? ", dedup and R2 retained" : ""}`;
+  return `${kind}/historical-unversioned: event 101 persisted as v2 and survived native eviction${kind === "run" ? ", dedup and R2 retained; indexed root2 retained" : ""}`;
 }
 
 async function proveChunkedState(mf: MiniflareInstance): Promise<string> {
@@ -743,6 +774,7 @@ export async function proveNotifierStateGuard(
       const base = kind === "run" ? runSnapshot("unused") : notificationSnapshot();
       for (const [label, value] of [
         ["future-v2", { ...base, schemaVersion: 2 }],
+        ["future-v4", { ...base, schemaVersion: 4 }],
         ["null", null],
         ["false", false],
         ["zero", 0],

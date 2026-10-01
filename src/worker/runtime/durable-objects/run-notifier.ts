@@ -49,12 +49,22 @@ import {
   type RunNotifierJournalState,
   type UsageReceipt,
 } from "./run-notifier-journal-state.ts";
+import { inspectRunArchiveSegment, readArchiveObjectBytes, RunArchiveIntegrityError } from "../../application/services/offload/indexed-run-events.ts";
+import {
+  prepareArchiveInsert, queryArchive, stageArchiveInsert, hashArchiveJSON,
+} from "./run-archive-index.ts";
+import {
+  collectRunArchiveGarbage, newRunArchiveState, prepareArchiveStage,
+  stageArchiveRetirement, type RunArchiveState,
+} from "./run-archive-maintenance.ts";
 
 const MAX_RUN_ID_LENGTH = 64;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const MAX_FLUSH_PLAIN_BYTES = 256 * 1024;
 const RECOVERY_ALARM_DELAY_MS = 2_000;
-const SNAPSHOT_RESERVE_BYTES = 128 * 1024;
+// At most33 node strings of32KiB, including their JSON escaping, plus bounded
+// plan/retirement metadata. Reserve the worst case before acknowledging input.
+const SNAPSHOT_RESERVE_BYTES = 3 * 1024 * 1024;
 const HEX_ZERO = "0".repeat(64);
 const REMOTE_IO_DEADLINE_MS = 5_000;
 
@@ -136,6 +146,8 @@ export class RunNotifierDO extends NotifierBase {
   private legacyPendingUsageCount = 0;
   private needsRecoveryDrain = false;
   private pumpPromise: Promise<void> | null = null;
+  private archive: RunArchiveState | null = null;
+  private archiveWorkPromise: Promise<void> | null = null;
 
   constructor(state: DurableObjectStateBinding, env: Env) {
     super(state);
@@ -143,9 +155,10 @@ export class RunNotifierDO extends NotifierBase {
     this.offloadBucket = env.TAKOS_OFFLOAD;
   }
 
-  private snapshot(): RunNotifierJournalState & { schemaVersion: 2 } {
+  private snapshot(): RunNotifierJournalState & { schemaVersion: 2 | 3 } {
     return {
-      schemaVersion: 2,
+      schemaVersion: this.archive ? 3 : 2,
+      ...(this.archive ? { archive: this.archive } : {}),
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       runId: this.runId,
@@ -161,7 +174,7 @@ export class RunNotifierDO extends NotifierBase {
       usageReceipts: this.usageReceipts,
       legacyPendingRunCount: this.legacyPendingRunCount,
       legacyPendingUsageCount: this.legacyPendingUsageCount,
-    };
+    } as RunNotifierJournalState & { schemaVersion: 2 | 3 };
   }
 
   private liveBlobs(): NotifierBlobRef[] {
@@ -185,6 +198,15 @@ export class RunNotifierDO extends NotifierBase {
           throw new Error("Invalid persisted run notifier journal: flushIntent.prefix");
         }
       }
+      if (stored.archive?.stage) {
+        const stage = stored.archive.stage;
+        const expected = await prepareArchiveInsert(this.state.storage,
+          stage.plan.previousRoot, stage.plan.descriptor);
+        if (JSON.stringify(expected) !== JSON.stringify(stage.plan) ||
+          stage.gc && await hashArchiveJSON(stage.gc.json) !== stage.gc.hash) {
+          throw new Error("Invalid persisted run archive insertion plan");
+        }
+      }
     }
     this.eventBuffer = stored?.eventBuffer ?? [];
     this.eventIdCounter = stored?.eventIdCounter ?? 0;
@@ -201,8 +223,9 @@ export class RunNotifierDO extends NotifierBase {
     this.usageReceipts = stored?.usageReceipts ?? [];
     this.legacyPendingRunCount = stored?.legacyPendingRunCount ?? 0;
     this.legacyPendingUsageCount = stored?.legacyPendingUsageCount ?? 0;
+    this.archive = stored?.archive ?? null;
     this.needsRecoveryDrain = !!stored && this.hasPending();
-    if (this.hasPending()) await this.armRecoveryAlarm();
+    if (this.hasPending() || this.hasArchiveWork()) await this.armRecoveryAlarm();
   }
 
   private hasPending(): boolean {
@@ -210,8 +233,19 @@ export class RunNotifierDO extends NotifierBase {
       this.usageSegmentBuffer.length > 0;
   }
 
+  private hasArchiveWork(): boolean {
+    return !!this.archive && (this.archive.phase === "building" ||
+      this.archive.stage !== null || this.archive.gcTopHash !== null ||
+      this.archive.gcCleanupHash !== null);
+  }
+
+  private archiveNeedsRepair(): boolean {
+    return this.archive?.phase === "repair";
+  }
+
   private async armRecoveryAlarm(): Promise<void> {
-    if (!this.hasPending()) return;
+    if (this.archiveNeedsRepair()) return;
+    if (!this.hasPending() && !this.hasArchiveWork()) return;
     const when = Date.now() + RECOVERY_ALARM_DELAY_MS;
     const existing = await this.state.storage.getAlarm();
     if (existing === null || existing <= Date.now() || existing > when) {
@@ -283,8 +317,11 @@ export class RunNotifierDO extends NotifierBase {
   }
 
   protected override handleExtraRoutes(
-    request: Request, _url: URL, path: string,
+    request: Request, url: URL, path: string,
   ): Response | Promise<Response> | null {
+    if (path === "/archive" && request.method === "GET") {
+      return this.handleArchiveQuery(url);
+    }
     if (path !== "/usage" || request.method !== "POST") return null;
     return (async () => {
       let body: UsageInput;
@@ -322,6 +359,10 @@ export class RunNotifierDO extends NotifierBase {
   }
 
   protected override async validateEmit(input: EmitInput): Promise<Response | null> {
+    return this.validateRunEmit(input, true);
+  }
+
+  private async validateRunEmit(input: EmitInput, requireReady: boolean): Promise<Response | null> {
     if (input.dedup_key !== undefined &&
       (typeof input.dedup_key !== "string" || !input.dedup_key ||
         input.dedup_key !== input.dedup_key.trim() || input.dedup_key.length > 512)) {
@@ -354,7 +395,40 @@ export class RunNotifierDO extends NotifierBase {
         return jsonResponse({ success: true, duplicate: true });
       }
     }
+    if (requireReady && this.offloadBucket && this.archive && this.archive.phase !== "ready") {
+      return jsonResponse({ success: false, error: "Run archive is unavailable for writes" }, 503);
+    }
     return null;
+  }
+
+  protected override async prepareEmit(input: EmitInput): Promise<Response | null> {
+    if (!this.offloadBucket) return null;
+    const runId = this.runId ?? input.runId;
+    if (input.runId !== undefined && this.runId && input.runId !== this.runId) {
+      return jsonResponse({ success: false, error: "runId mismatch" }, 409);
+    }
+    if (!isValidRunId(runId)) {
+      return jsonResponse({ success: false, error: "Invalid run identity" }, 400);
+    }
+    // Do not bind an invalid request or change an already deduplicated result.
+    const rejection = await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (input.dedup_key !== undefined && (typeof input.dedup_key !== "string" ||
+        !input.dedup_key || input.dedup_key !== input.dedup_key.trim() || input.dedup_key.length > 512)) {
+        return jsonResponse({ success: false, error: "Invalid dedup_key" }, 400);
+      }
+      if (this.runId && this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
+      // Validate receipts and exhausted sequences before bootstrap writes. A
+      // building archive may progress, but a rejected request must not bind it.
+      const validation = await this.validateRunEmit(input, false);
+      if (validation) return validation;
+      if (this.eventIdCounter === Number.MAX_SAFE_INTEGER) {
+        return jsonResponse({ success: false, error: "Event sequence exhausted" }, 503);
+      }
+      return null;
+    });
+    if (rejection) return rejection;
+    return this.ensureArchive(runId);
   }
 
   protected override async validateEmitCapacity(
@@ -394,7 +468,12 @@ export class RunNotifierDO extends NotifierBase {
     }
     try {
       parseRunNotifierJournalState(draft);
-      assertNotifierSnapshotBudget(draft, refs, SNAPSHOT_RESERVE_BYTES);
+      // Reserve both bytes and rounded chunk descriptors for a future plan.
+      // Counting only bytes could acknowledge data whose later plan exceeds
+      // the128-reference head bound even while its total bytes still fit.
+      refs.push(prospectiveBlobRef(this.offloadBucket && nextRunId
+        ? SNAPSHOT_RESERVE_BYTES : 128 * 1024));
+      assertNotifierSnapshotBudget(draft, refs);
     } catch (error) {
       return jsonResponse({ success: false,
         error: error instanceof NotifierCapacityError ? error.message : "Run journal capacity exhausted" }, 503);
@@ -456,6 +535,212 @@ export class RunNotifierDO extends NotifierBase {
 
   private intent(kind: RunFlushKind): RunFlushIntent | undefined {
     return this.flushIntents.find((entry) => entry.kind === kind);
+  }
+
+  private async commitArchive(next: RunArchiveState): Promise<void> {
+    this.archive = next;
+    try {
+      await this.persistState();
+    } catch (error) {
+      await this.recoverPersistedState(error);
+      throw error;
+    }
+  }
+
+  private async ensureArchive(runId: string): Promise<Response | null> {
+    if (!this.offloadBucket) return jsonResponse({ error: "Run archive unavailable" }, 503);
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId && this.runId !== runId) throw new Error("Run archive identity mismatch");
+      if (!this.archive) {
+        this.runId = runId;
+        await this.commitArchive(newRunArchiveState());
+      }
+    });
+    // An empty fresh archive becomes ready in this request, before accepting
+    // its first event. A lost head with existing objects is never assumed fresh.
+    const started = Date.now();
+    for (let step = 0; step < 8 && Date.now() - started < 20_000 &&
+      this.archive?.phase === "building"; step++) {
+      try {
+        await this.advanceArchive();
+      } catch (error) {
+        if (!this.archiveNeedsRepair()) throw error;
+        break;
+      }
+    }
+    return this.archive?.phase === "ready" ? null : jsonResponse({
+      error: this.archive?.error ?? "Run archive index is building; retry later",
+    }, 503);
+  }
+
+  private async handleArchiveQuery(url: URL): Promise<Response> {
+    const runId = url.searchParams.get("runId");
+    const after = this.parseReplayAfter(url.searchParams.get("after"));
+    const rawLimit = url.searchParams.get("limit") ?? "500";
+    const limit = /^\d+$/.test(rawLimit) ? Number(rawLimit) : NaN;
+    if (!isValidRunId(runId) || after === null || !Number.isSafeInteger(limit) || limit < 1 || limit > 2001) {
+      return jsonResponse({ error: "Invalid archive query" }, 400);
+    }
+    if (this.runId && this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
+    const unavailable = await this.ensureArchive(runId);
+    if (unavailable) return unavailable;
+    return this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (!this.archive || this.archive.phase !== "ready") return jsonResponse({ error: "Archive unavailable" }, 503);
+      const page = await queryArchive(this.state.storage, this.archive.root, after, Math.min(limit, 512));
+      // Pending follows the whole finalized catalog, not merely this page.
+      // Returning it before omitted descriptors would let a reader skip history.
+      const pending = page.hasMore ? [] : this.r2SegmentBuffer.filter((event) => event.event_id > after).slice(0, limit);
+      const morePending = !page.hasMore && this.r2SegmentBuffer.filter((event) => event.event_id > after).length > pending.length;
+      return jsonResponse({ schemaVersion: 1, runId, descriptors: page.descriptors,
+        pending, hasMore: page.hasMore || morePending });
+    });
+  }
+
+  private advanceArchive(): Promise<void> {
+    if (this.archiveWorkPromise) return this.archiveWorkPromise;
+    const work = this.advanceArchiveStep().catch(async (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      if (error instanceof RunArchiveIntegrityError || error instanceof SyntaxError || code === "Z_DATA_ERROR" ||
+        /repair required|migration repair|pagination failed|page capacity|Invalid run archive/i.test(message)) {
+        await this.state.blockConcurrencyWhile(async () => {
+          await this.awaitInitialized();
+          if (this.archive?.phase === "building") await this.commitArchive({
+            ...this.archive, phase: "repair", error: `Archive migration requires repair: ${message}`.slice(0, 512),
+          });
+        });
+      }
+      throw error;
+    });
+    this.archiveWorkPromise = work;
+    void work.finally(() => {
+      if (this.archiveWorkPromise === work) this.archiveWorkPromise = null;
+    }).catch(() => {});
+    return work;
+  }
+
+  private async finishArchiveStage(): Promise<void> {
+    const archive = this.archive;
+    if (!archive?.stage) return;
+    const stage = archive.stage;
+    await stageArchiveInsert(this.state.storage, stage.plan);
+    await stageArchiveRetirement(this.state.storage, stage);
+    const next = { ...archive, root: stage.plan.root, stage: null,
+      gcTopHash: stage.gc?.hash ?? archive.gcTopHash,
+      gcRecords: archive.gcRecords + (stage.gc ? 1 : 0) };
+    if (stage.purpose === "build") {
+      if (!next.build) throw new Error("Archive build frontier missing");
+      next.build = { ...next.build, keyIndex: next.build.keyIndex + 1,
+        scanned: next.build.scanned + 1 };
+    }
+    await this.commitArchive(next);
+  }
+
+  private async advanceArchiveStep(): Promise<void> {
+    if (!this.offloadBucket || !this.runId || this.archive?.phase !== "building") return;
+    // Finish durable work without another R2 read after a cold replacement.
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.archive?.stage?.purpose === "build") await this.finishArchiveStage();
+      if (this.archive && !this.archive.stage) await collectRunArchiveGarbage(
+        this.state.storage, this.archive, (next) => this.commitArchive(next),
+      );
+    });
+    const before = this.archive;
+    const build = before?.build;
+    if (!before || before.phase !== "building" || !build) return;
+    if (!build.pageLoaded) {
+      const page = await withRemoteDeadline(this.offloadBucket.list({
+        prefix: `runs/${this.runId}/events/`, cursor: build.cursor ?? undefined, limit: 32,
+      }), "Archive migration list");
+      if (page.objects.length > 32) throw new Error("Archive migration page capacity exceeded");
+      const keys = page.objects.map((object) => object.key);
+      const nextCursor = page.truncated ? page.cursor : null;
+      const nextHash = nextCursor ? await hashArchiveJSON(nextCursor) : null;
+      if (page.truncated && (!nextCursor || nextCursor === build.cursor ||
+        nextHash && build.seenCursorHashes.includes(nextHash))) {
+        throw new Error("Archive migration pagination failed to progress");
+      }
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.archive !== before) return;
+        await this.commitArchive({ ...before, build: { ...build, keys, keyIndex: 0,
+          pageLoaded: true, nextCursor: nextCursor ?? null, truncated: page.truncated,
+          seenCursorHashes: nextHash ? [...build.seenCursorHashes, nextHash] : build.seenCursorHashes } });
+      });
+    }
+    const current = this.archive;
+    const active = current?.build;
+    if (!current || current.phase !== "building" || !active) return;
+    if (active.keyIndex === active.keys.length) {
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.archive !== current) return;
+        if (!active.truncated) {
+          // Retained ring entries outside pending must have a matching archive
+          // record. Preferred IDs can jump: absence of an arbitrary ID is not loss.
+          for (const event of this.eventBuffer) {
+            if (this.r2SegmentBuffer.some((pending) => pending.event_id === event.id)) continue;
+            if (!active.ringWitnesses.includes(event.id)) {
+              throw new Error("Known Run ring event is missing from legacy archive; repair required");
+            }
+          }
+          await this.commitArchive({ ...current, phase: "ready", build: null });
+        } else {
+          await this.commitArchive({ ...current, build: { ...active, cursor: active.nextCursor,
+            keys: [], keyIndex: 0, nextCursor: null, truncated: false, pageLoaded: false } });
+        }
+      });
+      return;
+    }
+    const key = active.keys[active.keyIndex]!;
+    const match = key.match(new RegExp(`^runs/${this.runId}/events/(\\d+)\\.jsonl\\.gz$`));
+    const segmentIndex = match ? Number(match[1]) : NaN;
+    if (!Number.isSafeInteger(segmentIndex) || segmentIndex < 1 ||
+      key !== buildRunEventSegmentKey(this.runId, segmentIndex)) {
+      throw new Error("Noncanonical legacy archive key; repair required");
+    }
+    const object = await withRemoteDeadline(this.offloadBucket.get(key), "Archive migration GET");
+    if (!object) throw new Error("Legacy archive object disappeared; repair required");
+    const bytes = await withRemoteDeadline(readArchiveObjectBytes(object), "Archive migration body");
+    const { plain, descriptor, events } = await inspectRunArchiveSegment(bytes, key, segmentIndex, this.runId);
+    if (descriptor.lastEventId > this.eventIdCounter) throw new Error("Legacy archive exceeds accepted counter; repair required");
+    for (const event of events) {
+      const ring = this.eventBuffer.find((entry) => entry.id === event.event_id);
+      if (ring && (ring.type !== event.type || this.stringifyPersistedData(ring.data) !== event.data)) {
+        throw new Error("Legacy archive conflicts with retained ring; repair required");
+      }
+    }
+    const ringWitnesses = [...new Set([...active.ringWitnesses,
+      ...events.filter((event) => this.eventBuffer.some((ring) => ring.id === event.event_id)).map((event) => event.event_id)])];
+    if (segmentIndex > this.r2LastFlushedSegmentIndex) {
+      const intent = this.intent("run");
+      const expectedKey = intent?.key ?? buildRunEventSegmentKey(this.runId,
+        Math.max(this.r2SegmentIndex, this.r2LastFlushedSegmentIndex + 1,
+          segmentIndexForEventId(this.r2SegmentBuffer[0]?.event_id ?? 1)));
+      const pending = this.r2SegmentBuffer.slice(0, events.length);
+      if (key !== expectedKey || pending.length !== events.length ||
+        jsonl(pending) !== plain || intent &&
+        (intent.blob.digest !== descriptor.sha256 && intent.origin !== "legacy")) {
+        throw new Error("Uncommitted legacy archive object lacks a pending witness; repair required");
+      }
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.archive === current) await this.commitArchive({ ...current,
+          build: { ...active, ringWitnesses, keyIndex: active.keyIndex + 1, scanned: active.scanned + 1 } });
+      });
+      return;
+    }
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.archive !== current) return;
+      const plan = await prepareArchiveInsert(this.state.storage, current.root, descriptor);
+      const stage = await prepareArchiveStage(current, "build", plan);
+      await this.commitArchive({ ...current, build: { ...active, ringWitnesses }, stage });
+      await this.finishArchiveStage();
+    });
   }
 
   private freezePrefix<T>(events: T[], maxEntries: number): T[] {
@@ -527,7 +812,7 @@ export class RunNotifierDO extends NotifierBase {
     const bytes = await readNotifierBlob(this.state.storage, intent.blob);
     const existing = await withRemoteDeadline(this.offloadBucket.get(intent.key), "R2 get");
     if (existing) {
-      const current = await withRemoteDeadline(existing.arrayBuffer(), "R2 body read");
+      const current = await withRemoteDeadline(readArchiveObjectBytes(existing), "R2 body read");
       if (current.byteLength !== intent.blob.bytes ||
         await sha256(current) !== intent.blob.digest) {
         // A v2 intent is fenced by exact bytes. Only a marked v1 recovery
@@ -580,7 +865,7 @@ export class RunNotifierDO extends NotifierBase {
       }), "R2 put");
       const readback = await withRemoteDeadline(this.offloadBucket.get(intent.key), "R2 readback");
       const written = readback
-        ? await withRemoteDeadline(readback.arrayBuffer(), "R2 readback body") : null;
+        ? await withRemoteDeadline(readArchiveObjectBytes(readback), "R2 readback body") : null;
       if (!written || written.byteLength !== intent.blob.bytes ||
         await sha256(written) !== intent.blob.digest) {
         throw new Error(`Archive write verification failed: ${intent.key}`);
@@ -592,6 +877,29 @@ export class RunNotifierDO extends NotifierBase {
       if (!current || current.key !== intent.key ||
         current.blob.digest !== intent.blob.digest) return;
       if (intent.kind === "run") {
+        if (!this.archive || this.archive.phase !== "ready") throw new Error("Archive index is not ready");
+        if (!this.archive.stage) {
+          await collectRunArchiveGarbage(this.state.storage, this.archive,
+            (next) => this.commitArchive(next));
+          const archive = this.archive;
+          const prefix = this.r2SegmentBuffer.slice(0, intent.count);
+          const descriptor = { key: intent.key, segmentIndex: intent.segmentIndex,
+            firstEventId: prefix[0]!.event_id, lastEventId: prefix.at(-1)!.event_id,
+            count: intent.count, sha256: intent.blob.digest, bytes: intent.blob.bytes };
+          const plan = await prepareArchiveInsert(this.state.storage, archive.root, descriptor);
+          const stage = await prepareArchiveStage(archive, "flush", plan);
+          await this.commitArchive({ ...archive, stage });
+        }
+        const archive = this.archive;
+        const stage = archive.stage;
+        if (!stage || stage.purpose !== "flush" || stage.plan.descriptor.key !== intent.key) {
+          throw new Error("Archive insertion frontier mismatch");
+        }
+        await stageArchiveInsert(this.state.storage, stage.plan);
+        await stageArchiveRetirement(this.state.storage, stage);
+        this.archive = { ...archive, root: stage.plan.root, stage: null,
+          gcTopHash: stage.gc?.hash ?? archive.gcTopHash,
+          gcRecords: archive.gcRecords + (stage.gc ? 1 : 0) };
         this.r2SegmentBuffer = this.r2SegmentBuffer.slice(intent.count);
         this.legacyPendingRunCount = Math.max(0, this.legacyPendingRunCount - intent.count);
         this.r2LastFlushedSegmentIndex = Math.max(this.r2LastFlushedSegmentIndex, intent.segmentIndex);
@@ -615,6 +923,10 @@ export class RunNotifierDO extends NotifierBase {
   private pump(): Promise<void> {
     if (this.pumpPromise) return this.pumpPromise;
     const running = (async () => {
+      if (this.offloadBucket && this.runId && this.archive?.phase !== "ready") {
+        const unavailable = await this.ensureArchive(this.runId);
+        if (unavailable) return;
+      }
       // One bounded pass per call. Alarms and later requests continue backlog.
       for (let step = 0; step < 4; step++) {
         if (!this.flushIntents.length) {
@@ -674,6 +986,27 @@ export class RunNotifierDO extends NotifierBase {
   override async alarm(): Promise<void> {
     await this.awaitInitialized();
     await super.alarm();
+    if (this.offloadBucket && this.runId) {
+      try {
+        // Bootstrap and resume share one budget. Calling ensureArchive and
+        // then another progress loop gave a first alarm twice the step limit.
+        if (!this.archive || this.archive.phase === "building") await this.ensureArchive(this.runId);
+      } catch (error) {
+        logWarn("Run archive migration deferred", { module: this.moduleName,
+          detail: error instanceof Error ? error.message : String(error) });
+        await this.armRecoveryAlarm();
+        return;
+      }
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.archive) await collectRunArchiveGarbage(this.state.storage,
+          this.archive, (next) => this.commitArchive(next));
+      });
+      if (this.archive?.phase !== "ready") {
+        await this.armRecoveryAlarm();
+        return;
+      }
+    }
     if (this.offloadBucket && this.hasPending()) {
       await this.state.blockConcurrencyWhile(async () => {
         for (const kind of ["run", "usage"] as const) {
@@ -693,6 +1026,7 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistLastEventId(this.eventIdCounter);
       await this.armRecoveryAlarm();
     }
+    if (this.hasArchiveWork()) await this.armRecoveryAlarm();
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -747,7 +1081,24 @@ export class RunNotifierDO extends NotifierBase {
 
   private async handleUsage(input: UsageInput): Promise<Response> {
     await this.awaitInitialized();
+    const rejection = await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      return this.validateUsageBeforeArchive(input);
+    });
+    if (rejection) return rejection;
+    const runId = this.runId ?? input.runId;
+    const parsedUnits = typeof input.units === "number" ? input.units : parseFloat(String(input.units ?? ""));
+    if (this.offloadBucket && isValidRunId(runId) &&
+      (input.runId === undefined || input.runId === runId) &&
+      typeof input.meter_type === "string" && input.meter_type.trim() &&
+      Number.isFinite(parsedUnits) && parsedUnits > 0 &&
+      (input.request_id === undefined || typeof input.request_id === "string" &&
+        input.request_id.trim() === input.request_id && input.request_id.length > 0 && input.request_id.length <= 512)) {
+      const unavailable = await this.ensureArchive(runId);
+      if (unavailable) return unavailable;
+    }
     return this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
       if (input.runId !== undefined) {
         if (!isValidRunId(input.runId)) {
           return jsonResponse({ success: false, error: "Invalid runId" }, 400);
@@ -788,6 +1139,9 @@ export class RunNotifierDO extends NotifierBase {
       if (!this.offloadBucket) {
         return jsonResponse({ success: false, error: "Usage offload unavailable" }, 503);
       }
+      if (this.archive?.phase !== "ready") {
+        return jsonResponse({ success: false, error: "Run archive index is building" }, 503);
+      }
       if (this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) {
         return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);
       }
@@ -814,7 +1168,8 @@ export class RunNotifierDO extends NotifierBase {
         const draft = { ...this.snapshot(), runId: effectiveRunId,
           usageSegmentBuffer: pending, usageReceipts: receipts };
         parseRunNotifierJournalState(draft);
-        assertNotifierSnapshotBudget(draft, refs, SNAPSHOT_RESERVE_BYTES);
+        refs.push(prospectiveBlobRef(SNAPSHOT_RESERVE_BYTES));
+        assertNotifierSnapshotBudget(draft, refs);
       } catch (error) {
         return jsonResponse({ success: false,
           error: error instanceof NotifierCapacityError ? error.message : "Usage journal capacity exhausted" }, 503);
@@ -841,5 +1196,34 @@ export class RunNotifierDO extends NotifierBase {
       }
       return response;
     });
+  }
+
+  private async validateUsageBeforeArchive(input: UsageInput): Promise<Response | null> {
+    if (input.runId !== undefined) {
+      if (!isValidRunId(input.runId)) return jsonResponse({ success: false, error: "Invalid runId" }, 400);
+      if (this.runId && input.runId !== this.runId) return jsonResponse({ success: false, error: "runId mismatch" }, 409);
+    }
+    const meterType = typeof input.meter_type === "string" ? input.meter_type.trim() : "";
+    const units = typeof input.units === "number" ? input.units : parseFloat(String(input.units ?? ""));
+    if (!meterType) return jsonResponse({ success: false, error: "meter_type is required" }, 400);
+    if (!Number.isFinite(units) || units <= 0) return jsonResponse({ success: false, error: "units must be positive" }, 400);
+    if (input.request_id !== undefined && (typeof input.request_id !== "string" ||
+      !input.request_id || input.request_id !== input.request_id.trim() || input.request_id.length > 512)) {
+      return jsonResponse({ success: false, error: "Invalid request_id" }, 400);
+    }
+    const runId = this.runId ?? input.runId;
+    if (input.request_id && runId) {
+      const receipt = this.usageReceipts.find((entry) => entry.requestId === input.request_id);
+      if (receipt) {
+        const digest = await digestNotifierPayload({ runId, meterType, units,
+          referenceType: typeof input.reference_type === "string" ? input.reference_type : null,
+          metadata: input.metadata ?? null });
+        return receipt.digest === digest ? jsonResponse({ success: true, duplicate: true })
+          : jsonResponse({ success: false, error: "request_id payload conflict" }, 409);
+      }
+    }
+    if (!this.offloadBucket || !runId) return jsonResponse({ success: false, error: "Usage offload unavailable" }, 503);
+    if (this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);
+    return null;
   }
 }

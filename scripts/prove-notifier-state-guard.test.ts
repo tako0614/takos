@@ -79,16 +79,19 @@ test("native legacy-KV notifier guard preserves stored state and R2 through cold
     expect(code, `${output}\n${diagnostics}`).toBe(0);
     const result = JSON.parse(output) as { runtime: string; observations: string[] };
     expect(result.runtime).toContain("native workerd / legacy KV DO / local R2");
-    expect(result.observations).toHaveLength(18);
+    expect(result.observations).toHaveLength(20);
     for (const kind of ["run", "notification"] as const) {
-      for (const label of ["future-v2", "null", "false", "zero", "empty-string", "malformed"] as const) {
+      for (const label of ["future-v2", "future-v4", "null", "false", "zero", "empty-string", "malformed"] as const) {
         const observation = result.observations.find((item) => item.startsWith(`${kind}/${label}:`));
         expect(observation).toContain("rejected entrypoints, KV unchanged");
         if (kind === "run") expect(observation).toContain("R2 gzip unchanged");
       }
       const healthy = result.observations.find((item) => item.startsWith(`${kind}/historical-unversioned:`));
       expect(healthy).toContain("event 101 persisted as v2 and survived native eviction");
-      if (kind === "run") expect(healthy).toContain("dedup and R2 retained");
+      if (kind === "run") {
+        expect(healthy).toContain("dedup and R2 retained");
+        expect(healthy).toContain("indexed root2 retained");
+      }
     }
     expect(result.observations.find((item) => item.startsWith("notification/chunks:")))
       .toContain("200000 UTF-8 payload bytes retained through eviction");
