@@ -121,3 +121,19 @@ Docker Compose を使わず個別に起動したい場合は、Takos repo 内の
 
 ローカル環境は本番環境と完全に同一ではありません。プロバイダー固有の挙動については
 [デプロイ / セルフホスト](/deploy/) を確認してください。
+
+## Native production HTTP schema proof
+
+The portable gate also runs `scripts/prove-http-schema-native.test.ts`. It bundles the canonical
+Cloudflare entrypoint, runs it in an isolated Node26.1 / installed Miniflare process, and sends a
+real HTTP request to the anonymous `/.well-known/takos` route using deployment compatibility flags.
+A fresh fixture-held migration lease must produce the production503 and Retry-After response
+without applying migrations. After releasing that fixture claim, at most two ordinary HTTP
+requests must reach the full embedded checksum ledger and discovery200; a pending response must
+advance the same prefix and honor the retry hint. Ready re-entry must leave the ledger and lock
+unchanged. The Linux host and process cleanup requirements of the native usage proof also apply.
+
+This is local native HTTP admission over a fresh database. It does not prove hosted readiness,
+populated migrations, owner login or Container composition. Failure fixtures are retained;
+only new successful fixture state is removed. The production migration budget and test deadlines
+are not overridden, and no operator migration endpoint is used.
