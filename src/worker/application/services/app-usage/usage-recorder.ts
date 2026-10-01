@@ -1,6 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
+  accounts,
   appUsageEvents,
   appUsageRollups,
   getDb,
@@ -10,11 +11,7 @@ import type { Database } from "../../../infra/db/index.ts";
 import { executeAtomicStatements } from "../../../infra/db/client.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import {
-  generateId,
-  safeJsonParseOrDefault,
-} from "../../../shared/utils/index.ts";
-import { getUsageEventsFromR2 } from "../offload/usage-events.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 import {
   APP_USAGE_METER_TYPES,
   type AppUsageMeterType,
@@ -55,6 +52,9 @@ async function executeUsageStatements(
 
 function getPeriodStart(timestamp: string): string {
   const now = new Date(timestamp);
+  if (!Number.isFinite(now.getTime())) {
+    throw new Error("Run usage event has an invalid period anchor");
+  }
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${year}-${month}-01`;
@@ -79,15 +79,49 @@ function captureUsage(input: AppUsageRecordInput, timestamp: string) {
   };
 }
 
+function usageUnitsLiteral(units: number) {
+  if (!Number.isFinite(units) || units < 0) {
+    throw new TypeError("usage units must be finite and nonnegative");
+  }
+  return sql.raw(String(units));
+}
+
+function rollupSpaceIdentityMatches(spaceId: string | null) {
+  return spaceId === null
+    ? sql`${appUsageRollups.spaceId} IS NULL`
+    : sql`${appUsageRollups.spaceId} = ${spaceId}`;
+}
+
 function usageStatements(
   db: Database,
   event: ReturnType<typeof captureUsage>,
 ): UsageStatements {
-  const { scopeId, rollupId, periodStart, ...values } = event;
+  const { scopeId, rollupId, periodStart } = event;
+  const increment = usageUnitsLiteral(event.units);
+  const spaceIdentityMatches = rollupSpaceIdentityMatches(event.spaceId);
+  const nextUnits = sql`${appUsageRollups.units} + ${increment}`;
   return [
-    db.insert(appUsageEvents).values(values).onConflictDoNothing({
-      target: appUsageEvents.idempotencyKey,
-    }),
+    db.update(appUsageRollups).set({
+      units: appUsageRollups.units,
+      updatedAt: sql`${appUsageRollups.updatedAt}`,
+    })
+      .where(and(
+        eq(appUsageRollups.ownerAccountId, event.ownerAccountId),
+        eq(appUsageRollups.scopeType, event.scopeType),
+        eq(appUsageRollups.scopeId, scopeId),
+        eq(appUsageRollups.meterType, event.meterType),
+        eq(appUsageRollups.periodStart, periodStart),
+      )),
+    db.run(sql`
+      INSERT INTO app_usage_events (
+        id, idempotency_key, owner_account_id, scope_type, space_id,
+        meter_type, units, reference_id, reference_type, metadata, created_at
+      ) VALUES (
+        ${event.id}, ${event.idempotencyKey}, ${event.ownerAccountId},
+        ${event.scopeType}, ${event.spaceId}, ${event.meterType}, ${increment},
+        ${event.referenceId}, ${event.referenceType}, ${event.metadata}, ${event.createdAt}
+      ) ON CONFLICT(idempotency_key) DO NOTHING
+    `),
     // This SELECT contributes only the event inserted by this attempt. A
     // duplicate key has a different ID and cannot increment its rollup again.
     db.insert(appUsageRollups).select(db.select({
@@ -114,15 +148,168 @@ function usageStatements(
           // never clamp a finite event into an infinite persisted aggregate.
           // Keep the finite bound literal: edge.sql parameters have a smaller
           // portable range, even when this conflict branch is not executed.
-          units: sql`case
-            when ${appUsageRollups.units} + ${event.units}
-              between 0 and 1.7976931348623157e308
-            then ${appUsageRollups.units} + ${event.units}
-            else null end`,
+          units: sql`CASE WHEN ${spaceIdentityMatches} THEN
+            CASE WHEN ${nextUnits} BETWEEN 0 AND 1.7976931348623157e308
+              AND (${appUsageRollups.units} <= 0 OR
+                (${nextUnits} > ${appUsageRollups.units} AND
+                  ${nextUnits} > ${increment}))
+            THEN ${nextUnits} ELSE NULL END
+            ELSE NULL END`,
           updatedAt: event.createdAt,
         },
       }),
   ];
+}
+
+type RunUsageEvent = ReturnType<typeof captureUsage> & {
+  existingIdAtPrefetch: string | null;
+};
+
+function usageProjectionStatements(
+  db: Database,
+  events: readonly RunUsageEvent[],
+): UsageStatements {
+  const statements: UsageStatements[number][] = [];
+
+  // Acquire every affected rollup row in one deterministic order before any
+  // event key can be changed. New rows are temporary zero-valued locks within
+  // this same transaction and are reconciled from events below.
+  const ordered = [...events].sort((a, b) =>
+    compareLockKey(a, b)
+  );
+  for (const event of ordered) {
+    const { scopeId, rollupId, periodStart } = event;
+    statements.push(db.insert(appUsageRollups).values({
+      id: rollupId,
+      ownerAccountId: event.ownerAccountId,
+      scopeType: event.scopeType,
+      scopeId,
+      spaceId: event.spaceId,
+      meterType: event.meterType,
+      periodStart,
+      units: 0,
+      updatedAt: event.createdAt,
+    }).onConflictDoUpdate({
+      target: [
+        appUsageRollups.ownerAccountId,
+        appUsageRollups.scopeType,
+        appUsageRollups.scopeId,
+        appUsageRollups.meterType,
+        appUsageRollups.periodStart,
+      ],
+      set: {
+        units: sql`CASE WHEN ${rollupSpaceIdentityMatches(event.spaceId)}
+          THEN ${appUsageRollups.units} ELSE NULL END`,
+        updatedAt: sql`${appUsageRollups.updatedAt}`,
+      },
+    }));
+  }
+
+  for (const event of ordered) {
+    const month = event.periodStart.slice(0, 7);
+    const existingAtPrefetch = event.existingIdAtPrefetch;
+    const unitsLiteral = usageUnitsLiteral(event.units);
+    const priorSpaceMatches = event.spaceId === null
+      ? sql`prior.space_id IS NULL`
+      : sql`prior.space_id = ${event.spaceId}`;
+    const currentSpaceMatches = event.spaceId === null
+      ? sql`app_usage_events.space_id IS NULL AND excluded.space_id IS NULL`
+      : sql`app_usage_events.space_id = excluded.space_id`;
+    const prefetchedIdentityIsCurrent = existingAtPrefetch === null
+      ? sql`1`
+      : sql`EXISTS (
+          SELECT 1 FROM app_usage_events AS prior
+          WHERE prior.idempotency_key = ${event.idempotencyKey}
+            AND prior.id = ${existingAtPrefetch}
+            AND prior.owner_account_id = ${event.ownerAccountId}
+            AND prior.scope_type = ${event.scopeType}
+            AND ${priorSpaceMatches}
+            AND prior.meter_type = ${event.meterType}
+            AND prior.reference_id = ${event.referenceId}
+            AND prior.reference_type = ${event.referenceType}
+            AND substr(prior.created_at, 1, 7) = ${month}
+        )`;
+    // An invalid identity deliberately writes NULL to the NOT NULL units
+    // column. That makes the complete atomic group fail before ON
+    // CONFLICT can silently redirect a fixed key to another identity.
+    statements.push(db.run(sql`
+      INSERT INTO app_usage_events (
+        id, idempotency_key, owner_account_id, scope_type, space_id,
+        meter_type, units, reference_id, reference_type, metadata, created_at
+      ) VALUES (
+        ${event.id},
+        ${event.idempotencyKey}, ${event.ownerAccountId},
+        ${event.scopeType}, ${event.spaceId}, ${event.meterType},
+        CASE WHEN ${prefetchedIdentityIsCurrent} THEN ${unitsLiteral} ELSE NULL END,
+        ${event.referenceId}, ${event.referenceType}, ${event.metadata}, ${event.createdAt}
+      )
+      ON CONFLICT(idempotency_key) DO UPDATE SET
+        units = CASE WHEN
+          app_usage_events.owner_account_id = excluded.owner_account_id
+          AND app_usage_events.scope_type = excluded.scope_type
+          AND ${currentSpaceMatches}
+          AND app_usage_events.meter_type = excluded.meter_type
+          AND app_usage_events.reference_id = excluded.reference_id
+          AND app_usage_events.reference_type = excluded.reference_type
+          AND (${existingAtPrefetch ? sql`1` : sql`substr(app_usage_events.created_at, 1, 7) = ${month}`})
+          AND (${existingAtPrefetch ? sql`app_usage_events.id = ${existingAtPrefetch}` : sql`1`})
+        THEN CASE WHEN app_usage_events.units >= excluded.units
+          THEN app_usage_events.units ELSE excluded.units END ELSE NULL END
+    `));
+  }
+
+  for (const event of ordered) {
+    const month = event.periodStart.slice(0, 7);
+    statements.push(db.run(sql`
+      UPDATE app_usage_rollups
+      SET units = CASE
+        WHEN (
+          SELECT SUM(units) FROM app_usage_events
+          WHERE owner_account_id = ${event.ownerAccountId}
+            AND scope_type = ${event.scopeType}
+            AND space_id = ${event.spaceId}
+            AND meter_type = ${event.meterType}
+            AND substr(created_at, 1, 7) = ${month}
+        ) BETWEEN 0 AND 1.7976931348623157e308
+        THEN (
+          SELECT SUM(units) FROM app_usage_events
+          WHERE owner_account_id = ${event.ownerAccountId}
+            AND scope_type = ${event.scopeType}
+            AND space_id = ${event.spaceId}
+            AND meter_type = ${event.meterType}
+            AND substr(created_at, 1, 7) = ${month}
+        ) ELSE NULL END,
+        updated_at = ${event.createdAt}
+      WHERE owner_account_id = ${event.ownerAccountId}
+        AND scope_type = ${event.scopeType}
+        AND scope_id = ${event.scopeId}
+        AND meter_type = ${event.meterType}
+        AND period_start = ${event.periodStart}
+    `));
+  }
+  return statements;
+}
+
+function compareLockKey(a: RunUsageEvent, b: RunUsageEvent): number {
+  const left = [
+    a.ownerAccountId,
+    a.scopeType,
+    a.scopeId,
+    a.periodStart,
+    a.meterType,
+  ];
+  const right = [
+    b.ownerAccountId,
+    b.scopeType,
+    b.scopeId,
+    b.periodStart,
+    b.meterType,
+  ];
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] === right[index]) continue;
+    return left[index]! < right[index]! ? -1 : 1;
+  }
+  return 0;
 }
 
 function isAppUsageMeterType(value: string): value is AppUsageMeterType {
@@ -153,57 +340,118 @@ export async function recordRunUsageBatch(
   env: Env,
   runId: string,
 ): Promise<void> {
-  const db = getDb(env.DB);
+  const notifier = env.RUN_NOTIFIER;
+  if (!notifier) throw new Error("RUN_NOTIFIER is required to project Run usage");
+  const stub = notifier.get(notifier.idFromName(runId));
+  const response = await stub.fetch(new Request(
+    `http://internal/usage-project?runId=${encodeURIComponent(runId)}`,
+    { method: "POST" },
+  ));
+  if (!response.ok) {
+    throw new Error(`Run usage projection rejected (${response.status})`);
+  }
+  const result: unknown = await response.json();
+  if (!result || typeof result !== "object" ||
+    (result as Record<string, unknown>).success !== true) {
+    throw new Error("Run usage projection was not accepted");
+  }
+}
+
+export async function projectRunUsageSnapshot(
+  binding: AppUsageDb,
+  runId: string,
+  totals: Readonly<Partial<Record<AppUsageMeterType, number>>>,
+): Promise<void> {
+  // Snapshot all caller-owned values and the month anchor before the first
+  // await so a suspended SQL transaction cannot observe later mutations.
+  const suppliedTotals = { ...totals };
+  const timestamp = new Date().toISOString();
+  const db = getDb(binding);
   const run = await db
     .select({ usage: runs.usage, accountId: runs.accountId })
     .from(runs)
     .where(eq(runs.id, runId))
     .get();
 
-  if (!run?.accountId) throw new Error("Run usage owner is unavailable");
+  if (!run?.accountId) throw new Error("Run usage workspace is unavailable");
+  const workspace = await db.select({ ownerAccountId: accounts.ownerAccountId })
+    .from(accounts).where(eq(accounts.id, run.accountId)).get();
+  if (!workspace) throw new Error("Run usage workspace is unavailable");
+  const ownerAccountId = workspace.ownerAccountId || run.accountId;
 
   const aggregated = new Map<AppUsageMeterType, number>();
-  const usage = safeJsonParseOrDefault<
-    { inputTokens?: number; outputTokens?: number }
-  >(run.usage, {});
-  const inputK = (usage.inputTokens ?? 0) / 1000;
-  const outputK = (usage.outputTokens ?? 0) / 1000;
+  let usage: { inputTokens?: number; outputTokens?: number };
+  try {
+    const parsed: unknown = JSON.parse(run.usage);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Run usage must be a JSON object");
+    }
+    usage = parsed as { inputTokens?: number; outputTokens?: number };
+  } catch {
+    throw new Error("Run usage JSON is invalid");
+  }
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  if (!Number.isFinite(inputTokens) || inputTokens < 0 ||
+    !Number.isFinite(outputTokens) || outputTokens < 0) {
+    throw new Error("Invalid SQL Run token usage");
+  }
+  const inputK = inputTokens / 1000;
+  const outputK = outputTokens / 1000;
   if (inputK > 0) aggregated.set("llm_tokens_input", inputK);
   if (outputK > 0) aggregated.set("llm_tokens_output", outputK);
 
-  if (env.TAKOS_OFFLOAD) {
-    const raw = await getUsageEventsFromR2(env.TAKOS_OFFLOAD, runId, {
-      maxEvents: 50_001,
-      strict: true,
-    });
-    if (raw.length > 50_000) {
-      throw new Error("Run usage exceeds the supported complete-recording limit");
+  for (const [meterType, units] of Object.entries(suppliedTotals)) {
+    if (!isAppUsageMeterType(meterType)) {
+      throw new Error(`Unknown Run usage meter: ${meterType}`);
     }
-    for (const ev of raw) {
-      if (!isAppUsageMeterType(ev.meter_type)) continue;
-      aggregated.set(
-        ev.meter_type,
-        (aggregated.get(ev.meter_type) ?? 0) + ev.units,
-      );
-    }
-  }
-
-  const timestamp = new Date().toISOString();
-  const events = Array.from(aggregated, ([meterType, units]) => {
-    if (!Number.isFinite(units) || units <= 0) {
+    if (!Number.isFinite(units) || (units ?? 0) < 0) {
       throw new Error("Invalid aggregated Run usage");
     }
-    return captureUsage({
-      ownerAccountId: run.accountId,
-      spaceId: run.accountId,
+    if (units === 0) continue;
+    const current = aggregated.get(meterType) ?? 0;
+    const combined = current + units!;
+    if (current > 0 && units > 0 &&
+      (!Number.isFinite(combined) || combined <= current || combined <= units)) {
+      throw new Error("Invalid aggregated Run usage");
+    }
+    aggregated.set(meterType, combined);
+  }
+
+  const meters = APP_USAGE_METER_TYPES;
+  const keys = meters.map((meterType) => `run:${runId}:${meterType}`);
+  const existingRows = await db.select({
+    id: appUsageEvents.id,
+    idempotencyKey: appUsageEvents.idempotencyKey,
+    createdAt: appUsageEvents.createdAt,
+  }).from(appUsageEvents).where(inArray(appUsageEvents.idempotencyKey, keys)).all();
+  const existingByKey = new Map(existingRows.map((row) => [row.idempotencyKey, row]));
+  const events = meters.flatMap((meterType) => {
+    const units = aggregated.get(meterType) ?? 0;
+    const existing = existingByKey.get(`run:${runId}:${meterType}`);
+    if (!Number.isFinite(units) || units < 0) {
+      throw new Error("Invalid aggregated Run usage");
+    }
+    if (units === 0 && !existing) return [];
+    const event = captureUsage({
+      ownerAccountId,
+      spaceId: run.accountId!,
       meterType,
       units,
       referenceId: runId,
       referenceType: "run",
       idempotencyKey: `run:${runId}:${meterType}`,
     }, timestamp);
+    return [{
+      ...event,
+      // Existing rows retain their original month even if a later projection
+      // crosses a month boundary. A concurrent first writer crossing months
+      // is rejected in the atomic upsert and can be retried against its anchor.
+      periodStart: existing ? getPeriodStart(existing.createdAt) : event.periodStart,
+      existingIdAtPrefetch: existing?.id ?? null,
+    }];
   });
   if (!events.length) return;
-  await executeUsageStatements(env.DB, (db) =>
-    events.flatMap((event) => usageStatements(db, event)));
+  await executeUsageStatements(binding, (transactionDb) =>
+    usageProjectionStatements(transactionDb, events));
 }

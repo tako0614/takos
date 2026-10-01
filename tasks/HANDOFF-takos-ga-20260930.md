@@ -3,7 +3,36 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: app-local usage の原子性と失敗応答 — 2026-10-01
+## 最新の追加: accepted Run usage と single-owner 集計 — 2026-10-01
+
+Run accountId は Workspace ID。メーターの所有者は Workspace.ownerAccountId を参照し、
+space_id に Workspace を保持する。旧 wrong-owner 固定行は自動移管せず修復待ちにする。
+一人の所有者の複数 Workspace と外部参加者/共有を維持し、新規課金・認証grantは加えない。
+
+Takos-private logical journal schema4 に accepted totals/revision を加え、usage の pending/
+receipt と同じ head へ保存してから ACK する。終了後の追加も保持し、terminal は seal と
+みなさない。旧履歴は受理済み frontier と pending/intent を凍結して bounded に検証・集計。
+欠落/不正/説明不能な object は durable repair とし、部分値を SQL 成功にしない。
+SQL は fixed Run/meter key の cumulative MAX と rollup SUM を一つの atomic group に保存。
+先に deterministic rollup lock を取得し、通常 writer との競合を防ぐ。旧 partial 行も現在の
+同一所有者/scope に限り再集計できる。応答消失や古い revision の ACK は新しい dirty を消さない。
+内部 DO operation/alarm で cold retry し、offline candidate でも ledger と dirty を保持する。
+
+実 SQLite 付き DO/R2 fixture で 50,001 archived records+pending、bounded alarm/cold restart、
+終了前後・duplicate・SQL failure/lost ACK・新規受理中の旧 projection ACK・numeric loss を確認。
+原本9e source の wrong owner/frozen later tokens と schema4 不保持を red に再現した。
+raw/wrapped edge.sql、SQL atomicity/identity/overflow/mixed writers を検証し、独立レビューで
+見つかった3件を修正。全必須 local gate は1,565tests/247files/10,904assertions、20OpenTofu、全Rust、必須
+Worker/fullSQLite/process復旧、両buildまで成功。types98/lint111未申告0、native44.634s/
+observer200、docs build3.26s。exact commit CI の最終結果は dedicated HDD result に記録する。
+詳細: [accepted usage task](TASK-takos-ga-accepted-usage-20261001.md)。
+
+logical schema を新 reader より前へ戻す source-only rollback は不適切。保存 export を保持し
+reviewed forward repair/conversion を使う。live backend/alarm/PG concurrency、producer retry ID/
+token重複policy、長Run receipt容量、実owner-sub/mobile、公開artifactと実ユーザー導入/復旧/
+監視は残る。Takos全体GAを解除せず、共通契約/他tree/本番/料金/権限/既存データを変更しない。
+
+## 前段の追加: app-local usage の原子性と失敗応答 — 2026-10-01
 
 event と条件付き rollup を同じ SQL transaction/native batch へ入れ、Run の全メーターも
 まとめて保存する。実 SQLite で旧 event-only 失敗と再試行不能を再現し、新しい部分記録を

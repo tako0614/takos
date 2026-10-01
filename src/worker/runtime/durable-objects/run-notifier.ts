@@ -21,6 +21,7 @@ import {
   usageSegmentKey,
 } from "../../application/services/offload/usage-events.ts";
 import { gzipCompressString, gzipDecompressToString } from "../../shared/utils/gzip.ts";
+import { projectRunUsageSnapshot } from "../../application/services/app-usage/usage-recorder.ts";
 import { logWarn } from "../../shared/utils/logger.ts";
 import {
   type EmitResult,
@@ -57,6 +58,11 @@ import {
   collectRunArchiveGarbage, newRunArchiveState, prepareArchiveStage,
   stageArchiveRetirement, type RunArchiveState,
 } from "./run-archive-maintenance.ts";
+import {
+  addUsageEvents, decodeUsageSegment, newUsageLedgerBuild,
+  repairUsageLedger, usageSegmentIndex, UsageLedgerIntegrityError,
+  type UsageLedgerState,
+} from "./run-usage-ledger.ts";
 
 const MAX_RUN_ID_LENGTH = 64;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -148,6 +154,10 @@ export class RunNotifierDO extends NotifierBase {
   private pumpPromise: Promise<void> | null = null;
   private archive: RunArchiveState | null = null;
   private archiveWorkPromise: Promise<void> | null = null;
+  private usageLedger: UsageLedgerState | null = null;
+  private baselinePromise: Promise<Response | null> | null = null;
+  private baselineFenceRequested = false;
+  private projectionPromise: Promise<void> | null = null;
 
   constructor(state: DurableObjectStateBinding, env: Env) {
     super(state);
@@ -155,10 +165,11 @@ export class RunNotifierDO extends NotifierBase {
     this.offloadBucket = env.TAKOS_OFFLOAD;
   }
 
-  private snapshot(): RunNotifierJournalState & { schemaVersion: 2 | 3 } {
+  private snapshot(): RunNotifierJournalState & { schemaVersion: 4 } {
     return {
-      schemaVersion: this.archive ? 3 : 2,
-      ...(this.archive ? { archive: this.archive } : {}),
+      schemaVersion: 4,
+      archive: this.archive,
+      usageLedger: this.usageLedger,
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       runId: this.runId,
@@ -174,7 +185,7 @@ export class RunNotifierDO extends NotifierBase {
       usageReceipts: this.usageReceipts,
       legacyPendingRunCount: this.legacyPendingRunCount,
       legacyPendingUsageCount: this.legacyPendingUsageCount,
-    } as RunNotifierJournalState & { schemaVersion: 2 | 3 };
+    } as RunNotifierJournalState & { schemaVersion: 4 };
   }
 
   private liveBlobs(): NotifierBlobRef[] {
@@ -193,7 +204,9 @@ export class RunNotifierDO extends NotifierBase {
           ? stored.r2SegmentBuffer.slice(0, intent.count)
           : stored.usageSegmentBuffer.slice(0, intent.count);
         const bytes = await readNotifierBlob(this.state.storage, intent.blob);
-        const plain = await gzipDecompressToString(bytes, { maxDecompressedBytes: 8 * 1024 * 1024 });
+        const plain = await gzipDecompressToString(bytes, {
+          maxDecompressedBytes: 8 * 1024 * 1024, fatalUtf8: true,
+        });
         if (plain !== jsonl(pending)) {
           throw new Error("Invalid persisted run notifier journal: flushIntent.prefix");
         }
@@ -224,8 +237,9 @@ export class RunNotifierDO extends NotifierBase {
     this.legacyPendingRunCount = stored?.legacyPendingRunCount ?? 0;
     this.legacyPendingUsageCount = stored?.legacyPendingUsageCount ?? 0;
     this.archive = stored?.archive ?? null;
+    this.usageLedger = stored?.usageLedger ?? null;
     this.needsRecoveryDrain = !!stored && this.hasPending();
-    if (this.hasPending() || this.hasArchiveWork()) await this.armRecoveryAlarm();
+    if (this.hasPending() || this.hasArchiveWork() || this.hasLedgerWork()) await this.armRecoveryAlarm();
   }
 
   private hasPending(): boolean {
@@ -243,9 +257,15 @@ export class RunNotifierDO extends NotifierBase {
     return this.archive?.phase === "repair";
   }
 
+  private hasLedgerWork(): boolean {
+    return this.usageLedger?.phase === "building" ||
+      this.usageLedger?.phase === "ready" &&
+      this.usageLedger.projectedRevision < this.usageLedger.revision;
+  }
+
   private async armRecoveryAlarm(): Promise<void> {
-    if (this.archiveNeedsRepair()) return;
-    if (!this.hasPending() && !this.hasArchiveWork()) return;
+    if (this.archiveNeedsRepair() && !this.hasLedgerWork()) return;
+    if (!this.hasPending() && !this.hasArchiveWork() && !this.hasLedgerWork()) return;
     const when = Date.now() + RECOVERY_ALARM_DELAY_MS;
     const existing = await this.state.storage.getAlarm();
     if (existing === null || existing <= Date.now() || existing > when) {
@@ -322,6 +342,12 @@ export class RunNotifierDO extends NotifierBase {
     if (path === "/archive" && request.method === "GET") {
       return this.handleArchiveQuery(url);
     }
+    if (path === "/usage-snapshot" && request.method === "GET") {
+      return this.handleUsageSnapshot(url);
+    }
+    if (path === "/usage-project" && request.method === "POST") {
+      return this.handleUsageProject(url);
+    }
     if (path !== "/usage" || request.method !== "POST") return null;
     return (async () => {
       let body: UsageInput;
@@ -335,6 +361,57 @@ export class RunNotifierDO extends NotifierBase {
       }
       return this.handleUsage(body);
     })();
+  }
+
+  private async handleUsageSnapshot(url: URL): Promise<Response> {
+    const runId = url.searchParams.get("runId");
+    if (!isValidRunId(runId)) return jsonResponse({ error: "Invalid runId" }, 400);
+    await this.awaitInitialized();
+    if (this.runId && this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
+    const unavailable = await this.ensureUsageLedger(runId);
+    if (unavailable) return unavailable;
+    return this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId !== runId || this.usageLedger?.phase !== "ready") return this.usageUnavailable();
+      return jsonResponse({ success: true, runId,
+        totals: this.usageLedger.totals, revision: this.usageLedger.revision });
+    });
+  }
+
+  private async handleUsageProject(url: URL): Promise<Response> {
+    const runId = url.searchParams.get("runId");
+    if (!isValidRunId(runId)) return jsonResponse({ error: "Invalid runId" }, 400);
+    await this.awaitInitialized();
+    if (this.runId && this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
+    const unavailable = await this.ensureUsageLedger(runId);
+    if (unavailable) return unavailable;
+    // SQL token usage can change while accepted-event totals stay fixed.
+    // Force a new projection witness before taking the SQL snapshot.
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId !== runId || this.usageLedger?.phase !== "ready") return;
+      if (this.usageLedger.revision === Number.MAX_SAFE_INTEGER) {
+        throw new UsageLedgerIntegrityError("Usage revision exhausted");
+      }
+      this.usageLedger = { ...this.usageLedger, revision: this.usageLedger.revision + 1 };
+      try { await this.persistState(); }
+      catch (error) { await this.recoverPersistedState(error); throw error; }
+    });
+    try {
+      if (this.projectionPromise) await this.projectionPromise;
+      await this.projectUsage();
+    } catch (error) {
+      return jsonResponse({ success: false,
+        error: error instanceof Error ? error.message : String(error) }, 503);
+    }
+    return this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId !== runId || this.usageLedger?.phase !== "ready") return this.usageUnavailable();
+      if (this.usageLedger.projectedRevision < this.usageLedger.revision) {
+        return jsonResponse({ success: false, error: "Usage projection remains dirty" }, 503);
+      }
+      return jsonResponse({ success: true, revision: this.usageLedger.projectedRevision });
+    });
   }
 
   private readDedupKey(input: EmitInput): string | null {
@@ -398,6 +475,10 @@ export class RunNotifierDO extends NotifierBase {
     if (requireReady && this.offloadBucket && this.archive && this.archive.phase !== "ready") {
       return jsonResponse({ success: false, error: "Run archive is unavailable for writes" }, 503);
     }
+    if (requireReady && RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType) &&
+      this.offloadBucket && this.usageLedger?.phase !== "ready") {
+      return this.usageUnavailable();
+    }
     return null;
   }
 
@@ -428,7 +509,10 @@ export class RunNotifierDO extends NotifierBase {
       return null;
     });
     if (rejection) return rejection;
-    return this.ensureArchive(runId);
+    const archive = await this.ensureArchive(runId);
+    if (archive) return archive;
+    return RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType)
+      ? this.ensureUsageLedger(runId) : null;
   }
 
   protected override async validateEmitCapacity(
@@ -447,9 +531,15 @@ export class RunNotifierDO extends NotifierBase {
     const receipts = key
       ? [...this.emitReceipts, { key, digest: await this.emitDigest(input), eventId: prospectiveId }]
       : this.emitReceipts;
+    const terminal = RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType);
+    const ledger = this.usageLedger?.phase === "ready" && terminal
+      ? { ...this.usageLedger, revision: this.usageLedger.revision + 1 } : this.usageLedger;
+    if (terminal && (!ledger || ledger.phase !== "ready" ||
+      !Number.isSafeInteger(ledger.revision))) return this.usageUnavailable();
     const draft = {
       ...this.snapshot(), eventBuffer: prospectiveRing, eventIdCounter: prospectiveId,
       runId: nextRunId, r2SegmentBuffer: pending, emitReceipts: receipts,
+      usageLedger: ledger,
     };
     const refs = [...this.liveBlobs()];
     if (this.offloadBucket && nextRunId) {
@@ -486,6 +576,10 @@ export class RunNotifierDO extends NotifierBase {
     const emittedAt = new Date().toISOString();
     const key = this.readDedupKey(input);
     if (key) this.emitReceipts.push({ key, digest: await this.emitDigest(input), eventId });
+    if (RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType) &&
+      this.usageLedger?.phase === "ready") {
+      this.usageLedger = { ...this.usageLedger, revision: this.usageLedger.revision + 1 };
+    }
     if (this.offloadBucket && this.runId) {
       this.r2SegmentBuffer.push({
         event_id: eventId, type: input.type,
@@ -498,6 +592,7 @@ export class RunNotifierDO extends NotifierBase {
     }
     if (this.offloadBucket && this.runId &&
       RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType) &&
+      this.usageLedger?.phase === "ready" &&
       this.usageSegmentBuffer.length > 0 && !this.intent("usage")) {
       await this.freeze("usage");
     }
@@ -511,6 +606,11 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistLastEventId(eventId);
     }
     await this.pumpBestEffort();
+    if (RUN_TERMINAL_EVENT_TYPES.has(_input.type as RunTerminalEventType)) {
+      const projection = this.projectUsageBestEffort();
+      if (this.state.waitUntil) this.state.waitUntil(projection);
+      else await projection;
+    }
     if (RUN_TERMINAL_EVENT_TYPES.has(_input.type as RunTerminalEventType) &&
       this.offloadBucket && this.usageSegmentBuffer.length > 0 && !this.intent("usage")) {
       await this.state.blockConcurrencyWhile(async () => {
@@ -572,6 +672,210 @@ export class RunNotifierDO extends NotifierBase {
     return this.archive?.phase === "ready" ? null : jsonResponse({
       error: this.archive?.error ?? "Run archive index is building; retry later",
     }, 503);
+  }
+
+  private usageUnavailable(): Response {
+    return jsonResponse({ success: false, error: this.usageLedger?.error ??
+      "Usage ledger is building; retry later" }, 503);
+  }
+
+  private ensureUsageLedger(runId: string): Promise<Response | null> {
+    if (this.runId === runId && this.usageLedger?.phase === "ready") return Promise.resolve(null);
+    if (this.usageLedger?.phase === "repair") return Promise.resolve(this.usageUnavailable());
+    if (this.baselinePromise) return this.baselinePromise;
+    this.baselineFenceRequested = true;
+    const running = this.ensureUsageLedgerWork(runId);
+    this.baselinePromise = running;
+    void running.finally(() => {
+      if (this.baselinePromise === running) this.baselinePromise = null;
+      this.baselineFenceRequested = false;
+    }).catch(() => {});
+    return running;
+  }
+
+  private async ensureUsageLedgerWork(runId: string): Promise<Response | null> {
+    if (!this.offloadBucket) return this.usageUnavailable();
+    // A delivery already in flight may publish the last frozen segment. Join
+    // it before fixing the immutable migration frontier and pending prefix.
+    if (this.pumpPromise) await this.pumpPromise;
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId && this.runId !== runId) return;
+      if (this.usageLedger) return;
+      this.runId = runId;
+      const intent = this.intent("usage");
+      this.usageLedger = newUsageLedgerBuild(this.usageLastFlushedSegmentIndex,
+        this.usageSegmentBuffer.length, intent?.key ?? null, intent?.blob.digest ?? null);
+      try { await this.persistState(); }
+      catch (error) { await this.recoverPersistedState(error); throw error; }
+    });
+    if (this.runId !== runId) return jsonResponse({ error: "runId mismatch" }, 409);
+    const started = Date.now();
+    for (let step = 0; step < 8 && Date.now() - started < 20_000 &&
+      this.usageLedger?.phase === "building"; step++) {
+      try { await this.advanceUsageLedger(); }
+      catch (error) {
+        if (error instanceof UsageLedgerIntegrityError) {
+          await this.state.blockConcurrencyWhile(async () => {
+            await this.awaitInitialized();
+            if (this.usageLedger?.phase !== "building") return;
+            this.usageLedger = repairUsageLedger(this.usageLedger, error.message);
+            try { await this.persistState(); }
+            catch (persistError) { await this.recoverPersistedState(persistError); throw persistError; }
+          });
+          break;
+        }
+        throw error;
+      }
+    }
+    return this.usageLedger?.phase === "ready" ? null : this.usageUnavailable();
+  }
+
+  private async advanceUsageLedger(): Promise<void> {
+    const before = this.usageLedger;
+    const build = before?.build;
+    const runId = this.runId;
+    const bucket = this.offloadBucket;
+    if (!before || before.phase !== "building" || !build || !runId || !bucket) return;
+    if (build.stage === "inventory") {
+      const page = await withRemoteDeadline(bucket.list({
+        prefix: `runs/${runId}/usage/`, cursor: build.cursor ?? undefined, limit: 1000,
+      }), "Usage inventory list");
+      if (page.objects.length > 1000 || page.truncated &&
+        (page.objects.length === 0 || !page.cursor || page.cursor === build.cursor ||
+          page.cursor.length > 2048)) {
+        throw new UsageLedgerIntegrityError("Usage inventory pagination failed");
+      }
+      let scanned = build.scanned;
+      let lastKey = build.lastKey;
+      for (const object of page.objects) {
+        const key = object.key;
+        if (typeof key !== "string" || lastKey !== null && key <= lastKey) {
+          throw new UsageLedgerIntegrityError("Usage inventory is not strictly ordered");
+        }
+        const index = usageSegmentIndex(key, runId);
+        if (index > build.frontier + 1) {
+          throw new UsageLedgerIntegrityError("Usage inventory has an orphan");
+        }
+        if (index === build.frontier + 1) {
+          const pending = this.intent("usage")
+            ? this.usageSegmentBuffer.slice(0, this.intent("usage")!.count)
+            : this.freezePrefix(this.usageSegmentBuffer,
+              Math.min(USAGE_EVENT_SEGMENT_SIZE, this.legacyPendingUsageCount));
+          if (!pending.length || key !== (build.intentKey ??
+            usageSegmentKey(runId, this.usageSegmentIndex))) {
+            throw new UsageLedgerIntegrityError("Unwitnessed usage object above frontier");
+          }
+          const objectBody = await withRemoteDeadline(bucket.get(key), "Usage intent GET");
+          if (!objectBody) throw new UsageLedgerIntegrityError("Listed usage intent is missing");
+          const bytes = await this.readUsageBytes(objectBody, "Usage intent body");
+          if (bytes.byteLength > 8 * 1024 * 1024) {
+            throw new UsageLedgerIntegrityError("Usage intent exceeds byte limit");
+          }
+          const intent = this.intent("usage");
+          if (!(intent && await sha256(bytes) === build.intentDigest)) {
+            if (intent?.origin !== "legacy" && this.legacyPendingUsageCount === 0) {
+              throw new UsageLedgerIntegrityError("Usage intent bytes conflict");
+            }
+            const decoded = await decodeUsageSegment(bytes);
+            if (jsonl(decoded) !== jsonl(pending)) {
+              throw new UsageLedgerIntegrityError("Legacy usage intent prefix conflict");
+            }
+          }
+        }
+        else scanned++;
+        lastKey = key;
+      }
+      if (!page.truncated && scanned !== build.frontier) {
+        throw new UsageLedgerIntegrityError("Usage inventory is incomplete");
+      }
+      const next = { ...before, build: { ...build, scanned, lastKey,
+        cursor: page.truncated ? page.cursor! : null,
+        stage: page.truncated ? "inventory" as const : "fold" as const } };
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.usageLedger !== before) return;
+        this.usageLedger = next;
+        try { await this.persistState(); }
+        catch (error) { await this.recoverPersistedState(error); throw error; }
+      });
+      return;
+    }
+    if (build.nextIndex <= build.frontier) {
+      const key = usageSegmentKey(runId, build.nextIndex);
+      const object = await withRemoteDeadline(bucket.get(key), "Usage segment GET");
+      if (!object) throw new UsageLedgerIntegrityError(`Usage segment missing: ${key}`);
+      const bytes = await this.readUsageBytes(object, "Usage segment body");
+      const events = await decodeUsageSegment(bytes);
+      const totals = addUsageEvents(before.totals, events);
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.awaitInitialized();
+        if (this.usageLedger !== before) return;
+        this.usageLedger = { ...before, totals,
+          build: { ...build, nextIndex: build.nextIndex + 1 } };
+        try { await this.persistState(); }
+        catch (error) { await this.recoverPersistedState(error); throw error; }
+      });
+      return;
+    }
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.usageLedger !== before) return;
+      if (this.usageSegmentBuffer.length !== build.pendingCount ||
+        this.usageLastFlushedSegmentIndex !== build.frontier) {
+        throw new UsageLedgerIntegrityError("Usage baseline witness changed");
+      }
+      const totals = addUsageEvents(before.totals, this.usageSegmentBuffer);
+      this.usageLedger = { phase: "ready", totals, revision: 1,
+        projectedRevision: 0, build: null, error: null };
+      try { await this.persistState(); }
+      catch (error) { await this.recoverPersistedState(error); throw error; }
+    });
+  }
+
+  private async readUsageBytes(
+    object: Parameters<typeof readArchiveObjectBytes>[0], label: string,
+  ): Promise<ArrayBuffer> {
+    try {
+      return await withRemoteDeadline(readArchiveObjectBytes(object), label);
+    } catch (error) {
+      if (error instanceof RunArchiveIntegrityError) {
+        throw new UsageLedgerIntegrityError(error.message);
+      }
+      throw error;
+    }
+  }
+
+  private projectUsageBestEffort(): Promise<void> {
+    if (this.projectionPromise) return this.projectionPromise;
+    const work = this.projectUsage().catch((error) => {
+      logWarn("Run usage projection retained for retry", { module: this.moduleName,
+        detail: error instanceof Error ? error.message : String(error) });
+    });
+    this.projectionPromise = work;
+    void work.finally(() => { if (this.projectionPromise === work) this.projectionPromise = null; });
+    return work;
+  }
+
+  private async projectUsage(): Promise<void> {
+    const captured = await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (!this.runId || this.usageLedger?.phase !== "ready" ||
+        this.usageLedger.projectedRevision >= this.usageLedger.revision) return null;
+      return { runId: this.runId, revision: this.usageLedger.revision,
+        totals: { ...this.usageLedger.totals } };
+    });
+    if (!captured) return;
+    await withRemoteDeadline(projectRunUsageSnapshot(this.db, captured.runId, captured.totals),
+      "SQL Run usage projection");
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      if (this.runId !== captured.runId || this.usageLedger?.phase !== "ready" ||
+        this.usageLedger.projectedRevision >= captured.revision) return;
+      this.usageLedger = { ...this.usageLedger, projectedRevision: captured.revision };
+      try { await this.persistState(); }
+      catch (error) { await this.recoverPersistedState(error); throw error; }
+    });
   }
 
   private async handleArchiveQuery(url: URL): Promise<Response> {
@@ -821,6 +1125,8 @@ export class RunNotifierDO extends NotifierBase {
 
   private async deliverIntent(intent: RunFlushIntent): Promise<void> {
     if (!this.offloadBucket) return;
+    if (intent.kind === "usage" &&
+      (this.baselineFenceRequested || this.usageLedger?.phase === "building")) return;
     const bytes = await readNotifierBlob(this.state.storage, intent.blob);
     const existing = await withRemoteDeadline(this.offloadBucket.get(intent.key), "R2 get");
     if (existing) {
@@ -838,7 +1144,7 @@ export class RunNotifierDO extends NotifierBase {
             ? this.r2SegmentBuffer.slice(0, intent.count)
             : this.usageSegmentBuffer.slice(0, intent.count);
           matchesLegacy = await gzipDecompressToString(current, {
-            maxDecompressedBytes: 8 * 1024 * 1024,
+            maxDecompressedBytes: 8 * 1024 * 1024, fatalUtf8: true,
           }) === jsonl(pending);
         } catch {
           // A corrupt or unrelated existing object is never overwritten.
@@ -954,8 +1260,9 @@ export class RunNotifierDO extends NotifierBase {
                 await this.recoverPersistedState(error);
                 throw error;
               }
-            } else if (this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE ||
-              bufferBytes(this.usageSegmentBuffer) >= MAX_FLUSH_PLAIN_BYTES) {
+            } else if (!this.baselineFenceRequested && this.usageLedger?.phase !== "building" &&
+              (this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE ||
+              bufferBytes(this.usageSegmentBuffer) >= MAX_FLUSH_PLAIN_BYTES)) {
               try {
                 await this.freeze("usage");
                 await this.persistState();
@@ -966,7 +1273,8 @@ export class RunNotifierDO extends NotifierBase {
             }
           });
         }
-        const intent = this.flushIntents[0];
+        const intent = this.flushIntents.find((candidate) => candidate.kind !== "usage" ||
+          !this.baselineFenceRequested && this.usageLedger?.phase !== "building");
         if (!intent) return;
         await this.deliverIntent(intent);
       }
@@ -998,6 +1306,16 @@ export class RunNotifierDO extends NotifierBase {
   override async alarm(): Promise<void> {
     await this.awaitInitialized();
     await super.alarm();
+    if (this.runId && this.usageLedger?.phase === "building") {
+      try { await this.ensureUsageLedger(this.runId); }
+      catch (error) {
+        logWarn("Usage ledger migration deferred", { module: this.moduleName,
+          detail: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (this.hasLedgerWork() && this.usageLedger?.phase === "ready") {
+      await this.projectUsageBestEffort();
+    }
     if (this.offloadBucket && this.runId) {
       try {
         // Bootstrap and resume share one budget. Calling ensureArchive and
@@ -1022,6 +1340,8 @@ export class RunNotifierDO extends NotifierBase {
     if (this.offloadBucket && this.hasPending()) {
       await this.state.blockConcurrencyWhile(async () => {
         for (const kind of ["run", "usage"] as const) {
+          if (kind === "usage" &&
+            (this.baselineFenceRequested || this.usageLedger?.phase === "building")) continue;
           if (!this.intent(kind) && (kind === "run"
             ? this.r2SegmentBuffer.length > 0 : this.usageSegmentBuffer.length > 0)) {
             try {
@@ -1038,7 +1358,7 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistLastEventId(this.eventIdCounter);
       await this.armRecoveryAlarm();
     }
-    if (this.hasArchiveWork()) await this.armRecoveryAlarm();
+    if (this.hasArchiveWork() || this.hasLedgerWork()) await this.armRecoveryAlarm();
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -1055,6 +1375,8 @@ export class RunNotifierDO extends NotifierBase {
           await this.state.blockConcurrencyWhile(async () => {
             await this.awaitInitialized();
             for (const kind of ["run", "usage"] as const) {
+              if (kind === "usage" &&
+                (this.baselineFenceRequested || this.usageLedger?.phase === "building")) continue;
               if (!this.intent(kind) && (kind === "run"
                 ? this.r2SegmentBuffer.length > 0 : this.usageSegmentBuffer.length > 0)) {
                 await this.freeze(kind);
@@ -1108,6 +1430,8 @@ export class RunNotifierDO extends NotifierBase {
         input.request_id.trim() === input.request_id && input.request_id.length > 0 && input.request_id.length <= 512)) {
       const unavailable = await this.ensureArchive(runId);
       if (unavailable) return unavailable;
+      const ledgerUnavailable = await this.ensureUsageLedger(runId);
+      if (ledgerUnavailable) return ledgerUnavailable;
     }
     return this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
@@ -1154,8 +1478,12 @@ export class RunNotifierDO extends NotifierBase {
       if (this.archive?.phase !== "ready") {
         return jsonResponse({ success: false, error: "Run archive index is building" }, 503);
       }
+      if (this.usageLedger?.phase !== "ready") return this.usageUnavailable();
       if (this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) {
         return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);
+      }
+      if (this.usageLedger.revision === Number.MAX_SAFE_INTEGER) {
+        return jsonResponse({ success: false, error: "Usage revision exhausted" }, 503);
       }
       const event: PersistedUsageEvent = {
         meter_type: meterType, units, reference_type: referenceType,
@@ -1164,6 +1492,15 @@ export class RunNotifierDO extends NotifierBase {
       const pending = [...this.usageSegmentBuffer, event];
       const receipts: UsageReceipt[] = requestId
         ? [...this.usageReceipts, { requestId, digest }] : this.usageReceipts;
+      let ledger: UsageLedgerState;
+      try {
+        ledger = { ...this.usageLedger,
+          totals: addUsageEvents(this.usageLedger.totals, [event]),
+          revision: this.usageLedger.revision + 1 };
+      } catch (error) {
+        return jsonResponse({ success: false,
+          error: error instanceof Error ? error.message : "Usage total overflow" }, 503);
+      }
       const refs = [...this.liveBlobs()];
       const unfrozen = pending.slice(this.intent("usage")?.count ?? 0);
       if (unfrozen.length) {
@@ -1178,7 +1515,8 @@ export class RunNotifierDO extends NotifierBase {
       }
       try {
         const draft = { ...this.snapshot(), runId: effectiveRunId,
-          usageSegmentBuffer: pending, usageReceipts: receipts };
+          usageSegmentBuffer: pending, usageReceipts: receipts,
+          usageLedger: ledger };
         parseRunNotifierJournalState(draft);
         refs.push(prospectiveBlobRef(SNAPSHOT_RESERVE_BYTES));
         assertNotifierSnapshotBudget(draft, refs);
@@ -1189,6 +1527,7 @@ export class RunNotifierDO extends NotifierBase {
       this.runId = effectiveRunId;
       this.usageSegmentBuffer = pending;
       this.usageReceipts = receipts;
+      this.usageLedger = ledger;
       try {
         if (!this.intent("usage") &&
           (pending.length >= USAGE_EVENT_SEGMENT_SIZE || bufferBytes(pending) >= MAX_FLUSH_PLAIN_BYTES)) {
@@ -1205,6 +1544,9 @@ export class RunNotifierDO extends NotifierBase {
         const pump = this.pumpBestEffort();
         if (this.state.waitUntil) this.state.waitUntil(pump);
         else await pump;
+        const projection = this.projectUsageBestEffort();
+        if (this.state.waitUntil) this.state.waitUntil(projection);
+        else await projection;
       }
       return response;
     });

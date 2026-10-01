@@ -150,7 +150,10 @@ function stateWitness(state: RunNotifierJournalState): string {
     usageSegmentBuffer: state.usageSegmentBuffer,
     usageLastFlushedSegmentIndex: state.usageLastFlushedSegmentIndex,
     legacyPendingUsageCount: state.legacyPendingUsageCount,
-    usageIntent: state.flushIntents.find((item) => item.kind === "usage") ?? null }));
+    usageIntent: state.flushIntents.find((item) => item.kind === "usage") ?? null,
+    // Preserve the old witness for pre-ledger exports. A new ledger, including
+    // a building/repair fence or unacknowledged revision, is never discarded.
+    ...(state.usageLedger ? { usageLedger: state.usageLedger } : {}) }));
 }
 
 function mapStorage(values: Map<string, unknown>): DurableObjectStorageBinding {
@@ -508,14 +511,15 @@ export async function convertRunArchiveCandidate(input: CandidateInput): Promise
     if (safeJSON(ref) !== safeJSON(usageIntent.blob)) fail("usage intent blob changed during copy");
   }
   const archive = { ...newRunArchiveState(), phase: "ready" as const, root, build: null };
-  const snapshot = { schemaVersion: 3 as const, eventBuffer: state.eventBuffer,
+  const snapshot = { schemaVersion: 4 as const, eventBuffer: state.eventBuffer,
     eventIdCounter: state.eventIdCounter, runId: state.runId,
     r2SegmentIndex: segmentNumber + 1, r2SegmentBuffer: [], r2LastFlushedSegmentIndex: segmentNumber,
     usageSegmentIndex: state.usageSegmentIndex, usageSegmentBuffer: state.usageSegmentBuffer,
     usageLastFlushedSegmentIndex: state.usageLastFlushedSegmentIndex,
     emitDedupKeys: state.emitDedupKeys, flushIntents: usageIntent ? [usageIntent] : [],
     emitReceipts: state.emitReceipts, usageReceipts: state.usageReceipts,
-    legacyPendingRunCount: 0, legacyPendingUsageCount: state.legacyPendingUsageCount, archive };
+    legacyPendingRunCount: 0, legacyPendingUsageCount: state.legacyPendingUsageCount,
+    archive, usageLedger: state.usageLedger };
   if (!parseRunNotifierJournalState(snapshot)) fail("candidate snapshot is absent");
   const reserve = { bytes: 3 * MiB, digest: "0".repeat(64), chunks: Array(48).fill("0".repeat(64)) };
   assertNotifierSnapshotBudget(snapshot, [...(usageIntent ? [usageIntent.blob] : []), reserve]);
@@ -538,7 +542,7 @@ export async function verifyRunArchiveCandidate(input: VerifyCandidateInput): Pr
     safeJSON(state.archive.root) !== safeJSON(input.verification.root) ||
     stateWitness(state) !== input.verification.preservedStateDigest) fail("candidate head or preserved state mismatch");
   const reserve = { bytes: 3 * MiB, digest: "0".repeat(64), chunks: Array(48).fill("0".repeat(64)) };
-  assertNotifierSnapshotBudget({ ...state, schemaVersion: 3 }, [
+  assertNotifierSnapshotBudget({ ...state, schemaVersion: 4 }, [
     ...state.flushIntents.map((intent) => intent.blob), reserve,
   ]);
   const listed = new Map(inventory.map((item) => [item.key, item]));

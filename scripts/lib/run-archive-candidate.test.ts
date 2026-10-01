@@ -114,7 +114,7 @@ test("splits a real >8 MiB legacy gzip into bounded segments and preserves state
   expect(f.bodies.get(key(1))).toEqual(legacy);
   expect(f.outputBodies.get(usageKey(1))).toEqual(usage);
   const candidateState = await loadNotifierSnapshot(storage(result.values, true), "run") as Record<string, unknown>;
-  expect(candidateState).toMatchObject({ schemaVersion: 3, eventIdCounter: 85,
+  expect(candidateState).toMatchObject({ schemaVersion: 4, usageLedger: null, eventIdCounter: 85,
     r2SegmentBuffer: [], legacyPendingRunCount: 0, r2SegmentIndex: 3,
     r2LastFlushedSegmentIndex: 2, usageSegmentIndex: 2,
     usageLastFlushedSegmentIndex: 1, usageSegmentBuffer: (snapshot(events).usageSegmentBuffer),
@@ -127,6 +127,44 @@ test("splits a real >8 MiB legacy gzip into bounded segments and preserves state
   for (const descriptor of descriptors) {
     const body = f.outputBodies.get(descriptor.key)!;
     expect((await parseIndexedRunSegment(body, descriptor, RUN)).length).toBeGreaterThan(0);
+  }
+});
+
+test("conversion retains ready usage totals and an unacknowledged projection revision", async () => {
+  const events = [event(1)];
+  const usageLedger = { phase: "ready", totals: { embedding_count: 9 }, revision: 4,
+    projectedRevision: 2, build: null, error: null };
+  const f = await fixture(events, { head: { ...snapshot(events), schemaVersion: 4,
+    archive: null, usageLedger } });
+  const result = await convertRunArchiveCandidate(f.input);
+  const candidateStorage = storage(result.values);
+  const candidate = await loadNotifierSnapshot(candidateStorage, "run") as Record<string, unknown>;
+  expect(candidate.schemaVersion).toBe(4);
+  expect(candidate.usageLedger).toEqual(usageLedger);
+  expect(JSON.stringify([...f.values])).toBe(f.unchanged);
+  await persistNotifierSnapshot(candidateStorage, "run", { ...candidate,
+    usageLedger: { ...usageLedger, revision: 5 } });
+  await expect(verifyRunArchiveCandidate({ runId: RUN, storage: candidateStorage,
+    objects: result.objects, readObject: async (name) => f.outputBodies.get(name)!,
+    verification: result.verification })).rejects.toThrow(/preserved state mismatch/);
+});
+
+test("conversion retains usage baseline and repair fences without claiming a ready ledger", async () => {
+  const events = [event(1)];
+  for (const usageLedger of [
+    { phase: "building", totals: {}, revision: 0, projectedRevision: 0, error: null,
+      build: { frontier: 0, pendingCount: 1, intentKey: null, intentDigest: null,
+        stage: "inventory", cursor: null, lastKey: null, scanned: 0, nextIndex: 1 } },
+    { phase: "repair", totals: {}, revision: 0, projectedRevision: 0,
+      build: null, error: "Unexplained legacy usage object" },
+  ]) {
+    const f = await fixture(events, { head: { ...snapshot(events), schemaVersion: 4,
+      archive: null, usageLedger } });
+    const result = await convertRunArchiveCandidate(f.input);
+    const candidate = await loadNotifierSnapshot(storage(result.values, true), "run") as Record<string, unknown>;
+    expect(candidate.schemaVersion).toBe(4);
+    expect(candidate.usageLedger).toEqual(usageLedger);
+    expect(JSON.stringify([...f.values])).toBe(f.unchanged);
   }
 });
 

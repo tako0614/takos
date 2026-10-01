@@ -8,7 +8,11 @@ import { pathToFileURL } from "node:url";
 
 import { getDb } from "../../../infra/db/index.ts";
 import * as schema from "../../../infra/db/schema.ts";
-import { recordAppUsage, recordRunUsageBatch } from "./usage-recorder.ts";
+import {
+  projectRunUsageSnapshot,
+  recordAppUsage,
+  recordRunUsageBatch,
+} from "./usage-recorder.ts";
 import { adaptEdgeSqlBinding } from "../../../platform/adapters/edge-sql.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import type {
@@ -16,18 +20,11 @@ import type {
   EdgeSqlResult,
   EdgeSqlStatement,
   EdgeSqlValue,
-  ObjectStoreBinding,
   SqlDatabaseBinding,
   SqlPreparedStatementBinding,
   SqlResultBinding,
   SqlTransactionSessionBinding,
 } from "../../../shared/types/bindings.ts";
-import { createInMemoryObjectStore } from "../../../local-platform/in-memory-r2.ts";
-import {
-  usageSegmentKey,
-  writeUsageEventSegmentToR2,
-  type PersistedUsageEvent,
-} from "../offload/usage-events.ts";
 import type { AppUsageRecordInput } from "./usage-types.ts";
 
 const ACCOUNT_ID = "usage-owner";
@@ -235,6 +232,8 @@ function createLibsqlEdgeBinding(client: Client) {
 async function createFixture(options: {
   tokenUsage?: { inputTokens?: number; outputTokens?: number };
   fileBacked?: boolean;
+  workspaceId?: string;
+  ownerAccountId?: string | null;
 } = {}) {
   const directory = options.fileBacked
     ? await mkdtemp(join(tmpdir(), "takos-usage-recorder-"))
@@ -280,24 +279,30 @@ async function createFixture(options: {
       account_id TEXT,
       usage TEXT NOT NULL DEFAULT '{}'
     );
+    CREATE TABLE accounts (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_account_id TEXT
+    );
   `);
   const db = drizzle(client, { schema });
+  const workspaceId = options.workspaceId ?? ACCOUNT_ID;
   await client.execute({
     sql: "INSERT INTO runs (id, account_id, usage) VALUES (?, ?, ?)",
-    args: [RUN_ID, ACCOUNT_ID, JSON.stringify(options.tokenUsage ?? {})],
+    args: [RUN_ID, workspaceId, JSON.stringify(options.tokenUsage ?? {})],
+  });
+  await client.execute({
+    sql: "INSERT INTO accounts (id, owner_account_id) VALUES (?, ?)",
+    args: [workspaceId, options.ownerAccountId ?? null],
   });
 
-  const baseBucket = createInMemoryObjectStore();
   const env = {
     DB: db,
-    TAKOS_OFFLOAD: baseBucket,
   } as unknown as Env;
 
   return {
     client,
     db,
     env,
-    bucket: baseBucket,
     async close() {
       client.close();
       if (directory) await rm(directory, { force: true, recursive: true });
@@ -318,31 +323,9 @@ async function createFixture(options: {
   };
 }
 
-function rawEvent(
-  meterType: string,
-  units: number,
-  index: number,
-): PersistedUsageEvent {
-  return {
-    meter_type: meterType,
-    units,
-    created_at: new Date(Date.parse(CREATED_AT) + index).toISOString(),
-  };
-}
-
-async function putSegmentedEvents(
-  bucket: ObjectStoreBinding,
-  runId: string,
-  events: PersistedUsageEvent[],
-): Promise<void> {
-  for (let offset = 0, segment = 1; offset < events.length; offset += 200, segment += 1) {
-    await writeUsageEventSegmentToR2(
-      bucket,
-      runId,
-      segment,
-      events.slice(offset, offset + 200),
-    );
-  }
+function namedColumns(row: unknown, columns: readonly string[]) {
+  const values = Object.fromEntries(Object.entries(row as object));
+  return Object.fromEntries(columns.map((column) => [column, values[column]]));
 }
 
 test("recordAppUsage rolls back its event when the rollup write fails, then retries once", async () => {
@@ -381,130 +364,364 @@ test("recordAppUsage rolls back its event when the rollup write fails, then retr
   }
 });
 
-test("recordRunUsageBatch rejects more than 50000 raw events before writing SQL", async () => {
-  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
-  try {
-    await putSegmentedEvents(
-      fixture.bucket,
-      RUN_ID,
-      Array.from({ length: 50_001 }, (_, index) =>
-        rawEvent("embedding_count", 1, index)
-      ),
-    );
-
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
-    expect(await fixture.count("app_usage_events")).toBe(0);
-    expect(await fixture.count("app_usage_rollups")).toBe(0);
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("recordRunUsageBatch records the exact event limit once and ignores unknown meters", async () => {
-  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
-  try {
-    const events = Array.from({ length: 49_999 }, (_, index) =>
-      rawEvent("embedding_count", 1, index)
-    );
-    events.push(rawEvent("future_unrecognized_meter", 900, 49_999));
-    await putSegmentedEvents(fixture.bucket, RUN_ID, events);
-
-    await recordRunUsageBatch(fixture.env, RUN_ID);
-    await recordRunUsageBatch(fixture.env, RUN_ID);
-
-    expect(await fixture.meterUnits("app_usage_events")).toEqual([
-      { meterType: "embedding_count", units: 49_999 },
-      { meterType: "llm_tokens_input", units: 1 },
-    ]);
-    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
-      { meterType: "embedding_count", units: 49_999 },
-      { meterType: "llm_tokens_input", units: 1 },
-    ]);
-    expect(await fixture.count("app_usage_events")).toBe(2);
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("recordRunUsageBatch rejects an overflowing raw aggregate before any meter writes", async () => {
-  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
-  try {
-    await putSegmentedEvents(fixture.bucket, RUN_ID, [
-      rawEvent("embedding_count", Number.MAX_VALUE, 1),
-      rawEvent("embedding_count", Number.MAX_VALUE, 2),
-    ]);
-
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
-    expect(await fixture.count("app_usage_events")).toBe(0);
-    expect(await fixture.count("app_usage_rollups")).toBe(0);
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("recordRunUsageBatch leaves every meter absent after an object GET failure, then retries", async () => {
+test("Run snapshots add SQL tokens and converge monotonically on fixed event keys", async () => {
   const fixture = await createFixture({
     tokenUsage: { inputTokens: 2000, outputTokens: 3000 },
   });
   try {
-    const validEvents = [rawEvent("exec_seconds", 4, 1)];
-    await putSegmentedEvents(fixture.bucket, RUN_ID, validEvents);
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, { embedding_count: 4 });
+    const first = await fixture.client.execute(
+      "SELECT id, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, { embedding_count: 9 });
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, { embedding_count: 2 });
 
-    const base = fixture.bucket;
-    let failGet = true;
-    fixture.env.TAKOS_OFFLOAD = {
-      ...base,
-      get: async (...args: Parameters<typeof base.get>) => {
-        if (failGet) throw new Error("object store read failed");
-        return base.get(...args);
+    expect(await fixture.meterUnits("app_usage_events")).toEqual([
+      { meterType: "embedding_count", units: 9 },
+      { meterType: "llm_tokens_input", units: 2 },
+      { meterType: "llm_tokens_output", units: 3 },
+    ]);
+    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
+      { meterType: "embedding_count", units: 9 },
+      { meterType: "llm_tokens_input", units: 2 },
+      { meterType: "llm_tokens_output", units: 3 },
+    ]);
+    const after = await fixture.client.execute(
+      "SELECT id, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    expect(after.rows[0]?.id).toBe(first.rows[0]?.id);
+    expect(after.rows[0]?.created_at).toBe(first.rows[0]?.created_at);
+    expect(await fixture.count("app_usage_events")).toBe(3);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("zero Run totals are accepted as a no-op", async () => {
+  const fixture = await createFixture();
+  try {
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      llm_tokens_input: 0,
+      llm_tokens_output: 0,
+      embedding_count: 0,
+      vector_search_count: 0,
+      exec_seconds: 0,
+      r2_storage_gb_month: 0,
+      wfp_requests: 0,
+      queue_messages: 0,
+    });
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection uses the workspace owner and reconciles the matching generic usage scope", async () => {
+  const workspaceId = "usage-child-workspace";
+  const ownerAccountId = "usage-parent-owner";
+  const fixture = await createFixture({ workspaceId, ownerAccountId });
+  try {
+    await recordAppUsage(fixture.db, {
+      ownerAccountId,
+      spaceId: workspaceId,
+      meterType: "embedding_count",
+      units: 2,
+      idempotencyKey: "workspace-generic-contribution",
+    });
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      embedding_count: 3,
+    });
+
+    const rows = await fixture.client.execute(`
+      SELECT owner_account_id, scope_type, space_id, meter_type, units,
+        reference_id, reference_type
+      FROM app_usage_events ORDER BY idempotency_key
+    `);
+    expect(rows.rows.map((row) => namedColumns(row, [
+      "owner_account_id",
+      "scope_type",
+      "space_id",
+      "meter_type",
+      "units",
+      "reference_id",
+      "reference_type",
+    ]))).toEqual([
+      {
+        owner_account_id: ownerAccountId,
+        scope_type: "space",
+        space_id: workspaceId,
+        meter_type: "embedding_count",
+        units: 3,
+        reference_id: RUN_ID,
+        reference_type: "run",
       },
-    } as unknown as ObjectStoreBinding;
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
+      {
+        owner_account_id: ownerAccountId,
+        scope_type: "space",
+        space_id: workspaceId,
+        meter_type: "embedding_count",
+        units: 2,
+        reference_id: null,
+        reference_type: null,
+      },
+    ]);
+    const rollup = await fixture.client.execute(`
+      SELECT owner_account_id, scope_type, scope_id, space_id, units
+      FROM app_usage_rollups WHERE meter_type = 'embedding_count'
+    `);
+    expect(rollup.rows[0]).toMatchObject({
+      owner_account_id: ownerAccountId,
+      scope_type: "space",
+      scope_id: workspaceId,
+      space_id: workspaceId,
+      units: 5,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection refuses a legacy fixed event owned by the workspace instead of its owner", async () => {
+  const workspaceId = "usage-child-workspace";
+  const ownerAccountId = "usage-parent-owner";
+  const fixture = await createFixture({ workspaceId, ownerAccountId });
+  try {
+    await fixture.client.execute(`
+      INSERT INTO app_usage_events
+        (id, idempotency_key, owner_account_id, scope_type, space_id, meter_type,
+         units, reference_id, reference_type, metadata, created_at)
+      VALUES ('legacy-workspace-owner', 'run:${RUN_ID}:embedding_count',
+        '${workspaceId}', 'space', '${workspaceId}', 'embedding_count', 8,
+        '${RUN_ID}', 'run', '{"legacy":true}', '${CREATED_AT}');
+    `);
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      embedding_count: 4,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+    const row = await fixture.client.execute(`
+      SELECT id, owner_account_id, units, metadata
+      FROM app_usage_events WHERE idempotency_key = ?
+    `, [`run:${RUN_ID}:embedding_count`]);
+    expect(namedColumns(row.rows[0], [
+      "id",
+      "owner_account_id",
+      "units",
+      "metadata",
+    ])).toEqual({
+      id: "legacy-workspace-owner",
+      owner_account_id: workspaceId,
+      units: 8,
+      metadata: '{"legacy":true}',
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection aborts when the Run workspace row is missing", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.client.execute("DELETE FROM accounts WHERE id = ?", [ACCOUNT_ID]);
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {})).rejects.toThrow(
+      "Run usage workspace is unavailable",
+    );
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run token and accepted totals overflow is rejected before writing", async () => {
+  const fixture = await createFixture({
+    tokenUsage: { inputTokens: Number.MAX_VALUE },
+  });
+  try {
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      llm_tokens_input: Number.MAX_VALUE,
+    })).rejects.toThrow("Invalid aggregated Run usage");
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection rejects malformed and nonobject token usage before writing", async () => {
+  const fixture = await createFixture();
+  try {
+    for (const usage of ["{", "[]", "null"]) {
+      await fixture.client.execute({
+        sql: "UPDATE runs SET usage = ? WHERE id = ?",
+        args: [usage, RUN_ID],
+      });
+      await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+        embedding_count: 3,
+      })).rejects.toThrow("Run usage JSON is invalid");
+      expect(await fixture.count("app_usage_events")).toBe(0);
+      expect(await fixture.count("app_usage_rollups")).toBe(0);
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection repairs a partial event and rollup from every canonical event in its month", async () => {
+  const fixture = await createFixture();
+  try {
+    const period = "2026-09-01";
+    await fixture.client.execute(`
+      INSERT INTO app_usage_events
+        (id, idempotency_key, owner_account_id, scope_type, space_id, meter_type,
+         units, reference_id, reference_type, metadata, created_at)
+      VALUES ('partial', 'run:${RUN_ID}:embedding_count', '${ACCOUNT_ID}', 'space',
+        '${ACCOUNT_ID}', 'embedding_count', 5, '${RUN_ID}', 'run', '{}',
+        '2026-09-12T00:00:00.000Z'),
+        ('ordinary', NULL, '${ACCOUNT_ID}', 'space', '${ACCOUNT_ID}',
+         'embedding_count', 2, NULL, NULL, '{}', '2026-09-18T00:00:00.000Z');
+      INSERT INTO app_usage_rollups
+        (id, owner_account_id, scope_type, scope_id, space_id, meter_type,
+         period_start, units, updated_at)
+      VALUES ('partial-rollup', '${ACCOUNT_ID}', 'space', '${ACCOUNT_ID}',
+        '${ACCOUNT_ID}', 'embedding_count', '${period}', 99, '2026-09-30T00:00:00Z');
+    `);
+
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, { embedding_count: 3 });
+    const event = await fixture.client.execute(
+      "SELECT id, units, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    const rollup = await fixture.client.execute(
+      "SELECT id, period_start, units FROM app_usage_rollups WHERE meter_type = 'embedding_count'",
+    );
+    expect(event.rows[0]).toMatchObject({
+      id: "partial",
+      units: 5,
+      created_at: "2026-09-12T00:00:00.000Z",
+    });
+    expect(rollup.rows).toHaveLength(1);
+    expect(rollup.rows[0]?.period_start).toBe("2026-09-01");
+    expect(rollup.rows[0]?.units).toBe(7);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection aborts foreign fixed-key identity without changing any meter", async () => {
+  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
+  try {
+    await fixture.client.execute(`
+      INSERT INTO app_usage_events
+        (id, idempotency_key, owner_account_id, scope_type, space_id, meter_type,
+         units, reference_id, reference_type, metadata, created_at)
+      VALUES ('foreign', 'run:${RUN_ID}:embedding_count', 'other-owner', 'space',
+        'other-owner', 'embedding_count', 20, '${RUN_ID}', 'run', '{}',
+        '${CREATED_AT}');
+    `);
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      embedding_count: 3,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(1);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+    const foreign = await fixture.client.execute(
+      "SELECT owner_account_id, units FROM app_usage_events WHERE id = 'foreign'",
+    );
+    expect(namedColumns(foreign.rows[0], ["owner_account_id", "units"])).toEqual({
+      owner_account_id: "other-owner",
+      units: 20,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection aborts a conflicting rollup space identity without rewriting it", async () => {
+  const fixture = await createFixture();
+  try {
+    const periodStart = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}-01`;
+    await fixture.client.execute({
+      sql: `INSERT INTO app_usage_rollups
+        (id, owner_account_id, scope_type, scope_id, space_id, meter_type,
+         period_start, units, updated_at)
+        VALUES (?, ?, 'space', ?, 'foreign-space', 'vector_search_count', ?, 12, ?)`,
+      args: ["wrong-space-rollup", ACCOUNT_ID, ACCOUNT_ID, periodStart, CREATED_AT],
+    });
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      embedding_count: 3,
+      vector_search_count: 4,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(1);
+    const row = await fixture.client.execute(
+      "SELECT id, space_id, meter_type, units FROM app_usage_rollups",
+    );
+    expect(namedColumns(row.rows[0], ["id", "space_id", "meter_type", "units"]))
+      .toEqual({
+      id: "wrong-space-rollup",
+      space_id: "foreign-space",
+      meter_type: "vector_search_count",
+      units: 12,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection failure is atomic across meters and can be retried", async () => {
+  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
+  try {
+    await fixture.client.execute(`
+      CREATE TRIGGER reject_later_usage_rollup
+      BEFORE UPDATE ON app_usage_rollups
+      WHEN NEW.meter_type = 'vector_search_count'
+      BEGIN SELECT RAISE(ABORT, 'later rollup unavailable'); END;
+    `);
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      vector_search_count: 6,
+    })).rejects.toThrow();
     expect(await fixture.count("app_usage_events")).toBe(0);
     expect(await fixture.count("app_usage_rollups")).toBe(0);
 
-    failGet = false;
-    await recordRunUsageBatch(fixture.env, RUN_ID);
+    await fixture.client.execute("DROP TRIGGER reject_later_usage_rollup");
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      vector_search_count: 6,
+    });
     expect(await fixture.meterUnits("app_usage_events")).toEqual([
-      { meterType: "exec_seconds", units: 4 },
-      { meterType: "llm_tokens_input", units: 2 },
-      { meterType: "llm_tokens_output", units: 3 },
-    ]);
-    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
-      { meterType: "exec_seconds", units: 4 },
-      { meterType: "llm_tokens_input", units: 2 },
-      { meterType: "llm_tokens_output", units: 3 },
+      { meterType: "llm_tokens_input", units: 1 },
+      { meterType: "vector_search_count", units: 6 },
     ]);
   } finally {
     await fixture.close();
   }
 });
 
-test("recordRunUsageBatch leaves every meter absent after gzip decode failure, then retries", async () => {
-  const fixture = await createFixture({
-    tokenUsage: { inputTokens: 2000, outputTokens: 3000 },
-  });
+test("recordRunUsageBatch delegates to the notifier and rejects failed RPC results", async () => {
+  const fixture = await createFixture();
   try {
-    const validEvents = [rawEvent("exec_seconds", 4, 1)];
-    await putSegmentedEvents(fixture.bucket, RUN_ID, validEvents);
-    await fixture.bucket.put(usageSegmentKey(RUN_ID, 1), new Uint8Array([0, 1, 2]));
-
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
-    expect(await fixture.count("app_usage_events")).toBe(0);
-    expect(await fixture.count("app_usage_rollups")).toBe(0);
-
-    await putSegmentedEvents(fixture.bucket, RUN_ID, validEvents);
+    const requests: Request[] = [];
+    let status = 200;
+    let body = { success: true };
+    fixture.env.RUN_NOTIFIER = {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: async (request: Request) => {
+          requests.push(request);
+          return Response.json(body, { status });
+        },
+      }),
+    } as unknown as Env["RUN_NOTIFIER"];
     await recordRunUsageBatch(fixture.env, RUN_ID);
-    expect(await fixture.meterUnits("app_usage_events")).toEqual([
-      { meterType: "exec_seconds", units: 4 },
-      { meterType: "llm_tokens_input", units: 2 },
-      { meterType: "llm_tokens_output", units: 3 },
-    ]);
-    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
-      { meterType: "exec_seconds", units: 4 },
-      { meterType: "llm_tokens_input", units: 2 },
-      { meterType: "llm_tokens_output", units: 3 },
-    ]);
+    expect(requests[0]?.url).toBe(
+      `http://internal/usage-project?runId=${RUN_ID}`,
+    );
+    status = 503;
+    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
+    status = 200;
+    body = { success: false };
+    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
   } finally {
     await fixture.close();
   }
@@ -761,6 +978,85 @@ test("concurrent stateful calls with the same idempotency key apply once", async
   }
 });
 
+test("concurrent generic events preserve both contributions to one rollup", async () => {
+  const fixture = await createFixture({ fileBacked: true });
+  try {
+    const stateful = createStatefulSqlBinding(fixture.client);
+    const results = await Promise.all([
+      recordAppUsage(stateful.binding, {
+        ownerAccountId: ACCOUNT_ID,
+        meterType: "vector_search_count",
+        units: 5,
+        idempotencyKey: "concurrent-contribution-a",
+      }),
+      recordAppUsage(stateful.binding, {
+        ownerAccountId: ACCOUNT_ID,
+        meterType: "vector_search_count",
+        units: 7,
+        idempotencyKey: "concurrent-contribution-b",
+      }),
+    ]);
+
+    expect(results.every((result) => result.applied)).toBe(true);
+    expect(await fixture.meterUnits("app_usage_events")).toEqual([
+      { meterType: "vector_search_count", units: 5 },
+      { meterType: "vector_search_count", units: 7 },
+    ]);
+    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
+      { meterType: "vector_search_count", units: 12 },
+    ]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("concurrent generic and Run projection keep canonical events and rollups equal", async () => {
+  for (const existingRollup of [false, true]) {
+    const fixture = await createFixture({ fileBacked: true });
+    try {
+      const stateful = createStatefulSqlBinding(fixture.client);
+      if (existingRollup) {
+        await recordAppUsage(stateful.binding, {
+          ownerAccountId: ACCOUNT_ID,
+          spaceId: ACCOUNT_ID,
+          meterType: "embedding_count",
+          units: 1,
+          idempotencyKey: "preexisting-concurrent-usage",
+        });
+      }
+      await Promise.all([
+        recordAppUsage(stateful.binding, {
+          ownerAccountId: ACCOUNT_ID,
+          spaceId: ACCOUNT_ID,
+          meterType: "embedding_count",
+          units: 2,
+          idempotencyKey: `concurrent-generic-${existingRollup}`,
+        }),
+        projectRunUsageSnapshot(stateful.binding, RUN_ID, {
+          embedding_count: 6,
+        }),
+      ]);
+
+      const expected = existingRollup ? 9 : 8;
+      const events = await fixture.client.execute(
+        `SELECT SUM(units) AS units FROM app_usage_events
+         WHERE owner_account_id = ? AND scope_type = 'space' AND space_id = ?
+           AND meter_type = 'embedding_count'`,
+        [ACCOUNT_ID, ACCOUNT_ID],
+      );
+      const rollup = await fixture.client.execute(
+        `SELECT units FROM app_usage_rollups WHERE owner_account_id = ?
+          AND scope_type = 'space' AND scope_id = ? AND meter_type = 'embedding_count'`,
+        [ACCOUNT_ID, ACCOUNT_ID],
+      );
+      expect(Number(events.rows[0]?.units)).toBe(expected);
+      expect(Number(rollup.rows[0]?.units)).toBe(expected);
+    } finally {
+      await fixture.close();
+    }
+  }
+});
+
 async function assertEdgeSqlUsageBatch(wrapped: boolean): Promise<void> {
   const fixture = await createFixture({ fileBacked: true });
   try {
@@ -778,7 +1074,7 @@ async function assertEdgeSqlUsageBatch(wrapped: boolean): Promise<void> {
     expect(result.applied).toBe(true);
     expect(result.eventId).not.toBe("");
     expect(host.transactions).toHaveLength(1);
-    expect(host.transactions[0]).toHaveLength(2);
+    expect(host.transactions[0]).toHaveLength(3);
     for (const statement of host.transactions[0]!) {
       for (const parameter of statement.params ?? []) {
         if (typeof parameter === "number") {
@@ -808,23 +1104,228 @@ test("getDb-wrapped edge.sql writes usage through one real atomic transaction", 
   await assertEdgeSqlUsageBatch(true);
 });
 
-test("recordRunUsageBatch rejects a SQL rollup failure and a retry records the batch", async () => {
+async function assertEdgeSqlRunProjection(wrapped: boolean): Promise<void> {
+  const fixture = await createFixture({ fileBacked: true });
+  try {
+    const host = createLibsqlEdgeBinding(fixture.client);
+    const adapted = adaptEdgeSqlBinding(host.binding);
+    const database = wrapped ? getDb(adapted) : adapted;
+    await projectRunUsageSnapshot(database, RUN_ID, { embedding_count: 4 });
+    const first = await fixture.client.execute(
+      "SELECT id, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    await projectRunUsageSnapshot(database, RUN_ID, { embedding_count: 9 });
+    await projectRunUsageSnapshot(database, RUN_ID, { embedding_count: 2 });
+    const largeUnits = 2 ** 53 + 2;
+    await projectRunUsageSnapshot(database, RUN_ID, { queue_messages: largeUnits });
+
+    expect(host.transactions).toHaveLength(4);
+    for (const statements of host.transactions) {
+      expect(statements.length).toBeLessThanOrEqual(100);
+      for (const statement of statements) {
+        for (const parameter of statement.params ?? []) {
+          if (typeof parameter === "number") {
+            expect(Number.isFinite(parameter)).toBe(true);
+            expect(Math.abs(parameter)).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+          }
+        }
+      }
+    }
+    expect(await fixture.meterUnits("app_usage_events")).toEqual([
+      { meterType: "embedding_count", units: 9 },
+      { meterType: "queue_messages", units: largeUnits },
+    ]);
+    expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
+      { meterType: "embedding_count", units: 9 },
+      { meterType: "queue_messages", units: largeUnits },
+    ]);
+    const after = await fixture.client.execute(
+      "SELECT id, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    expect(after.rows[0]?.id).toBe(first.rows[0]?.id);
+    expect(after.rows[0]?.created_at).toBe(first.rows[0]?.created_at);
+  } finally {
+    await fixture.close();
+  }
+}
+
+test("raw edge.sql projects cumulative Run snapshots in bounded atomic batches", async () => {
+  await assertEdgeSqlRunProjection(false);
+});
+
+test("raw and wrapped edge.sql preserve large finite generic units", async () => {
+  const largeUnits = 2 ** 53 + 2;
+  for (const wrapped of [false, true]) {
+    const fixture = await createFixture({ fileBacked: true });
+    try {
+      const host = createLibsqlEdgeBinding(fixture.client);
+      const adapted = adaptEdgeSqlBinding(host.binding);
+      await recordAppUsage(wrapped ? getDb(adapted) : adapted, {
+        ownerAccountId: ACCOUNT_ID,
+        meterType: "queue_messages",
+        units: largeUnits,
+      });
+      expect(await fixture.meterUnits("app_usage_events")).toEqual([
+        { meterType: "queue_messages", units: largeUnits },
+      ]);
+      expect(await fixture.meterUnits("app_usage_rollups")).toEqual([
+        { meterType: "queue_messages", units: largeUnits },
+      ]);
+      expect(host.transactions).toHaveLength(1);
+      expect(host.transactions[0]?.flatMap((statement) => statement.params ?? [])
+        .some((parameter) => parameter === largeUnits)).toBe(false);
+    } finally {
+      await fixture.close();
+    }
+  }
+});
+
+test("generic rollup refuses an existing space-id identity collision", async () => {
+  const fixture = await createFixture();
+  try {
+    const periodStart = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}-01`;
+    await fixture.client.execute({
+      sql: `INSERT INTO app_usage_rollups
+        (id, owner_account_id, scope_type, scope_id, space_id, meter_type,
+         period_start, units, updated_at)
+        VALUES (?, ?, 'space', ?, 'foreign-space', 'embedding_count', ?, 12, ?)`,
+      args: ["wrong-space-rollup", ACCOUNT_ID, ACCOUNT_ID, periodStart, CREATED_AT],
+    });
+
+    await expect(recordAppUsage(fixture.db, {
+      ownerAccountId: ACCOUNT_ID,
+      spaceId: ACCOUNT_ID,
+      meterType: "embedding_count",
+      units: 3,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    const row = await fixture.client.execute(
+      "SELECT id, space_id, units FROM app_usage_rollups",
+    );
+    expect(namedColumns(row.rows[0], ["id", "space_id", "units"])).toEqual({
+      id: "wrong-space-rollup",
+      space_id: "foreign-space",
+      units: 12,
+    });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("generic contribution absorbed by a large existing rollup aborts without persisting its event", async () => {
+  const fixture = await createFixture();
+  try {
+    const periodStart = `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}-01`;
+    const largeUnits = 2 ** 53;
+    await fixture.client.execute({
+      sql: `INSERT INTO app_usage_rollups
+        (id, owner_account_id, scope_type, scope_id, space_id, meter_type,
+         period_start, units, updated_at)
+        VALUES (?, ?, 'account', ?, NULL, 'embedding_count', ?, ?, ?)`,
+      args: ["large-rollup", ACCOUNT_ID, ACCOUNT_ID, periodStart, largeUnits, CREATED_AT],
+    });
+    await expect(recordAppUsage(fixture.db, {
+      ownerAccountId: ACCOUNT_ID,
+      meterType: "embedding_count",
+      units: 1,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    const row = await fixture.client.execute("SELECT units FROM app_usage_rollups");
+    expect(row.rows[0]?.units).toBe(largeUnits);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run SQL token and supplied total addition rejects absorbed positive units", async () => {
   const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
   try {
-    await putSegmentedEvents(fixture.bucket, RUN_ID, [
-      rawEvent("vector_search_count", 6, 1),
-    ]);
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      llm_tokens_input: 2 ** 53,
+    })).rejects.toThrow("Invalid aggregated Run usage");
+    expect(await fixture.count("app_usage_events")).toBe(0);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("wrapped edge.sql projects cumulative Run snapshots in bounded atomic batches", async () => {
+  await assertEdgeSqlRunProjection(true);
+});
+
+test("Run projection rejects an unseen key that appears in a different month after prefetch", async () => {
+  const fixture = await createFixture({ fileBacked: true });
+  try {
+    const stateful = createStatefulSqlBinding(fixture.client);
+    const transaction = stateful.binding.withTransaction!;
+    let injectStaleWriter = true;
+    const binding: SqlDatabaseBinding = {
+      ...stateful.binding,
+      async withTransaction(callback) {
+        if (injectStaleWriter) {
+          injectStaleWriter = false;
+          await fixture.client.execute(`
+            INSERT INTO app_usage_events
+              (id, idempotency_key, owner_account_id, scope_type, space_id,
+               meter_type, units, reference_id, reference_type, metadata, created_at)
+            VALUES ('september-writer', 'run:${RUN_ID}:embedding_count',
+              '${ACCOUNT_ID}', 'space', '${ACCOUNT_ID}', 'embedding_count', 8,
+              '${RUN_ID}', 'run', '{}', '2026-09-30T23:59:59.000Z');
+          `);
+        }
+        return transaction(callback);
+      },
+    };
+    await expect(projectRunUsageSnapshot(binding, RUN_ID, {
+      embedding_count: 4,
+    })).rejects.toThrow();
+    expect(await fixture.count("app_usage_events")).toBe(1);
+    expect(await fixture.count("app_usage_rollups")).toBe(0);
+
+    await projectRunUsageSnapshot(binding, RUN_ID, {
+      embedding_count: 4,
+    });
+    const event = await fixture.client.execute(
+      "SELECT id, units, created_at FROM app_usage_events WHERE idempotency_key = ?",
+      [`run:${RUN_ID}:embedding_count`],
+    );
+    const rollup = await fixture.client.execute(
+      "SELECT period_start, units FROM app_usage_rollups WHERE meter_type = 'embedding_count'",
+    );
+    expect(event.rows[0]).toMatchObject({
+      id: "september-writer",
+      units: 8,
+      created_at: "2026-09-30T23:59:59.000Z",
+    });
+    expect(rollup.rows).toHaveLength(1);
+    expect(rollup.rows[0]?.period_start).toBe("2026-09-01");
+    expect(rollup.rows[0]?.units).toBe(8);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Run projection rolls back every meter on SQL rollup failure, then retries", async () => {
+  const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
+  try {
     await fixture.client.execute(`
-      CREATE TRIGGER reject_usage_rollup BEFORE INSERT ON app_usage_rollups
+      CREATE TRIGGER reject_usage_rollup BEFORE UPDATE ON app_usage_rollups
       BEGIN SELECT RAISE(ABORT, 'rollup unavailable'); END;
     `);
 
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      vector_search_count: 6,
+    })).rejects.toThrow();
     expect(await fixture.count("app_usage_events")).toBe(0);
     expect(await fixture.count("app_usage_rollups")).toBe(0);
 
     await fixture.client.execute("DROP TRIGGER reject_usage_rollup");
-    await recordRunUsageBatch(fixture.env, RUN_ID);
+    await projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      vector_search_count: 6,
+    });
     expect(await fixture.meterUnits("app_usage_events")).toEqual([
       { meterType: "llm_tokens_input", units: 1 },
       { meterType: "vector_search_count", units: 6 },
@@ -838,12 +1339,9 @@ test("recordRunUsageBatch rejects a SQL rollup failure and a retry records the b
   }
 });
 
-test("recordRunUsageBatch leaves all meters absent when a later meter rollup fails", async () => {
+test("Run projection leaves all meters absent when a later meter insert fails", async () => {
   const fixture = await createFixture({ tokenUsage: { inputTokens: 1000 } });
   try {
-    await putSegmentedEvents(fixture.bucket, RUN_ID, [
-      rawEvent("vector_search_count", 6, 1),
-    ]);
     await fixture.client.execute(`
       CREATE TRIGGER reject_later_usage_rollup
       BEFORE INSERT ON app_usage_rollups
@@ -851,7 +1349,9 @@ test("recordRunUsageBatch leaves all meters absent when a later meter rollup fai
       BEGIN SELECT RAISE(ABORT, 'later rollup unavailable'); END;
     `);
 
-    await expect(recordRunUsageBatch(fixture.env, RUN_ID)).rejects.toThrow();
+    await expect(projectRunUsageSnapshot(fixture.db, RUN_ID, {
+      vector_search_count: 6,
+    })).rejects.toThrow();
     expect(await fixture.count("app_usage_events")).toBe(0);
     expect(await fixture.count("app_usage_rollups")).toBe(0);
   } finally {
@@ -859,10 +1359,10 @@ test("recordRunUsageBatch leaves all meters absent when a later meter rollup fai
   }
 });
 
-test("recordRunUsageBatch rejects when the run does not exist", async () => {
+test("Run projection rejects when the run does not exist", async () => {
   const fixture = await createFixture();
   try {
-    await expect(recordRunUsageBatch(fixture.env, "missing-run")).rejects.toThrow();
+    await expect(projectRunUsageSnapshot(fixture.db, "missing-run", {})).rejects.toThrow();
     expect(await fixture.count("app_usage_events")).toBe(0);
     expect(await fixture.count("app_usage_rollups")).toBe(0);
   } finally {

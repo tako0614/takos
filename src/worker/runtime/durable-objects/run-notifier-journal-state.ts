@@ -1,5 +1,7 @@
 import type { NotifierBlobRef } from "./notifier-journal.ts";
 import { parseRunArchiveState, type RunArchiveState } from "./run-archive-maintenance.ts";
+import { parseUsageLedgerState, type UsageLedgerState } from "./run-usage-ledger.ts";
+import { APP_USAGE_METER_TYPES, type AppUsageMeterType } from "../../application/services/app-usage/usage-types.ts";
 import {
   parseRunNotifierState,
   type RunNotifierState,
@@ -34,6 +36,7 @@ export type RunNotifierJournalState = RunNotifierState & {
   legacyPendingRunCount: number;
   legacyPendingUsageCount: number;
   archive: RunArchiveState | null;
+  usageLedger: UsageLedgerState | null;
 };
 
 const BASE_KEYS = [
@@ -158,15 +161,16 @@ function usageReceipts(raw: unknown): UsageReceipt[] {
 export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalState | null {
   if (raw === undefined) return null;
   const value = object(raw, "snapshot");
-  if (value.schemaVersion !== 2 && value.schemaVersion !== 3) {
+  if (value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4) {
     const legacy = parseRunNotifierState(raw);
     return legacy && { ...legacy, flushIntents: [], emitReceipts: [], usageReceipts: [],
       legacyPendingRunCount: legacy.r2SegmentBuffer.length,
-      legacyPendingUsageCount: legacy.usageSegmentBuffer.length, archive: null };
+      legacyPendingUsageCount: legacy.usageSegmentBuffer.length, archive: null, usageLedger: null };
   }
   exactKeys(value, ["schemaVersion", ...BASE_KEYS, "flushIntents", "emitReceipts", "usageReceipts",
     "legacyPendingRunCount", "legacyPendingUsageCount",
-    ...(value.schemaVersion === 3 ? ["archive"] : [])], "snapshot.fields");
+    ...(value.schemaVersion === 3 || value.schemaVersion === 4 ? ["archive"] : []),
+    ...(value.schemaVersion === 4 ? ["usageLedger"] : [])], "snapshot.fields");
   const base: Record<string, unknown> = { schemaVersion: 1 };
   for (const key of BASE_KEYS) base[key] = value[key];
   const state = parseRunNotifierState(base);
@@ -184,7 +188,34 @@ export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalSt
     legacyPendingUsageCount > state.usageSegmentBuffer.length) fail("legacyPending.count");
   const intents = flushIntents(value.flushIntents, state,
     legacyPendingRunCount, legacyPendingUsageCount);
-  const archive = value.schemaVersion === 3 ? parseRunArchiveState(value.archive) : null;
+  const archive = value.schemaVersion === 4 && value.archive === null ? null
+    : value.schemaVersion === 3 || value.schemaVersion === 4 ? parseRunArchiveState(value.archive) : null;
+  const usageLedger = value.schemaVersion === 4 ? parseUsageLedgerState(value.usageLedger) : null;
+  if (usageLedger && !state.runId) fail("usageLedger.runId");
+  if (usageLedger?.phase === "building") {
+    const build = usageLedger.build!;
+    const usageIntent = intents.find((intent) => intent.kind === "usage");
+    if (build.frontier !== state.usageLastFlushedSegmentIndex ||
+      build.pendingCount !== state.usageSegmentBuffer.length ||
+      build.intentKey !== (usageIntent?.key ?? null) ||
+      build.intentDigest !== (usageIntent?.blob.digest ?? null)) fail("usageLedger.build witness");
+    if (build.lastKey !== null && !build.lastKey.startsWith(`runs/${state.runId}/usage/`)) {
+      fail("usageLedger.build identity");
+    }
+  }
+  if (usageLedger?.phase === "ready") {
+    const pendingTotals = new Map<AppUsageMeterType, number>();
+    for (const event of state.usageSegmentBuffer) {
+      if (!(APP_USAGE_METER_TYPES as readonly string[]).includes(event.meter_type)) continue;
+      const meter = event.meter_type as AppUsageMeterType;
+      const total = (pendingTotals.get(meter) ?? 0) + event.units;
+      if (!Number.isFinite(total)) fail("usageLedger.pending overflow");
+      pendingTotals.set(meter, total);
+    }
+    for (const [meter, units] of pendingTotals) {
+      if ((usageLedger.totals[meter] ?? 0) < units) fail("usageLedger.pending total");
+    }
+  }
   if (archive) {
     if (!state.runId || archive.root.lastEventId > state.eventIdCounter) fail("archive.run frontier");
     if (archive.phase === "ready" && state.r2SegmentBuffer.length > 0 &&
@@ -212,5 +243,6 @@ export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalSt
     legacyPendingRunCount,
     legacyPendingUsageCount,
     archive,
+    usageLedger,
   };
 }

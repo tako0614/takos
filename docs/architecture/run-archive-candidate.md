@@ -101,7 +101,9 @@ head が保存済みと記録した events／usage の最終 key は、入力 in
 各 event の ID、type、data、created_at を保ち、最大 100 event と圧縮・展開各 8 MiB の
 gzip に分割します。一つの event がこの形式に収まらなければ拒否します。counter、ring、
 再送 receipt、usage pending／intent／blob と usage object を保持し、Run pending は候補の
-archive に一度収めます。Run の schema3 ready root と外側 v2 head を作り、production
+archive に一度収めます。schema4 の usage 合計・revision・未投影 dirty 状態、building／repair
+fence も保持します。旧コピーの ledger 不在を完全集計済みとは扱いません。
+Run の schema4 ready archive root と外側 v2 head を作り、production
 RunNotifierDO の cold /archive と現在の indexed reader で全履歴を照合します。出力 object も
 合計 100,000 件までです。候補の KV を最後の空 page まで列挙し、head／chunk／root の
 参照先と inventory が正確に一致することを確認します。
@@ -119,6 +121,6 @@ source で見えなかった過去の消失イベントを復元しません。�
   restart／alarm／quota と exact resource／artifact identity。
 - 実利用者の読取・Run／tool／checkpoint 復旧、監視、retained artifact と restore drill。
 
-long Run receipt 容量、usage 50,000 超の集計、実 owner-sub と mobile の対応は
+long Run receipt 容量、旧 usage baseline の custody と実 backend での投影、実 owner-sub と mobile の対応は
 この変換とは別の GA 項目です。[保存の正本](notifier-journal.md) と、repository 内の
 tasks/TASK-takos-ga-archive-candidate-20261001.md を参照してください。

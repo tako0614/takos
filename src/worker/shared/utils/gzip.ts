@@ -29,7 +29,7 @@ const DEFAULT_MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024;
 
 export async function gzipDecompressToString(
   data: ArrayBuffer,
-  options: { maxDecompressedBytes?: number } = {},
+  options: { maxDecompressedBytes?: number; fatalUtf8?: boolean } = {},
 ): Promise<string> {
   const maxDecompressedBytes = options.maxDecompressedBytes ??
     DEFAULT_MAX_DECOMPRESSED_BYTES;
@@ -69,7 +69,7 @@ export async function gzipDecompressToString(
     chunks.push(value);
   }
 
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: options.fatalUtf8 === true });
   const result = new Uint8Array(totalDecompressedSize);
   let offset = 0;
   for (const chunk of chunks) {

@@ -30,7 +30,7 @@ SQL の `runs.last_event_id` は単調な投影であり、R2 の保存済み範
 
 ## Run の索引と旧履歴の移行
 
-Run の論理 snapshot は schema3、Notification は schema2 です。外側の commit head は
+Run の論理 snapshot は schema4、Notification は schema2 です。外側の commit head は
 どちらも v2 のままです。Run は既存 DO KV の point read で SHA-256 を検証する B+tree を
 持ち、各 segment の正確な R2 key、gzip digest/bytes、event の範囲・件数を記録します。
 root の切替と対応する pending prefix の除去を同じ head へ保存します。node を書く前に
@@ -59,10 +59,34 @@ building 中は新規受理と flush を止めます。無効 key、重複範囲
 実環境の切替前に旧 writer と遅延書込を止め、元 head・R2・SQL witness の copy を照合して
 保存する必要があります。大きい旧 segment の forward repair は、その copy をオフラインで
 分割し、ID/type/data/時刻を保った各 gzip の件数・範囲・digest を検証します。オフラインの
-道具は Run 一件の schema3 head と gzip を新しい隔離 namespace 用に作り、cold reader で
+道具は Run 一件の schema4 head と gzip を新しい隔離 namespace 用に作り、cold reader で
 全件を照合します。同じ論理 key の bytes が変わるため、元 bucket／prefix に適用できません。
 upload、本番 head の置換、他 Run を含む切替は実行しません。移行が証明するのは現存検証済み body と既知の
 pending/ring の対応であり、過去の消失復元や SQL 全 witness の照合ではありません。
+
+## 受理済み usage の集計
+
+Run の schema4 head は bounded な canonical 8 メーターの合計と、受理 revision／SQL
+投影済み revision を持ちます。usage の合計・pending・receipt は同じ head で確定します。
+private `/usage-snapshot` はその受理済み合計を返し、`/usage-project` は SQL の token
+合計も含めて全メーターを原子的に投影します。terminal は usage の封印ではありません。
+終了後の usage、新しい revision、失敗や応答喪失は dirty 状態と alarm で回復します。
+SQL 操作は head の直列化や constructor の外で行い、古い ACK は後続 revision を消しません。
+
+旧 schema1〜3 は合計を持たないため、usage baseline を再開可能な bounded step で作ります。
+baseline 中の新規 usage と usage flush を止め、確定済みの正の連番 segment を厳密に読み、
+pending を一度加算します。確定 frontier より先の interrupted PUT は accepted intent／
+legacy pending との完全な witness が必要で、pending と二重に加算しません。
+frontier が0でも prefix 全体が空か確認します。旧 segment 0、番号の欠落、由来不明の
+object、壊れた body は repair として保持し、部分合計を SQL に反映しません。
+これは Run event ID の合法な欠番を禁止する条件ではありません。
+有効な未知 meter token は archive に保持し、canonical 8 の集計には算入しません。
+
+SQL の固定 Run／meter 行は単調な累積投影です。最初の owner／scope／記録月を維持し、
+affected rollup を一定の順に lock してから event を更新・月次合計を再計算します。
+通常 usage の writer も同じ rollup lock に従い、並行した増分を落としません。
+このローカル source 検証とは別に、実 backend の transaction／concurrency と remote
+alarm、producer retry identity、SQL token と raw token の重複方針を確認する必要があります。
 
 ## 通知の長期利用と容量
 
@@ -90,7 +114,7 @@ single-key storage commit、authoritative R2 read、条件付き作成、alarm/r
 exact target 資格確認を引き継ぎます。
 
 v2 head への移行後、`6066a1a5c` より古いコードは新 state を空とみなす危険があります。
-Run schema3 を読めない旧 source（`a8411bb315` を含む）は cold load を拒否し、履歴を
+Run schema4 を読めない旧 source（`9e4559609d` を含む）は cold load を拒否し、履歴を
 そのまま提供できません。旧稼働 writer は新しい building fence を認識しません。guard のある
 artifact が実際に保存・配備された証明はまだありません。古い artifact への deploy は
 オフライン restore または forward repair が必要です。この source 検証は deploy 許可や
@@ -98,4 +122,5 @@ artifact が実際に保存・配備された証明はまだありません。�
 
 実装の検証記録は `tasks/TASK-takos-ga-notifier-journal-20261001.md` と
 `tasks/TASK-takos-ga-run-archive-index-20261001.md` と
-`tasks/TASK-takos-ga-archive-candidate-20261001.md` にあります。
+`tasks/TASK-takos-ga-archive-candidate-20261001.md` と
+`tasks/TASK-takos-ga-accepted-usage-20261001.md` にあります。

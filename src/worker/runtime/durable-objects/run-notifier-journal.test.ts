@@ -14,7 +14,9 @@ import { createInMemoryObjectStore } from "../../local-platform/in-memory-r2.ts"
 import {
   loadNotifierSnapshot,
   persistNotifierSnapshot,
+  readNotifierBlob,
   stageNotifierBlob,
+  type NotifierBlobRef,
 } from "./notifier-journal.ts";
 import { parseRunNotifierJournalState } from "./run-notifier-journal-state.ts";
 import { queryArchive, type ArchiveRoot } from "./run-archive-index.ts";
@@ -190,6 +192,13 @@ test("a committed archive intent survives finalization head failure and a cold r
     beforePut: async (key, value) => {
       if (!armed || key !== "bufferState" || !value || typeof value !== "object" ||
         (value as { schemaVersion?: unknown }).schemaVersion !== 2) return;
+      // Baseline preparation also commits heads. Inject only after the
+      // terminal event has entered this proposed logical head, so the fault
+      // still targets archive finalization after its durable acceptance.
+      const logical = JSON.parse(new TextDecoder().decode(await readNotifierBlob(
+        fixture.binding.storage, (value as { snapshot: NotifierBlobRef }).snapshot,
+      ))) as { eventIdCounter: number };
+      if (logical.eventIdCounter !== 100) return;
       terminalHeadPuts += 1;
       if (terminalHeadPuts >= 2) {
         throw new Error("injected archive finalization head failure");

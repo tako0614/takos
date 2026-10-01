@@ -76,10 +76,31 @@ Takos app は app-local の usage を記録し、課金主体は Takosumi Accoun
 まとめて保存し、読取・展開・SQL の失敗を成功として扱いません。内部 run-usage
 応答の `recorded: false` は、記録を再試行する必要があることを示します。
 
-現在の Run 記録は raw usage 50,000件までで、超過を検出すると全メーターの保存を
-拒否します。これは完全集計の GA 条件を満たしたという意味ではありません。
-notifier の pending usage、終了後の追加 usage、過去の部分記録の修復と実 backend
-での検証は未完了です。既存の usage 行をこの変更で再集計・削除することはありません。
+RunNotifier は受理した canonical 8 メーターの累積合計と revision を、pending と再送
+receipt と同じ commit head に保存します。Run 終了は usage の封印ではなく、終了後の
+追加 usage も同じ経路で反映します。SQL の応答が失われたり反映に失敗した場合は、
+dirty revision を残して alarm で再試行します。古い応答は新しい revision を解除しません。
+通常の反映に R2 の全件読取や 50,000件の切捨てはありません。
+
+固定 Run／meter 行は累積合計の投影です。再試行は値を下げず、最初の行 ID・所有者・
+scope・記録月を保ちます。その月の rollup は同じ transaction 内で canonical event 行
+から再計算するため、過去の部分集計も修復できます。行や履歴を削除しません。
+既存キーの所有者・scope・Run・メーターや月が矛盾する場合は全メーターを拒否します。
+Run の Workspace ID は space scope に保持し、owner は Workspace の ownerAccountId
+から解決します。旧行の Workspace-as-owner が現在の所有者と矛盾するときは、自動で
+所有者を書き換えず修復対象として拒否します。
+
+単位は従来どおり JavaScript／SQL REAL の浮動小数点です。正の増分が既存合計に完全に
+吸収される場合や overflow は拒否します。edge.sql の数値パラメーター制限を超える
+有限値は、検証済み数値だけを SQL literal にして反映します。任意文字列を literal に
+しません。厳密な十進課金や通貨計算の契約を新設したものではありません。
+
+旧 notifier の合計を作る際は保存済み frontier と object inventory、厳密な gzip、pending
+を照合します。segment 0、欠落、由来不明の object や壊れた body を空の履歴として
+扱いません。修復が必要な履歴は保持して集計を拒否します。未知の有効 meter token は
+archive に残し、既存方針どおり canonical usage へ算入しません。
+SQL token と raw token meter の加算方針は従来どおりで、producer の重複・再送 identity
+と実 backend の atomicity／alarm 配送は別の GA 検証条件です。
 
 billing の所有者は Takosumi Accounts の `takosumi.billing.usage` BillingPort
 です。 Takos app は usage イベントを記録し、billing API は Accounts
