@@ -60,6 +60,7 @@ async function listUsageSegments(
   const prefix = `runs/${runId}${USAGE_PREFIX_SUFFIX}`;
   const keys: string[] = [];
   let cursor: string | undefined;
+  const seenCursors = new Set<string>();
 
   while (true) {
     const listed = await bucket.list({ prefix, cursor, limit: 1000 });
@@ -67,7 +68,15 @@ async function listUsageSegments(
       keys.push(obj.key);
     }
     if (!listed.truncated) break;
-    cursor = listed.cursor;
+    const nextCursor = listed.cursor;
+    if (
+      typeof nextCursor !== "string" || !nextCursor ||
+      nextCursor === cursor || seenCursors.has(nextCursor)
+    ) {
+      throw new Error("Usage segment listing returned an invalid pagination cursor");
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
   }
 
   keys.sort();
@@ -108,20 +117,17 @@ export async function getUsageEventsFromR2(
   runId: string,
   options: { maxEvents?: number } = {},
 ): Promise<PersistedUsageEvent[]> {
-  const maxEvents = Math.max(1, Math.min(options.maxEvents ?? 10_000, 100_000));
-  const keys = await listUsageSegments(bucket, runId);
-  const objects = await Promise.all(keys.map((key) => bucket.get(key)));
-  const segments = await Promise.all(
-    objects.map((
-      obj: ObjectStoreObjectBody | null,
-    ) => (obj
-      ? readSegmentObject(obj)
-      : Promise.resolve([] as PersistedUsageEvent[]))
-    ),
+  const requestedMaxEvents = options.maxEvents ?? 10_000;
+  const maxEvents = Math.max(
+    1,
+    Math.min(Number.isNaN(requestedMaxEvents) ? 10_000 : requestedMaxEvents, 100_000),
   );
-
+  const keys = await listUsageSegments(bucket, runId);
   const out: PersistedUsageEvent[] = [];
-  for (const events of segments) {
+  for (const key of keys) {
+    const obj: ObjectStoreObjectBody | null = await bucket.get(key);
+    if (!obj) continue;
+    const events = await readSegmentObject(obj);
     for (const ev of events) {
       out.push(ev);
       if (out.length >= maxEvents) return out;

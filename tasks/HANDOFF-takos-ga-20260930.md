@@ -372,3 +372,33 @@ restore remain open. No other worktree, original UI/engine dirty data, common
 contract, billing, grants, production deploy, image publication or merge changed.
 See TASK-takos-ga-notifier-journal-20261001.md; exact new commit/CI are recorded in
 /root/hdd/takos-dev/handoffs/takos-ga-dedicated-result-20260930.md and draftPR126.
+
+## Usage archive body reads — 2026-10-01 01:51 UTC
+
+The existing usage reader fetched/decompressed all segments before applying its
+event cap. It now reads sorted bodies sequentially and stops at the cap. Required
+prefix failures still reject; missing/empty segments still continue. NaN uses the
+default10,000 instead of disabling the cap. Ordinary lower/upper/fractional limits
+are preserved. Invalid progressing cursors reject instead of looping indefinitely.
+No usage producer, pricing, billing, permission or persisted schema change is added.
+The emit helper has no production caller in this repository; stable usage retry
+identity must come from an actual producer and is not claimed as wired end to end.
+
+Final regressions fail against byte-identical 6430d9ba production source; a direct
+valid10,001-record gzip witness shows oldNaN10,001 versus current10,000. Current
+six focused tests/20assertions and independent scoped review pass. Complete local
+bun run check succeeds:1,444tests/237files/9,037assertions,20OpenTofu,allRust phases,
+mandatory real Worker/fullSQLite/ToolExecutor/process recovery,Web/Worker builds.
+Types98/lint111 stay declared with zero undeclared findings. No timeout/assertion
+or phase is weakened. Protected original UI and short-worker engine dirty remain
+intact. See TASK-takos-ga-usage-archive-reads-20261001.md and ignored
+tmp/ga-usage-archive-20261001/; exact commit/CI is returned in the dedicated result.
+
+Capacity still open: all catalog keys are listed/sorted, six-digit key rollover,
+long Run receipts and real backend/subscriber performance. Existing run-usage
+aggregation's50,000 cap and SQL-token fallback policy are unchanged; completeness
+above that cap is not proven. A Takos-owned authenticated durable index can use
+existing point storage/R2 reads, but upgrade fencing, immutable-page integrity,
+restart/GC and both observation/indexer consumers need implementation and proof.
+This source fix does not qualify GA, shared backend lifecycle, first-install
+owner-sub/mobile correspondence, published images or live user journey/restore.
