@@ -12,6 +12,24 @@ import { parseRunNotifierJournalState, type RunNotifierJournalState } from "../.
 import { RunNotifierDO } from "../../src/worker/runtime/durable-objects/run-notifier.ts";
 import { newRunArchiveState } from "../../src/worker/runtime/durable-objects/run-archive-maintenance.ts";
 import { archiveNodeKey, hashArchiveJSON, prepareArchiveInsert, queryArchive, stageArchiveInsert } from "../../src/worker/runtime/durable-objects/run-archive-index.ts";
+import {
+  parseReceiptEntry,
+  prepareReceiptBootstrap,
+  prepareReceiptInsert,
+  readReceiptBootstrapProgress,
+  receiptBootstrapProgressKey,
+  receiptNodeKey,
+  stageReceiptBootstrapBatch,
+  validateReceiptNode,
+  visitReceiptIndexClosure,
+  type ReceiptNodeRef,
+  type ReceiptEntry,
+} from "../../src/worker/runtime/durable-objects/run-receipt-index.ts";
+import {
+  newReceiptIndexState,
+  parseReceiptRetiredRecord,
+  receiptRetiredKey,
+} from "../../src/worker/runtime/durable-objects/run-receipt-maintenance.ts";
 import type { ArchiveDescriptor, ArchiveRoot } from "../../src/worker/shared/contracts/run-archive.ts";
 
 const MiB = 1024 * 1024;
@@ -38,6 +56,8 @@ export type CandidateVerification = {
   eventDigest: string;
   preservedStateDigest: string;
   root: ArchiveRoot;
+  /** Forward-packed legacy receipt identities, independent of their old layout. */
+  receiptDigest?: string;
 };
 export type CandidateSource = {
   sourceHeadDigest: string;
@@ -142,10 +162,12 @@ async function* legacyEvents(bytes: Uint8Array): AsyncGenerator<PersistedRunEven
   }
 }
 
-function stateWitness(state: RunNotifierJournalState): string {
+function stateWitness(state: RunNotifierJournalState, receiptDigest?: string): string {
   return digest(safeJSON({ runId: state.runId, eventIdCounter: state.eventIdCounter,
-    eventBuffer: state.eventBuffer, emitDedupKeys: state.emitDedupKeys,
-    emitReceipts: state.emitReceipts, usageReceipts: state.usageReceipts,
+    eventBuffer: state.eventBuffer,
+    ...(receiptDigest === undefined ? { emitDedupKeys: state.emitDedupKeys,
+      emitReceipts: state.emitReceipts, usageReceipts: state.usageReceipts,
+      ...(state.receiptIndex ? { receiptIndex: state.receiptIndex } : {}) } : { receiptDigest }),
     usageSegmentIndex: state.usageSegmentIndex,
     usageSegmentBuffer: state.usageSegmentBuffer,
     usageLastFlushedSegmentIndex: state.usageLastFlushedSegmentIndex,
@@ -154,6 +176,41 @@ function stateWitness(state: RunNotifierJournalState): string {
     // Preserve the old witness for pre-ledger exports. A new ledger, including
     // a building/repair fence or unacknowledged revision, is never discarded.
     ...(state.usageLedger ? { usageLedger: state.usageLedger } : {}) }));
+}
+
+function legacyReceiptEntries(state: RunNotifierJournalState): ReceiptEntry[] {
+  const entries = new Map<string, ReceiptEntry>();
+  function retain(raw: ReceiptEntry): void {
+    const entry = parseReceiptEntry(raw);
+    entries.set(safeJSON([entry.namespace, entry.key]), entry);
+  }
+  // Exact receipts take precedence over old opaque keys, as in RunNotifier.
+  for (const [key, legacyAcceptedAt] of state.emitDedupKeys) retain({ namespace: "emit", key, legacyAcceptedAt });
+  for (const entry of state.emitReceipts) retain({ namespace: "emit", ...entry });
+  for (const entry of state.usageReceipts) retain({ namespace: "usage", key: entry.requestId, digest: entry.digest });
+  return [...entries.values()].sort((a, b) => a.namespace === b.namespace
+    ? a.key < b.key ? -1 : a.key > b.key ? 1 : 0 : a.namespace === "emit" ? -1 : 1);
+}
+
+function receiptEntriesDigest(entries: Iterable<ReceiptEntry>): string {
+  const hash = createHash("sha256");
+  for (const entry of entries) hash.update(safeJSON(entry) + "\n");
+  return hash.digest("hex");
+}
+
+async function indexedReceiptDigest(storage: DurableObjectStorageBinding,
+  state: RunNotifierJournalState): Promise<string> {
+  if (!state.receiptIndex || state.receiptIndex.phase !== "ready" ||
+    state.receiptIndex.bootstrapStage || state.receiptIndex.stage ||
+    state.emitReceipts.length || state.usageReceipts.length ||
+    state.emitDedupKeys.length || state.receiptIndex.gcTopHash || state.receiptIndex.gcCleanupHash) {
+    fail("forward-packed receipt state is incomplete");
+  }
+  const hash = createHash("sha256");
+  await visitReceiptIndexClosure(storage, state.receiptIndex.root, {
+    entry: (entry) => { hash.update(safeJSON(entry) + "\n"); },
+  });
+  return hash.digest("hex");
 }
 
 function mapStorage(values: Map<string, unknown>): DurableObjectStorageBinding {
@@ -227,7 +284,107 @@ async function reachableNodeHashes(storage: DurableObjectStorageBinding, root: A
   return reachable;
 }
 
-async function assertExactCandidateKV(storage: DurableObjectStorageBinding, root: ArchiveRoot): Promise<void> {
+/** Copy only authenticated receipt state; absent retired copies can be partial GC. */
+async function receiptClosure(
+  storage: DurableObjectStorageBinding, state: RunNotifierJournalState,
+): Promise<{ values: Map<string, string>; emitIds: Set<number> }> {
+  const values = new Map<string, string>();
+  const emitIds = new Set<number>();
+  const index = state.receiptIndex;
+  if (!index) return { values, emitIds };
+  function retain(key: string, json: string): void {
+    if (values.has(key) && values.get(key) !== json) fail("receipt inventory collision");
+    values.set(key, json);
+    if (values.size > 100_000) fail("receipt KV inventory limit");
+  }
+  await visitReceiptIndexClosure(storage, index.root, {
+    node: (ref, json) => retain(receiptNodeKey(ref.hash), json),
+    entry: (entry) => {
+      if (entry.namespace === "emit" && "eventId" in entry) {
+        if (entry.eventId > state.eventIdCounter) fail("receipt event exceeds committed counter");
+        emitIds.add(entry.eventId);
+      }
+    },
+  });
+  async function retiredNode(ref: ReceiptNodeRef): Promise<void> {
+    const raw = await storage.get<unknown>(receiptNodeKey(ref.hash));
+    if (raw === undefined) return;
+    if (typeof raw !== "string") fail("retired receipt node shape");
+    // A hash may legitimately become live again after a later split. Verify
+    // it; the runtime collector must skip it rather than delete active bytes.
+    await validateReceiptNode(ref, raw);
+    retain(receiptNodeKey(ref.hash), raw);
+  }
+  async function retiredRecord(recordHash: string, optional: boolean): Promise<
+    ReturnType<typeof parseReceiptRetiredRecord> | null
+  > {
+    const raw = await storage.get<unknown>(receiptRetiredKey(recordHash));
+    if (raw === undefined && optional) return null;
+    if (typeof raw !== "string" || digest(raw) !== recordHash) fail("receipt retired record integrity");
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { fail("receipt retired record JSON"); }
+    const record = parseReceiptRetiredRecord(parsed);
+    if (safeJSON(record) !== raw) fail("receipt retired record canonical shape");
+    retain(receiptRetiredKey(recordHash), raw);
+    for (const ref of record.nodes) await retiredNode(ref);
+    return record;
+  }
+  let recordHash = index.gcTopHash;
+  let records = 0;
+  const seen = new Set<string>();
+  while (recordHash !== null) {
+    if (seen.has(recordHash) || records >= index.gcRecords) fail("receipt retired chain cycle/count");
+    seen.add(recordHash);
+    const record = await retiredRecord(recordHash, false);
+    recordHash = record!.previous;
+    records++;
+  }
+  if (records !== index.gcRecords) fail("receipt retired chain count");
+  if (index.gcCleanupHash !== null) await retiredRecord(index.gcCleanupHash, true);
+  if (index.bootstrapStage) {
+    const stage = index.bootstrapStage;
+    const expected = await prepareReceiptBootstrap(state);
+    if (safeJSON(expected.plan) !== safeJSON(stage.plan)) fail("receipt bootstrap plan integrity");
+    const progress = await readReceiptBootstrapProgress(storage, stage.plan);
+    if (progress.json !== null) retain(receiptBootstrapProgressKey(stage.plan.sourceDigest), progress.json);
+    const completed = Math.max(stage.cursor, progress.cursor);
+    for (let position = 0; position < expected.writes.length; position++) {
+      const write = expected.writes[position]!;
+      const raw = await storage.get<unknown>(receiptNodeKey(write.hash));
+      if (raw === undefined && position >= completed) continue;
+      if (raw !== write.json || digest(write.json) !== write.hash) fail("receipt bootstrap node integrity");
+      retain(receiptNodeKey(write.hash), write.json);
+    }
+  }
+  if (index.stage) {
+    const stage = index.stage;
+    const expected = await prepareReceiptInsert(storage, stage.plan.previousRoot, stage.plan.entry);
+    if (safeJSON(expected.plan) !== safeJSON(stage.plan)) fail("receipt staged plan integrity");
+    for (const write of expected.writes) {
+      const raw = await storage.get<unknown>(receiptNodeKey(write.hash));
+      if (raw === undefined) continue;
+      if (raw !== write.json || digest(write.json) !== write.hash) fail("receipt staged node integrity");
+      retain(receiptNodeKey(write.hash), write.json);
+    }
+    if (stage.gc) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(stage.gc.json); } catch { fail("receipt staged retired JSON"); }
+      const record = parseReceiptRetiredRecord(parsed);
+      if (digest(stage.gc.json) !== stage.gc.hash || safeJSON(record) !== stage.gc.json ||
+        safeJSON(record.nodes) !== safeJSON(stage.plan.retired) || record.previous !== index.gcTopHash) {
+        fail("receipt staged retired integrity");
+      }
+      const raw = await storage.get<unknown>(receiptRetiredKey(stage.gc.hash));
+      if (raw !== undefined && raw !== stage.gc.json) fail("receipt staged retired collision");
+      if (raw !== undefined) retain(receiptRetiredKey(stage.gc.hash), stage.gc.json);
+    }
+  }
+  return { values, emitIds };
+}
+
+async function assertExactCandidateKV(
+  storage: DurableObjectStorageBinding, root: ArchiveRoot, receipts: Map<string, string>,
+): Promise<void> {
   const head = await storage.get<unknown>("bufferState") as Record<string, unknown> | undefined;
   if (!head || typeof head !== "object" || !Array.isArray(head.blobs)) fail("candidate head inventory");
   const allowed = new Set<string>(["bufferState"]);
@@ -239,6 +396,7 @@ async function assertExactCandidateKV(storage: DurableObjectStorageBinding, root
     for (const hash of chunks) allowed.add(`notifier-v2/chunks/${hash}`);
   }
   for (const node of await reachableNodeHashes(storage, root)) allowed.add(archiveNodeKey(node));
+  for (const key of receipts.keys()) allowed.add(key);
   const actual = new Set<string>();
   let startAfter: string | undefined;
   while (true) {
@@ -336,6 +494,7 @@ export async function convertRunArchiveCandidate(input: CandidateInput): Promise
   const sourceHeadDigest = digest(safeJSON(rawHead));
   const state = parseRunNotifierJournalState(await loadNotifierSnapshot(input.storage, "run"));
   if (!state || state.runId !== input.runId) fail("source run identity mismatch");
+  const receipts = await receiptClosure(input.storage, state);
   for (const intent of state.flushIntents) {
     const bytes = new Uint8Array(await readNotifierBlob(input.storage, intent.blob));
     // The accepted frozen prefix is exact JSONL, including field order and newline.
@@ -371,12 +530,28 @@ export async function convertRunArchiveCandidate(input: CandidateInput): Promise
   const finalized = new Map<string, ArchiveDescriptor>();
   const eventHash = createHash("sha256");
   const ringById = new Map(state.eventBuffer.map((entry) => [entry.id, entry]));
-  const wanted = new Set([...ringById.keys(), ...state.emitReceipts.map((entry) => entry.eventId)]);
+  const wanted = new Set([...ringById.keys(), ...state.emitReceipts.map((entry) => entry.eventId),
+    ...receipts.emitIds]);
   let eventCount = 0;
   let firstEventId = 0;
   let lastEventId = 0;
-  const candidateValues = new Map<string, unknown>();
+  const candidateValues = new Map<string, unknown>(receipts.values);
   const candidateStorage = mapStorage(candidateValues);
+  const legacyEntries = state.receiptIndex ? null : legacyReceiptEntries(state);
+  const forwardPack = legacyEntries !== null && legacyEntries.length > 64;
+  const receiptDigest = forwardPack ? receiptEntriesDigest(legacyEntries!) : undefined;
+  let candidateReceiptIndex = state.receiptIndex;
+  if (forwardPack) {
+    const source = { emitReceipts: state.emitReceipts, usageReceipts: state.usageReceipts,
+      emitDedupKeys: state.emitDedupKeys };
+    const prepared = await prepareReceiptBootstrap(source);
+    const { plan } = prepared;
+    let cursor = 0;
+    while (cursor < plan.writeHashes.length) {
+      cursor = await stageReceiptBootstrapBatch(candidateStorage, source, plan, cursor, prepared);
+    }
+    candidateReceiptIndex = { ...newReceiptIndexState(), root: plan.root };
+  }
   const candidateObjects: ArchiveObject[] = [];
   let root = newRunArchiveState().root;
   let segmentNumber = 0;
@@ -511,21 +686,24 @@ export async function convertRunArchiveCandidate(input: CandidateInput): Promise
     if (safeJSON(ref) !== safeJSON(usageIntent.blob)) fail("usage intent blob changed during copy");
   }
   const archive = { ...newRunArchiveState(), phase: "ready" as const, root, build: null };
-  const snapshot = { schemaVersion: 4 as const, eventBuffer: state.eventBuffer,
+  const snapshot = { schemaVersion: candidateReceiptIndex ? 5 : 4, eventBuffer: state.eventBuffer,
     eventIdCounter: state.eventIdCounter, runId: state.runId,
     r2SegmentIndex: segmentNumber + 1, r2SegmentBuffer: [], r2LastFlushedSegmentIndex: segmentNumber,
     usageSegmentIndex: state.usageSegmentIndex, usageSegmentBuffer: state.usageSegmentBuffer,
     usageLastFlushedSegmentIndex: state.usageLastFlushedSegmentIndex,
-    emitDedupKeys: state.emitDedupKeys, flushIntents: usageIntent ? [usageIntent] : [],
-    emitReceipts: state.emitReceipts, usageReceipts: state.usageReceipts,
+    emitDedupKeys: forwardPack ? [] : state.emitDedupKeys, flushIntents: usageIntent ? [usageIntent] : [],
+    emitReceipts: forwardPack ? [] : state.emitReceipts,
+    usageReceipts: forwardPack ? [] : state.usageReceipts,
     legacyPendingRunCount: 0, legacyPendingUsageCount: state.legacyPendingUsageCount,
-    archive, usageLedger: state.usageLedger };
+    archive, usageLedger: state.usageLedger,
+    ...(candidateReceiptIndex ? { receiptIndex: candidateReceiptIndex } : {}) };
   if (!parseRunNotifierJournalState(snapshot)) fail("candidate snapshot is absent");
   const reserve = { bytes: 3 * MiB, digest: "0".repeat(64), chunks: Array(48).fill("0".repeat(64)) };
   assertNotifierSnapshotBudget(snapshot, [...(usageIntent ? [usageIntent.blob] : []), reserve]);
   await persistNotifierSnapshot(candidateStorage, "run", snapshot, usageIntent ? [usageIntent.blob] : []);
   const verification: CandidateVerification = { eventCount, firstEventId, lastEventId,
-    eventDigest: eventHash.digest("hex"), preservedStateDigest: stateWitness(state), root };
+    eventDigest: eventHash.digest("hex"), preservedStateDigest: stateWitness(state, receiptDigest), root,
+    ...(receiptDigest === undefined ? {} : { receiptDigest }) };
   await verifyRunArchiveCandidate({ runId: input.runId, storage: candidateStorage,
     objects: candidateObjects, readObject: input.readCandidateObject, verification });
   return { values: candidateValues, objects: candidateObjects, verification,
@@ -540,9 +718,19 @@ export async function verifyRunArchiveCandidate(input: VerifyCandidateInput): Pr
     state.r2LastFlushedSegmentIndex !== state.archive.root.entries ||
     state.r2SegmentIndex !== state.archive.root.entries + 1 ||
     safeJSON(state.archive.root) !== safeJSON(input.verification.root) ||
-    stateWitness(state) !== input.verification.preservedStateDigest) fail("candidate head or preserved state mismatch");
+    stateWitness(state, input.verification.receiptDigest) !== input.verification.preservedStateDigest) {
+    fail("candidate head or preserved state mismatch");
+  }
+  if (input.verification.receiptDigest !== undefined &&
+    (typeof input.verification.receiptDigest !== "string" || !SHA.test(input.verification.receiptDigest) ||
+      await indexedReceiptDigest(input.storage, state) !== input.verification.receiptDigest)) {
+    fail("forward-packed receipt identity mismatch");
+  }
+  const receipts = await receiptClosure(input.storage, state);
   const reserve = { bytes: 3 * MiB, digest: "0".repeat(64), chunks: Array(48).fill("0".repeat(64)) };
-  assertNotifierSnapshotBudget({ ...state, schemaVersion: 4 }, [
+  const { receiptIndex, ...preReceiptState } = state;
+  assertNotifierSnapshotBudget(receiptIndex
+    ? { ...preReceiptState, receiptIndex, schemaVersion: 5 } : { ...preReceiptState, schemaVersion: 4 }, [
     ...state.flushIntents.map((intent) => intent.blob), reserve,
   ]);
   const listed = new Map(inventory.map((item) => [item.key, item]));
@@ -551,7 +739,7 @@ export async function verifyRunArchiveCandidate(input: VerifyCandidateInput): Pr
     fail("candidate committed usage frontier object is missing");
   }
   const descriptors = await allDescriptors(input.storage, state.archive.root);
-  await assertExactCandidateKV(input.storage, state.archive.root);
+  await assertExactCandidateKV(input.storage, state.archive.root, receipts.values);
   const eventObjects = inventory.filter((item) => item.key.includes("/events/"));
   if (eventObjects.length !== descriptors.length) fail("candidate descriptor inventory mismatch");
   for (let i = 0; i < descriptors.length; i++) {
@@ -579,7 +767,7 @@ export async function verifyRunArchiveCandidate(input: VerifyCandidateInput): Pr
   let first = 0;
   let last = 0;
   const witnesses = new Set([...state.eventBuffer.map((entry) => entry.id),
-    ...state.emitReceipts.map((entry) => entry.eventId)]);
+    ...state.emitReceipts.map((entry) => entry.eventId), ...receipts.emitIds]);
   const ringById = new Map(state.eventBuffer.map((entry) => [entry.id, entry]));
   for (const descriptor of descriptors) {
     const page = await getIndexedRunEventsAfter(namespace, objectStore, input.runId, last, descriptor.count);

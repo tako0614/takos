@@ -46,12 +46,25 @@ import {
 } from "./notifier-journal.ts";
 import {
   parseRunNotifierJournalState,
+  nextInlineReceipt,
   type EmitReceipt,
   type RunFlushIntent,
   type RunFlushKind,
   type RunNotifierJournalState,
   type UsageReceipt,
 } from "./run-notifier-journal-state.ts";
+import {
+  lookupReceipt, prepareReceiptBootstrap, prepareReceiptInsert,
+  readReceiptBootstrapProgress, receiptBootstrapProgressKey,
+  stageReceiptBootstrapBatch, stageReceiptInsert,
+  validateReceiptBootstrapPrefix, visitReceiptIndexClosure,
+  writeReceiptBootstrapProgress, ReceiptIndexIntegrityError,
+  type ReceiptEntry,
+} from "./run-receipt-index.ts";
+import {
+  collectReceiptGarbage, newReceiptIndexState, prepareReceiptStage,
+  stageReceiptRetirement, type ReceiptIndexState,
+} from "./run-receipt-maintenance.ts";
 import { inspectRunArchiveSegment, readArchiveObjectBytes, RunArchiveIntegrityError } from "../../application/services/offload/indexed-run-events.ts";
 import {
   prepareArchiveInsert, queryArchive, stageArchiveInsert, hashArchiveJSON,
@@ -75,6 +88,9 @@ const RECOVERY_ALARM_DELAY_MS = 2_000;
 const SNAPSHOT_RESERVE_BYTES = 3 * 1024 * 1024;
 const HEX_ZERO = "0".repeat(64);
 const REMOTE_IO_DEADLINE_MS = 5_000;
+const RECEIPT_DELTA_MAX = 64;
+const RECEIPT_DRAIN_AT = 32;
+const RECEIPT_ALARM_STEPS = 4;
 
 type EmitInput = {
   type: string;
@@ -151,6 +167,9 @@ export class RunNotifierDO extends NotifierBase {
   private flushIntents: RunFlushIntent[] = [];
   private emitReceipts: EmitReceipt[] = [];
   private usageReceipts: UsageReceipt[] = [];
+  private receiptIndex: ReceiptIndexState = newReceiptIndexState();
+  private preparedReceiptBootstrap: Awaited<ReturnType<typeof prepareReceiptBootstrap>> | null = null;
+  private validatedBootstrapCursor = 0;
   private legacyPendingRunCount = 0;
   private legacyPendingUsageCount = 0;
   private needsRecoveryDrain = false;
@@ -171,11 +190,12 @@ export class RunNotifierDO extends NotifierBase {
     this.offloadBucket = env.TAKOS_OFFLOAD;
   }
 
-  private snapshot(): RunNotifierJournalState & { schemaVersion: 4 } {
+  private snapshot(): RunNotifierJournalState & { schemaVersion: 5 } {
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       archive: this.archive,
       usageLedger: this.usageLedger,
+      receiptIndex: this.receiptIndex,
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       runId: this.runId,
@@ -191,7 +211,7 @@ export class RunNotifierDO extends NotifierBase {
       usageReceipts: this.usageReceipts,
       legacyPendingRunCount: this.legacyPendingRunCount,
       legacyPendingUsageCount: this.legacyPendingUsageCount,
-    } as RunNotifierJournalState & { schemaVersion: 4 };
+    } as RunNotifierJournalState & { schemaVersion: 5 };
   }
 
   private liveBlobs(): NotifierBlobRef[] {
@@ -202,6 +222,7 @@ export class RunNotifierDO extends NotifierBase {
     const stored = parseRunNotifierJournalState(
       await loadNotifierSnapshot(this.state.storage, "run"),
     );
+    let preparedBootstrap: Awaited<ReturnType<typeof prepareReceiptBootstrap>> | null = null;
     // Validate every frozen prefix against the immutable bytes before changing
     // any live field. A corrupt intent must not become a new archive authority.
     if (stored) {
@@ -226,6 +247,30 @@ export class RunNotifierDO extends NotifierBase {
           throw new Error("Invalid persisted run archive insertion plan");
         }
       }
+      if (stored.receiptIndex?.stage) {
+        const stage = stored.receiptIndex.stage;
+        const expected = await prepareReceiptInsert(this.state.storage,
+          stage.plan.previousRoot, stage.plan.entry);
+        if (JSON.stringify(expected.plan) !== JSON.stringify(stage.plan)) {
+          throw new Error("Invalid persisted run receipt insertion plan");
+        }
+      }
+      if (stored.receiptIndex?.bootstrapStage) {
+        const expected = await prepareReceiptBootstrap(stored);
+        if (JSON.stringify(expected.plan) !==
+          JSON.stringify(stored.receiptIndex.bootstrapStage.plan)) {
+          throw new Error("Invalid persisted run receipt bootstrap plan");
+        }
+        const progress = await readReceiptBootstrapProgress(this.state.storage, expected.plan);
+        const cursor = Math.max(stored.receiptIndex.bootstrapStage.cursor, progress.cursor);
+        await validateReceiptBootstrapPrefix(this.state.storage, expected, cursor);
+        this.validatedBootstrapCursor = cursor;
+        preparedBootstrap = expected;
+      }
+      if (stored.archive?.stage &&
+        (stored.receiptIndex?.stage || stored.receiptIndex?.bootstrapStage)) {
+        throw new Error("Concurrent archive and receipt stage is unavailable");
+      }
     }
     this.eventBuffer = stored?.eventBuffer ?? [];
     this.eventIdCounter = stored?.eventIdCounter ?? 0;
@@ -240,12 +285,19 @@ export class RunNotifierDO extends NotifierBase {
     this.flushIntents = stored?.flushIntents ?? [];
     this.emitReceipts = stored?.emitReceipts ?? [];
     this.usageReceipts = stored?.usageReceipts ?? [];
+    this.receiptIndex = stored?.receiptIndex ?? newReceiptIndexState(
+      this.emitReceipts.length || this.usageReceipts.length || this.emitDedupKeys.size
+        ? "building" : "ready",
+    );
+    this.preparedReceiptBootstrap = preparedBootstrap;
+    if (!preparedBootstrap) this.validatedBootstrapCursor = 0;
     this.legacyPendingRunCount = stored?.legacyPendingRunCount ?? 0;
     this.legacyPendingUsageCount = stored?.legacyPendingUsageCount ?? 0;
     this.archive = stored?.archive ?? null;
     this.usageLedger = stored?.usageLedger ?? null;
     this.needsRecoveryDrain = !!stored && this.hasPending();
-    if (this.hasPending() || this.hasArchiveWork() || this.hasLedgerWork()) await this.armRecoveryAlarm();
+    if (this.hasPending() || this.hasArchiveWork() || this.hasLedgerWork() ||
+      this.hasReceiptWork()) await this.armRecoveryAlarm();
   }
 
   private hasPending(): boolean {
@@ -269,9 +321,17 @@ export class RunNotifierDO extends NotifierBase {
       this.usageLedger.projectedRevision < this.usageLedger.revision;
   }
 
+  private hasReceiptWork(): boolean {
+    return this.receiptIndex.phase === "building" || this.receiptIndex.stage !== null ||
+      this.receiptIndex.bootstrapStage !== null || this.receiptIndex.gcTopHash !== null ||
+      this.receiptIndex.gcCleanupHash !== null ||
+      this.emitReceipts.length + this.usageReceipts.length >= RECEIPT_DRAIN_AT;
+  }
+
   private async armRecoveryAlarm(): Promise<void> {
-    if (this.archiveNeedsRepair() && !this.hasLedgerWork()) return;
-    if (!this.hasPending() && !this.hasArchiveWork() && !this.hasLedgerWork()) return;
+    if (this.archiveNeedsRepair() && !this.hasLedgerWork() && !this.hasReceiptWork()) return;
+    if (!this.hasPending() && !this.hasArchiveWork() && !this.hasLedgerWork() &&
+      !this.hasReceiptWork()) return;
     const when = Date.now() + RECOVERY_ALARM_DELAY_MS;
     const existing = await this.state.storage.getAlarm();
     if (existing === null || existing <= Date.now() || existing > when) {
@@ -460,6 +520,32 @@ export class RunNotifierDO extends NotifierBase {
     });
   }
 
+  private async findEmitReceipt(key: string):
+  Promise<Extract<ReceiptEntry, { namespace: "emit" }> | null> {
+    const modern = this.emitReceipts.find((entry) => entry.key === key);
+    if (modern) return { namespace: "emit", key, digest: modern.digest,
+      eventId: modern.eventId };
+    const indexed = await lookupReceipt(this.state.storage, this.receiptIndex.root, "emit", key);
+    if (indexed) {
+      if (indexed.namespace !== "emit") throw new ReceiptIndexIntegrityError("namespace mismatch");
+      return indexed;
+    }
+    const legacyAcceptedAt = this.emitDedupKeys.get(key);
+    return legacyAcceptedAt === undefined ? null :
+      { namespace: "emit", key, legacyAcceptedAt };
+  }
+
+  private async findUsageReceipt(key: string):
+  Promise<Extract<ReceiptEntry, { namespace: "usage" }> | null> {
+    const modern = this.usageReceipts.find((entry) => entry.requestId === key);
+    if (modern) return { namespace: "usage", key, digest: modern.digest };
+    const indexed = await lookupReceipt(this.state.storage, this.receiptIndex.root, "usage", key);
+    if (indexed && indexed.namespace !== "usage") {
+      throw new ReceiptIndexIntegrityError("namespace mismatch");
+    }
+    return indexed;
+  }
+
   protected override async validateEmit(input: EmitInput): Promise<Response | null> {
     return this.validateRunEmit(input, true);
   }
@@ -485,17 +571,27 @@ export class RunNotifierDO extends NotifierBase {
     }
     const key = this.readDedupKey(input);
     if (key) {
-      const receipt = this.emitReceipts.find((entry) => entry.key === key);
+      let receipt: Awaited<ReturnType<typeof this.findEmitReceipt>>;
+      try { receipt = await this.findEmitReceipt(key); }
+      catch (error) {
+        if (error instanceof ReceiptIndexIntegrityError) {
+          return jsonResponse({ success: false, error: "Run receipt index unavailable" }, 503);
+        }
+        throw error;
+      }
       if (receipt) {
+        if ("legacyAcceptedAt" in receipt) return jsonResponse({ success: true, duplicate: true });
         const digest = await this.emitDigest(input);
         return receipt.digest === digest
           ? jsonResponse({ success: true, duplicate: true, eventId: receipt.eventId })
           : jsonResponse({ success: false, error: "dedup_key payload conflict" }, 409);
       }
-      // A v1 key has no payload witness. Honor its original opaque result.
-      if (this.emitDedupKeys.has(key)) {
-        return jsonResponse({ success: true, duplicate: true });
-      }
+    }
+    if (this.receiptIndex.phase !== "ready") {
+      return jsonResponse({ success: false, error: "Run receipt index is building; retry later" }, 503);
+    }
+    if (this.emitReceipts.length + this.usageReceipts.length >= RECEIPT_DELTA_MAX) {
+      return jsonResponse({ success: false, error: "Run receipt delta is draining; retry later" }, 503);
     }
     if (requireReady && this.offloadBucket && this.archive && this.archive.phase !== "ready") {
       return jsonResponse({ success: false, error: "Run archive is unavailable for writes" }, 503);
@@ -631,6 +727,13 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistLastEventId(eventId);
     }
     await this.pumpBestEffort();
+    // A rapid long Run may receive many sequential emits before an alarm is
+    // delivered. Drain one accepted receipt in bounded post-commit work so
+    // the 64-entry delta does not turn an otherwise valid stream into 503s.
+    for (let step = 0; step < 3 && this.receiptIndex.phase === "ready" &&
+      this.emitReceipts.length + this.usageReceipts.length > RECEIPT_DRAIN_AT; step++) {
+      await this.advanceReceiptStep();
+    }
     if (RUN_TERMINAL_EVENT_TYPES.has(_input.type as RunTerminalEventType)) {
       const projection = this.projectUsageBestEffort();
       if (this.state.waitUntil) this.state.waitUntil(projection);
@@ -1079,6 +1182,7 @@ export class RunNotifierDO extends NotifierBase {
     await this.state.blockConcurrencyWhile(async () => {
       await this.awaitInitialized();
       if (this.archive !== current) return;
+      if (this.receiptIndex.bootstrapStage || this.receiptIndex.stage) return;
       const plan = await prepareArchiveInsert(this.state.storage, current.root, descriptor);
       const stage = await prepareArchiveStage(current, "build", plan);
       await this.commitArchive({ ...current, build: { ...active, ringWitnesses }, stage });
@@ -1223,6 +1327,7 @@ export class RunNotifierDO extends NotifierBase {
         current.blob.digest !== intent.blob.digest) return;
       if (intent.kind === "run") {
         if (!this.archive || this.archive.phase !== "ready") throw new Error("Archive index is not ready");
+        if (this.receiptIndex.bootstrapStage || this.receiptIndex.stage) return;
         if (!this.archive.stage) {
           await collectRunArchiveGarbage(this.state.storage, this.archive,
             (next) => this.commitArchive(next));
@@ -1330,9 +1435,122 @@ export class RunNotifierDO extends NotifierBase {
     }
   }
 
+  private receiptBootstrapSource() {
+    return { emitReceipts: this.emitReceipts, usageReceipts: this.usageReceipts,
+      emitDedupKeys: Array.from(this.emitDedupKeys.entries()) };
+  }
+
+  private async commitReceiptIndex(next: ReceiptIndexState): Promise<void> {
+    this.receiptIndex = next;
+    try { await this.persistState(); }
+    catch (error) { await this.recoverPersistedState(error); throw error; }
+  }
+
+  private async advanceReceiptStep(): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.awaitInitialized();
+      const current = this.receiptIndex;
+      if (current.phase === "repair" || this.archive?.stage) return;
+      if (current.bootstrapStage) {
+        const source = this.receiptBootstrapSource();
+        const { plan } = current.bootstrapStage;
+        const prepared = this.preparedReceiptBootstrap ?? await prepareReceiptBootstrap(source);
+        if (JSON.stringify(prepared.plan) !== JSON.stringify(plan)) {
+          throw new ReceiptIndexIntegrityError("bootstrap plan changed");
+        }
+        const progress = await readReceiptBootstrapProgress(this.state.storage, plan);
+        const cursor = Math.max(current.bootstrapStage.cursor, progress.cursor);
+        await validateReceiptBootstrapPrefix(this.state.storage, prepared, cursor,
+          Math.min(this.validatedBootstrapCursor, cursor));
+        this.validatedBootstrapCursor = cursor;
+        if (cursor < plan.writeHashes.length) {
+          const nextCursor = await stageReceiptBootstrapBatch(
+            this.state.storage, source, plan, cursor, prepared);
+          await writeReceiptBootstrapProgress(this.state.storage, plan, nextCursor);
+          this.validatedBootstrapCursor = nextCursor;
+          if (nextCursor < plan.writeHashes.length) return;
+        } else await visitReceiptIndexClosure(this.state.storage, plan.root);
+        // The verified root and removal of every old inline receipt are one
+        // logical head commit. An ambiguous write is reloaded before retry.
+        this.emitReceipts = [];
+        this.usageReceipts = [];
+        this.emitDedupKeys.clear();
+        await this.commitReceiptIndex({ ...current, phase: "ready",
+          root: plan.root, bootstrapStage: null });
+        this.preparedReceiptBootstrap = null;
+        this.validatedBootstrapCursor = 0;
+        // The one tiny sidecar is non-authoritative after the final head commit.
+        try { await this.state.storage.delete(receiptBootstrapProgressKey(plan.sourceDigest)); }
+        catch (error) { logWarn("Run receipt bootstrap sidecar cleanup deferred", {
+          module: this.moduleName,
+          detail: error instanceof Error ? error.message : String(error),
+        }); }
+        return;
+      }
+      if (current.phase === "building") {
+        const source = this.receiptBootstrapSource();
+        if (!source.emitReceipts.length && !source.usageReceipts.length &&
+          !source.emitDedupKeys.length) {
+          await this.commitReceiptIndex({ ...current, phase: "ready" });
+          return;
+        }
+        const prepared = await prepareReceiptBootstrap(source);
+        const { plan } = prepared;
+        await this.commitReceiptIndex({ ...current,
+          bootstrapStage: { plan, cursor: 0 } });
+        this.preparedReceiptBootstrap = prepared;
+        return;
+      }
+      if (current.stage) {
+        const stage = current.stage;
+        const next = nextInlineReceipt(this.receiptBootstrapSource());
+        if (!next || JSON.stringify(next.entry) !== JSON.stringify(stage.plan.entry)) {
+          throw new Error("Run receipt delta frontier changed");
+        }
+        await stageReceiptInsert(this.state.storage, stage.plan);
+        await stageReceiptRetirement(this.state.storage, stage);
+        if (next.source === "emit") this.emitReceipts = this.emitReceipts.slice(1);
+        else if (next.source === "usage") this.usageReceipts = this.usageReceipts.slice(1);
+        else throw new Error("Legacy receipt in ready delta");
+        await this.commitReceiptIndex({ ...current, root: stage.plan.root,
+          stage: null, gcTopHash: stage.gc?.hash ?? current.gcTopHash,
+          gcRecords: current.gcRecords + (stage.gc ? 1 : 0) });
+        return;
+      }
+      if (current.gcTopHash || current.gcCleanupHash) {
+        await collectReceiptGarbage(this.state.storage, current,
+          (next) => this.commitReceiptIndex(next));
+        return;
+      }
+      if (this.emitReceipts.length + this.usageReceipts.length < RECEIPT_DRAIN_AT) return;
+      const next = nextInlineReceipt(this.receiptBootstrapSource());
+      if (!next || next.source === "legacy") throw new Error("Receipt delta frontier missing");
+      const already = await lookupReceipt(this.state.storage, current.root,
+        next.entry.namespace, next.entry.key);
+      if (already) throw new Error("Receipt delta duplicates authenticated tree");
+      const { plan } = await prepareReceiptInsert(this.state.storage, current.root, next.entry);
+      const stage = await prepareReceiptStage(current, "drain", plan);
+      await this.commitReceiptIndex({ ...current, stage });
+    });
+  }
+
   override async alarm(): Promise<void> {
     await this.awaitInitialized();
     await super.alarm();
+    const receiptStarted = Date.now();
+    // A legacy bootstrap may stage at most one 16-node batch per alarm.
+    // Ready-state delta drainage and retirement keep their separate step budget.
+    const bootstrapAlarm = this.receiptIndex.phase === "building";
+    for (let step = 0; step < RECEIPT_ALARM_STEPS &&
+      Date.now() - receiptStarted < 20_000 && this.hasReceiptWork(); step++) {
+      try { await this.advanceReceiptStep(); }
+      catch (error) {
+        logWarn("Run receipt maintenance deferred", { module: this.moduleName,
+          detail: error instanceof Error ? error.message : String(error) });
+        break;
+      }
+      if (bootstrapAlarm) break;
+    }
     if (this.runId && this.usageLedger?.phase === "building") {
       try { await this.ensureUsageLedger(this.runId); }
       catch (error) {
@@ -1385,11 +1603,24 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistLastEventId(this.eventIdCounter);
       await this.armRecoveryAlarm();
     }
-    if (this.hasArchiveWork() || this.hasLedgerWork()) await this.armRecoveryAlarm();
+    if (this.hasArchiveWork() || this.hasLedgerWork() || this.hasReceiptWork()) {
+      await this.armRecoveryAlarm();
+    }
   }
 
   override async fetch(request: Request): Promise<Response> {
-    const response = await super.fetch(request);
+    let response: Response;
+    try { response = await super.fetch(request); }
+    catch (error) {
+      // A missing or altered authenticated receipt node is a sealed private
+      // journal failure. Keep the original head and counters untouched.
+      if (error instanceof ReceiptIndexIntegrityError) {
+        logWarn("Run receipt index integrity unavailable", { module: this.moduleName,
+          detail: error.message });
+        return jsonResponse({ success: false, error: "Run receipt index unavailable" }, 503);
+      }
+      throw error;
+    }
     if (!this.hasPending()) this.needsRecoveryDrain = false;
     const path = new URL(request.url).pathname;
     if (request.method !== "GET" || !response.ok ||
@@ -1492,12 +1723,25 @@ export class RunNotifierDO extends NotifierBase {
         runId: effectiveRunId, meterType, units, referenceType, metadata: input.metadata ?? null,
       });
       if (requestId) {
-        const receipt = this.usageReceipts.find((entry) => entry.requestId === requestId);
+        let receipt: Awaited<ReturnType<typeof this.findUsageReceipt>>;
+        try { receipt = await this.findUsageReceipt(requestId); }
+        catch (error) {
+          if (error instanceof ReceiptIndexIntegrityError) {
+            return jsonResponse({ success: false, error: "Run receipt index unavailable" }, 503);
+          }
+          throw error;
+        }
         if (receipt) {
-          return receipt.digest === digest
+          return "digest" in receipt && receipt.digest === digest
             ? jsonResponse({ success: true, duplicate: true })
             : jsonResponse({ success: false, error: "request_id payload conflict" }, 409);
         }
+      }
+      if (this.receiptIndex.phase !== "ready") {
+        return jsonResponse({ success: false, error: "Run receipt index is building; retry later" }, 503);
+      }
+      if (this.emitReceipts.length + this.usageReceipts.length >= RECEIPT_DELTA_MAX) {
+        return jsonResponse({ success: false, error: "Run receipt delta is draining; retry later" }, 503);
       }
       if (!this.offloadBucket) {
         return jsonResponse({ success: false, error: "Usage offload unavailable" }, 503);
@@ -1594,14 +1838,28 @@ export class RunNotifierDO extends NotifierBase {
     }
     const runId = this.runId ?? input.runId;
     if (input.request_id && runId) {
-      const receipt = this.usageReceipts.find((entry) => entry.requestId === input.request_id);
+      let receipt: Awaited<ReturnType<typeof this.findUsageReceipt>>;
+      try { receipt = await this.findUsageReceipt(input.request_id); }
+      catch (error) {
+        if (error instanceof ReceiptIndexIntegrityError) {
+          return jsonResponse({ success: false, error: "Run receipt index unavailable" }, 503);
+        }
+        throw error;
+      }
       if (receipt) {
         const digest = await digestNotifierPayload({ runId, meterType, units,
           referenceType: typeof input.reference_type === "string" ? input.reference_type : null,
           metadata: input.metadata ?? null });
-        return receipt.digest === digest ? jsonResponse({ success: true, duplicate: true })
+        return "digest" in receipt && receipt.digest === digest
+          ? jsonResponse({ success: true, duplicate: true })
           : jsonResponse({ success: false, error: "request_id payload conflict" }, 409);
       }
+    }
+    if (this.receiptIndex.phase !== "ready") {
+      return jsonResponse({ success: false, error: "Run receipt index is building; retry later" }, 503);
+    }
+    if (this.emitReceipts.length + this.usageReceipts.length >= RECEIPT_DELTA_MAX) {
+      return jsonResponse({ success: false, error: "Run receipt delta is draining; retry later" }, 503);
     }
     if (!this.offloadBucket || !runId) return jsonResponse({ success: false, error: "Usage offload unavailable" }, 503);
     if (this.usageSegmentIndex === Number.MAX_SAFE_INTEGER) return jsonResponse({ success: false, error: "Usage sequence exhausted" }, 503);

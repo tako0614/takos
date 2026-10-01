@@ -3,10 +3,30 @@ import { createHash, randomBytes } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import type { DurableObjectStorageBinding } from "../../src/worker/shared/types/bindings.ts";
 import { inspectRunArchiveSegment, parseIndexedRunSegment } from "../../src/worker/application/services/offload/indexed-run-events.ts";
-import { loadNotifierSnapshot, persistNotifierSnapshot, stageNotifierBlob } from "../../src/worker/runtime/durable-objects/notifier-journal.ts";
+import { assertNotifierSnapshotBudget, loadNotifierSnapshot, persistNotifierSnapshot, stageNotifierBlob } from "../../src/worker/runtime/durable-objects/notifier-journal.ts";
 import { prepareArchiveInsert, stageArchiveInsert, queryArchive } from "../../src/worker/runtime/durable-objects/run-archive-index.ts";
 import { newRunArchiveState } from "../../src/worker/runtime/durable-objects/run-archive-maintenance.ts";
 import { emptyArchiveRoot } from "../../src/worker/shared/contracts/run-archive.ts";
+import {
+  emptyReceiptRoot,
+  hashReceiptJSON,
+  lookupReceipt,
+  prepareReceiptBootstrap,
+  prepareReceiptInsert,
+  readReceiptBootstrapProgress,
+  receiptBootstrapProgressKey,
+  receiptNodeKey,
+  stageReceiptInsert,
+  visitReceiptIndexClosure,
+  writeReceiptBootstrapProgress,
+  type ReceiptEntry,
+  type ReceiptRoot,
+} from "../../src/worker/runtime/durable-objects/run-receipt-index.ts";
+import {
+  newReceiptIndexState,
+  prepareReceiptStage,
+  receiptRetiredKey,
+} from "../../src/worker/runtime/durable-objects/run-receipt-maintenance.ts";
 import { convertRunArchiveCandidate, verifyRunArchiveCandidate, type ArchiveObject } from "./run-archive-candidate.ts";
 
 const RUN = "candidate-test";
@@ -59,7 +79,8 @@ function snapshot(events: Event[], options: { lastFlushed?: number; pending?: Ev
     r2LastFlushedSegmentIndex: lastFlushed,
     usageSegmentIndex: (options.usageFlushed ?? 0) + 1, usageSegmentBuffer: [{ meter_type: "tokens", units: 7,
       reference_type: "run", metadata: "{\"model\":\"opaque\"}", created_at: DATE }],
-    usageLastFlushedSegmentIndex: options.usageFlushed ?? 0, emitDedupKeys: [["saved-dedup", Date.parse(DATE)]],
+    usageLastFlushedSegmentIndex: options.usageFlushed ?? 0,
+    emitDedupKeys: [["saved-dedup", Date.parse(DATE)]] as Array<[string, number]>,
     flushIntents: [], emitReceipts: events.length ? [{ key: "saved-dedup", digest: "a".repeat(64),
       eventId: events.at(-1)!.event_id }] : [],
     usageReceipts: [{ requestId: "saved-usage", digest: "b".repeat(64) }],
@@ -94,6 +115,261 @@ async function fixture(events: Event[], options: { pending?: Event[]; sourceObje
     } };
   return { input, values, bodies, outputBodies, unchanged };
 }
+
+async function receiptFixture() {
+  const events = Array.from({ length: 65 }, (_, index) => event(index + 1));
+  const f = await fixture(events, { head: { ...snapshot(events), schemaVersion: 5,
+    emitDedupKeys: [], archive: null, usageLedger: null, receiptIndex: newReceiptIndexState() } });
+  const live = storage(f.values);
+  let root = emptyReceiptRoot();
+  let revived: ReceiptRoot | null = null;
+  let lastPlan: Awaited<ReturnType<typeof prepareReceiptInsert>>["plan"] | null = null;
+  const entries: ReceiptEntry[] = events.map((entry, index) => ({ namespace: "emit",
+    key: `receipt-${String(index).padStart(4, "0")}`, digest: "c".repeat(64), eventId: entry.event_id }));
+  entries.push({ namespace: "usage", key: "receipt-0000", digest: "d".repeat(64) });
+  for (let index = 0; index < entries.length; index++) {
+    const prepared = await prepareReceiptInsert(live, root, entries[index]!);
+    await stageReceiptInsert(live, prepared.plan);
+    root = prepared.plan.root;
+    lastPlan = prepared.plan;
+    if (index === 32) revived = root;
+  }
+  const head = await loadNotifierSnapshot(live, "run") as Record<string, unknown>;
+  const receiptIndex = { ...newReceiptIndexState(), root };
+  await persistNotifierSnapshot(live, "run", { ...head, receiptIndex });
+  return { ...f, events, entries, root, revived: revived!, lastPlan: lastPlan!, live };
+}
+
+test("schema-5 candidate preserves authenticated receipt keys, namespaces and cold lookup", async () => {
+  const f = await receiptFixture();
+  const retained = JSON.stringify([...f.values]);
+  const result = await convertRunArchiveCandidate(f.input);
+  const candidate = await loadNotifierSnapshot(storage(result.values), "run") as Record<string, unknown>;
+  expect(candidate.schemaVersion).toBe(5);
+  expect(candidate.receiptIndex).toEqual({ ...newReceiptIndexState(), root: f.root });
+  expect(candidate.emitReceipts).toEqual(snapshot(f.events).emitReceipts);
+  expect(candidate.usageReceipts).toEqual(snapshot(f.events).usageReceipts);
+  for (const entry of f.entries) {
+    expect(await lookupReceipt(storage(result.values, true), f.root, entry.namespace, entry.key)).toEqual(entry);
+  }
+  expect(JSON.stringify([...f.values])).toBe(retained);
+  await verifyRunArchiveCandidate({ runId: RUN, storage: storage(result.values, true),
+    objects: result.objects, readObject: async (name) => f.outputBodies.get(name)!,
+    verification: result.verification });
+});
+
+test("receipt node loss or corruption fails before writing a candidate object", async () => {
+  for (const corrupt of [false, true]) {
+    const f = await receiptFixture();
+    if (corrupt) f.values.set(receiptNodeKey(f.root.hash!), "{}");
+    else f.values.delete(receiptNodeKey(f.root.hash!));
+    await expect(convertRunArchiveCandidate(f.input)).rejects.toThrow(/receipt index/);
+    expect(f.outputBodies.size).toBe(0);
+  }
+});
+
+test("candidate rejects a missing historical event witnessed only by the receipt tree", async () => {
+  const f = await receiptFixture();
+  // Counter, ring and inline receipt witness event 65; event 4 is witnessed only
+  // by the authenticated receipt index, so a missing body must still fail.
+  const body = gzip(f.events.filter((entry) => entry.event_id !== 4));
+  f.bodies.set(key(1), body);
+  f.input.objects = [object(key(1), body)];
+  await expect(convertRunArchiveCandidate(f.input)).rejects.toThrow(/witness|receipt/);
+});
+
+test("candidate retains incomplete receipt staging without treating node PUT as acceptance", async () => {
+  for (const staged of [false, true]) {
+    const f = await receiptFixture();
+    const head = await loadNotifierSnapshot(f.live, "run") as Record<string, unknown>;
+    const index = { ...newReceiptIndexState(), root: f.root };
+    const inline = snapshot(f.events).emitReceipts[0]!;
+    const prepared = await prepareReceiptInsert(f.live, f.root,
+      { namespace: "emit", ...inline });
+    const stage = await prepareReceiptStage(index, "drain", prepared.plan);
+    if (staged) {
+      const write = prepared.writes[0]!;
+      f.values.set(receiptNodeKey(write.hash), write.json);
+      if (stage.gc) f.values.set(receiptRetiredKey(stage.gc.hash), stage.gc.json);
+    }
+    await persistNotifierSnapshot(f.live, "run", { ...head, receiptIndex: { ...index, stage } });
+    const retained = JSON.stringify([...f.values]);
+    const result = await convertRunArchiveCandidate(f.input);
+    const candidate = await loadNotifierSnapshot(storage(result.values), "run") as Record<string, unknown>;
+    expect(candidate.receiptIndex).toEqual({ ...index, stage });
+    expect(await lookupReceipt(storage(result.values), f.root, "emit", inline.key)).toBeNull();
+    expect(candidate.emitReceipts).toEqual(head.emitReceipts);
+    expect(JSON.stringify([...f.values])).toBe(retained);
+  }
+});
+
+test("receipt retirement permits a revived live node and an already collected old node", async () => {
+  const f = await receiptFixture();
+  const currentNodes = new Set<string>();
+  await visitReceiptIndexClosure(f.live, f.root, { node: (ref) => { currentNodes.add(ref.hash); } });
+  expect(currentNodes.has(f.revived.hash!)).toBe(true);
+  const removed = f.lastPlan.retired.find((ref) => !currentNodes.has(ref.hash))!;
+  expect(removed).toBeDefined();
+  f.values.delete(receiptNodeKey(removed.hash));
+  const json = JSON.stringify({ schemaVersion: 1, nodes: [f.revived, removed], previous: null });
+  const recordHash = await hashReceiptJSON(json);
+  f.values.set(receiptRetiredKey(recordHash), json);
+  const head = await loadNotifierSnapshot(f.live, "run") as Record<string, unknown>;
+  const receiptIndex = { ...newReceiptIndexState(), root: f.root, gcTopHash: recordHash, gcRecords: 1 };
+  await persistNotifierSnapshot(f.live, "run", { ...head, receiptIndex });
+  const result = await convertRunArchiveCandidate(f.input);
+  expect(result.values.get(receiptRetiredKey(recordHash))).toBe(json);
+  expect(result.values.has(receiptNodeKey(f.revived.hash!))).toBe(true);
+  expect(result.values.has(receiptNodeKey(removed.hash))).toBe(false);
+  for (const entry of f.entries) {
+    expect(await lookupReceipt(storage(result.values, true), f.root, entry.namespace, entry.key)).toEqual(entry);
+  }
+});
+
+test("candidate retains the exact interrupted bootstrap plan and authenticated written prefix", async () => {
+  for (const cursor of [0, 1, 3]) {
+    const events = [event(1)];
+    const head = { ...snapshot(events), schemaVersion: 5, archive: null, usageLedger: null,
+      usageReceipts: Array.from({ length: 65 }, (_, index) =>
+        ({ requestId: `bootstrap-${index}`, digest: "e".repeat(64) })),
+      receiptIndex: newReceiptIndexState("building") };
+    const prepared = await prepareReceiptBootstrap(head);
+    expect(prepared.writes.length).toBe(3);
+    head.receiptIndex.bootstrapStage = { plan: prepared.plan, cursor };
+    const f = await fixture(events, { head });
+    for (const write of prepared.writes.slice(0, cursor)) f.values.set(receiptNodeKey(write.hash), write.json);
+    const retained = JSON.stringify([...f.values]);
+    const result = await convertRunArchiveCandidate(f.input);
+    const candidate = await loadNotifierSnapshot(storage(result.values), "run") as Record<string, unknown>;
+    expect(candidate.receiptIndex).toEqual(head.receiptIndex);
+    expect(candidate.usageReceipts).toEqual(head.usageReceipts);
+    for (let index = 0; index < prepared.writes.length; index++) {
+      expect(result.values.get(receiptNodeKey(prepared.writes[index]!.hash)))
+        .toBe(index < cursor ? prepared.writes[index]!.json : undefined);
+    }
+    expect(JSON.stringify([...f.values])).toBe(retained);
+  }
+});
+
+test("bootstrap export rejects a missing completed node or changed source before object writes", async () => {
+  for (const changedSource of [false, true]) {
+    const events = [event(1)];
+    const head = { ...snapshot(events), schemaVersion: 5, archive: null, usageLedger: null,
+      usageReceipts: Array.from({ length: 65 }, (_, index) =>
+        ({ requestId: `bootstrap-${index}`, digest: "e".repeat(64) })),
+      receiptIndex: newReceiptIndexState("building") };
+    const prepared = await prepareReceiptBootstrap(head);
+    head.receiptIndex.bootstrapStage = { plan: prepared.plan, cursor: 1 };
+    if (changedSource) head.usageReceipts[0]!.digest = "f".repeat(64);
+    const f = await fixture(events, { head });
+    if (changedSource) f.values.set(receiptNodeKey(prepared.writes[0]!.hash), prepared.writes[0]!.json);
+    await expect(convertRunArchiveCandidate(f.input)).rejects.toThrow(/bootstrap/);
+    expect(f.outputBodies.size).toBe(0);
+  }
+});
+
+test("candidate preserves the exact bound bootstrap sidecar and completed node prefix", async () => {
+  const events = [event(1)];
+  const head = { ...snapshot(events), schemaVersion: 5, archive: null, usageLedger: null,
+    usageReceipts: Array.from({ length: 65 }, (_, index) =>
+      ({ requestId: `sidecar-${index}`, digest: "e".repeat(64) })),
+    receiptIndex: newReceiptIndexState("building") };
+  const prepared = await prepareReceiptBootstrap(head);
+  head.receiptIndex.bootstrapStage = { plan: prepared.plan, cursor: 0 };
+  const f = await fixture(events, { head });
+  const live = storage(f.values);
+  f.values.set(receiptNodeKey(prepared.writes[0]!.hash), prepared.writes[0]!.json);
+  await writeReceiptBootstrapProgress(live, prepared.plan, 1);
+  const progress = await readReceiptBootstrapProgress(live, prepared.plan);
+  const retained = JSON.stringify([...f.values]);
+  const result = await convertRunArchiveCandidate(f.input);
+  const candidate = await loadNotifierSnapshot(storage(result.values), "run") as Record<string, unknown>;
+  expect(candidate.receiptIndex).toEqual(head.receiptIndex);
+  expect(candidate.emitReceipts).toEqual(head.emitReceipts);
+  expect(candidate.usageReceipts).toEqual(head.usageReceipts);
+  expect(result.values.get(receiptBootstrapProgressKey(prepared.plan.sourceDigest))).toBe(progress.json);
+  expect(await readReceiptBootstrapProgress(storage(result.values), prepared.plan)).toEqual(progress);
+  expect(result.values.get(receiptNodeKey(prepared.writes[0]!.hash))).toBe(prepared.writes[0]!.json);
+  expect(result.values.has(receiptNodeKey(prepared.writes[1]!.hash))).toBe(false);
+  expect(JSON.stringify([...f.values])).toBe(retained);
+});
+
+test("bootstrap sidecar mismatch, malformed cursor or missing completed node fails before output", async () => {
+  for (const fault of ["plan", "source", "cursor", "missing"]) {
+    const events = [event(1)];
+    const head = { ...snapshot(events), schemaVersion: 5, archive: null, usageLedger: null,
+      usageReceipts: Array.from({ length: 65 }, (_, index) =>
+        ({ requestId: `sidecar-${index}`, digest: "e".repeat(64) })),
+      receiptIndex: newReceiptIndexState("building") };
+    const prepared = await prepareReceiptBootstrap(head);
+    head.receiptIndex.bootstrapStage = { plan: prepared.plan, cursor: 0 };
+    const f = await fixture(events, { head });
+    const json = JSON.stringify({ schemaVersion: 1,
+      planHash: fault === "plan" ? "0".repeat(64) : await hashReceiptJSON(JSON.stringify(prepared.plan)),
+      sourceDigest: fault === "source" ? "0".repeat(64) : prepared.plan.sourceDigest,
+      cursor: fault === "cursor" ? prepared.writes.length + 1 : 1 });
+    f.values.set(receiptBootstrapProgressKey(prepared.plan.sourceDigest), json);
+    if (fault !== "missing") f.values.set(receiptNodeKey(prepared.writes[0]!.hash), prepared.writes[0]!.json);
+    const retained = JSON.stringify([...f.values]);
+    await expect(convertRunArchiveCandidate(f.input)).rejects.toThrow(/progress|bootstrap/);
+    expect(f.outputBodies.size).toBe(0);
+    expect(JSON.stringify([...f.values])).toBe(retained);
+  }
+});
+
+test("forward-packs a legacy receipt head without future-plan room and preserves every identity", async () => {
+  const events = [event(1)];
+  const head = { ...snapshot(events), schemaVersion: 4, archive: null, usageLedger: null,
+    emitDedupKeys: [["saved-dedup", Date.parse(DATE)], ["opaque legacy", Date.parse(DATE)]] as Array<[string, number]>,
+    usageReceipts: Array.from({ length: 10_240 }, (_, index) =>
+      ({ requestId: `large-${String(index).padStart(5, "0")}-`.padEnd(512, "x"), digest: "e".repeat(64) })) };
+  head.usageReceipts.push({ requestId: "saved-dedup", digest: "f".repeat(64) });
+  const reserve = { bytes: 3 * 1024 * 1024, digest: "0".repeat(64), chunks: Array(48).fill("0".repeat(64)) };
+  expect(() => assertNotifierSnapshotBudget(head, [reserve])).toThrow(/capacity exhausted/);
+  const f = await fixture(events, { head });
+  const result = await convertRunArchiveCandidate(f.input);
+  const candidate = await loadNotifierSnapshot(storage(result.values), "run") as typeof head & {
+    receiptIndex: ReturnType<typeof newReceiptIndexState> };
+  expect(candidate.schemaVersion).toBe(5);
+  expect(candidate.emitReceipts).toEqual([]);
+  expect(candidate.usageReceipts).toEqual([]);
+  expect(candidate.emitDedupKeys).toEqual([]);
+  expect(candidate.receiptIndex.phase).toBe("ready");
+  expect(candidate.receiptIndex.root.entries).toBe(10_243);
+  expect(candidate.usageSegmentBuffer).toEqual(head.usageSegmentBuffer);
+  expect(candidate.legacyPendingUsageCount).toBe(head.legacyPendingUsageCount);
+  expect(candidate.usageLedger).toBeNull();
+  expect(result.verification.receiptDigest).toMatch(/^[a-f0-9]{64}$/);
+  const cold = storage(result.values, true);
+  const root = candidate.receiptIndex.root;
+  expect(await lookupReceipt(cold, root, "emit", "saved-dedup"))
+    .toEqual({ namespace: "emit", ...head.emitReceipts[0]! });
+  expect(await lookupReceipt(cold, root, "emit", "opaque legacy"))
+    .toEqual({ namespace: "emit", key: "opaque legacy", legacyAcceptedAt: Date.parse(DATE) });
+  const expectedEntries: ReceiptEntry[] = [
+    { namespace: "emit", key: "opaque legacy", legacyAcceptedAt: Date.parse(DATE) },
+    { namespace: "emit", ...head.emitReceipts[0]! },
+    ...head.usageReceipts.map((entry) => ({ namespace: "usage" as const,
+      key: entry.requestId, digest: entry.digest })).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
+  ];
+  const actualEntries: ReceiptEntry[] = [];
+  await visitReceiptIndexClosure(cold, root, { entry: (entry) => { actualEntries.push(entry); } });
+  expect(actualEntries).toEqual(expectedEntries);
+  expect(result.verification.receiptDigest).toBe(createHash("sha256")
+    .update(expectedEntries.map((entry) => JSON.stringify(entry) + "\n").join("")).digest("hex"));
+  // Full closure above checks every identity once. Sample independent cold
+  // point paths at both ends and the middle, including the shared emit key.
+  for (const entry of [head.usageReceipts[0]!, head.usageReceipts[5120]!,
+    head.usageReceipts[10_239]!, head.usageReceipts.at(-1)!]) {
+    expect(await lookupReceipt(cold, root, "usage", entry.requestId))
+      .toEqual({ namespace: "usage", key: entry.requestId, digest: entry.digest });
+  }
+  expect(JSON.stringify([...f.values])).toBe(f.unchanged);
+  await expect(verifyRunArchiveCandidate({ runId: RUN, storage: cold, objects: result.objects,
+    readObject: async (name) => f.outputBodies.get(name)!,
+    verification: { ...result.verification, receiptDigest: "0".repeat(64) } }))
+    .rejects.toThrow(/state mismatch|receipt identity/);
+});
 
 test("splits a real >8 MiB legacy gzip into bounded segments and preserves state with cold reader", async () => {
   const events = Array.from({ length: 85 }, (_, index) => event(index + 1,

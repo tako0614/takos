@@ -5,6 +5,11 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { BigIntStats } from "node:fs";
 import type { DurableObjectStorageBinding } from "../src/worker/shared/types/bindings.ts";
 import {
+  receiptBootstrapProgressKey,
+  receiptNodeKey,
+} from "../src/worker/runtime/durable-objects/run-receipt-index.ts";
+import { receiptRetiredKey } from "../src/worker/runtime/durable-objects/run-receipt-maintenance.ts";
+import {
   convertRunArchiveCandidate,
   verifyRunArchiveCandidate,
 } from "./lib/run-archive-candidate.ts";
@@ -96,6 +101,12 @@ function entries(raw: unknown, maximum: number, metadata = false): ObjectEntry[]
   return result;
 }
 
+function receiptKVKey(key: string): boolean {
+  const hash = key.slice(-64);
+  return SHA.test(hash) &&
+    (key === receiptNodeKey(hash) || key === receiptRetiredKey(hash) || key === receiptBootstrapProgressKey(hash));
+}
+
 function parseManifest(raw: unknown, candidate: boolean): ExportManifest | CandidateManifest {
   const common = ["kind", "runId", "sourceCommit", "kv", "objects"];
   const value = record(raw, candidate
@@ -109,7 +120,8 @@ function parseManifest(raw: unknown, candidate: boolean): ExportManifest | Candi
   const objects = entries(value.objects, OBJECT_LIMIT, true);
   if (kv.some((entry) => entry.key !== "bufferState" &&
     !/^notifier-v2\/chunks\/[a-f0-9]{64}$/.test(entry.key) &&
-    !/^run-archive-v3\/(?:nodes|retired)\/[a-f0-9]{64}$/.test(entry.key))) {
+    !/^run-archive-v3\/(?:nodes|retired)\/[a-f0-9]{64}$/.test(entry.key) &&
+    !receiptKVKey(entry.key))) {
     fail("Archive export contains an unknown KV key");
   }
   if (!kv.some((entry) => entry.key === "bufferState")) fail("Archive export is missing its committed head");

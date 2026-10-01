@@ -30,7 +30,7 @@ SQL の `runs.last_event_id` は単調な投影であり、R2 の保存済み範
 
 ## Run の索引と旧履歴の移行
 
-Run の論理 snapshot は schema4、Notification は schema2 です。外側の commit head は
+Run の論理 snapshot は schema5、Notification は schema2 です。外側の commit head は
 どちらも v2 のままです。Run は既存 DO KV の point read で SHA-256 を検証する B+tree を
 持ち、各 segment の正確な R2 key、gzip digest/bytes、event の範囲・件数を記録します。
 root の切替と対応する pending prefix の除去を同じ head へ保存します。node を書く前に
@@ -59,14 +59,14 @@ building 中は新規受理と flush を止めます。無効 key、重複範囲
 実環境の切替前に旧 writer と遅延書込を止め、元 head・R2・SQL witness の copy を照合して
 保存する必要があります。大きい旧 segment の forward repair は、その copy をオフラインで
 分割し、ID/type/data/時刻を保った各 gzip の件数・範囲・digest を検証します。オフラインの
-道具は Run 一件の schema4 head と gzip を新しい隔離 namespace 用に作り、cold reader で
+道具は Run 一件の head と gzip を新しい隔離 namespace 用に作り、cold reader で
 全件を照合します。同じ論理 key の bytes が変わるため、元 bucket／prefix に適用できません。
 upload、本番 head の置換、他 Run を含む切替は実行しません。移行が証明するのは現存検証済み body と既知の
 pending/ring の対応であり、過去の消失復元や SQL 全 witness の照合ではありません。
 
 ## 受理済み usage の集計
 
-Run の schema4 head は bounded な canonical 8 メーターの合計と、受理 revision／SQL
+Run の schema4以降の head は bounded な canonical 8 メーターの合計と、受理 revision／SQL
 投影済み revision を持ちます。usage の合計・pending・receipt は同じ head で確定します。
 private `/usage-snapshot` はその受理済み合計を返し、`/usage-project` は SQL の token
 合計も含めて全メーターを原子的に投影します。terminal は usage の封印ではありません。
@@ -130,6 +130,33 @@ rollback は証拠対応の artifact、または投影と writer を止めた fo
 exactly-once 配信は保証しません。HTTP 失敗や保存失敗後のヒント再送は可能です。
 ヒントの配信失敗だけでは SQL inbox の作成を取り消しません。
 
+Run の schema5 receipt は emit／usage の別 namespace と正確な opaque key を、private
+KV の認証済み tree に保持します。modern emit の digest／元 event ID、usage の digest、
+旧 opaque emit key の受理時刻を保持し、modern receipt を優先します。通常 lookup は
+root から必要な node だけを point read し、KV／R2 全一覧を読まず、各 bytes／SHA／範囲／
+件数を検証します。missing／corrupt node を「未受理の key」として再実行しません。
+初期化済み actor の emit／usage は、この認証失敗を private 503 として返し、counter／
+usage 合計や receipt を変更しません。cold load 自体が失敗した場合は native actor が
+fetch 前に終了し得るため、同じ HTTP 応答ではなく、未受理・無変更を復旧の条件とします。
+
+ready head の inline delta は emit と usage を合わせて最大64件です。新しい receipt と
+event counter／pending、または usage totals／revision は同じ head で確定してから
+ACK します。delta の tree への挿入計画を先に保存し、immutable node の readback 後に
+root と対応する delta prefix を同じ head で切り替えます。archive と receipt の計画は
+直列化し、退役記録に基づく GC でも現在の root から再び参照される node を削除しません。
+
+旧 schema1〜4 は全 inline receipt を保持したまま bulk bootstrap 計画を head に保存し、
+1 alarm 最大16 node を保存します。leaf は最大64件かつ64 KiB、branch は最大8参照です。
+途中の cursor は `run-receipt-v1/bootstrap-progress/<sourceDigest>` の小さいレコードに
+保存・readback し、計画の SHA と source digest に結び付けます。毎回大きい head を
+書き直しません。cold 起動は元 source から計画を再構成し、進捗までの全 node の bytes を
+照合します。全 node の認証後に root と inline source の除去を一つの head で確定します。
+切替後に進捗レコードの除去が失敗しても、参照されない小さいレコードが残るだけです。途中の
+node PUT は受理や移行完了ではありません。新規受理は移行を待ち、既知の duplicate は
+元の結果を保ちます。旧 head に計画を保存する余裕が無ければ、データを保持して拒否し、
+保存した export から隔離した [オフライン候補](run-archive-candidate.md) を作ります。
+以前に消失・退役した key の復元や再送期限の短縮はしません。
+
 Run receipt と未処理データは容量を理由に捨てません。snapshot と live blob の合計は
 8 MiB、参照 descriptor は 128 chunk までです。新しい入力が収まらなければ、ID を
 進める前に 503 で拒否します。Run が非常に長い場合の容量・性能の資格確認は残ります。
@@ -148,7 +175,10 @@ exact target 資格確認を引き継ぎます。
 
 v2 head への移行後、`6066a1a5c` より古いコードは新 state を空とみなす危険があります。
 Run schema4 を読めない旧 source（`9e4559609d` を含む）は cold load を拒否し、履歴を
-そのまま提供できません。旧稼働 writer は新しい building fence を認識しません。guard のある
+そのまま提供できません。schema5 receipt tree への切替後は、schema4 までの reader
+（`f6dbe198` を含む）への source-only rollback でも復旧できません。保存した node／
+進捗／head と対応する reader を保持し、隔離した restore または forward repair を使います。
+旧稼働 writer は新しい building fence を認識しません。guard のある
 artifact が実際に保存・配備された証明はまだありません。古い artifact への deploy は
 オフライン restore または forward repair が必要です。この source 検証は deploy 許可や
 実環境の restore 完了ではありません。

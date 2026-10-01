@@ -3,7 +3,31 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
-## 最新の追加: terminal usage projection outbox — 2026-10-01
+## 最新の追加: long Run receipt capacity — 2026-10-01
+
+schema5 private receipt treeとbounded head deltaを実装した。emit/usage namespaceと正確な
+key/digest/元ID、旧opaque結果を保持し、受理データとreceiptを同じheadで確定する。
+旧sourceを保持した16node/alarm移行とplan/sourceに結び付いた小さい永続進捗、cold prefix
+認証、全体検証後のroot/source切替、live hashを保護するGCを実装。warm破損lookupは
+private503/受理済み状態不変。offline候補はsource5 plan/進捗/stage/GCを保持し、旧大容量
+sourceは全identity semantic digestで隔離schema5候補へ変換する。
+
+旧f6dのcapacity拒否をbehavioral redに再現。容量2cases/95assertionsは3.64秒で成功し、
+fixture/16node/alarm/既定5秒を維持した。復旧8/215、index6/51、既存archive13/324、
+converter35/453も成功。10,243旧identityと元bytes保持を確認した。実native KV/R2/
+production alarmは13.486秒でcold進捗保持・391identity・再送/衝突・warm破損503/
+actorと受理済み状態不変を確認。初回のcold進捗観測失敗は原因未確定として別に保持する。
+
+凍結12fileの独立reviewに確定P1/P2無し。最終local fullgateは1,632tests/252files/
+11,816assertions、20OpenTofu、全Rust、実Worker/fullSQLite/process復旧と両build成功。
+native guard41.406s/observer200、docs3.30s、types98/lint111未申告0。既存native guardの
+正常legacy fixtureはbuilding fence/無変更とbounded移行を明示検証するよう適応し、
+不正state/fault/cold/期限の検査を維持した。最初の失敗gate/準備失敗も別ログに保持する。
+exact commit/CIは専任HDD result参照。schema4 readerへsourceだけ戻しても復旧できない。
+target quota/alarm/SQL/Container、公開artifact、全instance/実owner-client復旧は未検証。
+詳細: [long Run receipt task](TASK-takos-ga-long-run-receipt-20261001.md)。
+
+## 前段の追加: terminal usage projection outbox — 2026-10-01
 
 terminal SQL CASと同じtransactionへimmutable owner/Workspace/completion witnessを
 保存し、検索やrequesterの有無と独立したcron claim/retryで使用量を回復する。
@@ -27,7 +51,7 @@ native DO eviction後のcold retry（canonical meter各一件、done attempts2/r
 通常/409の旧harness SHAは記録のみ、最終fault harnessは保存済み。失敗した準備を成功に
 数えない。全source hashは検証後も一致。exact commit・CIは専任HDD resultを参照する。
 詳細: [terminal usage task](TASK-takos-ga-terminal-usage-outbox-20261001.md)。
-receipt容量対策は設計済み・未実装。実client/owner/mobile、backend/alarm/Container、
+実client/owner/mobile、backend/alarm/Container、
 公開artifact、全instance user journey/restore/monitoringは残り、全体GAを解除しない。
 
 ## 前段の追加: quality 子プロセスの完了確認 — 2026-10-01

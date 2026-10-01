@@ -93,7 +93,8 @@ class Harness {
           // replacement window. The explicit alarm call below still invokes
           // the real notifier method after native eviction.
           if (await nativeStorage.get("proof/head-fault-key") ||
-            await nativeStorage.get("proof/create-race")) {
+            await nativeStorage.get("proof/create-race") ||
+            await nativeStorage.get("proof/hold-auto-alarm")) {
             return nativeStorage.setAlarm(Date.now() + 120_000);
           }
           return nativeStorage.setAlarm(when);
@@ -192,6 +193,11 @@ class Harness {
       const value = await this.state.storage.get("quota-proof");
       return Response.json({ rejected, detail, absent: value === undefined,
         storedBytes: typeof value === "string" ? new TextEncoder().encode(value).length : 0 });
+    }
+    if (url.pathname === "/control/hold-auto-alarm") {
+      if (this.notifier) return new Response("already loaded", { status: 409 });
+      await this.state.storage.put("proof/hold-auto-alarm", true);
+      return Response.json({ held: true });
     }
     if (url.pathname === "/control/arm-head-fault") {
       if (this.notifier) return new Response("already loaded", { status: 409 });
@@ -503,6 +509,10 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
     await bucket.put(`runs/${name}/events/000001.jsonl.gz`, archive);
   }
   await seed(mf, kind, name, value);
+  if (kind === "run") {
+    const held = await request(mf, kind, name, "/control/hold-auto-alarm");
+    assert(held.status === 200, "run: could not hold native timed alarm for explicit migration steps");
+  }
   await evict(mf, kind, name);
   const state = await request(mf, kind, name, "/do/state");
   assert(state.status === 200, `${kind}: historical state load status ${state.status}`);
@@ -514,6 +524,50 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
     assert(duplicate.status === 200 && (await duplicate.json() as { duplicate?: boolean }).duplicate === true,
       "run: historical dedup key not restored");
     assert(JSON.stringify(await inspect(mf, kind, name)) === JSON.stringify(value), "run: duplicate mutated state");
+    const fenced = await request(mf, kind, name, "/do/emit", {
+      type: "completed", data: { proof: true }, runId: name, dedup_key: "fresh-key",
+    });
+    const fencedBody = await fenced.json() as { success?: boolean; error?: string };
+    assert(fenced.status === 503 && fencedBody.success === false &&
+      fencedBody.error === "Run receipt index is building; retry later",
+      `run: expected exact legacy receipt-building fence, got ${fenced.status}: ${JSON.stringify(fencedBody)}`);
+    assert(JSON.stringify(await inspect(mf, kind, name)) === JSON.stringify(value) &&
+      hash(await archivedBytes(mf, name)) === hash(archive),
+      "run: fenced fresh emit changed legacy state or R2 archive");
+    let ready: Record<string, unknown> | undefined;
+    for (let step = 0; step < 3; step++) {
+      const migrated = await request(mf, kind, name, "/invoke/alarm");
+      assert(migrated.status === 200,
+        `run: explicit receipt bootstrap alarm ${step + 1} returned ${migrated.status}`);
+      const snapshot = await decodedRunState(mf, name);
+      const index = snapshot.receiptIndex as { phase: string };
+      assert(snapshot.eventIdCounter === 100 && snapshot.runId === name &&
+        (index.phase === "building" || index.phase === "ready") &&
+        hash(await archivedBytes(mf, name)) === hash(archive),
+        `run: receipt bootstrap step ${step + 1} changed historical counter, identity or R2`);
+      if (index.phase === "ready") {
+        ready = snapshot;
+        break;
+      }
+    }
+    assert(ready !== undefined, "run: three planned receipt bootstrap alarms did not publish ready root");
+    const root = (ready.receiptIndex as { root: {
+      hash: string | null; entries: number; first: { namespace: string; key: string } | null;
+      last: { namespace: string; key: string } | null;
+    } }).root;
+    assert(typeof root.hash === "string" && /^[a-f0-9]{64}$/.test(root.hash) &&
+      root.entries === 1 && root.first?.namespace === "emit" &&
+      root.first.key === "already-seen" && root.last?.key === "already-seen" &&
+      Array.isArray(ready.emitDedupKeys) && ready.emitDedupKeys.length === 0,
+      "run: ready receipt root does not authenticate the historical opaque key");
+    const migratedDuplicate = await request(mf, kind, name, "/do/emit", {
+      type: "run.progress", data: { probe: true }, runId: name, dedup_key: "already-seen",
+    });
+    assert(migratedDuplicate.status === 200 &&
+      (await migratedDuplicate.json() as { duplicate?: boolean }).duplicate === true,
+      "run: authenticated historical key no longer returns duplicate after migration");
+    assert((await decodedRunState(mf, name)).eventIdCounter === 100,
+      "run: historical duplicate advanced event counter after migration");
   }
   const emitted = await request(mf, kind, name, "/do/emit", {
     type: kind === "run" ? "completed" : "notification.created",
@@ -528,7 +582,9 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
   const decoded = await request(mf, kind, name, "/control/snapshot");
   assert(decoded.status === 200, `${kind}: journal snapshot unreadable`);
   const persisted = (await decoded.json() as { value: Record<string, unknown> }).value;
-  assert(head.schemaVersion === 2 && persisted.eventIdCounter === 101, `${kind}: v2 journal counter not persisted`);
+  assert(head.schemaVersion === 2 && persisted.schemaVersion === (kind === "run" ? 5 : 2) &&
+    persisted.eventIdCounter === 101,
+    `${kind}: journal counter not persisted`);
   if (kind === "run") {
     const drained = await request(mf, kind, name, "/invoke/alarm");
     assert(drained.status === 200, "run: committed archive intent did not drain");
@@ -561,7 +617,7 @@ async function proveHealthy(mf: MiniflareInstance, kind: Kind, archive: Uint8Arr
       page.descriptors[0]?.lastEventId === 100 && page.descriptors[1]?.firstEventId === 101,
       "run: native indexed root/digest changed through eviction");
   }
-  return `${kind}/historical-unversioned: event 101 persisted as v2 and survived native eviction${kind === "run" ? ", dedup and R2 retained; indexed root2 retained" : ""}`;
+  return `${kind}/historical-unversioned: event 101 persisted as v2 and survived native eviction${kind === "run" ? ", outer head with logical schema5, authenticated legacy receipt, dedup and R2 retained; indexed root2 retained" : ""}`;
 }
 
 async function proveChunkedState(mf: MiniflareInstance): Promise<string> {

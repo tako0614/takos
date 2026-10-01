@@ -15,6 +15,12 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { DurableObjectStorageBinding } from "../src/worker/shared/types/bindings.ts";
+import { loadNotifierSnapshot, persistNotifierSnapshot } from "../src/worker/runtime/durable-objects/notifier-journal.ts";
+import { emptyReceiptRoot, lookupReceipt, prepareReceiptBootstrap, prepareReceiptInsert,
+  receiptBootstrapProgressKey, receiptNodeKey, stageReceiptInsert, writeReceiptBootstrapProgress,
+  type ReceiptEntry } from "../src/worker/runtime/durable-objects/run-receipt-index.ts";
+import { newReceiptIndexState } from "../src/worker/runtime/durable-objects/run-receipt-maintenance.ts";
 import {
   createArchiveCandidate,
   verifyArchiveCandidate,
@@ -125,6 +131,116 @@ async function expectPrivateSingleLink(path: string): Promise<void> {
   expect(Number(info.mode & 0o777n)).toBe(0o600);
   expect(info.nlink).toBe(1n);
 }
+
+function fixtureStorage(values: Map<string, unknown>): DurableObjectStorageBinding {
+  return {
+    get: async <T>(key: string) => structuredClone(values.get(key)) as T | undefined,
+    put: async (key: string | Record<string, unknown>, value?: unknown) => {
+      if (typeof key === "string") values.set(key, structuredClone(value));
+      else for (const [name, entry] of Object.entries(key)) values.set(name, structuredClone(entry));
+    },
+    list: async <T>(options?: { prefix?: string; startAfter?: string; limit?: number }) => new Map([...values]
+      .filter(([key]) => key.startsWith(options?.prefix ?? "") &&
+        (!options?.startAfter || key > options.startAfter))
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .slice(0, options?.limit).map(([key, entry]) => [key, structuredClone(entry) as T])),
+    delete: async (key: string | string[]) => {
+      if (typeof key === "string") return values.delete(key);
+      let deleted = 0;
+      for (const name of key) if (values.delete(name)) deleted++;
+      return deleted;
+    },
+    getAlarm: async () => null, setAlarm: async () => undefined, deleteAlarm: async () => undefined,
+  } as DurableObjectStorageBinding;
+}
+
+for (const mode of ["indexed", "legacy", "bootstrap"]) test(`filesystem candidate preserves receipt closure (${mode})`, async () => {
+  const legacy = mode === "legacy";
+  const bootstrap = mode === "bootstrap";
+  const inline = legacy || bootstrap;
+  const value = await fixture();
+  try {
+    const manifest = JSON.parse(await readFile(value.inputPath, "utf8"));
+    const original = JSON.parse(await readFile(join(value.inputDir, manifest.kv[0].path), "utf8"));
+    const values = new Map<string, unknown>();
+    const live = fixtureStorage(values);
+    const key = "same opaque / \u0000 identity";
+    const entries: ReceiptEntry[] = [
+      { namespace: "emit", key, digest: "a".repeat(64), eventId: 1 },
+      { namespace: "emit", key: "original-tail", digest: "b".repeat(64), eventId: 2 },
+      { namespace: "usage", key, digest: "c".repeat(64) },
+    ];
+    if (inline) for (let index = 0; index < 64; index++) {
+      entries.push({ namespace: "usage", key: `legacy usage ${index}`, digest: "d".repeat(64) });
+    }
+    let root = emptyReceiptRoot();
+    for (const entry of inline ? [] : entries) {
+      const prepared = await prepareReceiptInsert(live, root, entry);
+      await stageReceiptInsert(live, prepared.plan);
+      root = prepared.plan.root;
+    }
+    const receiptIndex = { ...newReceiptIndexState(bootstrap ? "building" : "ready"), root };
+    const head = { ...original, schemaVersion: legacy ? 4 : 5,
+      flushIntents: [],
+      emitReceipts: inline ? entries.flatMap((entry) => entry.namespace === "emit" && "eventId" in entry
+        ? [{ key: entry.key, digest: entry.digest, eventId: entry.eventId }] : []) : [],
+      usageReceipts: inline ? entries.filter((entry) => entry.namespace === "usage")
+        .map((entry) => ({ requestId: entry.key, digest: entry.digest })) : [],
+      legacyPendingRunCount: 0, legacyPendingUsageCount: 0, archive: null, usageLedger: null,
+      ...(legacy ? {} : { receiptIndex }) };
+    let progressKey: string | null = null;
+    if (bootstrap) {
+      const prepared = await prepareReceiptBootstrap(head);
+      receiptIndex.bootstrapStage = { plan: prepared.plan, cursor: 0 };
+      await live.put(receiptNodeKey(prepared.writes[0]!.hash), prepared.writes[0]!.json);
+      await writeReceiptBootstrapProgress(live, prepared.plan, 1);
+      progressKey = receiptBootstrapProgressKey(prepared.plan.sourceDigest);
+    }
+    await persistNotifierSnapshot(live, "run", head);
+    const inventory: { key: string; path: string; bytes: number; sha256: string }[] = [];
+    for (const [name, entry] of values) {
+      const path = "kv/" + sha256(name) + ".json";
+      const bytes = new TextEncoder().encode(JSON.stringify(entry));
+      await writeFile(join(value.inputDir, path), bytes, { mode: 0o600, flag: "wx" });
+      inventory.push({ key: name, path, bytes: bytes.length, sha256: sha256(bytes) });
+    }
+    manifest.kv = inventory;
+    const bytes = new TextEncoder().encode(JSON.stringify(manifest, null, 2) + "\n");
+    await writeFile(value.inputPath, bytes);
+    const sourceDigest = sha256(bytes);
+    const sourceFiles = new Map(await Promise.all(inventory.map(async (entry) => [entry.path,
+      await readFile(join(value.inputDir, entry.path))] as const)));
+    const result = await createArchiveCandidate({ input: value.inputPath,
+      expectedInputSha256: sourceDigest, output: value.output });
+    const targetManifest = JSON.parse(await readFile(join(value.output, "manifest.json"), "utf8"));
+    const restored = new Map<string, unknown>(await Promise.all(targetManifest.kv.map(async (entry:
+      { key: string; path: string }) => [entry.key,
+      JSON.parse(await readFile(join(value.output, entry.path), "utf8"))] as [string, unknown])));
+    const restoredStorage = fixtureStorage(restored);
+    const restoredHead = await loadNotifierSnapshot(restoredStorage, "run") as Record<string, unknown>;
+    expect(restoredHead.schemaVersion).toBe(5);
+    const restoredIndex = restoredHead.receiptIndex as ReturnType<typeof newReceiptIndexState>;
+    if (legacy) {
+      expect(restoredIndex.phase).toBe("ready");
+      expect(restoredIndex.root.entries).toBe(entries.length);
+      expect(targetManifest.verification.receiptDigest).toMatch(/^[a-f0-9]{64}$/);
+      expect(restoredHead.emitReceipts).toEqual([]);
+      expect(restoredHead.usageReceipts).toEqual([]);
+    } else expect(restoredHead.receiptIndex).toEqual(receiptIndex);
+    if (bootstrap) {
+      expect(restoredHead.emitReceipts).toEqual(head.emitReceipts);
+      expect(restoredHead.usageReceipts).toEqual(head.usageReceipts);
+      expect(restored.get(progressKey!)).toBe(values.get(progressKey!));
+    }
+    for (const entry of bootstrap ? [] : entries) {
+      expect(await lookupReceipt(restoredStorage, restoredIndex.root, entry.namespace, entry.key)).toEqual(entry);
+    }
+    await verifyArchiveCandidate({ manifest: join(value.output, "manifest.json"),
+      expectedManifestSha256: result.manifestSha256 });
+    expect(await readFile(value.inputPath)).toEqual(Buffer.from(bytes));
+    for (const [path, saved] of sourceFiles) expect(await readFile(join(value.inputDir, path))).toEqual(saved);
+  } finally { await cleanup(value); }
+});
 
 test("creates and verifies an isolated candidate while retaining exact source custody", async () => {
   const value = await fixture();

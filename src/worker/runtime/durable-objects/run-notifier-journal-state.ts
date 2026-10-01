@@ -1,6 +1,8 @@
 import type { NotifierBlobRef } from "./notifier-journal.ts";
 import { parseRunArchiveState, type RunArchiveState } from "./run-archive-maintenance.ts";
 import { parseUsageLedgerState, type UsageLedgerState } from "./run-usage-ledger.ts";
+import { parseReceiptIndexState, type ReceiptIndexState } from "./run-receipt-maintenance.ts";
+import type { ReceiptEntry } from "./run-receipt-index.ts";
 import { APP_USAGE_METER_TYPES, type AppUsageMeterType } from "../../application/services/app-usage/usage-types.ts";
 import {
   parseRunNotifierState,
@@ -37,6 +39,7 @@ export type RunNotifierJournalState = RunNotifierState & {
   legacyPendingUsageCount: number;
   archive: RunArchiveState | null;
   usageLedger: UsageLedgerState | null;
+  receiptIndex: ReceiptIndexState | null;
 };
 
 const BASE_KEYS = [
@@ -157,20 +160,39 @@ function usageReceipts(raw: unknown): UsageReceipt[] {
   });
 }
 
+/** Modern exact emit receipts precede v1 opaque keys even if old maps overlap. */
+export function nextInlineReceipt(state: Pick<RunNotifierJournalState,
+  "emitReceipts" | "usageReceipts" | "emitDedupKeys">):
+  { source: "emit" | "usage" | "legacy"; entry: ReceiptEntry } | null {
+  const emit = state.emitReceipts[0];
+  if (emit) return { source: "emit", entry: { namespace: "emit", key: emit.key,
+    digest: emit.digest, eventId: emit.eventId } };
+  const usage = state.usageReceipts[0];
+  if (usage) return { source: "usage", entry: { namespace: "usage",
+    key: usage.requestId, digest: usage.digest } };
+  const legacy = state.emitDedupKeys[0];
+  if (legacy) return { source: "legacy", entry: { namespace: "emit",
+    key: legacy[0], legacyAcceptedAt: legacy[1] } };
+  return null;
+}
+
 /** Validate the entire logical state before installing any field in a live DO. */
 export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalState | null {
   if (raw === undefined) return null;
   const value = object(raw, "snapshot");
-  if (value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4) {
+  if (value.schemaVersion !== 2 && value.schemaVersion !== 3 &&
+    value.schemaVersion !== 4 && value.schemaVersion !== 5) {
     const legacy = parseRunNotifierState(raw);
     return legacy && { ...legacy, flushIntents: [], emitReceipts: [], usageReceipts: [],
       legacyPendingRunCount: legacy.r2SegmentBuffer.length,
-      legacyPendingUsageCount: legacy.usageSegmentBuffer.length, archive: null, usageLedger: null };
+      legacyPendingUsageCount: legacy.usageSegmentBuffer.length,
+      archive: null, usageLedger: null, receiptIndex: null };
   }
   exactKeys(value, ["schemaVersion", ...BASE_KEYS, "flushIntents", "emitReceipts", "usageReceipts",
     "legacyPendingRunCount", "legacyPendingUsageCount",
-    ...(value.schemaVersion === 3 || value.schemaVersion === 4 ? ["archive"] : []),
-    ...(value.schemaVersion === 4 ? ["usageLedger"] : [])], "snapshot.fields");
+    ...(value.schemaVersion >= 3 ? ["archive"] : []),
+    ...(value.schemaVersion >= 4 ? ["usageLedger"] : []),
+    ...(value.schemaVersion === 5 ? ["receiptIndex"] : [])], "snapshot.fields");
   const base: Record<string, unknown> = { schemaVersion: 1 };
   for (const key of BASE_KEYS) base[key] = value[key];
   const state = parseRunNotifierState(base);
@@ -188,9 +210,10 @@ export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalSt
     legacyPendingUsageCount > state.usageSegmentBuffer.length) fail("legacyPending.count");
   const intents = flushIntents(value.flushIntents, state,
     legacyPendingRunCount, legacyPendingUsageCount);
-  const archive = value.schemaVersion === 4 && value.archive === null ? null
-    : value.schemaVersion === 3 || value.schemaVersion === 4 ? parseRunArchiveState(value.archive) : null;
-  const usageLedger = value.schemaVersion === 4 ? parseUsageLedgerState(value.usageLedger) : null;
+  const archive = value.schemaVersion >= 4 && value.archive === null ? null
+    : value.schemaVersion >= 3 ? parseRunArchiveState(value.archive) : null;
+  const usageLedger = value.schemaVersion >= 4 ? parseUsageLedgerState(value.usageLedger) : null;
+  const receiptIndex = value.schemaVersion === 5 ? parseReceiptIndexState(value.receiptIndex) : null;
   if (usageLedger && !state.runId) fail("usageLedger.runId");
   if (usageLedger?.phase === "building") {
     const build = usageLedger.build!;
@@ -235,14 +258,31 @@ export function parseRunNotifierJournalState(raw: unknown): RunNotifierJournalSt
         d.segmentIndex > state.r2LastFlushedSegmentIndex) fail("archive.stage build");
     }
   }
+  const parsedEmitReceipts = emitReceipts(value.emitReceipts, state.eventIdCounter);
+  const parsedUsageReceipts = usageReceipts(value.usageReceipts);
+  if (receiptIndex) {
+    const inlineCount = parsedEmitReceipts.length + parsedUsageReceipts.length + state.emitDedupKeys.length;
+    if (receiptIndex.phase === "ready" &&
+      (inlineCount > 64 || state.emitDedupKeys.length > 0)) fail("receiptIndex.delta");
+    const next = nextInlineReceipt({ emitReceipts: parsedEmitReceipts,
+      usageReceipts: parsedUsageReceipts, emitDedupKeys: state.emitDedupKeys });
+    if (receiptIndex.phase === "building" && !next && !receiptIndex.stage) {
+      fail("receiptIndex.build frontier");
+    }
+    if (receiptIndex.stage && (!next ||
+      JSON.stringify(receiptIndex.stage.plan.entry) !== JSON.stringify(next.entry))) {
+      fail("receiptIndex.stage prefix");
+    }
+  }
   return {
     ...state,
     flushIntents: intents,
-    emitReceipts: emitReceipts(value.emitReceipts, state.eventIdCounter),
-    usageReceipts: usageReceipts(value.usageReceipts),
+    emitReceipts: parsedEmitReceipts,
+    usageReceipts: parsedUsageReceipts,
     legacyPendingRunCount,
     legacyPendingUsageCount,
     archive,
     usageLedger,
+    receiptIndex,
   };
 }

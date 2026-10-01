@@ -54,7 +54,9 @@ manifest の形は次です。digest は各ファイルの実 bytes に対する
 }
 ~~~
 
-v2 head の参照先 chunk、既存索引 node、退役記録も kv に含めます。KV の file は、
+v2 head の参照先 chunk、既存索引 node、退役記録も kv に含めます。schema5 の
+`run-receipt-v1/nodes/`、`run-receipt-v1/retired/` と、未完了の移行に結び付いた
+`run-receipt-v1/bootstrap-progress/` も対象です。KV の file は、
 storage value 自体を JSON にした bytes です。R2 の file は圧縮された実 bytes です。
 objects には当該 Run の events と usage を含めます。usage object の任意の
 metadata object は、候補でもそのまま保持します。任意の sqlWitness は
@@ -103,10 +105,30 @@ gzip に分割します。一つの event がこの形式に収まらなけれ�
 再送 receipt、usage pending／intent／blob と usage object を保持し、Run pending は候補の
 archive に一度収めます。schema4 の usage 合計・revision・未投影 dirty 状態、building／repair
 fence も保持します。旧コピーの ledger 不在を完全集計済みとは扱いません。
-Run の schema4 ready archive root と外側 v2 head を作り、production
+Run の ready archive root と外側 v2 head を作り、production
 RunNotifierDO の cold /archive と現在の indexed reader で全履歴を照合します。出力 object も
 合計 100,000 件までです。候補の KV を最後の空 page まで列挙し、head／chunk／root の
 参照先と inventory が正確に一致することを確認します。
+
+schema5 の receipt root、inline delta、未完了の insertion／bootstrap plan、退役記録、
+repair fence はそのまま保持します。root の全参照先を認証し、tree 内の emit ID も
+履歴に存在することを確認します。bootstrap は残る inline source から計画を再構成し、
+進捗レコードの plan SHA／source digest／cursor を照合して、その bytes も保持します。
+head と進捗レコードの大きい方の cursor まで、保存済み node の欠落や異なる bytes を
+拒否します。それより後の未保存 node は未完了として保持できます。node PUT や進捗
+レコードを新しい受理や ready への切替と扱いません。
+
+旧 schema1〜4 の有効 receipt が64件を超える場合は、隔離した候補に compact な
+schema5 ready receipt tree を作ります。旧 head に移行計画の余裕がない場合も、元の
+head／chunk を書き換えず変換できます。key の正確な文字列、emit の payload digest／
+元 event ID、usage の別 namespace／digest、旧 opaque key の時刻を保持します。
+同じ emit key の modern receipt は旧 opaque key に優先します。全有効 identity の
+digest と候補 tree の全件 traversal を照合し、usage 合計・revision・未投影状態も
+別に照合します。小さい旧 receipt は従来の schema4 出力を維持します。
+
+100,000 KV inventory と32 MiB manifest の道具の上限は、runtime receipt の再送期限や
+key eviction を定義しません。この道具を超える export、実 backend の quota と
+全インスタンスの restore は別の資格確認が必要です。
 
 元の private Workspace、owner、参加者、通知や SQL usage を書き換えません。道具は
 source で見えなかった過去の消失イベントを復元しません。未知・欠落・矛盾した witness
@@ -121,6 +143,6 @@ source で見えなかった過去の消失イベントを復元しません。�
   restart／alarm／quota と exact resource／artifact identity。
 - 実利用者の読取・Run／tool／checkpoint 復旧、監視、retained artifact と restore drill。
 
-long Run receipt 容量、旧 usage baseline の custody と実 backend での投影、実 owner-sub と mobile の対応は
+long Run receipt の実 backend 容量、旧 usage baseline の custody と実 backend での投影、実 owner-sub と mobile の対応は
 この変換とは別の GA 項目です。[保存の正本](notifier-journal.md) と、repository 内の
 tasks/TASK-takos-ga-archive-candidate-20261001.md を参照してください。
