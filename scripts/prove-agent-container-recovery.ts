@@ -201,7 +201,7 @@ export class OciRuntime implements RecoveryRuntime {
   private cleanupPromise?: Promise<void>;
   private preparePromise?: Promise<void>;
   private terminated: Json[] = [];
-  readonly limitation = "Local OCI/runc wrapper and image were exercised with host network for loopback fixtures; production proxy-token verification, live Accounts, Cloudflare Container hosting, queue, model, notifier and SSE delivery are untested.";
+  readonly limitation = "Local OCI/runc wrapper and image were exercised with host network for loopback fixtures; production proxy-token verification, live Accounts, Cloudflare Container hosting, queue, model and SSE delivery, plus native notifier KV/object-store quota, durability and timed alarms are untested.";
 
   constructor(private readonly options: Options, private readonly deps: RuntimeDependencies = { runCommand: command, readPid, sleep: Bun.sleep, now: Date.now }) {}
 

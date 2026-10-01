@@ -3,6 +3,28 @@
 Takos 全体の GA は未完了。この引継ぎは source と実環境の証拠を分ける。
 配置・課金・権限変更・削除の許可は追加しない。
 
+## 最新の資格確認: current Worker and local OCI — 2026-10-01
+
+最新CI検証済みda2e48dd Workerと既存f5207eb imageの実OCI復旧が成功した。
+manifest4fba7740.../binary2b62e7d1...、UID/GID10001、二つのinitのreadiness/停止/reap、
+tool2attempts/1operation/1artifact、model2、usage24/8/3、lease8、messages4/completed1/
+checkpointcleared、旧authority4RPC409とterminal usage witness queuedを確認した。
+独立照合でDockerfileの全COPY入力とengine exact treeは現行と同じ、全artifact digestも一致。
+imageは元f5207eb buildのidentityのまま保持し、latest whole Worker build/publicationと呼ばない。
+先の短報でContainerを準備のみとした記述を訂正し、actual local OCIとlive不足を分ける。
+
+従来の必須復旧proofのnotifier success stubをproduction notifierへ置換した。
+復旧したRunのterminal witness→executor停止/全RPC待機→独立dispatcher/SQL→ACK喪失→
+cold再送は、修正後の実OCIで成功。canonical input0.024/output0.008各一件、revision3/4、
+witness attempts2と第三dispatch idleを確認した。SIGKILL生存誤判定とbridge RPCの待機不足を
+直し、既存assertion/期限を維持。独立review clear。必須local全gateも成功し、Rust process
+proofでも同じ回収を確認した（1,633tests/252files/11,819assertions、20OpenTofu、全Rust、
+両build、types98/lint111未申告0）。native guard40.062s/capacity2.146s、全1,040 source
+hashと元repo/engine差分不変。新commit/PR/CI readbackは専任HDD resultへ別に記録する。
+証拠は [Container usage composition task](TASK-takos-ga-container-usage-composition-20261001.md)
+と専任HDD result。portable KV/ObjectStoreはnative quota/alarmsの証拠ではない。
+実owner-client、exact Host/Cloudflare lifecycle、公開/deployed artifact、全instance復旧/監視は残る。
+
 ## 最新の追加: long Run receipt capacity — 2026-10-01
 
 schema5 private receipt treeとbounded head deltaを実装した。emit/usage namespaceと正確な

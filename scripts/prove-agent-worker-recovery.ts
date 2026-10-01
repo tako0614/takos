@@ -9,20 +9,29 @@ import { and, eq } from "drizzle-orm";
 import {
   accountMemberships,
   accounts,
+  appUsageEvents,
+  appUsageRollups,
   authIdentities,
   artifacts,
   getDb,
   messages,
   runEvents,
+  runUsageProjectionAssertions,
   runUsageProjectionOutbox,
   runs,
   threads,
   toolOperations,
 } from "../src/worker/infra/db/index.ts";
 import { createSqliteSqlDatabase } from "../src/worker/local-platform/persistent-d1.ts";
+import { createInMemoryObjectStore } from "../src/worker/local-platform/in-memory-r2.ts";
+import { dispatchRunUsageProjectionOutbox } from "../src/worker/application/services/app-usage/run-projection-outbox.ts";
 import { dispatchControlRpc } from "../src/worker/runtime/executor-proxy-api.ts";
 import { agentControlRpcPath, isControlRpcPath } from "../src/worker/runtime/container-hosts/executor-utils.ts";
+import { RunNotifierDO } from "../src/worker/runtime/durable-objects/run-notifier.ts";
+import { loadNotifierSnapshot } from "../src/worker/runtime/durable-objects/notifier-journal.ts";
+import { parseRunNotifierJournalState } from "../src/worker/runtime/durable-objects/run-notifier-journal-state.ts";
 import type { Env } from "../src/worker/shared/types/index.ts";
+import type { DurableObjectStateBinding, DurableObjectStorageBinding } from "../src/worker/shared/types/bindings.ts";
 
 type Json = Record<string, unknown>;
 type Identity = { runId: string; serviceId: string; leaseVersion: number };
@@ -52,6 +61,59 @@ function requireValue(condition: unknown, detail: string): asserts condition {
 function object(value: unknown, detail: string): Json {
   requireValue(value && typeof value === "object" && !Array.isArray(value), `${detail} must be an object`);
   return value as Json;
+}
+
+/** One owned, portable DO storage cell shared by the live and cold instances. */
+function portableNotifierState(): DurableObjectStateBinding {
+  const values = new Map<string, unknown>();
+  let alarm: number | null = null;
+  let serial = Promise.resolve();
+  async function put(key: string, value: unknown): Promise<void>;
+  async function put(entries: Record<string, unknown>): Promise<void>;
+  async function put(key: string | Record<string, unknown>, value?: unknown): Promise<void> {
+    if (typeof key === "string") values.set(key, structuredClone(value));
+    else for (const [name, entry] of Object.entries(key)) values.set(name, structuredClone(entry));
+  }
+  async function remove(key: string): Promise<boolean>;
+  async function remove(keys: string[]): Promise<number>;
+  async function remove(key: string | string[]): Promise<boolean | number> {
+    if (typeof key === "string") return values.delete(key);
+    let removed = 0;
+    for (const name of key) if (values.delete(name)) removed++;
+    return removed;
+  }
+  const storage: DurableObjectStorageBinding = {
+    async get<T>(key: string) { return structuredClone(values.get(key)) as T | undefined; },
+    put, delete: remove,
+    async list<T>(options?: Record<string, unknown>) {
+      const prefix = typeof options?.prefix === "string" ? options.prefix : "";
+      const start = typeof options?.start === "string" ? options.start : undefined;
+      const after = typeof options?.startAfter === "string" ? options.startAfter
+        : typeof options?.cursor === "string" ? options.cursor : undefined;
+      const end = typeof options?.end === "string" ? options.end : undefined;
+      const limit = Number.isSafeInteger(options?.limit) && (options?.limit as number) > 0
+        ? options!.limit as number : undefined;
+      const ordered = [...values].filter(([key]) => key.startsWith(prefix) &&
+        (start === undefined || key >= start) && (after === undefined || key > after) &&
+        (end === undefined || key < end))
+        .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+      if (options?.reverse === true) ordered.reverse();
+      return new Map((limit === undefined ? ordered : ordered.slice(0, limit))
+        .map(([key, value]) => [key, structuredClone(value)] as [string, T]));
+    },
+    async getAlarm() { return alarm; },
+    async setAlarm(when: number | Date) { alarm = when instanceof Date ? when.getTime() : when; },
+    async deleteAlarm() { alarm = null; },
+  };
+  return {
+    storage,
+    blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+      const work = serial.then(callback);
+      serial = work.then(() => undefined, () => undefined);
+      return work;
+    },
+    getWebSockets: () => [], getTags: () => [], acceptWebSocket: () => undefined,
+  };
 }
 
 function parseArgs(args: readonly string[]): { binary: string; root: string } {
@@ -140,6 +202,10 @@ async function drain(stream: ReadableStream<Uint8Array> | null, sink: { value: s
 }
 
 type Child = ReturnType<typeof Bun.spawn>;
+function childIsRunning(child: Child): boolean {
+  return child.exitCode === null && child.signalCode === null;
+}
+
 async function launchBinary(
   binary: string,
   port: number,
@@ -159,7 +225,7 @@ async function launchBinary(
   const log = { value: "" };
   const instance: RecoveryInstance = {
     log,
-    isAlive: () => child.exitCode === null,
+    isAlive: () => childIsRunning(child),
     stop: () => stopBinary(child),
   };
   registerInstance(instance);
@@ -172,7 +238,7 @@ async function launchBinary(
     const deadline = Date.now() + PHASE_MS;
     while (Date.now() < deadline) {
       requireValue(!isTimedOut(), "overall deadline expired during wrapper startup");
-      if (child.exitCode !== null) throw new Error(`wrapper exited before health (${child.exitCode}): ${log.value}`);
+      if (!childIsRunning(child)) throw new Error(`wrapper exited before health (exit=${child.exitCode}, signal=${child.signalCode}): ${log.value}`);
       try {
         const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(800) });
         if (response.ok) {
@@ -190,7 +256,7 @@ async function launchBinary(
 }
 
 async function stopBinary(child: Child): Promise<number> {
-  if (child.exitCode === null) child.kill("SIGKILL");
+  if (childIsRunning(child)) child.kill("SIGKILL");
   return await withTimeout(child.exited, "reap wrapper", 10_000);
 }
 
@@ -331,6 +397,62 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
     await db.insert(runs).values({ id: oldIdentity.runId, accountId: workspaceId, requesterAccountId: accountId, threadId, status: "running", serviceId: oldIdentity.serviceId, leaseVersion: 7, agentType: "default", model: "gpt-local", input: JSON.stringify({ message: "Create the proof artifact" }), startedAt: now, createdAt: now });
     await db.insert(messages).values({ id: `msg_${randomUUID()}`, threadId, role: "user", content: "Create the proof artifact", sequence: 0, createdAt: now });
 
+    // Keep this Run's canonical meters absent until the executor is gone. Any
+    // eager notifier projection hits real SQL and fails atomically; the later
+    // dispatcher must therefore be the first successful terminal projector.
+    const quotedRunId = `'${oldIdentity.runId.replaceAll("'", "''")}'`;
+    await dbBinding.exec(`CREATE TRIGGER proof_defer_run_usage BEFORE INSERT ON app_usage_events
+      WHEN NEW.reference_type = 'run' AND NEW.reference_id = ${quotedRunId}
+      BEGIN SELECT RAISE(ABORT, 'proof defers this Run usage until executor stops'); END`);
+    const notifierState = portableNotifierState();
+    const notifierEnv = {
+      DB: dbBinding, TAKOS_OFFLOAD: createInMemoryObjectStore(),
+      OIDC_ISSUER_URL: "https://accounts.example.test",
+      OIDC_OWNER_SUBJECT: "recovery-proof-owner",
+    } as unknown as Env;
+    let notifier = new RunNotifierDO(notifierState, notifierEnv);
+    const pendingNotifierFetches = new Set<Promise<Response>>();
+    const pendingControlRpcs = new Set<Promise<Response>>();
+    let projectionPhase = "executor";
+    let lostNotifierAcknowledgements = 0;
+    let firstProjectedRevision: number | undefined;
+    let retryProjectedRevision: number | undefined;
+    const projectionResponses: { phase: string; status: number }[] = [];
+    const namespace = {
+      idFromName: (name: string) => name,
+      get: (id: string) => {
+        requireValue(id === oldIdentity.runId, `notifier namespace routed an unexpected Run: ${id}`);
+        return { fetch: (request: Request): Promise<Response> => {
+          const work = (async () => {
+            const response = await notifier.fetch(request);
+            if (new URL(request.url).pathname === "/usage-project") {
+              projectionResponses.push({ phase: projectionPhase, status: response.status });
+              if (projectionPhase === "first" && lostNotifierAcknowledgements === 0) {
+                const ack = object(await response.clone().json(), "production notifier acknowledgement");
+                requireValue(response.ok && ack.success === true && ack.runId === id &&
+                  Number.isSafeInteger(ack.revision) && (ack.revision as number) > 0,
+                "cannot lose an unsuccessful or malformed notifier acknowledgement");
+                firstProjectedRevision = ack.revision as number;
+                lostNotifierAcknowledgements++;
+                throw new Error("injected lost HTTP acknowledgement after production usage projection");
+              }
+              if (projectionPhase === "retry") {
+                const ack = object(await response.clone().json(), "cold notifier acknowledgement");
+                requireValue(response.ok && ack.success === true && ack.runId === id &&
+                  Number.isSafeInteger(ack.revision) && (ack.revision as number) > 0,
+                "cold notifier acknowledgement lacks a durable revision");
+                retryProjectedRevision = ack.revision as number;
+              }
+            }
+            return response;
+          })();
+          pendingNotifierFetches.add(work);
+          void work.finally(() => pendingNotifierFetches.delete(work)).catch(() => undefined);
+          return work;
+        } };
+      },
+    };
+
     const bridgePort = await freeLoopbackPort();
     const bridgeBase = `http://127.0.0.1:${bridgePort}`;
     const env = {
@@ -340,7 +462,7 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
       ENVIRONMENT: "development",
       OPENAI_API_KEY: modelKey,
       OPENAI_BASE_URL: `${bridgeBase}/v1`,
-      RUN_NOTIFIER: { idFromName: (name: string) => name, get: () => ({ fetch: async () => Response.json({ success: true }) }) },
+      RUN_NOTIFIER: namespace,
     } as unknown as Env;
     const tokens = new Map<string, Identity>([[oldToken, oldIdentity], [newToken, newIdentity]]);
     server = Bun.serve({
@@ -366,27 +488,32 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
         const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/u)?.[1];
         const identity = bearer ? tokens.get(bearer) : undefined;
         if (!identity || request.headers.get("x-takos-run-id") !== identity.runId) return Response.json({ error: "unauthorized" }, { status: 401 });
-        const body = request.method === "POST" ? object(await request.json(), "control RPC request") : Object.fromEntries(url.searchParams);
-        body.runId = identity.runId;
-        body.serviceId = identity.serviceId;
-        body.workerId = identity.serviceId;
-        body.leaseVersion = identity.leaseVersion;
-        const response = await dispatchControlRpc(url.pathname, body, env);
-        if (!response) return Response.json({ error: "unmapped control RPC" }, { status: 404 });
-        if (url.pathname === agentControlRpcPath("tool-catalog") && response.ok) {
-          toolCatalog = object(await response.clone().json(), "real tool catalog");
-        }
-        trace.push({ path: url.pathname, identity: identity.serviceId, body, status: response.status });
-        if (url.pathname === agentControlRpcPath("complete-run") && identity.serviceId === newIdentity.serviceId && response.ok) {
-          terminalAcknowledged.resolve();
-        }
-        if (url.pathname === agentControlRpcPath("tool-execute") && identity.serviceId === oldIdentity.serviceId && response.ok && holdFirstAcknowledgement) {
-          holdFirstAcknowledgement = false;
-          operationCommitted.resolve();
-          await withTimeout(releaseOldAcknowledgement.promise, "release old tool acknowledgement", RUN_MS);
-          oldAcknowledgementReleased = true;
-        }
-        return response;
+        const work = (async () => {
+          const body = request.method === "POST" ? object(await request.json(), "control RPC request") : Object.fromEntries(url.searchParams);
+          body.runId = identity.runId;
+          body.serviceId = identity.serviceId;
+          body.workerId = identity.serviceId;
+          body.leaseVersion = identity.leaseVersion;
+          const response = await dispatchControlRpc(url.pathname, body, env);
+          if (!response) return Response.json({ error: "unmapped control RPC" }, { status: 404 });
+          if (url.pathname === agentControlRpcPath("tool-catalog") && response.ok) {
+            toolCatalog = object(await response.clone().json(), "real tool catalog");
+          }
+          trace.push({ path: url.pathname, identity: identity.serviceId, body, status: response.status });
+          if (url.pathname === agentControlRpcPath("complete-run") && identity.serviceId === newIdentity.serviceId && response.ok) {
+            terminalAcknowledged.resolve();
+          }
+          if (url.pathname === agentControlRpcPath("tool-execute") && identity.serviceId === oldIdentity.serviceId && response.ok && holdFirstAcknowledgement) {
+            holdFirstAcknowledgement = false;
+            operationCommitted.resolve();
+            await withTimeout(releaseOldAcknowledgement.promise, "release old tool acknowledgement", RUN_MS);
+            oldAcknowledgementReleased = true;
+          }
+          return response;
+        })();
+        pendingControlRpcs.add(work);
+        try { return await work; }
+        finally { pendingControlRpcs.delete(work); }
       },
     });
 
@@ -502,16 +629,163 @@ async function runAgentWorkerRecovery(options: { binary?: string; root: string; 
       finalUsageWitnesses[0]?.ownerAccountId === accountId &&
       finalUsageWitnesses[0]?.deliveryStatus === "queued",
     "replacement did not commit exactly one owner-bound terminal usage witness");
+    phase = "stop executor and drain notifier before independent usage projection";
+    const replacementExit = await newChild.stop();
+    requireValue(typeof replacementExit === "number" && !await newChild.isAlive(),
+      "replacement executor remained alive before independent usage projection");
+    await withTimeout((async () => {
+      while (pendingControlRpcs.size > 0 || pendingNotifierFetches.size > 0) {
+        await Promise.all([...pendingControlRpcs, ...pendingNotifierFetches]);
+      }
+    })(), "drain owned control RPC and notifier requests before projection", PHASE_MS);
+    requireValue(pendingControlRpcs.size === 0 && pendingNotifierFetches.size === 0,
+      "control RPC or notifier request remained in flight before projection");
+
+    const readCanonical = async () => ({
+      events: (await db.select().from(appUsageEvents)
+        .where(eq(appUsageEvents.referenceId, oldIdentity.runId)).all())
+        .sort((left, right) => left.meterType.localeCompare(right.meterType)),
+      rollups: (await db.select().from(appUsageRollups)
+        .where(eq(appUsageRollups.spaceId, workspaceId)).all())
+        .sort((left, right) => left.meterType.localeCompare(right.meterType)),
+      assertions: await db.select().from(runUsageProjectionAssertions).all(),
+    });
+    const readAuthority = async () => ({
+      run: await db.select().from(runs).where(eq(runs.id, oldIdentity.runId)).get(),
+      messages: (await db.select().from(messages).where(eq(messages.threadId, threadId)).all())
+        .sort((left, right) => left.id.localeCompare(right.id)),
+      events: (await db.select().from(runEvents).where(eq(runEvents.runId, oldIdentity.runId)).all())
+        .sort((left, right) => left.id - right.id),
+      operations: (await db.select().from(toolOperations).where(eq(toolOperations.runId, oldIdentity.runId)).all())
+        .sort((left, right) => left.id.localeCompare(right.id)),
+      artifacts: (await db.select().from(artifacts).where(eq(artifacts.runId, oldIdentity.runId)).all())
+        .sort((left, right) => left.id.localeCompare(right.id)),
+    });
+    const queuedCanonical = await readCanonical();
+    requireValue(queuedCanonical.events.length === 0 && queuedCanonical.rollups.length === 0 &&
+      queuedCanonical.assertions.length === 0,
+    "canonical usage was projected before the executor stopped or an assertion leaked");
+    const stoppedAuthority = await readAuthority();
+    const stoppedAuthorityBytes = JSON.stringify(stoppedAuthority);
+    const witnessIdentity = ({ id, runId, completionKey, runStatus, workspaceId: space, ownerAccountId }: typeof finalUsageWitnesses[number]) =>
+      ({ id, runId, completionKey, runStatus, workspaceId: space, ownerAccountId });
+    const originalWitnessIdentity = witnessIdentity(finalUsageWitnesses[0]!);
+
+    // The trigger belongs only to this disposable proof database. It stays in
+    // force through terminal/stop/drain, then the production dispatcher owns
+    // the first successful SQL projection.
+    await dbBinding.exec("DROP TRIGGER proof_defer_run_usage");
+    phase = "first usage dispatch with lost production notifier acknowledgement";
+    projectionPhase = "first";
+    const firstDispatch = await withTimeout(dispatchRunUsageProjectionOutbox(env),
+      "first terminal usage dispatch", PHASE_MS);
+    requireValue(firstDispatch === 0 && lostNotifierAcknowledgements === 1 &&
+      firstProjectedRevision !== undefined &&
+      projectionResponses.filter((entry) => entry.phase === "first").length === 1,
+    "first usage dispatch did not lose exactly one successful production acknowledgement");
+    const failedWitness = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, oldIdentity.runId)).get();
+    requireValue(failedWitness && JSON.stringify(witnessIdentity(failedWitness)) === JSON.stringify(originalWitnessIdentity) &&
+      failedWitness.deliveryStatus === "queued" && failedWitness.attempts === 1 &&
+      failedWitness.projectedRevision === null && failedWitness.nextAttemptAt &&
+      failedWitness.lastError?.includes("injected lost HTTP acknowledgement after production usage projection"),
+    "lost notifier acknowledgement did not leave the immutable witness queued for retry");
+    const firstCanonical = await readCanonical();
+    const expectedMeters = new Map([["llm_tokens_input", 0.024], ["llm_tokens_output", 0.008]]);
+    requireValue(firstCanonical.events.length === 2 && firstCanonical.rollups.length === 2 &&
+      firstCanonical.assertions.length === 0, "first projection did not commit exactly two canonical meters and rollups");
+    const firstJournal = parseRunNotifierJournalState(
+      await loadNotifierSnapshot(notifierState.storage, "run"));
+    requireValue(firstJournal?.runId === oldIdentity.runId &&
+      firstJournal.usageLedger?.phase === "ready" &&
+      firstJournal.usageLedger.revision === firstProjectedRevision &&
+      firstJournal.usageLedger.projectedRevision === firstProjectedRevision,
+    "lost acknowledgement did not leave a clean durable production notifier revision");
+    for (const event of firstCanonical.events) {
+      requireValue(expectedMeters.get(event.meterType) === event.units &&
+        event.idempotencyKey === `run:${oldIdentity.runId}:${event.meterType}` &&
+        event.ownerAccountId === accountId && event.scopeType === "space" &&
+        event.spaceId === workspaceId && event.referenceId === oldIdentity.runId &&
+        event.referenceType === "run" && event.metadata === "{}" &&
+        Number.isFinite(Date.parse(event.createdAt)),
+      `first projection recorded a malformed canonical event: ${event.meterType}`);
+      const rollup = firstCanonical.rollups.find((row) => row.meterType === event.meterType);
+      requireValue(rollup && rollup.ownerAccountId === accountId &&
+        rollup.scopeType === "space" && rollup.scopeId === workspaceId &&
+        rollup.spaceId === workspaceId && rollup.units === event.units &&
+        rollup.periodStart === `${event.createdAt.slice(0, 7)}-01` &&
+        Number.isFinite(Date.parse(rollup.updatedAt)),
+      `first projection recorded a malformed rollup: ${event.meterType}`);
+    }
+    requireValue(JSON.stringify(await readAuthority()) === stoppedAuthorityBytes,
+      "first usage dispatch mutated Run, transcript, tool, artifact, or lease authority");
+
+    phase = "cold notifier retry from persisted next attempt";
+    notifier = new RunNotifierDO(notifierState, notifierEnv);
+    projectionPhase = "retry";
+    const retryDispatch = await withTimeout(dispatchRunUsageProjectionOutbox(env, {
+      now: failedWitness.nextAttemptAt,
+    }), "cold terminal usage retry", PHASE_MS);
+    const doneWitness = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, oldIdentity.runId)).get();
+    requireValue(retryDispatch === 1 && doneWitness &&
+      JSON.stringify(witnessIdentity(doneWitness)) === JSON.stringify(originalWitnessIdentity) &&
+      doneWitness.deliveryStatus === "done" && doneWitness.attempts === 2 &&
+      doneWitness.projectedRevision !== null && doneWitness.projectedRevision > firstProjectedRevision &&
+      retryProjectedRevision === doneWitness.projectedRevision &&
+      doneWitness.nextAttemptAt === null && doneWitness.lastError === null &&
+      projectionResponses.filter((entry) => entry.phase === "retry").length === 1,
+    "cold notifier retry did not complete with a strictly newer durable revision");
+    const retriedCanonical = await readCanonical();
+    const retriedJournal = parseRunNotifierJournalState(
+      await loadNotifierSnapshot(notifierState.storage, "run"));
+    requireValue(retriedJournal?.runId === oldIdentity.runId &&
+      retriedJournal.usageLedger?.phase === "ready" &&
+      retriedJournal.usageLedger.revision === doneWitness.projectedRevision &&
+      retriedJournal.usageLedger.projectedRevision === doneWitness.projectedRevision,
+    "cold retry did not persist a clean newer notifier revision");
+    const stableRollups = (rows: typeof firstCanonical.rollups) =>
+      rows.map(({ updatedAt: _updatedAt, ...identity }) => identity);
+    requireValue(JSON.stringify(retriedCanonical.events) === JSON.stringify(firstCanonical.events) &&
+      JSON.stringify(stableRollups(retriedCanonical.rollups)) === JSON.stringify(stableRollups(firstCanonical.rollups)) &&
+      retriedCanonical.assertions.length === 0 &&
+      retriedCanonical.rollups.every((row, index) => Number.isFinite(Date.parse(row.updatedAt)) &&
+        Date.parse(row.updatedAt) >= Date.parse(firstCanonical.rollups[index]!.updatedAt)) &&
+      JSON.stringify(await readAuthority()) === stoppedAuthorityBytes,
+    "cold notifier retry double-counted canonical usage or mutated execution authority");
+
+    phase = "idle third usage dispatch";
+    projectionPhase = "idle";
+    const idleDispatch = await withTimeout(dispatchRunUsageProjectionOutbox(env, {
+      now: failedWitness.nextAttemptAt,
+    }), "idle terminal usage dispatch", PHASE_MS);
+    const idleWitness = await db.select().from(runUsageProjectionOutbox)
+      .where(eq(runUsageProjectionOutbox.runId, oldIdentity.runId)).get();
+    requireValue(idleDispatch === 0 && JSON.stringify(idleWitness) === JSON.stringify(doneWitness) &&
+      JSON.stringify(await readCanonical()) === JSON.stringify(retriedCanonical) &&
+      JSON.stringify(await readAuthority()) === stoppedAuthorityBytes &&
+      projectionResponses.filter((entry) => entry.phase === "idle").length === 0,
+    "third dispatcher was not idle or mutated durable projection and authority state");
     requireValue(!watchdog.timedOut, "overall deadline expired before final proof");
     succeeded = true;
     result = {
       ok: true, proof: options.runtime
         ? "real Worker handlers, SQLite migrations, ToolExecutor, OCI container init restart"
         : "real Worker handlers, SQLite migrations, ToolExecutor, compiled Rust process restart",
-      limitation: runtime.limitation ?? "Local bridge substitutes production proxy-token verification and RUN_NOTIFIER is a local stub; Accounts, Container/image, queue, SSE delivery, and live deployment are untested.",
+      limitation: runtime.limitation ?? "Local bridge substitutes production proxy-token verification; native notifier KV/object-store quota, durability and timed alarms, live Accounts, Container/image, queue, SSE delivery, and deployment are untested.",
       binarySHA256, checkpoint: { graph: checkpoint.graph_id, node: checkpoint.current_node, loopId: checkpoint.loop_id },
       tool: { attempts: toolAttempts.length, operationKey, completedOperations: finalOperations.length, artifacts: finalArtifacts.length },
       modelCalls: modelInputs.length, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cachedInputTokens: usage.cacheReadTokens },
+      usageProjection: {
+        productionNotifier: true, fullMigrationSqlite: true, portableStructuredCloneKv: true,
+        portableObjectStore: true, coldNotifierReload: true, executorStoppedBeforeDelivery: true,
+        lostSuccessfulHttpAcknowledgements: lostNotifierAcknowledgements,
+        firstDispatchCompleted: firstDispatch, retryDispatchCompleted: retryDispatch, idleDispatchCompleted: idleDispatch,
+        eagerProjectionRejections: projectionResponses.filter((entry) => entry.phase === "executor" && entry.status >= 400).length,
+        firstRevision: firstProjectedRevision, doneRevision: doneWitness.projectedRevision,
+        witnessAttempts: doneWitness.attempts, meters: Object.fromEntries(firstCanonical.events.map((event) => [event.meterType, event.units])),
+        ownerAccountId: accountId, workspaceId,
+      },
       terminal: { status: completed.status, leaseVersion: completed.leaseVersion, messages: finalMessages.length, completedEvents: 1, checkpointCleared: true },
       staleRpcStatuses: staleBodies.map(([endpoint]) => ({ endpoint, status: 409 })),
       ...(options.runtime ? { runtime: runtime.evidence?.() } : {}),
