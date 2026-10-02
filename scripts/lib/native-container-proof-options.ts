@@ -16,9 +16,10 @@ export type NativeContainerProofOptions = {
   port: number;
   callbackUrl: string;
   diagnosticContainerTransport: boolean;
+  actualStaleWindow: boolean;
 };
 
-export const NATIVE_CONTAINER_PROOF_USAGE = "node scripts/prove-agent-container-native-recovery.mjs --layout <absolute-OCI-layout> --reference <OCI-tag> --source-commit <40-hex> --expected-manifest-digest sha256:<64-hex> --image <preloaded-local-image> --sidecar-image <preloaded-image@sha256:digest> --bun <absolute-pinned-Bun> --output-dir <fresh-child-of-checkout/tmp/native-container-recovery-proof> --callback-host <Docker-reachable-host> --listen-host <local-interface> --port <1024-65535> [--diagnostic-container-transport]";
+export const NATIVE_CONTAINER_PROOF_USAGE = "node scripts/prove-agent-container-native-recovery.mjs --layout <absolute-OCI-layout> --reference <OCI-tag> --source-commit <40-hex> --expected-manifest-digest sha256:<64-hex> --image <preloaded-local-image> --sidecar-image <preloaded-image@sha256:digest> --bun <absolute-pinned-Bun> --output-dir <fresh-child-of-checkout/tmp/native-container-recovery-proof> --callback-host <Docker-reachable-host> --listen-host <local-interface> --port <1024-65535> [--diagnostic-container-transport] [--actual-stale-window]";
 
 function ensure(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -28,11 +29,17 @@ export function parseNativeContainerProofArgs(args: readonly string[], repositor
   const flags = new Set(["--layout", "--reference", "--source-commit", "--expected-manifest-digest", "--image", "--sidecar-image", "--bun", "--output-dir", "--callback-host", "--listen-host", "--port"]);
   const values = new Map<string, string>();
   let diagnosticContainerTransport = false;
+  let actualStaleWindow = false;
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === "--diagnostic-container-transport") {
       ensure(!diagnosticContainerTransport, NATIVE_CONTAINER_PROOF_USAGE);
       diagnosticContainerTransport = true;
+      continue;
+    }
+    if (flag === "--actual-stale-window") {
+      ensure(!actualStaleWindow, NATIVE_CONTAINER_PROOF_USAGE);
+      actualStaleWindow = true;
       continue;
     }
     const value = args[++index];
@@ -75,7 +82,7 @@ export function parseNativeContainerProofArgs(args: readonly string[], repositor
   const portValue = values.get("--port")!;
   const port = Number(portValue);
   ensure(/^[0-9]+$/u.test(portValue) && Number.isSafeInteger(port) && port >= 1024 && port <= 65535, "invalid --port");
-  return { root, layout, reference, sourceCommit, expectedManifestDigest, image, sidecarImage, bun, outputDir, callbackHost, listenHost, port, callbackUrl: `http://${callbackHost}:${port}`, diagnosticContainerTransport };
+  return { root, layout, reference, sourceCommit, expectedManifestDigest, image, sidecarImage, bun, outputDir, callbackHost, listenHost, port, callbackUrl: `http://${callbackHost}:${port}`, diagnosticContainerTransport, actualStaleWindow };
 }
 
 export async function createNativeProofEvidenceDirectory(options: NativeContainerProofOptions): Promise<void> {

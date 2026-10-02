@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-export function createNativeContainerWorkerFixture({ root, run, controllerToken, observerNonce, diagnosticContainerTransport = false }) {
+export function createNativeContainerWorkerFixture({ root, run, controllerToken, observerNonce, diagnosticContainerTransport = false, actualStaleWindow = false }) {
   const importPath = (path) => JSON.stringify(resolve(root, path));
   return `import webWorker, { SessionDO } from ${importPath('src/worker/web.ts')};
 import production from ${importPath('src/worker/index.ts')};
@@ -155,6 +155,7 @@ function recoveryScalars() {
 }
 const controllerToken = ${JSON.stringify(controllerToken)};
 const expectedObserverNonce = ${JSON.stringify(observerNonce)};
+const actualStaleWindow = ${JSON.stringify(actualStaleWindow)};
 let controlObservation = null;
 const controlTrace = [];
 const controlIngress = [];
@@ -263,6 +264,15 @@ export default {
         canonical: { ...canonicalEvidence(env), state: await snapshotRun(env.DB) } });
       if (path === '/__probe/canonical-recovery') return Response.json({
         ...canonicalEvidence(env), state: await snapshotRun(env.DB) });
+      if (path === '/__probe/actual-stale-window-snapshot') {
+        requireValue(actualStaleWindow, 'actual stale-window snapshot is available only in actual stale-window mode');
+        const state = await snapshotRun(env.DB);
+        const artifacts = (await env.DB.prepare('SELECT * FROM artifacts WHERE run_id=? ORDER BY id').bind(expectedRunId).all()).results;
+        const owner = await env.DB.prepare('SELECT id,type,status,owner_account_id FROM accounts WHERE id=?').bind(ownerId).first();
+        const workspace = await env.DB.prepare('SELECT id,type,status,owner_account_id FROM accounts WHERE id=?').bind(workspaceId).first();
+        return Response.json({ state: { ...state, artifacts }, owner, workspace,
+          checkpoint: recoveryState?.capture?.witness ?? null, recovery: recoveryScalars() });
+      }
       if (path === '/__probe/run-status') {
         // Fixture-only readback of this exact Run. Production control callbacks
         // and completion still pass through the real public Worker unchanged.
@@ -309,6 +319,7 @@ export default {
         return Response.json({ status: response.status, leaseLost: text.includes('Lease lost') });
       }
       if (path === '/__probe/age-recovery' && request.method === 'POST') {
+        if (actualStaleWindow) return Response.json({ code: 'actual_stale_window_manual_age_forbidden' }, { status: 409 });
         requireValue(recoveryState?.nativeDestroyAcknowledged && !recoveryState.reclaimed &&
           !recoveryHeartbeatAged && modelInputs.length === 1,
           'heartbeat aging requires the verified old Container death and cannot run twice');

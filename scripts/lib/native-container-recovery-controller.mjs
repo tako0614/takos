@@ -17,16 +17,14 @@ import { createFirstProjectorObserver } from './native-first-projector-observer.
 import { assertDockerImageIdentity } from './oci-image-identity.ts';
 import { nativeRecoveryPoolContainerId } from './native-container-proof-ownership.ts';
 import { captureNativeContainerTransportLogs } from './native-container-transport-logs.mjs';
+import { assertActualHeartbeatRecent, assertHeartbeatActuallyStale, assertMonotonicHeartbeatAge, assertNoEarlyRecovery,
+  assertRunSnapshotUnchanged, nativeContainerProofBudgets, remainingActualStaleWindowMs } from './native-container-stale-window.mjs';
 
 const execFile = promisify(execFileCallback);
 const miniflareRequire = createRequire(import.meta.resolve('miniflare'));
 const actualWorkerdModule = miniflareRequire.resolve('workerd');
 const migrationManifest = 'src/worker/platform/migrations/migration-set.generated.json';
 const wranglerConfig = 'deploy/cloudflare/wrangler.toml';
-const overallMs = 320_000; // Child watchdog; the public supervisor has its own 350-second bound.
-const phaseMs = 45_000; // Admission and old tool-ACK loss each have a separate phase budget.
-const completionPhaseMs = 90_000; // Replacement replay and terminal RPC budget.
-
 function assert(value, message) { if (!value) throw new Error(message); }
 function record(value, label) {
   assert(value !== null && typeof value === 'object' && !Array.isArray(value), `${label} is not an object`);
@@ -44,6 +42,7 @@ function makeCommand(root) {
 function validateOptions(value) {
   const options = record(value, 'native child options');
   assert(typeof options.diagnosticContainerTransport === 'boolean', 'diagnostic Container transport option must be boolean');
+  assert(typeof options.actualStaleWindow === 'boolean', 'actual stale-window option must be boolean');
   assert(Array.isArray(options.containersBefore) && options.containersBefore.every((id) => /^[a-f0-9]{64}$/u.test(id)),
     'parent physical Container baseline is required');
   for (const path of ['root', 'bun', 'outputDir', 'layout'])
@@ -131,6 +130,8 @@ async function preflight(options, stages) {
     headMatchesImageSource: headCommit === options.sourceCommit,
     generatedFixtureIsRuntimeOnly: true,
     diagnosticContainerTransport: options.diagnosticContainerTransport,
+    actualStaleWindow: options.actualStaleWindow,
+    proofMode: options.actualStaleWindow ? 'actual-stale-window' : 'fixture-aged-heartbeat',
     diagnosticTransportLimitation: options.diagnosticContainerTransport
       ? 'RUST_LOG debug and bounded read-only Docker log snapshots alter timing; success does not establish the earlier config transport failure cause or uninstrumented behavior'
       : null,
@@ -332,6 +333,10 @@ async function waitForObservation(mf, request, deadline) {
 
 export async function runNativeContainerRecovery(inputOptions) {
   const options = validateOptions(inputOptions);
+  const budgets = nativeContainerProofBudgets(options.actualStaleWindow);
+  const overallMs = budgets.childTimeoutMs;
+  const phaseMs = budgets.staleRecoveryPhaseMs;
+  const completionPhaseMs = budgets.completionPhaseMs;
   const command = makeCommand(options.root);
   const logCommand = (executable, args, timeout, maxBuffer) =>
     execFile(executable, args, { cwd: options.root, encoding: 'buffer', timeout, maxBuffer });
@@ -345,7 +350,7 @@ export async function runNativeContainerRecovery(inputOptions) {
   const reportPath = join(options.outputDir, 'result.json');
   const watchdog = setTimeout(() => {
     void writeFile(join(options.outputDir, 'failure.json'), JSON.stringify({
-      error: `owned Container admission probe exceeded ${overallMs}ms`, stages,
+      error: `owned Container admission probe exceeded ${overallMs}ms`, proofMode: budgets.mode, budgets, stages,
       at: new Date().toISOString(), outputDir: options.outputDir,
     }, null, 2)).catch(() => undefined);
     void Promise.resolve(mf?.dispose()).finally(() => process.exit(124));
@@ -372,7 +377,7 @@ export async function runNativeContainerRecovery(inputOptions) {
     const stateDir = join(options.outputDir, 'native-state');
     await mkdir(bundleDir);
     await writeFile(fixturePath, createNativeContainerWorkerFixture({ root: options.root, run, controllerToken, observerNonce,
-      diagnosticContainerTransport: options.diagnosticContainerTransport }));
+      diagnosticContainerTransport: options.diagnosticContainerTransport, actualStaleWindow: options.actualStaleWindow }));
     const built = await buildFixture(options, fixturePath, bundleDir);
     stages.push({ stage: 'fixture-built', at: new Date().toISOString(), sha256: built.bundleSha256 });
     const bindings = {
@@ -550,40 +555,138 @@ export async function runNativeContainerRecovery(inputOptions) {
     const oldPhysicalDeath = { acknowledged: true, agentIdsAbsent: containerWitness.dockerContainers.map((item) => item.id),
       at: new Date().toISOString(), marker: oldDeathMarker };
     await writeFile(join(options.outputDir, 'old-container-pre-ACK-death.json'), JSON.stringify(oldPhysicalDeath, null, 2));
-    const claimDeadline = Date.now() + phaseMs;
-    stages.push({ stage: 'canonical-stale-recovery-wait-start', at: new Date().toISOString(), budgetMs: phaseMs });
-    const agedResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/age-recovery`, {
-      method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
-    });
-    assert(agedResponse.ok, 'exact fixture heartbeat ageing failed');
-    const aged = record(await agedResponse.json(), 'stale eligibility fixture');
-    assert(aged.before?.status === 'running' && aged.before.service_id === run.serviceId &&
-      aged.before.lease_version === 7 && aged.after?.status === 'running' &&
-      aged.after.service_id === run.serviceId && aged.after.lease_version === 7 &&
-      Date.parse(aged.after.service_heartbeat) < Date.now() - 5 * 60 * 1000,
-      'heartbeat fixture changed lease ownership or did not establish stale eligibility');
-    for (const key of Object.keys(aged.before)) if (key !== 'service_heartbeat')
-      assert(JSON.stringify(aged.before[key]) === JSON.stringify(aged.after[key]),
-        `heartbeat fixture changed unrelated Run field ${key}`);
-    const nativeWorker = await mf.getWorker();
-    assert(Date.now() < claimDeadline, 'canonical recovery phase expired before scheduled entry');
-    let scheduledTimer;
-    let scheduledOutcome;
-    try {
-      scheduledOutcome = await Promise.race([
-        nativeWorker.scheduled({ cron: '* * * * *', scheduledTime: new Date() }),
-        new Promise((_, reject) => {
-          scheduledTimer = setTimeout(() => reject(new Error('canonical scheduled recovery phase deadline expired')),
-            Math.max(1, claimDeadline - Date.now()));
-        }),
-      ]);
-    } finally { clearTimeout(scheduledTimer); }
-    assert(scheduledOutcome?.outcome === 'ok', 'actual canonical scheduled invocation failed');
+    let nativeWorker;
+    const runScheduled = async (deadline, label) => {
+      assert(Date.now() < deadline, `${label} expired before scheduled entry`);
+      let scheduledTimer;
+      try {
+        return await Promise.race([
+          nativeWorker.scheduled({ cron: '* * * * *', scheduledTime: new Date() }),
+          new Promise((_, reject) => {
+            scheduledTimer = setTimeout(() => reject(new Error(`${label} deadline expired`)),
+              Math.max(1, deadline - Date.now()));
+          }),
+        ]);
+      } finally { clearTimeout(scheduledTimer); }
+    };
     const readCanonical = async () => {
       const response = await mf.dispatchFetch(...request('/__probe/canonical-recovery'));
       assert(response.ok, 'canonical recovery readback failed');
       return record(await response.json(), 'canonical recovery evidence');
     };
+    let staleEligibility;
+    let claimDeadline;
+    let actualStaleWindowClock;
+    if (options.actualStaleWindow) {
+      nativeWorker = await mf.getWorker();
+      stages.push({ stage: 'actual-stale-window-snapshot-start', at: new Date().toISOString(),
+        budgetMs: budgets.actualStaleWindowWaitMaxMs, heartbeatThresholdMs: budgets.actualStaleWindowMs });
+      const readStaleWindowSnapshot = async () => {
+        const response = await mf.dispatchFetch(`${options.callbackUrl}/__probe/actual-stale-window-snapshot`, {
+          headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
+        });
+        assert(response.ok, 'read-only actual stale-window SQL snapshot failed');
+        return record(await response.json(), 'actual stale-window SQL snapshot');
+      };
+      const baseline = await readStaleWindowSnapshot();
+      const heartbeatAt = assertActualHeartbeatRecent(baseline.state, Date.now());
+      const baselineObservedAtMs = Date.now();
+      const heartbeatAgeBefore = baselineObservedAtMs - heartbeatAt;
+      const baselineObservedAt = new Date(baselineObservedAtMs).toISOString();
+      const baselineMonotonicAt = performance.now();
+      actualStaleWindowClock = { baselineMonotonicAt, heartbeatAt, heartbeatAgeBefore };
+      assert(baseline.state.run?.status === 'running' && baseline.state.run.service_id === run.serviceId &&
+        baseline.state.run.lease_version === 7 && baseline.state.run.account_id === run.workspaceId &&
+        baseline.state.run.requester_account_id === run.ownerId && baseline.owner?.id === run.ownerId &&
+        baseline.workspace?.id === run.workspaceId && baseline.checkpoint?.runId === run.runId &&
+        baseline.recovery?.nativeDestroyAcknowledged === true && baseline.recovery?.reclaimed !== true,
+      'actual stale-window baseline lacks the exact old Run, owner, checkpoint, or destroyed-Container witness');
+      const manualAgeResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/age-recovery`, {
+        method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
+      });
+      const manualAgeBody = await manualAgeResponse.json();
+      assert(manualAgeResponse.status === 409 && manualAgeBody?.code === 'actual_stale_window_manual_age_forbidden' &&
+        Object.keys(manualAgeBody).join(',') === 'code',
+      `actual stale-window fixture did not explicitly refuse manual heartbeat aging: HTTP ${manualAgeResponse.status} ${JSON.stringify(manualAgeBody)}`);
+      const afterManualAge = await readStaleWindowSnapshot();
+      assertRunSnapshotUnchanged(baseline, afterManualAge);
+      const manualAgeRejected = { rejected: true, attempts: 1, status: manualAgeResponse.status, code: manualAgeBody.code,
+        sqlSnapshotUnchanged: true };
+      const earlyDeadline = Date.now() + phaseMs;
+      stages.push({ stage: 'actual-stale-window-early-scheduled-start', at: new Date().toISOString(), budgetMs: phaseMs });
+      assertActualHeartbeatRecent(baseline.state, Date.now());
+      const earlyStartElapsedMs = performance.now() - baselineMonotonicAt;
+      assertMonotonicHeartbeatAge(heartbeatAgeBefore, earlyStartElapsedMs, false);
+      const earlyScheduledOutcome = await runScheduled(earlyDeadline, 'actual stale-window early scheduled phase');
+      assert(earlyScheduledOutcome?.outcome === 'ok', 'early canonical scheduled invocation failed');
+      const earlyFinishElapsedMs = performance.now() - baselineMonotonicAt;
+      assertMonotonicHeartbeatAge(heartbeatAgeBefore, earlyFinishElapsedMs, false);
+      const earlyCanonical = await readCanonical();
+      const earlySnapshot = await readStaleWindowSnapshot();
+      assertActualHeartbeatRecent(earlySnapshot.state, Date.now());
+      assert(earlyCanonical.backgroundErrors === 0, 'early canonical scheduled invocation failed in background');
+      assertNoEarlyRecovery({ ...earlyCanonical, state: earlySnapshot.state, expectedOldServiceId: run.serviceId,
+        recovery: earlySnapshot.recovery }, run.runId);
+      assert(earlySnapshot.recovery?.reclaimed === false,
+        'actual stale-window early scheduled invocation changed recoveryState.reclaimed');
+      assertRunSnapshotUnchanged(baseline, earlySnapshot);
+      staleEligibility = { mode: 'actual-stale-window', heartbeatAt: baseline.state.run.service_heartbeat,
+        heartbeatThresholdMs: budgets.actualStaleWindowMs, before: baseline.state.run, afterEarlyScheduled: earlySnapshot.state.run,
+        baseline, baselineObservedAt, afterManualAgeSnapshot: afterManualAge, heartbeatAgeBefore, earlyStartElapsedMs, earlyFinishElapsedMs,
+        afterEarlyScheduledSnapshot: earlySnapshot, earlyScheduledOutcome, earlyCanonical,
+        manualAgeRejected, earlyRecoveryProhibited: true };
+      const waitStartedAt = Date.now();
+      const waitStartedMonotonic = performance.now();
+      const remainingMs = remainingActualStaleWindowMs(heartbeatAt, waitStartedAt);
+      assert(remainingMs <= budgets.actualStaleWindowWaitMaxMs, 'actual stale-window wait exceeded its configured bound');
+      await new Promise((resolveWait) => setTimeout(resolveWait, remainingMs));
+      const actualWaitElapsedMs = performance.now() - waitStartedMonotonic;
+      const monotonicElapsedMs = performance.now() - baselineMonotonicAt;
+      assert(actualWaitElapsedMs <= budgets.actualStaleWindowWaitMaxMs, 'actual stale-window wait exceeded 315 seconds');
+      const monotonicHeartbeatAgeAfter = assertMonotonicHeartbeatAge(heartbeatAgeBefore, monotonicElapsedMs, true);
+      assertHeartbeatActuallyStale(heartbeatAt, Date.now());
+      const afterWait = await readStaleWindowSnapshot();
+      const staleObservedAtMs = Date.now();
+      const staleObservedAt = new Date(staleObservedAtMs).toISOString();
+      const heartbeatAgeAfter = staleObservedAtMs - heartbeatAt;
+      assertHeartbeatActuallyStale(heartbeatAt, staleObservedAtMs);
+      assertRunSnapshotUnchanged(baseline, afterWait);
+      staleEligibility = { ...staleEligibility, waitStartedAt: new Date(waitStartedAt).toISOString(),
+        actualWaitElapsedMs, monotonicElapsedMs, heartbeatAgeBefore, heartbeatAgeAfter,
+        monotonicHeartbeatAgeAfter, staleObservedAt, afterWait: afterWait.state.run,
+        afterWaitSnapshot: afterWait,
+        snapshotUnchangedThroughThreshold: true,
+        claimScope: 'proves the unchanged Run heartbeat exceeded 300 seconds; it does not claim the old physical Container was absent for 300 seconds' };
+    } else {
+      claimDeadline = Date.now() + phaseMs;
+      stages.push({ stage: 'canonical-stale-recovery-wait-start', at: new Date().toISOString(), budgetMs: phaseMs });
+      const agedResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/age-recovery`, {
+        method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
+      });
+      assert(agedResponse.ok, 'exact fixture heartbeat ageing failed');
+      staleEligibility = record(await agedResponse.json(), 'stale eligibility fixture');
+      assert(staleEligibility.before?.status === 'running' && staleEligibility.before.service_id === run.serviceId &&
+        staleEligibility.before.lease_version === 7 && staleEligibility.after?.status === 'running' &&
+        staleEligibility.after.service_id === run.serviceId && staleEligibility.after.lease_version === 7 &&
+        Date.parse(staleEligibility.after.service_heartbeat) < Date.now() - 5 * 60 * 1000,
+        'heartbeat fixture changed lease ownership or did not establish stale eligibility');
+      for (const key of Object.keys(staleEligibility.before)) if (key !== 'service_heartbeat')
+        assert(JSON.stringify(staleEligibility.before[key]) === JSON.stringify(staleEligibility.after[key]),
+          `heartbeat fixture changed unrelated Run field ${key}`);
+      nativeWorker = await mf.getWorker();
+    }
+    if (options.actualStaleWindow) {
+      const positiveInvocationElapsedMs = performance.now() - actualStaleWindowClock.baselineMonotonicAt;
+      const monotonicHeartbeatAgeAtPositiveInvocation = assertMonotonicHeartbeatAge(
+        actualStaleWindowClock.heartbeatAgeBefore, positiveInvocationElapsedMs, true);
+      assertHeartbeatActuallyStale(actualStaleWindowClock.heartbeatAt, Date.now());
+      staleEligibility = { ...staleEligibility, positiveInvocationElapsedMs, monotonicHeartbeatAgeAtPositiveInvocation,
+        positiveInvocationAt: new Date().toISOString() };
+      await writeFile(join(options.outputDir, 'actual-stale-window-early.json'), JSON.stringify(staleEligibility, null, 2));
+      claimDeadline = Date.now() + phaseMs;
+    }
+    const scheduledOutcome = await runScheduled(claimDeadline, 'canonical scheduled recovery phase');
+    assert(scheduledOutcome?.outcome === 'ok', 'actual canonical scheduled invocation failed');
     let canonical;
     do {
       canonical = await readCanonical();
@@ -612,7 +715,7 @@ export async function runNativeContainerRecovery(inputOptions) {
       queueMessage.beforeQueueSend.run.service_id === null && queueMessage.beforeQueueSend.run.lease_version === 7 &&
       claimed?.status === 'running' && claimed.service_id === run.newServiceId && claimed.lease_version === 8 &&
       claimed.account_id === run.workspaceId && claimed.requester_account_id === run.ownerId &&
-      claimed.thread_id === run.threadId && claimed.engine_checkpoint === aged.before.engine_checkpoint,
+      claimed.thread_id === run.threadId && claimed.engine_checkpoint === staleEligibility.before.engine_checkpoint,
       'scheduled reset and Queue claim do not preserve the original private checkpoint/authority');
     const replacementDispatch = canonicalDispatch.response;
     const newAccepted = record(replacementDispatch?.body, 'canonical Host replacement acceptance');
@@ -628,8 +731,9 @@ export async function runNativeContainerRecovery(inputOptions) {
       receiptData.service_id === run.newServiceId && receiptData.lease_version === 8 &&
       receiptData.executor_container_id === run.newContainerId,
       'native SQL dispatch receipt does not join the canonical lease and actual Host slot');
-    await writeFile(join(options.outputDir, 'canonical-recovery.json'),
-      JSON.stringify({ aged, scheduledOutcome, canonical }, null, 2));
+    await writeFile(join(options.outputDir, 'canonical-recovery.json'), JSON.stringify(options.actualStaleWindow
+      ? { staleEligibility, scheduledOutcome, canonical }
+      : { aged: staleEligibility, scheduledOutcome, canonical }, null, 2));
     const staleStatuses = [];
     for (let index = 0; index < 2; index++) {
       const stale = await mf.dispatchFetch(`${options.callbackUrl}/__probe/old-token-probe`, {
@@ -873,8 +977,9 @@ export async function runNativeContainerRecovery(inputOptions) {
       'generated Worker bundle bytes changed during probe');
     const result = {
       status: 'passed', result: 'LOCAL_CANONICAL_QUEUE_CONTAINER_FIRST_PROJECTOR_LOST_ACK_COLD_RETRY_PROBE_OK',
-      limitation: 'Local native D1/DO/R2, canonical scheduled/native Queue and real executor Host Service Binding with two actual compiled Containers and a deterministic local model. The fixture ages only the destroyed old executor heartbeat; no actual five-minute outage, whole workerd restart, hosted lifecycle, real Accounts/model or deployed image identity claim.',
+      limitation: `Local native D1/DO/R2, canonical scheduled/native Queue and real executor Host Service Binding with two actual compiled Containers and a deterministic local model. ${options.actualStaleWindow ? 'The actual Run heartbeat was observed recent, remained unchanged, and crossed its 300-second stale threshold; whole workerd restart is not proven.' : 'The fixture ages only the destroyed old executor heartbeat; no actual five-minute outage.'} Hosted lifecycle, real Accounts/model or deployed image identity is not claimed.`,
       startedAt: new Date(started).toISOString(), elapsedMs: Date.now() - started,
+      proofMode: budgets.mode, budgets,
       sourceCommit: finalHeadCommit,
       diagnosticContainerTransport: options.diagnosticContainerTransport, transportLogCaptures,
       sourceState: before.sourceState, sourceHashesBefore: before.sourcesBefore,
@@ -898,7 +1003,8 @@ export async function runNativeContainerRecovery(inputOptions) {
       usageProjection: { firstWitness: queuedWitnesses[0], dispatchCompleted: projectionBody.completed,
         doneWitness, meters, rollups, firstProjector: firstUsage.record },
       containerWitness, replacementContainerWitness,
-      recovery: { ...recovery, oldPhysicalDeath, staleStatuses, aged, scheduledOutcome, canonical, duplicateRecovery,
+      recovery: { ...recovery, runId: run.runId, oldServiceId: run.serviceId, oldPhysicalDeath, staleStatuses,
+        ...(options.actualStaleWindow ? { staleEligibility } : { aged: staleEligibility }), scheduledOutcome, canonical, duplicateRecovery,
         replacementDispatch },
       stages,
     };
@@ -943,6 +1049,7 @@ export async function runNativeContainerRecovery(inputOptions) {
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack,
         cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? '') } : String(error),
       diagnosticContainerTransport: options.diagnosticContainerTransport, transportLogCaptures,
+      proofMode: budgets.mode, budgets,
       stages, outputDir: options.outputDir,
     }, null, 2)}\n`);
   } finally {
@@ -973,7 +1080,7 @@ export async function runNativeContainerRecovery(inputOptions) {
   }
   if (failure && !(await readFile(join(options.outputDir, 'failure.json')).catch(() => null))) {
     await writeFile(join(options.outputDir, 'failure.json'), `${JSON.stringify({
-      status: 'failed', at: new Date().toISOString(), error: String(failure), stages,
+      status: 'failed', at: new Date().toISOString(), error: String(failure), proofMode: budgets.mode, budgets, stages,
       outputDir: options.outputDir,
     }, null, 2)}\n`);
   }

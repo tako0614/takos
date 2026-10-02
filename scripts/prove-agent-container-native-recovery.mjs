@@ -12,10 +12,10 @@ import { imageIdentity } from "./lib/oci-image-identity.ts";
 import { createNativeProofEvidenceDirectory, parseNativeContainerProofArgs } from "./lib/native-container-proof-options.ts";
 import { assertFreshInspection, assertNativeRecoveryWitnesses, selectOwnedStops } from "./lib/native-container-proof-ownership.ts";
 import { qualifyOwnedProcessGroup } from "./lib/native-container-proof-process.ts";
+import { assertNativeStaleWindowQualification, nativeContainerProofBudgets } from "./lib/native-container-stale-window.mjs";
 
 const execFile = promisify(execFileCallback);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outerMs = 350_000;
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const ensure = (value, message) => { if (!value) throw new Error(message); };
@@ -61,10 +61,12 @@ async function heavyProcesses() {
 
 async function main() {
   const options = parseNativeContainerProofArgs(process.argv.slice(2), root);
+  const budgets = nativeContainerProofBudgets(options.actualStaleWindow);
+  const outerMs = budgets.outerTimeoutMs;
   ensure(process.platform === "linux" && process.version === "v26.1.0" && typeof globalThis.Bun === "undefined",
     "native proof requires the pinned Linux Node26.1.0 host");
   await createNativeProofEvidenceDirectory(options);
-  const record = { diagnosticTransport: { enabled: options.diagnosticContainerTransport, timingPerturbation: options.diagnosticContainerTransport }, startedAt: new Date().toISOString(), qualified: false, scope: "local canonical scheduled/native Queue/real Host Service Binding two-Container checkpoint/tool-ACK recovery and executor-stopped first usage projection/lost successful usage ACK/real-due cold retry/idle; fixture heartbeat ageing only", options, outerDeadlineMs: outerMs, observedGroupMembers: {}, dockerSnapshots: [] };
+  const record = { diagnosticTransport: { enabled: options.diagnosticContainerTransport, timingPerturbation: options.diagnosticContainerTransport }, startedAt: new Date().toISOString(), qualified: false, proofMode: budgets.mode, budgets, scope: "local canonical scheduled/native Queue/real Host Service Binding two-Container checkpoint/tool-ACK recovery and executor-stopped first usage projection/lost successful usage ACK/real-due cold retry/idle; stale heartbeat proof mode is explicit", options, outerDeadlineMs: outerMs, observedGroupMembers: {}, dockerSnapshots: [] };
   const reportPath = join(options.outputDir, "supervisor-result.json");
   const save = async () => writeFile(reportPath, JSON.stringify(record, null, 2) + "\n");
   const dockerConfig = join(options.outputDir, "docker-config");
@@ -206,6 +208,15 @@ async function main() {
       "native controller exited unsuccessfully; raw diagnostics are retained in controller-stderr.log");
     record.nativeReport = await readJson(join(nativeDir, "result.json"));
     record.nativeCleanup = await readJson(join(nativeDir, "native-container-cleanup.json"));
+    let actualStaleWindowEvidence;
+    if (options.actualStaleWindow) {
+      actualStaleWindowEvidence = await readJson(join(nativeDir, "actual-stale-window-early.json"));
+      record.actualStaleWindowEvidencePath = join(nativeDir, "actual-stale-window-early.json");
+    }
+    assertNativeStaleWindowQualification({ actualStaleWindow: options.actualStaleWindow, budgets,
+      report: record.nativeReport, evidence: actualStaleWindowEvidence });
+    record.staleWindowQualification = { verified: true, mode: budgets.mode, budgets,
+      earlyEvidenceLinked: options.actualStaleWindow };
     const nativeSources = record.nativeReport.sourceHashesBefore;
     ensure(nativeSources && Object.keys(nativeSources).length > 0 &&
       Object.entries(nativeSources).every(([path, digest]) => record.sourceHashesBefore[path] === digest),
@@ -319,7 +330,7 @@ async function main() {
         beforeIds: new Set(record.containersBefore), agentImage: options.image, agentImageId: record.dockerImageId });
       record.physicalWitnessQualified = true;
     } catch (error) { record.physicalWitnessError = String(error); }
-    record.qualified = !record.error && !record.nativeCleanupReadbackError && !record.interrupted && !record.groupCleanupError && !record.cleanupOrReadbackError && record.nativePassed === true && record.nativeCleanupAcknowledged === true && record.physicalWitnessQualified === true && record.sourceIdentityLinked === true && record.sourceBytesUnchanged === true && record.runtimeBytesUnchanged === true && Object.keys(record.groupMembersAfter ?? { absent: true }).length === 0;
+    record.qualified = !record.error && !record.nativeCleanupReadbackError && !record.interrupted && !record.groupCleanupError && !record.cleanupOrReadbackError && record.staleWindowQualification?.verified === true && record.nativePassed === true && record.nativeCleanupAcknowledged === true && record.physicalWitnessQualified === true && record.sourceIdentityLinked === true && record.sourceBytesUnchanged === true && record.runtimeBytesUnchanged === true && Object.keys(record.groupMembersAfter ?? { absent: true }).length === 0;
     record.finishedAt = new Date().toISOString();
     await save();
   }

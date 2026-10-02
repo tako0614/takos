@@ -1,9 +1,10 @@
 # Canonical stale recovery and actual Container composition
 
-Status: the local harness is implemented. Canonical initial-admission diagnostic
-passed, but one guided full recovery/usage trial failed after actual replacement
-bootstrap. Portable gate, commit and CI evidence are recorded in PR126 and the
-dedicated handoff; they do not qualify the failed combined trial.
+Status: the local harness is implemented. A later fixed-source diagnostic trial
+passed the complete canonical recovery/usage composition in 264.598 seconds.
+Its separate outer socket observer failed conservative whole-session coverage;
+that verdict and earlier failed trials remain unchanged. Portable gate, commit
+and CI evidence are recorded in PR126 and the dedicated handoff.
 An independent notification preference persistence defect found during the next
 bounded observation has been fixed and verified separately, as described below.
 
@@ -176,3 +177,42 @@ whole-instance SQL/KV/R2/Queue/alarm backup/restore remain unverified. The retai
 preloaded image's operator commit and unchanged image inputs are separate from
 current Worker source and published provenance. Common substrate gaps remain with
 the main owner; this work does not claim GA, merge or release completion.
+
+## Later observed composition and next bounded qualification
+
+On 2026-10-02, one unchanged native CLI at 1076e9a81 passed with diagnostic DEBUG
+and private socket observation: old physical Container died before tool success
+ACK, canonical cron/native Queue claimed lease 8 and a new service UUID, the real
+native Host selected a second compiled Container, and the original checkpoint
+resumed to completion. Duplicate Queue delivery kept one Host dispatch and one
+operation/effect. Both physical executors and producer work were stopped before
+first usage projection. After loss of its successful ACK, a new notifier instance
+with the same DO identity retried after the real 60-second due without duplicate
+meters or rollups, then idled. Native cleanup returned two HTTP 200 acknowledgements;
+source/runtime bytes were unchanged and the owned process group was empty.
+
+The native supervisor qualified this local composition. The outside socket
+observer exited unsuccessfully when workerd ended naturally, so complete observer
+coverage did not qualify. Instrumentation perturbs timing; this result establishes
+neither the cause/fix of earlier config-send failures nor ordinary uninstrumented
+reliability. The preloaded image's operator-supplied source commit is not a
+current-HEAD image build attestation.
+
+The opt-in `--actual-stale-window` mode retains the default 320/350-second
+watchdogs and 45/90-second phases. It adds a separate bounded 315-second wait
+allowance, proves explicit manual-age rejection without a changed SQL snapshot,
+and requires no cron/Queue/Host claim before the real five-minute heartbeat
+threshold. Wall and monotonic time, full persisted snapshots and the early
+invocation are checked before the same recovery and usage path. The supervisor
+independently checks the child mode, budgets and matching fresh evidence file.
+Default heartbeat-age evidence keys and the original phase deadline remain.
+
+Twenty focused CLI/ownership/qualification tests passed, including execution of
+the generated manual-age route with zero SQL calls and rejection of incomplete,
+forged or early qualification records. These are preparation; the prior 264.598-
+second success used fixture heartbeat ageing. New native trial and owning gate
+results are recorded separately in the dedicated and shared progress handoffs.
+The mode proves the real heartbeat threshold, not 300 seconds of physical
+Container absence. Whole-workerd restart remains separate: the installed Miniflare
+Queue broker is in-memory, so a queuePersist option cannot establish queued-message
+durability across a workerd restart.

@@ -37,6 +37,30 @@ Deployment の lifecycle を保持も実行もしません。Takosumi Accounts �
 account-plane の identity、アカウント / 課金の policy、OIDC issuer の動作、
 dashboard を介した install flow を所有します。
 
+## インスタンスの discovery
+
+`GET /.well-known/takos` は、Takos クライアントが接続先の API を見つけるための公開 JSON です。
+認証なしで `200` を返し、`Cache-Control: public, max-age=300` を設定します。
+
+```bash
+curl -fsS https://takos.example.com/.well-known/takos
+```
+
+| field | 内容 |
+| --- | --- |
+| `product` / `name` | `takos` / `Takos` |
+| `issuer` / `apiBaseUrl` | この JSON を提供する Takos の origin。例: `https://takos.example.com` |
+| `endpoints` | `api`、`currentUser`、`spaces`、`apps`、`notifications`、`notificationPushers` の URL |
+
+この文書の `issuer` は製品の接続先を表します。OIDC の発行者・JWKS・token の検証先には使いません。
+Takos の login は、設定された外部 Accounts issuer と所有者の正確な subject を確認します。
+例えば Takos が `https://takos.example.com`、Accounts issuer が `https://accounts.example.com` なら、
+この文書の `issuer` は前者です。ログインを開始する入口は `/auth/oidc/login` です。
+Takos 自体は OIDC issuer を提供しません。
+
+discovery の取得は Workspace や Run へのアクセス権を与えません。インスタンス所有者は1人で、
+複数の private Workspace と外部参加者はそれぞれの API のアクセス境界で扱います。
+
 ## Capsule API
 
 Current public/product API markers:

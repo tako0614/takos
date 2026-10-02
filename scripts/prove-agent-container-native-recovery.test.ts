@@ -5,7 +5,12 @@ import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { runInNewContext } from "node:vm";
 import { createNativeProofEvidenceDirectory, parseNativeContainerProofArgs } from "./lib/native-container-proof-options.ts";
+import { assertActualHeartbeatRecent, assertHeartbeatActuallyStale, assertNoEarlyRecovery,
+  assertMonotonicHeartbeatAge, assertNativeStaleWindowQualification, assertRunSnapshotUnchanged, nativeContainerProofBudgets,
+  remainingActualStaleWindowMs } from "./lib/native-container-stale-window.mjs";
+import { createNativeContainerWorkerFixture } from "./lib/native-container-worker-fixture.mjs";
 import { assertFreshInspection, assertNativeRecoveryWitnesses, fixtureContainerName, nativeRecoveryPoolContainerId, selectOwnedStops, type DockerCandidate, type NativeContainerWitness } from "./lib/native-container-proof-ownership.ts";
 import { qualifyOwnedProcessGroup, type ProcessWitness } from "./lib/native-container-proof-process.ts";
 
@@ -41,6 +46,160 @@ test("diagnostic transport logging is opt-in and refuses duplicate or valued tog
   assert.equal(parseNativeContainerProofArgs(["--diagnostic-container-transport", ...args], root).diagnosticContainerTransport, true);
   assert.throws(() => parseNativeContainerProofArgs([...args, "--diagnostic-container-transport", "--diagnostic-container-transport"], root));
   assert.throws(() => parseNativeContainerProofArgs([...args, "--diagnostic-container-transport", "false"], root));
+});
+
+test("actual stale-window option is opt-in, boolean, and rejects duplicates", () => {
+  const args = argv(values(root));
+  assert.equal(parseNativeContainerProofArgs(args, root).actualStaleWindow, false);
+  assert.equal(parseNativeContainerProofArgs(["--actual-stale-window", ...args], root).actualStaleWindow, true);
+  assert.throws(() => parseNativeContainerProofArgs(["--actual-stale-window", "--actual-stale-window", ...args], root));
+  assert.throws(() => parseNativeContainerProofArgs([...args, "--actual-stale-window", "false"], root));
+});
+
+test("stale-window budgets preserve default phases and add only the bounded real wait", () => {
+  assert.deepEqual(nativeContainerProofBudgets(false), {
+    mode: "fixture-aged-heartbeat", childTimeoutMs: 320_000, outerTimeoutMs: 350_000,
+    admissionPhaseMs: 45_000, oldToolAckLossPhaseMs: 45_000, staleRecoveryPhaseMs: 45_000,
+    completionPhaseMs: 90_000, actualStaleWindowMs: 0, actualStaleWindowWaitMaxMs: 0,
+  });
+  assert.deepEqual(nativeContainerProofBudgets(true), {
+    mode: "actual-stale-window", childTimeoutMs: 635_000, outerTimeoutMs: 665_000,
+    admissionPhaseMs: 45_000, oldToolAckLossPhaseMs: 45_000, staleRecoveryPhaseMs: 45_000,
+    completionPhaseMs: 90_000, actualStaleWindowMs: 300_000, actualStaleWindowWaitMaxMs: 315_000,
+  });
+});
+
+test("actual stale-window validation rejects invalid or mutated heartbeats and Run snapshots", () => {
+  const now = 1_800_000_000_000;
+  const snapshot = { run: { id: "run-1", service_heartbeat: new Date(now - 10_000).toISOString(), service_id: "service-old", lease_version: 7 } };
+  const heartbeatAt = assertActualHeartbeatRecent(snapshot, now);
+  assert.equal(remainingActualStaleWindowMs(heartbeatAt, now), 290_001);
+  assert.throws(() => assertActualHeartbeatRecent({ run: { service_heartbeat: "invalid" } }, now), /valid heartbeat/u);
+  assert.throws(() => assertActualHeartbeatRecent({ run: { service_heartbeat: new Date(now - 300_000).toISOString() } }, now), /less than 300 seconds/u);
+  assert.throws(() => assertActualHeartbeatRecent({ run: { service_heartbeat: new Date(now + 1).toISOString() } }, now), /valid heartbeat/u);
+  assert.throws(() => remainingActualStaleWindowMs(heartbeatAt, now + 300_001), /valid recent heartbeat/u);
+  assertHeartbeatActuallyStale(heartbeatAt, heartbeatAt + 300_001);
+  assert.throws(() => assertHeartbeatActuallyStale(heartbeatAt, heartbeatAt + 300_000), /has not exceeded/u);
+  assert.equal(assertMonotonicHeartbeatAge(10_000, 290_001, true), 300_001);
+  assert.throws(() => assertMonotonicHeartbeatAge(10_000, 290_000, true), /does not prove/u);
+  assert.equal(assertMonotonicHeartbeatAge(10_000, 289_999, false), 299_999);
+  assert.throws(() => assertMonotonicHeartbeatAge(10_000, 290_000, false), /did not finish before/u);
+  assertRunSnapshotUnchanged(snapshot, structuredClone(snapshot));
+  const mutated = structuredClone(snapshot); mutated.run.service_id = "service-new";
+  assert.throws(() => assertRunSnapshotUnchanged(snapshot, mutated), /snapshot changed/u);
+  const heartbeatMutated = structuredClone(snapshot); heartbeatMutated.run.service_heartbeat = new Date(now - 20_000).toISOString();
+  assert.throws(() => assertRunSnapshotUnchanged(snapshot, heartbeatMutated), /snapshot changed/u);
+  const fullSnapshot = { state: { run: snapshot.run, operations: [{ id: "op-1", status: "completed" }],
+    receipts: [{ event_key: "receipt-1" }], artifacts: [{ id: "artifact-1", name: "result" }] },
+  owner: { id: "owner-1", status: "active" }, workspace: { id: "workspace-1", owner_account_id: "owner-1" },
+  checkpoint: { runId: "run-1", digest: "checkpoint-1" } };
+  for (const mutate of [
+    (value: typeof fullSnapshot) => { value.owner.status = "disabled"; },
+    (value: typeof fullSnapshot) => { value.workspace.owner_account_id = "foreign-owner"; },
+    (value: typeof fullSnapshot) => { value.checkpoint.digest = "changed"; },
+    (value: typeof fullSnapshot) => { value.state.operations[0]!.status = "pending"; },
+    (value: typeof fullSnapshot) => { value.state.receipts[0]!.event_key = "changed"; },
+    (value: typeof fullSnapshot) => { value.state.artifacts[0]!.name = "changed"; },
+  ]) {
+    const changed = structuredClone(fullSnapshot); mutate(changed);
+    assert.throws(() => assertRunSnapshotUnchanged(fullSnapshot, changed), /snapshot changed/u);
+  }
+});
+
+test("early scheduled evidence rejects a claim and actual fixture age route refuses before SQL", async () => {
+  const runId = "run-1";
+  const evidence = { expectedOldServiceId: "service-old", state: { run: { service_id: "service-old", lease_version: 7 } },
+    emitted: [], hostDispatches: [], acknowledgements: [], recovery: { reclaimed: false } };
+  assertNoEarlyRecovery(evidence, runId);
+  assert.throws(() => assertNoEarlyRecovery({ ...evidence, emitted: [{ body: { runId } }] }, runId), /before its real stale threshold/u);
+  assert.throws(() => assertNoEarlyRecovery({ ...evidence, hostDispatches: [{ request: { runId } }] }, runId), /before its real stale threshold/u);
+  assert.throws(() => assertNoEarlyRecovery({ ...evidence, acknowledgements: [{ runId }] }, runId), /before its real stale threshold/u);
+  assert.throws(() => assertNoEarlyRecovery({ ...evidence, recovery: { reclaimed: true } }, runId), /before its real stale threshold/u);
+  assert.throws(() => assertNoEarlyRecovery({ ...evidence, state: { run: { service_id: "service-new", lease_version: 8 } } }, runId), /before its real stale threshold/u);
+  const fixture = createNativeContainerWorkerFixture({ root, run: { runId, containerId: "container-old",
+    newContainerId: "container-new", serviceId: "service-old", ownerId: "owner-1", workspaceId: "workspace-1", threadId: "thread-1" },
+  controllerToken: "controller", observerNonce: "nonce", actualStaleWindow: true });
+  const start = fixture.indexOf("if (path === '/__probe/age-recovery' && request.method === 'POST') {");
+  const end = fixture.indexOf("if (path === '/__probe/duplicate-recovery'", start);
+  assert(start >= 0 && end > start, "generated manual-age route is missing");
+  let sqlCalls = 0;
+  const response: Response = await runInNewContext(`(async () => { ${fixture.slice(start, end)} })()`, {
+    path: "/__probe/age-recovery", request: { method: "POST" }, actualStaleWindow: true,
+    Response,
+    requireValue(value: unknown, message: string) { if (!value) throw new Error(message); },
+    env: { DB: { prepare() { sqlCalls++; throw new Error("SQL must not run"); } } },
+  });
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { code: "actual_stale_window_manual_age_forbidden" });
+  assert.equal(sqlCalls, 0, "refused actual-mode manual ageing accessed SQL");
+});
+
+test("supervisor rejects mismatched, incomplete, early or mutated actual stale-window evidence", () => {
+  const heartbeatMs = 1_800_000_000_000;
+  const heartbeat = new Date(heartbeatMs).toISOString();
+  const baseline = {
+    state: { run: { id: "run-1", status: "running", service_id: "old-service", lease_version: 7,
+      account_id: "workspace-1", requester_account_id: "owner-1", service_heartbeat: heartbeat },
+    operations: [{ id: "operation-1", status: "completed" }], receipts: [], artifacts: [{ id: "artifact-1" }] },
+    owner: { id: "owner-1", type: "user", status: "active", owner_account_id: "owner-1" },
+    workspace: { id: "workspace-1", type: "team", status: "active", owner_account_id: "owner-1" },
+    checkpoint: { runId: "run-1" },
+    recovery: { nativeDestroyAcknowledged: true, reclaimed: false },
+  };
+  const evidence = {
+    baseline, afterManualAgeSnapshot: structuredClone(baseline), afterEarlyScheduledSnapshot: structuredClone(baseline),
+    afterWaitSnapshot: structuredClone(baseline), heartbeatAt: heartbeat,
+    baselineObservedAt: new Date(heartbeatMs + 10_000).toISOString(), heartbeatAgeBefore: 10_000,
+    earlyStartElapsedMs: 100, earlyFinishElapsedMs: 1_000,
+    manualAgeRejected: { rejected: true, attempts: 1, status: 409, code: "actual_stale_window_manual_age_forbidden", sqlSnapshotUnchanged: true },
+    earlyScheduledOutcome: { outcome: "ok" },
+    earlyCanonical: { backgroundErrors: 0, emitted: [], hostDispatches: [], acknowledgements: [] },
+    actualWaitElapsedMs: 289_020, monotonicElapsedMs: 290_020,
+    heartbeatAgeAfter: 300_020, monotonicHeartbeatAgeAfter: 300_020,
+    staleObservedAt: new Date(heartbeatMs + 300_020).toISOString(),
+    positiveInvocationAt: new Date(heartbeatMs + 300_030).toISOString(),
+    positiveInvocationElapsedMs: 290_030, monotonicHeartbeatAgeAtPositiveInvocation: 300_030,
+    claimScope: "proves the unchanged Run heartbeat exceeded 300 seconds; it does not claim the old physical Container was absent for 300 seconds",
+  };
+  const budgets = nativeContainerProofBudgets(true);
+  const report = { proofMode: budgets.mode, budgets, sourceState: { proofMode: budgets.mode, actualStaleWindow: true },
+    limitation: "Run heartbeat was observed recent, remained unchanged, and crossed its 300-second stale threshold; whole workerd restart is not proven",
+    containerWitness: { runId: "run-1" },
+    recovery: { runId: "run-1", oldServiceId: "old-service", staleEligibility: evidence } };
+  assert.equal(assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets, report, evidence }), true);
+  const check = (changedEvidence: typeof evidence) => assertNativeStaleWindowQualification({ actualStaleWindow: true,
+    budgets, report: { ...report, recovery: { ...report.recovery, staleEligibility: changedEvidence } }, evidence: changedEvidence });
+  for (const field of ["heartbeatAgeAfter", "monotonicHeartbeatAgeAfter", "monotonicHeartbeatAgeAtPositiveInvocation"]) {
+    const changed = structuredClone(evidence); Reflect.deleteProperty(changed, field);
+    assert.throws(() => check(changed), `missing ${field} must not qualify`);
+  }
+  for (const mutate of [
+    (value: typeof evidence) => { value.afterWaitSnapshot.state.run.service_heartbeat = new Date(heartbeatMs - 1).toISOString(); },
+    (value: typeof evidence) => { value.afterEarlyScheduledSnapshot.recovery.reclaimed = true; },
+    (value: typeof evidence) => { value.manualAgeRejected.status = 500; },
+    (value: typeof evidence) => { value.manualAgeRejected.code = "unrelated-error"; },
+    (value: typeof evidence) => { value.monotonicElapsedMs = 289_999; },
+    (value: typeof evidence) => { value.monotonicHeartbeatAgeAfter = 999_999; },
+    (value: typeof evidence) => { value.monotonicHeartbeatAgeAtPositiveInvocation = 999_999; },
+    (value: typeof evidence) => { value.earlyFinishElapsedMs = 99; },
+    (value: typeof evidence) => { value.positiveInvocationElapsedMs = 290_010; },
+    (value: typeof evidence) => { value.staleObservedAt = new Date(heartbeatMs + 300_000).toISOString(); },
+    (value: typeof evidence) => { value.claimScope = "proves whole-workerd restart and 300-second physical absence"; },
+  ]) {
+    const changed = structuredClone(evidence); mutate(changed);
+    assert.throws(() => check(changed));
+  }
+  const wrongFile = structuredClone(evidence); wrongFile.manualAgeRejected.rejected = false;
+  assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets, report, evidence: wrongFile }));
+  assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets,
+    report: { ...report, containerWitness: { runId: "another-run" } }, evidence }));
+  const forgedBudgets = { ...budgets, childTimeoutMs: 999_999 };
+  assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets: forgedBudgets,
+    report: { ...report, budgets: forgedBudgets }, evidence }));
+  const defaults = nativeContainerProofBudgets(false);
+  assert.equal(assertNativeStaleWindowQualification({ actualStaleWindow: false, budgets: defaults,
+    report: { proofMode: defaults.mode, budgets: defaults, sourceState: { proofMode: defaults.mode, actualStaleWindow: false } } }), true);
+  assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: false, budgets: defaults, report, evidence }));
 });
 
 test("refuses another checkout/output root, relative paths and ambiguous callback authority", () => {
