@@ -10,6 +10,7 @@ Docker Compose を使って、Takos の全サービスをローカルで動か�
 - Linux（必須native回帰試験は `/proc` で実workerdの実行ファイルを確認するため、現在Linux hostで検証）
 - Bun 1.3.14（repo gate / Worker build）
 - Node.js 26.1.0（native D1 回帰試験の Miniflare host、CI と同じ固定版）
+- Python3.9以降とpidfd対応Linux kernel（portableなprocess停止回帰と追加Container試験）
 - Docker (current stable)
 - Docker Compose V2
 
@@ -137,3 +138,47 @@ This is local native HTTP admission over a fresh database. It does not prove hos
 populated migrations, owner login or Container composition. Failure fixtures are retained;
 only new successful fixture state is removed. The production migration budget and test deadlines
 are not overridden, and no operator migration endpoint is used.
+
+## 実Containerのcheckpoint・使用量復旧試験
+
+`validate:agent-native-container-recovery` は明示的に実行する追加試験です。Linux、Node.js
+26.1.0、Bun1.3.14、pidfd対応のPython3.9以降／Linux kernel、ローカルDocker daemon、検証するagentのOCI layoutと事前load済みimage、
+digestで固定した事前load済みproxy imageが必要です。imageのbuild、pull、load、tag操作は行いません。
+callback hostはDocker Containerから到達できるローカルinterfaceを指定します。
+
+```bash
+node scripts/prove-agent-container-native-recovery.mjs \
+  --layout /absolute/path/to/oci-layout \
+  --reference your-oci-tag \
+  --source-commit <full-40-hex-image-source-commit> \
+  --expected-manifest-digest sha256:<64-hex-manifest-digest> \
+  --image your-preloaded-agent:tag \
+  --sidecar-image your-preloaded-proxy@sha256:<64-hex-digest> \
+  --bun /absolute/path/to/bun \
+  --output-dir "$PWD/tmp/native-container-recovery-proof/fresh-trial-name" \
+  --callback-host 172.17.0.1 --listen-host 172.17.0.1 --port 40123
+```
+
+placeholderは実値に置き換えます。outputはこのcheckoutの専用base直下にある新規directoryに限り、
+既存directoryや別checkoutへは書き込みません。OCI manifest/config/layer/diff IDとDocker image identityを
+照合し、Workerは実Wranglerのcompatibility設定と全embedded migrationsからbuildします。
+Docker image IDとOCI config digestを同一視せず、manifestの対応と実行設定・diff IDを別に照合します
+（[Docker containerd実装](https://github.com/moby/moby/blob/master/daemon/containerd/image_inspect.go)）。
+imageにrevision labelが無ければsource commitはoperatorが指定した情報として記録し、
+実行したWorkerのcommit・dirty状態・source/bundle/runtimeのhashと区別します。
+
+同じRunのtool成功ACK喪失、実Container交換、pending checkpoint再送、重複effect防止、
+両agent停止後の最初の使用量投影、成功usage ACK喪失、実due時刻でのcold retry、idleを検証します。
+Container.destroyの実ACKと物理identityを確認し、残るproxyはこの試験で新規作成した
+同じRun/DO/imageのIDだけを再inspectして停止します。既存Containerを保持し、所有する
+process groupの終了、source/runtime不変、厳格な数量・authority照合まで成功条件に含めます。
+プロセス停止はstart ticksとsessionを再照合したpidfdへ送信し、数値PGIDへのsignalは使いません。
+
+内側320秒・外側350秒でnative試験を制限し、成功・失敗ともにraw log、native D1/DO/R2状態、
+`supervisor-result.json`と`native/result.json`を保持します。未導入runtime、試験・cleanupの失敗、
+期限超過は非zero終了になり、mockへのfallbackやskipによって成功にはしません。
+Dockerを伴う試験は通常のportable gateには追加していません。
+
+これはfixture限定のlease CASによるローカル復旧の証拠です。production cron/Queueによる
+stale Run回収、whole workerd restart、hosted OIDC/MFA、公開imageのprovenance、Host lifecycle、
+全instanceの一貫したbackup/restoreは別の検証が必要です。
