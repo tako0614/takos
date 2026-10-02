@@ -92,24 +92,60 @@ jobs:
 
       - name: Run the product-owned portable gate
         working-directory: takos
-        run: bun run check
+        run: |
+          set -o pipefail
+          mkdir -p tmp
+          bun run check | tee tmp/native-proof-portable-gate.stdout.log
 
       - name: Verify complete native proof reports
         working-directory: takos
         run: |
           bun - <<'BUN'
           import { createHash } from "node:crypto";
-          import { readdir, readFile } from "node:fs/promises";
-          const directory = "tmp/native-proof-reports";
+          import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+          import { join } from "node:path";
+          const root = await realpath(".");
+          const directory = join(root, "tmp/native-proof-reports");
+          if (await realpath(directory) !== directory) {
+            throw new Error("native proof directory must stay in the physical checkout");
+          }
           const expected = new Map([
             ["nativeHttpSchemaProofReportChunk", "NATIVE_HTTP_SCHEMA_ADMISSION_OK"],
             ["nativeUsageProofReportChunk", "NATIVE_D1_SCHEMA_TERMINAL_USAGE_RECOVERY_OK"],
           ]);
-          const files = (await readdir(directory)).filter((file) => file.endsWith(".json"));
-          if (files.length !== 2) throw new Error("expected exactly two complete native proof reports");
-          for (const file of files) {
+          const logPath = join(root, "tmp/native-proof-portable-gate.stdout.log");
+          if (!(await lstat(logPath)).isFile() || await realpath(logPath) !== logPath) {
+            throw new Error("native proof gate log must be a regular file in the physical checkout");
+          }
+          const receiptLines = (await readFile(logPath, "utf8")).split("\n")
+            .filter((line) => line.includes('"nativeProofReportRetained"'));
+          if (receiptLines.length !== 2) throw new Error("expected exactly two native proof retention receipts");
+          const receipts = new Map();
+          for (const line of receiptLines) {
+            if (Buffer.byteLength(`${line}\n`) > 2048) throw new Error("native proof receipt exceeds its byte limit");
+            const record = JSON.parse(line);
+            if (Object.keys(record).length !== 1) throw new Error("invalid native proof retention record");
+            const receipt = record.nativeProofReportRetained;
+            if (!receipt || Object.keys(receipt).sort().join(",") !== "bytes,family,path,sha256" ||
+                !expected.has(receipt.family) || receipts.has(receipt.family) ||
+                !Number.isSafeInteger(receipt.bytes) || receipt.bytes <= 0 ||
+                typeof receipt.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(receipt.sha256) ||
+                typeof receipt.path !== "string" ||
+                !new RegExp(`^tmp/native-proof-reports/${receipt.family}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.json$`, "i").test(receipt.path)) {
+              throw new Error("invalid or duplicate native proof retention receipt");
+            }
+            receipts.set(receipt.family, receipt);
+          }
+          const entries = await readdir(directory, { withFileTypes: true });
+          if (entries.length !== 2 || entries.some((entry) => !entry.isFile() || !entry.name.endsWith(".json"))) {
+            throw new Error("expected exactly two regular complete native proof reports");
+          }
+          for (const { name: file } of entries) {
             const envelope = JSON.parse(await readFile(`${directory}/${file}`, "utf8"));
+            const receipt = receipts.get(envelope.family);
             if (envelope.schemaVersion !== 1 || !expected.has(envelope.family) ||
+                !receipt || receipt.path !== `tmp/native-proof-reports/${file}` ||
+                receipt.sha256 !== envelope.sha256 || receipt.bytes !== envelope.bytes ||
                 typeof envelope.serializedReport !== "string" ||
                 Buffer.byteLength(envelope.serializedReport) !== envelope.bytes ||
                 createHash("sha256").update(envelope.serializedReport).digest("hex") !== envelope.sha256) {

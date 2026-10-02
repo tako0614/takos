@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { emitNativeProofReportChunks, retainNativeProofReport } from "./lib/native-proof-report.ts";
+import { retainAndEmitNativeProofReport } from "./lib/native-proof-report.ts";
 
 import type { NativeUsageProofReport } from "./prove-run-usage-native.ts";
 
@@ -160,8 +160,7 @@ test("native D1 full schema and terminal usage recover through a cold RunNotifie
   if (failed) throw failure;
   try {
     if (serializedReport === undefined) throw new Error("native usage proof has no complete report");
-    await emitNativeProofReportChunks("nativeUsageProofReportChunk", serializedReport);
-    await retainNativeProofReport(root, "nativeUsageProofReportChunk", basename(outputDirectory), serializedReport);
+    await retainAndEmitNativeProofReport(root, "nativeUsageProofReportChunk", basename(outputDirectory), serializedReport);
     await rm(outputDirectory, { recursive: true, force: true });
   } catch (error) {
     console.error(`native usage proof diagnostics retained: ${outputDirectory}`);

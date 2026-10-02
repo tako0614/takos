@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-import { emitNativeProofReportChunks, retainNativeProofReport } from "./lib/native-proof-report.ts";
+import { retainAndEmitNativeProofReport } from "./lib/native-proof-report.ts";
 
 import type { NativeHttpSchemaProofReport } from "./prove-http-schema-native.ts";
 
@@ -191,8 +191,7 @@ test("native D1 production HTTP schema admission blocks on the fixture lease and
   if (failed) throw failure;
   try {
     if (serializedReport === undefined) throw new Error("native HTTP proof has no complete report");
-    await emitNativeProofReportChunks("nativeHttpSchemaProofReportChunk", serializedReport);
-    await retainNativeProofReport(root, "nativeHttpSchemaProofReportChunk", basename(outputDirectory), serializedReport);
+    await retainAndEmitNativeProofReport(root, "nativeHttpSchemaProofReportChunk", basename(outputDirectory), serializedReport);
     await rm(outputDirectory, { recursive: true, force: true });
   } catch (error) {
     console.error(`native HTTP schema proof diagnostics retained: ${outputDirectory}`);
