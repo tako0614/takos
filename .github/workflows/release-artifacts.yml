@@ -93,3 +93,46 @@ jobs:
       - name: Run the product-owned portable gate
         working-directory: takos
         run: bun run check
+
+      - name: Verify complete native proof reports
+        working-directory: takos
+        run: |
+          bun - <<'BUN'
+          import { createHash } from "node:crypto";
+          import { readdir, readFile } from "node:fs/promises";
+          const directory = "tmp/native-proof-reports";
+          const expected = new Map([
+            ["nativeHttpSchemaProofReportChunk", "NATIVE_HTTP_SCHEMA_ADMISSION_OK"],
+            ["nativeUsageProofReportChunk", "NATIVE_D1_SCHEMA_TERMINAL_USAGE_RECOVERY_OK"],
+          ]);
+          const files = (await readdir(directory)).filter((file) => file.endsWith(".json"));
+          if (files.length !== 2) throw new Error("expected exactly two complete native proof reports");
+          for (const file of files) {
+            const envelope = JSON.parse(await readFile(`${directory}/${file}`, "utf8"));
+            if (envelope.schemaVersion !== 1 || !expected.has(envelope.family) ||
+                typeof envelope.serializedReport !== "string" ||
+                Buffer.byteLength(envelope.serializedReport) !== envelope.bytes ||
+                createHash("sha256").update(envelope.serializedReport).digest("hex") !== envelope.sha256) {
+              throw new Error(`invalid complete native proof envelope: ${file}`);
+            }
+            const report = JSON.parse(envelope.serializedReport);
+            if (report.status !== "passed" || report.result !== expected.get(envelope.family)) {
+              throw new Error(`unqualified native proof report: ${file}`);
+            }
+            expected.delete(envelope.family);
+            console.log(JSON.stringify({ nativeProofArtifactReport: {
+              family: envelope.family, sha256: envelope.sha256, bytes: envelope.bytes,
+            } }));
+          }
+          if (expected.size !== 0) throw new Error("missing native proof family");
+          BUN
+
+      - name: Retain complete native proof reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026-04-10)
+        with:
+          name: native-proof-reports-${{ github.sha }}
+          path: takos/tmp/native-proof-reports/*.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9
+          overwrite: false

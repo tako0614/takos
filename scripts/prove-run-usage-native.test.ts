@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { emitNativeProofReportChunks, retainNativeProofReport } from "./lib/native-proof-report.ts";
 
 import type { NativeUsageProofReport } from "./prove-run-usage-native.ts";
 
 const root = join(import.meta.dir, "..");
 const deadlineMs = 75_000;
 const reapMs = 2_500;
+// The native deadline stays fixed; reporting has 5s for writes and 5s reserved for retention.
+const reportMarginMs = 10_000;
 
 function signalGroup(pid: number, signal: NodeJS.Signals | 0): boolean {
   try {
@@ -62,6 +65,7 @@ test("native D1 full schema and terminal usage recover through a cold RunNotifie
   let successful = false;
   let failed = false;
   let failure: unknown;
+  let serializedReport: string | undefined;
   try {
     // The bound includes pipe draining, so a leaked workerd cannot keep this
     // test alive after the controller exits. Only this child's group is owned.
@@ -131,20 +135,7 @@ test("native D1 full schema and terminal usage recover through a cold RunNotifie
     expect(report.sourceHashesAfterRun).toEqual(report.sourceHashesBeforeRun);
     expect(Object.keys(report.bundleInputHashes).length).toBeGreaterThan(0);
     expect(report.bundleInputHashesAfterRun).toEqual(report.bundleInputHashes);
-    // GitHub truncates a log line at 64KiB. Keep the complete native result
-    // in small, ordered records whose digest can be checked after reassembly.
-    const serializedReport = JSON.stringify(report);
-    const reportSha256 = createHash("sha256").update(serializedReport).digest("hex");
-    const chunkSize = 4_096;
-    const chunks = Math.ceil(serializedReport.length / chunkSize);
-    for (let index = 0; index < chunks; index++) {
-      console.log(JSON.stringify({
-        nativeUsageProofReportChunk: {
-          sha256: reportSha256, index, chunks,
-          data: serializedReport.slice(index * chunkSize, (index + 1) * chunkSize),
-        },
-      }));
-    }
+    serializedReport = JSON.stringify(report);
     successful = true;
   } catch (error) {
     failed = true;
@@ -164,8 +155,16 @@ test("native D1 full schema and terminal usage recover through a cold RunNotifie
       failed = true;
       failure = new Error(cleanupIssue, { cause: failure });
     }
-    if (!failed) await rm(outputDirectory, { recursive: true, force: true });
-    else console.error(`native usage proof diagnostics retained: ${outputDirectory}`);
+    if (failed) console.error(`native usage proof diagnostics retained: ${outputDirectory}`);
   }
   if (failed) throw failure;
-}, deadlineMs + reapMs + 1_000);
+  try {
+    if (serializedReport === undefined) throw new Error("native usage proof has no complete report");
+    await emitNativeProofReportChunks("nativeUsageProofReportChunk", serializedReport);
+    await retainNativeProofReport(root, "nativeUsageProofReportChunk", basename(outputDirectory), serializedReport);
+    await rm(outputDirectory, { recursive: true, force: true });
+  } catch (error) {
+    console.error(`native usage proof diagnostics retained: ${outputDirectory}`);
+    throw new Error(`native usage proof evidence retention failed: ${outputDirectory}`, { cause: error });
+  }
+}, deadlineMs + reapMs + reportMarginMs + 1_000);

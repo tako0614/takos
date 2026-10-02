@@ -1,13 +1,17 @@
 import { expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+
+import { emitNativeProofReportChunks, retainNativeProofReport } from "./lib/native-proof-report.ts";
 
 import type { NativeHttpSchemaProofReport } from "./prove-http-schema-native.ts";
 
 const root = join(import.meta.dir, "..");
 const deadlineMs = 75_000;
 const reapMs = 2_500;
+// The native deadline stays fixed; reporting has 5s for writes and 5s reserved for retention.
+const reportMarginMs = 10_000;
 
 function signalGroup(pid: number, signal: NodeJS.Signals | 0): boolean {
   try {
@@ -38,10 +42,6 @@ async function cleanOwnedGroup(pid: number, successful: boolean): Promise<string
   }
 }
 
-function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
-}
-
 test("native D1 production HTTP schema admission blocks on the fixture lease and serves discovery after release", async () => {
   const node = Bun.which("node");
   expect(node, "native HTTP schema proof requires the CI-pinned Node 26.1 controller").not.toBeNull();
@@ -67,6 +67,7 @@ test("native D1 production HTTP schema admission blocks on the fixture lease and
   let successful = false;
   let failed = false;
   let failure: unknown;
+  let serializedReport: string | undefined;
   try {
     const [code, output, diagnostics] = await Promise.race([
       Promise.all([child.exited, stdout, stderr] as const),
@@ -169,18 +170,7 @@ test("native D1 production HTTP schema admission blocks on the fixture lease and
       expect(child.version?.stdout).toMatch(/workerd/iu);
     }
 
-    // Keep CI log records below GitHub's per-line truncation limit and make
-    // report reassembly verifiable from ordered chunks.
-    const serialized = JSON.stringify(report);
-    const digest = sha256(serialized);
-    const chunkSize = 4_096;
-    const chunks = Math.ceil(serialized.length / chunkSize);
-    for (let index = 0; index < chunks; index++) {
-      console.log(JSON.stringify({ nativeHttpSchemaProofReportChunk: {
-        sha256: digest, index, chunks,
-        data: serialized.slice(index * chunkSize, (index + 1) * chunkSize),
-      } }));
-    }
+    serializedReport = JSON.stringify(report);
     successful = true;
   } catch (error) {
     failed = true;
@@ -196,8 +186,16 @@ test("native D1 production HTTP schema admission blocks on the fixture lease and
       failed = true;
       failure = new Error(cleanupIssue, { cause: failure });
     }
-    if (!failed) await rm(outputDirectory, { recursive: true, force: true });
-    else console.error(`native HTTP schema proof diagnostics retained: ${outputDirectory}`);
+    if (failed) console.error(`native HTTP schema proof diagnostics retained: ${outputDirectory}`);
   }
   if (failed) throw failure;
-}, deadlineMs + reapMs + 1_000);
+  try {
+    if (serializedReport === undefined) throw new Error("native HTTP proof has no complete report");
+    await emitNativeProofReportChunks("nativeHttpSchemaProofReportChunk", serializedReport);
+    await retainNativeProofReport(root, "nativeHttpSchemaProofReportChunk", basename(outputDirectory), serializedReport);
+    await rm(outputDirectory, { recursive: true, force: true });
+  } catch (error) {
+    console.error(`native HTTP schema proof diagnostics retained: ${outputDirectory}`);
+    throw new Error(`native HTTP proof evidence retention failed: ${outputDirectory}`, { cause: error });
+  }
+}, deadlineMs + reapMs + reportMarginMs + 1_000);

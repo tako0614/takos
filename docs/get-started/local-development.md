@@ -85,10 +85,20 @@ process / stdout / stderr全体75秒の期限を設け、所有するprocess gro
 成功時は実runtime identityとsource / bundle / input hashesをlogへ出し、fixtureを削除します。
 失敗時は同directoryに診断を保持し、pathを表示します。
 
-CIでは全文を `nativeUsageProofReportChunk` の4096文字ごとのJSON recordsで出力し、
-1行64KiBの切り詰めを避けます。読み戻す側は同じSHA256のrecordsを集め、重複・欠落がなく
+CIでは全文を `nativeUsageProofReportChunk` のJSON recordsで出力し、JSON escaping後の
+UTF8行全体を2048 bytes以内に制限します。各書込みの完了とbyte数を確認し、短い書込み・
+失敗・期限超過は試験を失敗にします。読み戻す側は同じSHA256のrecordsを集め、重複・欠落がなく
 indexが0からchunks-1まで揃うことを確認してdataを順番に結合し、全文SHA256を照合します。
 完全なJSONへ復元できてから、runtime / source / bundle / input hashesを証拠として扱います。
+
+HTTP schema proofも同じ出力条件を使います。ログ取り込み側の完全性は書込み完了だけでは
+証明できないため、両試験のassertionsと所有process cleanupが通った後で、完全なJSON文字列・
+UTF8 byte数・SHA256を `tmp/native-proof-reports/` の新規exclusive envelopeへ保持します。
+CIはgate成功後にこのdirectoryのJSONだけを `native-proof-reports-<tested-merge-commit>`
+artifactとして3日間保持します。保持失敗・既存fileの再利用・symlink escapeは失敗とし、
+元fixtureを残します。SQL databaseやfixture credentialsをartifactへ含めません。
+同じCI runのartifactを読み戻し、envelopeの `serializedReport` のUTF8 byte数とSHA256を
+照合してからparseします。ログに欠けがあれば、別runで補完せず同runの完全なartifactを使います。
 
 これはlocal native D1 / DO / R2の証拠です。hosted backendのalarm / quota / concurrency、
 native backendとcompiled process / Containerの結合、実owner導入や全instance
