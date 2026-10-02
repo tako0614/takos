@@ -26,6 +26,7 @@ export type PlatformConfig = {
   tenantBaseDomain: string;
   environment?: string;
   oidcIssuerUrl?: string;
+  oidcOwnerSubject?: string;
   oidcDiscoveryUrl?: string;
   oidcClientId?: string;
   oidcClientSecret?: string;

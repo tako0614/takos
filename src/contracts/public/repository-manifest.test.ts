@@ -198,9 +198,15 @@ test("the repository source and website CTA use one exact Takos release", () => 
     'tofu show "$HOME/.config/takos/takos.tfplan"',
     'tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"',
   ];
+  // The terminal renders shell continuations as JSX newlines plus indentation.
+  // Compare the joined command while still checking every argument and its order.
+  const installCtaCommands = installCtaSource.replace(
+    /\\\{(['"])\\n\1\}\s*\{(['"]) +\2\}/gu,
+    "",
+  );
   let previousCommandOffset = -1;
   for (const command of selfHostSequence) {
-    const commandOffset = installCtaSource.indexOf(command);
+    const commandOffset = installCtaCommands.indexOf(command);
     expect(commandOffset).toBeGreaterThan(previousCommandOffset);
     previousCommandOffset = commandOffset;
   }

@@ -46,6 +46,7 @@ function ctxWithAuthHeader(value: string | undefined): Context<{
 const fakeServices = { sql: { binding: {} } } as never;
 const fakeConfig = {
   oidcIssuerUrl: "https://accounts.test",
+  oidcOwnerSubject: "sub",
 } as never;
 
 function bearerDeps(
@@ -132,6 +133,27 @@ test("resolveAccountsBearer: self-issued verification rejects -> invalid", async
   assertEquals(r.kind, "invalid");
 });
 
+test("resolveAccountsBearer: malformed configured issuer refuses bearer before UserInfo", async () => {
+  for (const issuer of [" https://accounts.test ", "https://accounts.test?other=1", "https://user@accounts.test"]) {
+    let verified = false;
+    const r = await resolveAccountsBearer(
+      ctxWithAuthHeader("Bearer takpat_x"),
+      bearerDeps({
+        getPlatformConfig: () => ({
+          oidcIssuerUrl: issuer,
+          oidcOwnerSubject: "sub",
+        }) as never,
+        resolveSelfIssuedBearer: async () => {
+          verified = true;
+          return { kind: "invalid" };
+        },
+      }),
+    );
+    assertEquals(r.kind, "invalid");
+    assertEquals(verified, false);
+  }
+});
+
 test("resolveAccountsBearer: missing required scope -> scope-insufficient", async () => {
   const r = await resolveAccountsBearer(
     ctxWithAuthHeader("Bearer takpat_x"),
@@ -173,6 +195,8 @@ function sessionDeps(
     getCachedUser: async () => USER,
     isValidUserId: (id: unknown): id is string =>
       typeof id === "string" && id.length > 0,
+    getPlatformConfig: () => fakeConfig,
+    isActiveOwnerAccount: async () => true,
     ...over,
   } as CookieSessionResolverDeps;
 }
@@ -200,7 +224,7 @@ test("resolveCookieSession: revoked session id -> revoked (invariant single-sour
   assertEquals(getSessionCalled, false);
 });
 
-test("resolveCookieSession: no dbBinding skips the revocation check", async () => {
+test("resolveCookieSession: no dbBinding cannot verify owner", async () => {
   let revokedChecked = false;
   const r = await resolveCookieSession(
     sessionCtx,
@@ -213,7 +237,7 @@ test("resolveCookieSession: no dbBinding skips the revocation check", async () =
     { sessionId: "session_abc", sessionStore: {}, dbBinding: undefined },
   );
   assertEquals(revokedChecked, false);
-  assertEquals(r.kind, "ok");
+  assertEquals(r.kind, "user-not-found");
 });
 
 test("resolveCookieSession: missing session record -> no-session", async () => {

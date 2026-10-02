@@ -3,7 +3,8 @@
 > このページでわかること: Takos Workspace の正本 (正とする情報) モデルと、旧 `space` 永続化語彙の境界。
 
 Takos の **Workspace** は chat、agent、memory、Git repository、app launcher、MCP tools をまとめる
-private な作業領域です。認証済みの一つの外部 subject は Takos 内の一つの Principal に対応し、その Principal は
+private な作業領域です。各自が自分用にデプロイしたインスタンスの所有者は1人です。
+固定した所有者の外部 subject は Takos 内の一つの Principal に対応し、その Principal は
 default Workspace と追加作成した複数の Workspace を所有できます。
 
 ```txt
@@ -13,6 +14,9 @@ external subject
        ├─ private Workspace
        └─ private Workspace
 ```
+
+外部の通信相手、共有リンクの受信者、接続先アプリの参加者は、インスタンス所有者ではありません。
+それぞれの通信・共有契約を保ったまま、所有者の private Workspace と区別します。
 
 各 Workspace の authority は一つの Principal だけが持ちます。Takos Workspace は共同利用、招待、権限段階、
 owner transfer を持ちません。agent や service は独立した Workspace owner ではなく、実行時にその Principal の
@@ -51,6 +55,17 @@ adapter が Workspace access を認めるのは、次のすべてが同時に成
 
 旧 row に別の値を追加したり、owner witness を偽装したりしても authority は増えません。suspended row や不一致 row は
 access を拒否します。
+
+## 個人データの export
+
+`GET /api/me/privacy/export` は本人の default account の SQL データに加え、
+同じ owner gate で解決した追加 Workspace の SQL repository / thread / message /
+Run / memory row と、現在読み取れる Workspace の概要を含みます。
+legacy default witness が未修復でも、従来の本人データの export を維持します。
+別の所有者や外部参加者の Workspace を membership
+だけで読み取ることはありません。所有 thread 内の通信内容は保持します。
+対象と秘匿情報の除外、SQL export と全 instance backup の違いは
+[個人データの権利](../legal/privacy-rights.md#private-workspace-scope)を参照してください。
 
 ## Git の状態
 

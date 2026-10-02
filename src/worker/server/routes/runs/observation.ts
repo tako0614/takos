@@ -3,11 +3,10 @@ import { runEvents } from "../../../infra/db/schema.ts";
 import { and, asc, eq, gt } from "drizzle-orm";
 import type { Env, RunStatus } from "../../../shared/types/index.ts";
 import type { PersistedRunEvent } from "../../../application/services/offload/run-events.ts";
-import { getRunEventsAfterFromR2 } from "../../../application/services/offload/run-events.ts";
+import { getIndexedRunEventsAfter } from "../../../application/services/offload/indexed-run-events.ts";
 import { deriveTerminalStatusFromRunEvent } from "../../../application/services/run-notifier/index.ts";
 import { isRunTerminalStatus } from "../../../application/services/run-notifier/run-events-contract.ts";
 
-import { fetchWithTimeout } from "../../../application/services/execution/run-events.ts";
 import { MAX_EVENTS_PER_RESPONSE } from "../../../shared/config/limits.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 
@@ -23,21 +22,20 @@ export type FormattedRunEvent = {
 export type RunObservation = {
   events: FormattedRunEvent[];
   runStatus: RunStatus;
+  /** A bounded page can end before the terminal event of a completed run. */
+  hasMore?: boolean;
+};
+
+type RunObservationStreamOptions = {
+  pollIntervalMs?: number;
+  heartbeatIntervalMs?: number;
+  /** Notifications wake the durable reader; their frames are never replay authority. */
+  notifications?: ReadableStream<Uint8Array>;
 };
 
 const SSE_POLL_INTERVAL_MS = 1000;
 const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 const sseEncoder = new TextEncoder();
-
-function stringifyPersistedData(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    // Circular references or non-serializable values -- coerce to string
-    return String(value);
-  }
-}
 
 function formatRunEvents(
   persisted: PersistedRunEvent[],
@@ -70,59 +68,30 @@ export function deriveRunStatusFromTimelineEvents(
   return derivedStatus ?? fallbackStatus;
 }
 
-async function getNotifierBufferedEvents(
-  env: Env,
-  runId: string,
-  afterEventId: number,
-): Promise<PersistedRunEvent[]> {
-  const namespace = env.RUN_NOTIFIER;
-  const id = namespace.idFromName(runId);
-  const stub = namespace.get(id);
-  const res = await fetchWithTimeout(
-    stub,
-    new Request(`https://internal.do/events?after=${afterEventId}`, {}),
-  );
-  if (!res.ok) return [];
-  const json = await res.json() as {
-    events?: Array<
-      {
-        id: number;
-        type: string;
-        data: unknown;
-        timestamp: number;
-        event_id?: string;
-      }
-    >;
-  };
-  const events = Array.isArray(json.events) ? json.events : [];
-  return events
-    .filter((e) => typeof e?.id === "number" && Number.isFinite(e.id))
-    .map((e) => ({
-      event_id: e.id,
-      type: e.type,
-      data: stringifyPersistedData(e.data),
-      created_at: new Date(e.timestamp).toISOString(),
-    }));
-}
-
 async function fetchRunEventsAfter(
   env: Env,
   runId: string,
   afterEventId: number,
+  limit?: number,
 ): Promise<PersistedRunEvent[]> {
   const byId = new Map<number, PersistedRunEvent>();
 
   // Always read from SQL store as the durable fallback
   const db = getDb(env.DB);
-  const d1Result = await db.select({
-    id: runEvents.id,
-    runId: runEvents.runId,
-    type: runEvents.type,
-    data: runEvents.data,
-    createdAt: runEvents.createdAt,
-  }).from(runEvents).where(
-    and(eq(runEvents.runId, runId), gt(runEvents.id, afterEventId)),
-  ).orderBy(asc(runEvents.id)).all();
+  const query = db
+    .select({
+      id: runEvents.id,
+      runId: runEvents.runId,
+      type: runEvents.type,
+      data: runEvents.data,
+      createdAt: runEvents.createdAt,
+    })
+    .from(runEvents)
+    .where(and(eq(runEvents.runId, runId), gt(runEvents.id, afterEventId)))
+    .orderBy(asc(runEvents.id));
+  const d1Result = await (
+    limit === undefined ? query : query.limit(limit)
+  ).all();
 
   for (const e of d1Result) {
     byId.set(e.id, {
@@ -133,29 +102,23 @@ async function fetchRunEventsAfter(
     });
   }
 
-  // Merge with object store offload segments and DO ring buffer (if available)
+  // The durable index is the replay authority for offloaded history. SQL still
+  // contributes terminal evidence when a notifier write failed after commit.
   if (env.TAKOS_OFFLOAD) {
-    const r2Events = await getRunEventsAfterFromR2(
+    const indexedEvents = await getIndexedRunEventsAfter(
+      env.RUN_NOTIFIER,
       env.TAKOS_OFFLOAD,
       runId,
       afterEventId,
-      MAX_EVENTS_PER_RESPONSE,
+      limit ?? MAX_EVENTS_PER_RESPONSE,
     );
-    for (const e of r2Events) byId.set(e.event_id, e);
-
-    try {
-      const buffered = await getNotifierBufferedEvents(
-        env,
-        runId,
-        afterEventId,
-      );
-      for (const e of buffered) byId.set(e.event_id, e);
-    } catch {
-      // DO buffer unavailable — SQL store and object store data is sufficient
-    }
+    for (const e of indexedEvents) byId.set(e.event_id, e);
   }
 
-  return Array.from(byId.values()).sort((a, b) => a.event_id - b.event_id);
+  const ordered = Array.from(byId.values()).sort(
+    (a, b) => a.event_id - b.event_id,
+  );
+  return limit === undefined ? ordered : ordered.slice(0, limit);
 }
 
 export async function loadRunObservation(
@@ -163,14 +126,23 @@ export async function loadRunObservation(
   runId: string,
   fallbackStatus: RunStatus,
   lastEventId: number,
+  maxEvents?: number,
 ): Promise<RunObservation> {
-  const persistedEvents = await fetchRunEventsAfter(env, runId, lastEventId);
+  const persistedEvents = await fetchRunEventsAfter(
+    env,
+    runId,
+    lastEventId,
+    maxEvents === undefined ? undefined : maxEvents + 1,
+  );
+  const hasMore = maxEvents !== undefined && persistedEvents.length > maxEvents;
+  const page =
+    maxEvents === undefined
+      ? persistedEvents
+      : persistedEvents.slice(0, maxEvents);
   return {
-    events: formatRunEvents(persistedEvents, runId),
-    runStatus: deriveRunStatusFromTimelineEvents(
-      fallbackStatus,
-      persistedEvents,
-    ),
+    events: formatRunEvents(page, runId),
+    runStatus: deriveRunStatusFromTimelineEvents(fallbackStatus, page),
+    ...(maxEvents === undefined ? {} : { hasMore }),
   };
 }
 
@@ -195,61 +167,96 @@ function formatRunSseEvent(event: FormattedRunEvent): Uint8Array {
 export function createPollingRunObservationStream(
   source: (afterEventId: number) => Promise<RunObservation>,
   initialLastEventId: number,
-  options?: {
-    pollIntervalMs?: number;
-    heartbeatIntervalMs?: number;
-  },
+  options?: RunObservationStreamOptions,
 ): ReadableStream<Uint8Array> {
   const pollIntervalMs = options?.pollIntervalMs ?? SSE_POLL_INTERVAL_MS;
-  const heartbeatIntervalMs = options?.heartbeatIntervalMs ??
-    SSE_HEARTBEAT_INTERVAL_MS;
+  const heartbeatIntervalMs =
+    options?.heartbeatIntervalMs ?? SSE_HEARTBEAT_INTERVAL_MS;
   let closed = false;
   let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+  let wakePoll: (() => void) | undefined;
+  let notificationPending = false;
+  let lastEventId = initialLastEventId;
+  let lastHeartbeatAt = Date.now();
+  let page: FormattedRunEvent[] = [];
+  let pageOffset = 0;
+  let terminalPage = false;
+  const notificationReader = options?.notifications?.getReader();
+
+  const cleanup = () => {
+    closed = true;
+    wakePoll?.();
+    // Cancellation releases the Node notifier's subscriber and heartbeat.
+    void notificationReader?.cancel().catch(() => {});
+  };
+
+  const sleep = (ms: number) => {
+    if (closed || notificationPending) {
+      notificationPending = false;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      wakePoll = () => {
+        if (sleepTimer !== undefined) clearTimeout(sleepTimer);
+        sleepTimer = undefined;
+        wakePoll = undefined;
+        notificationPending = false;
+        resolve();
+      };
+      sleepTimer = setTimeout(wakePoll, ms);
+    });
+  };
 
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      let lastEventId = initialLastEventId;
-      let lastHeartbeatAt = Date.now();
-
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        if (sleepTimer) {
-          clearTimeout(sleepTimer);
-          sleepTimer = undefined;
-        }
-        controller.close();
-      };
-
-      const sleep = (ms: number) =>
-        new Promise<void>((resolve) => {
-          sleepTimer = setTimeout(() => {
-            sleepTimer = undefined;
-            resolve();
-          }, ms);
-        });
-
-      void (async () => {
-        controller.enqueue(formatSseComment("connected"));
-
+      controller.enqueue(formatSseComment("connected"));
+      if (notificationReader) {
+        void (async () => {
+          try {
+            while (!closed) {
+              const result = await notificationReader.read();
+              if (closed || result.done) return;
+              notificationPending = true;
+              wakePoll?.();
+            }
+          } catch {
+            // Redis/local notifications can fail or miss a delivery. Polling
+            // still observes the persisted timeline without losing its cursor.
+          } finally {
+            notificationReader.releaseLock();
+          }
+        })();
+      }
+    },
+    async pull(controller) {
+      try {
         while (!closed) {
-          const observation = await source(lastEventId);
-
-          if (observation.events.length > 0) {
-            for (const event of observation.events) {
-              lastEventId = event.id;
-              controller.enqueue(formatRunSseEvent(event));
-            }
+          // One frame per pull keeps slow clients from buffering the entire
+          // run history and keeps subsequent page reads behind client demand.
+          if (pageOffset < page.length) {
+            const event = page[pageOffset++];
+            lastEventId = event.id;
+            controller.enqueue(formatRunSseEvent(event));
             lastHeartbeatAt = Date.now();
-            if (isRunTerminalStatus(observation.runStatus)) {
-              close();
-              return;
+            if (pageOffset === page.length && terminalPage) {
+              cleanup();
+              controller.close();
             }
-            continue;
+            return;
           }
 
-          if (isRunTerminalStatus(observation.runStatus)) {
-            close();
+          const observation = await source(lastEventId);
+          if (closed) return;
+          page = observation.events;
+          pageOffset = 0;
+          terminalPage =
+            isRunTerminalStatus(observation.runStatus) &&
+            observation.hasMore !== true;
+          if (page.length > 0) continue;
+
+          if (terminalPage) {
+            cleanup();
+            controller.close();
             return;
           }
 
@@ -257,22 +264,20 @@ export function createPollingRunObservationStream(
           if (now - lastHeartbeatAt >= heartbeatIntervalMs) {
             controller.enqueue(formatSseComment("heartbeat"));
             lastHeartbeatAt = now;
+            return;
           }
 
           await sleep(pollIntervalMs);
         }
-      })().catch((error) => {
+      } catch (error) {
         if (!closed) {
+          cleanup();
           controller.error(error);
         }
-      });
+      }
     },
     cancel() {
-      closed = true;
-      if (sleepTimer) {
-        clearTimeout(sleepTimer);
-        sleepTimer = undefined;
-      }
+      cleanup();
     },
   });
 }
@@ -282,14 +287,17 @@ export function createRunObservationSseStream(
   runId: string,
   fallbackStatus: RunStatus,
   lastEventId: number,
-  options?: {
-    pollIntervalMs?: number;
-    heartbeatIntervalMs?: number;
-  },
+  options?: RunObservationStreamOptions,
 ): ReadableStream<Uint8Array> {
   return createPollingRunObservationStream(
     (afterEventId) =>
-      loadRunObservation(env, runId, fallbackStatus, afterEventId),
+      loadRunObservation(
+        env,
+        runId,
+        fallbackStatus,
+        afterEventId,
+        MAX_EVENTS_PER_RESPONSE,
+      ),
     lastEventId,
     options,
   );

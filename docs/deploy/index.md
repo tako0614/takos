@@ -1,6 +1,6 @@
 # Takos をセルフホストする
 
-Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractのgraphを宣言します。D1 の schema は install path に関係なく Worker が実行時に適用するので、deploy 側に migration 手順はありません ([スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities))。Cloudflare provider がまだ表現できない残りの gap は通常の production provider path だけでは反映されず、明示的に reviewed bridge を選んだ disposable E2E でだけ補われます。旧Provider 1.x Takoform projectionは現行Formだけで全graphを表せないため、新規installの選択肢ではありません。
+Takos は自分のCloudflareアカウントへ配置できます。現在のsupported moduleは `deploy/opentofu/cloudflare` で、product resource contractのgraphを宣言します。D1 の schema は install path に関係なく Worker が実行時に適用するので、deploy 側に migration 手順はありません ([スキーマ自動適用と縮退モード](/deploy/runtime-schema-and-capabilities))。Cloudflare provider が表現できない Vectorize index と Container application は、通常の module apply だけでは反映されません。[本番デプロイレーン](/deploy/production-lane)の Takos 所有の入口がこの二つを補います。container-enabled Durable Object の bootstrap は、この入口の `--vectorize` / `--apply` では補えず、下記 optional bridge の別途 bootstrap と container-ready namespace の読み戻しが必要です。旧Provider 1.x Takoform projectionは新規installの選択肢ではありません。
 
 このページは運用者向けです。Takos を利用するだけなら、[スタートガイド](/get-started/) へ進んでください。
 
@@ -38,6 +38,8 @@ ordinary provider path で index を作れないので、既定では Worker Ver
 意味検索を使う配置では、`cloudflare_vectorize_index_name` output が示す index を
 自分で作ってから `vector_index_provisioned = true` を指定します。bridge lane は
 index を自分で作るので、この input は不要です (同時指定は precondition が拒否します)。
+Takos 所有の本番入口では、`--vectorize` phase が index の作成と shape の読み戻しを
+担当します。実行条件と Worker artifact の反映は [本番デプロイレーン](/deploy/production-lane)を参照してください。
 
 ### Cloudflare provider gap bridge
 
@@ -54,6 +56,11 @@ Container application の反映には、Takos が所有する補助 bridge が�
 ためのものではなく、Container image は digest が変わらないまま、destroy 時は所有を証明できる Container application
 と Vectorize index だけを削除します。bridge は D1 を読み書きしないので、永続化された product data を触ることも、
 巻き戻すこともありません。
+
+これは OpenTofu module 内の optional bridge の説明です。Takos 所有の本番入口は
+`--vectorize` で index を用意し、`--apply` の Worker upload で宣言済み Container application を
+反映します。`--containers` は読み戻し phase です。bridge を有効にしただけでは、公開済み
+artifact、runtime secret、Container の稼働、利用者の agent Run の検証は完了しません。
 
 ### ランタイムシークレット
 

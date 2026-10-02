@@ -71,6 +71,11 @@ services:
       TAKOS_INTERNAL_API_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
       TAKOS_WORKER_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_app"
       DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_app"
+      OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:-}"
+      OIDC_CLIENT_ID: "${OIDC_CLIENT_ID:-}"
+      OIDC_CLIENT_SECRET: "${OIDC_CLIENT_SECRET:-}"
+      OIDC_REDIRECT_URI: "${OIDC_REDIRECT_URI:-}"
+      OIDC_OWNER_SUBJECT: "${OIDC_OWNER_SUBJECT:-}"
     ports:
       - "127.0.0.1:${TAKOS_WORKER_HOST_PORT:-${TAKOS_WORKER_PORT:-8787}}:${TAKOS_WORKER_PORT:-8787}"
     volumes:

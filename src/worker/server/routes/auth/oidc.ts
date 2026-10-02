@@ -21,6 +21,7 @@ import {
   generateRandomString,
 } from "../../../application/services/identity/oidc-pkce.ts";
 import { getDb } from "../../../infra/db/index.ts";
+import { configuredOwner } from "../../../application/services/identity/owner-admission.ts";
 import { accounts, authIdentities } from "../../../infra/db/schema.ts";
 import {
   getPlatformConfig,
@@ -97,12 +98,23 @@ authOidcRouter.get("/oidc/login", async (c) => {
   const config = getPlatformConfig(c);
   const sessionStore = getPlatformServices(c).notifications.sessionStore;
   const issuer = normalizeConfiguredUrl(config.oidcIssuerUrl);
+  const owner = configuredOwner({
+    issuer: config.oidcIssuerUrl,
+    subject: config.oidcOwnerSubject,
+  });
   const discoveryBaseUrl = normalizeConfiguredUrl(config.oidcDiscoveryUrl) ??
     issuer;
   const clientId = nonEmptyString(config.oidcClientId);
   const redirectUri = normalizeConfiguredUrl(
     config.oidcRedirectUri ?? defaultOidcRedirectUri(config.adminDomain),
   );
+
+  if (!owner) {
+    return c.html(
+      errorPage("OIDC Error", "Instance owner is not configured (OIDC_OWNER_SUBJECT).", "/", "Back"),
+      503,
+    );
+  }
 
   if (
     !sessionStore || !issuer || !discoveryBaseUrl || !clientId ||
@@ -115,7 +127,7 @@ authOidcRouter.get("/oidc/login", async (c) => {
         "/",
         "Back",
       ),
-      500,
+      503,
     );
   }
 
@@ -189,6 +201,10 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
   const issuer = normalizeConfiguredUrl(config.oidcIssuerUrl);
+  const owner = configuredOwner({
+    issuer: config.oidcIssuerUrl,
+    subject: config.oidcOwnerSubject,
+  });
   const discoveryBaseUrl = normalizeConfiguredUrl(config.oidcDiscoveryUrl) ??
     issuer;
   const clientId = nonEmptyString(config.oidcClientId);
@@ -218,14 +234,22 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     });
     return oidcErrorResponse("OIDC Error", "Invalid OIDC state.", 400);
   }
+  if (!owner) {
+    return oidcErrorResponse(
+      "OIDC Error",
+      "Instance owner is not configured (OIDC_OWNER_SUBJECT).",
+      503,
+    );
+  }
   if (
-    !dbBinding || !sessionStore || !issuer || !discoveryBaseUrl || !clientId ||
+    !dbBinding || !sessionStore || !issuer ||
+    !discoveryBaseUrl || !clientId ||
     !redirectUri
   ) {
     return oidcErrorResponse(
       "OIDC Error",
       "Takosumi Accounts OIDC is not configured.",
-      500,
+      503,
     );
   }
 
@@ -297,6 +321,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   }
 
   const subject = requireString(claims.sub);
+  if (issuer !== owner.issuer || subject !== owner.subject) {
+    return oidcErrorResponse("OIDC Error", "This account is not the configured owner.", 403);
+  }
   const userInfo = tokens.access_token && serverUserinfoEndpoint
     ? await fetchUserInfo(serverUserinfoEndpoint, tokens.access_token)
     : {};
@@ -312,8 +339,8 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   }
   const profile = resolveOidcProfile(claims, userInfo);
   const db = getDb(dbBinding);
-  const providerSub = oidcProviderSub(issuer, subject);
-  const identity = await db.select({
+  const providerSub = owner.providerSub;
+  let identity = await db.select({
     id: authIdentities.id,
     userId: authIdentities.userId,
   }).from(authIdentities).where(
@@ -324,7 +351,37 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   ).get();
 
   let user: OidcUser | null = null;
-  let identityId: string;
+  let identityId: string | undefined;
+  if (!identity) {
+    const newIdentityId = crypto.randomUUID();
+    try {
+      user = await provisionOidcUser(dbBinding, {
+        subject,
+        email: profile.accountEmail,
+        name: profile.name,
+        picture: profile.picture,
+      }, {
+        id: newIdentityId,
+        providerSub,
+        emailSnapshot: profile.emailSnapshot,
+        emailKind: profile.emailKind,
+      });
+      identityId = newIdentityId;
+    } catch (error) {
+      if (!isUniqueConstraintViolation(error)) throw error;
+      // Another callback may have atomically created this same owner identity.
+      identity = await db.select({
+        id: authIdentities.id,
+        userId: authIdentities.userId,
+      }).from(authIdentities).where(and(
+        eq(authIdentities.provider, "oidc"),
+        eq(authIdentities.providerSub, providerSub),
+      )).get();
+      if (!identity) {
+        return oidcErrorResponse("OIDC Error", "Owner account could not be resolved.", 503);
+      }
+    }
+  }
   if (identity) {
     identityId = identity.id;
     const userRow = await db.select({
@@ -364,29 +421,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
         eq(authIdentities.providerSub, providerSub),
       ),
     );
-  } else {
-    user = await provisionOidcUser(dbBinding, {
-      subject,
-      email: profile.accountEmail,
-      name: profile.name,
-      picture: profile.picture,
-    });
-
-    const timestamp = new Date().toISOString();
-    identityId = crypto.randomUUID();
-    await db.insert(authIdentities).values({
-      id: identityId,
-      userId: user.id,
-      provider: "oidc",
-      providerSub,
-      emailSnapshot: profile.emailSnapshot,
-      emailKind: profile.emailKind,
-      linkedAt: timestamp,
-      lastLoginAt: timestamp,
-    });
   }
 
-  if (!user) {
+  if (!user || !identityId) {
     return oidcErrorResponse(
       "OIDC Error",
       "Failed to resolve user account.",
@@ -691,8 +728,10 @@ function resolveOidcProfile(
   };
 }
 
-function oidcProviderSub(issuer: string, subject: string): string {
-  return `${issuer}#${subject}`;
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const detail = String(error).toLowerCase();
+  return detail.includes("unique constraint") ||
+    detail.includes("sqlite_constraint_unique");
 }
 
 function oidcUserFromRow(row: {

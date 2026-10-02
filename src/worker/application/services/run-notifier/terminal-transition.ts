@@ -10,6 +10,7 @@ import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import { buildTerminalIndexOutboxStatements } from "./index-outbox.ts";
 import { buildRunNotificationOutboxStatements } from "../notifications/run-outbox.ts";
+import { buildRunUsageProjectionOutboxStatements } from "../app-usage/run-projection-outbox.ts";
 
 export type ControlTerminalStatus = "completed" | "failed" | "cancelled";
 export type ActiveRunStatus = "pending" | "queued" | "running";
@@ -145,6 +146,15 @@ function buildStatements(
       }),
     );
   }
+  statements.push(
+    ...buildRunUsageProjectionOutboxStatements(factory, {
+      completionKey,
+      runStatus: input.status,
+      createdAt: input.completedAt,
+      runPredicateSql: committedPredicate,
+      runPredicateArgs: committedPredicateArgs,
+    }),
+  );
   statements.push(
     factory
       .prepare(

@@ -21,6 +21,10 @@ import {
   readRunServiceId,
 } from "./executor-utils.ts";
 import { resolveWorkspaceAuthority } from "../../application/services/platform/capabilities.ts";
+import {
+  configuredOwner,
+  isActiveOwnerAccount,
+} from "../../application/services/identity/owner-admission.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -151,11 +155,11 @@ export async function resolveExecutionUserIdForRun(
 
 /**
  * Revalidate the requester represented by a durable Run against the current
- * Workspace Principal owner proof. Queued runs and long-lived containers must
- * not retain authority after the owner witness or Principal is suspended.
+ * configured instance owner and Workspace Principal owner proof. Queued runs
+ * and long-lived containers must not retain a legacy second owner's authority.
  */
 export async function assertRunExecutionAccess(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB" | "OIDC_ISSUER_URL" | "OIDC_OWNER_SUBJECT">,
   runId: string,
 ): Promise<{ userId: string }> {
   const db = getDb(env.DB);
@@ -166,6 +170,15 @@ export async function assertRunExecutionAccess(
     .get();
   if (!run) throw new NotFoundError(`Run ${runId}`);
   const userId = await resolveExecutionUserIdForRun(env, runId);
+  const owner = configuredOwner({
+    issuer: env.OIDC_ISSUER_URL,
+    subject: env.OIDC_OWNER_SUBJECT,
+  });
+  if (!owner || !await isActiveOwnerAccount(env.DB, owner, userId)) {
+    throw new AuthorizationError(
+      "Run requester is not the active instance owner",
+    );
+  }
   const authority = await resolveWorkspaceAuthority(
     env.DB,
     run.accountId,

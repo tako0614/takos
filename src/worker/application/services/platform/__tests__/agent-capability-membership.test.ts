@@ -40,6 +40,12 @@ async function withMembershipDb(
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE auth_identities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_sub TEXT NOT NULL UNIQUE
+    );
     CREATE TABLE runs (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -55,6 +61,7 @@ async function withMembershipDb(
     );
     INSERT INTO accounts (id, type, status, name, slug, owner_account_id) VALUES
       ('workspace', 'team', 'active', 'Workspace', 'workspace', 'owner'),
+      ('second-workspace', 'team', 'active', 'Second', 'second-workspace', 'member'),
       ('revoked-workspace', 'team', 'active', 'Revoked', 'revoked', 'owner'),
       ('owner', 'user', 'active', 'Owner', 'owner', 'owner'),
       ('member', 'user', 'active', 'Member', 'member', 'member'),
@@ -64,6 +71,7 @@ async function withMembershipDb(
     INSERT INTO account_memberships
       (id, account_id, member_id, role, status) VALUES
       ('membership-owner', 'workspace', 'owner', 'owner', 'active'),
+      ('membership-second-owner', 'second-workspace', 'member', 'owner', 'active'),
       ('membership-active', 'workspace', 'member', 'editor', 'active'),
       ('membership-forged-owner', 'workspace', 'forged-owner', 'owner', 'active'),
       ('membership-suspended-principal', 'workspace', 'suspended', 'owner', 'active'),
@@ -72,13 +80,18 @@ async function withMembershipDb(
       id, account_id, requester_account_id, status, input, thread_id, agent_type
     ) VALUES
       ('run-owner', 'workspace', 'owner', 'queued', '{}', 'thread-workspace', 'default'),
+      ('run-second-owner', 'second-workspace', 'member', 'queued', '{}', 'thread-second', 'default'),
       ('run-editor', 'workspace', 'member', 'queued', '{}', 'thread-workspace', 'default'),
       ('run-forged-owner', 'workspace', 'forged-owner', 'queued', '{}', 'thread-workspace', 'default'),
       ('run-revoked-owner', 'revoked-workspace', 'owner', 'queued', '{}', 'thread-revoked', 'default'),
       ('run-legacy-null', 'workspace', NULL, 'queued', '{}', 'thread-workspace', 'default');
     INSERT INTO threads (id, account_id) VALUES
       ('thread-workspace', 'workspace'),
+      ('thread-second', 'second-workspace'),
       ('thread-revoked', 'revoked-workspace');
+    INSERT INTO auth_identities (id, user_id, provider, provider_sub) VALUES
+      ('identity-owner', 'owner', 'oidc', 'https://accounts.example.test#owner-subject'),
+      ('identity-second', 'member', 'oidc', 'https://accounts.example.test#second-subject');
   `);
   try {
     await run(drizzle(client, { schema }));
@@ -130,8 +143,13 @@ test("agent capabilities grant no authority from non-owner legacy memberships", 
 
 test("queued runs revalidate the requester as the active Workspace owner", async () => {
   await withMembershipDb(async (db) => {
+    const env = {
+      DB: db,
+      OIDC_ISSUER_URL: "https://accounts.example.test",
+      OIDC_OWNER_SUBJECT: "owner-subject",
+    } as never;
     await expect(
-      assertRunExecutionAccess({ DB: db } as never, "run-owner"),
+      assertRunExecutionAccess(env, "run-owner"),
     ).resolves.toEqual({ userId: "owner" });
 
     for (const runId of [
@@ -140,9 +158,30 @@ test("queued runs revalidate the requester as the active Workspace owner", async
       "run-revoked-owner",
     ]) {
       await expect(
-        assertRunExecutionAccess({ DB: db } as never, runId),
-      ).rejects.toThrow("no longer has access");
+        assertRunExecutionAccess(env, runId),
+      ).rejects.toBeInstanceOf(AuthorizationError);
     }
+  });
+});
+
+test("legacy queued and active runs require the pinned instance owner even in their own Workspace", async () => {
+  await withMembershipDb(async (db) => {
+    const env = {
+      DB: db,
+      OIDC_ISSUER_URL: "https://accounts.example.test",
+      OIDC_OWNER_SUBJECT: "owner-subject",
+    } as never;
+    expect(await resolveWorkspaceAuthority(db, "second-workspace", "member")).toBe("owner");
+    await expect(assertRunExecutionAccess(env, "run-second-owner"))
+      .rejects.toThrow("not the active instance owner");
+    await expect(getRunBootstrap(env, "run-second-owner"))
+      .rejects.toThrow("not the active instance owner");
+    await expect(getRunBootstrap(env, "run-owner"))
+      .resolves.toMatchObject({ userId: "owner", spaceId: "workspace" });
+    await expect(assertRunExecutionAccess({ DB: db } as never, "run-owner"))
+      .rejects.toThrow("not the active instance owner");
+    await expect(assertRunExecutionAccess({ DB: db, OIDC_ISSUER_URL: "https://accounts.example.test", OIDC_OWNER_SUBJECT: "second-subject" } as never, "run-owner"))
+      .rejects.toThrow("not the active instance owner");
   });
 });
 

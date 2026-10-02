@@ -33,7 +33,17 @@ function user(id: string): User {
 async function createTestContext() {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(`
-    CREATE TABLE accounts (id TEXT PRIMARY KEY);
+    CREATE TABLE accounts (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'active');
+    CREATE TABLE auth_identities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_sub TEXT NOT NULL,
+      UNIQUE(provider, provider_sub)
+    );
+    INSERT INTO accounts (id, status) VALUES ('user-1', 'active');
+    INSERT INTO auth_identities (id, user_id, provider, provider_sub)
+      VALUES ('owner-identity', 'user-1', 'oidc', 'https://accounts.example#owner-subject');
     CREATE TABLE mcp_oauth_pending (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -98,6 +108,8 @@ async function createTestContext() {
     ENCRYPTION_KEY: "mcp-browser-binding-test-encryption-key",
     ADMIN_DOMAIN: "takos.example",
     AUTH_PUBLIC_BASE_URL: "https://takos.example",
+    OIDC_ISSUER_URL: "https://accounts.example",
+    OIDC_OWNER_SUBJECT: "owner-subject",
     TAKOS_EGRESS: {
       fetch: async (input: RequestInfo | URL) => {
         const url = new URL(input.toString());
@@ -276,6 +288,26 @@ test("callback nonce or issuer mismatch leaves pending state intact", async () =
       1,
     );
     expect(context.tokenRequests()).toBe(0);
+  } finally {
+    context.client.close();
+  }
+});
+
+test("callback refuses a pending flow after its initiator loses owner admission", async () => {
+  const context = await createTestContext();
+  try {
+    await createPending(context);
+    context.env.OIDC_OWNER_SUBJECT = "replacement-subject";
+    const cookieName = `__Secure-takos_mcp_oauth_${STATE}`;
+    const response = await context.app.request(
+      callbackUrl(),
+      { headers: { Cookie: `${cookieName}=${BROWSER_NONCE}` } },
+      context.env,
+    );
+    expect(response.status).toBe(403);
+    expect(context.tokenRequests()).toBe(0);
+    expect(await context.db.select().from(mcpServers).all()).toHaveLength(0);
+    expect(await context.db.select().from(mcpOauthPending).all()).toHaveLength(0);
   } finally {
     context.client.close();
   }

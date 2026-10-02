@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   real,
   sqliteTable,
   text,
@@ -62,3 +63,33 @@ export const appUsageRollups = sqliteTable("app_usage_rollups", {
     table.periodStart,
   ),
 }));
+
+/** Takos-private terminal SQL witness; retained after delivery for audit. */
+export const runUsageProjectionOutbox = sqliteTable("run_usage_projection_outbox", {
+  id: text("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  completionKey: text("completion_key").notNull(),
+  runStatus: text("run_status").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  ownerAccountId: text("owner_account_id").notNull(),
+  deliveryStatus: text("delivery_status").notNull().default("queued"),
+  claimToken: text("claim_token"),
+  claimedAt: text("claimed_at"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: text("next_attempt_at"),
+  lastError: text("last_error"),
+  projectedRevision: integer("projected_revision"),
+  ...createdAtColumn,
+  ...updatedAtColumn,
+}, (table) => ({
+  uniqRun: uniqueIndex("idx_run_usage_projection_outbox_run").on(table.runId),
+  idxDue: index("idx_run_usage_projection_outbox_due").on(
+    table.deliveryStatus, table.nextAttemptAt, table.claimedAt,
+  ),
+}));
+
+/** A transaction-local assertion row, inserted and deleted in one meter group. */
+export const runUsageProjectionAssertions = sqliteTable("run_usage_projection_assertions", {
+  id: text("id").primaryKey(),
+  valid: integer("valid").notNull(),
+});

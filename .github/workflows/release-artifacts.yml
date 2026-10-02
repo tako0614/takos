@@ -35,15 +35,46 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Checkout agent engine source dependency
+      - name: Setup native proof Node host
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # pinned: v6.2.0
+        with:
+          node-version: 26.1.0
+          package-manager-cache: false
+
+      - name: Resolve pinned agent build inputs
+        id: agent-inputs
+        working-directory: takos
+        run: |
+          bun - <<'BUN'
+          import { readFileSync, appendFileSync } from "node:fs";
+          const pin = JSON.parse(readFileSync("containers/agent/engine-source.json", "utf8"));
+          if (pin.schemaVersion !== 1 || pin.repository !== "tako0614/takos-agent-engine" ||
+              typeof pin.commit !== "string" || !/^[0-9a-f]{40}$/.test(pin.commit)) {
+            throw new Error("invalid pinned agent engine source");
+          }
+          const toolchain = readFileSync("containers/agent/rust-toolchain.toml", "utf8")
+            .match(/^channel = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
+          if (!toolchain || !readFileSync("containers/agent/Dockerfile", "utf8")
+              .startsWith(`FROM rust:${toolchain}-bookworm AS builder\n`)) {
+            throw new Error("Rust toolchain and agent image builder must agree");
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT,
+            `engine-commit=${pin.commit}\nrust-toolchain=${toolchain}\n`);
+          BUN
+
+      - name: Checkout exact agent engine source dependency
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           repository: tako0614/takos-agent-engine
+          ref: ${{ steps.agent-inputs.outputs.engine-commit }}
           path: takos-agent-engine
           persist-credentials: false
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned action
+        with:
+          toolchain: ${{ steps.agent-inputs.outputs.rust-toolchain }}
+          components: rustfmt, clippy
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # pinned: v2
@@ -55,6 +86,150 @@ jobs:
         working-directory: takos
         run: bun install --frozen-lockfile
 
+      - name: Prepare locked Rust dependencies
+        working-directory: takos
+        run: bun run prepare:agent-wrapper
+
       - name: Run the product-owned portable gate
         working-directory: takos
-        run: bun run check
+        run: |
+          set -o pipefail
+          mkdir -p tmp
+          bun run check | tee tmp/native-proof-portable-gate.stdout.log
+
+      - name: Verify complete native proof reports
+        working-directory: takos
+        run: |
+          bun - <<'BUN'
+          import { createHash } from "node:crypto";
+          import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+          import { join } from "node:path";
+          const root = await realpath(".");
+          const directory = join(root, "tmp/native-proof-reports");
+          if (await realpath(directory) !== directory) {
+            throw new Error("native proof directory must stay in the physical checkout");
+          }
+          const expected = new Map([
+            ["nativeHttpSchemaProofReportChunk", "NATIVE_HTTP_SCHEMA_ADMISSION_OK"],
+            ["nativeUsageProofReportChunk", "NATIVE_D1_SCHEMA_TERMINAL_USAGE_RECOVERY_OK"],
+          ]);
+          const logPath = join(root, "tmp/native-proof-portable-gate.stdout.log");
+          if (!(await lstat(logPath)).isFile() || await realpath(logPath) !== logPath) {
+            throw new Error("native proof gate log must be a regular file in the physical checkout");
+          }
+          const receiptLines = (await readFile(logPath, "utf8")).split("\n")
+            .filter((line) => line.includes('"nativeProofReportRetained"'));
+          if (receiptLines.length !== 2) throw new Error("expected exactly two native proof retention receipts");
+          const receipts = new Map();
+          for (const line of receiptLines) {
+            if (Buffer.byteLength(`${line}\n`) > 2048) throw new Error("native proof receipt exceeds its byte limit");
+            const record = JSON.parse(line);
+            if (Object.keys(record).length !== 1) throw new Error("invalid native proof retention record");
+            const receipt = record.nativeProofReportRetained;
+            if (!receipt || Object.keys(receipt).sort().join(",") !== "bytes,family,path,sha256" ||
+                !expected.has(receipt.family) || receipts.has(receipt.family) ||
+                !Number.isSafeInteger(receipt.bytes) || receipt.bytes <= 0 ||
+                typeof receipt.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(receipt.sha256) ||
+                typeof receipt.path !== "string" ||
+                !new RegExp(`^tmp/native-proof-reports/${receipt.family}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.json$`, "i").test(receipt.path)) {
+              throw new Error("invalid or duplicate native proof retention receipt");
+            }
+            receipts.set(receipt.family, receipt);
+          }
+          const entries = await readdir(directory, { withFileTypes: true });
+          if (entries.length !== 2 || entries.some((entry) => !entry.isFile() || !entry.name.endsWith(".json"))) {
+            throw new Error("expected exactly two regular complete native proof reports");
+          }
+          for (const { name: file } of entries) {
+            const envelope = JSON.parse(await readFile(`${directory}/${file}`, "utf8"));
+            const receipt = receipts.get(envelope.family);
+            if (envelope.schemaVersion !== 1 || !expected.has(envelope.family) ||
+                !receipt || receipt.path !== `tmp/native-proof-reports/${file}` ||
+                receipt.sha256 !== envelope.sha256 || receipt.bytes !== envelope.bytes ||
+                typeof envelope.serializedReport !== "string" ||
+                Buffer.byteLength(envelope.serializedReport) !== envelope.bytes ||
+                createHash("sha256").update(envelope.serializedReport).digest("hex") !== envelope.sha256) {
+              throw new Error(`invalid complete native proof envelope: ${file}`);
+            }
+            const report = JSON.parse(envelope.serializedReport);
+            if (report.status !== "passed" || report.result !== expected.get(envelope.family)) {
+              throw new Error(`unqualified native proof report: ${file}`);
+            }
+            expected.delete(envelope.family);
+            console.log(JSON.stringify({ nativeProofArtifactReport: {
+              family: envelope.family, sha256: envelope.sha256, bytes: envelope.bytes,
+            } }));
+          }
+          if (expected.size !== 0) throw new Error("missing native proof family");
+          BUN
+
+      - name: Retain complete native proof reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026-04-10)
+        with:
+          name: native-proof-reports-${{ github.sha }}
+          path: takos/tmp/native-proof-reports/*.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9
+          overwrite: false
+
+      - name: Verify complete native stale Run proof
+        working-directory: takos
+        run: |
+          bun - <<'BUN'
+          import { createHash } from "node:crypto";
+          import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+          import { join } from "node:path";
+          const root = await realpath(".");
+          const base = join(root, "tmp/native-stale-run-proof");
+          if (await realpath(base) !== base) throw new Error("stale Run proof directory escaped the checkout");
+          const entries = await readdir(base, { withFileTypes: true });
+          if (entries.length !== 1 || !entries[0].isDirectory() ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entries[0].name)) {
+            throw new Error("expected exactly one fresh native stale Run trial");
+          }
+          const directory = join(base, entries[0].name);
+          async function retainedFile(name, limit) {
+            const path = join(directory, name);
+            const stat = await lstat(path);
+            if (!stat.isFile() || stat.size > limit || await realpath(path) !== path) {
+              throw new Error(`invalid or oversized stale Run evidence: ${name}`);
+            }
+            return readFile(path);
+          }
+          const bytes = await retainedFile("result.json", 8 * 1024 * 1024);
+          const stdout = await retainedFile("parent-stdout.raw", 4 * 1024 * 1024);
+          const stderr = await retainedFile("parent-stderr.raw", 4 * 1024 * 1024);
+          const receipts = stdout.toString("utf8").split(/\r?\n/).flatMap((line) => {
+            try {
+              const value = JSON.parse(line);
+              return value?.status === "passed" && value?.result === "NATIVE_WORKER_STALE_RUN_QUEUE_RECOVERY_OK" ? [{ line, value }] : [];
+            } catch { return []; }
+          });
+          if (receipts.length !== 1 || Buffer.byteLength(receipts[0].line) > 2048) throw new Error("missing or duplicate bounded stale Run receipt");
+          const digest = createHash("sha256").update(bytes).digest("hex");
+          const receipt = receipts[0].value;
+          const report = JSON.parse(bytes.toString("utf8"));
+          const cleanup = JSON.parse((await retainedFile("parent-process-cleanup.json", 1024 * 1024)).toString("utf8"));
+          if (receipt.outputDir !== directory || receipt.resultFile !== "result.json" || receipt.bytes !== bytes.length || receipt.sha256 !== digest ||
+              report.outputDir !== directory || report.status !== "passed" || report.result !== receipt.result ||
+              report.scheduledOutcome?.outcome !== "ok" || report.directQueueBatchOutcome?.outcome !== "ok" ||
+              report.directQueueBatchOutcome.retryBatch?.retry !== false || report.directQueueBatchOutcome.retryMessages?.length !== 0 ||
+              cleanup.finalAbsenceConfirmed !== true || Object.keys(cleanup.finalRemainingMembers).length !== 0 ||
+              cleanup.stdoutCapture?.truncated !== false || cleanup.stderrCapture?.truncated !== false ||
+              cleanup.stdoutCapture.storedBytes !== stdout.length || cleanup.stderrCapture.storedBytes !== stderr.length) {
+            throw new Error("native stale Run result, receipt, or owned cleanup did not qualify");
+          }
+          console.log(JSON.stringify({ nativeStaleRunArtifactReport: { sha256: digest, bytes: bytes.length } }));
+          BUN
+
+      - name: Retain native stale Run state and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026-04-10)
+        with:
+          name: native-stale-run-proof-${{ github.sha }}
+          path: takos/tmp/native-stale-run-proof/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9
+          overwrite: false

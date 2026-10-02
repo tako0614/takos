@@ -10,6 +10,8 @@ import { logError } from "../../shared/utils/logger.ts";
 import { buildWorkersWorkerPlatform } from "../../platform/adapters/workers.ts";
 import type { ControlPlatform } from "../../platform/platform-config.ts";
 import { classifyWorkerQueueName } from "../queues/queue-names.ts";
+import { isExternallyManagedSqlBinding } from "../../platform/adapters/edge-sql.ts";
+import { ensureSchemaReady } from "../../platform/migrations/schema-gate.ts";
 
 // Lazy imports to keep cold-start fast — only load what's needed per invocation.
 
@@ -79,6 +81,35 @@ export function createWorkerRuntime(
       const bindings = { ...platform.bindings, PLATFORM: platform };
       const queueKind = classifyWorkerQueueName(batch.queue);
 
+      // A Queue delivery may be the first event after an upgrade. Admit every
+      // known family before its handler can claim work or write a new table.
+      // Node converges at database open; edge.sql owns its schema externally.
+      if (
+        queueKind !== null && platform.source !== "node" &&
+        !isExternallyManagedSqlBinding(bindings.DB)
+      ) {
+        const schema = await ensureSchemaReady(bindings.DB);
+        if (schema.state !== "ready") {
+          const delaySeconds = schema.state === "failed"
+            ? 60
+            : Math.max(1, Math.min(60, schema.retryAfterSeconds ?? 5));
+          logError("Queue processing blocked by runtime schema", schema.error, {
+            module: "worker_queue",
+            queue: batch.queue,
+            state: schema.state,
+            failedMigration: schema.failedMigration,
+            attempts: batch.messages.map((message) => message.attempts),
+            delaySeconds,
+          });
+          // This consumes the normal Queue/DLQ retry budget. Persistent schema
+          // failures require operator repair; retries do not retain work forever.
+          for (const message of batch.messages) {
+            message.retry({ delaySeconds });
+          }
+          return;
+        }
+      }
+
       // --- runner queues ---
       if (queueKind === "runs" || queueKind === "runs_dlq") {
         const { default: runner } = await import("../runner/index.ts");
@@ -145,6 +176,21 @@ export function createWorkerRuntime(
     async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
       const platform = await buildPlatform(env);
       const bindings = { ...platform.bindings, PLATFORM: platform };
+      if (
+        platform.source !== "node" &&
+        !isExternallyManagedSqlBinding(bindings.DB)
+      ) {
+        const schema = await ensureSchemaReady(bindings.DB);
+        if (schema.state !== "ready") {
+          logError("Scheduled work blocked by runtime schema", schema.error, {
+            module: "worker_cron",
+            cron: event.cron,
+            state: schema.state,
+            failedMigration: schema.failedMigration,
+          });
+          throw new Error(`scheduled work blocked by runtime schema: ${schema.state}`);
+        }
+      }
       return runWorkerRuntimeScheduled(event, bindings);
     },
   };

@@ -149,10 +149,85 @@ Docker image は ecosystem root から作成します。
 docker build -f takos/containers/agent/Dockerfile -t takos-agent .
 ```
 
+Cargo の同時build jobは既定2です。必要な環境では
+`--build-arg CARGO_BUILD_JOBS=<jobs>` で調整できます。
+
 release artifact publisher は `containers/agent/engine-source.json` の exact commit を
 canonical `tako0614/takos-agent-engine` remote から一時 build context へ fetch し、
 Docker build 内の `cargo build --locked --release` で wrapper compatibility を検証します。
 local sibling checkout は release source authority には使いません。
+
+## Portable qualification
+
+product root の `bun run check` は、この wrapper の formatting、全 target / feature の
+compile、default / all-feature Clippy、default / mock-LLM tests と production feature構成のdebug executable
+build も必須で実行します。compiler は `rust-toolchain.toml` の Rust 1.94.0 に固定し、
+Docker builder と一致しない場合は失敗します。
+続けて、そのdebug executableと実 Worker RPC handler / ToolExecutor を接続する
+process recovery proof を実行します。現行 migration をすべて適用した新しい SQLite で
+`create_artifact` の結果を commit した後、HTTP acknowledgement を保留して旧 process を
+終了し、新 lease / process が同じ operation key の結果から完了することを確認します。
+
+初回は exact toolchain と locked dependencies を準備します。
+
+```sh
+rustup toolchain install 1.94.0 --profile minimal --component rustfmt --component clippy
+bun run prepare:agent-wrapper
+bun run check:agent-wrapper
+```
+
+engine source は既定の sibling Git repository から `engine-source.json` の exact commit
+を archive します。別の配置では `TAKOS_AGENT_ENGINE_REPOSITORY` で Git repository を指定します。
+dirty / untracked engine files は取り込みません。wrapper source と engine archive を
+product root の ignored `tmp/agent-wrapper-gate` に複製して検証し、成功時はその生成 context
+だけを除去します。失敗時は調査用に残します。Cargo cache は既定の
+`tmp/agent-wrapper-target` または `CARGO_TARGET_DIR` に保持します。
+
+gate は locked / offline で実行し、engine fetch や toolchain の自動 install はしません。
+pin、toolchain、cached dependencies が不足した場合は skip せず失敗します。
+`prepare:agent-wrapper` は locked Cargo dependencies の取得だけを行います。
+model provider key は Cargo child environment に渡しません。
+
+replacement tests は実 wrapper / pinned engine と localhost の model / RPC fixture を使い、
+tool operation の acknowledgement 前に旧 executor を中断します。新 lease が同じ
+idempotency key の cached outcome から完了することと、billable model の outcome が不明な
+checkpoint は再発行せず failed completion にすることを検証します。
+これは実 Worker ledger、Container image、稼働環境の interruption / restart の証拠とは別です。
+
+必須の `scripts/prove-agent-worker-recovery.ts` は、上記 wrapper-only fixture に加え、
+実 SQL operation ledger、artifact の一度だけの作成、checkpoint / transcript / usage と
+新 lease の atomic completion を検証します。proxy token の検証と model は localhost の
+test bridge が代用し、notifier は test sink です。Container image、queue dispatch、実 Accounts
+login、remote SQL / R2 / Redis、Host admission の資格確認は別に残ります。
+model/provider credential を使わず、tool allowlist は test process の
+`create_artifact` だけに限定します。失敗時は ignored context と診断を残します。
+proof は executable を専用 context へコピーし、同じ digest の bytes を両 process で
+実行します。300秒の watchdog と gate の360秒の process-group 上限で自身の child を
+終了・reap します。この必須 proof の process supervision は POSIX が対象です。
+
+Dockerfileの実imageを確認するときは、固定commitとexact engine pinから作成した
+Linux/amd64 OCI layoutを別に用意し、local OCI proofを明示的に実行します。
+検証済みのumoci/runc executableとContainerを起動できるlocal環境が必要です。
+
+```sh
+bun scripts/prove-agent-container-recovery.ts \
+  --layout /absolute/oci-layout \
+  --reference image-tag \
+  --source-commit "FULL_BUILD_SOURCE_COMMIT" \
+  --expected-manifest-digest "sha256:MANIFEST_DIGEST" \
+  --umoci /absolute/verified-umoci \
+  --runc /absolute/runc
+```
+
+path、tagとplaceholderは実際のbuild記録の値へ置き換えます。
+
+manifest/config/layerとuncompressed diff IDを照合し、imageのUID/GID10001、Cmd、
+workdir、両instanceで同じagent bytesを確認します。実initのPID/start timeを記録し、
+旧initと自身のrunc stateが消えた後だけleaseを更新して、同じWorker/SQLite/tool復旧assertionを
+通します。中断・停止失敗は成功扱いせず、自身のcontextと診断を残します。
+imageにrevision labelが無ければsource commitはoperatorが与えたbuild記録として報告します。
+local OCIの証拠は公開済みimage、Cloudflare/Host Container backend、queue、Accounts、
+稼働環境のmodel/proxy/notifierの資格確認へ流用しません。
 
 Live smoke は opt-in です。`TAKOS_AGENT_INTERNAL_URL` が未設定の場合は skip
 します。設定されている場合だけ `GET /health` を確認します。

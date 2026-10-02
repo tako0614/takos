@@ -35,6 +35,7 @@ const ENV_KEYS = [
   "ENVIRONMENT",
   "NODE_ENV",
   "OIDC_ISSUER_URL",
+  "OIDC_OWNER_SUBJECT",
   "OIDC_DISCOVERY_URL",
   "OIDC_CLIENT_ID",
   "OIDC_CLIENT_SECRET",
@@ -79,6 +80,7 @@ test("Node resolver drives the complete OIDC login and callback session flow", a
     setEnv("ENVIRONMENT", "development");
     deleteEnv("NODE_ENV");
     setEnv("OIDC_ISSUER_URL", "https://accounts.example.test");
+    setEnv("OIDC_OWNER_SUBJECT", "node-resolver-subject");
     setEnv("OIDC_DISCOVERY_URL", "http://accounts.internal:8787");
     setEnv("OIDC_CLIENT_ID", "node-resolver-client");
     setEnv("OIDC_CLIENT_SECRET", "node-resolver-secret");
@@ -146,6 +148,19 @@ test("Node resolver drives the complete OIDC login and callback session flow", a
     const app = createApp();
     const fetchRoute = (request: Request) =>
       app.fetch(request, requestEnv, createLocalExecutionContext());
+
+    setEnv("OIDC_OWNER_SUBJECT", " node-resolver-subject ");
+    const paddedEnv = await createNodeWebEnv();
+    expect(paddedEnv.OIDC_OWNER_SUBJECT).toBe(" node-resolver-subject ");
+    const paddedPlatform = await buildNodeWebPlatform(paddedEnv);
+    const paddedLogin = await app.fetch(
+      new Request("https://admin.local/auth/oidc/login"),
+      { ...paddedEnv, PLATFORM: paddedPlatform } as Env,
+      createLocalExecutionContext(),
+    );
+    expect(paddedLogin.status).toBe(503);
+    expect(await paddedLogin.text()).toContain("OIDC_OWNER_SUBJECT");
+    setEnv("OIDC_OWNER_SUBJECT", "node-resolver-subject");
 
     const loginResponse = await fetchRoute(
       new Request("https://admin.local/auth/oidc/login?return_to=/workspace"),

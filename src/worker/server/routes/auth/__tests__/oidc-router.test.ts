@@ -83,6 +83,7 @@ function createEnv(
   input: {
     states?: StoredOidcState[];
     oidcIssuerUrl?: string;
+    oidcOwnerSubject?: string;
     oidcDiscoveryUrl?: string;
     oidcClientId?: string;
     oidcClientSecret?: string;
@@ -103,6 +104,7 @@ function createEnv(
       config: {
         adminDomain: "takos.example.test",
         oidcIssuerUrl: input.oidcIssuerUrl,
+        oidcOwnerSubject: input.oidcOwnerSubject ?? "takosumi-subject-1",
         oidcDiscoveryUrl: input.oidcDiscoveryUrl,
         oidcClientId: input.oidcClientId,
         oidcClientSecret: input.oidcClientSecret,
@@ -196,10 +198,10 @@ test("OIDC login route rejects missing config", async () => {
     createEnv({ includeSessionStore: false }),
   );
 
-  assertEquals(response.status, 500);
+  assertEquals(response.status, 503);
   assertStringIncludes(
     await response.text(),
-    "Takosumi Accounts OIDC is not configured.",
+    "Instance owner is not configured (OIDC_OWNER_SUBJECT).",
   );
 });
 
@@ -741,7 +743,7 @@ test("Accounts delegation retains the current refresh token when rotation is omi
   }
 });
 
-test("OIDC callback does NOT link a new subject to an existing account by verified email (account-takeover prevention)", async () => {
+test("OIDC callback rejects an unpinned subject and keeps a pinned owner separate from a retained email account", async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
   const timestamp = new Date().toISOString();
@@ -830,6 +832,34 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
   }) as typeof fetch;
 
   try {
+    const denied = await createApp().fetch(
+      new Request(
+        "https://takos.example.test/auth/oidc/callback?code=auth-code-legacy&state=state-legacy",
+        { headers: { Cookie: "__Host-tp_oidc_state=state-legacy" } },
+      ),
+      createEnv({
+        states,
+        createdSessions,
+        sqlBinding: authDb.db,
+        oidcIssuerUrl: "https://accounts.example.test/",
+        oidcOwnerSubject: "another-owner",
+        oidcDiscoveryUrl: "http://accounts.internal:8787",
+        oidcClientId: "takos-client",
+        oidcClientSecret: "client-secret",
+        oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
+      }),
+    );
+    assertEquals(denied.status, 403);
+    assertEquals(createdSessions.length, 0);
+    assertEquals((await authDb.db.select().from(accounts).all()).length, 1);
+    assertEquals((await authDb.db.select().from(authIdentities).all()).length, 0);
+    states.push({
+      state: "state-legacy",
+      nonce: "nonce-legacy",
+      code_verifier: "verifier-legacy",
+      return_to: "/spaces",
+      expires_at: Date.now() + 60_000,
+    });
     const response = await createApp().fetch(
       new Request(
         "https://takos.example.test/auth/oidc/callback?code=auth-code-legacy&state=state-legacy",
@@ -840,6 +870,7 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
         createdSessions,
         sqlBinding: authDb.db,
         oidcIssuerUrl: "https://accounts.example.test/",
+        oidcOwnerSubject: "takosumi-legacy-subject",
         oidcDiscoveryUrl: "http://accounts.internal:8787",
         oidcClientId: "takos-client",
         oidcClientSecret: "client-secret",
@@ -852,10 +883,9 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     // routes to onboarding rather than the requested return_to.
     assertEquals(response.headers.get("location"), "/setup");
     assertEquals(createdSessions.length, 1);
-    // SECURITY: a brand-new (issuer, sub) carrying a verified email that matches
-    // an existing account MUST NOT be logged in as that account — email is
-    // transferable/reusable, so auto-linking by email is account takeover. The
-    // new subject gets its OWN account instead.
+    // The pinned owner subject does not take over an older account merely
+    // because its verified email matches. The older record remains separate
+    // and cannot pass owner admission under this configuration.
     const newUserId = createdSessions[0].user_id;
     assertEquals(newUserId === "legacy-user-1", false);
 
@@ -875,8 +905,7 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     assertEquals(legacy.email, "legacy@example.test");
     assertEquals(legacy.name, "Legacy User");
 
-    // The new account owns the new subject and does NOT steal the email — it is
-    // dropped to null on the unique-email collision rather than hijacked.
+    // The admitted owner's account does not steal the legacy record's email.
     const fresh = accountRows.find((row) => row.id === newUserId);
     assertExists(fresh);
     assertEquals(fresh.email, null);

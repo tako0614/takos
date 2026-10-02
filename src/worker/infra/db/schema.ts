@@ -15,7 +15,7 @@ export {
 export { authSessions, sessionsRevoked } from "./schema-auth.ts";
 
 // App usage
-export { appUsageEvents, appUsageRollups } from "./schema-app-usage.ts";
+export { appUsageEvents, appUsageRollups, runUsageProjectionOutbox, runUsageProjectionAssertions } from "./schema-app-usage.ts";
 
 // Memory graph
 export {

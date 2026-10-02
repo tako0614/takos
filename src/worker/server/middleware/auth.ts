@@ -23,6 +23,7 @@ import {
 } from "./accounts-bearer.ts";
 import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
+import { isActiveOwnerAccount } from "../../application/services/identity/owner-admission.ts";
 
 import {
   AppError,
@@ -66,6 +67,7 @@ export const authDeps = {
   logWarn,
   getPlatformServices,
   getPlatformConfig,
+  isActiveOwnerAccount,
   // Phase 18.2 H11
   isSessionRevoked,
   recordSessionRevocation,

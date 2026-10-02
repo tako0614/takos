@@ -6,6 +6,7 @@ import {
   notifications,
   notificationSettings,
 } from "../../../infra/db/index.ts";
+import { executeAtomicStatements } from "../../../infra/db/client.ts";
 import { and, count, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import {
   generateId,
@@ -13,7 +14,6 @@ import {
 } from "../../../shared/utils/index.ts";
 
 import { logInfo, logWarn } from "../../../shared/utils/logger.ts";
-import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -31,6 +31,51 @@ import {
   getNotificationPushOutboxStatus,
   markNotificationPushOutboxDone,
 } from "./push-outbox.ts";
+
+const MAX_NOTIFICATION_PREFERENCE_STATEMENT_PARAMETERS = 90;
+const NOTIFICATION_PREFERENCE_INSERT_COLUMN_COUNT = 6;
+const NOTIFICATION_PREFERENCE_INSERT_BATCH_SIZE = Math.floor(
+  MAX_NOTIFICATION_PREFERENCE_STATEMENT_PARAMETERS /
+    NOTIFICATION_PREFERENCE_INSERT_COLUMN_COUNT,
+);
+// accountId, channel, enabled, and updatedAt are bound outside the IN values.
+const NOTIFICATION_PREFERENCE_UPDATE_FIXED_PARAMETERS = 4;
+const NOTIFICATION_PREFERENCE_UPDATE_TYPE_BATCH_SIZE =
+  MAX_NOTIFICATION_PREFERENCE_STATEMENT_PARAMETERS -
+  NOTIFICATION_PREFERENCE_UPDATE_FIXED_PARAMETERS;
+
+type NotificationPreferenceInsert = {
+  accountId: string;
+  type: string;
+  channel: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function chunkNotificationPreferenceValues<T>(
+  values: readonly T[],
+  batchSize: number,
+): T[][] {
+  const batches: T[][] = [];
+  for (let offset = 0; offset < values.length; offset += batchSize) {
+    batches.push(values.slice(offset, offset + batchSize));
+  }
+  return batches;
+}
+
+async function insertNotificationPreferenceRows(
+  dbBinding: SqlDatabaseBinding,
+  rows: NotificationPreferenceInsert[],
+): Promise<void> {
+  const batches = chunkNotificationPreferenceValues(
+    rows,
+    NOTIFICATION_PREFERENCE_INSERT_BATCH_SIZE,
+  );
+  await executeAtomicStatements(dbBinding, (db) =>
+    batches.map((batch) => db.insert(notificationPreferences).values(batch))
+  );
+}
 
 export type NotificationDto = {
   id: string;
@@ -132,7 +177,13 @@ async function emitNotificationCreated(
       },
     }),
   });
-  await stub.fetch(request);
+  const response = await stub.fetch(request);
+  if (!response.ok) throw new Error(`Notification hint rejected (${response.status})`);
+  const result: unknown = await response.json();
+  if (!result || typeof result !== "object" ||
+    (result as Record<string, unknown>).success !== true) {
+    throw new Error("Notification hint was not accepted");
+  }
 }
 
 export async function getNotificationsMutedUntil(
@@ -253,26 +304,27 @@ export async function ensureNotificationPreferences(
       )
       .map((row) => row.type);
     if (unsupportedEnabledPushTypes.length > 0) {
-      await db
-        .update(notificationPreferences)
-        .set({ enabled: false, updatedAt: ts })
-        .where(
-          and(
-            eq(notificationPreferences.accountId, userId),
-            eq(notificationPreferences.channel, "push"),
-            inArray(notificationPreferences.type, unsupportedEnabledPushTypes),
-          ),
-        );
+      const batches = chunkNotificationPreferenceValues(
+        unsupportedEnabledPushTypes,
+        NOTIFICATION_PREFERENCE_UPDATE_TYPE_BATCH_SIZE,
+      );
+      await executeAtomicStatements(dbBinding, (batchDb) =>
+        batches.map((types) =>
+          batchDb
+            .update(notificationPreferences)
+            .set({ enabled: false, updatedAt: ts })
+            .where(
+              and(
+                eq(notificationPreferences.accountId, userId),
+                eq(notificationPreferences.channel, "push"),
+                inArray(notificationPreferences.type, types),
+              ),
+            )
+        )
+      );
     }
     const existingSet = new Set(existing.map((r) => `${r.type}:${r.channel}`));
-    const toCreate: Array<{
-      accountId: string;
-      type: string;
-      channel: string;
-      enabled: boolean;
-      createdAt: string;
-      updatedAt: string;
-    }> = [];
+    const toCreate: NotificationPreferenceInsert[] = [];
 
     for (const type of NOTIFICATION_TYPES) {
       for (const channel of NOTIFICATION_CHANNELS) {
@@ -292,7 +344,7 @@ export async function ensureNotificationPreferences(
 
     if (toCreate.length > 0) {
       try {
-        await db.insert(notificationPreferences).values(toCreate);
+        await insertNotificationPreferenceRows(dbBinding, toCreate);
       } catch (err) {
         // Possible race; re-query on next read.
         logWarn("Failed to create default preferences", {
@@ -386,14 +438,7 @@ export async function updateNotificationPreferences(
     );
 
     // 2. Partition updates into creates vs updates
-    const toCreate: Array<{
-      accountId: string;
-      type: string;
-      channel: string;
-      enabled: boolean;
-      createdAt: string;
-      updatedAt: string;
-    }> = [];
+    const toCreate: NotificationPreferenceInsert[] = [];
     const toUpdate: Array<{
       type: NotificationType;
       channel: NotificationChannel;
@@ -420,9 +465,9 @@ export async function updateNotificationPreferences(
       }
     }
 
-    // 3. Batch-create new preferences in one query
+    // 3. Create missing preferences in bounded inserts.
     if (toCreate.length > 0) {
-      await db.insert(notificationPreferences).values(toCreate);
+      await insertNotificationPreferenceRows(dbBinding, toCreate);
     }
 
     // 4. Update existing preferences sequentially (SQL store does not support transactions)
@@ -651,14 +696,11 @@ export async function createNotification(
   if (dataStr.length > MAX_NOTIFICATION_DATA_SIZE) {
     logWarn("Notification data exceeds size limit, truncating payload", {
       module: "notifications",
-      ...{
-        type: input.type,
-        size: dataStr.length,
-      },
+      type: input.type,
+      size: dataStr.length,
     });
   }
 
-  let inserted = true;
   try {
     const insert = db.insert(notifications).values({
       id,
@@ -675,14 +717,9 @@ export async function createNotification(
       emailError: null,
     });
     if (options.notificationId) {
-      const result = await insert.onConflictDoNothing({
+      await insert.onConflictDoNothing({
         target: notifications.id,
       });
-      if (affectedRowCount(result) === 0) {
-        // A fixed-id replay may mean the inbox row committed before Queue.send.
-        // Re-enqueue the same event id; delivery is intentionally at-least-once.
-        inserted = false;
-      }
     } else {
       await insert;
     }
@@ -693,7 +730,10 @@ export async function createNotification(
     throw err;
   }
 
-  if (inserted && wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
+  // A fixed-ID retry can follow an ambiguous notifier head commit. Re-emit the
+  // same notification ID. A replay-horizon receipt keeps its delivery cursor
+  // stable; after retirement it is a new refresh hint for the same SQL inbox row.
+  if (wantsInApp && !muted && env.NOTIFICATION_NOTIFIER) {
     try {
       const stub = getNotificationNotifierStub(env, input.userId);
       if (stub) {
