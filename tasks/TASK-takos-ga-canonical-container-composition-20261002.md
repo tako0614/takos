@@ -238,3 +238,70 @@ together to require actual stored-value validation. Only bounded selectors and
 hashes are saved before a failed baseline assertion; raw checkpoint and token
 material are excluded. Twenty exact focused tests and the scoped type check passed.
 These checks prepare the corrected native trial; its outcome is recorded separately.
+
+## Observed actual window and repeated recovery enqueue
+
+One new observed trial at `c667ed87c` crossed the real heartbeat threshold:
+wall 301,365 ms and monotonic 300,098.3478 ms. Manual ageing returned 409,
+early scheduled invocation emitted no Queue message or Host dispatch, and the
+owner/Workspace/checkpoint snapshots remained unchanged through the threshold.
+The full trial FAILED after 406.644 seconds; this is a threshold witness, not a
+completed Run or usage qualification.
+
+Canonical readback contained two accepted sends for the same Run, one actual
+Host response 202 and one Queue `ack()` call. The controller rejected the 2/1/1
+cardinality. Its failure text does not establish missing ACK or a phase timeout.
+The stale-running recovery changes the row to queued with a null heartbeat;
+the following stale-unclaimed selector can select it again before Queue claim.
+An actual SQLite composition regression must confirm this path before fixing
+the queued recovery heartbeat to the existing unclaimed-retry cooldown. Keep
+send-failure rollback, delayed unclaimed retry, lease claims, checkpoint state
+and the native deadlines/qualification predicate intact.
+
+The 66 raw files were byte-sealed and independently checked without opening a
+SQL handle on the evidence databases. Observer coverage separately failed on
+natural workerd exit. Native cleanup returned two HTTP 200 acknowledgements but
+its final readback still found the newly created proxy running. A separate parent
+cleanup joined the fresh full ID, Run/name, pinned image and PID/startTicks/netns,
+stopped that one proxy, then verified all four fresh agent/proxy identities absent
+or stopped and the preexisting Container preserved. This does not repair the raw
+native cleanup failure. All 1,608 source and six runtime hashes and the original
+Takos/engine worktree protections matched before and after the trial. No unchanged
+native retry, image operation, shared contract or deployment followed.
+
+The actual in-memory SQLite composition reproduced two sends before the fix.
+Stale-running recovery now records a fresh queued retry heartbeat, matching the
+existing stale-unclaimed cooldown; the latter cannot immediately select the row
+again. A still-unclaimed row becomes eligible after a later stale threshold.
+The existing failed-send rollback to stale running is unchanged. The regression
+checks the saved checkpoint, private Workspace/requester/thread and lease, a
+later retry and preservation of a replacement claim. The final exact-path cron
+suite passed six tests in one file; an earlier broad selection that also included
+ignored baseline copies is not used as current-source suite qualification.
+This is portable SQLite/source verification. The changed-source owning gate and
+CI are recorded separately, and no corrected actual-window native success has
+been claimed.
+
+The pre-fix production source was also checked with the final exact-path test
+under pinned Bun 1.3.14 and reproduced the two-send failure; the reviewed fixed
+source bytes were restored immediately afterward. The existing native stale-run
+proof and its report test now require a canonical ISO queued heartbeat within
+the observed scheduled invocation window instead of the old null value.
+Queued status, unowned service, lease 7 and all later claim/authority/checkpoint
+assertions remain. This expectation change does not relax the Container proof's
+1/1/1 cardinality or any phase deadline.
+
+The first changed-source complete gate stopped at three new test type errors
+before portable tests: libsql's Row type was compared/cast as a plain object.
+The test now normalizes its enumerable row values to a record and narrows the
+heartbeat with a runtime string guard. The final exact-path suite again passed
+six tests, and the type gate passed with no undeclared diagnostics. The failed
+gate log is retained; later complete-gate and CI results stay separate.
+
+The corrected gate passed 1,724 of 1,725 portable tests but failed the parent
+stale-run report assertion. Its child native D1/Queue proof succeeded and stored
+a valid fresh heartbeat. A pinned Bun 1.3.14 micro-reproduction established that
+the asymmetric string matcher mutated the received heartbeat into an object
+before Date.parse. The parent now checks its scalar type without that matcher;
+the fresh ISO/window and all claim/authority assertions remain. This gate's
+failure and the successful child report retain their distinct qualifications.

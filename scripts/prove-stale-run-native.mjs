@@ -148,6 +148,7 @@ try {
   seed.schema = readyAdmission.schema;
 
   stage = "canonical-scheduled";
+  const cronScheduledStartedAt = Date.now();
   const scheduledOutcome = await worker.scheduled({ cron: "* * * * *", scheduledTime: new Date() });
   diagnosticEvidence.scheduledOutcome = scheduledOutcome;
   if (scheduledOutcome?.outcome !== "ok") throw new Error(`canonical scheduled event failed: ${JSON.stringify(scheduledOutcome)}`);
@@ -167,7 +168,13 @@ try {
   const cronMessage = scheduleReadback.emitted.find((message) => message.runId === "cron-stale");
   if (!cronMessage) throw new Error("canonical scheduled handler did not emit RUN_QUEUE for fixture-eligible stale heartbeat");
   const cronQueueSnapshot = scheduleReadback.emittedSnapshots.find((entry) => entry.body.runId === "cron-stale")?.beforeQueueSend;
-  if (cronQueueSnapshot?.run.status !== "queued" || cronQueueSnapshot.run.service_id !== null || cronQueueSnapshot.run.service_heartbeat !== null || Number(cronQueueSnapshot.run.lease_version) !== 7) throw new Error(`cron did not queue the stale Run from its expected reset state: ${JSON.stringify(cronQueueSnapshot)}`);
+  const cronQueueSnapshotObservedAt = Date.now();
+  const queuedHeartbeat = cronQueueSnapshot?.run.service_heartbeat;
+  const queuedHeartbeatAt = typeof queuedHeartbeat === "string" ? Date.parse(queuedHeartbeat) : NaN;
+  if (cronQueueSnapshot?.run.status !== "queued" || cronQueueSnapshot.run.service_id !== null ||
+    !Number.isFinite(queuedHeartbeatAt) || new Date(queuedHeartbeatAt).toISOString() !== queuedHeartbeat ||
+    queuedHeartbeatAt < cronScheduledStartedAt || queuedHeartbeatAt > cronQueueSnapshotObservedAt ||
+    Number(cronQueueSnapshot.run.lease_version) !== 7) throw new Error(`cron did not queue the stale Run with a fresh retry cooldown: ${JSON.stringify(cronQueueSnapshot)}`);
   const agedQueueRun = await (await worker.fetch("http://native/__native/age-queue-run")).json();
 
   stage = "canonical-queue";
@@ -209,7 +216,7 @@ try {
     runtime: { node: process.version, bun: build.bunVersion, miniflare: JSON.parse(await readFile(join(root, "node_modules/miniflare/package.json"), "utf8")).version, miniflareModuleRepositoryPath: relative(root, miniflareModulePath).split("\\").join("/"), workerdPackage: workerdWrapper.version, workerdVersion, workerdBinaryRepositoryPath: relative(root, workerdBinary).split("\\").join("/"), workerdBinarySha256BeforeRun, workerdBinarySha256AfterRun, compatibilityDate, compatibilityFlags, effectiveCompatibilityFlags: [...compatibilityFlags, "service_binding_extra_handlers"], bundleSha256, bundleSha256AfterRun, runtimeHashesBeforeRun, runtimeHashesAfterRun },
     migrations: { applied: seed.schema.applied, total: seed.schema.total, names: seed.migrations.map((migration) => migration.name), manifest: seed.migrations, ledger: seed.ledger, ledgerMatchesManifest: seed.ledger.length === seed.migrations.length && seed.ledger.every((row, index) => row.name === seed.migrations[index].name && row.checksum === seed.migrations[index].sha256), admissions },
     queue: { emitted: finalReadback.emitted, emittedSnapshots: finalReadback.emittedSnapshots, dispatches: finalReadback.dispatches, dispatchSnapshots: finalReadback.dispatchSnapshots, acknowledgements: finalReadback.acknowledgements },
-    cronRecovery: { beforeQueueSend: cronQueueSnapshot, afterNativeQueueDelivery: scheduleReadback.runs["cron-stale"] },
+    cronRecovery: { scheduledStartedAt: new Date(cronScheduledStartedAt).toISOString(), snapshotObservedAt: new Date(cronQueueSnapshotObservedAt).toISOString(), beforeQueueSend: cronQueueSnapshot, afterNativeQueueDelivery: scheduleReadback.runs["cron-stale"] },
     queueTakeoverEligibility: agedQueueRun,
     scheduledOutcome,
     directQueueBatchOutcome: directQueueBatch,

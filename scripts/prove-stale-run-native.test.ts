@@ -231,7 +231,14 @@ test("native canonical Worker cron and Queue recover stale Runs through Miniflar
     }
     expect(report.scope.executorHost).toContain("no Container dispatch");
     expect(report.scope.directControlDelivery).toContain("getWorker().queue(queueName, messagesArray)");
-    expect(report.cronRecovery.beforeQueueSend.run).toMatchObject({ status: "queued", service_id: null, service_heartbeat: null, lease_version: 7 });
+    expect(report.cronRecovery.beforeQueueSend.run).toMatchObject({ status: "queued", service_id: null, lease_version: 7 });
+    const queuedHeartbeat = report.cronRecovery.beforeQueueSend.run.service_heartbeat;
+    expect(typeof queuedHeartbeat).toBe("string");
+    const queuedHeartbeatAt = Date.parse(queuedHeartbeat);
+    expect(Number.isFinite(queuedHeartbeatAt)).toBe(true);
+    expect(new Date(queuedHeartbeatAt).toISOString()).toBe(queuedHeartbeat);
+    expect(queuedHeartbeatAt).toBeGreaterThanOrEqual(Date.parse(report.cronRecovery.scheduledStartedAt));
+    expect(queuedHeartbeatAt).toBeLessThanOrEqual(Date.parse(report.cronRecovery.snapshotObservedAt));
     expect(report.cronRecovery.afterNativeQueueDelivery.run).toMatchObject({ status: "running", lease_version: 8 });
     const claimed = report.queueTakeover.run;
     expect(claimed).toMatchObject({ status: "running", model: "persisted-model", lease_version: 8, service_heartbeat: expect.any(String) });

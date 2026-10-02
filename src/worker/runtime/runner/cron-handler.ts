@@ -80,7 +80,10 @@ export async function reenqueueStaleRunningRuns(
       .set({
         status: "queued",
         serviceId: null,
-        serviceHeartbeat: null,
+        // Keep the newly queued row out of this pass's unclaimed selector.
+        // If it remains unclaimed, this heartbeat is only a retry cooldown;
+        // a later stale threshold can select it again.
+        serviceHeartbeat: new Date().toISOString(),
         completionKey: null,
         completedAt: null,
       })
