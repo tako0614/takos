@@ -153,6 +153,25 @@ populated migrations, owner login or Container composition. Failure fixtures are
 only new successful fixture state is removed. The production migration budget and test deadlines
 are not overridden, and no operator migration endpoint is used.
 
+## Native cron / Queue のRun復旧回帰
+
+次の試験は、隔離したNode / Miniflareで正規WorkerのscheduledとQueue entrypointを実行します。
+
+```bash
+bun test ./scripts/prove-stale-run-native.test.ts
+```
+
+新しいnative D1へ全migrationを適用し、stale Runの再配送と新しいleaseによるclaim、
+fresh / terminal Runの保持、重複配送、保存済みmodelとcheckpoint・累積usageの保持、
+以前のpending operationの再実行拒否を確認します。configured instance ownerとprivate
+Workspaceの認可も正規の経路を通します。
+
+stale時刻は試験用データで与え、実際の5分の検出待ち時間を証明しません。executor
+transportは試験用の受理応答であり、実Containerの起動・復旧とは別の証拠です。
+raw状態と結果はこのcheckoutの新しい `tmp/native-stale-run-proof/` 内に保存し、
+既存stateを再利用しません。hosted Queueやwhole-workerd restart、実ownerのログイン、
+全instance restoreは別途確認が必要です。
+
 ## 実Containerのcheckpoint・使用量復旧試験
 
 `validate:agent-native-container-recovery` は明示的に実行する追加試験です。Linux、Node.js

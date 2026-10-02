@@ -172,3 +172,64 @@ jobs:
           retention-days: 3
           compression-level: 9
           overwrite: false
+
+      - name: Verify complete native stale Run proof
+        working-directory: takos
+        run: |
+          bun - <<'BUN'
+          import { createHash } from "node:crypto";
+          import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+          import { join } from "node:path";
+          const root = await realpath(".");
+          const base = join(root, "tmp/native-stale-run-proof");
+          if (await realpath(base) !== base) throw new Error("stale Run proof directory escaped the checkout");
+          const entries = await readdir(base, { withFileTypes: true });
+          if (entries.length !== 1 || !entries[0].isDirectory() ||
+              !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entries[0].name)) {
+            throw new Error("expected exactly one fresh native stale Run trial");
+          }
+          const directory = join(base, entries[0].name);
+          async function retainedFile(name, limit) {
+            const path = join(directory, name);
+            const stat = await lstat(path);
+            if (!stat.isFile() || stat.size > limit || await realpath(path) !== path) {
+              throw new Error(`invalid or oversized stale Run evidence: ${name}`);
+            }
+            return readFile(path);
+          }
+          const bytes = await retainedFile("result.json", 8 * 1024 * 1024);
+          const stdout = await retainedFile("parent-stdout.raw", 4 * 1024 * 1024);
+          const stderr = await retainedFile("parent-stderr.raw", 4 * 1024 * 1024);
+          const receipts = stdout.toString("utf8").split(/\r?\n/).flatMap((line) => {
+            try {
+              const value = JSON.parse(line);
+              return value?.status === "passed" && value?.result === "NATIVE_WORKER_STALE_RUN_QUEUE_RECOVERY_OK" ? [{ line, value }] : [];
+            } catch { return []; }
+          });
+          if (receipts.length !== 1 || Buffer.byteLength(receipts[0].line) > 2048) throw new Error("missing or duplicate bounded stale Run receipt");
+          const digest = createHash("sha256").update(bytes).digest("hex");
+          const receipt = receipts[0].value;
+          const report = JSON.parse(bytes.toString("utf8"));
+          const cleanup = JSON.parse((await retainedFile("parent-process-cleanup.json", 1024 * 1024)).toString("utf8"));
+          if (receipt.outputDir !== directory || receipt.resultFile !== "result.json" || receipt.bytes !== bytes.length || receipt.sha256 !== digest ||
+              report.outputDir !== directory || report.status !== "passed" || report.result !== receipt.result ||
+              report.scheduledOutcome?.outcome !== "ok" || report.directQueueBatchOutcome?.outcome !== "ok" ||
+              report.directQueueBatchOutcome.retryBatch?.retry !== false || report.directQueueBatchOutcome.retryMessages?.length !== 0 ||
+              cleanup.finalAbsenceConfirmed !== true || Object.keys(cleanup.finalRemainingMembers).length !== 0 ||
+              cleanup.stdoutCapture?.truncated !== false || cleanup.stderrCapture?.truncated !== false ||
+              cleanup.stdoutCapture.storedBytes !== stdout.length || cleanup.stderrCapture.storedBytes !== stderr.length) {
+            throw new Error("native stale Run result, receipt, or owned cleanup did not qualify");
+          }
+          console.log(JSON.stringify({ nativeStaleRunArtifactReport: { sha256: digest, bytes: bytes.length } }));
+          BUN
+
+      - name: Retain native stale Run state and logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026-04-10)
+        with:
+          name: native-stale-run-proof-${{ github.sha }}
+          path: takos/tmp/native-stale-run-proof/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9
+          overwrite: false
