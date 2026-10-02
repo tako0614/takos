@@ -664,6 +664,8 @@ describe("authenticated owner session file adapter", () => {
     const linked = join(root, "linked-session");
     await chmod(root, 0o700);
     await writeFile(real, "A2345678901234567890_session\n", { mode: 0o644 });
+    // A restrictive caller umask must not turn this deliberately invalid fixture into 0600.
+    await chmod(real, 0o644);
     const pinnedFetchImpl = (() => {
       throw new Error("fetch must not run");
     }) as never;

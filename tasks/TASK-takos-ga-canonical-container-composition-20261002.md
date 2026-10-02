@@ -4,6 +4,8 @@ Status: the local harness is implemented. Canonical initial-admission diagnostic
 passed, but one guided full recovery/usage trial failed after actual replacement
 bootstrap. Portable gate, commit and CI evidence are recorded in PR126 and the
 dedicated handoff; they do not qualify the failed combined trial.
+An independent notification preference persistence defect found during the next
+bounded observation has been fixed and verified separately, as described below.
 
 ## Problem and boundary
 
@@ -19,6 +21,8 @@ participants. Main owns shared Forms/Host/edge.sql contracts. This slice changes
 only Takos's local proof harness and documentation; it does not change production
 handlers, schema, auth grants, billing, engine/wrapper/image inputs or deployment.
 The original Takos checkout and engine candidate worktree are read-only.
+The later notification follow-up changes a Takos-owned production service and its
+regression tests; it does not alter common contracts or those protected inputs.
 
 ## Implementation and acceptance
 
@@ -84,6 +88,85 @@ After this trial, the supervisor was adjusted to read the independently saved
 native cleanup acknowledgement even when the child Run fails. This preserves the
 failed verdict while making cleanup evidence visible. The trial's source freeze
 and sealed raw report are not rewritten for this post-trial reporting change.
+
+## Subsequent TCP observation: failed, with a narrower transport finding
+
+One reviewed outside-source wrapper ran the unchanged opt-in native CLI with
+text-only, zero-payload SYN/FIN/RST capture on the fresh callback port. Exact fresh
+Docker identities and a pinned network namespace joined host and physical-agent
+views. This attempt failed in 123.334 seconds during the initial lease-7 config
+send, before tool execution or replacement. A matching host-origin RST arrived in
+the agent namespace about 0.1 milliseconds before the compiled agent's send error;
+the Worker recorded no config ingress. The Run was failed with zero usage.
+Both capture views reported zero dropped packets and were reaped, but only the
+initial physical agent existed. Thus the full diagnostic and native proof remain
+FAILED. All 60 raw files, original source/runtime and exact owned cleanup were
+preserved; prior successful and failed attempts were not overwritten.
+
+The packet filter excludes payload-bearing control packets. A host-source address
+does not identify the actor that closed/reset the socket. The actual native binary
+was the nested workerd 1.20260721.1, correcting the earlier root-install version
+assumption. Its corresponding public upstream source uses a five-second HTTP idle
+wait after a response; the reset was about 0.52 seconds after bootstrap success, so
+connection age alone does not establish idle expiration. Binary-to-upstream build
+attestation, request-local port and response Connection metadata remain absent.
+Next investigation must join socket ownership with the close/reset transition;
+no client pooling, timeout or shared-foundation cause fix is claimed.
+
+## Independent notification preference fix
+
+The failed trial also exposed a separate persistence bug: default preferences have
+nine types and three channels, and one six-column insert bound 162 parameters.
+Actual local Miniflare/workerd D1 rejects more than 100. The service caught default
+creation failure and returned fallback choices, hiding missing persisted settings;
+a fresh full preference update could fail. This warning occurred after the agent
+transport error and is not claimed to explain that error.
+
+Both creation paths now split inserts into at most 15 rows / 90 parameters and use
+the existing atomic statement helper. Unsupported persisted push types are also
+disabled in bounded atomic updates. Existing opt-outs, account-row predicates,
+supported push taxonomy and the original creation atomicity remain. Fixture
+account rows test data isolation; they do not define multiple instance owners or
+remove external participants. No schema, auth, grants, new billing, shared
+edge.sql contract, image or deploy changes are involved.
+
+The old production service was frozen and reproduced RED on actual local D1:
+the 101-parameter canary failed and only the previously seeded 1 of 27 choices
+persisted. The unchanged fixed production service then passed a separate 13.703-
+second native D1 proof: all 27 defaults and a full fresh update persisted, repeated
+reads preserved an opt-out and unrelated fixture row, 110 unsupported legacy push
+rows were disabled, and injected failure in the second insert left zero partial
+rows for both creation paths. Native D1 was disposed. Six portable regressions
+also cover the bounded writes, preserved settings and late-insert rollback.
+RED/GREEN raw files and source freezes are sealed separately. This qualifies local
+notification persistence, not cloud D1, auth, sending, Run recovery or usage.
+
+Independent source/evidence review accepted this notification fix. The first new
+required product check ran 1695 tests: 1692 passed, with one permissive-session
+fixture failure and two existing native 70-second watchdog failures. The deliberately
+invalid session fixture had inherited umask 077 and become a valid 0600 file;
+explicit chmod to 0644 now makes that rejection test deterministic, with all 15
+focused tests passing under umask 077 and independent review. Production auth and
+grants are unchanged. Native proof deadlines and success predicates are unchanged.
+
+A second check retained CPU niceness and two build jobs while removing the prior
+best-effort disk priority. It also failed: HTTP schema admission remained pending
+at 101/106 after two allowed post-release requests, the notifier guard hit its
+internal deadline, and usage schema admission remained pending at 93/106 after two
+allowed requests. A 17:02 UTC host snapshot showed IO pressure full avg10 85.96%,
+with CPU/memory pressure approximately zero and ample disk space. These are
+environment observations, not proof that IO scheduling caused every failure.
+The second check completed with 1691 passed and four failed out of 1695 tests /
+262 files; the fourth failure was the stale Run proof's unchanged 70-second bound.
+Neither check is a new complete-gate success. Failed attempts are preserved
+separately from the six focused and isolated native notification successes, and
+from the earlier verified 871b9ee05 / CI37028181674. No further whole-check retry
+or relaxed schema admission/deadline is used to manufacture a passing result.
+The unexecuted later gate stages were invoked separately: architecture validation
+and pinned-engine Rust format/check/clippy/tests/production binary build passed,
+but the compiled Worker recovery fixture timed out during its full SQLite
+migration/seed after the existing 150-second bound, before either agent ran.
+This is also a failed recovery attempt, not a new compiled-recovery success.
 
 ## Remaining limits
 
