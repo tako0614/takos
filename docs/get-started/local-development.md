@@ -202,6 +202,11 @@ imageにrevision labelが無ければsource commitはoperatorが指定した情�
 
 同じRunのtool成功ACK喪失、実Container交換、pending checkpoint再送、重複effect防止、
 両agent停止後の最初の使用量投影、成功usage ACK喪失、実due時刻でのcold retry、idleを検証します。
+旧Containerの物理停止後、fixtureはそのRunのheartbeatだけをstale時刻へ変更します。
+実scheduled入口がQueueへ再送し、native Queue consumerがservice UUIDと新leaseを取得します。
+実Service Bindingを通るexecutor Hostがpool slotを選び、dispatch receipt、D1、公開callback、
+DOと物理Containerのidentityを照合します。fixtureによるlease CASやreplacementの手動dispatchは使いません。
+pool revisionはこのRun固有で、terminal Runへのnative Queue重複配送が再起動しないことも検査します。
 Container.destroyの実ACKと物理identityを確認し、残るproxyはこの試験で新規作成した
 同じRun/DO/imageのIDだけを再inspectして停止します。既存Containerを保持し、所有する
 process groupの終了、source/runtime不変、厳格な数量・authority照合まで成功条件に含めます。
@@ -212,6 +217,19 @@ process groupの終了、source/runtime不変、厳格な数量・authority照�
 期限超過は非zero終了になり、mockへのfallbackやskipによって成功にはしません。
 Dockerを伴う試験は通常のportable gateには追加していません。
 
-これはfixture限定のlease CASによるローカル復旧の証拠です。production cron/Queueによる
-stale Run回収、whole workerd restart、hosted OIDC/MFA、公開imageのprovenance、Host lifecycle、
+初期接続の調査では `--diagnostic-container-transport` を追加できます。省略時の生成Workerは
+通常のfixtureと同じ内容です。指定時はproduction Container classを継承し、既存imageの
+`RUST_LOG=takos_agent=info,reqwest=debug,hyper_util=debug` だけを追加します。各agentの
+admission直後に、fresh Run/DO/image/physical IDを再inspectしたread-only Dockerログを
+専用directoryへmode0600で保存します。ログは各stream最大4MiB、読取は5秒までとし、
+早いsnapshotにDEBUGが無い場合は、既存deadline内のbootstrap成功観測後、またはreplacementの
+terminal応答後に同じphysical IDを一度だけ再取得します。両agentのDEBUG記録・byte数・SHA256を
+成功条件に含めます。失敗時もcleanup前に現在の
+agentのsnapshotを試み、取得できなければ診断errorを別記します。削除済み旧agentのログは
+捏造しません。DEBUGとsnapshotによるtiming差は結果に記録し、この試験の成功だけで
+以前の通信エラーの原因や通常設定での動作を確定しません。私有ログをpublic repoへcommitしません。
+
+native scheduled呼び出し用に`service_binding_extra_handlers`を追加した実compatibility flagsと、
+Wranglerの元flagsを区別して記録します。heartbeatの時刻変更は試験のstale条件であり、
+実際に5分以上停止した証拠ではありません。whole workerd restart、hosted OIDC/MFA、公開imageのprovenance、Host lifecycle、
 全instanceの一貫したbackup/restoreは別の検証が必要です。

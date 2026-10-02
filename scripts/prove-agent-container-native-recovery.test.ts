@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { createNativeProofEvidenceDirectory, parseNativeContainerProofArgs } from "./lib/native-container-proof-options.ts";
-import { assertFreshInspection, assertNativeRecoveryWitnesses, fixtureContainerName, selectOwnedStops, type DockerCandidate, type NativeContainerWitness } from "./lib/native-container-proof-ownership.ts";
+import { assertFreshInspection, assertNativeRecoveryWitnesses, fixtureContainerName, nativeRecoveryPoolContainerId, selectOwnedStops, type DockerCandidate, type NativeContainerWitness } from "./lib/native-container-proof-ownership.ts";
 import { qualifyOwnedProcessGroup, type ProcessWitness } from "./lib/native-container-proof-process.ts";
 
 const root = resolve(import.meta.dir, "..");
@@ -33,6 +33,14 @@ test("requires explicit image/source/manifest/sidecar identity and refuses malfo
   for (const change of malformed) {
     assert.throws(() => parseNativeContainerProofArgs(argv({ ...values(root), ...change }), root));
   }
+});
+
+test("diagnostic transport logging is opt-in and refuses duplicate or valued toggles", () => {
+  const args = argv(values(root));
+  assert.equal(parseNativeContainerProofArgs(args, root).diagnosticContainerTransport, false);
+  assert.equal(parseNativeContainerProofArgs(["--diagnostic-container-transport", ...args], root).diagnosticContainerTransport, true);
+  assert.throws(() => parseNativeContainerProofArgs([...args, "--diagnostic-container-transport", "--diagnostic-container-transport"], root));
+  assert.throws(() => parseNativeContainerProofArgs([...args, "--diagnostic-container-transport", "false"], root));
 });
 
 test("refuses another checkout/output root, relative paths and ambiguous callback authority", () => {
@@ -87,6 +95,19 @@ const agent: DockerCandidate = { id: "1".repeat(64), name, imageId: ownership.ag
 const proxy: DockerCandidate = { id: "2".repeat(64), name: name + "-proxy", imageId: ownership.sidecarImageId, imageReference: ownership.sidecarImage, running: true, pid: 124 };
 const select = (candidates: DockerCandidate[], changes: Partial<typeof ownership> = {}) => selectOwnedStops({ ...ownership, candidates, ...changes });
 const inspection = (value: DockerCandidate) => ({ Id: value.id, Name: value.name, Image: value.imageId, Config: { Image: value.imageReference }, State: { Running: true, Pid: value.pid } });
+
+test("pool cleanup accepts only the isolated revision for the witnessed Run", () => {
+  const containerId = nativeRecoveryPoolContainerId(witness.runId);
+  const pooled = { ...witness, containerId };
+  assert.equal(containerId, "tier1-warm-0-11111111-2222-3333-4444-555555555555");
+  assert.equal(fixtureContainerName(pooled, ownership.agentImage, ownership.agentImageId), name);
+  assert.deepEqual(select([agent, proxy], { witness: pooled }).map((value) => value.id), [agent.id, proxy.id]);
+  for (const foreignId of ["tier1-warm-0", "tier1-warm-1-11111111-2222-3333-4444-555555555555",
+    "tier1-warm-0-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]) {
+    assert.throws(() => select([agent, proxy], { witness: { ...witness, containerId: foreignId } }), /physical-slot identity/u);
+  }
+  assert.throws(() => nativeRecoveryPoolContainerId("run_foreign"), /Run identity/u);
+});
 
 test("selects only a fresh agent and exact pinned proxy while another Run is untouched", () => {
   const unrelated = { ...proxy, id: "3".repeat(64), name: "/another-DO-proxy" };
@@ -204,7 +225,7 @@ test("the real native child rejects a different parent source snapshot before bu
         manifestDigest: options.expectedManifestDigest, configDigest: digest, platform: "linux/amd64",
         imageUser: "takos", imageWorkdir: "/app", imageCmd: ["/usr/local/bin/takos-agent"],
         layerDigests: [digest], rootfsDiffIds: [digest] },
-      sourceHashesBefore: { "package.json": "0".repeat(64) } };
+      sourceHashesBefore: { "package.json": "0".repeat(64) }, containersBefore: [] };
     const configPath = join(temporaryRoot, "controller-config.json");
     await writeFile(configPath, JSON.stringify(config));
     await assert.rejects(execFile(node, [join(root, "scripts/lib/native-container-recovery-controller.mjs"), configPath],

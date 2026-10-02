@@ -276,7 +276,13 @@ export function createFirstProjectorRunNotifier(productionClass) {
           producer?.publicWorkerWaitUntilActive === 0 &&
           producer?.publicWorkerWaitUntilRejected === 0 &&
           producer?.publicWorkerWaitUntilSynchronousThrows === 0 &&
-          producer?.afterArmControlEntries === 0, 'PRODUCER_NOT_STOPPED');
+          producer?.afterArmControlEntries === 0 &&
+          producer?.backgroundActive === 0 &&
+          producer?.executorHostActive === 0 &&
+          producer?.backgroundErrors === 0 &&
+          producer?.backgroundWaitUntilActive === 0 &&
+          producer?.backgroundWaitUntilRejected === 0 &&
+          producer?.backgroundWaitUntilSynchronousThrows === 0, 'PRODUCER_NOT_STOPPED');
         this.assertIdle({ specialSelf: 1 });
         requireProof(await this.readMarker(ARM_KEY) === null &&
           await this.readMarker(FAULT_KEY) === null, 'ALREADY_ARMED');

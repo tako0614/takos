@@ -64,7 +64,7 @@ async function main() {
   ensure(process.platform === "linux" && process.version === "v26.1.0" && typeof globalThis.Bun === "undefined",
     "native proof requires the pinned Linux Node26.1.0 host");
   await createNativeProofEvidenceDirectory(options);
-  const record = { startedAt: new Date().toISOString(), qualified: false, scope: "local native two-Container checkpoint/tool-ACK recovery and executor-stopped first usage projection/lost successful usage ACK/real-due cold retry/idle; fixture lease-CAS only", options, outerDeadlineMs: outerMs, observedGroupMembers: {}, dockerSnapshots: [] };
+  const record = { diagnosticTransport: { enabled: options.diagnosticContainerTransport, timingPerturbation: options.diagnosticContainerTransport }, startedAt: new Date().toISOString(), qualified: false, scope: "local canonical scheduled/native Queue/real Host Service Binding two-Container checkpoint/tool-ACK recovery and executor-stopped first usage projection/lost successful usage ACK/real-due cold retry/idle; fixture heartbeat ageing only", options, outerDeadlineMs: outerMs, observedGroupMembers: {}, dockerSnapshots: [] };
   const reportPath = join(options.outputDir, "supervisor-result.json");
   const save = async () => writeFile(reportPath, JSON.stringify(record, null, 2) + "\n");
   const dockerConfig = join(options.outputDir, "docker-config");
@@ -132,6 +132,7 @@ async function main() {
     record.dockerImageId = image.Id;
     record.sidecarImageId = sidecar.Id;
     record.containersBefore = await allIds();
+    childOptions.containersBefore = record.containersBefore;
     record.candidatesBefore = await dockerCandidates();
     ensure(!record.candidatesBefore.some((value) => value.imageId === image.Id && value.running), "selected agent image is already running; native proof not started");
     record.sourceCommit = (await command("git", ["rev-parse", "HEAD"])).trim();
@@ -219,8 +220,39 @@ async function main() {
         snapshot.sha256 === record.parentSourceSnapshot.sha256,
         "native child full source-map readback differs from its supervisor");
     }
+    ensure(record.nativeReport.diagnosticContainerTransport === options.diagnosticContainerTransport &&
+      record.nativeReport.sourceState?.diagnosticContainerTransport === options.diagnosticContainerTransport,
+      "native diagnostic transport provenance differs from explicit options");
+    record.diagnosticTransport = { enabled: options.diagnosticContainerTransport,
+      timingPerturbation: options.diagnosticContainerTransport,
+      limitation: record.nativeReport.sourceState?.diagnosticTransportLimitation ?? null };
+    if (options.diagnosticContainerTransport) {
+      const captures = record.nativeReport.transportLogCaptures;
+      const phases = new Set(["initial-admission", "initial-bootstrap", "replacement-admission", "replacement-terminal"]);
+      ensure(Array.isArray(captures) && captures.length >= 2 && captures.length <= 4 &&
+        new Set(captures.map((value) => value.phase)).size === captures.length &&
+        captures.every((value) => phases.has(value.phase)), "unexpected diagnostic capture phases");
+      for (const [prefix, witness] of [["initial", record.nativeReport.containerWitness],
+        ["replacement", record.nativeReport.replacementContainerWitness]]) {
+        const roleCaptures = captures.filter((value) => value.phase.startsWith(`${prefix}-`));
+        ensure(roleCaptures.some((value) => value.phase === `${prefix}-admission`) &&
+          roleCaptures.some((value) => value.debugLines > 0) &&
+          roleCaptures.every((value) => value.physicalId === witness?.dockerContainers?.[0]?.id &&
+            value.runId === witness.runId && value.containerId === witness.containerId &&
+            value.durableObjectId === witness.durableObjectId && !record.containersBefore.includes(value.physicalId)),
+          "diagnostic proof lacks bounded DEBUG logs for both exact physical agents");
+      }
+      for (const capture of captures) for (const stream of [capture.stdout, capture.stderr]) {
+        ensure(stream.path === join(nativeDir, `${capture.phase}-agent.${stream === capture.stdout ? "stdout" : "stderr"}.log`),
+          "diagnostic log path differs from its owned evidence directory");
+        const bytes = await readFile(stream.path);
+        ensure(bytes.length === stream.bytes && bytes.length <= 4 * 1024 * 1024 && hash(bytes) === stream.sha256,
+          "diagnostic agent log readback differs or exceeds bound");
+      }
+      record.diagnosticTransport.logsVerified = true;
+    }
     record.sourceIdentityLinked = true;
-    record.nativePassed = record.controllerExit.code === 0 && record.nativeReport.status === "passed" && record.nativeReport.result === "LOCAL_CANONICAL_CONTAINER_FIRST_PROJECTOR_LOST_ACK_COLD_RETRY_PROBE_OK";
+    record.nativePassed = record.controllerExit.code === 0 && record.nativeReport.status === "passed" && record.nativeReport.result === "LOCAL_CANONICAL_QUEUE_CONTAINER_FIRST_PROJECTOR_LOST_ACK_COLD_RETRY_PROBE_OK";
   } catch (error) {
     record.error = { name: error.name, message: error.message, stack: error.stack, stdout: error.stdout, stderr: error.stderr };
   } finally {
@@ -235,6 +267,10 @@ async function main() {
     }
     stdout?.end();
     stderr?.end();
+    // A failed Run still has an independently written native cleanup result.
+    // Preserve its acknowledgement without replacing the failed Run verdict.
+    try { record.nativeCleanup ??= await readJson(join(nativeDir, "native-container-cleanup.json")); }
+    catch (error) { if (error.code !== "ENOENT") record.nativeCleanupReadbackError = String(error); }
     try {
       if (record.containersBefore) {
         const witnesses = [];
@@ -283,7 +319,7 @@ async function main() {
         beforeIds: new Set(record.containersBefore), agentImage: options.image, agentImageId: record.dockerImageId });
       record.physicalWitnessQualified = true;
     } catch (error) { record.physicalWitnessError = String(error); }
-    record.qualified = !record.error && !record.interrupted && !record.groupCleanupError && !record.cleanupOrReadbackError && record.nativePassed === true && record.nativeCleanupAcknowledged === true && record.physicalWitnessQualified === true && record.sourceIdentityLinked === true && record.sourceBytesUnchanged === true && record.runtimeBytesUnchanged === true && Object.keys(record.groupMembersAfter ?? { absent: true }).length === 0;
+    record.qualified = !record.error && !record.nativeCleanupReadbackError && !record.interrupted && !record.groupCleanupError && !record.cleanupOrReadbackError && record.nativePassed === true && record.nativeCleanupAcknowledged === true && record.physicalWitnessQualified === true && record.sourceIdentityLinked === true && record.sourceBytesUnchanged === true && record.runtimeBytesUnchanged === true && Object.keys(record.groupMembersAfter ?? { absent: true }).length === 0;
     record.finishedAt = new Date().toISOString();
     await save();
   }

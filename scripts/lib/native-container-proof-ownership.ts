@@ -27,9 +27,17 @@ function ensure(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+export function nativeRecoveryPoolContainerId(runId: string): string {
+  ensure(new RegExp(`^run_${uuid}$`, "u").test(runId), "invalid fresh controller Run identity");
+  // The fixture configures one tier-1 slot and a UUID pool revision. The real
+  // host still chooses the slot and must return this exact isolated receipt.
+  return `tier1-warm-0-${runId.slice(4)}`;
+}
+
 export function fixtureContainerName(witness: NativeContainerWitness, agentImage: string, agentImageId: string): string {
   ensure(new RegExp(`^run_${uuid}$`, "u").test(witness?.runId ?? ""), "invalid fresh controller Run identity");
-  ensure(new RegExp(`^container_${uuid}$`, "u").test(witness?.containerId ?? ""), "invalid fresh physical-slot identity");
+  ensure(new RegExp(`^container_${uuid}$`, "u").test(witness?.containerId ?? "") ||
+    witness.containerId === nativeRecoveryPoolContainerId(witness.runId), "invalid fresh physical-slot identity");
   ensure(hex64.test(witness?.durableObjectId ?? ""), "invalid native DO identity");
   ensure(imageId.test(agentImageId) && witness.imageTag === agentImage && witness.dockerImageId === agentImageId,
     "controller image witness differs from inspected artifact");

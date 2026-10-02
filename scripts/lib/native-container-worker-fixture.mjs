@@ -1,37 +1,57 @@
-// Staged native proof Worker source factory; install at scripts/lib only after review.
 import { resolve } from 'node:path';
 
-export function createNativeContainerWorkerFixture({ root, run, controllerToken, observerNonce }) {
+export function createNativeContainerWorkerFixture({ root, run, controllerToken, observerNonce, diagnosticContainerTransport = false }) {
   const importPath = (path) => JSON.stringify(resolve(root, path));
   return `import webWorker, { SessionDO } from ${importPath('src/worker/web.ts')};
-import executorHostHandler, { ExecutorContainerTier1 } from ${importPath('src/worker/runtime/container-hosts/executor-host.ts')};
+import production from ${importPath('src/worker/index.ts')};
+import executorHostHandler${diagnosticContainerTransport ? ', { ExecutorContainerTier1 as ProductionExecutorContainerTier1 }' : ', { ExecutorContainerTier1 }'} from ${importPath('src/worker/runtime/container-hosts/executor-host.ts')};
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import { FirstProjectorRunNotifier as RunNotifierDO } from ${importPath('scripts/lib/native-first-projector-fixture.mjs')};
 import { trackNativeStateWaitUntil } from ${importPath('scripts/lib/native-owned-work-tracker.mjs')};
 import { ensureSchemaReady } from ${importPath('src/worker/platform/migrations/schema-gate.ts')};
 import { dispatchRunUsageProjectionOutbox } from ${importPath('src/worker/application/services/app-usage/run-projection-outbox.ts')};
 import { captureCheckpointWitness, assertCheckpointUnchanged } from ${importPath('scripts/lib/native-recovery-checkpoint-witness.mjs')};
-export { SessionDO, ExecutorContainerTier1, RunNotifierDO };
+${diagnosticContainerTransport ? `export { SessionDO, RunNotifierDO };
+export class ExecutorContainerTier1 extends ProductionExecutorContainerTier1 {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.envVars = { ...this.envVars, RUST_LOG: 'takos_agent=info,reqwest=debug,hyper_util=debug' };
+  }
+}` : 'export { SessionDO, ExecutorContainerTier1, RunNotifierDO };'}
 const expectedRunId = ${JSON.stringify(run.runId)};
 const expectedContainerId = ${JSON.stringify(run.containerId)};
 const replacementContainerId = ${JSON.stringify(run.newContainerId)};
 const oldServiceId = ${JSON.stringify(run.serviceId)};
-const replacementServiceId = ${JSON.stringify(run.newServiceId)};
 const ownerId = ${JSON.stringify(run.ownerId)};
 const workspaceId = ${JSON.stringify(run.workspaceId)};
 const threadId = ${JSON.stringify(run.threadId)};
 const checkpointExpected = { runId: expectedRunId, serviceId: oldServiceId, leaseVersion: 7,
   pendingToolCallId: 'call-recovery-1', usage: { inputTokens: 11, outputTokens: 3, cachedInputTokens: 2 } };
 let firstToolSeen = false, capturedOldBearer = null, recoveryState = null;
-let replacementDestroyed = false, workerPublicFetchActive = 0, usageArmRequested = false, afterArmControlEntries = 0;
+let replacementServiceId = null;
+let replacementDestroyed = false, workerPublicFetchActive = 0, usageArmRequested = false,
+  afterArmControlEntries = 0, recoveryHeartbeatAged = false;
 const nativeWorkerDeferred = [];
+const nativeHostDeferred = [];
+const nativeBackgroundDeferred = [];
+const emitted = [], hostDispatches = [], acknowledgements = [];
+let duplicateRecoverySent = false, backgroundActive = 0, executorHostActive = 0;
+const backgroundErrors = [];
 function workerProducers() {
   const snapshots = nativeWorkerDeferred.map((entry) => entry.snapshot());
+  const backgroundSnapshots = [...nativeHostDeferred, ...nativeBackgroundDeferred].map((entry) => entry.snapshot());
   return { oldContainerStopped: recoveryState?.nativeDestroyAcknowledged === true,
     replacementContainerStopped: replacementDestroyed,
     publicWorkerFetchActive: workerPublicFetchActive,
     publicWorkerWaitUntilActive: snapshots.reduce((sum, value) => sum + value.active, 0),
     publicWorkerWaitUntilRejected: snapshots.reduce((sum, value) => sum + value.rejected, 0),
     publicWorkerWaitUntilSynchronousThrows: snapshots.reduce((sum, value) => sum + value.synchronousThrows, 0),
+    backgroundActive, executorHostActive,
+    backgroundWaitUntilActive: backgroundSnapshots.reduce((sum, value) => sum + value.active, 0),
+    backgroundWaitUntilRejected: backgroundSnapshots.reduce((sum, value) => sum + value.rejected, 0),
+    backgroundWaitUntilSynchronousThrows: backgroundSnapshots.reduce((sum, value) => sum + value.synchronousThrows, 0),
+    backgroundErrors: backgroundErrors.length,
+    backgroundErrorDetails: [...backgroundErrors],
     afterArmControlEntries };
 }
 async function trackedWebFetch(request, env, ctx) {
@@ -41,6 +61,82 @@ async function trackedWebFetch(request, env, ctx) {
 }
 const recoveryToolAttempts = [], replacementCheckpointSaves = [];
 function requireValue(value, detail) { if (!value) throw new Error(detail); }
+function rejectLateProducerEntry(label) {
+  if (!usageArmRequested) return;
+  afterArmControlEntries++;
+  const error = new Error('late ' + label + ' entry after first-usage arm');
+  backgroundErrors.push({ handler: label, error: error.message, stack: error.stack });
+  throw error;
+}
+async function snapshotRun(db) {
+  const run = await db.prepare('SELECT * FROM runs WHERE id=?').bind(expectedRunId).first();
+  const operations = (await db.prepare('SELECT * FROM tool_operations WHERE run_id=? ORDER BY id').bind(expectedRunId).all()).results;
+  const receipts = (await db.prepare("SELECT * FROM run_events WHERE run_id=? AND type='executor_dispatch_receipt' ORDER BY event_key").bind(expectedRunId).all()).results;
+  return { run, operations, receipts };
+}
+function wrappedQueue(env) {
+  const original = env.RUN_QUEUE;
+  return { ...env, RUN_QUEUE: Object.assign(Object.create(null), { send: async (body, options) => {
+    const beforeQueueSend = await snapshotRun(env.DB);
+    const item = { body: structuredClone(body), beforeQueueSend, accepted: false };
+    emitted.push(item);
+    try {
+      const receipt = await original.send(body, options);
+      item.accepted = true;
+      item.acceptedAt = new Date().toISOString();
+      if (receipt !== undefined) item.sendReceipt = receipt;
+      return receipt;
+    } catch (error) {
+      item.sendError = String(error);
+      throw error;
+    }
+  } }) };
+}
+function observeQueueBatch(batch) {
+  const messages = batch.messages.map((message) => ({
+    get body() { return message.body; },
+    get id() { return message.id; },
+    get timestamp() { return message.timestamp; },
+    get attempts() { return message.attempts; },
+    ack() {
+      acknowledgements.push({ messageId: message.id, runId: message.body?.runId,
+        action: 'ack', attempts: message.attempts ?? 1, options: null });
+      return Reflect.apply(message.ack, message, []);
+    },
+    retry(options) {
+      acknowledgements.push({ messageId: message.id, runId: message.body?.runId,
+        action: 'retry', attempts: message.attempts ?? 1, options: options ?? null });
+      return Reflect.apply(message.retry, message, [options]);
+    },
+  }));
+  return new Proxy(batch, {
+    get(target, property) {
+      if (property === 'messages') return messages;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+function canonicalEvidence(env) {
+  return { emitted, hostDispatches, acknowledgements, state: null,
+    backgroundActive, executorHostActive, backgroundErrors: backgroundErrors.length,
+    backgroundErrorDetails: [...backgroundErrors] };
+}
+async function withBackground(label, work) {
+  backgroundActive++;
+  try { return await work(); }
+  catch (error) {
+    backgroundErrors.push({ handler: label, error: String(error), stack: error instanceof Error ? error.stack : null });
+    throw error;
+  } finally { backgroundActive--; }
+}
+async function withTrackedBackground(label, ctx, work) {
+  rejectLateProducerEntry(label);
+  requireValue(nativeBackgroundDeferred.length < 512, 'owned background event counter capacity exceeded');
+  const deferred = trackNativeStateWaitUntil(ctx);
+  nativeBackgroundDeferred.push(deferred);
+  return await withBackground(label, () => work(deferred.state));
+}
 async function digest(value) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map((v) => v.toString(16).padStart(2, '0')).join('');
 }
@@ -52,7 +148,8 @@ function recoveryScalars() {
     operationKey: recoveryState.operationKey, productionToolStatus: recoveryState.productionToolStatus,
     toolResponseSha256: recoveryState.toolResponseSha256, nativeDestroyAcknowledged: recoveryState.nativeDestroyAcknowledged,
     successResponseForwarded: false, modelCallsAtDeath: recoveryState.modelCallsAtDeath,
-    reclaimed: recoveryState.reclaimed === true, leaseCas: recoveryState.leaseCas ?? null,
+    replacementServiceId,
+    reclaimed: recoveryState.reclaimed === true, leaseClaim: recoveryState.leaseClaim ?? null,
     replacementCheckpointLoad: recoveryState.replacementCheckpointLoad ?? null,
     toolAttempts: recoveryToolAttempts, replacementCheckpointSaves };
 }
@@ -65,6 +162,78 @@ const controlErrors = [];
 const modelInputs = [];
 let toolCatalog = null;
 function controller(request) { return request.headers.get('X-Probe-Controller-Token') === controllerToken; }
+export class NativeRecoveryExecutorHost extends WorkerEntrypoint {
+  async fetch(request) {
+    rejectLateProducerEntry('executor host');
+    executorHostActive++;
+    try {
+      const deferred = trackNativeStateWaitUntil(this.ctx);
+      requireValue(nativeHostDeferred.length < 512, 'owned executor-host invocation counter capacity exceeded');
+      nativeHostDeferred.push(deferred);
+      requireValue(request.method === 'POST' && new URL(request.url).pathname === '/dispatch' &&
+        request.headers.get('Content-Type') === 'application/json' &&
+        request.headers.get('Authorization') === null &&
+        request.headers.get('X-Takos-Executor-Tier') === null &&
+        request.headers.get('X-Takos-Executor-Container-Id') === null,
+      'canonical host request method, path, or headers were changed by the fixture');
+      const payload = await request.clone().json();
+      requireValue(payload && Object.keys(payload).sort().join(',') === 'leaseVersion,model,runId,serviceId,workerId' &&
+        payload.runId === expectedRunId && payload.workerId === payload.serviceId &&
+        typeof payload.serviceId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(payload.serviceId) &&
+        payload.leaseVersion === 8 && payload.model === 'gpt-local',
+      'canonical executor host request changed or contains fixture-only fields');
+      const beforeHost = await snapshotRun(this.env.DB);
+      beforeHost.artifacts = (await this.env.DB.prepare('SELECT * FROM artifacts WHERE run_id=? ORDER BY id').bind(expectedRunId).all()).results;
+      const row = beforeHost.run;
+      const authority = {
+        owner: await this.env.DB.prepare('SELECT id,type,status,owner_account_id FROM accounts WHERE id=?').bind(ownerId).first(),
+        workspace: await this.env.DB.prepare('SELECT id,type,status,owner_account_id FROM accounts WHERE id=?').bind(workspaceId).first(),
+        privateSettings: await this.env.DB.prepare('SELECT account_id,private_account FROM account_settings WHERE account_id=?').bind(workspaceId).first(),
+        thread: await this.env.DB.prepare('SELECT id,account_id FROM threads WHERE id=?').bind(threadId).first(),
+      };
+      beforeHost.authority = authority;
+      requireValue(row?.status === 'running' && row.service_id === payload.serviceId && row.lease_version === 8 &&
+        row.account_id === workspaceId && row.requester_account_id === ownerId && row.thread_id === threadId &&
+        row.engine_checkpoint === recoveryState?.stored && authority.owner?.id === ownerId &&
+        authority.workspace?.id === workspaceId && authority.workspace.owner_account_id === ownerId &&
+        authority.privateSettings?.private_account === 1 && authority.thread?.account_id === workspaceId,
+      'canonical host dispatch did not observe the actual claimed replacement Run');
+      await assertCheckpointUnchanged({ beforeStored: recoveryState.stored, beforeCapture: recoveryState.capture,
+        afterStored: row.engine_checkpoint, expected: checkpointExpected,
+        readObject: (key) => this.env.TAKOS_OFFLOAD.get(key) });
+      requireValue(beforeHost.operations.length === 1 && beforeHost.operations[0].status === 'completed' &&
+        beforeHost.operations[0].operation_key === recoveryState.operationKey &&
+        beforeHost.operations[0].tool_name === 'create_artifact' &&
+        JSON.stringify(beforeHost.operations[0]) === JSON.stringify(recoveryState.completedOperation) &&
+        JSON.stringify(beforeHost.operations[0].result_output) === JSON.stringify(recoveryState.completedOperation.result_output) &&
+        beforeHost.artifacts.length === 1 &&
+        JSON.stringify(beforeHost.artifacts[0]) === JSON.stringify(recoveryState.cachedArtifact),
+      'canonical host dispatch lost the completed cached create_artifact operation');
+      requireValue(replacementServiceId === null && recoveryState.reclaimed !== true,
+        'a replacement service identity was observed before the actual canonical Run claim');
+      replacementServiceId = payload.serviceId;
+      recoveryState.reclaimed = true;
+      recoveryState.leaseClaim = { fromLease: 7, toLease: 8, oldServiceId,
+        newServiceId: replacementServiceId, origin: 'canonical scheduled and Queue' };
+      const response = await executorHostHandler.fetch(request, this.env, deferred.state);
+      const responseBodyText = await response.clone().text();
+      let responseBody;
+      try { responseBody = JSON.parse(responseBodyText); }
+      catch { responseBody = null; }
+      const item = { request: payload, beforeHost,
+        response: { status: response.status, body: responseBody, bodyText: responseBodyText,
+          containerReceipt: response.headers.get('X-Takos-Executor-Container-Id') } };
+      hostDispatches.push(item);
+      requireValue(response.ok && item.response.containerReceipt === replacementContainerId,
+        'actual canonical host did not choose the exact isolated warm-pool Container');
+      return response;
+    } catch (error) {
+      if (!backgroundErrors.some((entry) => entry.error === String(error) && entry.handler === 'executor host'))
+        backgroundErrors.push({ handler: 'executor host', error: String(error), stack: error instanceof Error ? error.stack : null });
+      throw error;
+    } finally { executorHostActive--; }
+  }
+}
 export default {
   async fetch(request, env, ctx) {
     const path = new URL(request.url).pathname;
@@ -81,12 +250,19 @@ export default {
       }
       if (path === '/__probe/dispatch' && request.method === 'POST') {
         const body = await request.text();
+        const parsed = JSON.parse(body);
+        requireValue(parsed.runId === expectedRunId && parsed.executorContainerId === expectedContainerId &&
+          parsed.serviceId === oldServiceId && parsed.leaseVersion === 7,
+        'manual dispatch probe is reserved for the first old Container only');
         return await executorHostHandler.fetch(new Request('https://internal/dispatch', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
         }), env, ctx);
       }
       if (path === '/__probe/observation') return Response.json({ observation: controlObservation,
-        controlTrace, controlIngress, controlErrors, modelInputs, toolCatalog, recovery: recoveryScalars() });
+        controlTrace, controlIngress, controlErrors, modelInputs, toolCatalog, recovery: recoveryScalars(),
+        canonical: { ...canonicalEvidence(env), state: await snapshotRun(env.DB) } });
+      if (path === '/__probe/canonical-recovery') return Response.json({
+        ...canonicalEvidence(env), state: await snapshotRun(env.DB) });
       if (path === '/__probe/run-status') {
         // Fixture-only readback of this exact Run. Production control callbacks
         // and completion still pass through the real public Worker unchanged.
@@ -105,6 +281,9 @@ export default {
         requireValue(producer.oldContainerStopped && producer.replacementContainerStopped &&
           producer.publicWorkerFetchActive === 0 && producer.publicWorkerWaitUntilActive === 0 &&
           producer.publicWorkerWaitUntilRejected === 0 && producer.publicWorkerWaitUntilSynchronousThrows === 0 &&
+          producer.backgroundActive === 0 && producer.executorHostActive === 0 &&
+          producer.backgroundWaitUntilActive === 0 && producer.backgroundWaitUntilRejected === 0 &&
+          producer.backgroundWaitUntilSynchronousThrows === 0 && producer.backgroundErrors === 0 &&
           producer.afterArmControlEntries === 0 && !usageArmRequested, 'actual Worker producer quiescence not proven');
         usageArmRequested = true;
         try { return await env.RUN_NOTIFIER.getByName(expectedRunId).fetch(new Request('http://internal/__first-proof/arm', {
@@ -129,9 +308,10 @@ export default {
         const text = await response.text();
         return Response.json({ status: response.status, leaseLost: text.includes('Lease lost') });
       }
-      if (path === '/__probe/reclaim' && request.method === 'POST') {
-        requireValue(recoveryState?.nativeDestroyAcknowledged && !recoveryState.reclaimed && modelInputs.length === 1,
-          'fixture reclaim cannot run before old Container death or twice');
+      if (path === '/__probe/age-recovery' && request.method === 'POST') {
+        requireValue(recoveryState?.nativeDestroyAcknowledged && !recoveryState.reclaimed &&
+          !recoveryHeartbeatAged && modelInputs.length === 1,
+          'heartbeat aging requires the verified old Container death and cannot run twice');
         const before = await env.DB.prepare('SELECT * FROM runs WHERE id=?').bind(expectedRunId).first();
         requireValue(before?.status === 'running' && before.service_id === oldServiceId && before.lease_version === 7 &&
           before.account_id === workspaceId && before.requester_account_id === ownerId && before.thread_id === threadId &&
@@ -139,22 +319,29 @@ export default {
         await assertCheckpointUnchanged({ beforeStored: recoveryState.stored, beforeCapture: recoveryState.capture,
           afterStored: before.engine_checkpoint, expected: checkpointExpected,
           readObject: (key) => env.TAKOS_OFFLOAD.get(key) });
-        const now = new Date().toISOString();
-        const updated = await env.DB.prepare('UPDATE runs SET service_id=?,lease_version=8,service_heartbeat=? WHERE id=? AND status=? AND service_id=? AND lease_version=7 AND account_id=? AND requester_account_id=? AND thread_id=? AND engine_checkpoint=?')
-          .bind(replacementServiceId, now, expectedRunId, 'running', oldServiceId, workspaceId, ownerId, threadId, recoveryState.stored).run();
-        requireValue(updated.meta?.changes === 1, 'exact fixture lease CAS did not affect one row');
+        const staleHeartbeat = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+        const updated = await env.DB.prepare('UPDATE runs SET service_heartbeat=? WHERE id=? AND status=? AND service_id=? AND lease_version=7 AND account_id=? AND requester_account_id=? AND thread_id=? AND engine_checkpoint=?')
+          .bind(staleHeartbeat, expectedRunId, 'running', oldServiceId, workspaceId, ownerId, threadId, recoveryState.stored).run();
+        requireValue(updated.meta?.changes === 1, 'exact fixture heartbeat aging did not affect one row');
         const after = await env.DB.prepare('SELECT * FROM runs WHERE id=?').bind(expectedRunId).first();
-        requireValue(after?.service_id === replacementServiceId && after.lease_version === 8 && after.service_heartbeat === now,
-          'fixture replacement lease readback failed');
-        for (const key of Object.keys(before)) if (!['service_id','lease_version','service_heartbeat'].includes(key))
+        requireValue(after?.service_id === oldServiceId && after.lease_version === 7 && after.service_heartbeat === staleHeartbeat,
+          'heartbeat aging changed the Run owner or lease');
+        for (const key of Object.keys(before)) if (key !== 'service_heartbeat')
           requireValue(JSON.stringify(before[key]) === JSON.stringify(after[key]), 'fixture CAS altered an unrelated persisted Run field');
         await assertCheckpointUnchanged({ beforeStored: recoveryState.stored, beforeCapture: recoveryState.capture,
           afterStored: after.engine_checkpoint, expected: checkpointExpected,
           readObject: (key) => env.TAKOS_OFFLOAD.get(key) });
-        recoveryState.reclaimed = true;
-        recoveryState.leaseCas = { changedRows: 1, fromLease: 7, toLease: 8, oldServiceId,
-          newServiceId: replacementServiceId, origin: 'fixture CAS; production cron/Queue reclaim unqualified' };
-        return Response.json({ reclaimed: true, checkpoint: recoveryState.capture.witness, leaseCas: recoveryState.leaseCas });
+        recoveryHeartbeatAged = true;
+        return Response.json({ aged: true, checkpoint: recoveryState.capture.witness,
+          before, after,
+          staleEligibility: 'accelerated fixture heartbeat aging: six minutes old for canonical scheduled and Queue stale-recovery gates' });
+      }
+      if (path === '/__probe/duplicate-recovery' && request.method === 'POST') {
+        requireValue(!duplicateRecoverySent && emitted.length > 0 && emitted[0].body?.runId === expectedRunId,
+          'duplicate recovery requires one recorded original canonical scheduled message and is one-shot');
+        duplicateRecoverySent = true;
+        await wrappedQueue(env).RUN_QUEUE.send(structuredClone(emitted[0].body));
+        return Response.json({ accepted: true, runId: expectedRunId, duplicateCount: 1 });
       }
       if (path === '/__probe/identity-new') return Response.json({
         runId: expectedRunId, containerId: replacementContainerId,
@@ -211,7 +398,10 @@ export default {
     const isOwnedControl = path.startsWith('/api/internal/v1/agent-control/') &&
       request.headers.get('X-Takos-Run-Id') === expectedRunId;
     if (isOwnedControl) {
-      if (usageArmRequested) afterArmControlEntries++;
+      if (usageArmRequested) {
+        afterArmControlEntries++;
+        throw new Error('late public control entry after first-usage arm');
+      }
       const entry = { path, method: request.method, at: new Date().toISOString(),
         containerId: request.headers.get('X-Takos-Executor-Container-Id'),
         tokenPresented: request.headers.get('Authorization')?.startsWith('Bearer ') === true };
@@ -281,7 +471,7 @@ export default {
         const withheldAckWork = Promise.resolve().then(async () => {
         const row = await env.DB.prepare('SELECT * FROM runs WHERE id=?').bind(expectedRunId).first();
         const ops = (await env.DB.prepare('SELECT run_id,operation_key,tool_name,status FROM tool_operations WHERE run_id=?').bind(expectedRunId).all()).results;
-        const effects = (await env.DB.prepare('SELECT run_id,account_id,title,content FROM artifacts WHERE run_id=?').bind(expectedRunId).all()).results;
+        const effects = (await env.DB.prepare('SELECT * FROM artifacts WHERE run_id=? ORDER BY id').bind(expectedRunId).all()).results;
         requireValue(row?.status === 'running' && row.service_id === oldServiceId && row.lease_version === 7 &&
           row.account_id === workspaceId && row.requester_account_id === ownerId && row.thread_id === threadId &&
           row.completion_key === null && ops.length === 1 && ops[0].status === 'completed' &&
@@ -293,6 +483,8 @@ export default {
         recoveryState = { stage: 'tool-committed-before-ACK', stored: row.engine_checkpoint, capture,
           checkpointUpdatedAt: row.engine_checkpoint_updated_at,
           operationKey: toolRequest.idempotencyKey, productionToolStatus: response.status,
+          completedOperation: (await env.DB.prepare('SELECT * FROM tool_operations WHERE run_id=?').bind(expectedRunId).first()),
+          cachedArtifact: effects[0],
           toolResponseSha256: resultSha, nativeDestroyAcknowledged: false };
         // Request-local native destruction happens before any successful Response
         // can be returned to the compiled old executor. No cross-request barrier.
@@ -343,6 +535,14 @@ export default {
       };
     }
     return response;
+  },
+  async queue(batch, env, ctx) {
+    return await withTrackedBackground('queue', ctx,
+      (trackedCtx) => production.queue(observeQueueBatch(batch), wrappedQueue(env), trackedCtx));
+  },
+  async scheduled(controller, env, ctx) {
+    return await withTrackedBackground('scheduled', ctx,
+      (trackedCtx) => production.scheduled(controller, wrappedQueue(env), trackedCtx));
   },
 };
 `;

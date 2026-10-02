@@ -15,6 +15,8 @@ import { createNativeContainerWorkerFixture } from './native-container-worker-fi
 import { proveFirstProjector } from './native-first-projector-steps.mjs';
 import { createFirstProjectorObserver } from './native-first-projector-observer.mjs';
 import { assertDockerImageIdentity } from './oci-image-identity.ts';
+import { nativeRecoveryPoolContainerId } from './native-container-proof-ownership.ts';
+import { captureNativeContainerTransportLogs } from './native-container-transport-logs.mjs';
 
 const execFile = promisify(execFileCallback);
 const miniflareRequire = createRequire(import.meta.resolve('miniflare'));
@@ -36,11 +38,14 @@ async function fileSha(path) {
   return digest.digest('hex');
 }
 function makeCommand(root) {
-  return async (executable, args, timeout = 10_000) =>
-    execFile(executable, args, { cwd: root, encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024 });
+  return async (executable, args, timeout = 10_000, maxBuffer = 64 * 1024 * 1024) =>
+    execFile(executable, args, { cwd: root, encoding: 'utf8', timeout, maxBuffer });
 }
 function validateOptions(value) {
   const options = record(value, 'native child options');
+  assert(typeof options.diagnosticContainerTransport === 'boolean', 'diagnostic Container transport option must be boolean');
+  assert(Array.isArray(options.containersBefore) && options.containersBefore.every((id) => /^[a-f0-9]{64}$/u.test(id)),
+    'parent physical Container baseline is required');
   for (const path of ['root', 'bun', 'outputDir', 'layout'])
     assert(typeof options[path] === 'string' && isAbsolute(options[path]), `${path} must be absolute`);
   for (const name of ['reference', 'sourceCommit', 'expectedManifestDigest', 'image',
@@ -125,6 +130,10 @@ async function preflight(options, stages) {
     dirtyStatusSha256: createHash('sha256').update(dirtyStatus).digest('hex'),
     headMatchesImageSource: headCommit === options.sourceCommit,
     generatedFixtureIsRuntimeOnly: true,
+    diagnosticContainerTransport: options.diagnosticContainerTransport,
+    diagnosticTransportLimitation: options.diagnosticContainerTransport
+      ? 'RUST_LOG debug and bounded read-only Docker log snapshots alter timing; success does not establish the earlier config transport failure cause or uninstrumented behavior'
+      : null,
     provenanceClaim: 'current worktree and generated local fixture bytes; no reviewed commit artifact claim' };
   const imageInputs = [
     'containers/agent/Dockerfile', 'containers/agent/Cargo.toml',
@@ -155,6 +164,10 @@ async function preflight(options, stages) {
     'scripts/lib/native-recovery-checkpoint-witness.mjs',
     'scripts/lib/native-first-projector-observer.mjs',
     'scripts/lib/oci-image-identity.ts',
+    'scripts/lib/native-container-proof-ownership.ts',
+    'scripts/lib/native-container-transport-logs.mjs',
+    'src/worker/index.ts', 'src/worker/runtime/runner/cron-handler.ts',
+    'src/worker/runtime/runner/queue-handler.ts',
     'src/worker/web.ts', 'src/worker/runtime/container-hosts/executor-host.ts',
     'src/worker/runtime/container-hosts/container-runtime.ts',
     ...imageInputs, ...migrations.map((entry) => `db/migrations-control/migrations/${entry.name}`)];
@@ -320,11 +333,15 @@ async function waitForObservation(mf, request, deadline) {
 export async function runNativeContainerRecovery(inputOptions) {
   const options = validateOptions(inputOptions);
   const command = makeCommand(options.root);
-  await mkdir(options.outputDir); // EEXIST is intentional; never reuse native proof state.
+  const logCommand = (executable, args, timeout, maxBuffer) =>
+    execFile(executable, args, { cwd: options.root, encoding: 'buffer', timeout, maxBuffer });
+  await mkdir(options.outputDir, { mode: 0o700 }); // EEXIST is intentional; never reuse native proof state.
   const stages = [];
   const started = Date.now();
   let mf, successResult, failure, destroyOwnedContainer, diagnosticControllerToken, runtimeObserver, projectorObserver;
   const completionObservationAttempts = [];
+  const transportLogCaptures = [];
+  let activeContainerWitness;
   const reportPath = join(options.outputDir, 'result.json');
   const watchdog = setTimeout(() => {
     void writeFile(join(options.outputDir, 'failure.json'), JSON.stringify({
@@ -340,9 +357,9 @@ export async function runNativeContainerRecovery(inputOptions) {
       runId: `run_${randomUUID()}`, serviceId: `service_${randomUUID()}`,
       ownerId: `owner_${randomUUID()}`, workspaceId: `workspace_${randomUUID()}`,
       threadId: `thread_${randomUUID()}`, containerId: `container_${randomUUID()}`,
-      newContainerId: `container_${randomUUID()}`, newServiceId: `service_${randomUUID()}`,
       usageTrigger: `ga_run_usage_fence_${randomUUID().replaceAll("-", "")}`,
     };
+    run.newContainerId = nativeRecoveryPoolContainerId(run.runId);
     const controllerToken = randomUUID();
     diagnosticControllerToken = controllerToken;
     const observerNonce = randomUUID(); // Correlation only; never an auth credential.
@@ -354,7 +371,8 @@ export async function runNativeContainerRecovery(inputOptions) {
     const bundleDir = join(options.outputDir, 'bundle');
     const stateDir = join(options.outputDir, 'native-state');
     await mkdir(bundleDir);
-    await writeFile(fixturePath, createNativeContainerWorkerFixture({ root: options.root, run, controllerToken, observerNonce }));
+    await writeFile(fixturePath, createNativeContainerWorkerFixture({ root: options.root, run, controllerToken, observerNonce,
+      diagnosticContainerTransport: options.diagnosticContainerTransport }));
     const built = await buildFixture(options, fixturePath, bundleDir);
     stages.push({ stage: 'fixture-built', at: new Date().toISOString(), sha256: built.bundleSha256 });
     const bindings = {
@@ -372,12 +390,17 @@ export async function runNativeContainerRecovery(inputOptions) {
       FIRST_PROOF_TRIGGER: run.usageTrigger, FIRST_PROOF_TOKEN: controllerToken,
       ENVIRONMENT: 'development', OPENAI_API_KEY: modelKey,
       OPENAI_BASE_URL: `${options.callbackUrl}/v1`, LOCAL_PROOF_MODEL_KEY: modelKey,
+      EXECUTOR_TIER1_WARM_POOL_SIZE: '1', EXECUTOR_POOL_REVISION: run.runId.slice(4),
     };
+    const nativeFlags = [...new Set([...built.compatibility.flags, 'service_binding_extra_handlers'])];
+    const workerName = `canonical-container-${run.runId}`;
+    const queueName = `canonical-container-${run.runId}-runs`;
     mf = new Miniflare({
-      name: `canonical-container-${run.runId}`, modules: true,
+      name: workerName, modules: true,
       script: built.script, scriptPath: built.bundlePath,
       compatibilityDate: built.compatibility.date,
-      compatibilityFlags: built.compatibility.flags,
+      compatibilityFlags: nativeFlags,
+      serviceBindings: { EXECUTOR_HOST: { name: workerName, entrypoint: 'NativeRecoveryExecutorHost' } },
       handleRuntimeStdio(stdout, stderr) {
         // Public Miniflare hook; preserve raw diagnostics while reading only
         // this child's own response marker. Never close parent stdio on exit.
@@ -403,7 +426,8 @@ export async function runNativeContainerRecovery(inputOptions) {
       r2Persist: join(stateDir, 'r2'),
       kvNamespaces: { HOSTNAME_ROUTING: `canonical-container-kv-${run.runId}` },
       kvPersist: join(stateDir, 'kv'),
-      queueProducers: { RUN_QUEUE: `canonical-container-queue-${run.runId}` },
+      queueProducers: { RUN_QUEUE: queueName },
+      queueConsumers: { [queueName]: { maxBatchSize: 1, maxBatchTimeout: 1 } },
       queuePersist: join(stateDir, 'queue'),
     });
     destroyOwnedContainer = async () => {
@@ -479,13 +503,31 @@ export async function runNativeContainerRecovery(inputOptions) {
     await writeFile(join(options.outputDir, 'container-witness.json'), JSON.stringify({
       ...containerWitness, imageTag: options.image, dockerImageId: before.identity.dockerImageId,
     }, null, 2));
-    const observationResult = await waitForObservation(mf, request, Date.now() + phaseMs);
+    const admissionDeadline = Date.now() + phaseMs;
+    activeContainerWitness = { ...containerWitness, imageTag: options.image, dockerImageId: before.identity.dockerImageId };
+    if (options.diagnosticContainerTransport) transportLogCaptures.push(await captureNativeContainerTransportLogs({
+      witness: activeContainerWitness, beforeIds: new Set(options.containersBefore), agentImage: options.image,
+      agentImageId: before.identity.dockerImageId, outputDir: options.outputDir, phase: 'initial-admission',
+      since: new Date(started).toISOString(), command: logCommand,
+    }));
+    const observationResult = await waitForObservation(mf, request, admissionDeadline);
     const observation = record(observationResult.observation, 'canonical callback observation');
     assert(observation.path === '/api/internal/v1/agent-control/run-bootstrap' &&
       observation.method === 'POST' && observation.status === 200 &&
       observation.runId === run.runId && observation.containerId === run.containerId &&
       observation.tokenPresented === true,
     `compiled agent did not receive successful public Worker token-guarded bootstrap: ${JSON.stringify(observation)}`);
+    // A snapshot may precede the first DEBUG line. Observe the existing
+    // bootstrap response first, then allow one causal same-ID snapshot.
+    if (options.diagnosticContainerTransport && transportLogCaptures[0].debugLines === 0) {
+      assert(Date.now() < admissionDeadline, 'bootstrap log follow-up exceeded admission deadline');
+      transportLogCaptures.push(await captureNativeContainerTransportLogs({
+        witness: activeContainerWitness, beforeIds: new Set(options.containersBefore), agentImage: options.image,
+        agentImageId: before.identity.dockerImageId, outputDir: options.outputDir, phase: 'initial-bootstrap',
+        since: new Date(started).toISOString(), command: logCommand, requireDebug: true,
+      }));
+      assert(Date.now() < admissionDeadline, 'bootstrap log follow-up exceeded admission deadline');
+    }
     const wrongToken = await mf.dispatchFetch(`${options.callbackUrl}/api/internal/v1/agent-control/run-bootstrap`, {
       method: 'POST', headers: { Authorization: `Bearer ${randomUUID()}`,
         'X-Takos-Run-Id': run.runId, 'X-Takos-Executor-Tier': '1',
@@ -504,18 +546,90 @@ export async function runNativeContainerRecovery(inputOptions) {
       stage: 'old-container-destroyed-before-tool-ack' }, Date.now() + phaseMs);
     const allAfterDeath = (await command('docker', ['container', 'ls', '-aq', '--no-trunc'])).stdout.trim().split('\n');
     assert(containerWitness.dockerContainers.every((item) => !allAfterDeath.includes(item.id)),
-      'native destroy marker did not physically remove the exact old agent before lease CAS');
+      'native destroy marker did not physically remove the exact old agent before canonical stale recovery');
     const oldPhysicalDeath = { acknowledged: true, agentIdsAbsent: containerWitness.dockerContainers.map((item) => item.id),
       at: new Date().toISOString(), marker: oldDeathMarker };
     await writeFile(join(options.outputDir, 'old-container-pre-ACK-death.json'), JSON.stringify(oldPhysicalDeath, null, 2));
-    const reclaim = await mf.dispatchFetch(`${options.callbackUrl}/__probe/reclaim`, {
+    const claimDeadline = Date.now() + phaseMs;
+    stages.push({ stage: 'canonical-stale-recovery-wait-start', at: new Date().toISOString(), budgetMs: phaseMs });
+    const agedResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/age-recovery`, {
       method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
     });
-    assert(reclaim.ok, 'exact fixture-owned native lease CAS failed');
-    const reclaimed = record(await reclaim.json(), 'fixture lease handoff');
-    assert(reclaimed.reclaimed === true && reclaimed.leaseCas?.changedRows === 1 &&
-      reclaimed.leaseCas.fromLease === 7 && reclaimed.leaseCas.toLease === 8,
-      'fixture reclaim readback lacks exact lease transition');
+    assert(agedResponse.ok, 'exact fixture heartbeat ageing failed');
+    const aged = record(await agedResponse.json(), 'stale eligibility fixture');
+    assert(aged.before?.status === 'running' && aged.before.service_id === run.serviceId &&
+      aged.before.lease_version === 7 && aged.after?.status === 'running' &&
+      aged.after.service_id === run.serviceId && aged.after.lease_version === 7 &&
+      Date.parse(aged.after.service_heartbeat) < Date.now() - 5 * 60 * 1000,
+      'heartbeat fixture changed lease ownership or did not establish stale eligibility');
+    for (const key of Object.keys(aged.before)) if (key !== 'service_heartbeat')
+      assert(JSON.stringify(aged.before[key]) === JSON.stringify(aged.after[key]),
+        `heartbeat fixture changed unrelated Run field ${key}`);
+    const nativeWorker = await mf.getWorker();
+    assert(Date.now() < claimDeadline, 'canonical recovery phase expired before scheduled entry');
+    let scheduledTimer;
+    let scheduledOutcome;
+    try {
+      scheduledOutcome = await Promise.race([
+        nativeWorker.scheduled({ cron: '* * * * *', scheduledTime: new Date() }),
+        new Promise((_, reject) => {
+          scheduledTimer = setTimeout(() => reject(new Error('canonical scheduled recovery phase deadline expired')),
+            Math.max(1, claimDeadline - Date.now()));
+        }),
+      ]);
+    } finally { clearTimeout(scheduledTimer); }
+    assert(scheduledOutcome?.outcome === 'ok', 'actual canonical scheduled invocation failed');
+    const readCanonical = async () => {
+      const response = await mf.dispatchFetch(...request('/__probe/canonical-recovery'));
+      assert(response.ok, 'canonical recovery readback failed');
+      return record(await response.json(), 'canonical recovery evidence');
+    };
+    let canonical;
+    do {
+      canonical = await readCanonical();
+      assert(canonical.backgroundErrors === 0, 'canonical background invocation failed');
+      if (canonical.hostDispatches?.[0]?.response && canonical.acknowledgements?.some((item) =>
+        item.runId === run.runId && item.action === 'ack')) break;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    } while (Date.now() < claimDeadline);
+    assert(Date.now() < claimDeadline, 'canonical Queue recovery exceeded its original phase deadline');
+    assert(canonical.hostDispatches?.length === 1 && canonical.emitted?.length === 1 &&
+      canonical.acknowledgements?.length === 1 && canonical.acknowledgements[0].action === 'ack',
+      'native Queue did not acknowledge one canonical Host dispatch within its phase budget');
+    const canonicalDispatch = canonical.hostDispatches[0];
+    const claimed = canonicalDispatch.beforeHost?.run;
+    const queueMessage = canonical.emitted[0];
+    run.newServiceId = canonicalDispatch.request?.serviceId;
+    assert(typeof run.newServiceId === 'string' &&
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(run.newServiceId) &&
+      run.newServiceId !== run.serviceId && canonicalDispatch.request.workerId === run.newServiceId &&
+      canonicalDispatch.request.runId === run.runId && canonicalDispatch.request.leaseVersion === 8 &&
+      canonicalDispatch.request.model === 'gpt-local' &&
+      Object.keys(canonicalDispatch.request).sort().join(',') === 'leaseVersion,model,runId,serviceId,workerId',
+      'replacement identity was not the unchanged canonical Queue payload');
+    assert(queueMessage.accepted === true && queueMessage.body.version === 2 && queueMessage.body.runId === run.runId &&
+      queueMessage.body.model === 'gpt-local' && queueMessage.beforeQueueSend.run.status === 'queued' &&
+      queueMessage.beforeQueueSend.run.service_id === null && queueMessage.beforeQueueSend.run.lease_version === 7 &&
+      claimed?.status === 'running' && claimed.service_id === run.newServiceId && claimed.lease_version === 8 &&
+      claimed.account_id === run.workspaceId && claimed.requester_account_id === run.ownerId &&
+      claimed.thread_id === run.threadId && claimed.engine_checkpoint === aged.before.engine_checkpoint,
+      'scheduled reset and Queue claim do not preserve the original private checkpoint/authority');
+    const replacementDispatch = canonicalDispatch.response;
+    const newAccepted = record(replacementDispatch?.body, 'canonical Host replacement acceptance');
+    assert(replacementDispatch.status >= 200 && replacementDispatch.status < 300 &&
+      replacementDispatch.containerReceipt === run.newContainerId && newAccepted.accepted === true &&
+      newAccepted.runId === run.runId && newAccepted.runtimeProtocolVersion === 2,
+      'native Queue replacement lacks actual Host receipt and protocol2 acceptance');
+    assert(canonical.state.receipts.length === 1, 'canonical Queue did not persist its dispatch receipt');
+    const receipt = canonical.state.receipts[0];
+    const receiptData = JSON.parse(receipt.data);
+    assert(receipt.type === 'executor_dispatch_receipt' &&
+      receipt.event_key === `executor-dispatch:${run.runId}:lease:8:service:${run.newServiceId}` &&
+      receiptData.service_id === run.newServiceId && receiptData.lease_version === 8 &&
+      receiptData.executor_container_id === run.newContainerId,
+      'native SQL dispatch receipt does not join the canonical lease and actual Host slot');
+    await writeFile(join(options.outputDir, 'canonical-recovery.json'),
+      JSON.stringify({ aged, scheduledOutcome, canonical }, null, 2));
     const staleStatuses = [];
     for (let index = 0; index < 2; index++) {
       const stale = await mf.dispatchFetch(`${options.callbackUrl}/__probe/old-token-probe`, {
@@ -525,7 +639,7 @@ export async function runNativeContainerRecovery(inputOptions) {
       staleStatuses.push(await stale.json());
     }
     assert((staleStatuses[0].status === 409 && staleStatuses[0].leaseLost === true || staleStatuses[0].status === 401) &&
-      staleStatuses[1].status === 401, 'native old minted token was not fenced/revoked after fixture CAS');
+      staleStatuses[1].status === 401, 'native old minted token was not fenced/revoked after canonical Queue claim');
     const newIdentityResponse = await mf.dispatchFetch(...request('/__probe/identity-new'));
     assert(newIdentityResponse.ok, 'replacement native identity readback failed');
     const replacementContainerWitness = await newIdentityResponse.json();
@@ -535,15 +649,6 @@ export async function runNativeContainerRecovery(inputOptions) {
     await writeFile(join(options.outputDir, 'replacement-container-witness.json'), JSON.stringify({
       ...replacementContainerWitness, imageTag: options.image, dockerImageId: before.identity.dockerImageId,
     }, null, 2));
-    const newDispatch = await mf.dispatchFetch(`${options.callbackUrl}/__probe/dispatch`, {
-      method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...dispatchPayload, serviceId: run.newServiceId, workerId: run.newServiceId,
-        leaseVersion: 8, executorContainerId: run.newContainerId }), signal: AbortSignal.timeout(phaseMs),
-    });
-    const newAccepted = record(await newDispatch.json(), 'replacement compiled Container /start');
-    assert(newDispatch.ok && newDispatch.headers.get('X-Takos-Executor-Container-Id') === run.newContainerId &&
-      newAccepted.accepted === true && newAccepted.runId === run.runId && newAccepted.runtimeProtocolVersion === 2,
-      'replacement production dispatch lacks exact native receipt/protocol2');
     const newDockerIds = (await command('docker', ['container','ls','-aq','--no-trunc',
       '--filter', `ancestor=${options.image}`, '--filter', 'status=running'])).stdout.trim().split('\n').filter(Boolean);
     assert(newDockerIds.length === 1, 'replacement left an unexpected number of running image Containers');
@@ -559,10 +664,25 @@ export async function runNativeContainerRecovery(inputOptions) {
     await writeFile(join(options.outputDir, 'replacement-container-witness.json'), JSON.stringify({
       ...replacementContainerWitness, imageTag: options.image, dockerImageId: before.identity.dockerImageId,
     }, null, 2));
+    const terminalDeadline = Date.now() + completionPhaseMs;
+    activeContainerWitness = { ...replacementContainerWitness, imageTag: options.image, dockerImageId: before.identity.dockerImageId };
+    if (options.diagnosticContainerTransport) transportLogCaptures.push(await captureNativeContainerTransportLogs({
+      witness: activeContainerWitness, beforeIds: new Set(options.containersBefore), agentImage: options.image,
+      agentImageId: before.identity.dockerImageId, outputDir: options.outputDir, phase: 'replacement-admission',
+      since: new Date(started).toISOString(), command: logCommand,
+    }));
     stages.push({ stage: 'replacement-checkpoint-terminal-wait-start', at: new Date().toISOString(), budgetMs: completionPhaseMs });
     const nativeTerminalResponse = await runtimeObserver.waitFor({ kind: 'control', containerId: run.newContainerId,
-      path: '/api/internal/v1/agent-control/complete-run', status: 200 }, Date.now() + completionPhaseMs);
+      path: '/api/internal/v1/agent-control/complete-run', status: 200 }, terminalDeadline);
     assert(nativeTerminalResponse.runId === run.runId, 'replacement terminal belongs to another Run');
+    if (options.diagnosticContainerTransport &&
+      transportLogCaptures.find((value) => value.phase === 'replacement-admission').debugLines === 0)
+      transportLogCaptures.push(await captureNativeContainerTransportLogs({
+        witness: activeContainerWitness, beforeIds: new Set(options.containersBefore), agentImage: options.image,
+        agentImageId: before.identity.dockerImageId, outputDir: options.outputDir, phase: 'replacement-terminal',
+        since: new Date(started).toISOString(), command: logCommand, requireDebug: true,
+      }));
+
     // One authenticated read after the real response. Logs are a wake-up only;
     // this full trace and authoritative SQL retain every original assertion.
     const observationResponse = await mf.dispatchFetch(...request('/__probe/observation'));
@@ -625,6 +745,33 @@ export async function runNativeContainerRecovery(inputOptions) {
       typeof completed.completion_key === 'string' && completed.completion_key.length > 0 &&
       completed.transcript_sequence_start === 1,
     'atomic native terminal Run did not preserve owner, lease, usage and transcript reservation');
+    const beforeDuplicate = await readCanonical();
+    const duplicateResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/duplicate-recovery`, {
+      method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
+    });
+    const duplicateAccepted = await duplicateResponse.json();
+    assert(duplicateResponse.ok && duplicateAccepted.accepted === true && duplicateAccepted.runId === run.runId,
+      'native duplicate delivery was not enqueued for the exact terminal Run');
+    const duplicateDeadline = Date.now() + 10_000;
+    let afterDuplicate;
+    do {
+      afterDuplicate = await readCanonical();
+      assert(afterDuplicate.backgroundErrors === 0, 'duplicate native Queue invocation failed');
+      if (afterDuplicate.acknowledgements?.length === 2 && afterDuplicate.backgroundActive === 0) break;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    } while (Date.now() < duplicateDeadline);
+    assert(afterDuplicate.acknowledgements?.length === 2 &&
+      afterDuplicate.acknowledgements.every((item) => item.runId === run.runId && item.action === 'ack' && item.attempts === 1) &&
+      new Set(afterDuplicate.acknowledgements.map((item) => item.messageId)).size === 2 &&
+      afterDuplicate.emitted.length === 2 &&
+      afterDuplicate.emitted.every((item) => item.accepted === true) &&
+      JSON.stringify(afterDuplicate.emitted[0].body) === JSON.stringify(afterDuplicate.emitted[1].body) &&
+      afterDuplicate.hostDispatches.length === 1 && afterDuplicate.executorHostActive === 0 &&
+      afterDuplicate.backgroundActive === 0 &&
+      JSON.stringify(afterDuplicate.state) === JSON.stringify(beforeDuplicate.state),
+      'duplicate native Queue mutated terminal state, receipt or original operation');
+    const duplicateRecovery = { accepted: duplicateAccepted, before: beforeDuplicate, after: afterDuplicate };
+    await writeFile(join(options.outputDir, 'canonical-duplicate-recovery.json'), JSON.stringify(duplicateRecovery, null, 2));
     const artifacts = (await db.prepare(`SELECT id,run_id,account_id,type,title,content
       FROM artifacts WHERE run_id=?`).bind(run.runId).all()).results;
     const operations = (await db.prepare(`SELECT id,run_id,operation_key,tool_name,status
@@ -725,15 +872,16 @@ export async function runNativeContainerRecovery(inputOptions) {
     assert(bundleSha256After === built.bundleSha256,
       'generated Worker bundle bytes changed during probe');
     const result = {
-      status: 'passed', result: 'LOCAL_CANONICAL_CONTAINER_FIRST_PROJECTOR_LOST_ACK_COLD_RETRY_PROBE_OK',
-      limitation: 'Local native D1/DO/R2 and two actual compiled Containers with a deterministic local model. Fixture lease-CAS checkpoint restart, lost tool ACK, executor-stopped first usage projection, lost successful usage ACK and real-due cold native notifier retry only; no production cron/Queue reclaim, hosted lifecycle, real Accounts/model or deployed identity claim.',
+      status: 'passed', result: 'LOCAL_CANONICAL_QUEUE_CONTAINER_FIRST_PROJECTOR_LOST_ACK_COLD_RETRY_PROBE_OK',
+      limitation: 'Local native D1/DO/R2, canonical scheduled/native Queue and real executor Host Service Binding with two actual compiled Containers and a deterministic local model. The fixture ages only the destroyed old executor heartbeat; no actual five-minute outage, whole workerd restart, hosted lifecycle, real Accounts/model or deployed image identity claim.',
       startedAt: new Date(started).toISOString(), elapsedMs: Date.now() - started,
       sourceCommit: finalHeadCommit,
+      diagnosticContainerTransport: options.diagnosticContainerTransport, transportLogCaptures,
       sourceState: before.sourceState, sourceHashesBefore: before.sourcesBefore,
       sourceHashesAfter: after,
       parentSourceSnapshot: { before: before.parentSourceSnapshot,
         after: parentSourceSnapshotAfter },
-      image: before.identity, compatibility: built.compatibility,
+      image: before.identity, compatibility: { ...built.compatibility, flags: nativeFlags, configuredFlags: built.compatibility.flags },
       miniflareVersion: (await readJson(resolve(options.root, 'node_modules/miniflare/package.json'))).version,
       workerdVersion: (await readJson(resolve(dirname(actualWorkerdModule), '../package.json'))).version,
       workerdModulePath: actualWorkerdModule,
@@ -750,8 +898,8 @@ export async function runNativeContainerRecovery(inputOptions) {
       usageProjection: { firstWitness: queuedWitnesses[0], dispatchCompleted: projectionBody.completed,
         doneWitness, meters, rollups, firstProjector: firstUsage.record },
       containerWitness, replacementContainerWitness,
-      recovery: { ...recovery, oldPhysicalDeath, staleStatuses, fixtureReclaim: reclaimed,
-        replacementDispatch: { status: newDispatch.status, body: newAccepted, containerReceipt: run.newContainerId } },
+      recovery: { ...recovery, oldPhysicalDeath, staleStatuses, aged, scheduledOutcome, canonical, duplicateRecovery,
+        replacementDispatch },
       stages,
     };
     successResult = result;
@@ -765,6 +913,19 @@ export async function runNativeContainerRecovery(inputOptions) {
     // replace the failed assertion or alter the Run/lease/schema/model paths.
     if (mf) {
       try {
+        // Snapshot only the most recently witnessed live agent, before cleanup.
+        // The old executor is intentionally removed during the recovery scenario.
+        const witness = activeContainerWitness ?? await readJson(join(options.outputDir, 'container-witness.json'));
+        transportLogCaptures.push(await captureNativeContainerTransportLogs({
+          witness, beforeIds: new Set(options.containersBefore), agentImage: options.image,
+          agentImageId: options.dockerImageId, outputDir: options.outputDir, phase: 'failure',
+          since: new Date(started).toISOString(), command: logCommand,
+        }));
+      } catch (diagnosticError) {
+        await writeFile(join(options.outputDir, 'failure-agent-logs-error.json'),
+          JSON.stringify({ error: String(diagnosticError), transportLogCaptures }, null, 2), { flag: 'wx', mode: 0o600 });
+      }
+      try {
         const observed = await mf.dispatchFetch(`${options.callbackUrl}/__probe/observation`, {
           headers: { 'X-Probe-Controller-Token': diagnosticControllerToken },
           signal: AbortSignal.timeout(5_000),
@@ -776,30 +937,12 @@ export async function runNativeContainerRecovery(inputOptions) {
         await writeFile(join(options.outputDir, 'failure-observation-error.json'),
           JSON.stringify({ error: String(diagnosticError) }, null, 2));
       }
-      try {
-        const witness = JSON.parse(await readFile(join(options.outputDir, 'container-witness.json'), 'utf8'));
-        for (const item of witness.dockerContainers ?? []) {
-          assert(item.name === '/workerd-canonical-container-' + witness.runId +
-            '-ExecutorContainerTier1-' + witness.durableObjectId &&
-            item.imageId === witness.dockerImageId && item.imageReference === witness.imageTag,
-            'refusing diagnostics for a mismatched physical Container witness');
-          const inspected = JSON.parse((await command('docker', ['container', 'inspect', item.id], 3_000)).stdout)[0];
-          assert(inspected.Id === item.id && inspected.Name === item.name &&
-            inspected.Image === item.imageId && inspected.Config.Image === item.imageReference,
-            'physical Container identity changed before read-only logs');
-          const logs = await command('docker', ['container', 'logs', '--tail', '120', item.id], 5_000);
-          await writeFile(join(options.outputDir, 'failure-agent.stdout.log'), logs.stdout);
-          await writeFile(join(options.outputDir, 'failure-agent.stderr.log'), logs.stderr);
-        }
-      } catch (diagnosticError) {
-        await writeFile(join(options.outputDir, 'failure-agent-logs-error.json'),
-          JSON.stringify({ error: String(diagnosticError) }, null, 2));
-      }
     }
     await writeFile(join(options.outputDir, 'failure.json'), `${JSON.stringify({
       status: 'failed', at: new Date().toISOString(), elapsedMs: Date.now() - started,
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack,
         cause: error.cause instanceof Error ? error.cause.message : String(error.cause ?? '') } : String(error),
+      diagnosticContainerTransport: options.diagnosticContainerTransport, transportLogCaptures,
       stages, outputDir: options.outputDir,
     }, null, 2)}\n`);
   } finally {
