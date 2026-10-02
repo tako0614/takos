@@ -115,3 +115,43 @@ that emit to the SSE notifier wake immediately. Object-store enumeration and
 DO reads per subscriber still need real capacity qualification. The tests
 prove local SQL/notifier recovery, not live Redis, object-store restoration,
 agent-engine consumer execution or production readiness.
+
+## Exact reconnect cursor hardening — 2026-10-02
+
+The route accepted numeric prefixes through `parseInt`: `42junk`, `42.5`,
+`42e1` and `+42` silently resumed after event 42, and unsafe integers could lose
+precision or suppress all replay. Only complete decimal nonnegative safe
+integers now select a cursor. Invalid input retains the existing cursor-zero
+fallback and header precedence; zero, leading zeros and the maximum safe
+integer remain accepted. Workspace access checks and durable replay are
+unchanged. This is an independent Takos source correction, not a fix for native
+Container callback transport or per-subscriber capacity.
+
+Real Hono/SQLite route regressions failed 13 cases before the correction
+(12 controls passed), then the exact route/stream suites passed 40 tests with
+130 assertions under pinned Bun 1.3.14. They cover malformed/unsafe header and
+query cursors, decimal boundaries, SQL cursor preservation, header precedence,
+restart replay, stream closure and the private Workspace access boundary.
+Commands use exact `./` test paths; an earlier green log selected only the
+route file and is not counted as both suites. Evidence is ignored
+`tmp/ga-sse-cursor-20261002/cursor-{red-v1,green-v1,green-v2}.log`.
+Independent source review is GO for the parser, cursor propagation, existing
+access boundary and regression coverage. The first local gate stopped at a
+new test-only TypeScript readonly-array overload; spreading the expected IDs
+preserves the assertion and the corrected project-wide type check passed with
+zero undeclared diagnostics (existing debt: 98). That early failed lane also
+resolved child Bun to the system 1.4.2 through an incorrect PATH entry, so it
+is not pinned complete-gate qualification. The corrected lane pins the Bun
+directory for all child commands. Both the failure and corrected type log
+remain in this evidence bucket. The corrected complete gate exited 1:
+1,721 passed and 3 native timeout failures out of 1,724 tests/262 files
+(12,526 assertions, 314.80 seconds). HTTP schema admission passed; notifier,
+usage and canonical stale-Run proofs reached their unchanged 75/70-second
+limits. Format, lint and types passed; later architecture/Rust/build phases
+were not reached. The source freeze remained unchanged throughout the run.
+High host I/O pressure was observed, without establishing the timeout cause.
+No unchanged-source gate/native retry or deadline relaxation was made.
+The earlier `21caddc17` CI success qualifies that tree, not this new correction;
+exact-commit CI verification is recorded separately in the integration handoff.
+No shared contract, schema, image input, authentication grant, billing or
+deployment change is part of this correction.

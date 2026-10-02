@@ -30,13 +30,13 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
     const services = getPlatformServices(c);
     const sseNotifier = services.sseNotifier;
 
-    // Parse Last-Event-ID from header or query parameter
+    // Preserve header precedence; malformed or inexact cursors replay from zero.
     const lastEventIdRaw = c.req.header("Last-Event-ID") ??
       c.req.query("last_event_id");
     let lastEventId: number | undefined;
-    if (lastEventIdRaw) {
-      const parsed = parseInt(lastEventIdRaw, 10);
-      if (Number.isFinite(parsed) && parsed >= 0) {
+    if (lastEventIdRaw && /^[0-9]+$/u.test(lastEventIdRaw)) {
+      const parsed = Number(lastEventIdRaw);
+      if (Number.isSafeInteger(parsed)) {
         lastEventId = parsed;
       }
     }

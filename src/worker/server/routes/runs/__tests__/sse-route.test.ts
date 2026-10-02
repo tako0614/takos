@@ -336,6 +336,88 @@ test("SSE without a notifier uses the same durable replay and query cursor", asy
   }
 });
 
+for (const source of ["header", "query"] as const) {
+  test.each([
+    "42junk",
+    "42.5",
+    "42e1",
+    "+42",
+    "-1",
+    "9007199254740992",
+    "9007199254740993",
+  ])(
+    `SSE ignores an invalid ${source} cursor %s and replays durable history`,
+    async (cursor) => {
+      const f = await fixture();
+      try {
+        const response = source === "header"
+          ? await f.request("", { "Last-Event-ID": cursor })
+          : await f.request(`?last_event_id=${encodeURIComponent(cursor)}`);
+        const text = await readTerminalStream(response);
+        expect([...text.matchAll(/^id: (\d+)$/gm)].map((match) => Number(match[1])))
+          .toEqual([41, 42, 43]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+}
+
+test.each([" 42", "42 ", "42\n", "0x2a", "Infinity", ""])(
+  "SSE ignores a non-decimal query cursor %j and replays durable history",
+  async (cursor) => {
+    const f = await fixture();
+    try {
+      const text = await readTerminalStream(
+        await f.request(`?last_event_id=${encodeURIComponent(cursor)}`),
+      );
+      expect([...text.matchAll(/^id: (\d+)$/gm)].map((match) => Number(match[1])))
+        .toEqual([41, 42, 43]);
+    } finally {
+      await f.close();
+    }
+  },
+);
+
+test.each([
+  { cursor: "0", expected: 0, ids: [41, 42, 43] },
+  { cursor: "00042", expected: 42, ids: [43] },
+  { cursor: "9007199254740991", expected: Number.MAX_SAFE_INTEGER, ids: [] },
+])(
+  "SSE preserves the exact safe decimal cursor $cursor",
+  async ({ cursor, expected, ids }) => {
+    const f = await fixture();
+    try {
+      const text = await readTerminalStream(
+        await f.request(`?last_event_id=${cursor}`),
+      );
+      expect([...text.matchAll(/^id: (\d+)$/gm)].map((match) => Number(match[1])))
+        .toEqual([...ids]);
+      const read = f.queries.find(
+        ({ sql }) => sql.startsWith("select") && sql.includes('from "run_events"'),
+      );
+      expect(read?.params).toEqual([
+        "run-restarted", expected, MAX_EVENTS_PER_RESPONSE + 1,
+      ]);
+    } finally {
+      await f.close();
+    }
+  },
+);
+
+test("SSE retains header precedence when the header cursor is invalid", async () => {
+  const f = await fixture();
+  try {
+    const text = await readTerminalStream(
+      await f.request("?last_event_id=43", { "Last-Event-ID": "42junk" }),
+    );
+    expect([...text.matchAll(/^id: (\d+)$/gm)].map((match) => Number(match[1])))
+      .toEqual([41, 42, 43]);
+  } finally {
+    await f.close();
+  }
+});
+
 test("SSE replay retains the existing Workspace access boundary", async () => {
   const f = await fixture();
   try {
