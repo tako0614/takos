@@ -37,6 +37,16 @@ const nativeBackgroundDeferred = [];
 const emitted = [], hostDispatches = [], acknowledgements = [];
 let duplicateRecoverySent = false, backgroundActive = 0, executorHostActive = 0;
 const backgroundErrors = [];
+const oldTokenProbeTrace = [];
+let oldTokenProbeAttempts = 0, oldTokenProbeTraceDropped = 0;
+function recordOldTokenProbe(attempt, stage, started) {
+  if (oldTokenProbeTrace.length >= 32) { oldTokenProbeTraceDropped++; return; }
+  // Fixed boundary labels and clocks only: never bearer, request, body or error text.
+  const entry = { attempt, stage, at: new Date().toISOString(), elapsedMs: performance.now() - started };
+  oldTokenProbeTrace.push(entry);
+  try { console.log(JSON.stringify({ nativeOldTokenProbe: entry })); }
+  catch { /* A diagnostic logger must not replace the original result or error. */ }
+}
 function workerProducers() {
   const snapshots = nativeWorkerDeferred.map((entry) => entry.snapshot());
   const backgroundSnapshots = [...nativeHostDeferred, ...nativeBackgroundDeferred].map((entry) => entry.snapshot());
@@ -261,6 +271,7 @@ export default {
       }
       if (path === '/__probe/observation') return Response.json({ observation: controlObservation,
         controlTrace, controlIngress, controlErrors, modelInputs, toolCatalog, recovery: recoveryScalars(),
+        oldTokenProbe: { trace: oldTokenProbeTrace, dropped: oldTokenProbeTraceDropped },
         canonical: { ...canonicalEvidence(env), state: await snapshotRun(env.DB) } });
       if (path === '/__probe/canonical-recovery') return Response.json({
         ...canonicalEvidence(env), state: await snapshotRun(env.DB) });
@@ -308,15 +319,28 @@ export default {
         return Response.json({ completed });
       }
       if (path === '/__probe/old-token-probe' && request.method === 'POST') {
-        requireValue(recoveryState?.nativeDestroyAcknowledged && capturedOldBearer, 'old token unavailable before native death');
-        const response = await trackedWebFetch(new Request(new URL('/api/internal/v1/agent-control/run-status', request.url), {
-          method: 'POST', headers: { Authorization: capturedOldBearer,
-            'X-Takos-Run-Id': expectedRunId, 'X-Takos-Executor-Tier': '1',
-            'X-Takos-Executor-Container-Id': expectedContainerId, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId: expectedRunId }),
-        }), env, ctx);
-        const text = await response.text();
-        return Response.json({ status: response.status, leaseLost: text.includes('Lease lost') });
+        const attempt = ++oldTokenProbeAttempts, started = performance.now();
+        recordOldTokenProbe(attempt, 'entered', started);
+        try {
+          requireValue(recoveryState?.nativeDestroyAcknowledged && capturedOldBearer, 'old token unavailable before native death');
+          recordOldTokenProbe(attempt, 'public-fetch-start', started);
+          const response = await trackedWebFetch(new Request(new URL('/api/internal/v1/agent-control/run-status', request.url), {
+            method: 'POST', headers: { Authorization: capturedOldBearer,
+              'X-Takos-Run-Id': expectedRunId, 'X-Takos-Executor-Tier': '1',
+              'X-Takos-Executor-Container-Id': expectedContainerId, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ runId: expectedRunId }),
+          }), env, ctx);
+          recordOldTokenProbe(attempt, 'public-fetch-returned', started);
+          recordOldTokenProbe(attempt, 'body-read-start', started);
+          const text = await response.text();
+          recordOldTokenProbe(attempt, 'body-read-complete', started);
+          const result = Response.json({ status: response.status, leaseLost: text.includes('Lease lost') });
+          recordOldTokenProbe(attempt, 'response-ready', started);
+          return result;
+        } catch (error) {
+          recordOldTokenProbe(attempt, 'failed', started);
+          throw error;
+        }
       }
       if (path === '/__probe/age-recovery' && request.method === 'POST') {
         if (actualStaleWindow) return Response.json({ code: 'actual_stale_window_manual_age_forbidden' }, { status: 409 });

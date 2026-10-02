@@ -305,3 +305,40 @@ the asymmetric string matcher mutated the received heartbeat into an object
 before Date.parse. The parent now checks its scalar type without that matcher;
 the fresh ISO/window and all claim/authority assertions remain. This gate's
 failure and the successful child report retain their distinct qualifications.
+
+## Corrected actual window and old-token boundary diagnosis
+
+The corrected `34b56cace` trial crossed actual heartbeat wall 300,992 ms and
+monotonic 300,096.638481 ms. Canonical accepted send/actual Host 202/Queue ack-call
+cardinality was exactly 1/1/1, preserving lease 8, the saved private authority,
+checkpoint and dispatch receipt. Its whole native verdict remained FAILED:
+the following old-token probe timed out under the existing ten-second signal.
+Checkpoint reload, terminal completion and usage projection were not reached.
+Native cleanup and outside observer failed; the parent's separately verified
+exact-owned remaining-proxy stop and source/runtime custody do not repair them.
+
+That probe calls production `webWorker.fetch` internally, bypassing the outer
+control ingress recorder. A missing outer run-status entry cannot locate the
+timeout. The next slice adds bounded, non-secret clocks and fixed stage labels
+at probe entry, internal public fetch, response body read and response readiness;
+the controller independently records dispatch receipt/body-read/failure phase.
+These are observations, not a timeout-cause or recovery fix. Keep the minted old
+bearer challenge, original request/results/errors, two calls, ten-second signal
+and all later canonical/recovery/usage qualification assertions intact.
+
+Eight fast tests execute the generated route and the controller's actual loop
+with held fetch/body boundaries and failures. The old source failed all eight
+diagnostic assertions; the instrumented source passed eight under pinned Bun
+1.3.14. They verify bounded storage, no credential/body/error-message logging,
+unchanged challenge and primary errors, including a failed diagnostic logger.
+This is diagnostic preparation, not reproduction or correction of the actual
+physical timeout. Independent review, the changed-source complete gate and CI
+are separate evidence; any future native invocation needs a fresh resource slot,
+source/image checks and a new output directory. No image, engine/wrapper,
+shared contract, grant, billing, production data or deployment changes here.
+
+The first complete gate for this diagnostic preparation failed at two new test
+type errors before portable tests. The error cases used incomplete objects cast
+to Response. They now use real Responses with failing ReadableStreams, retaining
+the exact primary rejection and stage assertions; the eight tests still pass.
+The gate failure is preserved, and later gate/CI/native results stay separate.

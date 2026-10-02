@@ -742,11 +742,25 @@ export async function runNativeContainerRecovery(inputOptions) {
       : { aged: staleEligibility, scheduledOutcome, canonical }, null, 2));
     const staleStatuses = [];
     for (let index = 0; index < 2; index++) {
-      const stale = await mf.dispatchFetch(`${options.callbackUrl}/__probe/old-token-probe`, {
-        method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
-      });
-      assert(stale.ok, 'fixed old bearer public-route probe failed');
-      staleStatuses.push(await stale.json());
+      const attempt = index + 1;
+      let phase = 'dispatch';
+      stages.push({ stage: 'old-token-probe-dispatch-start', attempt, at: new Date().toISOString(), budgetMs: 10_000 });
+      try {
+        const stale = await mf.dispatchFetch(`${options.callbackUrl}/__probe/old-token-probe`, {
+          method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
+        });
+        phase = 'response-validation';
+        stages.push({ stage: 'old-token-probe-response-received', attempt, at: new Date().toISOString(), status: stale.status });
+        assert(stale.ok, 'fixed old bearer public-route probe failed');
+        phase = 'body-read';
+        stages.push({ stage: 'old-token-probe-body-read-start', attempt, at: new Date().toISOString() });
+        staleStatuses.push(await stale.json());
+        stages.push({ stage: 'old-token-probe-body-read-complete', attempt, at: new Date().toISOString() });
+      } catch (error) {
+        stages.push({ stage: 'old-token-probe-failed', attempt, phase, at: new Date().toISOString(),
+          timeout: error?.name === 'TimeoutError' || error?.name === 'AbortError' });
+        throw error;
+      }
     }
     assert((staleStatuses[0].status === 409 && staleStatuses[0].leaseLost === true || staleStatuses[0].status === 401) &&
       staleStatuses[1].status === 401, 'native old minted token was not fenced/revoked after canonical Queue claim');
