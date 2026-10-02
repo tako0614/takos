@@ -24,6 +24,13 @@ export function assertNoEarlyRecovery(evidence: unknown, runId: string): void;
 export function remainingActualStaleWindowMs(heartbeatAt: number, now?: number): number;
 export function assertHeartbeatActuallyStale(heartbeatAt: number, now?: number): void;
 export function assertMonotonicHeartbeatAge(heartbeatAgeAtSnapshotMs: number, monotonicElapsedMs: number, shouldBeStale: boolean): number;
+export function actualStaleCheckpointBindingDiagnostics(baseline: unknown): Readonly<Record<string, unknown>>;
+export function assertActualStaleCheckpointBinding(options: {
+  baseline: unknown;
+  runId: string;
+  oldServiceId: string;
+  oldContainerId: string;
+}): true;
 export function assertNativeStaleWindowQualification(options: {
   actualStaleWindow: boolean;
   budgets: NativeContainerProofBudgets;

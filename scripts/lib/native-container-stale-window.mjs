@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { MAX_CHECKPOINT_BYTES, MAX_INLINE_CHECKPOINT_BYTES } from './native-recovery-checkpoint-witness.mjs';
+
 export const ACTUAL_STALE_WINDOW_MS = 300_000;
 export const ACTUAL_STALE_WINDOW_WAIT_MAX_MS = 315_000;
 export const DEFAULT_CHILD_TIMEOUT_MS = 320_000;
@@ -68,6 +71,100 @@ export function assertMonotonicHeartbeatAge(heartbeatAgeAtSnapshotMs, monotonicE
   return age;
 }
 
+function safeString(value, maxLength = 256) {
+  return typeof value === 'string' ? value.slice(0, maxLength) : null;
+}
+
+export function actualStaleCheckpointBindingDiagnostics(baseline) {
+  const run = baseline?.state?.run;
+  const checkpoint = baseline?.checkpoint;
+  const pending = Array.isArray(checkpoint?.pendingToolCallIds)
+    ? checkpoint.pendingToolCallIds.slice(0, 2).map((value) => safeString(value)) : null;
+  const stored = run?.engine_checkpoint;
+  const storedString = typeof stored === 'string' ? stored : null;
+  const storedBytes = storedString === null ? null : Buffer.byteLength(storedString, 'utf8');
+  const computedStoredSha256 = storedString === null || storedBytes > MAX_CHECKPOINT_BYTES ? null
+    : createHash('sha256').update(Buffer.from(storedString, 'utf8')).digest('hex');
+  const usage = checkpoint?.usage;
+  const serializedBytes = Number.isSafeInteger(checkpoint?.serializedBytes) ? checkpoint.serializedBytes : null;
+  const storageMatchesPrefix = checkpoint?.storage === 'r2'
+    ? storedString?.startsWith('r2:') === true
+    : checkpoint?.storage === 'inline' && storedString !== null && !storedString.startsWith('r2:');
+  const serializedBytesWithinStorageLimits = serializedBytes !== null && serializedBytes > 0 &&
+    serializedBytes <= MAX_CHECKPOINT_BYTES &&
+    (checkpoint?.storage === 'inline' ? serializedBytes <= MAX_INLINE_CHECKPOINT_BYTES
+      : checkpoint?.storage === 'r2' && serializedBytes > MAX_INLINE_CHECKPOINT_BYTES);
+  return {
+    run: { id: safeString(run?.id), status: safeString(run?.status), serviceId: safeString(run?.service_id),
+      leaseVersion: Number.isSafeInteger(run?.lease_version) ? run.lease_version : null,
+      engineCheckpointPresent: storedString !== null && storedString.length > 0,
+      engineCheckpointUtf8Bytes: storedBytes,
+      engineCheckpointSha256: computedStoredSha256 },
+    recovery: { runId: safeString(baseline?.recovery?.runId), oldContainerId: safeString(baseline?.recovery?.oldContainerId),
+      nativeDestroyAcknowledged: baseline?.recovery?.nativeDestroyAcknowledged === true,
+      reclaimed: baseline?.recovery?.reclaimed === true },
+    witness: { storage: safeString(checkpoint?.storage), storedSha256: safeString(checkpoint?.storedSha256),
+      storedShaMatches: typeof checkpoint?.storedSha256 === 'string' && checkpoint.storedSha256 === computedStoredSha256,
+      serializedSha256: safeString(checkpoint?.serializedSha256),
+      serializedSha256FormatValid: typeof checkpoint?.serializedSha256 === 'string' && /^[0-9a-f]{64}$/u.test(checkpoint.serializedSha256),
+      serializedBytes,
+      serializedBytesWithinStorageLimits,
+      storageMatchesPrefix,
+      graphId: safeString(checkpoint?.graphId), node: safeString(checkpoint?.node), status: safeString(checkpoint?.status),
+      loopId: safeString(checkpoint?.loopId), sessionId: safeString(checkpoint?.sessionId), pendingToolCallIds: pending,
+      pendingToolCallMatches: pending?.length === 1 && pending[0] === 'call-recovery-1',
+      usage: { inputTokens: Number.isSafeInteger(usage?.inputTokens) ? usage.inputTokens : null,
+        outputTokens: Number.isSafeInteger(usage?.outputTokens) ? usage.outputTokens : null,
+        cachedInputTokens: Number.isSafeInteger(usage?.cachedInputTokens) ? usage.cachedInputTokens : null,
+        matchesExpected: usage?.inputTokens === 11 && usage?.outputTokens === 3 && usage?.cachedInputTokens === 2 } },
+  };
+}
+
+export function assertActualStaleCheckpointBinding({ baseline, runId, oldServiceId, oldContainerId }) {
+  const run = baseline?.state?.run;
+  const witness = baseline?.checkpoint;
+  const stored = run?.engine_checkpoint;
+  const validId = (value) => typeof value === 'string' && value.length > 0 && value.length <= 256 &&
+    !Array.from(value).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+  if (!validId(runId) || !validId(oldServiceId) || !validId(oldContainerId) ||
+      run?.id !== runId || run?.status !== 'running' || run?.service_id !== oldServiceId ||
+      run?.lease_version !== 7 || typeof stored !== 'string' || stored.length === 0 ||
+      baseline?.recovery?.runId !== runId || baseline?.recovery?.oldContainerId !== oldContainerId ||
+      baseline?.recovery?.nativeDestroyAcknowledged !== true || baseline?.recovery?.reclaimed !== false ||
+      JSON.stringify(witness) !== JSON.stringify(baseline?.recovery?.checkpoint))
+    throw new Error('actual stale-window Run and checkpoint witness identity is invalid');
+
+  const storedBytes = Buffer.byteLength(stored, 'utf8');
+  if (storedBytes > MAX_CHECKPOINT_BYTES ||
+      (stored.startsWith('r2:') ? witness?.storage !== 'r2' : witness?.storage !== 'inline' || storedBytes > MAX_INLINE_CHECKPOINT_BYTES))
+    throw new Error('actual stale-window checkpoint stored value exceeds native size or storage limits');
+  if (stored.startsWith('r2:')) {
+    const key = stored.slice(3);
+    const expectedPrefix = `agent-checkpoints/${encodeURIComponent(runId)}/${encodeURIComponent(oldServiceId)}/7/`;
+    if (!key.startsWith(expectedPrefix) ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/u.test(key.slice(expectedPrefix.length)))
+      throw new Error('actual stale-window checkpoint R2 pointer does not match the old Run lease');
+  }
+  const storedSha256 = createHash('sha256').update(Buffer.from(stored, 'utf8')).digest('hex');
+  const validDigest = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/u.test(value);
+  const validSize = Number.isSafeInteger(witness?.serializedBytes) && witness.serializedBytes > 0 &&
+    witness.serializedBytes <= MAX_CHECKPOINT_BYTES &&
+    (witness.storage === 'inline' && !stored.startsWith('r2:') && witness.serializedBytes <= MAX_INLINE_CHECKPOINT_BYTES ||
+      witness.storage === 'r2' && stored.startsWith('r2:') && witness.serializedBytes > MAX_INLINE_CHECKPOINT_BYTES);
+  const usage = witness?.usage;
+  if (witness?.storedSha256 !== storedSha256 || !validDigest(witness?.storedSha256) ||
+      !validDigest(witness?.serializedSha256) || !validSize ||
+      (witness.storage === 'inline' &&
+        (witness.serializedBytes !== storedBytes || witness.serializedSha256 !== storedSha256)) ||
+      witness?.graphId !== 'external-context-v1' || witness?.node !== 'execute_tools' || witness?.status !== 'running' ||
+      !validId(witness?.loopId) || !validId(witness?.sessionId) ||
+      !Array.isArray(witness?.pendingToolCallIds) || witness.pendingToolCallIds.length !== 1 ||
+      witness.pendingToolCallIds[0] !== 'call-recovery-1' ||
+      usage?.inputTokens !== 11 || usage?.outputTokens !== 3 || usage?.cachedInputTokens !== 2)
+    throw new Error('actual stale-window checkpoint digest, storage, size, selectors, or usage is invalid');
+  return true;
+}
+
 export function assertNativeStaleWindowQualification({ actualStaleWindow, budgets, report, evidence }) {
   const expectedBudgets = nativeContainerProofBudgets(actualStaleWindow);
   if (typeof actualStaleWindow !== 'boolean' || !budgets || !report ||
@@ -83,9 +180,29 @@ export function assertNativeStaleWindowQualification({ actualStaleWindow, budget
     throw new Error('actual stale-window early evidence file differs from the child report');
   const baseline = evidence.baseline;
   const run = baseline?.state?.run;
+  const oldContainerWitness = report.containerWitness;
+  const oldPhysicalDeath = report.recovery?.oldPhysicalDeath;
   if (!run?.id || run.id !== report.containerWitness?.runId || run.id !== report.recovery?.runId ||
-      run.service_id !== report.recovery?.oldServiceId || run.lease_version !== 7 || run.status !== 'running')
+      run.service_id !== report.recovery?.oldServiceId ||
+      report.containerWitness?.containerId !== report.recovery?.oldContainerId ||
+      run.lease_version !== 7 || run.status !== 'running')
     throw new Error('actual stale-window evidence is not joined to the witnessed old Run identity');
+  const physicalAgentIds = Array.isArray(oldContainerWitness?.dockerContainers)
+    ? oldContainerWitness.dockerContainers.map((container) => container?.id) : [];
+  const deathAt = Date.parse(oldPhysicalDeath?.at);
+  const markerAt = Date.parse(oldPhysicalDeath?.marker?.at);
+  if (oldPhysicalDeath?.acknowledged !== true || !Array.isArray(oldPhysicalDeath.agentIdsAbsent) ||
+      physicalAgentIds.length === 0 || physicalAgentIds.some((id) => typeof id !== 'string' || !/^[a-f0-9]{64}$/u.test(id)) ||
+      new Set(physicalAgentIds).size !== physicalAgentIds.length ||
+      [...physicalAgentIds].sort().join(',') !== [...oldPhysicalDeath.agentIdsAbsent].sort().join(',') ||
+      !Number.isFinite(deathAt) || !Number.isFinite(markerAt) || markerAt > deathAt ||
+      oldPhysicalDeath.marker?.kind !== 'stage' || oldPhysicalDeath.marker?.runId !== run.id ||
+      oldPhysicalDeath.marker?.containerId !== oldContainerWitness.containerId ||
+      oldPhysicalDeath.marker?.stage !== 'old-container-destroyed-before-tool-ack' ||
+      oldPhysicalDeath.marker?.productionToolStatus !== 200 ||
+      oldPhysicalDeath.marker?.nativeDestroyAcknowledged !== true ||
+      oldPhysicalDeath.marker?.successResponseForwarded !== false)
+    throw new Error('actual stale-window old physical Container death does not join the exact native witness');
   if (!Number.isFinite(Date.parse(run.service_heartbeat)) || evidence.heartbeatAt !== run.service_heartbeat ||
       !Number.isFinite(Date.parse(evidence.baselineObservedAt)) ||
       Math.abs(Date.parse(evidence.baselineObservedAt) - Date.parse(run.service_heartbeat) - evidence.heartbeatAgeBefore) > 10)
@@ -94,9 +211,11 @@ export function assertNativeStaleWindowQualification({ actualStaleWindow, budget
       baseline.owner?.status !== 'active' || baseline.owner?.type !== 'user' ||
       baseline.workspace?.status !== 'active' || baseline.workspace?.type !== 'team' ||
       baseline.workspace?.owner_account_id !== baseline.owner?.id ||
-      baseline.checkpoint?.runId !== run.id || baseline.recovery?.nativeDestroyAcknowledged !== true ||
+      baseline.recovery?.nativeDestroyAcknowledged !== true ||
       baseline.recovery?.reclaimed !== false)
     throw new Error('actual stale-window baseline owner, checkpoint, or old Container death witness is invalid');
+  assertActualStaleCheckpointBinding({ baseline, runId: run.id, oldServiceId: run.service_id,
+    oldContainerId: report.containerWitness.containerId });
   assertRunSnapshotUnchanged(baseline, evidence.afterManualAgeSnapshot);
   assertRunSnapshotUnchanged(baseline, evidence.afterEarlyScheduledSnapshot);
   assertRunSnapshotUnchanged(baseline, evidence.afterWaitSnapshot);

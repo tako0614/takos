@@ -216,3 +216,25 @@ The mode proves the real heartbeat threshold, not 300 seconds of physical
 Container absence. Whole-workerd restart remains separate: the installed Miniflare
 Queue broker is in-memory, so a queuePersist option cannot establish queued-message
 durability across a workerd restart.
+
+## Actual-window trial failure and canonical checkpoint binding correction
+
+The first actual-window trial at `c1752f352` destroyed the witnessed old physical
+Container before the successful tool ACK, then failed in the controller baseline
+assertion. It never reached the five-minute wait or a replacement Container.
+The existing canonical checkpoint witness does not contain a `runId`; the
+assertion and its previous synthetic positive test incorrectly assumed that field.
+The failed trial, raw files, cleanup outcome and prior source review remain sealed.
+The separate portable gate and CI at that commit passed 1,700 tests; they did not
+qualify this actual-window native path.
+
+The correction binds the real D1 Run row and stored checkpoint hash to the old
+service/lease, canonical checkpoint selectors and exact old Container witness.
+Inline byte count and serialized hash must match the stored UTF-8 bytes; R2
+pointers retain their encoded Run/service/lease namespace and independent payload
+hash. The canonical checkpoint producer remains unchanged. The positive test now
+uses that producer, and negative tests mutate matching top-level/recovery witnesses
+together to require actual stored-value validation. Only bounded selectors and
+hashes are saved before a failed baseline assertion; raw checkpoint and token
+material are excluded. Twenty exact focused tests and the scoped type check passed.
+These checks prepare the corrected native trial; its outcome is recorded separately.

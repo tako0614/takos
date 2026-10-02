@@ -18,7 +18,8 @@ import { assertDockerImageIdentity } from './oci-image-identity.ts';
 import { nativeRecoveryPoolContainerId } from './native-container-proof-ownership.ts';
 import { captureNativeContainerTransportLogs } from './native-container-transport-logs.mjs';
 import { assertActualHeartbeatRecent, assertHeartbeatActuallyStale, assertMonotonicHeartbeatAge, assertNoEarlyRecovery,
-  assertRunSnapshotUnchanged, nativeContainerProofBudgets, remainingActualStaleWindowMs } from './native-container-stale-window.mjs';
+  assertActualStaleCheckpointBinding, actualStaleCheckpointBindingDiagnostics, assertRunSnapshotUnchanged,
+  nativeContainerProofBudgets, remainingActualStaleWindowMs } from './native-container-stale-window.mjs';
 
 const execFile = promisify(execFileCallback);
 const miniflareRequire = createRequire(import.meta.resolve('miniflare'));
@@ -589,6 +590,9 @@ export async function runNativeContainerRecovery(inputOptions) {
         return record(await response.json(), 'actual stale-window SQL snapshot');
       };
       const baseline = await readStaleWindowSnapshot();
+      const checkpointBindingDiagnostics = actualStaleCheckpointBindingDiagnostics(baseline);
+      await writeFile(join(options.outputDir, 'actual-stale-window-baseline-diagnostics.json'),
+        JSON.stringify(checkpointBindingDiagnostics, null, 2));
       const heartbeatAt = assertActualHeartbeatRecent(baseline.state, Date.now());
       const baselineObservedAtMs = Date.now();
       const heartbeatAgeBefore = baselineObservedAtMs - heartbeatAt;
@@ -598,9 +602,11 @@ export async function runNativeContainerRecovery(inputOptions) {
       assert(baseline.state.run?.status === 'running' && baseline.state.run.service_id === run.serviceId &&
         baseline.state.run.lease_version === 7 && baseline.state.run.account_id === run.workspaceId &&
         baseline.state.run.requester_account_id === run.ownerId && baseline.owner?.id === run.ownerId &&
-        baseline.workspace?.id === run.workspaceId && baseline.checkpoint?.runId === run.runId &&
+        baseline.workspace?.id === run.workspaceId &&
         baseline.recovery?.nativeDestroyAcknowledged === true && baseline.recovery?.reclaimed !== true,
       'actual stale-window baseline lacks the exact old Run, owner, checkpoint, or destroyed-Container witness');
+      assertActualStaleCheckpointBinding({ baseline, runId: run.runId, oldServiceId: run.serviceId,
+        oldContainerId: run.containerId });
       const manualAgeResponse = await mf.dispatchFetch(`${options.callbackUrl}/__probe/age-recovery`, {
         method: 'POST', headers: { 'X-Probe-Controller-Token': controllerToken }, signal: AbortSignal.timeout(10_000),
       });
@@ -1003,7 +1009,8 @@ export async function runNativeContainerRecovery(inputOptions) {
       usageProjection: { firstWitness: queuedWitnesses[0], dispatchCompleted: projectionBody.completed,
         doneWitness, meters, rollups, firstProjector: firstUsage.record },
       containerWitness, replacementContainerWitness,
-      recovery: { ...recovery, runId: run.runId, oldServiceId: run.serviceId, oldPhysicalDeath, staleStatuses,
+      recovery: { ...recovery, runId: run.runId, oldServiceId: run.serviceId, oldContainerId: run.containerId,
+        oldPhysicalDeath, staleStatuses,
         ...(options.actualStaleWindow ? { staleEligibility } : { aged: staleEligibility }), scheduledOutcome, canonical, duplicateRecovery,
         replacementDispatch },
       stages,

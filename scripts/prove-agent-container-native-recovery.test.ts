@@ -7,10 +7,11 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { runInNewContext } from "node:vm";
 import { createNativeProofEvidenceDirectory, parseNativeContainerProofArgs } from "./lib/native-container-proof-options.ts";
-import { assertActualHeartbeatRecent, assertHeartbeatActuallyStale, assertNoEarlyRecovery,
+import { assertActualHeartbeatRecent, assertActualStaleCheckpointBinding, assertHeartbeatActuallyStale, assertNoEarlyRecovery,
   assertMonotonicHeartbeatAge, assertNativeStaleWindowQualification, assertRunSnapshotUnchanged, nativeContainerProofBudgets,
   remainingActualStaleWindowMs } from "./lib/native-container-stale-window.mjs";
 import { createNativeContainerWorkerFixture } from "./lib/native-container-worker-fixture.mjs";
+import { captureCheckpointWitness } from "./lib/native-recovery-checkpoint-witness.mjs";
 import { assertFreshInspection, assertNativeRecoveryWitnesses, fixtureContainerName, nativeRecoveryPoolContainerId, selectOwnedStops, type DockerCandidate, type NativeContainerWitness } from "./lib/native-container-proof-ownership.ts";
 import { qualifyOwnedProcessGroup, type ProcessWitness } from "./lib/native-container-proof-process.ts";
 
@@ -134,18 +135,47 @@ test("early scheduled evidence rejects a claim and actual fixture age route refu
   assert.equal(sqlCalls, 0, "refused actual-mode manual ageing accessed SQL");
 });
 
-test("supervisor rejects mismatched, incomplete, early or mutated actual stale-window evidence", () => {
+test("supervisor accepts a real canonical checkpoint witness and rejects incomplete or mutated stale-window evidence", async () => {
   const heartbeatMs = 1_800_000_000_000;
   const heartbeat = new Date(heartbeatMs).toISOString();
+  const storedCheckpoint = JSON.stringify({ checkpoint: {
+    graph_id: "external-context-v1", current_node: "execute_tools", status: "running",
+    loop_id: "loop-1", session_id: "session-1", state_json: {
+      execution_profile: "external_context", loop_id: "loop-1", session_id: "session-1",
+      pending_tool_calls: [{ id: "call-recovery-1" }],
+    },
+  }, usage: { inputTokens: 11, outputTokens: 3, cachedInputTokens: 2 } });
+  const capture = await captureCheckpointWitness({ stored: storedCheckpoint, expected: {
+    runId: "run-1", serviceId: "old-service", leaseVersion: 7, pendingToolCallId: "call-recovery-1",
+    usage: { inputTokens: 11, outputTokens: 3, cachedInputTokens: 2 },
+  } });
+  assert.equal(Object.hasOwn(capture.witness, "runId"), false, "canonical witness identity is bound through the D1 Run");
+  const checkpoint = { ...capture.witness, pendingToolCallIds: [...capture.witness.pendingToolCallIds], usage: { ...capture.witness.usage } };
   const baseline = {
     state: { run: { id: "run-1", status: "running", service_id: "old-service", lease_version: 7,
-      account_id: "workspace-1", requester_account_id: "owner-1", service_heartbeat: heartbeat },
+      account_id: "workspace-1", requester_account_id: "owner-1", service_heartbeat: heartbeat, engine_checkpoint: storedCheckpoint },
     operations: [{ id: "operation-1", status: "completed" }], receipts: [], artifacts: [{ id: "artifact-1" }] },
     owner: { id: "owner-1", type: "user", status: "active", owner_account_id: "owner-1" },
     workspace: { id: "workspace-1", type: "team", status: "active", owner_account_id: "owner-1" },
-    checkpoint: { runId: "run-1" },
-    recovery: { nativeDestroyAcknowledged: true, reclaimed: false },
+    checkpoint,
+    recovery: { runId: "run-1", oldContainerId: "container-old", checkpoint: structuredClone(checkpoint),
+      nativeDestroyAcknowledged: true, reclaimed: false },
   };
+  const binding = { runId: "run-1", oldServiceId: "old-service", oldContainerId: "container-old" };
+  assert.equal(assertActualStaleCheckpointBinding({ baseline, ...binding }), true);
+  for (const mutate of [
+    (value: typeof baseline) => { value.state.run.id = "another-run"; },
+    (value: typeof baseline) => { value.state.run.engine_checkpoint += " "; },
+    (value: typeof baseline) => { value.recovery.oldContainerId = "another-container"; },
+    (value: typeof baseline) => { value.checkpoint.serializedSha256 = "0".repeat(64); },
+    (value: typeof baseline) => { value.checkpoint.serializedBytes++; },
+    (value: typeof baseline) => { value.checkpoint.pendingToolCallIds = ["wrong-call"]; },
+    (value: typeof baseline) => { value.checkpoint.usage.cachedInputTokens = 3; },
+  ]) {
+    const changed = structuredClone(baseline); mutate(changed);
+    changed.recovery.checkpoint = structuredClone(changed.checkpoint);
+    assert.throws(() => assertActualStaleCheckpointBinding({ baseline: changed, ...binding }));
+  }
   const evidence = {
     baseline, afterManualAgeSnapshot: structuredClone(baseline), afterEarlyScheduledSnapshot: structuredClone(baseline),
     afterWaitSnapshot: structuredClone(baseline), heartbeatAt: heartbeat,
@@ -164,8 +194,14 @@ test("supervisor rejects mismatched, incomplete, early or mutated actual stale-w
   const budgets = nativeContainerProofBudgets(true);
   const report = { proofMode: budgets.mode, budgets, sourceState: { proofMode: budgets.mode, actualStaleWindow: true },
     limitation: "Run heartbeat was observed recent, remained unchanged, and crossed its 300-second stale threshold; whole workerd restart is not proven",
-    containerWitness: { runId: "run-1" },
-    recovery: { runId: "run-1", oldServiceId: "old-service", staleEligibility: evidence } };
+    containerWitness: { runId: "run-1", containerId: "container-old", dockerContainers: [{ id: "a".repeat(64) }] },
+    recovery: { runId: "run-1", oldServiceId: "old-service", oldContainerId: "container-old", staleEligibility: evidence,
+      oldPhysicalDeath: { acknowledged: true, at: new Date(heartbeatMs + 9_500).toISOString(), agentIdsAbsent: ["a".repeat(64)], marker: {
+        at: new Date(heartbeatMs + 9_000).toISOString(),
+        kind: "stage", runId: "run-1", containerId: "container-old", stage: "old-container-destroyed-before-tool-ack",
+        productionToolStatus: 200, nativeDestroyAcknowledged: true, successResponseForwarded: false,
+      } },
+    } };
   assert.equal(assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets, report, evidence }), true);
   const check = (changedEvidence: typeof evidence) => assertNativeStaleWindowQualification({ actualStaleWindow: true,
     budgets, report: { ...report, recovery: { ...report.recovery, staleEligibility: changedEvidence } }, evidence: changedEvidence });
@@ -175,6 +211,13 @@ test("supervisor rejects mismatched, incomplete, early or mutated actual stale-w
   }
   for (const mutate of [
     (value: typeof evidence) => { value.afterWaitSnapshot.state.run.service_heartbeat = new Date(heartbeatMs - 1).toISOString(); },
+    (value: typeof evidence) => { value.baseline.state.run.engine_checkpoint += " "; },
+    (value: typeof evidence) => { value.baseline.recovery.runId = "another-run"; },
+    (value: typeof evidence) => { value.baseline.recovery.oldContainerId = "another-container"; },
+    (value: typeof evidence) => { value.baseline.checkpoint.storedSha256 = "0".repeat(64); },
+    (value: typeof evidence) => { value.baseline.checkpoint.serializedSha256 = "0".repeat(64); },
+    (value: typeof evidence) => { value.baseline.checkpoint.node = "completed"; },
+    (value: typeof evidence) => { value.baseline.checkpoint.usage.inputTokens = 12; },
     (value: typeof evidence) => { value.afterEarlyScheduledSnapshot.recovery.reclaimed = true; },
     (value: typeof evidence) => { value.manualAgeRejected.status = 500; },
     (value: typeof evidence) => { value.manualAgeRejected.code = "unrelated-error"; },
@@ -192,7 +235,7 @@ test("supervisor rejects mismatched, incomplete, early or mutated actual stale-w
   const wrongFile = structuredClone(evidence); wrongFile.manualAgeRejected.rejected = false;
   assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets, report, evidence: wrongFile }));
   assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets,
-    report: { ...report, containerWitness: { runId: "another-run" } }, evidence }));
+    report: { ...report, containerWitness: { runId: "another-run", containerId: "container-old" } }, evidence }));
   const forgedBudgets = { ...budgets, childTimeoutMs: 999_999 };
   assert.throws(() => assertNativeStaleWindowQualification({ actualStaleWindow: true, budgets: forgedBudgets,
     report: { ...report, budgets: forgedBudgets }, evidence }));
