@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   validateAuditFindings,
@@ -7,6 +8,7 @@ import {
   validateVulnerableToolOccurrences,
 } from "../validate-dependency-security.ts";
 
+// Keep the historical fixture fixed so renewals cannot move the expiry regression.
 const evidence = {
   kind: "takos.dependency-audit-waivers@v1" as const,
   reviewedAt: "2026-07-22",
@@ -60,6 +62,68 @@ const audit = {
 };
 
 describe("dependency security gate", () => {
+  test("rejects impossible calendar dates, future reviews, and unbounded renewals", () => {
+    expect(
+      validateReviewWindow(
+        { ...evidence, reviewedAt: "2026-02-30" },
+        "2026-07-22",
+      ),
+    ).toEqual(["the waiver reviewedAt date is invalid"]);
+    expect(
+      validateReviewWindow(
+        { ...evidence, reviewAfter: "2026-08-32" },
+        "2026-07-22",
+      ),
+    ).toEqual(["the waiver reviewAfter date is invalid"]);
+    expect(validateReviewWindow(evidence, "2026-07-21")).toEqual([
+      "the waiver reviewedAt date is in the future",
+    ]);
+    expect(
+      validateReviewWindow(
+        { ...evidence, reviewAfter: "2026-08-06" },
+        "2026-07-22",
+      ),
+    ).toEqual(["the waiver review window must not exceed 14 days"]);
+    expect(
+      validateReviewWindow(
+        { ...evidence, reviewAfter: "2026-07-21" },
+        "2026-07-22",
+      ),
+    ).toEqual(["the waiver review window ends before it starts"]);
+    expect(validateReviewWindow(evidence, evidence.reviewAfter)).toEqual([]);
+  });
+
+  test("keeps the repository waiver current and confined to the reviewed dev-only scope", () => {
+    const reviewed = JSON.parse(
+      readFileSync(
+        new URL("../../security/dependency-audit-waivers.json", import.meta.url),
+        "utf8",
+      ),
+    ) as typeof evidence;
+    expect(
+      validateReviewWindow(reviewed, new Date().toISOString().slice(0, 10)),
+    ).toEqual([]);
+    const rootPackage = JSON.parse(
+      readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(
+      validateWaiverScope(
+        rootPackage,
+        {
+          name: "vitepress",
+          version: "1.6.4",
+          dependencies: { vite: "^5.4.14" },
+        },
+        { name: "vite", version: "5.4.21" },
+        { name: "esbuild", version: "0.21.5" },
+        reviewed,
+      ),
+    ).toEqual([]);
+  });
+
   test("accepts only the exact reviewed dev-only advisory", () => {
     expect(validateAuditFindings(audit, evidence)).toEqual([]);
     expect(validateReviewWindow(evidence, "2026-07-22")).toEqual([]);

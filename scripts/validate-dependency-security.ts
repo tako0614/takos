@@ -188,14 +188,23 @@ export function validateReviewWindow(
   evidence: WaiverEvidence,
   today: string,
 ): string[] {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(evidence.reviewedAt)) {
+  if (!isCalendarDate(evidence.reviewedAt)) {
     return ["the waiver reviewedAt date is invalid"];
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(evidence.reviewAfter)) {
+  if (!isCalendarDate(evidence.reviewAfter)) {
     return ["the waiver reviewAfter date is invalid"];
   }
   if (evidence.reviewedAt > evidence.reviewAfter) {
     return ["the waiver review window ends before it starts"];
+  }
+  if (evidence.reviewedAt > today) {
+    return ["the waiver reviewedAt date is in the future"];
+  }
+  if (
+    Date.parse(evidence.reviewAfter) - Date.parse(evidence.reviewedAt) >
+    14 * 24 * 60 * 60 * 1000
+  ) {
+    return ["the waiver review window must not exceed 14 days"];
   }
   if (today > evidence.reviewAfter) {
     return [
@@ -203,6 +212,13 @@ export function validateReviewWindow(
     ];
   }
   return [];
+}
+
+function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString().slice(0, 10) === value;
 }
 
 function canonicalAudit(

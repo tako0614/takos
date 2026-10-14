@@ -9,7 +9,7 @@ Run ledger は append-only なので、巻き戻しも「過去に戻す」の�
 
 - worker artifact や module 参照は、対象の commit / descriptor を固定して
   再 apply すれば前の状態に戻せます。
-- provider の data copy や schema migration の巻き戻しは、現在の rollback の
+- provider data copy / schema migration の巻き戻しは、現在の rollback の
   保証範囲ではありません。provider-gap bridge が作った D1 のデータも
   destroy では巻き戻しません。
 - runtime secret は OpenTofu state の外にあるため、secret だけを戻す操作は
