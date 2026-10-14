@@ -128,6 +128,7 @@
     "form-data": "2.5.6",
     "hono": "4.12.31",
     "protobufjs": "7.6.5",
+    "proxy-addr": "2.0.8",
     "seroval": "1.6.9",
     "seroval-plugins": "1.6.9",
     "sharp": "0.35.3",
