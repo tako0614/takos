@@ -24,6 +24,9 @@ const MAX_SQL_PARAMETERS = 100;
 const MAX_SQL_STATEMENTS = 100;
 
 const EDGE_METHODS = ["execute", "query", "transaction"] as const;
+// Native D1 also exposes a query RPC. Only these names distinguish edge.sql
+// from a complete native prepare/batch binding.
+const EDGE_ONLY_METHODS = ["execute", "transaction"] as const;
 const NATIVE_METHODS = [
   "prepare",
   "batch",
@@ -86,13 +89,15 @@ export function isEdgeSqlBinding(value: unknown): value is EdgeSqlBinding {
 /**
  * Native D1 is identified by the two operations the pinned Drizzle driver
  * needs.  The shared native port retains its other required methods; the
- * narrower edge adapter explicitly refuses those methods.  A binding carrying
- * any edge.sql operation is a hybrid and is refused rather than guessed into
- * the native path.
+ * narrower edge adapter explicitly refuses those methods. Native D1's query
+ * RPC shares a name with edge.sql, but keeps the native driver and migration
+ * ownership. External execute/transaction members still make a hybrid, even
+ * when non-callable; a malformed query RPC is also refused.
  */
 export function isNativeD1Binding(value: unknown): value is SqlDatabaseBinding {
   return hasMethods(value, ["prepare", "batch"]) &&
-    !hasAnyProperty(value as Record<string, unknown>, EDGE_METHODS);
+    !hasAnyProperty(value, EDGE_ONLY_METHODS) &&
+    (!("query" in value) || typeof value.query === "function");
 }
 
 /** Alias matching the terminology used by other platform adapters. */

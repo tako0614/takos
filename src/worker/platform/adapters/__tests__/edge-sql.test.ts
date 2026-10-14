@@ -5,10 +5,43 @@ import {
   isEdgeSqlBinding,
   isNativeD1Binding,
   normalizeEdgeSqlResult,
+  resolveSqlDatabaseBinding,
   toEdgeSqlValue,
 } from "../edge-sql.ts";
 
 describe("edge.sql platform adapter", () => {
+  test("legacy native D1 without query RPC preserves its identity", () => {
+    const native = {
+      prepare() {},
+      async batch() {
+        return [];
+      },
+    };
+    expect(Object.is(resolveSqlDatabaseBinding(native), native)).toBe(true);
+  });
+
+  test("native D1 still rejects partial and complete external SQL hybrids", () => {
+    const native = {
+      prepare() {},
+      async batch() {
+        return [];
+      },
+      async query() {},
+    };
+    for (const extra of [
+      { execute: undefined },
+      { transaction: null },
+      { execute() {}, transaction() {} },
+    ]) {
+      expect(() => resolveSqlDatabaseBinding({ ...native, ...extra }))
+        .toThrow("partial and hybrid bindings are refused");
+    }
+    expect(() => resolveSqlDatabaseBinding({ ...native, query: undefined }))
+      .toThrow("partial and hybrid bindings are refused");
+    expect(() => resolveSqlDatabaseBinding({ query: native.query }))
+      .toThrow("partial and hybrid bindings are refused");
+  });
+
   test("projects execute results through the prepared D1 consumer surface", async () => {
     const calls: Array<{
       operation: string;

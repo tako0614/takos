@@ -8,6 +8,7 @@ import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 import type { Env } from "../../shared/types/index.ts";
 import { createWebWorker } from "../../web.ts";
 import { buildWorkersWebPlatform } from "../adapters/workers.ts";
+import { isExternallyManagedSqlBinding } from "../adapters/edge-sql.ts";
 
 const edgeSqlProbe = sqliteTable("edge_sql_probe", {
   id: integer("id").notNull(),
@@ -120,18 +121,38 @@ test("externally managed edge.sql skips Worker-owned migration triggers", async 
   expect(sqlCalls).toEqual([]);
 });
 
-test("native D1 keeps the pinned drizzle-orm/d1 driver", () => {
-  const native = {
+test("native D1 query RPC keeps platform identity and the pinned D1 driver", async () => {
+  const calls: string[] = [];
+  // Current workerd exposes query() on D1Database's prototype even when its
+  // d1_binding_jsrpc compatibility flag is disabled. It is not edge.sql query.
+  class NativeD1 {
     prepare() {
-      throw new Error("not executed");
-    },
+      calls.push("prepare");
+      return {
+        bind() {
+          return this;
+        },
+        async raw() {
+          calls.push("raw");
+          return [[7, "native"]];
+        },
+      };
+    }
     async batch() {
       return [];
-    },
-  } as unknown as SqlDatabaseBinding;
+    }
+    async query() {
+      throw new Error("D1 query RPC must not be invoked by the native driver");
+    }
+  }
+  const native = new NativeD1() as unknown as SqlDatabaseBinding;
+  const platform = buildWorkersWebPlatform({ DB: native } as Env);
+  const db = getDb(platform.services.sql!.binding!);
 
-  const db = getDb(native);
-
+  expect(platform.bindings.DB).toBe(native);
+  expect(isExternallyManagedSqlBinding(native)).toBe(false);
   expect(db.$client).toBe(native);
   expect(getDb(native)).toBe(db);
+  expect(await db.select().from(edgeSqlProbe)).toEqual([{ id: 7, label: "native" }]);
+  expect(calls).toEqual(["prepare", "raw"]);
 });
