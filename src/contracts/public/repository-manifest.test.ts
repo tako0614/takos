@@ -183,6 +183,9 @@ test("the repository source and website CTA use one exact Takos release", () => 
   );
   expect(websiteCloudUrlSource).not.toContain("var.");
 
+  // The website wraps the long tofu plan invocation with shell line
+  // continuations, so assert its three fragments in order rather than one
+  // single-line string.
   const selfHostSequence = [
     "git clone https://github.com/tako0614/takos.git",
     "git fetch --tags origin",
@@ -194,7 +197,9 @@ test("the repository source and website CTA use one exact Takos release", () => 
     'cp deploy/opentofu/cloudflare/opentofu.tfvars.example "$HOME/.config/takos/takos.tfvars"',
     'chmod 600 "$HOME/.config/takos/takos.tfvars"',
     "tofu -chdir=deploy/opentofu/cloudflare init -input=false",
-    'tofu -chdir=deploy/opentofu/cloudflare plan -input=false -var-file="$HOME/.config/takos/takos.tfvars" -out="$HOME/.config/takos/takos.tfplan"',
+    "tofu -chdir=deploy/opentofu/cloudflare plan -input=false",
+    '-var-file="$HOME/.config/takos/takos.tfvars"',
+    '-out="$HOME/.config/takos/takos.tfplan"',
     'tofu show "$HOME/.config/takos/takos.tfplan"',
     'tofu -chdir=deploy/opentofu/cloudflare apply "$HOME/.config/takos/takos.tfplan"',
   ];
