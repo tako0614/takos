@@ -5,7 +5,7 @@
 
 | Field         | Value                                                   |
 | ------------- | ------------------------------------------------------- |
-| Last reviewed | 2026-05-12                                              |
+| Last reviewed | 2026-10-01                                              |
 | Owner         | Takos app / API (`takos`)                               |
 | Status        | Operational baseline; final legal review remains E-11.1 |
 
@@ -60,6 +60,36 @@ secret は返しません。
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App-local auth/session metadata | Takos Web/API が持つ session mirror と revocation state だけを返す。provider subject、OIDC identity、billing identity、refresh token ciphertext は返さない |
 | App usage                       | app-local usage event / rollup metadata を返す。Accounts billing account / Stripe identifiers は Takos 側では返さない                                      |
+
+`auth.identities` は app-local link の metadata に限定し、`provider_sub` を
+含みません。`auth.revocations` は本人の app-local subject に関連付けられた
+`revoked_at` / `reason` / `expires_at` を返し、raw session ID を含みません。
+subject の関連付けが無い失効記録や、外部参加者など別 subject の記録は推測して
+本人の export に加えません。この export は全 instance の backup ではありません。
+
+## Private Workspace Scope
+
+個人 export は、認証済み Principal の default account の本人データを従来どおり
+返し、追加の private Workspace も対象にします。追加 Workspace の読み取りは
+active な Principal、active な Workspace、一致する所有者、active な owner
+witness を既存の Workspace 判定で確認します。`workspaces` はこの owner gate
+で現在読み取れる Workspace の概要です。legacy profile の default owner witness
+が未修復でも、本人の default account の SQL row を export から落としません。
+export 自体は witness の修復や Workspace access の追加を行いません。
+他の所有者、guest / viewer membership、偽装された owner witness、無効な
+Workspace の内容を取得範囲に加えません。
+
+`repositories` / `threads` / `memories` はその Workspace に属する SQL row、
+`messages` はその thread の SQL row、`runs` は thread と Workspace の所属が
+一致する SQL row を返します。本人の thread 内の外部参加者に由来する内容も
+保持します。外部参加者を instance owner として登録することはありません。
+profile / settings / metadata / auth / usage / notifications は従来どおり
+本人の subject に結び付いた範囲です。
+
+これは既存の app-local SQL export です。R2 等へ退避した payload や添付ファイルの
+取得、store 間の同時点 snapshot、全 instance の復元は保証しません。
+`/api/spaces/:spaceId/export` の thread 一覧と個別 thread download は、
+この個人 export とは別の利用経路です。
 
 ## Lawful Bases
 

@@ -8,6 +8,11 @@ import {
 import type { NotificationPushDeliveryEnv } from "../../application/services/notifications/mobile-push-delivery.ts";
 import { deliverNotificationToPushers } from "../../application/services/notifications/mobile-push-delivery.ts";
 import { getDb, notifications } from "../../infra/db/index.ts";
+import type { Env } from "../../shared/types/index.ts";
+import {
+  configuredOwner,
+  isActiveOwnerAccount,
+} from "../../application/services/identity/owner-admission.ts";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
 import {
   notificationPushQueueFallbackDelaySeconds,
@@ -24,7 +29,8 @@ import {
   reopenNotificationPushOutboxFromDlq,
 } from "../../application/services/notifications/push-outbox.ts";
 
-export type NotificationPushQueueEnv = NotificationPushDeliveryEnv;
+export type NotificationPushQueueEnv = NotificationPushDeliveryEnv &
+  Pick<Env, "OIDC_ISSUER_URL" | "OIDC_OWNER_SUBJECT">;
 
 export async function handleNotificationPushQueue(
   batch: MessageQueueBatch<unknown>,
@@ -95,6 +101,21 @@ export async function handleNotificationPushQueue(
           notification_id: body.notificationId,
           transport_message_id: message.id,
         });
+        message.ack();
+        continue;
+      }
+      const owner = configuredOwner({
+        issuer: env.OIDC_ISSUER_URL,
+        subject: env.OIDC_OWNER_SUBJECT,
+      });
+      if (!owner) {
+        // Preserve pending delivery until the operator fixes the configuration.
+        throw new Error("Notification push instance owner is not configured");
+      }
+      if (!await isActiveOwnerAccount(env.DB, owner, notification.userId)) {
+        // Pushers belong to the authenticated app owner, not external sharing
+        // participants. Retain their records but stop old-owner device delivery.
+        await markNotificationPushOutboxDone(env.DB, body.notificationId);
         message.ack();
         continue;
       }

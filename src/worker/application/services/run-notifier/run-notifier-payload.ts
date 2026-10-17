@@ -18,6 +18,7 @@ export function buildRunNotifierEmitPayload<TData>(
       type,
       data,
       event_id: eventId,
+      dedup_key: `run:${runId}:event:${eventId}`,
     };
   }
 

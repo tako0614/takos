@@ -1,0 +1,190 @@
+# Run 履歴と通知の復旧
+
+Takos は所有者 1 人のインスタンスです。Run の履歴は Run ごとに、通知のストリームは
+その所有者の Principal ごとに保存します。通知の宛先や外部参加者を新しいインスタンス
+所有者として登録する仕組みではありません。
+
+## 保存と再送
+
+`RunNotifierDO` と `NotificationNotifierDO` の `bufferState` は v2 の commit head です。
+JSON と flush 用 gzip を 64 KiB ごとの変更しない chunk に分割し、SHA-256 と完全な
+readback を確認してから、一つの head を保存します。chunk の base64 値は約 88 KiB で、
+legacy KV の文書上の 128 KiB 制限より小さくします。head、参照先、payload の検証が
+済むまで状態をインストールしません。保存結果が不明なら head を再読し、その読み込みも
+失敗すれば次の操作を拒否します。ACK と WebSocket の配信は head 保存の後です。
+
+Run の R2 書き込みは、送る gzip の正確なバイト列と flush intent を先に DO に保存します。
+R2 が同じバイト列なら完了できます。不存在なら条件付き作成と readback を行い、違う
+バイト列なら intent を残して停止します。成功後の head 保存に失敗しても、再起動後は
+同じ intent を処理します。最終保存は直列化した最新状態に対して行い、自分が処理した
+prefix だけを除くため、処理中に届いた後続イベントを失いません。
+
+歴史的な inline state は読み込めます。旧 state に由来する pending のみ、既存 gzip の
+JSONL が同一ならその実バイト列を intent に保存して採用できます。新規 v2 intent は
+JSONL が同じでも圧縮バイト列が違えば採用しません。異なる履歴や壊れた chunk を自動で
+上書き・削除して復旧することはありません。
+
+Run producer は SQL event ID を含む安定した再送キーを使います。usage は異なる計測を
+同一 payload だけで重複と判断しません。再送には安定した `request_id` が必要です。
+SQL の `runs.last_event_id` は単調な投影であり、R2 の保存済み範囲の証明には使いません。
+
+## Run の索引と旧履歴の移行
+
+Run の論理 snapshot は schema5、Notification は schema2 です。外側の commit head は
+どちらも v2 のままです。Run は既存 DO KV の point read で SHA-256 を検証する B+tree を
+持ち、各 segment の正確な R2 key、gzip digest/bytes、event の範囲・件数を記録します。
+root の切替と対応する pending prefix の除去を同じ head へ保存します。node を書く前に
+挿入計画を保存し、退役 node の掃除も同じ head に結び付いた記録に従います。
+新入力の受理前に、将来の挿入計画用 3 MiB と 48 chunk 分も予約します。
+
+公開 replay/SSE と InfoUnitIndexer は内部 `/archive` から必要な descriptor と pending を
+取得し、必要な gzip だけを検証して読みます。ready 後の通常読取は R2 catalog を列挙
+しません。SQL の terminal 証拠も merge しますが、索引・必須 body の読取失敗を無視して
+terminal stream を完了させません。event ID は preferred SQL ID により飛ぶことがあるため、
+counter 以下の全整数が存在するとは仮定しません。
+
+旧履歴は building 中に一度列挙し、再起動できる frontier を保存します。1 page は 32 key、
+1 request/alarm は最大 8 step・20 秒の開始判定で処理し、remote read は別途期限を持ちます。
+building 中は新規受理と flush を止めます。無効 key、重複範囲、既知 ring/pending との矛盾、
+破損 body はデータを保って repair にします。通信障害・読取期限切れは再試行対象です。
+正の `r2LastFlushedSegmentIndex` がある場合は、索引の最終 descriptor の key・segment
+番号がその確定 frontier と一致することも完了前に検証します。リングが全て pending に
+残っていても、既知の最終保存済み body の欠落を ready と扱いません。番号の欠番は合法で、
+0 の旧 frontier から過去の完全性は推定しません。未知の中間欠落を復元する検証ではありません。
+32768 個を超える cursor、圧縮・展開とも 8 MiB を超える segment は自動移行の対象外です。
+旧 reader の展開上限は 200 MiB だったため、合法な大きい旧 segment にもこの制限が及びます。
+大きい旧 segment は [オフライン候補の道具](run-archive-candidate.md) で再分割できます。
+実環境の export、全インスタンスの restore、対象 backend の資格確認は未完了です。
+
+実環境の切替前に旧 writer と遅延書込を止め、元 head・R2・SQL witness の copy を照合して
+保存する必要があります。大きい旧 segment の forward repair は、その copy をオフラインで
+分割し、ID/type/data/時刻を保った各 gzip の件数・範囲・digest を検証します。オフラインの
+道具は Run 一件の head と gzip を新しい隔離 namespace 用に作り、cold reader で
+全件を照合します。同じ論理 key の bytes が変わるため、元 bucket／prefix に適用できません。
+upload、本番 head の置換、他 Run を含む切替は実行しません。移行が証明するのは現存検証済み body と既知の
+pending/ring の対応であり、過去の消失復元や SQL 全 witness の照合ではありません。
+
+## 受理済み usage の集計
+
+Run の schema4以降の head は bounded な canonical 8 メーターの合計と、受理 revision／SQL
+投影済み revision を持ちます。usage の合計・pending・receipt は同じ head で確定します。
+private `/usage-snapshot` はその受理済み合計を返し、`/usage-project` は SQL の token
+合計も含めて全メーターを原子的に投影します。terminal は usage の封印ではありません。
+終了後の usage、新しい revision、失敗や応答喪失は dirty 状態と alarm で回復します。
+SQL 操作は head の直列化や constructor の外で行い、古い ACK は後続 revision を消しません。
+
+旧 schema1〜3 は合計を持たないため、usage baseline を再開可能な bounded step で作ります。
+baseline 中の新規 usage と usage flush を止め、確定済みの正の連番 segment を厳密に読み、
+pending を一度加算します。確定 frontier より先の interrupted PUT は accepted intent／
+legacy pending との完全な witness が必要で、pending と二重に加算しません。
+frontier が0でも prefix 全体が空か確認します。旧 segment 0、番号の欠落、由来不明の
+object、壊れた body は repair として保持し、部分合計を SQL に反映しません。
+これは Run event ID の合法な欠番を禁止する条件ではありません。
+有効な未知 meter token は archive に保持し、canonical 8 の集計には算入しません。
+
+SQL の固定 Run／meter 行は単調な累積投影です。最初の owner／scope／記録月を維持し、
+affected rollup を一定の順に lock してから event を更新・月次合計を再計算します。
+通常 usage の writer も同じ rollup lock に従い、並行した増分を落としません。
+このローカル source 検証とは別に、実 backend の transaction／concurrency と remote
+alarm、producer retry identity、SQL token と raw token の重複方針を確認する必要があります。
+
+## SQL 終了確定後の usage 回復
+
+終了 SQL が確定した後で notifier への emit が未受理になると、DO に dirty revision が
+ありません。この場合は DO alarm だけを回復経路にできません。terminal transaction は
+完了・失敗・キャンセルのいずれでも、同じ winning Run／status／completion key に対する
+`run_usage_projection_outbox` を保存します。要求した利用者の有無や検索の可否で省略しません。
+Workspace と Principal owner の証拠も保存し、CAS に負けた処理は行を作りません。
+
+cron は検索・embedding・通知処理とは別に、期限が来た queued 行と古い dispatching claim
+を一定数だけ回収します。claim token が一致する処理だけが完了・再試行状態を更新します。
+SQL／RPC／応答 body の各待機を5秒、dispatch全体を30秒の残り時間で制限します。
+期限後にSQLが確定したclaimも、古いclaimの再回収と同じ固定keyで回復します。
+private `/usage-project` の成功は SQL 投影と DO の projected revision が確定した証拠です。
+通信・SQL 応答の喪失や process 停止では同じ要求を再試行し、固定 Run／meter 行を
+累積 MAX で回復します。done 行も保存し、再試行待ち・所有境界の不一致を成功と扱いません。
+
+投影は記録済み owner／Workspace／terminal witness を SQL の同じ transaction 内で検証
+します。dispatcher が RPC 前に確認するだけでは、確認と保存の間の所有状態変更を防げません。
+通常の自動投影と alarm もこの境界に従い、0 メーターでも証拠の確認を省きません。
+古い owner の使用量を新しい owner に移管せず、現在の exact issuer／subject と active
+Principal、Workspace の所有証拠が一致しない場合は修復が必要です。usage 回復は tool
+実行を再認可する操作ではなく、外部参加者を新しい所有者として登録する操作でもありません。
+固定meter／rollupの所有境界が違う場合も移管せず、確認済みの衝突だけをprivate RPCの
+修復codeでblockedにします。SQL制約エラー全般を恒久障害とはみなしません。outboxには
+制限した理由を保存し、一時障害のqueued/backoffと修復待ちを区別します。
+
+追加 migration `0110` を新 Worker より先に適用する必要があります。本作業は source と
+ローカル fixture の検証であり、本番 migration を実行しません。以前の terminal 全件を
+cron や migration から自動で backfill せず、証拠のない履歴は明示した cohort の inventory
+と修復が必要です。code rollback でも outbox と未完了要求を保存します。古い Worker が
+追加 table を無視できることは、所有者証拠を検証できることの証明ではありません。
+rollback は証拠対応の artifact、または投影と writer を止めた forward repair を使います。
+
+## 通知の長期利用と容量
+
+`notification.new` は `notification_id` による SQL inbox の更新ヒントです。
+正本は SQL の通知行で、ストリームは現在の 100 件の replay と再送 receipt を保持します。
+その範囲の再送は同じ cursor を返します。範囲外に退いた通知は同じ ID の新しいヒントを
+配信できますが、固定 ID の SQL 行を追加・置換しません。任意の期間にわたるヒントの
+exactly-once 配信は保証しません。HTTP 失敗や保存失敗後のヒント再送は可能です。
+ヒントの配信失敗だけでは SQL inbox の作成を取り消しません。
+
+Run の schema5 receipt は emit／usage の別 namespace と正確な opaque key を、private
+KV の認証済み tree に保持します。modern emit の digest／元 event ID、usage の digest、
+旧 opaque emit key の受理時刻を保持し、modern receipt を優先します。通常 lookup は
+root から必要な node だけを point read し、KV／R2 全一覧を読まず、各 bytes／SHA／範囲／
+件数を検証します。missing／corrupt node を「未受理の key」として再実行しません。
+初期化済み actor の emit／usage は、この認証失敗を private 503 として返し、counter／
+usage 合計や receipt を変更しません。cold load 自体が失敗した場合は native actor が
+fetch 前に終了し得るため、同じ HTTP 応答ではなく、未受理・無変更を復旧の条件とします。
+
+ready head の inline delta は emit と usage を合わせて最大64件です。新しい receipt と
+event counter／pending、または usage totals／revision は同じ head で確定してから
+ACK します。delta の tree への挿入計画を先に保存し、immutable node の readback 後に
+root と対応する delta prefix を同じ head で切り替えます。archive と receipt の計画は
+直列化し、退役記録に基づく GC でも現在の root から再び参照される node を削除しません。
+
+旧 schema1〜4 は全 inline receipt を保持したまま bulk bootstrap 計画を head に保存し、
+1 alarm 最大16 node を保存します。leaf は最大64件かつ64 KiB、branch は最大8参照です。
+途中の cursor は `run-receipt-v1/bootstrap-progress/<sourceDigest>` の小さいレコードに
+保存・readback し、計画の SHA と source digest に結び付けます。毎回大きい head を
+書き直しません。cold 起動は元 source から計画を再構成し、進捗までの全 node の bytes を
+照合します。全 node の認証後に root と inline source の除去を一つの head で確定します。
+切替後に進捗レコードの除去が失敗しても、参照されない小さいレコードが残るだけです。途中の
+node PUT は受理や移行完了ではありません。新規受理は移行を待ち、既知の duplicate は
+元の結果を保ちます。旧 head に計画を保存する余裕が無ければ、データを保持して拒否し、
+保存した export から隔離した [オフライン候補](run-archive-candidate.md) を作ります。
+以前に消失・退役した key の復元や再送期限の短縮はしません。
+
+Run receipt と未処理データは容量を理由に捨てません。snapshot と live blob の合計は
+8 MiB、参照 descriptor は 128 chunk までです。新しい入力が収まらなければ、ID を
+進める前に 503 で拒否します。Run が非常に長い場合の容量・性能の資格確認は残ります。
+recovery alarm は pending を公開する head より先に設定します。途中で失敗した staging
+コピーも、次の入力がなくても alarm で片付けます。片付けるのは検証済み head から
+参照されない内部 chunk だけで、通知行・履歴・Workspace を削除しません。
+
+## GA と後戻りの条件
+
+ローカル workerd での chunk/restart と fault injection は、Cloudflare 本番や別 backend の
+永続性・alarm 配送・容量制限を証明しません。実測したローカル KV は `useSQLite:false`
+でも 133120 bytes を受理したため、文書上の制限の検証には使えません。R2 の
+`onlyIf` を無視する adapter に、条件付き作成の競合保護を主張しません。主担当には
+single-key storage commit、authoritative R2 read、条件付き作成、alarm/restart の
+exact target 資格確認を引き継ぎます。
+
+v2 head への移行後、`6066a1a5c` より古いコードは新 state を空とみなす危険があります。
+Run schema4 を読めない旧 source（`9e4559609d` を含む）は cold load を拒否し、履歴を
+そのまま提供できません。schema5 receipt tree への切替後は、schema4 までの reader
+（`f6dbe198` を含む）への source-only rollback でも復旧できません。保存した node／
+進捗／head と対応する reader を保持し、隔離した restore または forward repair を使います。
+旧稼働 writer は新しい building fence を認識しません。guard のある
+artifact が実際に保存・配備された証明はまだありません。古い artifact への deploy は
+オフライン restore または forward repair が必要です。この source 検証は deploy 許可や
+実環境の restore 完了ではありません。
+
+実装の検証記録は `tasks/TASK-takos-ga-notifier-journal-20261001.md` と
+`tasks/TASK-takos-ga-run-archive-index-20261001.md` と
+`tasks/TASK-takos-ga-archive-candidate-20261001.md` と
+`tasks/TASK-takos-ga-accepted-usage-20261001.md` と
+`tasks/TASK-takos-ga-terminal-usage-outbox-20261001.md` にあります。

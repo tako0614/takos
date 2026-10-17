@@ -54,6 +54,7 @@ type PlatformConfigInput = {
   tenantBaseDomain?: string;
   environment?: string;
   oidcIssuerUrl?: string;
+  oidcOwnerSubject?: string;
   oidcDiscoveryUrl?: string;
   oidcClientId?: string;
   oidcClientSecret?: string;
@@ -94,6 +95,7 @@ export function createPlatformConfig(
     tenantBaseDomain: input.tenantBaseDomain ?? "",
     environment: input.environment,
     oidcIssuerUrl: input.oidcIssuerUrl,
+    oidcOwnerSubject: input.oidcOwnerSubject,
     oidcDiscoveryUrl: input.oidcDiscoveryUrl,
     oidcClientId: input.oidcClientId,
     oidcClientSecret: input.oidcClientSecret,
@@ -212,6 +214,7 @@ export function buildPlatformFromEnv<TBindings extends object>(
     tenantBaseDomain: getString(bindings, "TENANT_BASE_DOMAIN"),
     environment: getString(bindings, "ENVIRONMENT"),
     oidcIssuerUrl: getString(bindings, "OIDC_ISSUER_URL"),
+    oidcOwnerSubject: getString(bindings, "OIDC_OWNER_SUBJECT"),
     oidcDiscoveryUrl: getString(bindings, "OIDC_DISCOVERY_URL"),
     oidcClientId: getString(bindings, "OIDC_CLIENT_ID"),
     oidcClientSecret: getString(bindings, "OIDC_CLIENT_SECRET"),

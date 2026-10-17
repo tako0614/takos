@@ -483,6 +483,11 @@ test("terminal status atomically persists event/outbox and exact retry is idempo
     statement.queryText.includes('INSERT INTO "run_notification_outbox"'),
   );
   assertEquals(outbox.length, 1);
+  const usageOutbox = batches[0].filter((statement) =>
+    statement.queryText.includes('INSERT INTO "run_usage_projection_outbox"'),
+  );
+  assertEquals(usageOutbox.length, 1);
+  assertEquals(usageOutbox[0].queryText.includes('r."completion_key" = ?'), true);
   const event = batches[0].find((statement) =>
     statement.queryText.includes('INSERT INTO "run_events"'),
   );

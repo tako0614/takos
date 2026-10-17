@@ -27,6 +27,18 @@ bun run check:workspace -- --task TASK-0003
 bun run check:workspace -- --all
 ```
 
+Rust agent wrapper も product gate の必須対象です。初回は
+`containers/agent/rust-toolchain.toml` の exact toolchain と rustfmt / Clippy を install し、
+`bun run prepare:agent-wrapper` で locked Cargo dependencies を取得します。
+`containers/agent/engine-source.json` の exact Git object が sibling
+`takos-agent-engine` に必要です。別の配置は `TAKOS_AGENT_ENGINE_REPOSITORY` で指定します。
+gate は engine の dirty files を使わず、offline で compile / lint / tests / executable build
+を実行します。続けて実 Worker handler と全 migration 適用済み SQLite に接続し、
+旧 executable process の終了から新 lease の tool 再開・atomic completion まで検証します。
+model と proxy token は test bridge が代用します。詳細は
+[agent wrapper の検証手順](../../containers/agent/README.md#portable-qualification)
+を参照してください。
+
 live service、operator-private state、readiness evidence、recovery drill は別の
 credential boundary と cadence を持ち、product check や release approval に
 混ぜません。
@@ -47,6 +59,11 @@ repository 全体を対象にし、残っている例外だけを `quality/` の
 件数は countdown です。増えれば gate が落ち、減っても ledger を下げるまで落ちます。
 0 になった entry は削除します。quarantine は「今は失敗する」という主張なので、
 `bun run check:test-quarantine` が該当 file を実行し、通ってしまったものを拒否します。
+
+type／lint gate は子プロセスの正常な完了も確認します。signal、想定外の終了値、
+診断なしの失敗、壊れた lint JSON report は標準出力・標準エラーを残して拒否します。
+宣言済み診断があっても異常終了を成功にしません。通常の TypeScript diagnostic と
+oxlint finding だけを、上記の同じ件数台帳で比較します。
 
 online evidence は portable gate に混ぜません。`bun run test:online` または
 `bun scripts/run-portable-tests.ts --online` を明示的に実行してください。

@@ -12,8 +12,21 @@ account-plane policy として Takosumi Accounts plane が所有します。
 3. 確認した plan を **`apply` type Run** として適用する。成功した apply が
    **StateVersion** と **Output** を記録する。
 4. Accounts plane が Takos product routes へ OIDC consumer metadata を投影する:
-   `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、`OIDC_REDIRECT_URI`（confidential client の
+   `TAKOSUMI_ACCOUNTS_URL`、`OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、`OIDC_REDIRECT_URI`（confidential client の
    `OIDC_CLIENT_SECRET` は operator が secret store から別途設定する）。
+5. operator が `OIDC_OWNER_SUBJECT` を、登録した Takos client で所有者へ返る正確な `sub` に
+   設定する。これは Accounts の4つの consumer metadata とは別の Takos アプリ設定です。
+   所有者 pin が未設定・形式不正なら login は `503` で停止します。形式上有効でも、
+   固定した所有者とは別の subject なら callback が `403` で拒否します。
+
+Takos は各自が自分用にデプロイする、所有者1人のインスタンスです。subject を email、表示名、
+Workspace ID、最初にアクセスした人から推測しません。browser/mobile client が別の pairwise subject
+を返す場合は、その client と subject の対応を Accounts 側で確認します。自動 alias や複数所有者の
+追加は行いません。既存 issuer/subject の変更とデータ移管は別の操作として扱います。
+
+`/.well-known/takos` の `issuer` は Takos 製品の origin です。OIDC の issuer にはこの値を転用せず、
+`OIDC_ISSUER_URL` を使います。discovery の field は [API リファレンス](/reference/api#インスタンスの-discovery)
+に記載しています。
 
 ## Takos が受ける route
 
@@ -23,8 +36,9 @@ account-plane policy として Takosumi Accounts plane が所有します。
 
 Takos の dynamic client は public PKCE client を標準とし、
 `openid profile email offline_access capsules:read capsules:write` を要求します。
-callback は UserInfo の `takosumi.workspace_id` と一意で一致する
-`workspace_memberships` を検証した場合だけ session を発行します。
+callback は署名・state・nonce・PKCE と固定した `(issuer, sub)` を検証し、UserInfo の
+`takosumi.workspace_id` と一意で一致する `workspace_memberships` を確認した場合だけ
+所有者の app-local profile / session を作ります。
 
 ## install 対象の形
 

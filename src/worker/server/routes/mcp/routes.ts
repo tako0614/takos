@@ -28,6 +28,10 @@ import { zValidator } from "../zod-validator.ts";
 import { escapeHtml } from "../auth/html.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import {
+  configuredOwner,
+  isActiveOwnerAccount,
+} from "../../../application/services/identity/owner-admission.ts";
+import {
   BadRequestError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
@@ -208,6 +212,16 @@ mcpRoutes.get("/oauth/callback", async (c) => {
   }
   if (!code) {
     return c.html(errorPage("Missing authorization code"), 400);
+  }
+  const owner = configuredOwner({
+    issuer: c.env.OIDC_ISSUER_URL,
+    subject: c.env.OIDC_OWNER_SUBJECT,
+  });
+  if (
+    !owner ||
+    !await isActiveOwnerAccount(c.env.DB, owner, pending.initiatorUserId)
+  ) {
+    return c.html(errorPage("OAuth request owner is not available"), 403);
   }
   try {
     await completeMcpOAuthFlow(c.env.DB, c.env, {

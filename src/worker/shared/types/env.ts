@@ -114,6 +114,7 @@ export type RunnerEnv = DbEnv & AiEnv & {
   RUN_NOTIFIER: DurableNamespaceBinding;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
   OIDC_ISSUER_URL?: string;
+  OIDC_OWNER_SUBJECT?: string;
   OIDC_CLIENT_ID?: string;
   ENCRYPTION_KEY?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
@@ -123,6 +124,7 @@ export type RunnerEnv = DbEnv & AiEnv & {
 export type IndexerEnv = DbEnv & {
   AI?: AiBinding;
   VECTORIZE?: VectorIndexBinding;
+  RUN_NOTIFIER?: DurableNamespaceBinding;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
@@ -160,6 +162,7 @@ export interface Env
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
   OIDC_ISSUER_URL?: string;
+  OIDC_OWNER_SUBJECT?: string;
   OIDC_DISCOVERY_URL?: string;
   OIDC_CLIENT_ID?: string;
   /**

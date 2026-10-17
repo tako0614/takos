@@ -1,6 +1,6 @@
 # アーキテクチャ
 
-Takos は、利用者向けの AI ワークスペースです。デプロイ管理を内蔵せず、アカウントとアプリの配置は外部の Takosumi と連携します。
+Takos は、各自が自分用にデプロイする、所有者 1 人の AI ワークスペースです。1 人の所有者が複数の Workspace を使えます。外部の通信相手や共有リンクの受信者はインスタンス所有者とは別です。デプロイ管理を内蔵せず、アカウントとアプリの配置は外部の Takosumi と連携します。
 
 ## 全体の流れ
 
@@ -44,6 +44,8 @@ API、agent、tool、storageなどの製品ロジックは中立bindingを使い
 | [システム全体](/architecture/system-architecture)        | Takos と Takosumi の境界        |
 | [サービス構成](/architecture/service-topology)           | ローカル環境のサービスとポート  |
 | [エージェント実行](/architecture/runtime-service)        | 実行、ツール、メモリ            |
+| [履歴と通知の復旧](/architecture/notifier-journal)       | 保存、再送、容量、後戻りの境界  |
+| [旧履歴のオフライン候補](/architecture/run-archive-candidate) | 大容量 gzip の再分割と検証      |
 | [アプリの公開情報](/architecture/app-interface)          | UI、MCP、ファイル形式           |
 | [実行時の接続](/architecture/capsule-runtime-projection) | デプロイ結果から接続を作る方法  |
 | [アプリメタデータ](/architecture/app-metadata)           | 名前、URL、機能の所有者         |

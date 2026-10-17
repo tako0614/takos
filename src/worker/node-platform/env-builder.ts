@@ -50,6 +50,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { Env } from "../shared/types/index.ts";
 import type {
   DurableNamespaceBinding,
@@ -241,6 +242,9 @@ function buildBaseConfig(isLocal: boolean) {
     OIDC_ISSUER_URL:
       optionalEnv("OIDC_ISSUER_URL") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_ISSUER_URL : ""),
+    // Preserve exact subject bytes. optionalEnv trims and could silently
+    // convert a misconfigured owner pin into another valid principal.
+    OIDC_OWNER_SUBJECT: getEnv("OIDC_OWNER_SUBJECT") || undefined,
     OIDC_DISCOVERY_URL: optionalEnv("OIDC_DISCOVERY_URL"),
     TAKOSUMI_ACCOUNTS_INTERNAL_URL: optionalEnv(
       "TAKOSUMI_ACCOUNTS_INTERNAL_URL",
@@ -478,6 +482,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     WORKER_BUNDLES: shared.workerBundles,
     TENANT_BUILDS: shared.tenantBuilds,
     OIDC_ISSUER_URL: config.OIDC_ISSUER_URL,
+    OIDC_OWNER_SUBJECT: config.OIDC_OWNER_SUBJECT,
     OIDC_DISCOVERY_URL: config.OIDC_DISCOVERY_URL,
     TAKOSUMI_ACCOUNTS_INTERNAL_URL: config.TAKOSUMI_ACCOUNTS_INTERNAL_URL,
     TAKOSUMI_ACCOUNTS_URL: config.TAKOSUMI_ACCOUNTS_URL,

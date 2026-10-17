@@ -89,9 +89,12 @@ function createEnv(): Env {
   return {
     DB: db,
     OIDC_ISSUER_URL: "https://accounts.test",
+    OIDC_OWNER_SUBJECT: "acct_subject",
     PLATFORM: {
       config: {
         adminDomain: "takos.jp",
+        oidcIssuerUrl: "https://accounts.test",
+        oidcOwnerSubject: "acct_subject",
         platformPublicKey: "test-key",
       },
       services: {

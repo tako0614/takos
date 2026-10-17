@@ -22,9 +22,24 @@ import {
   getNotificationPushOutboxStatus,
 } from "../../../application/services/notifications/push-outbox.ts";
 
+const OWNER_CONFIG = {
+  OIDC_ISSUER_URL: "https://accounts.example.test",
+  OIDC_OWNER_SUBJECT: "push-owner-subject",
+};
+
 async function freshDb(): Promise<Database> {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(`
+    CREATE TABLE accounts (id TEXT PRIMARY KEY, status TEXT NOT NULL);
+    CREATE TABLE auth_identities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_sub TEXT NOT NULL UNIQUE
+    );
+    INSERT INTO accounts VALUES ('user-1', 'active');
+    INSERT INTO auth_identities VALUES
+      ('push-owner', 'user-1', 'oidc', 'https://accounts.example.test#push-owner-subject');
     CREATE TABLE notifications (
       id TEXT PRIMARY KEY,
       recipient_account_id TEXT NOT NULL,
@@ -149,6 +164,49 @@ function queueMessage<T>(messageBody: T, attempts = 1) {
   return { message, state };
 }
 
+test("notification push retains legacy records but stops delivery to a former owner's device", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
+  const queued = queueMessage(body());
+  let gatewayCalls = 0;
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [queued.message] },
+    {
+      DB: db,
+      ...OWNER_CONFIG,
+      OIDC_OWNER_SUBJECT: "different-current-owner",
+      TAKOS_EGRESS: { async fetch() { gatewayCalls++; return Response.json({ rejected: [] }); } },
+      TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS: "push.example",
+    } as never,
+  );
+  expect(gatewayCalls).toBe(0);
+  expect(queued.state.acknowledgements).toBe(1);
+  expect(queued.state.retryDelays).toEqual([]);
+  expect(await getNotificationPushOutboxStatus(db as never, "notification-1")).toBe("done");
+  expect(await db.select().from(schema.notifications).all()).toHaveLength(1);
+  expect(await db.select().from(schema.notificationPushers).all()).toHaveLength(1);
+});
+
+test("notification push waits for missing owner configuration without sending or acknowledging", async () => {
+  const db = await freshDb();
+  await seedDelivery(db);
+  const queued = queueMessage(body());
+  let gatewayCalls = 0;
+  await handleNotificationPushQueue(
+    { queue: "takos-notification-push", messages: [queued.message] },
+    {
+      DB: db,
+      ...OWNER_CONFIG,
+      OIDC_OWNER_SUBJECT: undefined,
+      TAKOS_EGRESS: { async fetch() { gatewayCalls++; return Response.json({ rejected: [] }); } },
+    } as never,
+  );
+  expect(gatewayCalls).toBe(0);
+  expect(queued.state.acknowledgements).toBe(0);
+  expect(queued.state.retryDelays).toEqual([notificationPushQueueFallbackDelaySeconds(1)]);
+  expect(await getNotificationPushOutboxStatus(db as never, "notification-1")).not.toBe("done");
+});
+
 test("notification push queue honors a bounded gateway Retry-After", async () => {
   const db = await freshDb();
   await seedDelivery(db);
@@ -159,6 +217,7 @@ test("notification push queue honors a bounded gateway Retry-After", async () =>
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           gatewayCalls += 1;
@@ -186,6 +245,7 @@ test("notification push queue acknowledges permanent gateway failures", async ()
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           return Response.json({ rejected: [] }, { status: 400 });
@@ -213,6 +273,7 @@ test("notification push queue rejects payload-bearing and stale-scope jobs", asy
     },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           gatewayCalls += 1;
@@ -238,6 +299,7 @@ test("notification push queue acknowledges unsupported Takos event types without
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           gatewayCalls += 1;
@@ -275,6 +337,7 @@ test("notification push queue honors a push opt-out made after enqueue", async (
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           gatewayCalls += 1;
@@ -310,6 +373,7 @@ test("notification push queue honors a mute made after enqueue", async () => {
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           gatewayCalls += 1;
@@ -337,6 +401,7 @@ test("notification push queue retries configuration errors for DLQ visibility", 
     { queue: "takos-notification-push", messages: [queued.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_NOTIFICATION_PUSH_GATEWAY_ALLOWED_HOSTS: "push.example",
     } as never,
   );
@@ -374,6 +439,7 @@ test("notification push survives gateway outage through DLQ and replays idempote
     { queue: "takos-notification-push", messages: [unavailable.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           return Response.json(
@@ -425,6 +491,7 @@ test("notification push survives gateway outage through DLQ and replays idempote
     { queue: "takos-notification-push", messages: [recovered.message] },
     {
       DB: db,
+      ...OWNER_CONFIG,
       TAKOS_EGRESS: {
         async fetch() {
           return Response.json({ rejected: [] });
@@ -537,6 +604,7 @@ test("notification push outbox recovers crash-after-send and collapses the dupli
   let gatewayCalls = 0;
   const env = {
     DB: db,
+    ...OWNER_CONFIG,
     TAKOS_EGRESS: {
       async fetch() {
         gatewayCalls += 1;
@@ -588,7 +656,9 @@ test("unified Worker runtime routes notification push and DLQ queues", async () 
   const db = await freshDb();
   await seedDelivery(db);
   const runtime = createWorkerRuntime(
-    async (env) => ({ bindings: env }) as never,
+    // This handler-routing fixture supplies an already initialized local SQL
+    // database. Native-D1 upgrade admission has a full-migration SQLite suite.
+    async (env) => ({ source: "node", bindings: env }) as never,
   );
   const push = queueMessage({ invalid: true });
   const dlq = queueMessage(body(), 6);

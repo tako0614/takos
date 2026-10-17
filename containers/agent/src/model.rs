@@ -149,11 +149,13 @@ pub trait OpenAiRuntimeCredentialProvider: Send + Sync {
 }
 
 #[derive(Clone)]
+#[cfg(any(test, feature = "mock-llm"))]
 struct StaticOpenAiRuntimeCredentialProvider {
     credentials: OpenAiRuntimeCredentials,
 }
 
 #[async_trait]
+#[cfg(any(test, feature = "mock-llm"))]
 impl OpenAiRuntimeCredentialProvider for StaticOpenAiRuntimeCredentialProvider {
     async fn credentials(&self) -> AppResult<OpenAiRuntimeCredentials> {
         Ok(self.credentials.clone())
@@ -210,6 +212,7 @@ impl TakosModelRunner {
         )
     }
 
+    #[cfg(any(test, feature = "mock-llm"))]
     pub fn new_with_openai_api_keys_and_endpoint(
         model: impl Into<String>,
         temperature: Option<f32>,

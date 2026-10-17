@@ -826,12 +826,13 @@ export function createWebWorker(
       ) {
         const schema = await convergeSchemaInBackground(bindings.DB);
         if (schema.state !== "ready") {
-          errors.push({
-            job: "runtime-schema-migration",
-            error: `schema ${schema.state}${
-              schema.error ? `: ${schema.error}` : ""
-            }`,
+          logError("Scheduled work blocked by runtime schema", schema.error, {
+            module: "cron",
+            cron,
+            state: schema.state,
+            failedMigration: schema.failedMigration,
           });
+          throw new Error(`scheduled work blocked by runtime schema: ${schema.state}`);
         }
       }
 

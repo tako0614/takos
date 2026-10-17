@@ -30,37 +30,28 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
     const services = getPlatformServices(c);
     const sseNotifier = services.sseNotifier;
 
-    // Parse Last-Event-ID from header or query parameter
+    // Preserve header precedence; malformed or inexact cursors replay from zero.
     const lastEventIdRaw = c.req.header("Last-Event-ID") ??
       c.req.query("last_event_id");
     let lastEventId: number | undefined;
-    if (lastEventIdRaw) {
-      const parsed = parseInt(lastEventIdRaw, 10);
-      if (Number.isFinite(parsed) && parsed >= 0) {
+    if (lastEventIdRaw && /^[0-9]+$/u.test(lastEventIdRaw)) {
+      const parsed = Number(lastEventIdRaw);
+      if (Number.isSafeInteger(parsed)) {
         lastEventId = parsed;
       }
     }
 
-    if (!sseNotifier) {
-      const stream = createRunObservationSseStream(
-        c.env,
-        runId,
-        access.run.status,
-        lastEventId ?? 0,
-      );
-
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-        },
-      });
-    }
-
-    // Subscribe to the run channel
-    const channel = `run:${runId}`;
-    const stream = sseNotifier.subscribe(channel, lastEventId);
+    // Subscribe before reading the persisted timeline so commits during replay
+    // wake the next read. Process-local/Redis history only signals availability;
+    // SQL/object-store observation owns replay, ordering and terminal closure.
+    const notifications = sseNotifier?.subscribe(`run:${runId}`, lastEventId);
+    const stream = createRunObservationSseStream(
+      c.env,
+      runId,
+      access.run.status,
+      lastEventId ?? 0,
+      { notifications },
+    );
 
     return new Response(stream, {
       headers: {

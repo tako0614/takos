@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../../../../infra/db/schema.ts";
 import type { Database } from "../../../../infra/db/index.ts";
 import type { ObjectStoreBinding } from "../../../../shared/types/bindings.ts";
+import { gzipCompressString } from "../../../../shared/utils/gzip.ts";
 import { InfoUnitIndexer } from "../info-units.ts";
 
 const TEST_DDL = `
@@ -72,20 +73,15 @@ async function seedCompletedRun(
   });
 }
 
-test("info unit indexing keeps SQL terminal evidence when configured R2 has no notifier segment", async () => {
+test("SQL-only info unit indexing keeps terminal evidence and reconciles retries", async () => {
   const client = createClient({ url: ":memory:" });
   await client.executeMultiple(TEST_DDL);
   await seedCompletedRun(client, "run_a", "durable final answer");
 
   const db = drizzle(client, { schema }) as unknown as Database;
-  const emptyOffload = {
-    list: async () => ({ objects: [], truncated: false }),
-  } as unknown as ObjectStoreBinding;
-
   try {
     await new InfoUnitIndexer({
       DB: db as never,
-      TAKOS_OFFLOAD: emptyOffload,
     }).indexRun("space_a", "run_a");
 
     const result = await client.execute(
@@ -103,7 +99,6 @@ test("info unit indexing keeps SQL terminal evidence when configured R2 has no n
     );
     await new InfoUnitIndexer({
       DB: db as never,
-      TAKOS_OFFLOAD: emptyOffload,
     }).indexRun("space_a", "run_a");
     const retried = await client.execute(
       "SELECT id, content FROM info_units WHERE run_id = 'run_a'",
@@ -112,6 +107,83 @@ test("info unit indexing keeps SQL terminal evidence when configured R2 has no n
     expect(String(retried.rows[0]?.content)).toContain(
       "[assistant] recovered final answer",
     );
+  } finally {
+    client.close();
+  }
+});
+
+test("info unit indexing reads archived history through the index and merges SQL completion", async () => {
+  const client = createClient({ url: ":memory:" });
+  await client.executeMultiple(TEST_DDL);
+  await seedCompletedRun(client, "run_indexed", "SQL terminal fallback");
+  const db = drizzle(client, { schema }) as unknown as Database;
+  const runId = "run_indexed";
+  const archivedEvent = {
+    event_id: 2,
+    type: "progress",
+    data: JSON.stringify({ message: "archived indexed progress" }),
+    created_at: "2026-07-11T00:00:30.000Z",
+  };
+  const compressed = new Uint8Array(
+    await gzipCompressString(`${JSON.stringify(archivedEvent)}\n`),
+  );
+  const digest = await crypto.subtle.digest("SHA-256", compressed);
+  const key = `runs/${runId}/events/000001.jsonl.gz`;
+  const descriptor = {
+    key,
+    segmentIndex: 1,
+    firstEventId: 2,
+    lastEventId: 2,
+    count: 1,
+    sha256: Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0")
+    ).join(""),
+    bytes: compressed.byteLength,
+  };
+  const namespace = {
+    idFromName: (id: string) => id,
+    get: () => ({
+      fetch: async (request: Request) => {
+        const url = new URL(request.url);
+        expect(url.pathname).toBe("/archive");
+        return Response.json({
+          schemaVersion: 1,
+          runId,
+          descriptors: [descriptor],
+          pending: [],
+          hasMore: false,
+        });
+      },
+    }),
+  };
+  const bucket = {
+    list: async () => {
+      throw new Error("indexed history must not list R2");
+    },
+    get: async (requestedKey: string) => requestedKey === key
+      ? {
+          key,
+          size: compressed.byteLength,
+          body: new Blob([compressed]).stream(),
+          arrayBuffer: async () => compressed.slice().buffer,
+        }
+      : null,
+  } as unknown as ObjectStoreBinding;
+
+  try {
+    await new InfoUnitIndexer({
+      DB: db as never,
+      TAKOS_OFFLOAD: bucket,
+      RUN_NOTIFIER: namespace as never,
+    }).indexRun("space_a", runId);
+
+    const result = await client.execute(
+      "SELECT content FROM info_units WHERE run_id = 'run_indexed'",
+    );
+    expect(result.rows).toHaveLength(1);
+    const content = String(result.rows[0]?.content);
+    expect(content).toContain("[progress] archived indexed progress");
+    expect(content).toContain("[assistant] SQL terminal fallback");
   } finally {
     client.close();
   }

@@ -8,6 +8,8 @@ export async function emitRunUsageEvent(
     units: number;
     referenceType?: string;
     metadata?: unknown;
+    /** Stable across retries of this exact usage record. Omit for at-least-once delivery. */
+    requestId?: string;
   },
 ): Promise<void> {
   if (!env.TAKOS_OFFLOAD) return;
@@ -28,7 +30,16 @@ export async function emitRunUsageEvent(
       units: input.units,
       reference_type: input.referenceType,
       metadata: input.metadata,
+      request_id: input.requestId,
     }),
   });
-  await stub.fetch(request);
+  const response = await stub.fetch(request);
+  if (!response.ok) {
+    throw new Error(`Run usage event rejected (${response.status})`);
+  }
+  const result: unknown = await response.json();
+  if (!result || typeof result !== "object" ||
+    (result as Record<string, unknown>).success !== true) {
+    throw new Error("Run usage event was not accepted");
+  }
 }

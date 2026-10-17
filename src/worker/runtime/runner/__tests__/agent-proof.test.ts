@@ -524,6 +524,8 @@ function createAgentProofEnv(
 ) {
   return {
     DB: createAgentProofDb(state),
+    OIDC_ISSUER_URL: "https://accounts.example.test",
+    OIDC_OWNER_SUBJECT: "queue-proof-owner",
     RUN_QUEUE: {
       async send(message: unknown, options?: { delaySeconds?: number }) {
         state.runQueueMessages.push({ message, options });
@@ -752,6 +754,11 @@ function selectFirst(
       status: "active",
       securityPosture: "standard",
     };
+  }
+  if (table === "auth_identities") {
+    return state.run.requesterAccountId
+      ? { userId: state.run.requesterAccountId }
+      : null;
   }
   if (table === "account_memberships") {
     if (

@@ -10,9 +10,14 @@ Takos worker が読む環境変数と secret の一覧です。値の種類は 3
 | `BASE_URL` | Takos worker の public origin |
 | `TAKOSUMI_ACCOUNTS_URL` | 外部 Takosumi Accounts API / issuer の origin |
 | `OIDC_ISSUER_URL` | Takosumi Accounts issuer |
+| `OIDC_OWNER_SUBJECT` | このインスタンス唯一の所有者の正確な issuer-bound `sub`。login公開前にoperatorが設定 |
 | `OIDC_CLIENT_ID` | Accounts plane が発行した client id |
 | `OIDC_REDIRECT_URI` | `<BASE_URL>/auth/oidc/callback` |
 | `TAKOS_INSTALLATION_ID` | app-local の Capsule / profile id（legacy 命名） |
+
+`OIDC_OWNER_SUBJECT` は Takos アプリ設定です。通常moduleの `env`、またはNode/self-hostの
+同名環境変数で指定します。`identity.oidc` のissuer/client/redirect4値から所有者を推測しません。
+未設定では browser、bearer、既存cookieの所有者admissionを認めません。
 
 `OIDC_CLIENT_SECRET` は confidential client の場合だけ、operator の secret store
 から設定します。

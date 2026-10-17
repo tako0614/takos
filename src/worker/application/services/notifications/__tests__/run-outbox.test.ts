@@ -6,6 +6,10 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "../../../../infra/db/schema.ts";
 import type { Database } from "../../../../infra/db/client.ts";
 import type { Env } from "../../../../shared/types/index.ts";
+import type { DurableObjectStateBinding } from "../../../../shared/types/bindings.ts";
+import { NotificationNotifierDO } from "../../../../runtime/durable-objects/notification-notifier.ts";
+import { loadNotifierSnapshot } from "../../../../runtime/durable-objects/notifier-journal.ts";
+import { createNotification, type NotificationServiceEnv } from "../service.ts";
 import {
   dispatchRunNotificationOutbox,
   runNotificationOutboxId,
@@ -151,6 +155,87 @@ async function insertOutcome(
     updatedAt: createdAt,
   });
 }
+
+test("ambiguous hint commit and retired receipt retries keep one canonical SQL inbox row", async () => {
+  const { client, db } = await freshDb();
+  try {
+    const values = new Map<string, unknown>();
+    let queue: Promise<unknown> = Promise.resolve();
+    let failAfterCommit = true;
+    const state = {
+      storage: {
+        async get<T>(key: string): Promise<T | undefined> {
+          const value = values.get(key);
+          return value === undefined ? undefined : structuredClone(value) as T;
+        },
+        async put(key: string, value: unknown): Promise<void> {
+          values.set(key, structuredClone(value));
+          if (key === "bufferState" && failAfterCommit) {
+            failAfterCommit = false;
+            throw new Error("injected hint head rejection after durable write");
+          }
+        },
+        async getAlarm(): Promise<number | null> { return null; },
+        async setAlarm(): Promise<void> {},
+      },
+      blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+        const operation = queue.then(callback);
+        queue = operation.then(() => undefined, () => undefined);
+        return operation;
+      },
+      getWebSockets() { return []; },
+      getTags() { return []; },
+    } as unknown as DurableObjectStateBinding;
+    let notifier = new NotificationNotifierDO(state);
+    const delivered: Array<{ success: boolean; eventId: number; duplicate?: boolean; clients?: number }> = [];
+    const env = {
+      DB: db,
+      NOTIFICATION_NOTIFIER: {
+        idFromName(name: string) { return name; },
+        get() {
+          return {
+            async fetch(input: RequestInfo | URL, init?: RequestInit) {
+              const response = await notifier.fetch(new Request(input, init));
+              delivered.push(await response.clone().json());
+              return response;
+            },
+          };
+        },
+      },
+    } as unknown as NotificationServiceEnv;
+    const input = { userId: "user-1", type: "run.completed" as const, title: "Run completed" };
+    const options = { notificationId: "fixed-domain-event" };
+    const first = await createNotification(env, input, options);
+    expect(first.notification_id).toBe(options.notificationId);
+    const original = await db.select().from(schema.notifications).get();
+    expect(original?.id).toBe(options.notificationId);
+    if (!original) throw new Error("canonical notification was not inserted");
+    expect(delivered).toHaveLength(0);
+
+    // Cold replacement reloads the ambiguous head. The stable SQL ID re-emits
+    // its hint without another inbox row or another cursor in the replay ring.
+    notifier = new NotificationNotifierDO(state);
+    await createNotification(env, input, options);
+    expect(delivered).toEqual([{ success: true, duplicate: true, eventId: 1 }]);
+    expect(await db.select().from(schema.notifications)).toEqual([original]);
+
+    for (let index = 0; index < 100; index++) {
+      const response = await notifier.fetch(new Request("https://internal.do/emit", {
+        method: "POST",
+        body: JSON.stringify({ type: "notification.new", data: { notification_id: `other-${index}` } }),
+      }));
+      expect(response.status).toBe(200);
+    }
+    notifier = new NotificationNotifierDO(state);
+    await createNotification(env, input, options);
+    expect(delivered[1]).toEqual({ success: true, eventId: 102, clients: 0 });
+    expect(await db.select().from(schema.notifications)).toEqual([original]);
+    const snapshot = await loadNotifierSnapshot(state.storage, "notification") as { emitReceipts: unknown[] };
+    expect(snapshot.emitReceipts).toHaveLength(100);
+  } finally {
+    client.close();
+  }
+});
 
 test("Run notification outbox completes after Queue accepts the stable event", async () => {
   const { client, db } = await freshDb();

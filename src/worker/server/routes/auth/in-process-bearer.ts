@@ -13,6 +13,7 @@ import { accounts, authIdentities, getDb } from "../../../infra/db/index.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { extractBearerToken } from "../../middleware/bearer-token-classification.ts";
 import { provisionOidcUser } from "./provisioning.ts";
+import { configuredOwner } from "../../../application/services/identity/owner-admission.ts";
 
 const ACCOUNTS_USERINFO_TIMEOUT_MS = 10_000;
 
@@ -258,6 +259,11 @@ export async function resolveSelfIssuedBearer(input: {
   if (!token) return { kind: "no-bearer" };
   if (!input.issuer) return { kind: "no-issuer" };
   if (!input.db) return { kind: "invalid" };
+  const owner = configuredOwner({
+    issuer: input.issuer,
+    subject: input.env.OIDC_OWNER_SUBJECT,
+  });
+  if (!owner || owner.issuer !== input.issuer) return { kind: "invalid" };
 
   let response: Response;
   try {
@@ -279,8 +285,8 @@ export async function resolveSelfIssuedBearer(input: {
     return { kind: "invalid" };
   }
   const claims = payload as Record<string, unknown>;
-  const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
-  if (!subject) return { kind: "invalid" };
+  const subject = claims.sub;
+  if (subject !== owner.subject) return { kind: "invalid" };
   if (!hasAcceptedAudience(claims, input.env)) return { kind: "invalid" };
   const workspace = resolveWorkspaceEvidence(claims);
   if (!workspace.valid) return { kind: "invalid" };
