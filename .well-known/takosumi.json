@@ -68,8 +68,8 @@
             "required": false,
             "label": { "ja": "初回 install の確認", "en": "First install acknowledgement" },
             "helper": {
-              "ja": "runtime_secrets_provisioned = false にする初回 install だけ FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS を完全一致で指定します。値を投入したら空に戻します。",
-              "en": "Pass exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS on the first install that sets runtime_secrets_provisioned to false. Clear it once the values exist."
+              "ja": "runtime_secrets_provisioned を false にする初回 install だけ FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS を完全一致で指定します。値を投入したら空に戻します。",
+              "en": "On the first install with runtime_secrets_provisioned set to false, pass exactly FIRST_INSTALL_WITHOUT_RUNTIME_SECRETS. Clear it once the values exist."
             },
             "advanced": true
           },
