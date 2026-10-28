@@ -172,6 +172,7 @@ locals {
     local.takosumi_accounts_oidc_enabled && local.takosumi_accounts_url != "" ? {
       TAKOSUMI_ACCOUNTS_URL = local.takosumi_accounts_url
     } : {},
+    trimspace(var.app_capsule_id) != "" ? { APP_CAPSULE_ID = trimspace(var.app_capsule_id) } : {},
     local.takosumi_accounts_oidc_enabled ? {
       OIDC_ISSUER_URL = local.takosumi_accounts_issuer_url
       OIDC_CLIENT_ID  = local.takosumi_accounts_client_id

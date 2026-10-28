@@ -309,3 +309,24 @@ function dbWithIdentity(): SqlDatabaseBinding {
   };
   return db as unknown as SqlDatabaseBinding;
 }
+
+
+test("app-scoped Bearer accepts ordinary accounts and rejects foreign app evidence", async () => {
+  for (const capsuleId of ["cap-takos", "foreign-app"]) {
+    const result = await resolveSelfIssuedBearer({
+      authorizationHeader: "Bearer app-scoped-token", issuer: ISSUER,
+      db: dbWithIdentity(),
+      env: { APP_CAPSULE_ID: "cap-takos", OIDC_CLIENT_ID: "takos" } as Env,
+      fetchImpl: Object.assign(async () => Response.json({
+        sub: "tsub_1", aud: "takos", scope: "profile capsules:read",
+        takosumi: { capsule_id: capsuleId, workspace_id: "ws-old" },
+        workspace_memberships: ["ws-old"],
+      }), { preconnect: () => {} }),
+    });
+    assertEquals(result.kind, capsuleId === "cap-takos" ? "ok" : "invalid");
+    if (result.kind === "ok") {
+      assertEquals(result.capsuleId, "cap-takos");
+      assertEquals(result.workspaceId, undefined);
+    }
+  }
+});

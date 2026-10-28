@@ -91,6 +91,7 @@ async function runtimeMcpInterfaceConfig(
       clientSecret: nonEmptyString(env.OIDC_CLIENT_SECRET) ?? undefined,
       access: "read",
     });
+    if (!authorization.workspaceId) return undefined;
     return {
       workspaceId: authorization.workspaceId,
       request: {

@@ -304,13 +304,19 @@ describe("Capsule routes on canonical Takosumi records", () => {
     );
   });
 
-  test("raw Accounts session without Workspace delegation fails closed", async () => {
+  test("raw Accounts session lists the caller apps without a workspace", async () => {
     authorize();
     capsulesRouteDeps.resolveInstallableAppAccountsConfig = () => ({
       baseUrl: "https://operator.test",
     });
     capsulesRouteDeps.accountsPlaneFetch = async () =>
       Response.json({ subject: "tsub_user" });
+    capsulesRouteDeps.listInstallableAppCapsulesWithServices = async (workspaceId, config) => {
+      expect(workspaceId).toBeUndefined();
+      expect(new Headers(config?.headers).get("x-takosumi-account-session"))
+        .toBe("sess_current");
+      return { status: 200, body: { capsules: [] } };
+    };
     const response = await createApp().request(
       "/spaces/me/capsules",
       {
@@ -318,12 +324,8 @@ describe("Capsule routes on canonical Takosumi records", () => {
       },
       { DB: {} } as Env,
     );
-    expect(response.status).toBe(401);
-    expect(await response.json()).toMatchObject({
-      error: {
-        message: "Takosumi Workspace-bound OAuth authorization is required",
-      },
-    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ capsules: [] });
   });
 
   test("forwards only the exact Takosumi session cookie to Accounts", async () => {
@@ -338,6 +340,11 @@ describe("Capsule routes on canonical Takosumi records", () => {
       requestedPath = new URL(request.url).pathname;
       return Response.json({ subject: "tsub_user" });
     };
+    capsulesRouteDeps.listInstallableAppCapsulesWithServices = async (workspaceId, config) => {
+      expect(workspaceId).toBeUndefined();
+      expect(new Headers(config?.headers).get("cookie")).toBe("takosumi_session=sess_current");
+      return { status: 200, body: { capsules: [] } };
+    };
     const response = await createApp().request(
       "/spaces/me/capsules",
       {
@@ -348,7 +355,7 @@ describe("Capsule routes on canonical Takosumi records", () => {
       },
       { DB: {} } as Env,
     );
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
     expect(forwardedCookie).toBe("takosumi_session=sess_current");
     expect(requestedPath).toBe("/api/v1/account/session/me");
   });

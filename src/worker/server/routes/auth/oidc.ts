@@ -30,6 +30,7 @@ import { logError } from "../../../shared/utils/logger.ts";
 import type { OptionalAuthRouteEnv } from "../route-auth.ts";
 import { errorPage } from "./html.ts";
 import { provisionOidcUser, sanitizeReturnTo } from "./provisioning.ts";
+import { takosumiAppClaims } from "./takosumi-app-claims.ts";
 import { exchangeAuthorizationCode } from "./oidc-token-exchange.ts";
 import {
   storeAccountsDelegation,
@@ -300,10 +301,11 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const userInfo = tokens.access_token && serverUserinfoEndpoint
     ? await fetchUserInfo(serverUserinfoEndpoint, tokens.access_token)
     : {};
-  let workspaceId: string;
+  let workspaceId: string | undefined;
   try {
     assertUserInfoSubject(userInfo, subject);
-    workspaceId = assertUserInfoWorkspace(userInfo);
+    const app = takosumiAppClaims(userInfo, c.env.APP_CAPSULE_ID);
+    workspaceId = app ? undefined : assertUserInfoWorkspace(userInfo);
   } catch (error) {
     logError("OIDC userinfo validation failed", error, {
       module: "routes/auth/oidc",

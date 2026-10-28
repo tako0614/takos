@@ -12,6 +12,7 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { accounts, authIdentities, getDb } from "../../../infra/db/index.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { extractBearerToken } from "../../middleware/bearer-token-classification.ts";
+import { takosumiAppClaims } from "./takosumi-app-claims.ts";
 import { provisionOidcUser } from "./provisioning.ts";
 
 const ACCOUNTS_USERINFO_TIMEOUT_MS = 10_000;
@@ -31,6 +32,7 @@ export type SelfIssuedBearerResult =
       subject: string;
       scopes: string[];
       workspaceId?: string;
+      capsuleId?: string;
     };
 
 /**
@@ -282,7 +284,13 @@ export async function resolveSelfIssuedBearer(input: {
   const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
   if (!subject) return { kind: "invalid" };
   if (!hasAcceptedAudience(claims, input.env)) return { kind: "invalid" };
-  const workspace = resolveWorkspaceEvidence(claims);
+  let app;
+  try {
+    app = takosumiAppClaims(claims, input.env.APP_CAPSULE_ID);
+  } catch {
+    return { kind: "invalid" };
+  }
+  const workspace = app ? { valid: true } : resolveWorkspaceEvidence(claims);
   if (!workspace.valid) return { kind: "invalid" };
 
   const user = await resolveOrProvisionSelfIssuedUser({
@@ -299,6 +307,7 @@ export async function resolveSelfIssuedBearer(input: {
     userId: user.id,
     subject,
     scopes: parseTokenScopes(claims),
+    ...(app ? { capsuleId: app.capsuleId } : {}),
     ...(workspace.workspaceId
       ? { workspaceId: workspace.workspaceId }
       : {}),

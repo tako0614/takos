@@ -260,9 +260,9 @@ async function checkRuntimeSecretBindingContract(): Promise<void> {
       >;
     };
   };
-  if (manifest.apiVersion !== 'takosumi.com/v2.4') {
+  if (!['takosumi.com/v2.4', 'takosumi.com/v2.5'].includes(manifest.apiVersion ?? '')) {
     failures.push(
-      `${REPOSITORY_MANIFEST_PATH} must declare takosumi.com/v2.4 to request generated runtime secrets`,
+      `${REPOSITORY_MANIFEST_PATH} must declare takosumi.com/v2.4 or v2.5 to request generated runtime secrets`,
     );
   }
   const requirements = Object.values(manifest.install?.modules ?? {}).flatMap(

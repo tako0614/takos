@@ -1,5 +1,5 @@
 {
-  "apiVersion": "takosumi.com/v2.4",
+  "apiVersion": "takosumi.com/v2.5",
   "kind": "Repository",
   "install": {
     "modules": {
@@ -16,6 +16,12 @@
               "ja": "Takosのサービスとクラウドリソースに使う名前です。",
               "en": "The name used for the Takos service and its cloud resources."
             }
+          },
+          {
+            "name": "app_capsule_id",
+            "source": { "kind": "capsule_id" },
+            "type": "string",
+            "label": { "ja": "アプリID", "en": "App ID" }
           },
           {
             "name": "public_subdomain",

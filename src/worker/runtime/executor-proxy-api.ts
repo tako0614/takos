@@ -305,6 +305,7 @@ export async function resolveRunOpenAiRuntimeCredential(
     clientSecret,
     access: "read",
   });
+  if (!authorization.workspaceId) return undefined;
   const request = {
     baseUrl: internalAccountsUrl,
     token: authorization.accessToken,

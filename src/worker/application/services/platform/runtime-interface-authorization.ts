@@ -14,7 +14,7 @@ export type RuntimeInterfaceAuthorization = RuntimeInterfaceRequestConfig & {
 export type RuntimeInterfaceBearerContext = {
   readonly accessToken: string;
   readonly subjectId: string;
-  readonly workspaceId: string;
+  readonly workspaceId?: string;
 };
 
 export const runtimeInterfaceAuthorizationDeps = {
@@ -66,12 +66,15 @@ export async function resolveRuntimeInterfaceAuthorization(
       env.TAKOSUMI_ACCOUNTS_URL ??
       env.OIDC_ISSUER_URL,
   );
-  if (
-    baseUrl &&
-    bearer?.accessToken.trim() &&
-    bearer.subjectId.trim() &&
-    bearer.workspaceId.trim()
-  ) {
+  if (bearer) {
+    if (
+      !baseUrl || !bearer.accessToken.trim() ||
+      !bearer.subjectId.trim() || !bearer.workspaceId?.trim()
+    ) {
+      throw new AuthenticationError(
+        "Takosumi runtime Interface requires workspace-bound authorization",
+      );
+    }
     return {
       baseUrl,
       token: bearer.accessToken,
@@ -99,7 +102,7 @@ export async function resolveRuntimeInterfaceAuthorization(
       access: "read",
     });
   if (
-    !authorization.workspaceId.trim() ||
+    !authorization.workspaceId?.trim() ||
     !authorization.subjectId.trim() ||
     !authorization.accessToken.trim()
   ) {

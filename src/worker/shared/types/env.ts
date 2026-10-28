@@ -113,6 +113,7 @@ export type RunnerEnv = DbEnv & AiEnv & {
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   RUN_NOTIFIER: DurableNamespaceBinding;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
+  APP_CAPSULE_ID?: string;
   OIDC_ISSUER_URL?: string;
   OIDC_CLIENT_ID?: string;
   ENCRYPTION_KEY?: string;
@@ -159,6 +160,7 @@ export interface Env
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   TAKOS_NOTIFICATION_PUSH_QUEUE?: MessageQueueBinding<NotificationPushQueueMessage>;
   // Platform config
+  APP_CAPSULE_ID?: string;
   OIDC_ISSUER_URL?: string;
   OIDC_DISCOVERY_URL?: string;
   OIDC_CLIENT_ID?: string;

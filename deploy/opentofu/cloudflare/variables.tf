@@ -128,6 +128,12 @@ variable "takosumi_accounts_issuer_url" {
   }
 }
 
+variable "app_capsule_id" {
+  description = "This app's Capsule id, delivered by the Takosumi install context for app-scoped sign-in validation."
+  type        = string
+  default     = ""
+}
+
 variable "takosumi_accounts_client_id" {
   description = "Optional Takosumi Accounts public OIDC client id issued for this Takos Capsule."
   type        = string
@@ -148,6 +154,7 @@ variable "env" {
         "TAKOSUMI_ACCOUNTS_URL",
         "OIDC_ISSUER_URL",
         "OIDC_CLIENT_ID",
+        "APP_CAPSULE_ID",
         "OIDC_REDIRECT_URI",
         "ASSETS",
         "DB",

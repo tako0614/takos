@@ -4,6 +4,14 @@ function segment(value: string): string {
   return encodeURIComponent(value);
 }
 
+export function takosumiAppsPath(): string {
+  return `${TAKOSUMI_SESSION_API_PREFIX}/apps`;
+}
+
+export function takosumiInstallPlansPath(): string {
+  return `${TAKOSUMI_SESSION_API_PREFIX}/install-plans`;
+}
+
 export function takosumiWorkspaceCapsulesPath(workspaceId: string): string {
   return `${TAKOSUMI_SESSION_API_PREFIX}/workspaces/${segment(workspaceId)}/capsules`;
 }
