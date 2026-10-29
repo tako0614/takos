@@ -11,12 +11,31 @@ function publicAssetResourcePolicy(path: string): "cross-origin" | "same-site" {
   return "same-site";
 }
 
+// The Cloudflare OpenTofu provider labels uploaded assets with Go's
+// mime.TypeByExtension, whose built-in table has no `.webmanifest`, so the
+// stored type depends on the runner host's mime.types. Pin the web app
+// manifest's type here so home-screen install does not depend on that host.
+// Only the one shipped manifest path is pinned, and never an HTML body: if the
+// assets binding ever answers a missing path with the SPA index, that response
+// must keep its HTML type.
+const WEB_APP_MANIFEST_PATH = "/manifest.webmanifest";
+const WEB_APP_MANIFEST_CONTENT_TYPE = "application/manifest+json; charset=utf-8";
+
+function assetContentType(response: Response, path: string): string | null {
+  const upstream = response.headers.get("content-type");
+  if (path === WEB_APP_MANIFEST_PATH && !upstream?.includes("text/html")) {
+    return WEB_APP_MANIFEST_CONTENT_TYPE;
+  }
+  return upstream;
+}
+
 function applySecurityHeaders(
   response: Response,
   contentType: string | null,
   path: string,
 ): Response {
   const headers = new Headers(response.headers);
+  if (contentType) headers.set("Content-Type", contentType);
   if (!headers.has("X-Content-Type-Options")) {
     headers.set("X-Content-Type-Options", "nosniff");
   }
@@ -72,7 +91,7 @@ export const staticAssetsMiddleware: MiddlewareHandler<{
       const assetResponse = await assets.fetch(
         new Request(new URL(path, c.req.url)),
       );
-      const contentType = assetResponse.headers.get("content-type");
+      const contentType = assetContentType(assetResponse, path);
       if (assetResponse.ok && contentType !== "text/html") {
         return applySecurityHeaders(assetResponse, contentType, path);
       }
