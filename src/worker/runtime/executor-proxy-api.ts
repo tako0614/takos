@@ -27,8 +27,7 @@ import {
 } from "./container-hosts/executor-run-state.ts";
 
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
-import { takosumiAppClaims, takosumiWorkspaceId } from "../server/routes/auth/takosumi-app-claims.ts";
-import { TAKOSUMI_ACCOUNTS_USERINFO_PATH } from "@takosjp/takosumi-contract/identity-oidc";
+import { userHasCurrentAppMembership } from "../application/services/platform/operator-ai-authorization.ts";
 import {
   fetchAuthorizedRuntimeInterfaces,
   issueRuntimeInterfaceAccessToken,
@@ -282,47 +281,11 @@ async function runHasCurrentAppMembership(
   env: Env,
   deps: RuntimeCredentialDeps,
 ): Promise<boolean> {
-  const issuer = nonEmptyString(env.OIDC_ISSUER_URL);
-  const clientId = nonEmptyString(env.OIDC_CLIENT_ID);
-  const encryptionKey = nonEmptyString(env.ENCRYPTION_KEY);
-  if (!issuer || !clientId || !encryptionKey) return false;
   const bootstrap = await deps.getRunBootstrap(env, runId);
   if (
     bootstrap.status === null || TERMINAL_RUN_STATUSES.has(bootstrap.status)
   ) return false;
-  const authorization = await deps.accountsDelegatedAuthorization({
-    db: env.DB,
-    encryptionKey,
-    userId: bootstrap.userId,
-    issuer: issuer.replace(/\/+$/u, ""),
-    clientId,
-    clientSecret: nonEmptyString(env.OIDC_CLIENT_SECRET),
-    access: "read",
-  });
-  const baseUrl = nonEmptyString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
-    nonEmptyString(env.OIDC_DISCOVERY_URL) ?? issuer;
-  const response = await deps.fetch(
-    `${baseUrl.replace(/\/+$/u, "")}${TAKOSUMI_ACCOUNTS_USERINFO_PATH}`,
-    {
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${authorization.accessToken}`,
-      },
-      redirect: "manual",
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
-  if (!response.ok) return false;
-  const claims: unknown = await response.json();
-  if (!claims || typeof claims !== "object" || Array.isArray(claims)) return false;
-  const userInfo = claims as Record<string, unknown>;
-  if (userInfo.sub !== authorization.subjectId) return false;
-  const app = takosumiAppClaims(userInfo, env.APP_CAPSULE_ID);
-  if (app) return app.appRole !== undefined;
-  // Claim-absent legacy clients retain the original browser membership gate.
-  // Explicit foreign Capsule evidence has already failed above.
-  takosumiWorkspaceId(userInfo);
-  return true;
+  return await userHasCurrentAppMembership(env, bootstrap.userId, deps);
 }
 
 /**

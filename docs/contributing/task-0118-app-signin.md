@@ -39,6 +39,26 @@ membership gate for this opt-in.
 Unconfigured legacy self-host shared-key opt-in behavior remains unchanged.
 UserInfo credential requests do not follow redirects.
 
+Task planning, AI pull-request reviews and background thread indexing use the
+same live membership gate before spending any operator provider key. HTTP
+operations use the requesting user. Thread indexing resolves the originating
+Run through the persisted terminal outbox job's completion key, scoped to the
+exact local workspace and thread. Continuation job ids retain that source;
+neither a later Run nor the workspace owner can substitute its requester.
+Missing or ambiguous Run/requester evidence and legacy random job ids fail
+closed on configured apps. Ordinary accounts and removed app members cannot
+use these operator-funded paths. Denied jobs stop without retry; temporary
+Accounts failures remain retryable. The check authorizes the indexing job;
+the existing thread-wide indexing cursor is unchanged.
+
+## Deployment order
+
+Deploy the updated apps (Takos, Git, Storage, Office and Computer) first, then
+deploy Takosumi Accounts' open sign-in change (writer B, #657) last. Until
+updated, self-hosted installs keep relying on Workspace membership for sign-in;
+an Accounts update does not update or bypass those clients' existing checks.
+This order is an operator instruction, not deployment authorization.
+
 Workspace-bound delegation keeps the existing Workspace control routes,
 including the primary Capsule list route. Genuinely workspace-less delegation
 uses `GET /api/v1/apps` and `POST /api/v1/install-plans` with `mode: "attempt"`.

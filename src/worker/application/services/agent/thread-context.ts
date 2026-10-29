@@ -1,7 +1,11 @@
 import type { AiEnv, DbEnv } from "../../../shared/types/index.ts";
 
-type ThreadContextEnv = DbEnv & AiEnv;
-import { accounts, getDb, messages, threads } from "../../../infra/db/index.ts";
+import {
+  type OperatorAiAuthorizationEnv,
+  requireOperatorAiMembership,
+} from "../platform/operator-ai-authorization.ts";
+type ThreadContextEnv = DbEnv & AiEnv & OperatorAiAuthorizationEnv;
+import { accounts, getDb, messages, runs, threads } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import { getBackendFromModel, LLMClient } from "./llm.ts";
 import { DEFAULT_MODEL_ID } from "./model-catalog.ts";
@@ -17,6 +21,15 @@ const MAX_EMBEDDING_TEXT_CHARS = 4000;
 const MAX_VECTOR_UPSERT_BATCH = 100;
 
 export const DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB = 200;
+
+/** Preserve the terminal outbox's durable Run provenance across continuations. */
+export function threadContextJobSource(jobId: string | undefined): {
+  rootJobId: string;
+  completionKey: string;
+} | undefined {
+  const match = jobId?.match(/^(index-outbox:((?:agent-complete|control-terminal):[a-f0-9]{64}):thread_context)(?:\/continuation\/[A-Za-z0-9_-]+)?$/u);
+  return match ? { rootJobId: match[1]!, completionKey: match[2]! } : undefined;
+}
 
 const SUMMARY_MAX_INPUT_MESSAGES = 50;
 const SUMMARY_INITIAL_INPUT_MESSAGES = 80;
@@ -327,6 +340,7 @@ export async function indexThreadContext(params: {
   env: ThreadContextEnv;
   spaceId: string;
   threadId: string;
+  sourceJobId?: string;
   maxMessages?: number;
 }): Promise<{
   embedded: number;
@@ -335,6 +349,27 @@ export async function indexThreadContext(params: {
   summaryUpdated: boolean;
 }> {
   const { env, spaceId, threadId } = params;
+  if (env.APP_CAPSULE_ID?.trim()) {
+    // The persisted outbox id identifies the originating terminal Run. A newer
+    // Run on this thread must never authorize a delayed or continued old job.
+    const source = threadContextJobSource(params.sourceJobId);
+    const sourceRuns = source
+      ? await getDb(env.DB)
+        .select({ requesterAccountId: runs.requesterAccountId })
+        .from(runs)
+        .where(and(
+          eq(runs.accountId, spaceId),
+          eq(runs.threadId, threadId),
+          eq(runs.completionKey, source.completionKey),
+        ))
+        .limit(2)
+        .all()
+      : [];
+    await requireOperatorAiMembership(
+      env,
+      sourceRuns.length === 1 ? sourceRuns[0]?.requesterAccountId ?? undefined : undefined,
+    );
+  }
   const maxMessages = Math.max(
     1,
     Math.min(

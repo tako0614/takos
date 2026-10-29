@@ -14,6 +14,7 @@ import {
 } from "../../../shared/utils/index.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { getWorkspaceModelSettings } from "../identity/spaces.ts";
+import { requireOperatorAiMembership } from "../platform/operator-ai-authorization.ts";
 import {
   DEFAULT_MODEL_ID,
   getBackendFromModel,
@@ -253,11 +254,13 @@ export async function buildPRDiffText(
 
 export async function runAiReview(options: {
   env: Env;
+  userId: string;
   repoId: string;
   pullRequest: PullRequestRecord;
   spaceId: string;
 }): Promise<AiReviewResult> {
   const { env, repoId, pullRequest, spaceId } = options;
+  await requireOperatorAiMembership(env, options.userId);
 
   const workspaceModel = await getWorkspaceModelSettings(env.DB, spaceId);
   const model = normalizeModelId(workspaceModel?.ai_model) || DEFAULT_MODEL_ID;
