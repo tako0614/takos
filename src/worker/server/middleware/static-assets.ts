@@ -15,11 +15,18 @@ function publicAssetResourcePolicy(path: string): "cross-origin" | "same-site" {
 // mime.TypeByExtension, whose built-in table has no `.webmanifest`, so the
 // stored type depends on the runner host's mime.types. Pin the web app
 // manifest's type here so home-screen install does not depend on that host.
+// Only the one shipped manifest path is pinned, and never an HTML body: if the
+// assets binding ever answers a missing path with the SPA index, that response
+// must keep its HTML type.
+const WEB_APP_MANIFEST_PATH = "/manifest.webmanifest";
 const WEB_APP_MANIFEST_CONTENT_TYPE = "application/manifest+json; charset=utf-8";
 
 function assetContentType(response: Response, path: string): string | null {
-  if (path.endsWith(".webmanifest")) return WEB_APP_MANIFEST_CONTENT_TYPE;
-  return response.headers.get("content-type");
+  const upstream = response.headers.get("content-type");
+  if (path === WEB_APP_MANIFEST_PATH && !upstream?.includes("text/html")) {
+    return WEB_APP_MANIFEST_CONTENT_TYPE;
+  }
+  return upstream;
 }
 
 function applySecurityHeaders(

@@ -65,12 +65,34 @@ const assets = {
   },
 };
 
-function appWithAuthWall(): Hono {
+// The same stand-in with single-page-application not-found handling: a path
+// that is not a shipped file comes back as the SPA index.
+const INDEX_BODY = "<!DOCTYPE html><div id=root></div>";
+const spaFallbackAssets = {
+  async fetch(request: Request): Promise<Response> {
+    const response = await assets.fetch(request);
+    if (response.ok) return response;
+    return new Response(INDEX_BODY, {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  },
+};
+const htmlOnlyAssets = {
+  fetch(): Promise<Response> {
+    return Promise.resolve(
+      new Response(INDEX_BODY, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
+  },
+};
+
+function appWithAuthWall(binding: { fetch(request: Request): Promise<Response> } = assets): Hono {
   const app = new Hono();
   app.use("*", async (c, next) => {
     c.set("platform" as never, {
       config: {},
-      services: { assets: { binding: assets } },
+      services: { assets: { binding } },
       bindings: {},
     } as never);
     await next();
@@ -159,4 +181,25 @@ test("static assets serve the manifest and icons anonymously with their types", 
   // The auth wall still answers everything that is not a shipped asset.
   const missing = await app.request("https://takos.example/settings");
   expect(missing.status).toBe(401);
+});
+
+test("only the shipped manifest path is labeled as a manifest, never an HTML fallback", async () => {
+  const spa = appWithAuthWall(spaFallbackAssets);
+  for (const path of ["/x.webmanifest", "/icons/manifest.webmanifest"]) {
+    const response = await spa.request(`https://takos.example${path}`);
+    expect(response.headers.get("content-type")).toBe(
+      "text/html; charset=utf-8",
+    );
+    expect(await response.text()).toBe(INDEX_BODY);
+  }
+  const shipped = await spa.request("https://takos.example/manifest.webmanifest");
+  expect(shipped.headers.get("content-type")).toBe(
+    "application/manifest+json; charset=utf-8",
+  );
+
+  // Even the manifest path keeps an HTML type when the binding answers HTML.
+  const htmlOnly = await appWithAuthWall(htmlOnlyAssets).request(
+    "https://takos.example/manifest.webmanifest",
+  );
+  expect(htmlOnly.headers.get("content-type")).toBe("text/html; charset=utf-8");
 });
