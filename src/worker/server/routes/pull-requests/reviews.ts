@@ -6,7 +6,7 @@ import type {
 } from "../../../shared/types/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
+import { AppError, BadRequestError } from "@takos/worker-platform-utils/errors";
 import { zValidator } from "../zod-validator.ts";
 import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import { getDb } from "../../../infra/db/index.ts";
@@ -282,6 +282,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     try {
       const result = await runAiReview({
         env: c.env,
+        userId: user.id,
         repoId,
         pullRequest,
         spaceId: repoAccess.repo.space_id,
@@ -294,7 +295,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         backend: result.backend,
       }, 201);
     } catch (err) {
-      if (err instanceof AiReviewError) {
+      if (err instanceof AiReviewError || err instanceof AppError) {
         throw err;
       }
       logError("AI review failed", err, { module: "reviews" });

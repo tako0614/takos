@@ -47,7 +47,7 @@ test("Takos publishes repository install hints and service declarations", () => 
     "install",
     "kind",
   ]);
-  expect(manifest.apiVersion).toBe("takosumi.com/v2.4");
+  expect(manifest.apiVersion).toBe("takosumi.com/v2.5");
   expect(manifest.kind).toBe("Repository");
   expect(Object.keys(manifest.install)).toEqual(["modules"]);
   expect(Object.keys(manifest.install.modules)).toEqual([
@@ -270,7 +270,7 @@ test("manifest references real variables and only bounded presentation metadata"
       expect(variables.has(name)).toBe(true);
     }
     for (const input of module.inputs) {
-      expect(["user", "capsule_name", "module_default"]).toContain(
+      expect(["user", "capsule_name", "capsule_id", "module_default"]).toContain(
         input.source.kind,
       );
       expect(input.label.ja.length).toBeGreaterThan(0);
@@ -513,3 +513,13 @@ interface RepositoryModule {
     outputs: string[];
   };
 }
+
+
+test("the install context pins app sign-in to this Capsule", () => {
+  expect(manifest.install.modules["deploy/opentofu/cloudflare"].inputs.find(
+    (input) => input.name === "app_capsule_id",
+  )).toEqual({ name: "app_capsule_id", source: { kind: "capsule_id" }, type: "string",
+    label: { ja: "アプリID", en: "App ID" } });
+  expect(modules["deploy/opentofu/cloudflare"]).toContain('variable "app_capsule_id"');
+  expect(platformModuleSource).toContain("APP_CAPSULE_ID = trimspace(var.app_capsule_id)");
+});

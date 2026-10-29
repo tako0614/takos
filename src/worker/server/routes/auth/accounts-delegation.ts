@@ -44,7 +44,7 @@ type DelegationIdentity = {
 
 export type AccountsDelegatedAuthorization = {
   readonly accessToken: string;
-  readonly workspaceId: string;
+  readonly workspaceId?: string;
   readonly subjectId: string;
 };
 
@@ -151,11 +151,6 @@ export async function storeAccountsDelegation(input: {
       )
     : undefined;
   const scope = input.tokens.scope?.trim() || input.fallbackScope;
-  if (scopeAllows(scope, "read") && !input.workspaceId) {
-    throw new Error(
-      "Takosumi Accounts Workspace binding is required for Capsule delegation",
-    );
-  }
   await getDb(input.db)
     .update(authIdentities)
     .set({
@@ -210,11 +205,6 @@ async function resolveAccountsDelegatedAuthorization(input: {
       "Takosumi Accounts authorization is required",
     );
   }
-  if (!identity.delegatedWorkspaceId) {
-    throw new AuthenticationError(
-      "Takosumi Accounts Workspace authorization must be renewed",
-    );
-  }
   if (validAccessToken(identity, input.access)) {
     return {
       accessToken: await decryptEnvelope(
@@ -222,7 +212,9 @@ async function resolveAccountsDelegatedAuthorization(input: {
         input.encryptionKey,
         tokenSalt(identity.id, "access"),
       ),
-      workspaceId: identity.delegatedWorkspaceId,
+      ...(identity.delegatedWorkspaceId
+        ? { workspaceId: identity.delegatedWorkspaceId }
+        : {}),
       subjectId: delegatedSubjectId(identity, input.issuer),
     };
   }
@@ -257,11 +249,6 @@ async function resolveAccountsDelegatedAuthorization(input: {
       await new Promise((resolve) => setTimeout(resolve, REFRESH_WAIT_MS));
       identity = await identityForUser(db, input.userId, input.issuer);
       if (!identity) break;
-      if (!identity.delegatedWorkspaceId) {
-        throw new AuthenticationError(
-          "Takosumi Accounts Workspace authorization must be renewed",
-        );
-      }
       if (validAccessToken(identity, input.access)) {
         return {
           accessToken: await decryptEnvelope(
@@ -269,7 +256,9 @@ async function resolveAccountsDelegatedAuthorization(input: {
             input.encryptionKey,
             tokenSalt(identity.id, "access"),
           ),
-          workspaceId: identity.delegatedWorkspaceId,
+          ...(identity.delegatedWorkspaceId
+            ? { workspaceId: identity.delegatedWorkspaceId }
+            : {}),
           subjectId: delegatedSubjectId(identity, input.issuer),
         };
       }
@@ -358,7 +347,9 @@ async function resolveAccountsDelegatedAuthorization(input: {
       );
     return {
       accessToken: tokens.access_token,
-      workspaceId: identity.delegatedWorkspaceId,
+      ...(identity.delegatedWorkspaceId
+        ? { workspaceId: identity.delegatedWorkspaceId }
+        : {}),
       subjectId: delegatedSubjectId(identity, input.issuer),
     };
   } catch (error) {

@@ -17,6 +17,8 @@ import { eq } from "drizzle-orm";
 import { createEmbeddingsService } from "../../application/services/execution/embeddings.ts";
 import { createInfoUnitIndexer } from "../../application/services/source/info-units.ts";
 import { indexThreadContext } from "../../application/services/agent/index.ts";
+import { threadContextJobSource } from "../../application/services/agent/thread-context.ts";
+import { AuthorizationError } from "@takos/worker-platform-utils/errors";
 import { buildMemoryPaths } from "../../application/services/memory-graph/path-builder.ts";
 import { recordAppUsage } from "../../application/services/app-usage/usage-recorder.ts";
 import { generateId } from "../../shared/utils/index.ts";
@@ -136,7 +138,15 @@ export async function handleThreadContext(
     };
   }
 
-  const result = await indexThreadContext({ env, spaceId, threadId: targetId });
+  let result: Awaited<ReturnType<typeof indexThreadContext>>;
+  try {
+    result = await indexThreadContext({ env, spaceId, threadId: targetId, sourceJobId: jobId });
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { processed: false, reason: "app_membership_required", retryable: false };
+    }
+    throw error;
+  }
 
   if (result.hasMore && !env.INDEX_QUEUE) {
     return {
@@ -147,7 +157,10 @@ export async function handleThreadContext(
   }
   if (result.hasMore && env.INDEX_QUEUE) {
     try {
-      const followUpJobId = generateId();
+      const source = threadContextJobSource(jobId);
+      const followUpJobId = source
+        ? `${source.rootJobId}/continuation/${generateId()}`
+        : generateId();
       await env.INDEX_QUEUE.send({
         version: INDEX_QUEUE_MESSAGE_VERSION,
         jobId: followUpJobId,

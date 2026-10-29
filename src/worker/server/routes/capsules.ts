@@ -361,12 +361,9 @@ async function resolveAccountsCaller(
 function accountsCallerWorkspaceId(
   caller: AccountsCaller,
   _localWorkspaceId: string,
-): string {
-  if (!caller.workspaceId) {
-    throw new AuthenticationError(
-      "Takosumi Workspace-bound OAuth authorization is required",
-    );
-  }
+): string | undefined {
+  // A missing external workspace selects the per-app Accounts APIs.
+  // Never substitute the local Takos workspace id.
   return caller.workspaceId;
 }
 

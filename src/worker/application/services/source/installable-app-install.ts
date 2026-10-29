@@ -12,6 +12,8 @@ import {
   type CapsuleWorkloadServiceSummary,
 } from "./takosumi-workload-services.ts";
 import {
+  takosumiAppsPath,
+  takosumiInstallPlansPath,
   takosumiCapsulePath,
   takosumiCapsuleDestroyPlanPath,
   takosumiCapsuleRevisionPlansPath,
@@ -85,7 +87,7 @@ export type InstallableAppSourceInput = {
 };
 
 export type InstallableAppPlanInput = InstallableAppSourceInput & {
-  workspaceId: string;
+  workspaceId?: string;
   appId?: string;
   variables?: Record<string, unknown>;
   /** Caller-provided key; every retry must reuse this logical operation key. */
@@ -96,14 +98,14 @@ export type InstallableAppPlanInput = InstallableAppSourceInput & {
 };
 
 export type InstallableAppApplyInput = {
-  workspaceId: string;
+  workspaceId?: string;
   expected: Record<string, unknown>;
 };
 
 export type InstallableAppRevisionOperation = "upgrade" | "rollback";
 
 export type InstallableAppRevisionInput = {
-  workspaceId: string;
+  workspaceId?: string;
   capsuleId: string;
   operation: InstallableAppRevisionOperation;
   /** Git ref for upgrade, StateVersion id for rollback. */
@@ -113,7 +115,7 @@ export type InstallableAppRevisionInput = {
 };
 
 export type InstallableAppRevisionApplyInput = {
-  workspaceId: string;
+  workspaceId?: string;
   capsuleId: string;
   operation: InstallableAppRevisionOperation;
   expected: Record<string, unknown>;
@@ -383,14 +385,19 @@ async function createInstallPlan(
 ): Promise<InstallableAppUpstreamResponse> {
   const idempotencyKey = installPlanIdempotencyKey(input, config);
   const baseUrl = requireControlUrl(config);
-  const body = JSON.stringify(installPlanCreateBody(input));
+  const body = JSON.stringify({
+    ...(!input.workspaceId ? { mode: "attempt" } : {}),
+    ...installPlanCreateBody(input),
+  });
   let lastError: unknown;
   for (let attempt = 0; attempt < INSTALL_PLAN_CREATE_MAX_ATTEMPTS; attempt++) {
     let result: InstallableAppUpstreamResponse;
     try {
       result = await fetchControlJson(
         baseUrl,
-        takosumiWorkspaceInstallPlansPath(input.workspaceId),
+        input.workspaceId
+          ? takosumiWorkspaceInstallPlansPath(input.workspaceId)
+          : takosumiInstallPlansPath(),
         {
           method: "POST",
           headers: { "Idempotency-Key": idempotencyKey },
@@ -442,9 +449,12 @@ function assertInstallPlanIdentity(
 
 function assertInstallPlanWorkspace(
   response: InstallableAppUpstreamResponse,
-  expectedWorkspaceId: string,
+  expectedWorkspaceId: string | undefined,
 ): void {
-  if (readString(installPlanRecord(response).workspaceId) !== expectedWorkspaceId) {
+  if (
+    expectedWorkspaceId &&
+    readString(installPlanRecord(response).workspaceId) !== expectedWorkspaceId
+  ) {
     throw new Error("canonical install plan belongs to another Workspace");
   }
 }
@@ -499,13 +509,13 @@ function timedOutInstallPlanResponse(
 
 function installPlanSourceRecord(
   plan: Record<string, unknown>,
-  workspaceId: string,
+  workspaceId: string | undefined,
   sourceId: string,
 ): Record<string, unknown> {
   const source = readRecord(plan.source) ?? {};
   return {
     id: sourceId,
-    workspaceId,
+    ...(workspaceId ? { workspaceId } : {}),
     name: readString(source.name),
     url: readString(source.url),
     defaultRef: readString(source.ref),
@@ -518,14 +528,14 @@ function installPlanSourceRecord(
 
 function installPlanCapsuleRecord(
   plan: Record<string, unknown>,
-  workspaceId: string,
+  workspaceId: string | undefined,
   sourceId: string,
   capsuleId: string,
 ): Record<string, unknown> {
   const capsule = readRecord(plan.capsule) ?? {};
   return {
     id: capsuleId,
-    workspaceId,
+    ...(workspaceId ? { workspaceId } : {}),
     sourceId,
     name: readString(capsule.name),
     environment: readString(capsule.environment) ?? DEFAULT_ENVIRONMENT,
@@ -535,12 +545,12 @@ function installPlanCapsuleRecord(
 async function reviewInstallPlanRun(
   response: InstallableAppUpstreamResponse,
   initialStatus: number,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   const plan = installPlanRecord(response);
   const planWorkspaceId = readString(plan.workspaceId);
-  if (planWorkspaceId !== workspaceId) {
+  if (workspaceId && planWorkspaceId !== workspaceId) {
     throw new Error("canonical install plan belongs to another Workspace");
   }
   const sourceId = readString(plan.sourceId);
@@ -563,7 +573,7 @@ async function reviewInstallPlanRun(
   if (readString(run.id) !== planRunId) {
     throw new Error("canonical Run reference does not match install plan");
   }
-  if (readString(run.workspaceId) !== workspaceId) {
+  if (workspaceId && readString(run.workspaceId) !== workspaceId) {
     throw new Error("canonical Run belongs to another Workspace");
   }
   if (readString(run.capsuleId) !== capsuleId) {
@@ -581,7 +591,7 @@ async function reviewInstallPlanRun(
     throw new Error("canonical Run uses another Source snapshot");
   }
   const expected = exactPlanReference({
-    workspaceId,
+    ...(workspaceId ? { workspaceId } : {}),
     sourceId,
     capsuleId,
     runId: planRunId,
@@ -618,13 +628,13 @@ function requireBodyRecord(
 }
 
 function exactPlanReference(input: {
-  workspaceId: string;
+  workspaceId?: string;
   sourceId?: string;
   capsuleId: string;
   runId: string;
 }): Record<string, unknown> {
   return {
-    workspaceId: input.workspaceId,
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     ...(input.sourceId ? { sourceId: input.sourceId } : {}),
     capsuleId: input.capsuleId,
     runId: input.runId,
@@ -633,20 +643,20 @@ function exactPlanReference(input: {
 
 function exactPlanReferenceFromBody(
   expected: Record<string, unknown>,
-  workspaceId: string,
+  workspaceId: string | undefined,
   capsuleId?: string,
 ): { runId: string; capsuleId: string } {
   const runId = readString(expected.runId) ?? readString(expected.planRunId);
   const planRunId = readString(expected.planRunId);
   const expectedWorkspaceId = readString(expected.workspaceId);
   const expectedCapsuleId = readString(expected.capsuleId);
-  if (!runId || !expectedWorkspaceId || !expectedCapsuleId) {
+  if (!runId || (workspaceId && !expectedWorkspaceId) || !expectedCapsuleId) {
     throw new Error("canonical plan reference is incomplete");
   }
   if (planRunId && planRunId !== runId) {
     throw new Error("canonical plan reference has conflicting Run references");
   }
-  if (expectedWorkspaceId !== workspaceId) {
+  if (workspaceId && expectedWorkspaceId !== workspaceId) {
     throw new Error("canonical plan reference belongs to another Workspace");
   }
   if (capsuleId && expectedCapsuleId !== capsuleId) {
@@ -660,14 +670,14 @@ type ExactPlanReference = ReturnType<typeof exactPlanReferenceFromBody>;
 function assertExactCanonicalRun(
   response: InstallableAppUpstreamResponse,
   exact: ExactPlanReference,
-  workspaceId: string,
+  workspaceId: string | undefined,
 ): Record<string, unknown> {
   const run = readRecord(response.body?.run);
   if (!run) throw new Error("canonical Run response is missing run");
   if (readString(run.id) !== exact.runId) {
     throw new Error("canonical Run response has another Run id");
   }
-  if (readString(run.workspaceId) !== workspaceId) {
+  if (workspaceId && readString(run.workspaceId) !== workspaceId) {
     throw new Error("canonical Run belongs to another Workspace");
   }
   if (readString(run.capsuleId) !== exact.capsuleId) {
@@ -678,7 +688,7 @@ function assertExactCanonicalRun(
 
 async function readExactCanonicalRun(
   exact: ExactPlanReference,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   const response = await fetchControlJson(
@@ -738,7 +748,7 @@ async function postIdempotentRunMutation(
 
 async function applyExactCanonicalRun(
   exact: ExactPlanReference,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppInstallConfig,
   approveWaitingRun: boolean,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -891,7 +901,7 @@ export async function approveAndApplyInstallableAppCapsule(
 
 async function getCanonicalCapsule(
   capsuleId: string,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppInstallConfig,
 ): Promise<Record<string, unknown>> {
   const result = await fetchControlJson(
@@ -903,7 +913,7 @@ async function getCanonicalCapsule(
   const capsule = requireBodyRecord(result, "capsule");
   if (
     readString(capsule.id) !== capsuleId ||
-    readString(capsule.workspaceId) !== workspaceId
+    (workspaceId && readString(capsule.workspaceId) !== workspaceId)
   ) {
     throw new Error("canonical Capsule identity does not match this Workspace");
   }
@@ -931,13 +941,16 @@ function revisionPlanId(response: InstallableAppUpstreamResponse): string {
 
 function assertRevisionPlanAuthority(
   response: InstallableAppUpstreamResponse,
-  expected: { id: string; workspaceId: string; capsuleId: string },
+  expected: { id: string; workspaceId?: string; capsuleId: string },
 ): void {
   const plan = revisionPlanRecord(response);
   if (readString(plan.id) !== expected.id) {
     throw new Error("Takosumi revision-plan response has a different id");
   }
-  if (readString(plan.workspaceId) !== expected.workspaceId) {
+  if (
+    expected.workspaceId &&
+    readString(plan.workspaceId) !== expected.workspaceId
+  ) {
     throw new Error("canonical revision plan belongs to another Workspace");
   }
   if (readString(plan.capsuleId) !== expected.capsuleId) {
@@ -1038,7 +1051,7 @@ function timedOutRevisionPlanResponse(
 async function reviewRevisionPlanRun(
   response: InstallableAppUpstreamResponse,
   initialStatus: number,
-  workspaceId: string,
+  workspaceId: string | undefined,
   capsuleId: string,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -1062,7 +1075,7 @@ async function reviewRevisionPlanRun(
   if (readString(run.id) !== planRunId) {
     throw new Error("canonical Run reference does not match revision plan");
   }
-  if (readString(run.workspaceId) !== workspaceId) {
+  if (workspaceId && readString(run.workspaceId) !== workspaceId) {
     throw new Error("canonical Run belongs to another Workspace");
   }
   if (readString(run.capsuleId) !== capsuleId) {
@@ -1319,11 +1332,44 @@ function servicesByCapsuleId(
 }
 
 async function listInstallableAppCapsuleProjection(
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppAccountsConfig | null,
   includeServices: boolean,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
+  if (!workspaceId) {
+    const page = await fetchControlJson(
+      accountsConfig.baseUrl,
+      takosumiAppsPath(),
+      { method: "GET" },
+      accountsConfig,
+    );
+    if (page.status >= 400) return page;
+    if (!Array.isArray(page.body?.apps)) {
+      throw new Error("Takosumi apps response is missing apps");
+    }
+    return {
+      status: page.status,
+      body: {
+        capsules: page.body.apps.flatMap((value) => {
+          const app = readRecord(value);
+          const capsuleId = readString(app?.capsuleId);
+          return app && capsuleId ? [{
+            capsule_id: capsuleId,
+            app_id: readString(app.name),
+            name: readString(app.displayName) ?? readString(app.name),
+            status: readString(app.state),
+            role: app.role,
+            owner_display_name: app.ownerDisplayName,
+            primary_action: app.primaryAction,
+            ...(includeServices ? { services: [] } : {}),
+          }] : [];
+        }),
+        ...(readString(page.body?.nextCursor)
+          ? { nextCursor: readString(page.body?.nextCursor) } : {}),
+      },
+    };
+  }
   const url = takosumiSessionApiUrl(
     accountsConfig.baseUrl,
     takosumiWorkspaceCapsulesPath(workspaceId),
@@ -1381,7 +1427,7 @@ async function listInstallableAppCapsuleProjection(
 }
 
 export async function listInstallableAppCapsules(
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   return await listInstallableAppCapsuleProjection(
@@ -1392,7 +1438,7 @@ export async function listInstallableAppCapsules(
 }
 
 export async function listInstallableAppCapsulesWithServices(
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   return await listInstallableAppCapsuleProjection(
@@ -1404,7 +1450,7 @@ export async function listInstallableAppCapsulesWithServices(
 
 export async function listInstallableAppCapsuleServices(
   capsuleId: string,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
@@ -1416,13 +1462,15 @@ export async function listInstallableAppCapsuleServices(
   );
   if (capsule.status >= 400) return capsule;
   if (
-    readString(readRecord(capsule.body?.capsule)?.workspaceId) !== workspaceId
+    readString(readRecord(capsule.body?.capsule)?.id) !== capsuleId ||
+    (workspaceId &&
+      readString(readRecord(capsule.body?.capsule)?.workspaceId) !== workspaceId)
   ) {
     return { status: 404, body: { error: "Capsule not found" } };
   }
-  const services = await fetchCapsuleWorkloadServices(capsuleId, workspaceId, {
-    ...accountsConfig,
-  });
+  const services = workspaceId
+    ? await fetchCapsuleWorkloadServices(capsuleId, workspaceId, accountsConfig)
+    : [];
   return {
     status: 200,
     body: { capsule_id: capsuleId, services },
@@ -1431,7 +1479,7 @@ export async function listInstallableAppCapsuleServices(
 
 export async function deleteInstallableAppCapsule(
   capsuleId: string,
-  workspaceId: string,
+  workspaceId: string | undefined,
   config: InstallableAppAccountsConfig | null,
   reason?: string,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -1444,7 +1492,9 @@ export async function deleteInstallableAppCapsule(
   );
   if (capsule.status >= 400) return capsule;
   if (
-    readString(readRecord(capsule.body?.capsule)?.workspaceId) !== workspaceId
+    readString(readRecord(capsule.body?.capsule)?.id) !== capsuleId ||
+    (workspaceId &&
+      readString(readRecord(capsule.body?.capsule)?.workspaceId) !== workspaceId)
   ) {
     return { status: 404, body: { error: "Capsule not found" } };
   }
@@ -1464,7 +1514,7 @@ export async function deleteInstallableAppCapsule(
     throw new Error("canonical destroy plan response is missing run.id");
   }
   if (
-    readString(run?.workspaceId) !== workspaceId ||
+    (workspaceId && readString(run?.workspaceId) !== workspaceId) ||
     readString(run?.capsuleId) !== capsuleId
   ) {
     throw new Error("canonical destroy plan belongs to another Workspace or Capsule");

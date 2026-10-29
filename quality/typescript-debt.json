@@ -1,8 +1,8 @@
 {
   "note": "Declared TypeScript debt. `bun run check:types` compiles every file in tsconfig.check.json and web/tsconfig.json and refuses any diagnostic that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. Every entry is a test file; no production source carries type debt.",
   "totals": {
-    "files": 33,
-    "diagnostics": 98
+    "files": 32,
+    "diagnostics": 91
   },
   "files": {
     "scripts/__tests__/local-agent-proof.test.ts": 1,
@@ -34,7 +34,6 @@
     "src/worker/runtime/queues/__tests__/notification-push.test.ts": 4,
     "src/worker/runtime/runner/__tests__/agent-proof.test.ts": 6,
     "src/worker/server/routes/__tests__/apps-interface-launcher-proof.test.ts": 5,
-    "src/worker/server/routes/auth/__tests__/in-process-bearer-userinfo.test.ts": 7,
     "src/worker/server/routes/auth/__tests__/node-resolver-oidc.integration.test.ts": 2,
     "src/worker/server/routes/auth/__tests__/oidc-router.test.ts": 6,
     "src/worker/server/routes/capsules_test.ts": 2

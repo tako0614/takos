@@ -39,6 +39,7 @@ test("resolveSelfIssuedBearer validates an opaque token through Accounts UserInf
     assertEquals(result.scopes, ["profile", "spaces:read"]);
     assertEquals(result.workspaceId, "workspace_1");
   }
+  assertEquals(receivedRequest?.redirect, "manual");
   assertEquals(
     receivedRequest?.url,
     "http://accounts.internal/oauth/userinfo",
@@ -309,3 +310,53 @@ function dbWithIdentity(): SqlDatabaseBinding {
   };
   return db as unknown as SqlDatabaseBinding;
 }
+
+
+test("current capsule Bearer retains the Accounts workspace and rejects mismatches", async () => {
+  for (const capsuleId of ["cap-takos", "foreign-app"]) {
+    const result = await resolveSelfIssuedBearer({
+      authorizationHeader: "Bearer app-scoped-token", issuer: ISSUER,
+      db: dbWithIdentity(),
+      env: { APP_CAPSULE_ID: "cap-takos", OIDC_CLIENT_ID: "takos" } as Env,
+      fetchImpl: Object.assign(async () => Response.json({
+        sub: "tsub_1", aud: "takos", scope: "profile capsules:read",
+        takosumi: { capsule_id: capsuleId, workspace_id: "ws-current", role: "owner" },
+        workspace_memberships: ["ws-current"],
+      }), { preconnect: () => {} }),
+    });
+    assertEquals(result.kind, capsuleId === "cap-takos" ? "ok" : "invalid");
+    if (result.kind === "ok") {
+      assertEquals(result.capsuleId, "cap-takos");
+      assertEquals(result.workspaceId, "ws-current");
+    }
+  }
+});
+
+test("ordinary capsule Bearer has no workspace authority", async () => {
+  const result = await resolveSelfIssuedBearer({
+    authorizationHeader: "Bearer ordinary-account-token", issuer: ISSUER,
+    db: dbWithIdentity(), env: { APP_CAPSULE_ID: "cap-takos" } as Env,
+    fetchImpl: async () => Response.json({
+      sub: "tsub_1", takosumi: { capsule_id: "cap-takos" }, workspace_memberships: [],
+    }),
+  });
+  assertEquals(result.kind, "ok");
+  if (result.kind === "ok") assertEquals(result.workspaceId, undefined);
+});
+
+test("unconfigured capsule binding keeps existing Accounts bearer users working", async () => {
+  const result = await resolveSelfIssuedBearer({
+    authorizationHeader: "Bearer legacy-user-token", issuer: ISSUER,
+    db: dbWithIdentity(), env: {} as Env,
+    fetchImpl: async () => Response.json({
+      sub: "tsub_1",
+      takosumi: { capsule_id: "cap-takos", workspace_id: "ws-current", role: "member" },
+      workspace_memberships: ["ws-current"],
+    }),
+  });
+  assertEquals(result.kind, "ok");
+  if (result.kind === "ok") {
+    assertEquals(result.capsuleId, undefined);
+    assertEquals(result.workspaceId, "ws-current");
+  }
+});

@@ -37,6 +37,7 @@ module "platform" {
 
   takosumi_accounts_url          = var.takosumi_accounts_url
   takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url
+  app_capsule_id                 = var.app_capsule_id
   takosumi_accounts_client_id    = var.takosumi_accounts_client_id
   takosumi_accounts_redirect_uri = var.takosumi_accounts_redirect_uri
   env                            = var.env

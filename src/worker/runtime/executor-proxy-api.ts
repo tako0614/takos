@@ -27,6 +27,7 @@ import {
 } from "./container-hosts/executor-run-state.ts";
 
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
+import { userHasCurrentAppMembership } from "../application/services/platform/operator-ai-authorization.ts";
 import {
   fetchAuthorizedRuntimeInterfaces,
   issueRuntimeInterfaceAccessToken,
@@ -198,15 +199,17 @@ async function handleRunUsage(
   }
 }
 
-async function handleApiKeys(
+export async function handleApiKeys(
   body: Record<string, unknown>,
   env: Env,
+  deps: RuntimeCredentialDeps = runtimeCredentialDeps,
 ): Promise<Response> {
   // Only hand out the deployment-global provider keys while the token-bound
   // run is still active; a missing/terminal run is rejected.
   const inactive = await rejectApiKeysIfRunInactive(body, env);
   if (inactive) return inactive;
 
+  const runId = nonEmptyString(body.runId)!;
   const configuredDirectOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
   const allowSharedProviderKey =
     env.ENVIRONMENT === "development" ||
@@ -216,6 +219,15 @@ async function handleApiKeys(
     ? configuredDirectOpenAiKey
     : undefined;
   if (directOpenAiKey) {
+    if (nonEmptyString(env.APP_CAPSULE_ID)) {
+      try {
+        if (!await runHasCurrentAppMembership(runId, env, deps)) {
+          return err("App membership is required for shared provider funding", 403);
+        }
+      } catch {
+        return err("App membership authorization is unavailable", 503);
+      }
+    }
     return ok({
       openai: directOpenAiKey,
       openaiEndpoint:
@@ -229,12 +241,11 @@ async function handleApiKeys(
       { module: "executor-proxy-api" },
     );
   }
-  const runId = nonEmptyString(body.runId)!;
   let openAiCredential: OpenAiRuntimeCredential | undefined;
   try {
     openAiCredential = await resolveRunOpenAiRuntimeCredential(
       { runId, env },
-      runtimeCredentialDeps,
+      deps,
     );
   } catch (error) {
     logError("Takosumi AI Gateway runtime credential mint failed", error, {
@@ -262,6 +273,19 @@ async function handleApiKeys(
     openai: openAiCredential.apiKey,
     openaiEndpoint: openAiCredential.endpoint,
   });
+}
+
+/** The self-host key opt-in does not fund ordinary app accounts. */
+async function runHasCurrentAppMembership(
+  runId: string,
+  env: Env,
+  deps: RuntimeCredentialDeps,
+): Promise<boolean> {
+  const bootstrap = await deps.getRunBootstrap(env, runId);
+  if (
+    bootstrap.status === null || TERMINAL_RUN_STATUSES.has(bootstrap.status)
+  ) return false;
+  return await userHasCurrentAppMembership(env, bootstrap.userId, deps);
 }
 
 /**
@@ -305,6 +329,7 @@ export async function resolveRunOpenAiRuntimeCredential(
     clientSecret,
     access: "read",
   });
+  if (!authorization.workspaceId) return undefined;
   const request = {
     baseUrl: internalAccountsUrl,
     token: authorization.accessToken,

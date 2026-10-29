@@ -29,6 +29,12 @@ export type WorkerEnv = DbEnv & {
   TAKOS_OFFLOAD?: ObjectStoreBinding;
 
   // --- indexer ---
+  APP_CAPSULE_ID?: string;
+  OIDC_ISSUER_URL?: string;
+  OIDC_DISCOVERY_URL?: string;
+  OIDC_CLIENT_ID?: string;
+  OIDC_CLIENT_SECRET?: string;
+  TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   AI?: Ai;
   VECTORIZE?: VectorizeIndex;
   OPENAI_API_KEY?: string;

@@ -18,6 +18,7 @@ import { checkSpaceAccess } from "../../../application/services/identity/space-a
 import { getWorkspaceModelSettings } from "../../../application/services/identity/spaces.ts";
 import { createThread } from "../../../application/services/threads/thread-service.ts";
 import { analyzeTask } from "../../../application/services/agent/task-analysis.ts";
+import { requireOperatorAiMembership } from "../../../application/services/platform/operator-ai-authorization.ts";
 import {
   DEFAULT_MODEL_ID,
   filterAgentAllowedToolNames,
@@ -396,6 +397,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   })
   .post("/agent-tasks/:id/plan", async (c) => {
     const user = c.get("user");
+    await requireOperatorAiMembership(c.env, user.id);
     const taskId = c.req.param("id");
 
     const task = await fetchTask(c.env.DB, taskId);

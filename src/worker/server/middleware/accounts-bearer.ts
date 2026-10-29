@@ -79,7 +79,7 @@ export interface AccountsBearerResolverDeps {
 export interface AccountsBearerAuthContext {
   accessToken: string;
   subjectId: string;
-  workspaceId: string;
+  workspaceId?: string;
   scopes: string[];
 }
 
@@ -185,10 +185,9 @@ export async function resolveAccountsBearerFromHeader<
     user,
     userId: selfBearer.userId,
     scopes,
-    // Only expose forwarding authority when UserInfo binds the token to one
-    // exact Workspace. General Takos user authentication still succeeds
-    // without it, but Workspace-scoped Interface/Capsule facades fail closed.
-    ...(selfBearer.workspaceId
+    // App-bound and legacy workspace-bound OAuth grants use the caller's live
+    // Accounts access checks on every forwarded request.
+    ...(selfBearer.workspaceId || selfBearer.capsuleId
       ? {
           accountsBearer: {
             accessToken: bearer,

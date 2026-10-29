@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
 import {
   dispatchControlRpc,
+  handleApiKeys,
   resolveRunOpenAiRuntimeCredential,
 } from "../../executor-proxy-api.ts";
 import {
@@ -456,4 +457,87 @@ test("api-keys rejects when the body omits the token-bound runId", async () => {
     },
   );
   assertEquals(res.status, 400);
+});
+
+
+test("ordinary app accounts cannot spend the operator key even in development", async () => {
+  for (const appClaims of [
+    {},
+    { capsule_id: "cap-takos" },
+    { capsule_id: "cap-takos", workspace_id: "workspace_owner" },
+    { capsule_id: "foreign", app_role: "owner" },
+  ]) {
+    let userInfoReads = 0;
+    const res = await handleApiKeys({ runId: "run_ordinary" }, {
+      APP_CAPSULE_ID: "cap-takos", ENVIRONMENT: "development",
+      TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY: "true", OPENAI_API_KEY: "operator-key",
+      OIDC_ISSUER_URL: "https://accounts.test", OIDC_CLIENT_ID: "takos",
+      ENCRYPTION_KEY: "test-key", DB: createRunStatusDb("running"),
+    } as never, {
+      getRunBootstrap: async () => ({ status: "running", spaceId: "space", threadId: "thread", userId: "ordinary-user", agentType: "default" }),
+      accountsDelegatedAuthorization: async (input) => {
+        assertEquals(input.userId, "ordinary-user");
+        return { accessToken: "ordinary-grant", subjectId: "subject-ordinary" };
+      },
+      fetch: async (_input, init) => {
+        userInfoReads += 1;
+        assertEquals(init?.redirect, "manual");
+        assertEquals(new Headers(init?.headers).get("authorization"), "Bearer ordinary-grant");
+        return Response.json({ sub: "subject-ordinary", takosumi: appClaims, workspace_memberships: [] });
+      },
+    });
+    assertEquals(res.status === 403 || res.status === 503, true);
+    assertEquals((await res.text()).includes("operator-key"), false);
+    assertEquals(userInfoReads, 1);
+  }
+});
+
+test("current Accounts members retain explicitly enabled operator funding", async () => {
+  for (const role of ["owner", "member", undefined]) {
+    const res = await handleApiKeys({ runId: "run_member" }, {
+      APP_CAPSULE_ID: "cap-takos", TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY: "true",
+      OPENAI_API_KEY: "operator-key", OIDC_ISSUER_URL: "https://accounts.test",
+      OIDC_CLIENT_ID: "takos", ENCRYPTION_KEY: "test-key", DB: createRunStatusDb("running"),
+    } as never, {
+      getRunBootstrap: async () => ({ status: "running", spaceId: "space", threadId: "thread", userId: "member-user", agentType: "default" }),
+      accountsDelegatedAuthorization: async () => ({ accessToken: "member-grant", workspaceId: "workspace_owner", subjectId: "subject-member" }),
+      fetch: async () => Response.json({
+        sub: "subject-member",
+        takosumi: { capsule_id: "cap-takos", workspace_id: "workspace_owner", role },
+        workspace_memberships: ["workspace_owner"],
+      }),
+    });
+    assertEquals(res.status, 200);
+    assertEquals((await res.json() as { openai: string }).openai, "operator-key");
+  }
+});
+
+test("ordinary app delegation cannot mint a workspace AI Gateway token", async () => {
+  let discoveryCalls = 0;
+  const credential = await resolveRunOpenAiRuntimeCredential({ runId: "run_ordinary", env: {
+    OIDC_ISSUER_URL: "https://accounts.test", OIDC_CLIENT_ID: "takos", ENCRYPTION_KEY: "test-key",
+  } as never }, {
+    getRunBootstrap: async () => ({ status: "running", spaceId: "space", threadId: "thread", userId: "ordinary-user", agentType: "default" }),
+    accountsDelegatedAuthorization: async () => ({ accessToken: "ordinary-grant", subjectId: "subject-ordinary" }),
+    fetch: async () => { discoveryCalls += 1; throw new Error("ordinary account cannot discover operator gateway"); },
+  });
+  assertEquals(credential, undefined);
+  assertEquals(discoveryCalls, 0);
+});
+
+test("legacy Workspace-only Accounts membership retains opted-in funding", async () => {
+  const res = await handleApiKeys({ runId: "run_legacy" }, {
+    APP_CAPSULE_ID: "cap-takos", TAKOS_AGENT_ALLOW_SHARED_PROVIDER_KEY: "true",
+    OPENAI_API_KEY: "operator-key", OIDC_ISSUER_URL: "https://accounts.test",
+    OIDC_CLIENT_ID: "takos", ENCRYPTION_KEY: "test-key", DB: createRunStatusDb("running"),
+  } as never, {
+    getRunBootstrap: async () => ({ status: "running", spaceId: "space", threadId: "thread", userId: "legacy-user", agentType: "default" }),
+    accountsDelegatedAuthorization: async () => ({ accessToken: "legacy-grant", workspaceId: "workspace_legacy", subjectId: "subject-legacy" }),
+    fetch: async () => Response.json({
+      sub: "subject-legacy", takosumi: { workspace_id: "workspace_legacy" },
+      workspace_memberships: ["workspace_legacy"],
+    }),
+  });
+  assertEquals(res.status, 200);
+  assertEquals((await res.json() as { openai: string }).openai, "operator-key");
 });

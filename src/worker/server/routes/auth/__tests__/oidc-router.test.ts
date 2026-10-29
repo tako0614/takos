@@ -342,6 +342,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       return Response.json({ keys: [jwk] });
     }
     if (request.url === "http://accounts.internal:8787/oauth/userinfo") {
+      assertEquals(request.redirect, "manual");
       assertEquals(
         request.headers.get("authorization"),
         "Bearer access-token-1",
@@ -544,6 +545,50 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       "openid profile email offline_access capsules:read capsules:write",
     );
     assertEquals(identity.delegatedWorkspaceId, "workspace-parent-1");
+    // Current Accounts claims keep the workspace selector; ordinary accounts
+    // from the additive protocol have no operator workspace authority.
+    const appCases = [
+      { name: "current-owner", claims: { capsule_id: "cap-takos", workspace_id: "workspace-parent-1", role: "owner" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+      { name: "current-member", claims: { capsule_id: "cap-takos", workspace_id: "workspace-parent-1", role: "member" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+      ...["owner", "member", undefined].map((appRole) => ({
+        name: `new-${appRole ?? "ordinary"}`,
+        claims: { capsule_id: "cap-takos", ...(appRole ? { app_role: appRole } : {}) },
+        memberships: appRole ? undefined : [], workspaceId: null,
+      })),
+      { name: "no-app-config", claims: { capsule_id: "foreign-app", workspace_id: "workspace-parent-1", role: "member" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+    ];
+    for (const appCase of appCases) {
+      const appState = `state-app-${appCase.name}`;
+      states.push({
+        state: appState,
+        nonce: "nonce-1",
+        code_verifier: "verifier-app",
+        return_to: "/",
+        expires_at: Date.now() + 60_000,
+      });
+      userInfo = {
+        sub: "takosumi-subject-1",
+        takosumi: appCase.claims,
+        ...(appCase.memberships ? { workspace_memberships: appCase.memberships } : {}),
+      };
+      const env = createEnv({
+        states, createdSessions, sqlBinding: authDb.db,
+        oidcIssuerUrl: "https://accounts.example.test/",
+        oidcDiscoveryUrl: "http://accounts.internal:8787",
+        oidcClientId: "takos-client",
+      });
+      if (appCase.name !== "no-app-config") env.APP_CAPSULE_ID = "cap-takos";
+      const appResponse = await createApp().fetch(new Request(
+        `https://takos.example.test/auth/oidc/callback?code=app-code&state=${appState}`,
+        { headers: { Cookie: `__Host-tp_oidc_state=${appState}` } },
+      ), env);
+      assertEquals(appResponse.status, 302);
+      const saved = await authDb.db.select({
+        workspaceId: authIdentities.delegatedWorkspaceId,
+      }).from(authIdentities).get();
+      assertEquals(saved?.workspaceId, appCase.workspaceId);
+    }
+
     assertEquals(
       Date.parse(identity.accessTokenExpiresAt ?? "") > Date.now(),
       true,
@@ -555,7 +600,8 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
   }
 });
 
-test("Accounts delegation refreshes once and reuses the encrypted access token", async () => {
+for (const workspaceId of ["workspace-delegation", undefined]) {
+test(`Accounts delegation refreshes once (${workspaceId ?? "app-scoped"}) and reuses encrypted access`, async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/delegation.sqlite`);
   const now = new Date().toISOString();
@@ -589,7 +635,7 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
       scope: "openid offline_access capsules:read capsules:write",
     },
     fallbackScope: "openid capsules:read capsules:write",
-    workspaceId: "workspace-delegation",
+    ...(workspaceId ? { workspaceId } : {}),
   });
   await authDb.db.update(authIdentities).set({
     accessTokenExpiresAt: new Date(Date.now() - 1_000).toISOString(),
@@ -619,12 +665,12 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
     };
     assertEquals(await accountsDelegatedAuthorization(input), {
       accessToken: "fresh-access-token",
-      workspaceId: "workspace-delegation",
+      ...(workspaceId ? { workspaceId } : {}),
       subjectId: "pairwise-subject",
     });
     assertEquals(await accountsDelegatedAuthorization(input), {
       accessToken: "fresh-access-token",
-      workspaceId: "workspace-delegation",
+      ...(workspaceId ? { workspaceId } : {}),
       subjectId: "pairwise-subject",
     });
     assertEquals(requests.length, 1);
@@ -658,6 +704,8 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
     await removeTempDir(dir);
   }
 });
+
+}
 
 test("Accounts delegation retains the current refresh token when rotation is omitted", async () => {
   const dir = await makeTempDir();

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  takosumiAppsPath,
+  takosumiInstallPlansPath,
   takosumiCapsuleDestroyPlanPath,
   takosumiCapsuleOutputsPath,
   takosumiCapsulePath,
@@ -24,6 +26,11 @@ import {
 } from "../takosumi-control-paths.ts";
 
 describe("Takosumi session control paths", () => {
+  test("offers workspace-less app listing and install attempts", () => {
+    expect(takosumiAppsPath()).toBe("/api/v1/apps");
+    expect(takosumiInstallPlansPath()).toBe("/api/v1/install-plans");
+  });
+
   test("encodes every ledger identifier as one path segment", () => {
     expect(takosumiWorkspaceCapsulesPath("ws/a b")).toBe(
       "/api/v1/workspaces/ws%2Fa%20b/capsules",

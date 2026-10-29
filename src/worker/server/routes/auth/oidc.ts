@@ -30,6 +30,7 @@ import { logError } from "../../../shared/utils/logger.ts";
 import type { OptionalAuthRouteEnv } from "../route-auth.ts";
 import { errorPage } from "./html.ts";
 import { provisionOidcUser, sanitizeReturnTo } from "./provisioning.ts";
+import { takosumiAppClaims, takosumiWorkspaceId } from "./takosumi-app-claims.ts";
 import { exchangeAuthorizationCode } from "./oidc-token-exchange.ts";
 import {
   storeAccountsDelegation,
@@ -300,10 +301,11 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const userInfo = tokens.access_token && serverUserinfoEndpoint
     ? await fetchUserInfo(serverUserinfoEndpoint, tokens.access_token)
     : {};
-  let workspaceId: string;
+  let workspaceId: string | undefined;
   try {
     assertUserInfoSubject(userInfo, subject);
-    workspaceId = assertUserInfoWorkspace(userInfo);
+    const app = takosumiAppClaims(userInfo, c.env.APP_CAPSULE_ID);
+    workspaceId = app ? app.workspaceId : takosumiWorkspaceId(userInfo);
   } catch (error) {
     logError("OIDC userinfo validation failed", error, {
       module: "routes/auth/oidc",
@@ -611,6 +613,7 @@ async function fetchUserInfo(
         accept: "application/json",
         authorization: `Bearer ${accessToken}`,
       },
+      redirect: "manual",
       signal: AbortSignal.timeout(OIDC_FETCH_TIMEOUT_MS),
     });
     return response.ok ? await response.json() as Record<string, unknown> : {};
@@ -630,12 +633,6 @@ function profileString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function workspaceClaimString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 function assertUserInfoSubject(
   userInfo: Record<string, unknown>,
   subject: string,
@@ -644,27 +641,6 @@ function assertUserInfoSubject(
   if (userInfoSubject !== subject) {
     throw new Error("OIDC UserInfo sub mismatch");
   }
-}
-
-function assertUserInfoWorkspace(
-  userInfo: Record<string, unknown>,
-): string {
-  const takosumi = userInfo.takosumi &&
-      typeof userInfo.takosumi === "object" &&
-      !Array.isArray(userInfo.takosumi)
-    ? (userInfo.takosumi as Record<string, unknown>)
-    : undefined;
-  const userInfoWorkspaceId = workspaceClaimString(takosumi?.workspace_id);
-  const memberships = userInfo.workspace_memberships;
-  if (
-    !userInfoWorkspaceId ||
-    !Array.isArray(memberships) ||
-    memberships.length !== 1 ||
-    workspaceClaimString(memberships[0]) !== userInfoWorkspaceId
-  ) {
-    throw new Error("OIDC UserInfo Workspace binding mismatch");
-  }
-  return userInfoWorkspaceId;
 }
 
 function resolveOidcProfile(
