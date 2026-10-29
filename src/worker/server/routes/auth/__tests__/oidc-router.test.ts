@@ -342,6 +342,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       return Response.json({ keys: [jwk] });
     }
     if (request.url === "http://accounts.internal:8787/oauth/userinfo") {
+      assertEquals(request.redirect, "manual");
       assertEquals(
         request.headers.get("authorization"),
         "Bearer access-token-1",
@@ -544,9 +545,20 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       "openid profile email offline_access capsules:read capsules:write",
     );
     assertEquals(identity.delegatedWorkspaceId, "workspace-parent-1");
-    // New Accounts clients bind sign-in to the app, regardless of membership.
-    for (const appRole of ["owner", "member", undefined] as const) {
-      const appState = `state-app-${appRole ?? "ordinary"}`;
+    // Current Accounts claims keep the workspace selector; ordinary accounts
+    // from the additive protocol have no operator workspace authority.
+    const appCases = [
+      { name: "current-owner", claims: { capsule_id: "cap-takos", workspace_id: "workspace-parent-1", role: "owner" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+      { name: "current-member", claims: { capsule_id: "cap-takos", workspace_id: "workspace-parent-1", role: "member" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+      ...["owner", "member", undefined].map((appRole) => ({
+        name: `new-${appRole ?? "ordinary"}`,
+        claims: { capsule_id: "cap-takos", ...(appRole ? { app_role: appRole } : {}) },
+        memberships: appRole ? undefined : [], workspaceId: null,
+      })),
+      { name: "no-app-config", claims: { capsule_id: "foreign-app", workspace_id: "workspace-parent-1", role: "member" }, memberships: ["workspace-parent-1"], workspaceId: "workspace-parent-1" },
+    ];
+    for (const appCase of appCases) {
+      const appState = `state-app-${appCase.name}`;
       states.push({
         state: appState,
         nonce: "nonce-1",
@@ -556,7 +568,8 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       });
       userInfo = {
         sub: "takosumi-subject-1",
-        takosumi: { capsule_id: "cap-takos", ...(appRole ? { app_role: appRole } : {}) },
+        takosumi: appCase.claims,
+        ...(appCase.memberships ? { workspace_memberships: appCase.memberships } : {}),
       };
       const env = createEnv({
         states, createdSessions, sqlBinding: authDb.db,
@@ -564,7 +577,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
         oidcDiscoveryUrl: "http://accounts.internal:8787",
         oidcClientId: "takos-client",
       });
-      env.APP_CAPSULE_ID = "cap-takos";
+      if (appCase.name !== "no-app-config") env.APP_CAPSULE_ID = "cap-takos";
       const appResponse = await createApp().fetch(new Request(
         `https://takos.example.test/auth/oidc/callback?code=app-code&state=${appState}`,
         { headers: { Cookie: `__Host-tp_oidc_state=${appState}` } },
@@ -573,7 +586,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       const saved = await authDb.db.select({
         workspaceId: authIdentities.delegatedWorkspaceId,
       }).from(authIdentities).get();
-      assertEquals(saved?.workspaceId, null);
+      assertEquals(saved?.workspaceId, appCase.workspaceId);
     }
 
     assertEquals(

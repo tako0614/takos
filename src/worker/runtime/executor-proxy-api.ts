@@ -27,6 +27,8 @@ import {
 } from "./container-hosts/executor-run-state.ts";
 
 import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
+import { takosumiAppClaims, takosumiWorkspaceId } from "../server/routes/auth/takosumi-app-claims.ts";
+import { TAKOSUMI_ACCOUNTS_USERINFO_PATH } from "@takosjp/takosumi-contract/identity-oidc";
 import {
   fetchAuthorizedRuntimeInterfaces,
   issueRuntimeInterfaceAccessToken,
@@ -198,15 +200,17 @@ async function handleRunUsage(
   }
 }
 
-async function handleApiKeys(
+export async function handleApiKeys(
   body: Record<string, unknown>,
   env: Env,
+  deps: RuntimeCredentialDeps = runtimeCredentialDeps,
 ): Promise<Response> {
   // Only hand out the deployment-global provider keys while the token-bound
   // run is still active; a missing/terminal run is rejected.
   const inactive = await rejectApiKeysIfRunInactive(body, env);
   if (inactive) return inactive;
 
+  const runId = nonEmptyString(body.runId)!;
   const configuredDirectOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
   const allowSharedProviderKey =
     env.ENVIRONMENT === "development" ||
@@ -216,6 +220,15 @@ async function handleApiKeys(
     ? configuredDirectOpenAiKey
     : undefined;
   if (directOpenAiKey) {
+    if (nonEmptyString(env.APP_CAPSULE_ID)) {
+      try {
+        if (!await runHasCurrentAppMembership(runId, env, deps)) {
+          return err("App membership is required for shared provider funding", 403);
+        }
+      } catch {
+        return err("App membership authorization is unavailable", 503);
+      }
+    }
     return ok({
       openai: directOpenAiKey,
       openaiEndpoint:
@@ -229,12 +242,11 @@ async function handleApiKeys(
       { module: "executor-proxy-api" },
     );
   }
-  const runId = nonEmptyString(body.runId)!;
   let openAiCredential: OpenAiRuntimeCredential | undefined;
   try {
     openAiCredential = await resolveRunOpenAiRuntimeCredential(
       { runId, env },
-      runtimeCredentialDeps,
+      deps,
     );
   } catch (error) {
     logError("Takosumi AI Gateway runtime credential mint failed", error, {
@@ -262,6 +274,55 @@ async function handleApiKeys(
     openai: openAiCredential.apiKey,
     openaiEndpoint: openAiCredential.endpoint,
   });
+}
+
+/** The self-host key opt-in does not fund ordinary app accounts. */
+async function runHasCurrentAppMembership(
+  runId: string,
+  env: Env,
+  deps: RuntimeCredentialDeps,
+): Promise<boolean> {
+  const issuer = nonEmptyString(env.OIDC_ISSUER_URL);
+  const clientId = nonEmptyString(env.OIDC_CLIENT_ID);
+  const encryptionKey = nonEmptyString(env.ENCRYPTION_KEY);
+  if (!issuer || !clientId || !encryptionKey) return false;
+  const bootstrap = await deps.getRunBootstrap(env, runId);
+  if (
+    bootstrap.status === null || TERMINAL_RUN_STATUSES.has(bootstrap.status)
+  ) return false;
+  const authorization = await deps.accountsDelegatedAuthorization({
+    db: env.DB,
+    encryptionKey,
+    userId: bootstrap.userId,
+    issuer: issuer.replace(/\/+$/u, ""),
+    clientId,
+    clientSecret: nonEmptyString(env.OIDC_CLIENT_SECRET),
+    access: "read",
+  });
+  const baseUrl = nonEmptyString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+    nonEmptyString(env.OIDC_DISCOVERY_URL) ?? issuer;
+  const response = await deps.fetch(
+    `${baseUrl.replace(/\/+$/u, "")}${TAKOSUMI_ACCOUNTS_USERINFO_PATH}`,
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${authorization.accessToken}`,
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!response.ok) return false;
+  const claims: unknown = await response.json();
+  if (!claims || typeof claims !== "object" || Array.isArray(claims)) return false;
+  const userInfo = claims as Record<string, unknown>;
+  if (userInfo.sub !== authorization.subjectId) return false;
+  const app = takosumiAppClaims(userInfo, env.APP_CAPSULE_ID);
+  if (app) return app.appRole !== undefined;
+  // Claim-absent legacy clients retain the original browser membership gate.
+  // Explicit foreign Capsule evidence has already failed above.
+  takosumiWorkspaceId(userInfo);
+  return true;
 }
 
 /**

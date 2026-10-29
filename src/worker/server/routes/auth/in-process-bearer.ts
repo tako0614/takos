@@ -254,7 +254,7 @@ export async function resolveSelfIssuedBearer(input: {
   db: SqlDatabaseBinding | undefined;
   env: Env;
   /** Test seam for the external Accounts authority. */
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (request: Request) => Promise<Response>;
 }): Promise<SelfIssuedBearerResult> {
   const token = extractBearerToken(input.authorizationHeader);
   if (!token) return { kind: "no-bearer" };
@@ -269,6 +269,7 @@ export async function resolveSelfIssuedBearer(input: {
           accept: "application/json",
           authorization: `Bearer ${token}`,
         },
+        redirect: "manual",
         signal: AbortSignal.timeout(ACCOUNTS_USERINFO_TIMEOUT_MS),
       }),
     );
@@ -290,7 +291,9 @@ export async function resolveSelfIssuedBearer(input: {
   } catch {
     return { kind: "invalid" };
   }
-  const workspace = app ? { valid: true } : resolveWorkspaceEvidence(claims);
+  const workspace = app
+    ? { valid: true, workspaceId: app.workspaceId }
+    : resolveWorkspaceEvidence(claims);
   if (!workspace.valid) return { kind: "invalid" };
 
   const user = await resolveOrProvisionSelfIssuedUser({

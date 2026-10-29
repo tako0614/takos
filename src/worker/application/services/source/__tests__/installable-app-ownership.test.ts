@@ -3,6 +3,7 @@ import {
   applyInstallableAppCapsule,
   deleteInstallableAppCapsule,
   listInstallableAppCapsules,
+  listInstallableAppCapsulesWithServices,
   planInstallableAppCapsule,
 } from "../installable-app-install.ts";
 
@@ -70,6 +71,41 @@ describe("per-app Accounts control client", () => {
       capsules: [{ capsule_id: "cap-a", role: "member", owner_display_name: "Owner" }],
       nextCursor: "next-a",
     });
+  });
+
+  test("current member workspace remains the primary list route before the apps API ships", async () => {
+    const paths: string[] = [];
+    const result = await listInstallableAppCapsules("ws-current", {
+      baseUrl: "https://accounts.test", token: "member-grant",
+      fetch: async (input, init) => {
+        const path = new URL(input instanceof Request ? input.url : input).pathname;
+        paths.push(path);
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer member-grant");
+        if (path === "/api/v1/workspaces/ws-current/capsules") {
+          return Response.json({ capsules: [{ id: "cap-a", workspaceId: "ws-current", name: "app-a" }] });
+        }
+        if (path === "/api/v1/sources") return Response.json({ sources: [] });
+        throw new Error(`unexpected route ${path}; /apps is not yet available`);
+      },
+    });
+    expect(result.status).toBe(200);
+    expect(result.body?.capsules).toMatchObject([{ capsule_id: "cap-a" }]);
+    expect(paths).toEqual(["/api/v1/workspaces/ws-current/capsules", "/api/v1/sources"]);
+  });
+
+  test("workspace-less lists preserve unavailable and denied upstream responses without widening authority", async () => {
+    for (const status of [404, 403]) {
+      const paths: string[] = [];
+      const result = await listInstallableAppCapsulesWithServices(undefined, {
+        baseUrl: "https://accounts.test", token: "ordinary-grant",
+        fetch: async (input) => {
+          paths.push(new URL(input instanceof Request ? input.url : input).pathname);
+          return Response.json({ error: "unavailable-or-denied" }, { status });
+        },
+      });
+      expect(result).toEqual({ status, body: { error: "unavailable-or-denied" } });
+      expect(paths).toEqual(["/api/v1/apps"]);
+    }
   });
 
   test("does not fall back or mutate after an app access denial", async () => {

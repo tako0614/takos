@@ -12,29 +12,47 @@ hunks when files overlap.
 ## Takos authority
 
 The install context supplies `app_capsule_id`, projected as `APP_CAPSULE_ID`.
-Accounts UserInfo must match that configured id when it supplies app evidence.
-`app_role` is either `owner`, `member`, or absent. A foreign id, malformed role
-or malformed claims envelope fails closed, including when legacy workspace
-claims are also present. An absent role permits sign-in and follows Takos's
-existing local account and resource access rules; it confers no local admin
-privileges. Claim-absent clients retain legacy UserInfo workspace validation.
+When configured, app evidence must match that exact id. A foreign id,
+malformed role, inconsistent workspace binding or malformed claims envelope
+fails closed, even with legacy workspace claims. When not configured, Capsule
+claims are ignored and the existing legacy validation applies.
 
-App-scoped OAuth delegation has no workspace selector. It uses
-`GET /api/v1/apps` and `POST /api/v1/install-plans` with `mode: "attempt"`.
-Legacy delegation retains its external workspace selector and compatibility
-routes. Neither path substitutes a local Takos workspace id or operator token.
-Accounts checks the caller's live app access on each forwarded control request.
-Exact plan id, capsule id, source reference and run id checks remain in place
-before review, approval, apply and destroy operations. Access denials do not
-retry through a different authority or compatibility route.
+Current Accounts emits `capsule_id`, `workspace_id`, legacy `role` and a
+singleton `workspace_memberships`; `app_role` is added by unmerged Takosumi
+#657. Exact Capsule matches therefore retain the verified external Workspace.
+Legacy owner/admin/member/viewer roles preserve membership (owner stays owner;
+the others are app members; a legacy membership without role stays a member)
+without granting local Takos admin powers. Modern `app_role` owner/member claims
+remain supported. A Capsule-only ordinary account
+can sign in with no Workspace authority. Takos has no `APP_WORKSPACE_ID`
+setting: the pre-existing strict singleton claim validation remains its binding.
 
-The new apps response is value-free. It does not contain authorized Interface
-documents. Workspace-less app summaries therefore do not invent service URLs,
-Interface bindings or runtime credentials. The existing Interface launcher,
-MCP and AI-gateway discovery remain workspace-bound compatibility consumers
+The validated Workspace is persisted with the user's encrypted OAuth grant
+and forwarded by the Bearer pipeline, so existing Interface launcher, MCP and
+AI Gateway discovery continue to work for current Accounts members. Ordinary
+accounts cannot select another stored grant or use operator gateway credentials.
+They also cannot receive `OPENAI_API_KEY`, including in development or with the
+self-host key opt-in: configured-app key handout revalidates the triggering
+user's delegated UserInfo and current app membership before returning a key.
+Claim-absent legacy clients retain the original verified singleton Workspace
+membership gate for this opt-in.
+Unconfigured legacy self-host shared-key opt-in behavior remains unchanged.
+UserInfo credential requests do not follow redirects.
+
+Workspace-bound delegation keeps the existing Workspace control routes,
+including the primary Capsule list route. Genuinely workspace-less delegation
+uses `GET /api/v1/apps` and `POST /api/v1/install-plans` with `mode: "attempt"`.
+The apps and raw account-session APIs depend on unmerged Takosumi #663 and are
+not available on current main. Missing or denied upstream routes remain explicit
+errors; they never become empty success lists or widen into an operator/local
+Workspace fallback. Exact plan id, Capsule id, source reference and Run id
+checks remain in place before review, approval, apply and destroy operations.
+
+The new apps response is value-free and contains no authorized Interface
+documents. Workspace-less summaries do not invent service URLs, Interface
+bindings or credentials. Launcher, MCP and AI Gateway remain Workspace-bound
 until their workspace-less protocol is specified; they fail closed without
-that selector. This is a remaining integration boundary, not evidence that
-workspace-less runtime Interfaces are implemented.
+that selector. This is a remaining integration boundary.
 
 ## Forward D1 migration: retire delegated_workspace_id in Phase 9
 
@@ -66,3 +84,16 @@ Run focused OIDC/browser-Bearer, delegation refresh, app lifecycle, control-path
 and install-manifest tests. Run source formatting, lint, Worker/web type checks,
 OpenTofu formatting, architecture and relevant docs checks. CI runs the full
 portable gate; do not run the local full gate on the shared low-space SSD.
+
+Independent review regression evidence (2026-10-29): six claim/Bearer tests
+failed before the fix (discarded Workspace, missing legacy role and unconfigured
+Capsule lockout). The ordinary-account funding regression separately failed
+because development mode returned the operator key. After the fixes, 99 focused
+tests across 11 files passed, including current claims, empty ordinary-account
+memberships, Interface/MCP/Gateway discovery, primary Workspace app listing and
+explicit upstream 404/403 responses. Worker/web type checks, lint, source and
+OpenTofu formatting, architecture/current/API docs, migration-set, queue,
+runtime-secret, migration-safety and release-reference checks passed. The
+UserInfo fetch seam no longer requires Bun's unrelated `fetch.preconnect`
+property, retiring seven declared test type diagnostics. The full portable gate
+is delegated to PR CI; no local full suite, deploy or live sign-in was run.
