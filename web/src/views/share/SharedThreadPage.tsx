@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { rpc } from "../../lib/rpc.ts";
 import { getErrorMessage } from "../../lib/errors.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -43,6 +43,19 @@ export function SharedThreadPage(props: { token: string }) {
   const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [data, setData] = createSignal<SharedThreadPayload | null>(null);
+  let requestSequence = 0;
+  let retired = false;
+
+  // A refresh, unlock or token change supersedes the previous operation.
+  // Reading an old response must not give it authority over the current page.
+  const beginRequest = (token: string) => {
+    const sequence = ++requestSequence;
+    return () => !retired && sequence === requestSequence && props.token === token;
+  };
+  onCleanup(() => {
+    retired = true;
+    requestSequence++;
+  });
 
   const mappedMessages = createMemo((): Message[] => {
     const d = data();
@@ -59,18 +72,21 @@ export function SharedThreadPage(props: { token: string }) {
   });
 
   const loadShare = async () => {
+    const token = props.token;
+    const isCurrent = beginRequest(token);
     setLoading(true);
     setError(null);
     setRequiresPassword(false);
     try {
       const res = await rpc.public["thread-shares"][":token"].$get({
-        param: { token: props.token },
+        param: { token },
       });
       if (res.status === 401) {
         const body = await res.json().catch(() => ({})) as {
           requires_password?: boolean;
           error?: unknown;
         };
+        if (!isCurrent()) return;
         if (body.requires_password) {
           setRequiresPassword(true);
           setData(null);
@@ -82,53 +98,65 @@ export function SharedThreadPage(props: { token: string }) {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: unknown };
+        if (!isCurrent()) return;
         setError(getErrorMessage(body.error, t("notFound")));
         setData(null);
         return;
       }
       const payload = await res.json() as SharedThreadPayload;
+      if (!isCurrent()) return;
       setData(payload);
     } catch (err) {
+      if (!isCurrent()) return;
       setError(err instanceof Error ? err.message : t("failedToLoadShares"));
       setData(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
   const unlock = async () => {
     const pw = password();
     if (!pw.trim()) return;
+    const token = props.token;
+    const isCurrent = beginRequest(token);
 
     setLoading(true);
     setError(null);
     try {
       const res = await rpc.public["thread-shares"][":token"].access.$post({
-        param: { token: props.token },
+        param: { token },
         json: { password: pw },
       });
       if (res.status === 401) {
+        if (!isCurrent()) return;
         setRequiresPassword(true);
         setError(null);
         return;
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: unknown };
+        if (!isCurrent()) return;
         setError(getErrorMessage(body.error, t("operationFailed")));
         return;
       }
       const payload = await res.json() as SharedThreadPayload;
+      if (!isCurrent()) return;
       setData(payload);
       setRequiresPassword(false);
       setPassword("");
     } catch (err) {
+      if (!isCurrent()) return;
       setError(err instanceof Error ? err.message : t("operationFailed"));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
   createEffect(() => {
+    // A new link must not display the old link's body or reuse its password.
+    setData(null);
+    setPassword("");
     loadShare();
   });
 
