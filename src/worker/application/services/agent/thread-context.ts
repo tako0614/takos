@@ -554,7 +554,7 @@ export async function indexThreadContext(params: {
   return { embedded, lastSequence, hasMore, summaryUpdated };
 }
 
-export function buildThreadContextSystemMessage(params: {
+export function buildThreadContextMessage(params: {
   summary: string | null;
   keyPointsJson: string;
   retrieved: RetrievedThreadMessage[];
@@ -600,5 +600,7 @@ export function buildThreadContextSystemMessage(params: {
   const content = truncateText(parts.join("\n"), maxChars);
   if (!summary && keyPoints.length === 0 && retrieved.length === 0) return null;
 
-  return { role: "system", content };
+  // Summaries and saved vector metadata are derived from historical user/tool
+  // content. A server-generated wrapper does not make that content policy.
+  return { role: "user", content };
 }

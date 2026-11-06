@@ -69,6 +69,9 @@ CREATE TABLE runs (
   thread_id TEXT NOT NULL,
   account_id TEXT NOT NULL,
   parent_run_id TEXT,
+  status TEXT NOT NULL DEFAULT 'queued',
+  completion_key TEXT,
+  transcript_sequence_start INTEGER,
   input TEXT NOT NULL DEFAULT '{}'
 );
 `;

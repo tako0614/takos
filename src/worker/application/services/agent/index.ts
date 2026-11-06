@@ -37,7 +37,7 @@ export {
 } from "./model-catalog.ts";
 export type { RetrievedThreadMessage } from "./thread-context.ts";
 export {
-  buildThreadContextSystemMessage,
+  buildThreadContextMessage,
   DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB,
   indexThreadContext,
   queryRelevantThreadMessages,
