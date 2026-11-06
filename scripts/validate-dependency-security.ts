@@ -382,7 +382,7 @@ function validateProductionSanitizerBundle(): string[] {
     .filter((name) => name.endsWith(".js"))
     .map((name) => readFileSync(resolve(assetPath, name), "utf8"))
     .join("\n");
-  const proof = "takos.monaco-dompurify@3.4.12";
+  const proof = "takos.monaco-dompurify@3.4.17";
   const proofCount = javascript.split(proof).length - 1;
   if (proofCount !== 1) {
     return [
