@@ -77,6 +77,9 @@ export function useMessagePolling({
       }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
+      if (controller.signal.aborted) return;
+      if (!isMountedRef.current) return;
+      if (requestSeq !== messageFetchSeqRef) return;
       if (threadId() !== currentThreadId) return;
       if (showError) {
         messageFetchErrorVisible = true;
