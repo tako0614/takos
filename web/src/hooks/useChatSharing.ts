@@ -1,5 +1,6 @@
 import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { getErrorMessage } from "../lib/errors.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 
@@ -219,8 +220,8 @@ export function useChatSharing(
         query: { format },
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error || t("exportFailed"));
+        const body = await res.json().catch(() => ({})) as { error?: unknown };
+        throw new Error(getErrorMessage(body.error, t("exportFailed")));
       }
       const filename = parseContentDispositionFilename(
         res.headers.get("Content-Disposition"),
