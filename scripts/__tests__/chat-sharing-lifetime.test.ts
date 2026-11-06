@@ -48,7 +48,7 @@ async function verifySharingLifetime() {
   const anchor = createClient({ url: "file::memory:?cache=shared" });
   const client = createClient({ url: "file::memory:?cache=shared" });
   let server: ReturnType<typeof Bun.serve> | undefined;
-  let fixture: { sharing: UseChatSharingReturn; setThread: (id: string) => void; dispose: () => void; toastCount: () => number; clearToasts: () => void } | undefined;
+  let fixture: { sharing: UseChatSharingReturn; setThread: (id: string) => void; dispose: () => void; toastCount: () => number; toastMessages: () => Array<{ type: string; message: string }>; clearToasts: () => void } | undefined;
   const releases: Array<() => void> = [];
   try {
     await ensureServerMigrations(client, resolve(import.meta.dir, "../../db/migrations-control/migrations"));
@@ -105,7 +105,7 @@ async function verifySharingLifetime() {
     const { document, Event, HTMLElement } = parseHTML("<!doctype html><html><body><div id='root'></div></body></html>");
     const storage = new Map<string, string>();
     const clipboard: string[] = [];
-    let clipboardGate: { started: () => void; released: Promise<void> } | undefined;
+    let clipboardGate: { started: () => void; released: Promise<void>; error?: Error } | undefined;
     let bodyGate: { path: string; started: () => void; released: Promise<void> } | undefined;
     const scope: Record<string, unknown> = {
       document, HTMLElement, console, URL, Headers, Request, Response, Blob, setTimeout, clearTimeout,
@@ -114,6 +114,7 @@ async function verifySharingLifetime() {
         clipboard.push(value);
         if (clipboardGate) {
           const gate = clipboardGate; clipboardGate = undefined; gate.started(); await gate.released;
+          if (gate.error) throw gate.error;
         }
       } } },
       location: { href: String(server.url), origin: server.url.origin, pathname: "/chat", search: "" },
@@ -305,6 +306,70 @@ async function verifySharingLifetime() {
     expect(ui.shares().find(s => s.id === currentRevoke.id)!.revoked_at).not.toBeNull();
     console.info("[chat-sharing] revocation closed");
 
+    // Drive the real row button, not the create-share hook: its clipboard
+    // continuation has a separate Solid owner. Only the external clipboard
+    // ACK/rejection is controlled; every URL still comes from the real API.
+    const startRowCopy = async (reject = false) => {
+      const share = ui.shares().find(s => !s.revoked_at)!;
+      expect(share).toBeDefined();
+      const button = document.querySelector<HTMLButtonElement>('button[title="Copy"]:not([disabled])');
+      expect(button).not.toBeNull();
+      let started!: () => void; let release!: () => void;
+      const entered = new Promise<void>(resolve => { started = resolve; });
+      const released = new Promise<void>(resolve => { release = resolve; });
+      releases.push(release);
+      clipboardGate = { started, released, ...(reject ? { error: new Error("Clipboard permission denied") } : {}) };
+      button!.dispatchEvent(new Event("click", { bubbles: true }));
+      await entered;
+      expect(clipboard.at(-1)).toBe(share.share_url);
+      return async () => {
+        release();
+        // Let the actual async DOM handler continue after the clipboard ACK.
+        await new Promise(resolve => setTimeout(resolve, 0));
+      };
+    };
+    fixture.clearToasts();
+    await (await startRowCopy())();
+    expect(fixture.toastMessages()).toEqual([{ type: "success", message: "Copied" }]);
+    fixture.clearToasts();
+    await (await startRowCopy(true))();
+    expect(fixture.toastMessages()).toEqual([{ type: "error", message: "Failed to copy" }]);
+    console.info("[chat-sharing] current row copy and denial closed");
+
+    for (const scenario of ["other-thread", "rejected-other-thread", "A-B-A", "refresh", "close", "close-reopen"]) {
+      fixture.setThread(a!.id);
+      ui.setShowShareModal(true);
+      await waitFor(() => !ui.sharesLoading());
+      fixture.clearToasts();
+      const finishCopy = await startRowCopy(scenario === "rejected-other-thread");
+      if (scenario === "other-thread" || scenario === "rejected-other-thread" || scenario === "A-B-A") {
+        fixture.setThread(b!.id); await waitFor(() => !ui.sharesLoading());
+        if (scenario === "A-B-A") {
+          fixture.setThread(a!.id); await waitFor(() => !ui.sharesLoading());
+        }
+      } else if (scenario === "refresh") {
+        await ui.fetchShares();
+      } else {
+        ui.setShowShareModal(false);
+        expect(document.querySelector("[role=dialog]")).toBeNull();
+        if (scenario === "close-reopen") {
+          ui.setShowShareModal(true); await waitFor(() => !ui.sharesLoading());
+        }
+      }
+      if (scenario !== "close") editDraft(`row-${scenario}-draft`, "26");
+      const requestCount = requests.length;
+      await finishCopy();
+      expect(fixture.toastMessages()).toEqual([]);
+      expect(requests.length).toBe(requestCount);
+      if (scenario !== "close") {
+        expect(ui.sharePassword()).toBe(`row-${scenario}-draft`);
+        expect(ui.shareExpiresInDays()).toBe("26");
+      }
+      console.info(`[chat-sharing] retired row copy ${scenario} closed`);
+    }
+    ui.setShowShareModal(true);
+    fixture.setThread(a!.id); await waitFor(() => !ui.sharesLoading());
+
     // A retired 401 body must not redirect the new context through rpcJson.
     let reading!: () => void; let releaseBody!: () => void;
     const bodyStarted = new Promise<void>(resolve => { reading = resolve; });
@@ -343,9 +408,11 @@ async function verifySharingLifetime() {
     console.info("[chat-sharing] dialog reopening closed");
     const disposing = holdResponse(`/api/threads/${a!.id}/share`, "POST");
     const pendingDisposal = ui.createShare(); await disposing.entered;
+    const finishDisposedCopy = await startRowCopy();
     const disposed = fixture; disposed.dispose(); fixture = undefined;
     const beforeDisposeCopies = clipboard.length;
     disposing.release(); await pendingDisposal;
+    await finishDisposedCopy();
     expect(clipboard.length).toBe(beforeDisposeCopies);
     expect(disposed.toastCount()).toBe(0);
     expect(document.getElementById("root")!.textContent).toBe("");
