@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { rpc } from "../../lib/rpc.ts";
+import { getErrorMessage } from "../../lib/errors.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { Input } from "../../components/ui/Input.tsx";
@@ -68,20 +69,20 @@ export function SharedThreadPage(props: { token: string }) {
       if (res.status === 401) {
         const body = await res.json().catch(() => ({})) as {
           requires_password?: boolean;
-          error?: string;
+          error?: unknown;
         };
         if (body.requires_password) {
           setRequiresPassword(true);
           setData(null);
           return;
         }
-        setError(body.error || t("operationFailed"));
+        setError(getErrorMessage(body.error, t("operationFailed")));
         setData(null);
         return;
       }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || t("notFound"));
+        const body = await res.json().catch(() => ({})) as { error?: unknown };
+        setError(getErrorMessage(body.error, t("notFound")));
         setData(null);
         return;
       }
@@ -112,8 +113,8 @@ export function SharedThreadPage(props: { token: string }) {
         return;
       }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || t("operationFailed"));
+        const body = await res.json().catch(() => ({})) as { error?: unknown };
+        setError(getErrorMessage(body.error, t("operationFailed")));
         return;
       }
       const payload = await res.json() as SharedThreadPayload;

@@ -15,6 +15,7 @@ import type { Env, Thread, User } from "../../../shared/types/index.ts";
 import type { ObjectStoreBinding, SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { isAppError, type BaseVariables } from "../route-auth.ts";
 import threadsRoutes from "../threads/routes.ts";
+import publicShareRoutes from "../public-share/routes.ts";
 
 const OWNER = "fixture_message_owner";
 const FOREIGN = "fixture_message_foreign";
@@ -127,6 +128,15 @@ function messageBody(value: unknown): RequestInit {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(value),
   };
+}
+
+function anonymousShares() {
+  const app = new Hono<{ Bindings: Env }>();
+  app.onError((error, c) => {
+    if (isAppError(error)) return c.json(error.toResponse(), error.statusCode as 401 | 403 | 404 | 429);
+    throw error;
+  });
+  return app.route("/api/public", publicShareRoutes);
 }
 
 // Only the external object-store boundary is in memory. Production offload
@@ -387,5 +397,91 @@ test("previously indexed roles and summaries remain available as untrusted provi
     expect(body.history[0].content).toContain("OLD_SUMMARY");
     expect(body.history[0].content).toContain("OLD_KEY_POINT");
     expect(body.history[0].content).toContain("untrusted");
+  });
+});
+
+test("a protected share advertises its password challenge without disclosing messages", async () => {
+  await withThread(async ({ request, environment, threadId }) => {
+    expect((await request(`/threads/${threadId}/messages`, messageBody({ role: "user", content: "Protected conversation" }))).status).toBe(201);
+    const created = await request(`/threads/${threadId}/share`, messageBody({ mode: "password", password: "fixture-password" }));
+    expect(created.status).toBe(201);
+    const body = await created.json() as { share: { token: string } };
+    expect((await request(`/threads/${threadId}/share`, messageBody({ mode: "public" }), FOREIGN)).status).toBe(404);
+    // No authenticated middleware or user is supplied on the public router.
+    const anonymous = anonymousShares();
+    const url = `https://takos.test/api/public/thread-shares/${body.share.token}`;
+    const challenge = await anonymous.fetch(new Request(url), environment);
+    expect(challenge.status).toBe(401);
+    const challengeBody = await challenge.json() as { requires_password?: boolean; error: { code: string }; messages?: unknown };
+    expect(challengeBody.requires_password).toBe(true);
+    expect(challengeBody.error.code).toBe("UNAUTHORIZED");
+    expect(challengeBody.messages).toBeUndefined();
+    expect(JSON.stringify(challengeBody)).not.toContain("Protected conversation");
+    const missing = await anonymous.fetch(new Request(`${url}/access`, messageBody({})), environment);
+    expect(missing.status).toBe(401);
+    expect((await missing.json() as { requires_password: boolean }).requires_password).toBe(true);
+    const wrong = await anonymous.fetch(new Request(`${url}/access`, messageBody({ password: "wrong-password" })), environment);
+    expect(wrong.status).toBe(403);
+    expect(await wrong.text()).not.toContain("Protected conversation");
+    const unlocked = await anonymous.fetch(new Request(`${url}/access`, messageBody({ password: "fixture-password" })), environment);
+    expect(unlocked.status).toBe(200);
+    const payload = await unlocked.json() as { messages: Array<{ content: string }> };
+    expect(payload.messages.map(message => message.content)).toEqual(["Protected conversation"]);
+  });
+});
+
+test("public share password challenges preserve the attempt limit and Retry-After", async () => {
+  await withThread(async ({ request, environment, threadId }) => {
+    const response = await request(`/threads/${threadId}/share`, messageBody({ mode: "password", password: "fixture-password" }));
+    expect(response.status).toBe(201);
+    const { share } = await response.json() as { share: { token: string } };
+    const url = `https://takos.test/api/public/thread-shares/${share.token}/access`;
+    const anonymous = anonymousShares();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const rejected = await anonymous.fetch(new Request(url, messageBody({ password: "wrong-password" })), environment);
+      expect(rejected.status).toBe(403);
+    }
+    const limited = await anonymous.fetch(new Request(url, messageBody({ password: "fixture-password" })), environment);
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
+    const body = await limited.json() as { error: { code: string }; messages?: unknown };
+    expect(body.error.code).toBe("RATE_LIMITED");
+    expect(body.messages).toBeUndefined();
+  });
+});
+
+test("expired, revoked and deleted shares stay unavailable and public payloads exclude internal roles", async () => {
+  await withThread(async ({ request, environment, database, thread, threadId }) => {
+    await createMessage(environment, database, thread, { role: "user", content: "Visible shared text" });
+    await createMessage(environment, database, thread, { role: "system", content: "Internal policy must not leak" });
+    await createMessage(environment, database, thread, { role: "tool", content: "Internal tool must not leak" });
+    const anonymous = anonymousShares();
+    const created = await request(`/threads/${threadId}/share`, messageBody({ mode: "public" }));
+    expect(created.status).toBe(201);
+    const { share } = await created.json() as { share: { id: string; token: string } };
+    const url = `https://takos.test/api/public/thread-shares/${share.token}`;
+    const publicResponse = await anonymous.fetch(new Request(url), environment);
+    expect(publicResponse.status).toBe(200);
+    const publicBody = await publicResponse.json() as { messages: Array<{ role: string; content: string }> };
+    expect(publicBody.messages.map(message => message.content)).toEqual(["Visible shared text"]);
+    expect((await request(`/threads/${threadId}/shares/${share.id}/revoke`, messageBody({}), FOREIGN)).status).toBe(404);
+    expect((await request(`/threads/${threadId}/shares/${share.id}/revoke`, messageBody({}))).status).toBe(200);
+    expect((await anonymous.fetch(new Request(url), environment)).status).toBe(404);
+    expect((await anonymous.fetch(new Request(`${url}/access`, messageBody({ password: "fixture-password" })), environment)).status).toBe(404);
+    const expiring = await request(`/threads/${threadId}/share`, messageBody({ mode: "password", password: "fixture-password", expires_at: new Date(Date.now() + 86400000).toISOString() }));
+    const expiredBody = await expiring.json() as { share: { id: string; token: string } };
+    await database.prepare("UPDATE thread_shares SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?").bind(expiredBody.share.id).run();
+    const expiredUrl = `https://takos.test/api/public/thread-shares/${expiredBody.share.token}`;
+    expect((await anonymous.fetch(new Request(expiredUrl), environment)).status).toBe(404);
+    const refused = await anonymous.fetch(new Request(`${expiredUrl}/access`, messageBody({ password: "fixture-password" })), environment);
+    expect(refused.status).toBe(404);
+    expect(await refused.text()).not.toContain("Visible shared text");
+    const deletedPublic = await (await request(`/threads/${threadId}/share`, messageBody({ mode: "public" }))).json() as { share: { token: string } };
+    const deletedProtected = await (await request(`/threads/${threadId}/share`, messageBody({ mode: "password", password: "fixture-password" }))).json() as { share: { token: string } };
+    expect((await request(`/threads/${threadId}`, { method: "DELETE" })).status).toBe(200);
+    expect((await anonymous.fetch(new Request(`https://takos.test/api/public/thread-shares/${deletedPublic.share.token}`), environment)).status).toBe(404);
+    const deletedAccess = await anonymous.fetch(new Request(`https://takos.test/api/public/thread-shares/${deletedProtected.share.token}/access`, messageBody({ password: "fixture-password" })), environment);
+    expect(deletedAccess.status).toBe(404);
+    expect(await deletedAccess.text()).not.toContain("Visible shared text");
   });
 });
