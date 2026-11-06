@@ -6,13 +6,13 @@ import { useI18n } from "../../store/i18n.ts";
 
 /** Renders the global toast list from the shared Solid store. */
 export function ToastRenderer() {
-  const { toasts, dismissToast, pauseToast, resumeToast } = useToast();
+  const toast = useToast();
   return (
     <ToastContainer
-      toasts={toasts}
-      onDismiss={dismissToast}
-      onPause={pauseToast}
-      onResume={resumeToast}
+      toasts={toast.toasts}
+      onDismiss={toast.dismissToast}
+      onPause={toast.pauseToast}
+      onResume={toast.resumeToast}
     />
   );
 }
