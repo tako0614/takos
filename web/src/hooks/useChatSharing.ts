@@ -1,4 +1,4 @@
-import { type Accessor, createEffect, createSignal } from "solid-js";
+import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
@@ -70,9 +70,30 @@ export function useChatSharing(
   const [shareExpiresInDays, setShareExpiresInDays] = createSignal<string>("");
   const [shareError, setShareError] = createSignal<string | null>(null);
   const [creatingShare, setCreatingShare] = createSignal(false);
+  let contextSequence = 0;
+  let listSequence = 0;
+  let retired = false;
+
+  // A→B→A and closing/reopening the dialog create new contexts even when the
+  // thread id matches again. Old server operations may finish, but their UI
+  // continuations cannot act on the new context.
+  const captureContext = () => {
+    const sequence = contextSequence;
+    const id = threadId();
+    return {
+      id,
+      isCurrent: () => !retired && sequence === contextSequence &&
+        id === threadId() && showShareModal(),
+    };
+  };
+  onCleanup(() => {
+    retired = true;
+    contextSequence++;
+  });
 
   const resetShareState = () => {
     setShares([]);
+    setSharesLoading(false);
     setShareError(null);
     setShareMode("public");
     setSharePassword("");
@@ -81,23 +102,27 @@ export function useChatSharing(
   };
 
   const fetchShares = async () => {
-    const currentThreadId = threadId();
+    const context = captureContext();
+    if (!context.isCurrent()) return;
+    const request = ++listSequence;
+    const isCurrent = () => context.isCurrent() && request === listSequence;
     setSharesLoading(true);
     setShareError(null);
     try {
       const res = await rpc.threads[":id"].shares.$get({
-        param: { id: currentThreadId },
+        param: { id: context.id },
       });
-      const data = await rpcJson<{ shares: ThreadShare[] }>(res);
-      if (currentThreadId !== threadId()) return;
+      if (!isCurrent()) return;
+      const data = await rpcJson<{ shares: ThreadShare[] }>(res, { isCurrent });
+      if (!isCurrent()) return;
       setShares(data.shares || []);
     } catch (err) {
-      if (currentThreadId !== threadId()) return;
+      if (!isCurrent()) return;
       setShareError(
         err instanceof Error ? err.message : t("failedToLoadShares"),
       );
     } finally {
-      if (currentThreadId === threadId()) {
+      if (isCurrent()) {
         setSharesLoading(false);
       }
     }
@@ -105,64 +130,80 @@ export function useChatSharing(
 
   createEffect(() => {
     threadId();
+    const open = showShareModal();
+    contextSequence++;
     resetShareState();
-    if (showShareModal()) {
+    if (open) {
       void fetchShares();
     }
   });
 
   const createShare = async () => {
-    const currentThreadId = threadId();
+    const context = captureContext();
+    if (!context.isCurrent() || creatingShare()) return;
+    const mode = shareMode();
+    const password = sharePassword();
+    const expiry = shareExpiresInDays();
     setCreatingShare(true);
     setShareError(null);
     try {
-      const expiresStr = shareExpiresInDays().trim();
+      const expiresStr = expiry.trim();
       const expires_in_days = expiresStr
         ? Number.parseInt(expiresStr, 10)
         : undefined;
       const res = await rpc.threads[":id"].share.$post({
-        param: { id: currentThreadId },
+        param: { id: context.id },
         json: {
-          mode: shareMode(),
-          password: shareMode() === "password" ? sharePassword() : undefined,
+          mode,
+          password: mode === "password" ? password : undefined,
           expires_in_days: typeof expires_in_days === "number" &&
               Number.isFinite(expires_in_days)
             ? expires_in_days
             : undefined,
         },
       });
+      if (!context.isCurrent()) return;
       const data = await rpcJson<{ share: ThreadShare; share_url: string }>(
         res,
+        { isCurrent: context.isCurrent },
       );
+      if (!context.isCurrent()) return;
       showToast("success", t("created"));
       if (data.share_url) {
         try {
           await navigator.clipboard.writeText(data.share_url);
+          if (!context.isCurrent()) return;
           showToast("success", t("copied"));
         } catch { /* ignored */ }
       }
-      setSharePassword("");
-      setShareExpiresInDays("");
+      if (!context.isCurrent()) return;
+      if (sharePassword() === password) setSharePassword("");
+      if (shareExpiresInDays() === expiry) setShareExpiresInDays("");
       await fetchShares();
     } catch (err) {
+      if (!context.isCurrent()) return;
       setShareError(
         err instanceof Error ? err.message : t("failedToCreateShare"),
       );
     } finally {
-      setCreatingShare(false);
+      if (context.isCurrent()) setCreatingShare(false);
     }
   };
 
   const revokeShare = async (shareId: string) => {
+    const context = captureContext();
+    if (!context.isCurrent()) return;
     try {
-      const currentThreadId = threadId();
       const res = await rpc.threads[":id"].shares[":shareId"].revoke.$post({
-        param: { id: currentThreadId, shareId },
+        param: { id: context.id, shareId },
       });
-      await rpcJson(res);
+      if (!context.isCurrent()) return;
+      await rpcJson(res, { isCurrent: context.isCurrent });
+      if (!context.isCurrent()) return;
       showToast("success", t("revoked"));
       await fetchShares();
     } catch (err) {
+      if (!context.isCurrent()) return;
       showToast(
         "error",
         err instanceof Error ? err.message : t("failedToRevoke"),
