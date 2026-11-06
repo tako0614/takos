@@ -11,6 +11,7 @@ const host = globalThis as unknown as {
     setThread: (id: string) => void;
     dispose: () => void;
     toastCount: () => number;
+    toastMessages: () => Array<{ type: string; message: string }>;
     clearToasts: () => void;
   };
 };
@@ -44,6 +45,7 @@ const clearToasts = () => {
 host.takosSharingFixture = {
   sharing, setThread,
   toastCount: () => store.toasts.length,
+  toastMessages: () => store.toasts.map(({ type, message }) => ({ type, message })),
   clearToasts,
   dispose() {
     dispose();

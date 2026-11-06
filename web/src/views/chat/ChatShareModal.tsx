@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, onCleanup, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
@@ -140,62 +140,72 @@ export function ChatShareModal(props: ChatShareModalProps) {
           >
             <div class="mt-3 space-y-2">
               <For each={props.shares}>
-                {(s) => (
-                  <div class="flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                          {s.share_url}
-                        </span>
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                          {s.mode}
-                        </span>
-                        <Show when={s.revoked_at}>
-                          <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                            {t("revoked")}
+                {(s) => {
+                  let retired = false;
+                  onCleanup(() => {
+                    retired = true;
+                  });
+                  // The clipboard write may already have committed. Its late
+                  // notification belongs only to this rendered share row.
+                  const copyLink = async () => {
+                    if (retired || s.revoked_at) return;
+                    try {
+                      await navigator.clipboard.writeText(s.share_url);
+                      if (!retired) showToast("success", t("copied"));
+                    } catch {
+                      if (!retired) showToast("error", t("failedToCopy"));
+                    }
+                  };
+                  return (
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                            {s.share_url}
                           </span>
-                        </Show>
+                          <span class="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                            {s.mode}
+                          </span>
+                          <Show when={s.revoked_at}>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                              {t("revoked")}
+                            </span>
+                          </Show>
+                        </div>
+                        <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          {s.expires_at
+                            ? t("shareExpiresAt", { date: s.expires_at })
+                            : t("shareNoExpiry")}
+                          {s.last_accessed_at
+                            ? ` \u00B7 ${
+                              t("shareLastAccessed", { date: s.last_accessed_at })
+                            }`
+                            : ""}
+                        </div>
                       </div>
-                      <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {s.expires_at
-                          ? t("shareExpiresAt", { date: s.expires_at })
-                          : t("shareNoExpiry")}
-                        {s.last_accessed_at
-                          ? ` \u00B7 ${
-                            t("shareLastAccessed", { date: s.last_accessed_at })
-                          }`
-                          : ""}
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center"
+                          onClick={copyLink}
+                          disabled={!!s.revoked_at}
+                          title={t("copy")}
+                        >
+                          <Icons.Copy class="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center"
+                          onClick={() => props.onRevokeShare(s.id)}
+                          disabled={!!s.revoked_at}
+                          title={t("revoke")}
+                        >
+                          <Icons.Trash class="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <div class="flex items-center gap-1">
-                      <button
-                        type="button"
-                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(s.share_url);
-                            showToast("success", t("copied"));
-                          } catch {
-                            showToast("error", t("failedToCopy"));
-                          }
-                        }}
-                        disabled={!!s.revoked_at}
-                        title={t("copy")}
-                      >
-                        <Icons.Copy class="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center"
-                        onClick={() => props.onRevokeShare(s.id)}
-                        disabled={!!s.revoked_at}
-                        title={t("revoke")}
-                      >
-                        <Icons.Trash class="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  );
+                }}
               </For>
             </div>
           </Show>
