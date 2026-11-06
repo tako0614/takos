@@ -62,6 +62,16 @@ Current public/product API markers:
   `202` とレビュー用 Run / expected guard を返す。適用は Takosumi 側の承認後に行う)
 - `/git/:owner/:repo.git/info/refs`
 
+Password-protected thread shares use `GET /api/public/thread-shares/:token` and
+`POST /api/public/thread-shares/:token/access` with `{ "password": "..." }`.
+Missing passwords return HTTP 401 with `requires_password: true` alongside the
+standard `error: { code, message }` envelope. This challenge contains no thread
+or message payload and does not require an account login. A wrong password returns
+403; a correct password returns the filtered shared conversation. The current
+in-memory limiter allows five access attempts per token per minute within one
+Worker instance; further attempts on that instance return 429 with `Retry-After`.
+This is not a deployment-wide limit. Expired/revoked shares remain unavailable.
+
 Git URL の `plan` は呼び出し側が `Idempotency-Key` header を必ず送り、通信再試行でも
 同じ install 操作キーを使います。Capsule HTTP は delegated Accounts Workspace のみを
 受け付け、deployment-wide operator token へはフォールバックしません。

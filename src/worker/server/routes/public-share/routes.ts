@@ -31,6 +31,13 @@ const sharePasswordRateLimiter = new InMemoryRateLimiter({
   message: "Too many password attempts. Please try again later.",
 });
 
+function passwordChallenge() {
+  return {
+    ...new AuthenticationError("Password required").toResponse(),
+    requires_password: true,
+  };
+}
+
 function sanitizeSharedMessages(messages: SharedMessageRow[]) {
   // Safety by default: do not expose system/tool messages in unauthenticated share views.
   return messages
@@ -99,7 +106,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     });
     if ("error" in access) {
       if (access.error === "password_required") {
-        throw new AuthenticationError("Password required");
+        return c.json(passwordChallenge(), 401);
       }
       throw new NotFoundError();
     }
@@ -153,7 +160,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       });
       if ("error" in access) {
         if (access.error === "password_required") {
-          throw new AuthenticationError("Password required");
+          return c.json(passwordChallenge(), 401);
         }
         if (access.error === "forbidden") {
           throw new AuthorizationError("Invalid password");
