@@ -151,7 +151,15 @@ function extractErrorMessage(data: unknown): string | null {
   return null;
 }
 
-export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
+export interface RpcJsonOptions {
+  /** A retired caller still receives an error, without login navigation. */
+  isCurrent?: () => boolean;
+}
+
+export async function rpcJson<T>(
+  response: JsonResponseLike,
+  options?: RpcJsonOptions,
+): Promise<T> {
   if (!response.ok) {
     const data = (await response.json().catch((e) => {
       console.warn("Failed to parse error response JSON:", e);
@@ -165,10 +173,14 @@ export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
     };
     const message = extractErrorMessage(data);
     if (response.status === 401) {
-      const returnTo = `${globalThis.location.pathname}${globalThis.location.search}`;
-      globalThis.location.href = `/auth/oidc/login?return_to=${encodeURIComponent(
-        returnTo,
-      )}`;
+      // Reading the body can outlive a page/dialog. Keep the failure while
+      // allowing its caller to retire this navigation effect at that boundary.
+      if (options?.isCurrent?.() !== false) {
+        const returnTo = `${globalThis.location.pathname}${globalThis.location.search}`;
+        globalThis.location.href = `/auth/oidc/login?return_to=${encodeURIComponent(
+          returnTo,
+        )}`;
+      }
       throw new Error(message || fallbackMessage("authenticationRequired"));
     }
     if (response.status === 402 && data.code === "BILLING_QUOTA_EXCEEDED") {
