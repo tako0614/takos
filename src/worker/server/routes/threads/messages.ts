@@ -40,10 +40,8 @@ const messageSearchQuerySchema = z.object({
 });
 
 const createMessageSchema = z.object({
-  role: z.enum(["user", "assistant", "system", "tool"]),
+  role: z.literal("user"),
   content: z.string().optional(),
-  tool_calls: z.array(z.unknown()).optional(),
-  tool_call_id: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
