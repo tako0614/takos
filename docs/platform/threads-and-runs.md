@@ -54,6 +54,18 @@ container image 内の snapshot は、model から見える catalog や実行の
 | `tool_calls` / `tool_call_id` | tool call の payload と応答 ID           |
 | `sequence`                    | thread 内の順序                          |
 
+公開のmessage作成は`user`だけを受け付けます。内部のassistant/tool transcriptは
+現在leaseのexecutorまたはatomic complete-runが保存します。モデル用履歴の読取では、
+atomic完了行を永続Runのcompletion key・account/thread・連続sequenceと照合し、
+公開route由来の旧system/assistant/toolや不明な形式の行は本文・tool記録を非信頼テキストとして
+user channelへ渡します。保存行や利用者向けhistory/exportの内容を削除・改変しません。
+
+v1内部split writerの`msg_idem_<base36>`／`msg_<base36>_<4alnum>`という厳密なID形式は、
+12桁のserver生成IDだけを使う旧公開POSTと区別する互換契約です。client metadataや単なるprefixは
+証拠にしません。この契約は任意のimportや未確認の旧writerの真正性まで保証するものではなく、
+それらには独立した出所の検証が必要です。summary・key points・取得済みvectorの内容とrole labelも
+非信頼の派生dataとしてuser channelへ渡し、モデルのsystem policyへ昇格させません。
+
 ## Run
 
 Thread 上で発生する 1 回の実行です。
