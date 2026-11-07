@@ -16,6 +16,7 @@ import {
 } from "../../lib/spaces.ts";
 import type { Space, Thread } from "../../types/index.ts";
 import { WelcomeView } from "../app/space/WelcomeView.tsx";
+import { createChatPageActions } from "./chat-page-actions.ts";
 import {
   type MessageSequenceLookupPage,
   resolveMessageSequenceById,
@@ -203,51 +204,40 @@ export function ChatPage(props: ChatPageProps) {
     });
   });
 
-  const openSearchResult = async (
-    threadId: string,
-    messageId: string,
-    sequence: number,
-  ) => {
-    try {
-      const res = await rpc.threads[":id"].$get({ param: { id: threadId } });
-      const data = await rpcJson<{ thread: Thread }>(res);
-      const thread = data.thread;
+  const { openSearchResult, handleCreateThread } = createChatPageActions({
+    spaceId: selectedSpaceId,
+    threadId: () => props.initialThreadId,
+    selectedModel: modelSelection.selectedModel,
+    loadThread: async (threadId) => {
+      return await rpc.threads[":id"].$get({ param: { id: threadId } });
+    },
+    onSearchSelected: ({ thread, messageId, sequence }) => {
       setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
       setJumpToMessageId(messageId);
       setJumpToMessageSequence(sequence);
-    } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error ? err.message : t("failedToLoad"),
-      );
-    }
-  };
-
-  // Called by WelcomeView when user sends a message
-  const handleCreateThread = async (message: string, files?: File[]) => {
-    const spaceId = selectedSpaceId();
-    if (!spaceId) return;
-    try {
-      const res = await rpc.spaces[":spaceId"].threads.$post({
+    },
+    createThread: async (spaceId, message) => {
+      return await rpc.spaces[":spaceId"].threads.$post({
         param: { spaceId },
         json: { title: message.slice(0, 60), locale: lang },
       });
-      const data = await rpcJson<{ thread: Thread }>(res);
-      const thread = data.thread;
+    },
+    onCreated: ({ spaceId, thread, message, files, model }) => {
       props.onNewThreadCreated?.(spaceId, thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
-      setPendingModel(modelSelection.selectedModel());
+      setPendingModel(model);
       setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
-    } catch (err) {
+    },
+    onError: (error, fallback) => {
       showToast(
         "error",
-        err instanceof Error ? err.message : t("failedToCreate"),
+        error instanceof Error ? error.message : t(fallback),
       );
-    }
-  };
+    },
+  });
 
   return (
     <div class="flex flex-1 h-full bg-white dark:bg-zinc-900">
