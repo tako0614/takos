@@ -91,6 +91,15 @@ const scenarios = {
   finalReadCurrent: "a current final message refresh retains preview until its saved reply arrives",
   finalReadNextDone: "an aborted earlier final read cannot clear a newer completed reply preview",
   finalReadDuplicate: "a superseded final read keeps the same completed Run preview until the latest read finishes",
+  finalReadCurrentFailure: "a failed current final message read preserves its reply preview and unsent draft",
+  finalReadCurrentBodyFailure: "a malformed final message body retains its reply until a successful read retry",
+  finalReadCurrentDisconnect: "a disconnected final message body retains its reply until a successful read retry",
+  finalReadCurrentRetryFailure: "a failed final message read retry stays recoverable without resending",
+  finalReadCurrent401: "a current final message authentication failure retains sign-in and its preview",
+  finalReadRetryRetired: "a final message read retry retires across navigation without affecting the new conversation",
+  finalReadRetryNext401: "a retired final read retry cannot navigate the next reply on a late 401",
+  finalReadRetryNext200: "a retired final read retry cannot adopt its old body over the next reply",
+  finalReadNext401: "a stale initial final message 401 cannot navigate the next reply",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -126,6 +135,8 @@ async function verifySendRecovery(mode: Scenario) {
   const authCloseLifetime = mode.startsWith("authClose");
   const treeReadLifetime = mode.startsWith("treeRead");
   const finalReadLifetime = mode.startsWith("finalRead");
+  const retryNext = mode === "finalReadRetryNext401" || mode === "finalReadRetryNext200";
+  const currentFinalFailure = (mode.startsWith("finalReadCurrent") && mode !== "finalReadCurrent") || mode === "finalReadRetryRetired" || retryNext;
   const closeLifetime = mode.startsWith("close");
   const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
@@ -140,6 +151,7 @@ async function verifySendRecovery(mode: Scenario) {
   const output = await mkdtemp(join(tmpdir(), "takos-send-recovery-ui-"));
   const messages: { id: string; thread_id: string; role: string; content: string; metadata: string; sequence: number; created_at: string }[] = [];
   if (finalReadLifetime) messages.push({ id: "existing-user", thread_id: "thread-a", role: "user", content: "Existing conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
+  if (mode === "finalReadRetryRetired") messages.push({ id: "other-user", thread_id: "thread-b", role: "user", content: "Second conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
   const attempts: { method: string; path: string }[] = [];
   let runPosts = 0, historyReads = 0, subscriptions = 0;
   let messagePosts = 0;
@@ -189,6 +201,7 @@ async function verifySendRecovery(mode: Scenario) {
   const treeReadRequests: { thread: string; root: string }[] = [];
   let finalReadArmed = false, finalReadHeld = false;
   let ordinaryMessageParsesDone = 0, nextStatusReads = 0;
+  let finalReadRetryRequests = 0;
   let finalLiveMessage: (() => void) | undefined;
   let releaseSecondFinal!: () => void;
   const secondFinalGate = new Promise<void>((yes) => { releaseSecondFinal = yes; });
@@ -271,7 +284,8 @@ async function verifySendRecovery(mode: Scenario) {
         body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
         if (new URL(request.url).searchParams.get("offset") === "200") body.messages[0]!.content = "Focused A Run view";
       }
-      if (finalReadLifetime) body.messages = [...messages];
+      if (finalReadLifetime) body.messages = messages.filter((message) => message.thread_id === path.split("/")[3]);
+      if (mode === "finalReadRetryRetired" && path === "/api/threads/thread-b/history") body.activeRun = null;
       if (mode === "finalReadDuplicate" && finalReadArmed && !duplicateCompletionIssued && new URL(request.url).searchParams.get("root_run_id") === run.id) {
         duplicateCompletionIssued = true;
         await firstFinalParseReady;
@@ -326,22 +340,29 @@ async function verifySendRecovery(mode: Scenario) {
       return Response.json(body);
     }
     if (finalReadLifetime && request.method === "GET" && path === "/api/threads/thread-a/messages" &&
-      finalReadArmed && (!finalReadHeld || (messageReads === 1 && (mode === "finalReadDuplicate" || (mode === "finalReadNextDone" && activeRun?.id === "created-run" && activeRun.status === "completed"))))) {
+      finalReadArmed && (!finalReadHeld || (messageReads === 1 && (mode === "finalReadDuplicate" || mode === "finalReadRetryRetired" || retryNext || (mode === "finalReadNextDone" && activeRun?.id === "created-run" && activeRun.status === "completed"))))) {
       finalReadHeld = true; messageReads++;
       const slot = messageReads;
-      const payload = JSON.stringify(mode === "finalReadFailure"
+      const failed = (mode === "finalReadFailure" || mode === "finalReadNext401" || currentFinalFailure) && !(mode === "finalReadRetryNext200" && slot === 2);
+      const status = mode === "finalReadNext401" || mode === "finalReadCurrent401" || ((mode === "finalReadRetryRetired" || mode === "finalReadRetryNext401") && slot === 2) ? 401 : failed && mode !== "finalReadCurrentBodyFailure" && mode !== "finalReadCurrentDisconnect" ? 500 : 200;
+      const payload = mode === "finalReadCurrentBodyFailure" ? "{" : JSON.stringify(failed
         ? { error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic final message read unavailable" } }
         : { messages });
       let open = true;
       return new Response(new ReadableStream({ start(controller) {
         controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
-        const pending = (slot === 1 ? messagesGate : secondFinalGate).then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+        const pending = (slot === 1 ? messagesGate : secondFinalGate).then(() => { if (open) {
+          if (mode === "finalReadCurrentDisconnect") controller.error(new Error("Synthetic final message body disconnect"));
+          else { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); }
+          open = false;
+        } });
         if (slot === 1) messageProducer = pending; else secondFinalProducer = pending;
-      }, cancel() { open = false; } }), { status: mode === "finalReadFailure" ? 500 : 200, headers: { "content-type": "application/json", "x-synthetic-final-read": String(slot) } });
+      }, cancel() { open = false; } }), { status, headers: { "content-type": "application/json", "x-synthetic-final-read": String(slot) } });
     }
     if ((runReadLifetime || closeLifetime || treeReadLifetime || finalReadLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
       if (treeReadLifetime) treeMessageReads++;
-      if (finalReadLifetime) return Response.json({ messages });
+      if (mode === "finalReadCurrentRetryFailure" && finalReadArmed && finalReadHeld && ++finalReadRetryRequests === 1) return Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic read retry failure" } }, { status: 500 });
+      if (finalReadLifetime) return Response.json({ messages: messages.filter((message) => message.thread_id === path.split("/")[3]) });
       const thread = path.split("/")[3]!;
       return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
@@ -509,10 +530,72 @@ async function verifySendRecovery(mode: Scenario) {
       document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await fixture.idle();
       await waitFor(() => subscriptions === 1 && completeRun !== undefined && ordinaryMessageParsesDone >= 1);
-      if (mode === "finalReadCurrent" || mode === "finalReadDuplicate") {
+      if (mode === "finalReadCurrent" || mode === "finalReadDuplicate" || currentFinalFailure) {
         sendLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "First reply is streaming");
       }
+      const errorBeforeFinal = fixture.state().error;
       completeRun!(); await waitFor(() => messageParsesStarted >= 1);
+      if (currentFinalFailure) {
+        textarea.value = "Next unsent draft"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+        releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+        expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+        expect(fixture.state().input).toBe("Next unsent draft");
+        if (mode === "finalReadCurrent401") {
+          expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(fixture.state().error).toBe(errorBeforeFinal);
+          expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+          return;
+        }
+        expect(document.querySelector('[role="alert"]')?.textContent).toContain("Failed to load messages");
+        expect(document.body.textContent).not.toContain("Saved first reply");
+        expect(fixture.state().loading).toBe(false);
+        expect(messagePosts).toBe(1); expect(runPosts).toBe(1); expect(messageAborts).toBe(0);
+        const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent === "Retry");
+        expect(retry).toBeDefined(); retry!.click();
+        if (retryNext) {
+          await waitFor(() => messageParsesStarted === 2);
+          const next = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Start another reply");
+          expect(next).toBeDefined(); next!.click(); await Bun.sleep(0);
+          [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Start another reply")!.click();
+          await fixture.idle(); await waitFor(() => subscriptions === 2 && nextStatusReads === 1 && finalLiveMessage !== undefined);
+          finalLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "Second reply is streaming");
+          releaseSecondFinal(); await waitFor(() => messageParsesDone === 2); await Bun.sleep(0);
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+          expect(document.body.textContent).not.toContain("Saved first reply");
+          expect(fixture.state().streamingMessage).toBe("Second reply is streaming");
+          expect(fixture.state().input).toBe("Next unsent draft"); expect(fixture.state().loading).toBe(true);
+          expect(fixture.state().error).toBeNull(); expect(messagePosts).toBe(1); expect(runPosts).toBe(2);
+          return;
+        }
+        if (mode === "finalReadRetryRetired") {
+          await waitFor(() => messageParsesStarted === 2);
+          fixture.setThread("thread-b"); await waitFor(() => document.body.textContent?.includes("Second conversation") === true);
+          const nextInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
+          expect(nextInput.disabled).toBe(false);
+          nextInput.value = "B unsent draft"; nextInput.dispatchEvent(new Event("input", { bubbles: true }));
+          releaseSecondFinal(); await waitFor(() => messageParsesDone === 2); await Bun.sleep(0);
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-b`);
+          expect(messageAborts).toBe(1); expect(messageParseErrors).toEqual(["AbortError"]);
+          expect(fixture.state().input).toBe("B unsent draft"); expect(fixture.state().error).toBeNull();
+          expect(document.body.textContent).not.toContain("Saved first reply");
+          expect(document.querySelector('[role="alert"]')).toBeNull();
+          expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+          return;
+        }
+        if (mode === "finalReadCurrentRetryFailure") {
+          await waitFor(() => finalReadRetryRequests === 1 && [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry"));
+          expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+          expect(fixture.state().input).toBe("Next unsent draft");
+          [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent === "Retry")!.click();
+        }
+        await waitFor(() => ordinaryMessageParsesDone >= 2 && fixture!.state().streamingMessage === null);
+        expect(document.body.textContent).toContain("Saved first reply");
+        expect(document.querySelector('[role="alert"]')).toBeNull();
+        expect(fixture.state().input).toBe("Next unsent draft");
+        expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+        return;
+      }
       if (mode === "finalReadDuplicate") {
         await waitFor(() => messageParsesStarted === 2 && messageParsesDone === 1);
         await Bun.sleep(0);
@@ -556,6 +639,7 @@ async function verifySendRecovery(mode: Scenario) {
         return;
       }
       releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+      if (mode === "finalReadNext401") expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
       expect(fixture.state().streamingMessage).toBe("Second reply is streaming");
       if (mode === "finalReadNext") expect(document.body.textContent).toContain("Saved first reply");
       expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();

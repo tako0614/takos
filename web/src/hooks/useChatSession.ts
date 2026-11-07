@@ -70,6 +70,7 @@ export interface UseChatSessionResult {
   handleCancel: () => Promise<void>;
   error: Accessor<string | null>;
   setError: (value: string | null) => void;
+  retryFinalMessages: Accessor<(() => Promise<void>) | null>;
   attachedFiles: Accessor<File[]>;
   addFiles: (files: File[]) => void;
   handleFileSelect: (e: Event & { currentTarget: HTMLInputElement }) => void;
@@ -367,6 +368,7 @@ export function useChatSession({
     error,
     setError: polling.setError,
     attachedFiles,
+    retryFinalMessages: () => ws.retryFinalMessages,
     addFiles: files.addFiles,
     handleFileSelect: files.handleFileSelect,
     removeAttachedFile: files.removeAttachedFile,
