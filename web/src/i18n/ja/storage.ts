@@ -21,6 +21,7 @@ export const storage = {
   uploadSuccess: "アップロードしました",
   uploadFailed: "アップロードに失敗しました",
   fileTooLarge: "ファイルが大きすぎます（最大{size}）",
+  fileTypeNotAllowed: "この形式のファイルは添付できません。",
 
   // Storage Page
   storageTitle: "ストレージ",

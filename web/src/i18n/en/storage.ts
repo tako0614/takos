@@ -21,6 +21,7 @@ export const storage = {
   uploadSuccess: "Uploaded",
   uploadFailed: "Upload failed",
   fileTooLarge: "File too large (max {size})",
+  fileTypeNotAllowed: "This file type cannot be attached.",
 
   // Storage Page
   storageTitle: "Storage",
