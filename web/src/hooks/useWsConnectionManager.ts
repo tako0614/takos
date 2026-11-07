@@ -131,7 +131,7 @@ export function useWsConnectionManager(
         onTransportErrorRef.current?.();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null;
         ctx.wsRef.current = null;
         if (heartbeatRef.current) {
@@ -139,7 +139,7 @@ export function useWsConnectionManager(
           heartbeatRef.current = null;
         }
 
-        onClose();
+        onClose({ code: event.code, reason: event.reason });
       };
     } catch (wsErr) {
       console.error("WebSocket creation failed:", wsErr);
