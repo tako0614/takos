@@ -160,6 +160,8 @@ export function useSseConnectionManager(
       for (const eventType of SSE_RUN_EVENT_TYPES) {
         const handler = (event: Event): void => {
           const messageEvent = event as MessageEvent;
+          // Transport errors are plain Events; wire "error" is a MessageEvent.
+          if (typeof messageEvent.data !== "string") return;
           onMessage(
             wrapSseMessage(
               eventType,

@@ -71,6 +71,11 @@ const scenarios = {
   closeMismatched: "an unmatched transport-close Run payload cannot complete the current Run",
   closeReturnActive: "a retired transport-close read cannot reconnect over a returning Run connection",
   closeQueuedReconnect: "a queued transport-close retry cannot replace a returning Run connection",
+  retryBackoff: "repeated failed fallback connections retain their exponential retry backoff",
+  retryWireError: "a data-bearing SSE Run error still completes the Run and shows its error",
+  retryWireMessage: "a live SSE message still updates the current streaming reply",
+  retryNewRun: "a new conversation resets the failed connection retry budget",
+  retryTransportError: "an SSE transport error keeps the current Run active for retry",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -92,6 +97,17 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  if (mode.startsWith("retry")) {
+    const child = Bun.spawn(["node", resolve(import.meta.dir, "fixtures/chat-send-recovery/sse-runtime.mjs"), mode], {
+      env: process.env, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 25_000,
+    });
+    try {
+      const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+      if (code !== 0) throw new Error(`${stdout}\n${stderr}`);
+      expect(code).toBe(0);
+    } finally { if (child.exitCode === null) child.kill(); }
+    return;
+  }
   const closeLifetime = mode.startsWith("close");
   const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
