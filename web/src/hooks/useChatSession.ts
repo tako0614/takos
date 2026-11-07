@@ -172,6 +172,8 @@ export function useChatSession({
     const currentThreadId = currentInitState.threadId;
     const currentFocusSequence = currentInitState.focusSequence;
     const currentInitialMessage = untrack(() => initialMessage?.() ?? "");
+    let cancelled = false;
+    const isCurrent = () => !cancelled && polling.isMountedRef.current && threadId() === currentThreadId;
 
     polling.isMountedRef.current = true;
 
@@ -215,10 +217,9 @@ export function useChatSession({
             git_mode: boolean;
           } | null;
           taskContext: ThreadHistoryTaskContext | null;
-        }>(res);
+        }>(res, { isCurrent });
 
-        if (!polling.isMountedRef.current) return;
-        if (threadId() !== currentThreadId) return;
+        if (!isCurrent()) return;
 
         polling.setMessages(data.messages);
         ws.applyHistorySnapshot({
@@ -239,8 +240,7 @@ export function useChatSession({
 
         void ws.loadPendingSessionDiff(data.pendingSessionDiff);
       } catch {
-        if (!polling.isMountedRef.current) return;
-        if (threadId() !== currentThreadId) return;
+        if (!isCurrent()) return;
         polling.setError(
           t("failedToLoadMessages" as TranslationKey),
         );
@@ -249,6 +249,7 @@ export function useChatSession({
     init();
 
     onCleanup(() => {
+      cancelled = true;
       polling.isMountedRef.current = false;
       polling.abortPendingFetch();
       ws.closeWebSocket();
