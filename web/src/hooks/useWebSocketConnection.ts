@@ -139,10 +139,18 @@ export function useWebSocketConnection({
   });
 
   // --- Wire up handleRunCompleted (needs connection.closeWebSocket) ---
+  const finalMessageReads = createLatestRequest();
   processor.handleRunCompletedRef.current = (
     run?: Partial<Run>,
     sessionId?: string | null,
   ): Promise<void> => {
+    const currentThreadId = threadId();
+    const scope = untrack(requestScope);
+    const rootRunId = connection.rootRunIdRef.current;
+    const claim = finalMessageReads.claim(() => isMountedRef.current &&
+      requestScope() === scope && threadId() === currentThreadId &&
+      connection.rootRunIdRef.current === rootRunId &&
+      currentRunIdRef.current === null);
     const effectiveSessionId = sessionId ?? run?.session_id ?? undefined;
     if (effectiveSessionId) {
       sessionDiffHook.fetchSessionDiff(effectiveSessionId);
@@ -159,10 +167,10 @@ export function useWebSocketConnection({
     // Delay clearing streaming state until messages are fetched,
     // so thinking/tool calls remain visible during the transition.
     fetchMessages()
-      .then(() => processor.resetStreamingState())
+      .then(() => { if (claim.won()) processor.resetStreamingState(); })
       .catch((err) => {
         console.debug("Final message fetch failed:", err);
-        processor.resetStreamingState();
+        if (claim.won()) processor.resetStreamingState();
       });
     return Promise.resolve();
   };

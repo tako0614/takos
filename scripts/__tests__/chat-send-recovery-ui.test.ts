@@ -86,6 +86,11 @@ const scenarios = {
   treeReadCurrent401: "a current Run tree authentication failure retains login navigation",
   treeReadCurrentTerminal: "current Run tree completion retains the final message refresh",
   treeReadNextRunTerminal: "an old Run tree completion cannot stop the next reply in the same conversation",
+  finalReadNext: "a delayed final message refresh cannot erase the next reply stream",
+  finalReadFailure: "a failed old final message refresh cannot erase the next reply stream",
+  finalReadCurrent: "a current final message refresh retains preview until its saved reply arrives",
+  finalReadNextDone: "an aborted earlier final read cannot clear a newer completed reply preview",
+  finalReadDuplicate: "a superseded final read keeps the same completed Run preview until the latest read finishes",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -120,6 +125,7 @@ async function verifySendRecovery(mode: Scenario) {
   }
   const authCloseLifetime = mode.startsWith("authClose");
   const treeReadLifetime = mode.startsWith("treeRead");
+  const finalReadLifetime = mode.startsWith("finalRead");
   const closeLifetime = mode.startsWith("close");
   const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
@@ -133,6 +139,7 @@ async function verifySendRecovery(mode: Scenario) {
   ]);
   const output = await mkdtemp(join(tmpdir(), "takos-send-recovery-ui-"));
   const messages: { id: string; thread_id: string; role: string; content: string; metadata: string; sequence: number; created_at: string }[] = [];
+  if (finalReadLifetime) messages.push({ id: "existing-user", thread_id: "thread-a", role: "user", content: "Existing conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
   const attempts: { method: string; path: string }[] = [];
   let runPosts = 0, historyReads = 0, subscriptions = 0;
   let messagePosts = 0;
@@ -180,6 +187,15 @@ async function verifySendRecovery(mode: Scenario) {
   let treeParsesStarted = 0, treeParsesDone = 0;
   let treeMessageReads = 0;
   const treeReadRequests: { thread: string; root: string }[] = [];
+  let finalReadArmed = false, finalReadHeld = false;
+  let ordinaryMessageParsesDone = 0, nextStatusReads = 0;
+  let finalLiveMessage: (() => void) | undefined;
+  let releaseSecondFinal!: () => void;
+  const secondFinalGate = new Promise<void>((yes) => { releaseSecondFinal = yes; });
+  let secondFinalProducer = Promise.resolve();
+  let firstFinalParsed!: () => void;
+  const firstFinalParseReady = new Promise<void>((yes) => { firstFinalParsed = yes; });
+  let duplicateCompletionIssued = false;
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
   let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime ? run : null;
@@ -197,6 +213,13 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/runs\/[^/]+\/ws$/.test(path)) {
       if (server.upgrade(request)) return;
       return new Response(null, { status: 400 });
+    }
+    if (finalReadLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
+      if (path.endsWith("/created-run")) {
+        nextStatusReads++;
+        await runReadGate;
+      }
+      return Response.json({ run: path.endsWith("/created-run") ? activeRun : run });
     }
     if (authCloseLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
       authCloseReads++;
@@ -242,11 +265,17 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
-      if (runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime) {
+      if (runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || finalReadLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
         body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
         if (new URL(request.url).searchParams.get("offset") === "200") body.messages[0]!.content = "Focused A Run view";
+      }
+      if (finalReadLifetime) body.messages = [...messages];
+      if (mode === "finalReadDuplicate" && finalReadArmed && !duplicateCompletionIssued && new URL(request.url).searchParams.get("root_run_id") === run.id) {
+        duplicateCompletionIssued = true;
+        await firstFinalParseReady;
+        return Response.json({ ...body, runs: [{ run: { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" }, events: [], artifacts: [] }] });
       }
       if (treeReadLifetime) {
         const root = new URL(request.url).searchParams.get("root_run_id");
@@ -296,8 +325,23 @@ async function verifySendRecovery(mode: Scenario) {
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
     }
-    if ((runReadLifetime || closeLifetime || treeReadLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+    if (finalReadLifetime && request.method === "GET" && path === "/api/threads/thread-a/messages" &&
+      finalReadArmed && (!finalReadHeld || (messageReads === 1 && (mode === "finalReadDuplicate" || (mode === "finalReadNextDone" && activeRun?.id === "created-run" && activeRun.status === "completed"))))) {
+      finalReadHeld = true; messageReads++;
+      const slot = messageReads;
+      const payload = JSON.stringify(mode === "finalReadFailure"
+        ? { error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic final message read unavailable" } }
+        : { messages });
+      let open = true;
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+        const pending = (slot === 1 ? messagesGate : secondFinalGate).then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+        if (slot === 1) messageProducer = pending; else secondFinalProducer = pending;
+      }, cancel() { open = false; } }), { status: mode === "finalReadFailure" ? 500 : 200, headers: { "content-type": "application/json", "x-synthetic-final-read": String(slot) } });
+    }
+    if ((runReadLifetime || closeLifetime || treeReadLifetime || finalReadLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
       if (treeReadLifetime) treeMessageReads++;
+      if (finalReadLifetime) return Response.json({ messages });
       const thread = path.split("/")[3]!;
       return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
@@ -337,8 +381,12 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/threads/thread-a/runs") {
       runPosts++;
       runModels.push((await request.json() as { model: string }).model);
+      if (finalReadLifetime && runPosts === 1) {
+        activeRun = run;
+        return Response.json({ error: { code: "SYNTHETIC_ACK_LOSS", message: "Synthetic reply acceptance response unavailable" } }, { status: 500 });
+      }
       if (["pending", "late401", "pendingSuccess", "earlyReturn"].includes(mode)) await runGate;
-      if (["positive", "pendingSuccess", "earlyReturn", "treeReadNextRunTerminal"].includes(mode)) {
+      if (["positive", "pendingSuccess", "earlyReturn", "treeReadNextRunTerminal"].includes(mode) || finalReadLifetime) {
         expect(runModels.at(-1)).toBe("synthetic-model");
         activeRun = { ...run, id: "created-run", root_run_id: "created-run" };
         return Response.json({ run: activeRun }, { status: 201 });
@@ -352,6 +400,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
   }, websocket: { open(socket) {
+    if (finalReadLifetime) socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
     if (runReadLifetime) {
       runReadSocketCount++;
       const connected = () => socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
@@ -368,10 +417,19 @@ async function verifySendRecovery(mode: Scenario) {
           mode === "authCloseReason" ? "Synthetic unauthorized close" : "Synthetic policy gate");
       };
       if (closeLifetime) closeTransport = () => { socket.close(1012, "Synthetic restart"); };
-      if (pollingLifetime || treeReadLifetime) completeRun = () => {
+      if (finalReadLifetime && JSON.parse(String(value)).runId === "created-run") finalLiveMessage = () => {
+        socket.send(JSON.stringify({ type: "message", data: { content: "Second reply is streaming" }, eventId: 1 }));
+      };
+      if (finalReadLifetime && JSON.parse(String(value)).runId === "unrelated-run") sendLiveMessage = () => {
+        socket.send(JSON.stringify({ type: "message", data: { content: "First reply is streaming" }, eventId: 1 }));
+      };
+      if (pollingLifetime || treeReadLifetime || finalReadLifetime) completeRun = () => {
         if (treeReadLifetime) treeReadArmed = true;
-        activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
-        socket.send(JSON.stringify({ type: "completed", data: { run: activeRun }, eventId: 1 }));
+        if (finalReadLifetime) finalReadArmed = true;
+        const second = finalReadLifetime && JSON.parse(String(value)).runId === "created-run";
+        if (finalReadLifetime) messages.push({ id: second ? "saved-second-reply" : "saved-first-reply", thread_id: "thread-a", role: "assistant", content: second ? "Saved second reply" : "Saved first reply", metadata: "{}", sequence: messages.length + 1, created_at: "2026-11-07T00:00:01Z" });
+        activeRun = { ...run, ...(second ? { id: "created-run", root_run_id: "created-run" } : {}), status: "completed", completed_at: "2026-11-07T00:00:01Z" };
+        socket.send(JSON.stringify({ type: "completed", data: { run: activeRun }, eventId: finalReadLifetime ? 2 : 1 }));
       };
     }
   } } });
@@ -386,7 +444,7 @@ async function verifySendRecovery(mode: Scenario) {
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || finalReadLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -394,7 +452,16 @@ async function verifySendRecovery(mode: Scenario) {
         const url = new URL(String(input), server.url);
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
         if (pollingLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
+        if (finalReadLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
         const response = await fetch(url, init);
+        if (finalReadLifetime && url.pathname.endsWith("/messages")) {
+          const json = response.json.bind(response);
+          if (response.headers.has("x-synthetic-final-read")) response.json = async () => {
+            messageParsesStarted++; if (response.headers.get("x-synthetic-final-read") === "1") firstFinalParsed();
+            try { return await json(); } catch (error) { messageParseErrors.push((error as Error).name); throw error; } finally { messageParsesDone++; }
+          };
+          else response.json = async () => { try { return await json(); } finally { ordinaryMessageParsesDone++; } };
+        }
         if (treeReadLifetime && response.headers.get("x-synthetic-held-tree") === "1") {
           const json = response.json.bind(response);
           response.json = async () => { treeParsesStarted++; try { return await json(); } finally { treeParsesDone++; } };
@@ -434,8 +501,67 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || finalReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (finalReadLifetime) {
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+      textarea.value = "First message"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await fixture.idle();
+      await waitFor(() => subscriptions === 1 && completeRun !== undefined && ordinaryMessageParsesDone >= 1);
+      if (mode === "finalReadCurrent" || mode === "finalReadDuplicate") {
+        sendLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "First reply is streaming");
+      }
+      completeRun!(); await waitFor(() => messageParsesStarted >= 1);
+      if (mode === "finalReadDuplicate") {
+        await waitFor(() => messageParsesStarted === 2 && messageParsesDone === 1);
+        await Bun.sleep(0);
+        expect(messageAborts).toBe(1); expect(messageParseErrors).toEqual(["AbortError"]);
+        expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+        expect(fixture.state().loading).toBe(false);
+        releaseSecondFinal(); await waitFor(() => messageParsesDone === 2); await Bun.sleep(0);
+        expect(fixture.state().streamingMessage).toBeNull();
+        expect(document.body.textContent).toContain("Saved first reply");
+        expect(messageReads).toBe(2); expect(runPosts).toBe(1); expect(messagePosts).toBe(1);
+        return;
+      }
+      if (mode === "finalReadCurrent") {
+        expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+        expect(fixture.state().loading).toBe(false);
+        releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+        expect(fixture.state().streamingMessage).toBeNull();
+        expect(document.body.textContent).toContain("Saved first reply");
+        expect(messagePosts).toBe(1); expect(runPosts).toBe(1); expect(messageAborts).toBe(0);
+        return;
+      }
+      const nextReply = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Start another reply") ?? null;
+      expect(nextReply).not.toBeNull(); expect(nextReply!.disabled).toBe(false);
+      nextReply!.click(); await Bun.sleep(0);
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Start another reply")!.click();
+      await fixture.idle();
+      await waitFor(() => subscriptions === 2 && nextStatusReads === 1 && finalLiveMessage !== undefined);
+      expect(messagePosts).toBe(1); expect(runPosts).toBe(2); expect(messageAborts).toBe(0);
+      finalLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "Second reply is streaming");
+      expect(fixture.state().loading).toBe(true);
+      if (mode === "finalReadNextDone") {
+        completeRun!(); await waitFor(() => messageParsesStarted === 2 && messageParsesDone === 1);
+        expect(messageAborts).toBe(1); expect(messageParseErrors).toEqual(["AbortError"]);
+        await Bun.sleep(0);
+        expect(fixture.state().streamingMessage).toBe("Second reply is streaming");
+        expect(fixture.state().loading).toBe(false);
+        releaseSecondFinal(); await waitFor(() => messageParsesDone === 2); await Bun.sleep(0);
+        expect(fixture.state().streamingMessage).toBeNull();
+        expect(document.body.textContent).toContain("Saved second reply");
+        expect(messageReads).toBe(2);
+        return;
+      }
+      releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+      expect(fixture.state().streamingMessage).toBe("Second reply is streaming");
+      if (mode === "finalReadNext") expect(document.body.textContent).toContain("Saved first reply");
+      expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+      expect(messageReads).toBe(1); expect(messageAborts).toBe(0);
+      return;
+    }
     if (treeReadLifetime) {
       await waitFor(() => subscriptions === 1 && completeRun !== undefined);
       completeRun!(); await waitFor(() => treeParsesStarted === 1);
@@ -952,6 +1078,8 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    firstFinalParsed();
+    releaseSecondFinal();
     releaseTreeRead();
     releaseCloseRead();
     releaseRunRead();
@@ -964,6 +1092,7 @@ async function verifySendRecovery(mode: Scenario) {
     await runReadProducer;
     await closeReadProducer;
     await treeReadProducer;
+    await secondFinalProducer;
     await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });
