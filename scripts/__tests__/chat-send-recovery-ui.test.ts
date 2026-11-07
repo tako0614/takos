@@ -79,6 +79,13 @@ const scenarios = {
   authCloseCode: "an authentication WebSocket close code returns to sign-in without another Run read",
   authCloseReason: "an authentication WebSocket close reason reaches the existing sign-in guard",
   authClosePolicy: "the existing policy close code reaches the sign-in guard without retry",
+  treeReadLate401: "a retired Run tree authentication response cannot navigate another conversation",
+  treeReadFocus401: "a retired Run tree authentication response cannot navigate a newer same-thread focus",
+  treeReadReturn401: "a retired Run tree authentication response stays retired after returning to the conversation",
+  treeReadDisposed401: "a disposed Run tree read cannot navigate after its body finishes",
+  treeReadCurrent401: "a current Run tree authentication failure retains login navigation",
+  treeReadCurrentTerminal: "current Run tree completion retains the final message refresh",
+  treeReadNextRunTerminal: "an old Run tree completion cannot stop the next reply in the same conversation",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -112,6 +119,7 @@ async function verifySendRecovery(mode: Scenario) {
     return;
   }
   const authCloseLifetime = mode.startsWith("authClose");
+  const treeReadLifetime = mode.startsWith("treeRead");
   const closeLifetime = mode.startsWith("close");
   const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
@@ -165,9 +173,16 @@ async function verifySendRecovery(mode: Scenario) {
   let closeReadProducer = Promise.resolve();
   let closeAuthSocket: (() => void) | undefined;
   let authCloseReads = 0;
+  let releaseTreeRead!: () => void;
+  const treeReadGate = new Promise<void>((yes) => { releaseTreeRead = yes; });
+  let treeReadProducer = Promise.resolve();
+  let treeReadArmed = false, treeReadHeld = false;
+  let treeParsesStarted = 0, treeParsesDone = 0;
+  let treeMessageReads = 0;
+  const treeReadRequests: { thread: string; root: string }[] = [];
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -227,11 +242,30 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
-      if (runReadLifetime || closeLifetime || authCloseLifetime) {
+      if (runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
         body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
         if (new URL(request.url).searchParams.get("offset") === "200") body.messages[0]!.content = "Focused A Run view";
+      }
+      if (treeReadLifetime) {
+        const root = new URL(request.url).searchParams.get("root_run_id");
+        if (root) {
+          treeReadRequests.push({ thread: path.split("/")[3]!, root });
+          if (root === run.id && treeReadArmed && !treeReadHeld) {
+            treeReadHeld = true;
+            const terminal = mode.endsWith("Terminal");
+            const payload = JSON.stringify(terminal ? {
+              ...body,
+              runs: [{ run: { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" }, events: [], artifacts: [] }],
+            } : { error: { code: "UNAUTHENTICATED", message: "Synthetic Run tree authentication failure" } });
+            let open = true;
+            return new Response(new ReadableStream({ start(controller) {
+              controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+              treeReadProducer = treeReadGate.then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+            }, cancel() { open = false; } }), { status: terminal ? 200 : 401, headers: { "content-type": "application/json", "x-synthetic-held-tree": "1" } });
+          }
+        }
       }
       if (pollingLifetime) {
         const thread = path.split("/")[3]!;
@@ -262,7 +296,8 @@ async function verifySendRecovery(mode: Scenario) {
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
     }
-    if ((runReadLifetime || closeLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+    if ((runReadLifetime || closeLifetime || treeReadLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+      if (treeReadLifetime) treeMessageReads++;
       const thread = path.split("/")[3]!;
       return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
@@ -303,7 +338,7 @@ async function verifySendRecovery(mode: Scenario) {
       runPosts++;
       runModels.push((await request.json() as { model: string }).model);
       if (["pending", "late401", "pendingSuccess", "earlyReturn"].includes(mode)) await runGate;
-      if (["positive", "pendingSuccess", "earlyReturn"].includes(mode)) {
+      if (["positive", "pendingSuccess", "earlyReturn", "treeReadNextRunTerminal"].includes(mode)) {
         expect(runModels.at(-1)).toBe("synthetic-model");
         activeRun = { ...run, id: "created-run", root_run_id: "created-run" };
         return Response.json({ run: activeRun }, { status: 201 });
@@ -333,7 +368,8 @@ async function verifySendRecovery(mode: Scenario) {
           mode === "authCloseReason" ? "Synthetic unauthorized close" : "Synthetic policy gate");
       };
       if (closeLifetime) closeTransport = () => { socket.close(1012, "Synthetic restart"); };
-      if (pollingLifetime) completeRun = () => {
+      if (pollingLifetime || treeReadLifetime) completeRun = () => {
+        if (treeReadLifetime) treeReadArmed = true;
         activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
         socket.send(JSON.stringify({ type: "completed", data: { run: activeRun }, eventId: 1 }));
       };
@@ -350,7 +386,7 @@ async function verifySendRecovery(mode: Scenario) {
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime || authCloseLifetime },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -359,6 +395,10 @@ async function verifySendRecovery(mode: Scenario) {
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
         if (pollingLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
         const response = await fetch(url, init);
+        if (treeReadLifetime && response.headers.get("x-synthetic-held-tree") === "1") {
+          const json = response.json.bind(response);
+          response.json = async () => { treeParsesStarted++; try { return await json(); } finally { treeParsesDone++; } };
+        }
         if (closeLifetime && /^\/api\/runs\/[^/]+$/.test(url.pathname)) {
           closeReadDone++;
           const json = response.json.bind(response);
@@ -394,8 +434,63 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (treeReadLifetime) {
+      await waitFor(() => subscriptions === 1 && completeRun !== undefined);
+      completeRun!(); await waitFor(() => treeParsesStarted === 1);
+      await waitFor(() => treeMessageReads === 1);
+      if (mode === "treeReadDisposed401") {
+        fixture.setMounted(false); await Bun.sleep(0); expect(document.querySelector("textarea")).toBeNull();
+        releaseTreeRead(); await waitFor(() => treeParsesDone === 1); await Bun.sleep(0);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(treeMessageReads).toBe(1);
+        return;
+      }
+      if (["treeReadCurrent401", "treeReadCurrentTerminal"].includes(mode)) {
+        releaseTreeRead(); await waitFor(() => treeParsesDone === 1); await Bun.sleep(0);
+        if (mode === "treeReadCurrent401") {
+          expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(treeMessageReads).toBe(1);
+        } else {
+          await waitFor(() => treeMessageReads === 2);
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+          expect(document.body.textContent).toContain("Current A Run messages");
+        }
+        expect(fixture.state().loading).toBe(false); expect(fixture.state().error).toBeNull();
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (mode === "treeReadNextRunTerminal") {
+        const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+        textarea.value = "Next reply"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await fixture.idle(); await waitFor(() => subscriptions === 2 && fixture!.state().loading);
+        expect(runPosts).toBe(1); expect(messagePosts).toBe(1);
+        releaseTreeRead(); await waitFor(() => treeParsesDone === 1); await Bun.sleep(0);
+        expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(treeMessageReads).toBe(1);
+        expect(attempts.filter((attempt) => attempt.path.endsWith("/ws")).map((attempt) => attempt.path)).toEqual(["/api/runs/unrelated-run/ws", "/api/runs/created-run/ws"]);
+        return;
+      }
+      if (mode === "treeReadFocus401") {
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Focused A Run view"));
+      } else {
+        fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B Run view") && subscriptions === 2);
+        if (mode === "treeReadReturn401") {
+          fixture.setThread("thread-a"); await waitFor(() => document.body.textContent!.includes("Current A Run view"));
+        }
+      }
+      const expectedLoading = mode === "treeReadLate401";
+      expect(fixture.state().loading).toBe(expectedLoading);
+      releaseTreeRead(); await waitFor(() => treeParsesDone === 1); await Bun.sleep(0);
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/${mode === "treeReadLate401" ? "thread-b" : "thread-a"}`);
+      expect(fixture.state().loading).toBe(expectedLoading); expect(fixture.state().error).toBeNull();
+      expect(treeReadRequests.some((request) => request.thread === "thread-a" && request.root === "unrelated-run")).toBe(true);
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (authCloseLifetime) {
       await waitFor(() => subscriptions === 1 && closeAuthSocket !== undefined);
       closeAuthSocket!(); await waitFor(() => location.href.startsWith("/signin") || authCloseReads > 0);
@@ -857,6 +952,7 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseTreeRead();
     releaseCloseRead();
     releaseRunRead();
     releaseMessages();
@@ -867,6 +963,7 @@ async function verifySendRecovery(mode: Scenario) {
     await messageProducer;
     await runReadProducer;
     await closeReadProducer;
+    await treeReadProducer;
     await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });

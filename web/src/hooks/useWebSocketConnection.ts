@@ -1,6 +1,7 @@
-import { type Accessor, createEffect, type Setter } from "solid-js";
+import { type Accessor, createEffect, type Setter, untrack } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type {
   Message,
   Run,
@@ -170,14 +171,21 @@ export function useWebSocketConnection({
   const syncRunTreeRef: MutableRefObject<(() => Promise<void>) | null> = {
     current: null,
   };
+  const runTreeReads = createLatestRequest();
 
   syncRunTreeRef.current = async () => {
     const rootRunId = connection.rootRunIdRef.current ||
       currentRunIdRef.current;
     if (!rootRunId) return;
 
+    const currentThreadId = threadId();
+    // Capture the view generation without adding a new effect dependency.
+    const scope = untrack(requestScope);
+    const claim = runTreeReads.claim(() => isMountedRef.current &&
+      requestScope() === scope && threadId() === currentThreadId &&
+      (connection.rootRunIdRef.current || currentRunIdRef.current) === rootRunId);
+
     try {
-      const currentThreadId = threadId();
       const historyRes = await rpc.threads[":id"].history.$get({
         param: { id: currentThreadId },
         query: {
@@ -193,9 +201,8 @@ export function useWebSocketConnection({
         pendingSessionDiff: PendingSessionDiffSummary | null;
         activeRun: Run | null;
         taskContext: ThreadHistoryTaskContext | null;
-      }>(historyRes);
-      if (!isMountedRef.current) return;
-      if (threadId() !== currentThreadId) return;
+      }>(historyRes, { isCurrent: claim.won });
+      if (!claim.won()) return;
       const runsById = new Map(
         historyData.runs.map((
           node,
