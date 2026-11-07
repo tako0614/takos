@@ -22,6 +22,7 @@ interface ChatInputBarProps {
   onRemoveFile: (index: number) => void;
   onSend: () => void;
   isLoading: boolean;
+  sendBlocked?: boolean;
   isCancelling?: boolean;
   onCancel?: () => void;
   attachLabel: string;
@@ -65,6 +66,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
   const sendDisabled = () =>
     (!props.input.trim() && props.attachedFiles.length === 0) ||
     props.isLoading ||
+    props.sendBlocked ||
     !agentAvailable();
 
   // Create object URLs for image thumbnails and revoke on cleanup

@@ -12,6 +12,7 @@ import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
 import { Icons } from "../lib/Icons.tsx";
 import { ChatErrorBanner } from "./chat/ChatErrorBanner.tsx";
+import { ChatSendRecovery } from "./chat/ChatSendRecovery.tsx";
 import { ChatHeader } from "./chat/ChatHeader.tsx";
 import { ModelSwitcher } from "./chat/ModelSwitcher.tsx";
 import { ChatInputBar } from "./chat/ChatInputBar.tsx";
@@ -103,6 +104,13 @@ export function ChatView(props: ChatViewProps) {
     handleFileSelect,
     removeAttachedFile,
     sendMessage,
+    sendRecovery,
+    recoveryBusy,
+    retryReply,
+    checkSendStatus,
+    restoreSendDraft,
+    dismissSendRecovery,
+    sendBlocked,
     messagesEndRef,
   } = useChatSession({
     threadId,
@@ -477,6 +485,9 @@ export function ChatView(props: ChatViewProps) {
               <ChatErrorBanner error={err()} onDismiss={() => setError(null)} />
             )}
           </Show>
+          <ChatSendRecovery recovery={sendRecovery()} busy={isLoading() || recoveryBusy()}
+            canRestore={!input() && attachedFiles().length === 0}
+            onRetry={retryReply} onCheck={checkSendStatus} onRestore={restoreSendDraft} onDismiss={dismissSendRecovery} />
           <ChatInputBar
             input={input()}
             onInputChange={setInput}
@@ -485,6 +496,7 @@ export function ChatView(props: ChatViewProps) {
             onRemoveFile={removeAttachedFile}
             onSend={sendMessage}
             isLoading={isLoading()}
+            sendBlocked={sendBlocked()}
             isCancelling={isCancelling()}
             onCancel={handleCancel}
             attachLabel={t("attachFile")}

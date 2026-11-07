@@ -82,7 +82,7 @@ export interface UseWebSocketConnectionResult {
   currentRunIdRef: MutableRefObject<string | null>;
   lastEventIdRef: MutableRefObject<number>;
   rootRunIdRef: MutableRefObject<string | null>;
-  syncThreadAfterSendFailure: () => Promise<void>;
+  syncThreadAfterSendFailure: (isCurrent?: () => boolean) => Promise<{ activeRun: Run | null } | undefined>;
 }
 
 export function useWebSocketConnection({
@@ -232,9 +232,10 @@ export function useWebSocketConnection({
   };
 
   // --- syncThreadAfterSendFailure ---
-  const syncThreadAfterSendFailure = async (): Promise<void> => {
+  const syncThreadAfterSendFailure = async (isCurrent?: () => boolean): Promise<{ activeRun: Run | null } | undefined> => {
     try {
       const currentThreadId = threadId();
+      const stillCurrent = () => isMountedRef.current && threadId() === currentThreadId && isCurrent?.() !== false;
       const res = await rpc.threads[":id"].history.$get({
         param: { id: currentThreadId },
         query: { limit: "100", offset: "0" },
@@ -246,9 +247,16 @@ export function useWebSocketConnection({
         activeRun: Run | null;
         pendingSessionDiff: PendingSessionDiffSummary | null;
         taskContext: ThreadHistoryTaskContext | null;
-      }>(res);
-      if (!isMountedRef.current) return;
-      if (threadId() !== currentThreadId) return;
+      }>(res, { isCurrent: stillCurrent });
+      if (!stillCurrent()) return;
+      if (!data || !Array.isArray(data.messages) || !Array.isArray(data.runs) ||
+        !data.messages.every((message) => message && typeof message.id === "string" &&
+          message.thread_id === currentThreadId && typeof message.content === "string") ||
+        !(data.activeRun === null || (data.activeRun && typeof data.activeRun.id === "string" && data.activeRun.id &&
+          (data.activeRun.thread_id === currentThreadId || data.activeRun.root_thread_id === currentThreadId) &&
+          ["pending", "queued", "running"].includes(data.activeRun.status)))) {
+        throw new Error("Invalid send recovery history response");
+      }
 
       setMessages(data.messages || []);
       processor.applyHistorySnapshot({
@@ -262,6 +270,7 @@ export function useWebSocketConnection({
         processor.setIsLoading(true);
         connection.startWebSocketRef.current(data.activeRun.id);
       }
+      return { activeRun: data.activeRun ?? null };
     } catch (syncErr) {
       console.debug("Failed to sync thread after send failure:", syncErr);
     }
