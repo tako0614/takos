@@ -128,7 +128,9 @@ export function ChatPage(props: ChatPageProps) {
           const res = await rpc.threads[":id"].$get({
             param: { id: currentThreadId },
           });
-          const data = await rpcJson<{ thread: Thread }>(res);
+          const data = await rpcJson<{ thread: Thread }>(res, {
+            isCurrent: () => !cancelled,
+          });
           if (cancelled) return;
           setSelectedThread(data.thread);
         } catch {
