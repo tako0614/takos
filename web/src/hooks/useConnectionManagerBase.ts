@@ -499,7 +499,7 @@ export function useConnectionManagerBase(
   };
   const transportRequests = createLatestRequest();
 
-  const closeWebSocket = (): void => {
+  const stopConnection = (): void => {
     transportRequests.next();
     stopMessagePolling();
     if (runStatusWatchdogRef.current) {
@@ -508,6 +508,10 @@ export function useConnectionManagerBase(
     }
     runStatusWatchdogInFlightRef.current = false;
     cleanupTransport();
+  };
+
+  const closeWebSocket = (): void => {
+    stopConnection();
     reconnectAttemptsRef.current = 0;
   };
 
@@ -537,9 +541,11 @@ export function useConnectionManagerBase(
     if (previousRunId !== runId) {
       lastEventIdRef.current = 0;
       rootRunIdRef.current = runId;
+      reconnectAttemptsRef.current = 0;
     }
 
-    closeWebSocket();
+    // A retry replaces the transport while retaining this Run's retry budget.
+    stopConnection();
     currentRunIdRef.current = runId;
     const scope = requestScope();
     const claim = transportRequests.claim(() => isMountedRef.current &&
