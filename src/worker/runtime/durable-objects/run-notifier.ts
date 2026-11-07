@@ -23,20 +23,42 @@ import {
 import { logWarn } from "../../shared/utils/logger.ts";
 import {
   type EmitResult,
+  type ExtendedWebSocket,
   jsonResponse,
   NotifierBase,
   type RingBufferEvent,
   toWsEnvelope,
   type WebSocketLike,
 } from "./notifier-base.ts";
-import { MAX_CONNECTIONS } from "./do-header-utils.ts";
+import {
+  MAX_CONNECTIONS,
+  RECONNECT_CLOSE_CODE,
+  safeClose,
+} from "./do-header-utils.ts";
 
 const MAX_RUN_ID_LENGTH = 64;
 const RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const WS_USER_TAG_PREFIX = "ws-user:";
+const AUTHORITY_REVOKED_CLOSE_CODE = 1008;
 
 function isValidRunId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 &&
     value.length <= MAX_RUN_ID_LENGTH && RUN_ID_PATTERN.test(value);
+}
+
+function websocketUserTag(userId: string): string {
+  return `${WS_USER_TAG_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+function websocketUserId(tags: readonly string[]): string | null {
+  const tag = tags.find((entry) => entry.startsWith(WS_USER_TAG_PREFIX));
+  if (!tag) return null;
+  try {
+    const userId = decodeURIComponent(tag.slice(WS_USER_TAG_PREFIX.length));
+    return userId || null;
+  } catch {
+    return null;
+  }
 }
 
 export class RunNotifierDO extends NotifierBase {
@@ -177,7 +199,67 @@ export class RunNotifierDO extends NotifierBase {
       await this.persistState();
     }
 
-    return {};
+    return { tags: [websocketUserTag(userId)] };
+  }
+
+  protected override async beforeBroadcast(_message: string): Promise<void> {
+    const runId = this.runId;
+    if (!runId) {
+      this.closeAllConnections("run identity unavailable");
+      return;
+    }
+
+    const connectionsByUser = new Map<string, Array<[string, ExtendedWebSocket]>>();
+    for (const [connectionId, ws] of this.connections) {
+      const userId = websocketUserId(this.state.getTags(ws as WebSocket));
+      if (!userId) {
+        safeClose(ws, RECONNECT_CLOSE_CODE, "user identity unavailable");
+        this.connections.delete(connectionId);
+        continue;
+      }
+      const connections = connectionsByUser.get(userId) ?? [];
+      connections.push([connectionId, ws]);
+      connectionsByUser.set(userId, connections);
+    }
+    if (connectionsByUser.size === 0) return;
+
+    try {
+      const run = await getDb(this.db)
+        .select({ accountId: runs.accountId })
+        .from(runs)
+        .where(eq(runs.id, runId))
+        .get();
+      if (!run) {
+        this.closeAllConnections("run not found");
+        return;
+      }
+
+      for (const [userId, connections] of connectionsByUser) {
+        const authority = await resolveWorkspaceAuthority(
+          this.db,
+          run.accountId,
+          userId,
+        );
+        if (authority) continue;
+        for (const [connectionId, ws] of connections) {
+          safeClose(ws, AUTHORITY_REVOKED_CLOSE_CODE, "workspace authority revoked");
+          this.connections.delete(connectionId);
+        }
+      }
+    } catch {
+      // If current authority cannot be proven, do not leak the pending event.
+      this.closeAllConnections("authority check failed");
+      logWarn("Run WebSocket broadcast authority check failed", {
+        module: this.moduleName,
+      });
+    }
+  }
+
+  private closeAllConnections(reason: string): void {
+    for (const [connectionId, ws] of this.connections) {
+      safeClose(ws, RECONNECT_CLOSE_CODE, reason);
+      this.connections.delete(connectionId);
+    }
   }
 
   protected override async handleWsMessage(
