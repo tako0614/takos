@@ -22,6 +22,7 @@ export interface UseChatMessagesOptions {
   setInput: (value: string) => void;
   selectedModel: Accessor<string>;
   onUpdateTitle: (title: string) => void;
+  onRecoveryIntent?: () => void;
   // From useFileAttachment
   attachedFiles: Accessor<File[]>;
   setAttachedFiles: (files: File[]) => void;
@@ -67,6 +68,7 @@ export function useChatMessages({
   setInput,
   selectedModel,
   onUpdateTitle,
+  onRecoveryIntent,
   attachedFiles,
   setAttachedFiles,
   isLoading,
@@ -292,6 +294,7 @@ export function useChatMessages({
 
   const checkSendStatus = async (expected: ChatSendRecovery) => {
     if (sendRecovery() !== expected || threadId() !== expected.threadId || expected.pending || isLoading() || recoveryBusy()) return;
+    onRecoveryIntent?.();
     const claim = requests.claim(() => threadId() === expected.threadId);
     setRecoveryBusy(true);
     try {
@@ -307,6 +310,7 @@ export function useChatMessages({
     if (sendRecovery() !== expected || threadId() !== expected.threadId || expected.pending || isLoading() || recoveryBusy()) return;
     if (expected.kind !== "reply-rejected" && expected.kind !== "reply-known" &&
       !(expected.kind === "reply-unknown" && expected.checked && confirmedNew)) return;
+    onRecoveryIntent?.();
     const claim = requests.claim(() => threadId() === expected.threadId);
     setError(null);
     setIsLoading(true);

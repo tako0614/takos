@@ -100,6 +100,21 @@ const scenarios = {
   finalReadRetryNext401: "a retired final read retry cannot navigate the next reply on a late 401",
   finalReadRetryNext200: "a retired final read retry cannot adopt its old body over the next reply",
   finalReadNext401: "a stale initial final message 401 cannot navigate the next reply",
+  initialHistoryRetry: "an initial conversation read can retry without losing its unsent draft",
+  initialHistoryActive: "an initial history retry reconnects the canonical active Run without creating one",
+  initialHistoryFocus: "a focused conversation history retry retains its canonical window and draft",
+  initialHistoryFiles: "an initial history retry preserves the unsent attachment selection",
+  initialHistoryRetryFails: "an initial history retry remains available after another read failure",
+  initialHistoryMalformed: "an initial history retry can recover after a malformed response body",
+  initialHistoryCurrent401: "a current history retry retains canonical login and failure feedback",
+  initialHistoryNext401: "an old history retry cannot navigate a newly accepted reply on a late 401",
+  initialHistoryNext200: "an old history retry cannot replace messages after a new reply is accepted",
+  initialHistoryReturn: "an old history retry remains retired after leaving and returning to its conversation",
+  initialHistoryRejected200: "an old history retry stays retired after a new reply is rejected",
+  initialHistoryFileError: "a history retry is not offered for a later attachment validation error",
+  finalReadCurrentFileError: "a final message retry is not offered for a later attachment validation error",
+  initialHistoryLateFileError: "a pending history retry failure cannot overwrite a newer attachment error",
+  finalReadCurrentLateFileError: "a pending final message failure cannot overwrite a newer attachment error",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -133,6 +148,10 @@ async function verifySendRecovery(mode: Scenario) {
     return;
   }
   const authCloseLifetime = mode.startsWith("authClose");
+  const initialHistoryRetry = mode.startsWith("initialHistory");
+  const initialRetryNext = mode === "initialHistoryNext401" || mode === "initialHistoryNext200";
+  const initialRetryRejected = mode === "initialHistoryRejected200";
+  const initialRetryHeld = initialRetryNext || initialRetryRejected || mode === "initialHistoryReturn" || mode === "initialHistoryLateFileError";
   const treeReadLifetime = mode.startsWith("treeRead");
   const finalReadLifetime = mode.startsWith("finalRead");
   const retryNext = mode === "finalReadRetryNext401" || mode === "finalReadRetryNext200";
@@ -151,9 +170,12 @@ async function verifySendRecovery(mode: Scenario) {
   const output = await mkdtemp(join(tmpdir(), "takos-send-recovery-ui-"));
   const messages: { id: string; thread_id: string; role: string; content: string; metadata: string; sequence: number; created_at: string }[] = [];
   if (finalReadLifetime) messages.push({ id: "existing-user", thread_id: "thread-a", role: "user", content: "Existing conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
+  if (initialHistoryRetry) messages.push({ id: "saved-conversation", thread_id: "thread-a", role: "user", content: "Saved conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
+  if (mode === "initialHistoryReturn") messages.push({ id: "other-conversation", thread_id: "thread-b", role: "user", content: "Other conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
   if (mode === "finalReadRetryRetired") messages.push({ id: "other-user", thread_id: "thread-b", role: "user", content: "Second conversation", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" });
   const attempts: { method: string; path: string }[] = [];
   let runPosts = 0, historyReads = 0, subscriptions = 0;
+  const historyRetrySubscriptions: string[] = [];
   let messagePosts = 0;
   const runModels: string[] = [];
   let authStatus = 200;
@@ -211,7 +233,7 @@ async function verifySendRecovery(mode: Scenario) {
   let duplicateCompletionIssued = false;
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || mode === "initialHistoryActive" ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -277,7 +299,23 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) return Response.json({ run: cancelLifetime ? path.endsWith("/second-run") ? otherRun : run : activeRun ?? run });
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
+      if (initialHistoryRetry) {
+        const query = new URL(request.url).searchParams;
+        historyWindows.push({ limit: query.get("limit"), offset: query.get("offset") });
+        if (mode === "initialHistoryRetryFails" ? historyReads <= 2 : historyReads === (mode === "initialHistoryFocus" ? 2 : 1)) return Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic initial history unavailable" } }, { status: 503 });
+        if (mode === "initialHistoryMalformed" && historyReads === 2) return new Response("{", { headers: { "content-type": "application/json" } });
+        if (mode === "initialHistoryCurrent401" && historyReads === 2) return Response.json({ error: { code: "UNAUTHENTICATED", message: "Synthetic current history retry authentication failure" } }, { status: 401 });
+      }
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
+      if (initialRetryHeld && historyReads === 2) {
+        const status = mode === "initialHistoryNext401" ? 401 : mode === "initialHistoryLateFileError" ? 503 : 200;
+        const payload = JSON.stringify(status !== 200 ? { error: { code: "SYNTHETIC_RETRY_FAILURE", message: "Synthetic held history retry failure" } } : { ...body, messages: [{ ...messages[0]!, content: "Old retry snapshot" }] });
+        let open = true;
+        return new Response(new ReadableStream({ start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+          void historyGate.then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+        }, cancel() { open = false; } }), { status, headers: { "content-type": "application/json", "x-synthetic-initial-retry": "1" } });
+      }
       if (runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || finalReadLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
@@ -359,10 +397,10 @@ async function verifySendRecovery(mode: Scenario) {
         if (slot === 1) messageProducer = pending; else secondFinalProducer = pending;
       }, cancel() { open = false; } }), { status, headers: { "content-type": "application/json", "x-synthetic-final-read": String(slot) } });
     }
-    if ((runReadLifetime || closeLifetime || treeReadLifetime || finalReadLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+    if ((runReadLifetime || closeLifetime || treeReadLifetime || finalReadLifetime || initialHistoryRetry) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
       if (treeReadLifetime) treeMessageReads++;
       if (mode === "finalReadCurrentRetryFailure" && finalReadArmed && finalReadHeld && ++finalReadRetryRequests === 1) return Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic read retry failure" } }, { status: 500 });
-      if (finalReadLifetime) return Response.json({ messages: messages.filter((message) => message.thread_id === path.split("/")[3]) });
+      if (finalReadLifetime || initialHistoryRetry) return Response.json({ messages: messages.filter((message) => message.thread_id === path.split("/")[3]) });
       const thread = path.split("/")[3]!;
       return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
@@ -407,13 +445,13 @@ async function verifySendRecovery(mode: Scenario) {
         return Response.json({ error: { code: "SYNTHETIC_ACK_LOSS", message: "Synthetic reply acceptance response unavailable" } }, { status: 500 });
       }
       if (["pending", "late401", "pendingSuccess", "earlyReturn"].includes(mode)) await runGate;
-      if (["positive", "pendingSuccess", "earlyReturn", "treeReadNextRunTerminal"].includes(mode) || finalReadLifetime) {
+      if (["positive", "pendingSuccess", "earlyReturn", "treeReadNextRunTerminal"].includes(mode) || finalReadLifetime || initialRetryNext) {
         expect(runModels.at(-1)).toBe("synthetic-model");
         activeRun = { ...run, id: "created-run", root_run_id: "created-run" };
         return Response.json({ run: activeRun }, { status: 201 });
       }
       if (mode === "run202") return Response.json({ run: { ...run, id: "asynchronous-run", root_run_id: "asynchronous-run" } }, { status: 202 });
-      return Response.json({ error: { code: "SYNTHETIC_REPLY_FAILURE", message: "Synthetic reply failure" } }, { status: ["late401", "current401"].includes(mode) ? 401 : ["rejected", "messageRejected", "conversation"].includes(mode) ? 400 : 500 });
+      return Response.json({ error: { code: "SYNTHETIC_REPLY_FAILURE", message: "Synthetic reply failure" } }, { status: ["late401", "current401"].includes(mode) ? 401 : ["rejected", "messageRejected", "conversation"].includes(mode) || initialRetryRejected ? 400 : 500 });
     }
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/folders") return Response.json({ ok: true });
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/upload-url") return Response.json({ file_id: uploaded.id, upload_url: String(new URL("/synthetic-upload", server.url)) });
@@ -421,7 +459,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
   }, websocket: { open(socket) {
-    if (finalReadLifetime) socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
+    if (finalReadLifetime || initialHistoryRetry) socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
     if (runReadLifetime) {
       runReadSocketCount++;
       const connected = () => socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
@@ -433,6 +471,8 @@ async function verifySendRecovery(mode: Scenario) {
     if (value === "ping") socket.send("pong");
     else if (JSON.parse(String(value)).type === "subscribe") {
       subscriptions++;
+      if (initialHistoryRetry) historyRetrySubscriptions.push(JSON.parse(String(value)).runId);
+      if (initialRetryNext) sendLiveMessage = () => { socket.send(JSON.stringify({ type: "message", data: { content: "New reply while history waits" }, eventId: 1 })); };
       if (authCloseLifetime) closeAuthSocket = () => {
         socket.close(mode === "authClosePolicy" ? 1008 : mode === "authCloseReason" ? 1012 : 4401,
           mode === "authCloseReason" ? "Synthetic unauthorized close" : "Synthetic policy gate");
@@ -508,7 +548,7 @@ async function verifySendRecovery(mode: Scenario) {
             finally { messageParsesDone++; }
           };
         }
-        if (historyLifetime && url.pathname.endsWith("/history")) {
+        if ((historyLifetime || response.headers.has("x-synthetic-initial-retry")) && url.pathname.endsWith("/history")) {
           const json = response.json.bind(response);
           response.json = async () => { historyParsesStarted++; try { return await json(); } finally { historyParsesDone++; } };
         }
@@ -524,6 +564,114 @@ async function verifySendRecovery(mode: Scenario) {
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
     await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime || treeReadLifetime || finalReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (initialHistoryRetry) {
+      if (mode === "initialHistoryFocus") fixture.setFocus(300);
+      await waitFor(() => fixture!.state().error !== null);
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+      expect(textarea.disabled).toBe(false);
+      textarea.value = "Keep this unsent draft"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      if (mode === "initialHistoryFiles") {
+        const picker = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+        Object.defineProperty(picker, "files", { configurable: true, value: [new File(["draft"], "draft.txt", { type: "text/plain" })] });
+        picker.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(fixture.state().files).toEqual(["draft.txt"]);
+      }
+      expect(document.querySelector('[role="alert"]')?.textContent).toContain("Failed to load messages");
+      if (mode === "initialHistoryFileError") {
+        [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent !== "Retry")!.click();
+        const picker = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+        Object.defineProperty(picker, "files", { configurable: true, value: [new File(["blocked"], "blocked.exe", { type: "application/x-msdownload" })] });
+        picker.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(fixture.state().error).toBeTruthy(); expect(fixture.state().error).not.toBe("Failed to load messages");
+        expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+        expect(fixture.state().input).toBe("Keep this unsent draft"); expect(historyReads).toBe(1);
+        expect(messagePosts).toBe(0); expect(runPosts).toBe(0);
+        return;
+      }
+      const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent === "Retry");
+      expect(retry).toBeDefined(); retry!.click();
+      if (mode === "initialHistoryCurrent401") {
+        await waitFor(() => location.href.startsWith("/auth/oidc/login"));
+        expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+        expect(fixture.state().input).toBe("Keep this unsent draft");
+        expect(fixture.state().error).toBeTruthy();
+        expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+        expect(messagePosts).toBe(0); expect(runPosts).toBe(0);
+        return;
+      }
+      if (initialRetryHeld) {
+        await waitFor(() => historyParsesStarted === 1);
+        if (mode === "initialHistoryLateFileError") {
+          const picker = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+          Object.defineProperty(picker, "files", { configurable: true, value: [new File(["blocked"], "blocked.exe", { type: "application/x-msdownload" })] });
+          picker.dispatchEvent(new Event("change", { bubbles: true }));
+          const fileError = fixture.state().error; expect(fileError).toBeTruthy(); expect(fileError).not.toBe("Failed to load messages");
+          releaseHistory(); await waitFor(() => historyParsesDone === 1); await Bun.sleep(0);
+          expect(fixture.state().error).toBe(fileError);
+          expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+          expect(fixture.state().input).toBe("Keep this unsent draft"); expect(messagePosts).toBe(0); expect(runPosts).toBe(0);
+          return;
+        }
+        if (initialRetryNext || initialRetryRejected) {
+          textarea.value = "Start exactly one new reply"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+          await fixture.idle();
+          if (initialRetryRejected) {
+            expect(fixture.state().loading).toBe(false); expect(fixture.state().error).toBe("Synthetic reply failure");
+            expect(document.body.textContent).toContain("Start exactly one new reply");
+            releaseHistory(); await waitFor(() => historyParsesDone === 1); await Bun.sleep(0);
+            expect(document.body.textContent).toContain("Start exactly one new reply");
+            expect(document.body.textContent).not.toContain("Old retry snapshot");
+            expect(fixture.state().error).toBe("Synthetic reply failure"); expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+            expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+            return;
+          }
+          await waitFor(() => historyRetrySubscriptions.includes("created-run") && sendLiveMessage !== undefined);
+          sendLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "New reply while history waits");
+          releaseHistory(); await waitFor(() => historyParsesDone === 1); await Bun.sleep(0);
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+          expect(document.body.textContent).toContain("Start exactly one new reply");
+          expect(document.body.textContent).not.toContain("Old retry snapshot");
+          expect(fixture.state().streamingMessage).toBe("New reply while history waits"); expect(fixture.state().loading).toBe(true);
+          expect(fixture.state().error).toBeNull(); expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+        } else {
+          fixture.setThread("thread-b"); await waitFor(() => document.body.textContent?.includes("Other conversation") === true);
+          fixture.setThread("thread-a"); await waitFor(() => document.body.textContent?.includes("Saved conversation") === true);
+          const currentInput = document.querySelector<HTMLTextAreaElement>("textarea")!;
+          currentInput.value = "Returning unsent draft"; currentInput.dispatchEvent(new Event("input", { bubbles: true }));
+          releaseHistory(); await waitFor(() => historyParsesDone === 1); await Bun.sleep(0);
+          expect(document.body.textContent).toContain("Saved conversation"); expect(document.body.textContent).not.toContain("Old retry snapshot");
+          expect(fixture.state().input).toBe("Returning unsent draft"); expect(fixture.state().error).toBeNull();
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`); expect(messagePosts).toBe(0); expect(runPosts).toBe(0);
+        }
+        return;
+      }
+      if (mode === "initialHistoryRetryFails" || mode === "initialHistoryMalformed") {
+        await waitFor(() => historyReads === 2 && [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry"));
+        expect(fixture.state().input).toBe("Keep this unsent draft");
+        expect(document.body.textContent).not.toContain("Saved conversation");
+        [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent === "Retry")!.click();
+      }
+      await waitFor(() => document.body.textContent?.includes("Saved conversation") === true);
+      expect(fixture.state().input).toBe("Keep this unsent draft");
+      expect(fixture.state().error).toBeNull(); expect(document.querySelector('[role="alert"]')).toBeNull();
+      if (mode === "initialHistoryFiles") expect(fixture.state().files).toEqual(["draft.txt"]);
+      if (mode === "initialHistoryActive") {
+        await waitFor(() => historyRetrySubscriptions.length === 1);
+        expect(historyRetrySubscriptions).toEqual(["unrelated-run"]); expect(subscriptions).toBe(1);
+        expect(fixture.state().loading).toBe(true);
+      }
+      if (mode === "initialHistoryFocus") {
+        expect(historyReads).toBe(3); expect(historyWindows).toEqual([{ limit: "100", offset: "0" }, { limit: "200", offset: "200" }, { limit: "200", offset: "200" }]);
+      } else if (mode === "initialHistoryRetryFails" || mode === "initialHistoryMalformed") {
+        expect(historyReads).toBe(3); expect(historyWindows).toEqual([{ limit: "100", offset: "0" }, { limit: "100", offset: "0" }, { limit: "100", offset: "0" }]);
+      } else {
+        expect(historyReads).toBe(2); expect(historyWindows).toEqual([{ limit: "100", offset: "0" }, { limit: "100", offset: "0" }]);
+      }
+      expect(messagePosts).toBe(0); expect(runPosts).toBe(0);
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (finalReadLifetime) {
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "First message"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -538,6 +686,17 @@ async function verifySendRecovery(mode: Scenario) {
       if (currentFinalFailure) {
         textarea.value = "Next unsent draft"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
         expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+        if (mode === "finalReadCurrentLateFileError") {
+          const picker = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+          Object.defineProperty(picker, "files", { configurable: true, value: [new File(["blocked"], "blocked.exe", { type: "application/x-msdownload" })] });
+          picker.dispatchEvent(new Event("change", { bubbles: true }));
+          const fileError = fixture.state().error; expect(fileError).toBeTruthy(); expect(fileError).not.toBe("Failed to load messages");
+          releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+          expect(fixture.state().error).toBe(fileError); expect(fixture.state().streamingMessage).toBe("First reply is streaming");
+          expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+          expect(fixture.state().input).toBe("Next unsent draft"); expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+          return;
+        }
         releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
         expect(fixture.state().streamingMessage).toBe("First reply is streaming");
         expect(fixture.state().input).toBe("Next unsent draft");
@@ -551,6 +710,16 @@ async function verifySendRecovery(mode: Scenario) {
         expect(document.body.textContent).not.toContain("Saved first reply");
         expect(fixture.state().loading).toBe(false);
         expect(messagePosts).toBe(1); expect(runPosts).toBe(1); expect(messageAborts).toBe(0);
+        if (mode === "finalReadCurrentFileError") {
+          const picker = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+          Object.defineProperty(picker, "files", { configurable: true, value: [new File(["blocked"], "blocked.exe", { type: "application/x-msdownload" })] });
+          picker.dispatchEvent(new Event("change", { bubbles: true }));
+          expect(fixture.state().error).toBeTruthy(); expect(fixture.state().error).not.toBe("Failed to load messages");
+          expect([...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].some((button) => button.textContent === "Retry")).toBe(false);
+          expect(fixture.state().input).toBe("Next unsent draft");
+          expect(messagePosts).toBe(1); expect(runPosts).toBe(1);
+          return;
+        }
         const retry = [...document.querySelectorAll<HTMLButtonElement>('[role="alert"] button')].find((button) => button.textContent === "Retry");
         expect(retry).toBeDefined(); retry!.click();
         if (retryNext) {
