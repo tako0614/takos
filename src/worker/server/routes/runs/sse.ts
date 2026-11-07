@@ -8,6 +8,66 @@ import { createRunObservationSseStream } from "./observation.ts";
 
 type RunSseRouteEnv = { Bindings: Env; Variables: BaseVariables };
 
+/** Check authority immediately before releasing each upstream SSE chunk. */
+export function guardSseStream(
+  upstream: ReadableStream<Uint8Array>,
+  authorize: () => Promise<boolean>,
+): ReadableStream<Uint8Array> {
+  const reader = upstream.getReader();
+  let closed = false;
+
+  const cancel = async (reason: unknown) => {
+    if (closed) return;
+    closed = true;
+    try {
+      await reader.cancel(reason);
+    } catch {
+      // The upstream may already have failed; no pending bytes are released.
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (closed) return;
+      try {
+        if (!(await authorize())) {
+          await cancel("run authority revoked");
+          controller.close();
+          return;
+        }
+        if (closed) return;
+        const chunk = await reader.read();
+        if (closed) return;
+        if (chunk.done) {
+          closed = true;
+          reader.releaseLock();
+          controller.close();
+          return;
+        }
+        // A pending read can span a revocation. Prove current authority again
+        // after it settles, before any of its bytes reach the client.
+        if (!(await authorize())) {
+          await cancel("run authority revoked");
+          controller.close();
+          return;
+        }
+        if (closed) return;
+        controller.enqueue(chunk.value);
+      } catch (error) {
+        if (!closed) {
+          await cancel(error);
+          controller.error(error);
+        }
+      }
+    },
+    cancel(reason) {
+      return cancel(reason);
+    },
+  });
+}
+
 /**
  * SSE endpoint for run events.
  *
@@ -47,6 +107,10 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
         runId,
         access.run.status,
         lastEventId ?? 0,
+        {
+          authorize: async () =>
+            Boolean(await checkRunAccess(c.env.DB, runId, user.id)),
+        },
       );
 
       return new Response(stream, {
@@ -60,7 +124,10 @@ export function createRunSseRouter(): Hono<RunSseRouteEnv> {
 
     // Subscribe to the run channel
     const channel = `run:${runId}`;
-    const stream = sseNotifier.subscribe(channel, lastEventId);
+    const stream = guardSseStream(
+      sseNotifier.subscribe(channel, lastEventId),
+      async () => Boolean(await checkRunAccess(c.env.DB, runId, user.id)),
+    );
 
     return new Response(stream, {
       headers: {

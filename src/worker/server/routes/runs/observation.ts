@@ -198,6 +198,7 @@ export function createPollingRunObservationStream(
   options?: {
     pollIntervalMs?: number;
     heartbeatIntervalMs?: number;
+    authorize?: () => Promise<boolean>;
   },
 ): ReadableStream<Uint8Array> {
   const pollIntervalMs = options?.pollIntervalMs ?? SSE_POLL_INTERVAL_MS;
@@ -233,7 +234,18 @@ export function createPollingRunObservationStream(
         controller.enqueue(formatSseComment("connected"));
 
         while (!closed) {
+          if (options?.authorize && !(await options.authorize())) {
+            close();
+            return;
+          }
+          if (closed) return;
           const observation = await source(lastEventId);
+          if (closed) return;
+          if (options?.authorize && !(await options.authorize())) {
+            close();
+            return;
+          }
+          if (closed) return;
 
           if (observation.events.length > 0) {
             for (const event of observation.events) {
@@ -285,6 +297,7 @@ export function createRunObservationSseStream(
   options?: {
     pollIntervalMs?: number;
     heartbeatIntervalMs?: number;
+    authorize?: () => Promise<boolean>;
   },
 ): ReadableStream<Uint8Array> {
   return createPollingRunObservationStream(

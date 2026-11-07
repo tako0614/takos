@@ -518,6 +518,10 @@ export abstract class NotifierBase {
 
       await this.persistState();
 
+      // Domain subclasses may revoke/close sockets before any bytes leave the
+      // object. Default notifiers have no per-message authority transition.
+      await this.beforeBroadcast(result.broadcastMessage);
+
       const clientCount = this.broadcastMessage(result.broadcastMessage);
 
       return jsonResponse({
@@ -560,6 +564,9 @@ export abstract class NotifierBase {
     },
     eventId: number,
   ): Promise<EmitResult>;
+
+  /** Revalidate or prune connections immediately before broadcasting output. */
+  protected async beforeBroadcast(_message: string): Promise<void> {}
 
   // ---------------------------------------------------------------------------
   // Broadcasting
