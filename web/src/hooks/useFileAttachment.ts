@@ -73,7 +73,7 @@ export function useFileAttachment(
       // Reject empty / clearly disallowed MIME types client-side. The server
       // re-checks for security; this is purely UX.
       if (!isMimeAllowed(file.type)) {
-        setError(t("fileTypeNotAllowed" as TranslationKey));
+        setError(t("fileTypeNotAllowed"));
         continue;
       }
       validFiles.push(file);
