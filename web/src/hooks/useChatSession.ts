@@ -29,7 +29,7 @@ import {
 import { useFileAttachment } from "./useFileAttachment.ts";
 import { useChatModelSelection } from "./useChatModelSelection.ts";
 import { useChatAttachments } from "./useChatAttachments.ts";
-import { useChatMessages } from "./useChatMessages.ts";
+import { type ChatSendRecovery, useChatMessages } from "./useChatMessages.ts";
 import {
   type ChatSessionInitState,
   nextChatSessionInitState,
@@ -75,6 +75,13 @@ export interface UseChatSessionResult {
   handleFileSelect: (e: Event & { currentTarget: HTMLInputElement }) => void;
   removeAttachedFile: (index: number) => void;
   sendMessage: () => Promise<void>;
+  sendRecovery: Accessor<ChatSendRecovery | null>;
+  recoveryBusy: Accessor<boolean>;
+  retryReply: (expected: ChatSendRecovery, confirmedNew?: boolean) => Promise<void>;
+  checkSendStatus: (expected: ChatSendRecovery) => Promise<void>;
+  restoreSendDraft: (expected: ChatSendRecovery) => void;
+  dismissSendRecovery: (expected: ChatSendRecovery, confirmed?: boolean) => void;
+  sendBlocked: Accessor<boolean>;
   messagesEndRef: (element: HTMLDivElement | undefined) => void;
 }
 
@@ -225,6 +232,10 @@ export function useChatSession({
           ws.setCurrentRun(data.activeRun);
           ws.startWebSocket(data.activeRun.id);
         }
+        messaging.acknowledgeRunHistory([
+          ...(data.activeRun ? [data.activeRun.id] : []),
+          ...(data.runs || []).filter((node) => ["completed", "failed", "cancelled"].includes(node.run.status)).map((node) => node.run.id),
+        ]);
 
         void ws.loadPendingSessionDiff(data.pendingSessionDiff);
       } catch {
@@ -355,6 +366,13 @@ export function useChatSession({
     handleFileSelect: files.handleFileSelect,
     removeAttachedFile: files.removeAttachedFile,
     sendMessage: messaging.sendMessage,
+    sendRecovery: messaging.sendRecovery,
+    recoveryBusy: messaging.recoveryBusy,
+    retryReply: messaging.retryReply,
+    checkSendStatus: messaging.checkSendStatus,
+    restoreSendDraft: messaging.restoreSendDraft,
+    dismissSendRecovery: messaging.dismissSendRecovery,
+    sendBlocked: messaging.sendBlocked,
     messagesEndRef: setMessagesEndRef,
   };
 }

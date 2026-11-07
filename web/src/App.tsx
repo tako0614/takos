@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "./hooks/useAuth.tsx";
 import { ModalProvider, useModals } from "./store/modal.tsx";
 import { NavigationProvider, useNavigation } from "./store/navigation.ts";
 import { useI18n } from "./store/i18n.ts";
+import { ChatSendRecoveryProvider } from "./hooks/chat-send-recovery.tsx";
 
 function AppShell(props: { children?: JSX.Element }) {
   const auth = useAuth();
@@ -62,13 +63,13 @@ function AppShell(props: { children?: JSX.Element }) {
   };
 
   return (
-    <>
+    <ChatSendRecoveryProvider principal={() => auth.user?.username ?? null} authState={() => auth.authState}>
       {props.children}
       <AppModals onCreateSpace={handleCreateSpace} />
       <ConfirmDialogRenderer />
       <ToastRenderer />
       <CookieConsentBanner />
-    </>
+    </ChatSendRecoveryProvider>
   );
 }
 
