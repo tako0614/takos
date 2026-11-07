@@ -104,9 +104,17 @@ if (Bun.env.TAKOS_CHAT_PAGE_ACTIONS_CLIENT !== "1") {
       const pending = fixture.handleCreateThread("Original A draft");
       fixture.setSpaceId("space-b");
       response.resolve(Response.json({ thread: { id: "created-in-a" } as Thread }));
-      await pending;
+      const result = await pending;
+      expect(result).toMatchObject({ kind: "created" });
       expect(requests).toEqual([{ space: "space-a", message: "Original A draft" }]);
       expect(created).toEqual([]);
+      if (typeof result !== "object" || result.kind !== "created") throw new Error("Expected known create receipt");
+      expect(result.resume("Recovered draft")).toBe(false);
+      fixture.setSpaceId("space-a");
+      expect(result.resume("Recovered draft")).toBe(true);
+      expect(result.resume("Do not repeat")).toBe(false);
+      expect(requests).toHaveLength(1);
+      expect(created).toHaveLength(1);
     } finally {
       dispose();
     }
@@ -135,7 +143,7 @@ if (Bun.env.TAKOS_CHAT_PAGE_ACTIONS_CLIENT !== "1") {
       fixture.setModel("model-b");
       const thread = { id: "created-in-a" } as Thread;
       response.resolve(Response.json({ thread: thread }));
-      await pending;
+      expect(await pending).toBe(true);
       expect(created).toEqual([{
         spaceId: "space-a", thread, message: "Original draft", files, model: "model-a",
       }]);
@@ -214,14 +222,16 @@ if (Bun.env.TAKOS_CHAT_PAGE_ACTIONS_CLIENT !== "1") {
     const thread = { id: "retry-thread" } as Thread;
     let calls = 0;
     const fixture = setup({
-      createThread: () => ++calls === 1 ? Promise.reject(error) : Promise.resolve(Response.json({ thread })),
+      createThread: () => ++calls === 1
+        ? Promise.resolve(Response.json({ error: { code: "INVALID_INPUT", message: error.message } }, { status: 400 }))
+        : Promise.resolve(Response.json({ thread })),
     });
     try {
-      await fixture.handleCreateThread("Draft to retry");
+      expect(await fixture.handleCreateThread("Draft to retry")).toBe(false);
       expect(calls).toBe(1);
       expect(fixture.created).toEqual([]);
       expect(fixture.errors).toEqual([{ error, fallback: "failedToCreate" }]);
-      await fixture.handleCreateThread("Draft to retry");
+      expect(await fixture.handleCreateThread("Draft to retry")).toBe(true);
       expect(calls).toBe(2);
       expect(fixture.created).toEqual([{
         spaceId: "space-a", thread, message: "Draft to retry", files: undefined, model: "model-a",
@@ -311,5 +321,23 @@ if (Bun.env.TAKOS_CHAT_PAGE_ACTIONS_CLIENT !== "1") {
       expect(fixture.selected).toEqual([]);
       expect(fixture.errors).toEqual([]);
     } finally { fixture.dispose(); }
+  });
+
+  test("a transport failure or malformed creation acknowledgement stays unconfirmed", async () => {
+    for (const createThread of [
+      () => Promise.reject(new Error("Connection lost")),
+      async () => Response.json({ thread: null }, { status: 201 }),
+      async () => Response.json({ error: "unavailable" }, { status: 503 }),
+      async () => Response.json({ error: "timeout" }, { status: 408 }),
+      async () => Response.json({ error: "conflict" }, { status: 409 }),
+      async () => Response.json({ error: "throttled" }, { status: 429 }),
+    ]) {
+      const fixture = setup({ createThread });
+      try {
+        expect(await fixture.handleCreateThread("Draft")).toEqual({ kind: "unconfirmed" });
+        expect(fixture.created).toEqual([]);
+        expect(fixture.errors).toHaveLength(1);
+      } finally { fixture.dispose(); }
+    }
   });
 }

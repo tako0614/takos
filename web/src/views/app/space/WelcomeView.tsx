@@ -2,16 +2,22 @@ import { createMemo, createSignal, onCleanup } from "solid-js";
 import { type TranslationKey, useI18n } from "../../../store/i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 import { useFileAttachment } from "../../../hooks/useFileAttachment.ts";
+import { useWelcomeSubmission, type WelcomeSubmissionResult } from "../../../hooks/useWelcomeSubmission.ts";
+import { useConfirmDialog } from "../../../store/confirm-dialog.ts";
 import type { Space } from "../../../types/index.ts";
 
 interface WelcomeViewProps {
   space?: Space;
   onNewChat?: (message?: string) => void;
-  onCreateThread?: (message: string, files?: File[]) => void;
+  onCreateThread?: (
+    message: string,
+    files?: File[],
+  ) => WelcomeSubmissionResult | Promise<WelcomeSubmissionResult>;
 }
 
 export function WelcomeView(props: WelcomeViewProps) {
   const { t } = useI18n();
+  const { confirm } = useConfirmDialog();
   const [input, setInput] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [isComposing, setIsComposing] = createSignal(false);
@@ -27,34 +33,44 @@ export function WelcomeView(props: WelcomeViewProps) {
 
   // Object URLs for image thumbnails
   const objectUrls = createMemo(() => {
-    return fileAttachments.attachedFiles.map((file) =>
+    const urls = fileAttachments.attachedFiles.map((file) =>
       file.type.startsWith("image/") ? URL.createObjectURL(file) : null
     );
+    onCleanup(() => {
+      for (const url of urls) {
+        if (url) URL.revokeObjectURL(url);
+      }
+    });
+    return urls;
   });
 
-  onCleanup(() => {
-    for (const url of objectUrls()) {
-      if (url) URL.revokeObjectURL(url);
-    }
+  const submission = useWelcomeSubmission({
+    input,
+    setInput,
+    attachedFiles: () => fileAttachments.attachedFiles,
+    setAttachedFiles: fileAttachments.setAttachedFiles,
+    scope: () => props.space?.id,
+    submit: async (message, files) => {
+      if (props.onCreateThread) {
+        return await props.onCreateThread(message, files);
+      }
+      if (!props.onNewChat) return false;
+      await props.onNewChat(message);
+      return true;
+    },
+    onClear: () => {
+      if (textareaRef) textareaRef.style.height = "auto";
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : t("failedToCreate"));
+    },
   });
-
-  const handleSend = () => {
-    const trimmed = input().trim();
-    const attachedFiles = fileAttachments.attachedFiles;
-    if (!trimmed && attachedFiles.length === 0) return;
-    if (props.onCreateThread) {
-      props.onCreateThread(
-        trimmed,
-        attachedFiles.length > 0 ? attachedFiles : undefined,
-      );
-    } else {
-      props.onNewChat?.(trimmed);
-    }
-    setInput("");
-    if (textareaRef) {
-      textareaRef.style.height = "auto";
-    }
-  };
+  onCleanup(submission.dispose);
+  const handleSend = () => void submission.send();
+  const createAnother = () => void submission.confirmNewAttempt(() => confirm({
+    title: t("welcomeCreateAnother"), message: t("welcomeCreationUnconfirmed"),
+    confirmText: t("welcomeCreateAnother"), danger: true,
+  }));
 
   // Auto-resize textarea
   const handleChange = (e: Event & { currentTarget: HTMLTextAreaElement }) => {
@@ -99,7 +115,10 @@ export function WelcomeView(props: WelcomeViewProps) {
         </h1>
 
         {/* Input card */}
-        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 shadow-sm overflow-hidden">
+        <div
+          class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 shadow-sm overflow-hidden"
+          aria-busy={submission.isSubmitting()}
+        >
           {/* Attached files */}
           {fileAttachments.attachedFiles.length > 0 && (
             <div class="flex flex-wrap gap-2 px-4 pt-3">
@@ -120,6 +139,7 @@ export function WelcomeView(props: WelcomeViewProps) {
                   <span class="max-w-32 truncate">{file.name}</span>
                   <button
                     type="button"
+                    disabled={submission.isSubmitting()}
                     class="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                     onClick={() => fileAttachments.removeAttachedFile(index)}
                     aria-label={t("removeFile")}
@@ -132,6 +152,14 @@ export function WelcomeView(props: WelcomeViewProps) {
           )}
 
           {/* Error */}
+          {submission.outcome() && (
+            <div role="status" class="px-4 pt-3 text-sm text-zinc-700 dark:text-zinc-300">
+              <p>{submission.outcome()?.kind === "created" ? t("welcomeChatCreated") : t("welcomeCreationUnconfirmed")}</p>
+              <button type="button" class="mt-2 underline disabled:opacity-50" disabled={submission.isSubmitting()} onClick={createAnother}>
+                {t("welcomeCreateAnother")}
+              </button>
+            </div>
+          )}
           {error?.() && (
             <div class="px-4 pt-2 text-xs text-red-500">{error()}</div>
           )}
@@ -139,6 +167,7 @@ export function WelcomeView(props: WelcomeViewProps) {
           {/* Textarea */}
           <textarea
             ref={textareaRef}
+            disabled={submission.isSubmitting()}
             class="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none min-h-[80px]"
             placeholder={t("inputPlaceholder")}
             value={input()}
@@ -165,6 +194,7 @@ export function WelcomeView(props: WelcomeViewProps) {
           <input
             ref={fileInputRef}
             type="file"
+            disabled={submission.isSubmitting()}
             multiple
             style={{ display: "none" }}
             onChange={fileAttachments.handleFileSelect}
@@ -175,6 +205,7 @@ export function WelcomeView(props: WelcomeViewProps) {
             <div class="flex items-center gap-1">
               <button
                 type="button"
+                disabled={submission.isSubmitting()}
                 class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 title={t("attachFile")}
                 onClick={() => fileInputRef?.click()}
@@ -186,10 +217,11 @@ export function WelcomeView(props: WelcomeViewProps) {
               type="button"
               class="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               onClick={handleSend}
-              disabled={!input().trim() &&
-                fileAttachments.attachedFiles.length === 0}
-              title={t("send")}
-              aria-label={t("send")}
+              disabled={submission.isSubmitting() ||
+                submission.outcome()?.kind === "unconfirmed" ||
+                (!input().trim() && fileAttachments.attachedFiles.length === 0)}
+              title={submission.outcome()?.kind === "created" ? t("continue") : t("send")}
+              aria-label={submission.outcome()?.kind === "created" ? t("continue") : t("send")}
             >
               <Icons.Send class="w-4 h-4" />
             </button>

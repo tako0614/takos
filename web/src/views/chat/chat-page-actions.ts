@@ -2,6 +2,7 @@ import { type Accessor, createMemo, onCleanup } from "solid-js";
 import type { Thread } from "../../types/index.ts";
 import { createLatestRequest } from "../../lib/createLatestRequest.ts";
 import { type JsonResponseLike, rpcJson } from "../../lib/rpc.ts";
+import type { WelcomeSubmissionResult } from "../../hooks/useWelcomeSubmission.ts";
 
 interface CreatedThreadSelection {
   spaceId: string;
@@ -64,17 +65,37 @@ export function createChatPageActions(options: ChatPageActionsOptions) {
     }
   };
 
-  const handleCreateThread = async (message: string, files?: File[]) => {
+  const handleCreateThread = async (message: string, files?: File[]): Promise<WelcomeSubmissionResult> => {
     const spaceId = options.spaceId();
-    if (!spaceId) return;
+    if (!spaceId) return false;
     const model = options.selectedModel();
+    const requestedThreadId = options.threadId();
     const claim = claimNavigation();
+    let rejected = false;
     try {
       const response = await options.createThread(spaceId, message);
+      // Only these product validation/access rejections precede thread create.
+      // Other statuses (including a timeout) do not prove that no write ran.
+      rejected = !response.ok && [400, 401, 403, 404].includes(response.status);
       const { thread } = await rpcJson<{ thread: Thread }>(response, {
         isCurrent: claim.won,
       });
-      if (!claim.won()) return;
+      if (!thread || typeof thread.id !== "string" || !thread.id.trim()) {
+        throw new Error("Chat creation could not be confirmed");
+      }
+      if (!claim.won()) {
+        let resumed = false;
+        return {
+          kind: "created",
+          resume: (draft, attachments) => {
+            if (resumed || !mounted || options.spaceId() !== spaceId || options.threadId() !== requestedThreadId) return false;
+            resumed = true;
+            requests.next();
+            options.onCreated({ spaceId, thread, message: draft, files: attachments, model: options.selectedModel() });
+            return true;
+          },
+        };
+      }
       options.onCreated({
         spaceId,
         thread,
@@ -82,9 +103,10 @@ export function createChatPageActions(options: ChatPageActionsOptions) {
         files,
         model,
       });
+      return true;
     } catch (error) {
-      if (!claim.won()) return;
-      options.onError(error, "failedToCreate");
+      if (claim.won()) options.onError(error, "failedToCreate");
+      return rejected ? false : { kind: "unconfirmed" };
     }
   };
 
