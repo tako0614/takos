@@ -31,6 +31,7 @@ export type { SessionDiffState } from "./useWsSessionDiff.ts";
 type MutableRefObject<T> = { current: T };
 
 export interface UseWebSocketConnectionOptions {
+  requestScope: Accessor<unknown>;
   threadId: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
@@ -86,6 +87,7 @@ export interface UseWebSocketConnectionResult {
 }
 
 export function useWebSocketConnection({
+  requestScope,
   threadId,
   t,
   isMountedRef,
@@ -95,21 +97,22 @@ export function useWebSocketConnection({
   setMessages,
   setError,
 }: UseWebSocketConnectionOptions): UseWebSocketConnectionResult {
+  const currentRunIdRef: MutableRefObject<string | null> = { current: null };
+  const lastEventIdRef: MutableRefObject<number> = { current: 0 };
+
   // --- Session diff sub-hook ---
   const sessionDiffHook = useWsSessionDiff({ threadId, t, setError });
 
   // --- Message processor sub-hook ---
   const processor = useWsMessageProcessor({
+    requestScope,
+    currentRunIdRef,
     t,
     isMountedRef,
     fetchMessages,
     setError,
     fetchSessionDiff: sessionDiffHook.fetchSessionDiff,
   });
-
-  // Stable refs for cross-hook communication
-  const currentRunIdRef: MutableRefObject<string | null> = { current: null };
-  const lastEventIdRef: MutableRefObject<number> = { current: 0 };
 
   // --- Connection manager sub-hook (WS with SSE fallback) ---
   const connection = useConnectionManagerWithFallback({

@@ -51,6 +51,15 @@ const scenarios = {
   pollingDispose: "a disposed message refresh cannot navigate after its body is aborted",
   pollingCurrent401: "a current message refresh authentication failure retains login navigation",
   pollingCurrentOK: "a current message refresh adopts the saved reply after a terminal WebSocket event",
+  runReadLate401: "a retired Run status authentication response cannot navigate the new conversation",
+  runReadLateTerminal: "a retired completed Run status cannot stop the newer conversation Run",
+  runReadFocus: "a retired Run status cannot navigate a newer focus before its connection frame arrives",
+  runReadDispose: "a disposed Run status read cannot navigate after its body finishes",
+  runReadCurrent401: "a current Run status authentication failure retains login navigation",
+  runReadCurrentActive: "a current active Run status refreshes messages and keeps its controls",
+  runReadCurrentTerminal: "a current completed Run status adopts terminal state and messages",
+  runReadMismatched: "an unmatched Run status payload cannot replace the current Run",
+  runReadWatchdog503: "an unavailable Run status watchdog keeps the current WebSocket usable",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -72,6 +81,7 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  const runReadLifetime = mode.startsWith("runRead");
   const pollingLifetime = mode.startsWith("polling");
   const cancelLifetime = mode.startsWith("cancel");
   const cancelOverlap = mode === "cancelOverlap" || mode === "cancelOverlapAck";
@@ -105,9 +115,17 @@ async function verifySendRecovery(mode: Scenario) {
   let messageReads = 0, messageParsesStarted = 0, messageParsesDone = 0, messageAborts = 0;
   const messageParseErrors: string[] = [];
   let completeRun: (() => void) | undefined;
+  let releaseRunRead!: () => void;
+  const runReadGate = new Promise<void>((yes) => { releaseRunRead = yes; });
+  let runReadProducer = Promise.resolve();
+  const runReadRequests: string[] = [];
+  let oldRunReadStarted = 0, oldRunReadDone = 0, newRunReadDone = 0;
+  let runReadResponses = 0, runReadSocketCount = 0, runReadClosed = 0;
+  let resumeRunConnected: (() => void) | undefined;
+  let sendLiveMessage: (() => void) | undefined;
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -123,10 +141,34 @@ async function verifySendRecovery(mode: Scenario) {
       if (server.upgrade(request)) return;
       return new Response(null, { status: 400 });
     }
+    if (runReadLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
+      runReadRequests.push(path);
+      if (path.endsWith("/second-run")) return Response.json({ run: otherRun });
+      if (runReadRequests.filter((value) => value.endsWith("/unrelated-run")).length > 1) return mode === "runReadWatchdog503"
+        ? Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic Run read unavailable" } }, { status: 503 })
+        : Response.json({ run });
+      const terminal = ["runReadLateTerminal", "runReadCurrentTerminal"].includes(mode);
+      const status = ["runReadCurrentActive", "runReadCurrentTerminal", "runReadLateTerminal", "runReadMismatched", "runReadWatchdog503"].includes(mode) ? 200 : 401;
+      if (terminal) activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
+      const payload = JSON.stringify(status === 401
+        ? { error: { code: "UNAUTHENTICATED", message: "Synthetic Run status authentication failure" } }
+        : { run: mode === "runReadMismatched" ? { ...run, id: "unmatched-run", status: "completed" } : terminal ? activeRun : run });
+      let open = true;
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+        runReadProducer = runReadGate.then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+      }, cancel() { open = false; } }), { status, headers: { "content-type": "application/json" } });
+    }
     if (request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) return Response.json({ run: cancelLifetime ? path.endsWith("/second-run") ? otherRun : run : activeRun ?? run });
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
+      if (runReadLifetime) {
+        const thread = path.split("/")[3]!;
+        body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
+        body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
+        if (new URL(request.url).searchParams.get("offset") === "200") body.messages[0]!.content = "Focused A Run view";
+      }
       if (pollingLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = activeRun?.thread_id === thread && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null;
@@ -155,6 +197,10 @@ async function verifySendRecovery(mode: Scenario) {
       }
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
+    }
+    if (runReadLifetime && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+      const thread = path.split("/")[3]!;
+      return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
     if (pollingLifetime && request.method === "GET" && path === "/api/threads/thread-a/messages") {
       messageReads++;
@@ -206,7 +252,15 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "PUT" && path === "/synthetic-upload") { expect(await request.text()).toBe("draft"); return new Response(null, { status: 204 }); }
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
-  }, websocket: { message(socket, value) {
+  }, websocket: { open(socket) {
+    if (runReadLifetime) {
+      runReadSocketCount++;
+      const connected = () => socket.send(JSON.stringify({ type: "connected", data: { connectionId: "synthetic-connection", lastEventId: 0 } }));
+      if (mode === "runReadFocus" && runReadSocketCount > 1) resumeRunConnected = connected;
+      else connected();
+      sendLiveMessage = () => { socket.send(JSON.stringify({ type: "message", data: { content: "Streaming after unavailable status" }, eventId: 1 })); };
+    }
+  }, close() { if (runReadLifetime) runReadClosed++; }, message(socket, value) {
     if (value === "ping") socket.send("pong");
     else if (JSON.parse(String(value)).type === "subscribe") {
       subscriptions++;
@@ -216,7 +270,7 @@ async function verifySendRecovery(mode: Scenario) {
       };
     }
   } } });
-  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; cancelling: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; pendingCount: () => number; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
+  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; cancelling: boolean; streamingMessage: string | null; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; pendingCount: () => number; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
   try {
     await build({ configFile: false, root: resolve(import.meta.dir, "../.."), logLevel: "silent", plugins: [solid()],
       build: { outDir: output, minify: false, lib: { entry: resolve(import.meta.dir, "fixtures/chat-send-recovery/client.tsx"), formats: ["iife"], name: "ChatSendRecoveryTest", fileName: () => "client.js" } },
@@ -227,7 +281,7 @@ async function verifySendRecovery(mode: Scenario) {
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -236,6 +290,14 @@ async function verifySendRecovery(mode: Scenario) {
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
         if (pollingLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
         const response = await fetch(url, init);
+        if (runReadLifetime && /^\/api\/runs\/[^/]+$/.test(url.pathname)) {
+          const json = response.json.bind(response);
+          const old = url.pathname.endsWith("/unrelated-run") && ++runReadResponses === 1;
+          response.json = async () => {
+            if (!old) { try { return await json(); } finally { newRunReadDone++; } }
+            oldRunReadStarted++; try { return await json(); } finally { oldRunReadDone++; }
+          };
+        }
         if (pollingLifetime && url.pathname.endsWith("/messages")) {
           const json = response.json.bind(response);
           response.json = async () => {
@@ -258,8 +320,58 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime || pollingLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (runReadLifetime) {
+      await waitFor(() => oldRunReadStarted === 1);
+      if (mode === "runReadDispose") {
+        fixture.setMounted(false); await Bun.sleep(0); expect(document.querySelector("textarea")).toBeNull();
+        releaseRunRead(); await waitFor(() => oldRunReadDone === 1); await Bun.sleep(0);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (mode === "runReadFocus") {
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Focused A Run view") && resumeRunConnected !== undefined);
+        releaseRunRead(); await waitFor(() => oldRunReadDone === 1); await Bun.sleep(0);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        resumeRunConnected!(); await waitFor(() => newRunReadDone === 1 && document.body.textContent!.includes("Current A Run messages"));
+        expect(fixture.state().loading).toBe(true); expect(runReadRequests).toHaveLength(2);
+        return;
+      }
+      if (["runReadCurrent401", "runReadCurrentActive", "runReadCurrentTerminal", "runReadMismatched", "runReadWatchdog503"].includes(mode)) {
+        releaseRunRead(); await waitFor(() => oldRunReadDone === 1); await Bun.sleep(0);
+        if (mode === "runReadCurrent401") {
+          expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(runReadRequests).toHaveLength(1);
+        } else if (mode === "runReadMismatched") {
+          expect(fixture.state().loading).toBe(true);
+          expect(document.body.textContent).toContain("Current A Run view");
+          expect(attempts.some((attempt) => attempt.path.endsWith("/messages"))).toBe(false);
+        } else {
+          await waitFor(() => document.body.textContent!.includes("Current A Run messages"));
+          expect(fixture.state().loading).toBe(mode !== "runReadCurrentTerminal");
+          if (mode === "runReadWatchdog503") {
+            await Bun.sleep(8_050); await waitFor(() => newRunReadDone >= 1); await Bun.sleep(25);
+            expect(runReadClosed).toBe(0);
+            sendLiveMessage!(); await waitFor(() => fixture!.state().streamingMessage === "Streaming after unavailable status");
+            expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+            expect(runReadRequests).toHaveLength(2);
+          }
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        }
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B Run messages") && newRunReadDone === 1);
+      expect(fixture.state().loading).toBe(true);
+      releaseRunRead(); await waitFor(() => oldRunReadDone === 1); await Bun.sleep(0);
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-b`);
+      expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+      expect(runReadRequests).toEqual(["/api/runs/unrelated-run", "/api/runs/second-run"]);
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (pollingLifetime) {
       await waitFor(() => subscriptions === 1); await Bun.sleep(0);
       expect(messageReads).toBe(0);
@@ -609,12 +721,14 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseRunRead();
     releaseMessages();
     releaseCancel();
     releaseSecondCancel();
     releaseHistory();
     releaseRun();
     await messageProducer;
+    await runReadProducer;
     await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });

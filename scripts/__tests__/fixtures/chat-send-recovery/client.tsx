@@ -54,7 +54,7 @@ const dispose = render(() => config?.auth
   </ChatSendRecoveryProvider>, document.getElementById("root")!);
 
 Object.assign(globalThis, { chatSendFixture: {
-  state: () => ({ input: session.input(), messages: session.messages(), error: session.error(), loading: session.isLoading(), cancelling: session.isCancelling(), model: session.selectedModel(), files: session.attachedFiles().map((file) => file.name) }),
+  state: () => ({ input: session.input(), messages: session.messages(), error: session.error(), loading: session.isLoading(), cancelling: session.isCancelling(), streamingMessage: session.streaming().currentMessage, model: session.selectedModel(), files: session.attachedFiles().map((file) => file.name) }),
   idle: async () => { while (pending.size) await Promise.all(pending); },
   pendingCount: () => pending.size,
   refetchIdentity: () => { if (!refetchIdentity) throw new Error("No AuthProvider in this fixture"); return refetchIdentity(); },

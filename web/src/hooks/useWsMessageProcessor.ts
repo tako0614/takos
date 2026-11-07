@@ -1,6 +1,7 @@
-import { createSignal, type Setter } from "solid-js";
+import { type Accessor, createEffect, createSignal, onCleanup, type Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type {
   Run,
   ThreadHistoryFocus,
@@ -31,7 +32,7 @@ export {
   VALID_RUN_STATUSES,
 } from "./wsEventHandlers.ts";
 
-import { ACTIVE_RUN_STATUSES } from "./wsEventHandlers.ts";
+import { ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from "./wsEventHandlers.ts";
 
 export {
   parseEventData,
@@ -47,6 +48,8 @@ export const EMPTY_STREAMING: ChatStreamingState = {
 };
 
 export interface UseWsMessageProcessorOptions {
+  requestScope: Accessor<unknown>;
+  currentRunIdRef: MutableRefObject<string | null>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
   fetchMessages: (showError?: boolean) => Promise<void>;
@@ -87,10 +90,11 @@ export interface UseWsMessageProcessorResult {
     eventId?: number,
     createdAt?: number,
   ) => void;
+  /** Undefined means retired, unavailable, or invalid; it is not terminal evidence. */
   verifyRunStatus: (
     runId: string,
     refreshMessages?: boolean,
-  ) => Promise<boolean>;
+  ) => Promise<boolean | undefined>;
   handleRunCompletedRef: MutableRefObject<
     (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
   >;
@@ -106,8 +110,10 @@ export interface UseWsMessageProcessorResult {
 }
 
 export function useWsMessageProcessor({
+  requestScope,
+  currentRunIdRef,
   t,
-  isMountedRef: _isMountedRef,
+  isMountedRef,
   fetchMessages,
   setError: _setError,
   fetchSessionDiff,
@@ -135,6 +141,12 @@ export function useWsMessageProcessor({
     current: new Map(),
   };
   const runMetaRef: MutableRefObject<ChatRunMetaMap> = { current: {} };
+  const statusRequests = createLatestRequest();
+  createEffect(() => {
+    requestScope();
+    statusRequests.next();
+  });
+  onCleanup(() => { statusRequests.next(); });
 
   const handleRunCompletedRef: MutableRefObject<
     (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
@@ -377,12 +389,18 @@ export function useWsMessageProcessor({
   const verifyRunStatus = async (
     runId: string,
     refreshMessages = true,
-  ): Promise<boolean> => {
+  ): Promise<boolean | undefined> => {
+    const scope = requestScope();
+    const claim = statusRequests.claim(() => isMountedRef.current &&
+      requestScope() === scope && currentRunIdRef.current === runId);
     try {
       const res = await rpcPath(rpc, "runs", ":id").$get({
         param: { id: runId },
       });
-      const data = await rpcJson<{ run: Run }>(res);
+      const data = await rpcJson<{ run: Run }>(res, { isCurrent: claim.won });
+      if (!claim.won()) return undefined;
+      if (!data.run || data.run.id !== runId ||
+        !(ACTIVE_RUN_STATUSES.has(data.run.status) || TERMINAL_RUN_STATUSES.has(data.run.status))) return undefined;
       const status = data.run?.status;
       if (data.run) {
         upsertRunMeta(data.run);
@@ -405,7 +423,7 @@ export function useWsMessageProcessor({
       }
       return isActive;
     } catch {
-      return false;
+      return undefined;
     }
   };
 

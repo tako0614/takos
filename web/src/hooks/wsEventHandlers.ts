@@ -61,7 +61,7 @@ export interface EventHandlerContext {
   verifyRunStatus: (
     runId: string,
     refreshMessages?: boolean,
-  ) => Promise<boolean>;
+  ) => Promise<boolean | undefined>;
   isMountedRef: MutableRefObject<boolean>;
   currentRunIdRef: MutableRefObject<string | null>;
   lastEventIdRef: MutableRefObject<number>;
