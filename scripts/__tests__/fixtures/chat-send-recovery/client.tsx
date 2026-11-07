@@ -10,6 +10,7 @@ import { ChatSendRecoveryProvider } from "../../../../web/src/hooks/chat-send-re
 import { AuthProvider, useAuth } from "../../../../web/src/hooks/useAuth.tsx";
 
 const [thread, setThread] = createSignal("thread-a");
+const [focus, setFocus] = createSignal<number | null>(null);
 const [principal, setPrincipal] = createSignal({ id: "synthetic-owner" });
 const [mounted, setMounted] = createSignal(true);
 let session!: UseChatSessionResult;
@@ -20,7 +21,7 @@ const track = (promise: Promise<void>) => {
   const result = promise.finally(() => pending.delete(result)); pending.add(result); return result;
 };
 function Conversation() {
-  session = useChatSession({ threadId: thread, spaceId: () => "space-a", onUpdateTitle: () => {} });
+  session = useChatSession({ threadId: thread, spaceId: () => "space-a", focusSequence: focus, onUpdateTitle: () => {} });
   return <>
     <ul aria-label="Messages"><For each={session.messages()}>{(message) => <li>{message.content}</li>}</For></ul>
     <Show when={session.error()}>{(error) => <ChatErrorBanner error={error()} onDismiss={() => session.setError(null)} />}</Show>
@@ -59,6 +60,6 @@ Object.assign(globalThis, { chatSendFixture: {
     globalThis.location.href = `${globalThis.location.origin}${globalThis.location.pathname}`;
     setThread(id);
   },
-  setPrincipal: (id: string) => setPrincipal({ id }), setMounted, setModel: (model: string) => session.setSelectedModel(model),
+  setPrincipal: (id: string) => setPrincipal({ id }), setMounted, setFocus, setModel: (model: string) => session.setSelectedModel(model),
   dispose() { dialogs.handleCancel(); dispose(); },
 } });

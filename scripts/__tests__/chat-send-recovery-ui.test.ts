@@ -30,6 +30,12 @@ const scenarios = {
   authPending: "a message ACK crossing an auth read failure does not start a Run",
   conversation: "a new reply action describes the current conversation after another client appends a message",
   earlyReturn: "a returning view can reconnect an accepted Run missed by its initial history read",
+  historyReturn: "a returning conversation keeps its fresh history after the old response finishes",
+  history401: "a retired history authentication response cannot navigate the returning conversation",
+  historyError: "a retired history failure cannot replace the returning conversation error state",
+  historyDisposed: "an unmounted conversation ignores its late history authentication response",
+  historyCurrent401: "a current history authentication failure retains login navigation and error feedback",
+  historyFocus: "a newer same-thread focus keeps its history when the old body finishes",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -51,6 +57,7 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  const historyLifetime = ["historyReturn", "history401", "historyError", "historyDisposed", "historyCurrent401", "historyFocus"].includes(mode);
   const [{ parseHTML }, { build }, { default: solid }, { createContext, runInContext }] = await Promise.all([
     import("linkedom"), import("vite"), import("vite-plugin-solid"), import("node:vm"),
   ]);
@@ -63,6 +70,10 @@ async function verifySendRecovery(mode: Scenario) {
   let authStatus = 200;
   let releaseRun!: () => void;
   const runGate = new Promise<void>((yes) => { releaseRun = yes; });
+  let releaseHistory!: () => void;
+  const historyGate = new Promise<void>((yes) => { releaseHistory = yes; });
+  let historyParsesStarted = 0, historyParsesDone = 0;
+  const historyWindows: { limit: string | null; offset: string | null }[] = [];
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   let activeRun: typeof run | null = null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
@@ -84,6 +95,19 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
+      if (historyLifetime) {
+        const query = new URL(request.url).searchParams;
+        historyWindows.push({ limit: query.get("limit"), offset: query.get("offset") });
+        body.messages = [{ id: `history-${historyReads}`, thread_id: path.split("/")[3]!, role: "user", content: historyReads === 1 ? "Old A snapshot" : path.includes("thread-a") ? "Current A snapshot" : "Current B snapshot", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
+        if (historyReads === 1) {
+          const status = ["history401", "historyDisposed", "historyCurrent401"].includes(mode) ? 401 : mode === "historyError" ? 500 : 200;
+          const payload = JSON.stringify(status !== 200 ? { error: { code: "SYNTHETIC_HISTORY_FAILURE", message: "Synthetic history failure" } } : body);
+          return new Response(new ReadableStream({ start(controller) {
+            controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+            void historyGate.then(() => { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); });
+          } }), { status, headers: { "content-type": "application/json" } });
+        }
+      }
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
     }
@@ -116,7 +140,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
   }, websocket: { message(socket, value) { if (value === "ping") socket.send("pong"); else if (JSON.parse(String(value)).type === "subscribe") subscriptions++; } } });
-  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
+  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
   try {
     await build({ configFile: false, root: resolve(import.meta.dir, "../.."), logLevel: "silent", plugins: [solid()],
       build: { outDir: output, minify: false, lib: { entry: resolve(import.meta.dir, "fixtures/chat-send-recovery/client.tsx"), formats: ["iife"], name: "ChatSendRecoveryTest", fileName: () => "client.js" } },
@@ -131,10 +155,15 @@ async function verifySendRecovery(mode: Scenario) {
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
-      fetch: (input: string | URL, init?: RequestInit) => {
+      fetch: async (input: string | URL, init?: RequestInit) => {
         const url = new URL(String(input), server.url);
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
-        return fetch(url, init);
+        const response = await fetch(url, init);
+        if (historyLifetime && url.pathname.endsWith("/history")) {
+          const json = response.json.bind(response);
+          response.json = async () => { historyParsesStarted++; try { return await json(); } finally { historyParsesDone++; } };
+        }
+        return response;
       },
     };
     scope.window = scope; scope.self = scope;
@@ -142,6 +171,38 @@ async function verifySendRecovery(mode: Scenario) {
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
     await waitFor(() => historyReads === 1 && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (historyLifetime) {
+      await waitFor(() => historyParsesStarted === 1);
+      if (mode === "historyCurrent401") {
+        releaseHistory(); await waitFor(() => historyParsesDone === 1); await Bun.sleep(0);
+        expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+        expect(fixture.state().error).not.toBeNull();
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (mode === "historyDisposed") {
+        fixture.setMounted(false); await Bun.sleep(0);
+        expect(document.querySelector("textarea")).toBeNull();
+      } else if (mode === "historyFocus") {
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Current A snapshot"));
+        expect(historyWindows).toEqual([{ limit: "100", offset: "0" }, { limit: "200", offset: "200" }]);
+      } else {
+        fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B snapshot"));
+        fixture.setThread("thread-a"); await waitFor(() => document.body.textContent!.includes("Current A snapshot"));
+      }
+      releaseHistory(); await waitFor(() => historyParsesDone === (mode === "historyDisposed" ? 1 : mode === "historyFocus" ? 2 : 3)); await Bun.sleep(0);
+      if (mode === "historyDisposed") {
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      expect(document.body.textContent).toContain("Current A snapshot");
+      expect(document.body.textContent).not.toContain("Old A snapshot");
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+      expect(fixture.state().error).toBeNull();
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     const form = document.querySelector("form")!;
     textarea.value = "Start one reply"; textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -347,6 +408,7 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseHistory();
     releaseRun();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });
