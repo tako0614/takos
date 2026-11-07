@@ -170,6 +170,7 @@ export function ChatPage(props: ChatPageProps) {
       const currentSequenceValue = await resolveMessageSequenceById({
         messageId: currentMessageId,
         fetchPage: async (offset, limit) => {
+          if (cancelled) throw new Error("Message lookup retired");
           const res = await rpc.threads[":id"].messages.$get({
             param: { id: currentThreadId },
             query: {
@@ -177,7 +178,9 @@ export function ChatPage(props: ChatPageProps) {
               offset: String(offset),
             },
           });
-          return await rpcJson<MessageSequenceLookupPage>(res);
+          return await rpcJson<MessageSequenceLookupPage>(res, {
+            isCurrent: () => !cancelled,
+          });
         },
       });
 
