@@ -56,6 +56,7 @@ export interface UseChatMessagesResult {
   restoreSendDraft: (expected: ChatSendRecovery) => void;
   dismissSendRecovery: (expected: ChatSendRecovery, confirmed?: boolean) => void;
   sendBlocked: Accessor<boolean>;
+  acknowledgeRunHistory: (runIds: string[]) => void;
 }
 
 export function useChatMessages({
@@ -122,7 +123,7 @@ export function useChatMessages({
       }
       accepted = data.run;
       if (!save({ ...receipt, kind: "reply-known", run: accepted, pending: false })) return;
-      if (!isCurrent()) { store.replace(receipt.threadId, owned, null); return; }
+      if (!isCurrent()) return;
       setCurrentRun(accepted);
       startWebSocket(accepted.id);
       store.replace(receipt.threadId, owned, null);
@@ -330,8 +331,16 @@ export function useChatMessages({
     store.replace(expected.threadId, expected, null); setError(null);
   };
 
+  const acknowledgeRunHistory = (runIds: string[]) => {
+    // The orchestrator supplies only a connected Run or terminal history IDs.
+    const receipt = sendRecovery();
+    if (receipt?.kind === "reply-known" && receipt.run && runIds.includes(receipt.run.id)) {
+      store.replace(receipt.threadId, receipt, null);
+    }
+  };
+
   return {
     sendMessage,
-    sendRecovery, recoveryBusy, retryReply, checkSendStatus, restoreSendDraft, dismissSendRecovery, sendBlocked,
+    sendRecovery, recoveryBusy, retryReply, checkSendStatus, restoreSendDraft, dismissSendRecovery, sendBlocked, acknowledgeRunHistory,
   };
 }

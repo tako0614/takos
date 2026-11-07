@@ -29,6 +29,7 @@ const scenarios = {
   authRefresh: "an actual auth read failure preserves same user recovery after refetch",
   authPending: "a message ACK crossing an auth read failure does not start a Run",
   conversation: "a new reply action describes the current conversation after another client appends a message",
+  earlyReturn: "a returning view can reconnect an accepted Run missed by its initial history read",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -100,8 +101,8 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/threads/thread-a/runs") {
       runPosts++;
       runModels.push((await request.json() as { model: string }).model);
-      if (["pending", "late401", "pendingSuccess"].includes(mode)) await runGate;
-      if (mode === "positive" || mode === "pendingSuccess") {
+      if (["pending", "late401", "pendingSuccess", "earlyReturn"].includes(mode)) await runGate;
+      if (["positive", "pendingSuccess", "earlyReturn"].includes(mode)) {
         expect(runModels.at(-1)).toBe("synthetic-model");
         activeRun = { ...run, id: "created-run", root_run_id: "created-run" };
         return Response.json({ run: activeRun }, { status: 201 });
@@ -150,6 +151,18 @@ async function verifySendRecovery(mode: Scenario) {
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    if (mode === "earlyReturn") {
+      await waitFor(() => runPosts === 1);
+      fixture.setThread("thread-b"); await waitFor(() => historyReads >= 2); await Bun.sleep(0);
+      fixture.setThread("thread-a"); await waitFor(() => historyReads >= 3); await Bun.sleep(0);
+      releaseRun(); await fixture.idle();
+      const reconnect = document.querySelector<HTMLButtonElement>('button[aria-label="Reconnect reply"]');
+      expect(reconnect).not.toBeNull();
+      expect(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.disabled).toBe(true);
+      reconnect!.click(); await fixture.idle(); await waitFor(() => subscriptions === 1);
+      expect(runPosts).toBe(1); expect(messages).toHaveLength(1);
+      return;
+    }
     if (mode === "authPending") {
       await waitFor(() => messagePosts === 1);
       authStatus = 503; await fixture.refetchIdentity();

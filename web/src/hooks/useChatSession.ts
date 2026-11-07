@@ -232,6 +232,10 @@ export function useChatSession({
           ws.setCurrentRun(data.activeRun);
           ws.startWebSocket(data.activeRun.id);
         }
+        messaging.acknowledgeRunHistory([
+          ...(data.activeRun ? [data.activeRun.id] : []),
+          ...(data.runs || []).filter((node) => ["completed", "failed", "cancelled"].includes(node.run.status)).map((node) => node.run.id),
+        ]);
 
         void ws.loadPendingSessionDiff(data.pendingSessionDiff);
       } catch {
