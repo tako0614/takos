@@ -60,6 +60,17 @@ const scenarios = {
   runReadCurrentTerminal: "a current completed Run status adopts terminal state and messages",
   runReadMismatched: "an unmatched Run status payload cannot replace the current Run",
   runReadWatchdog503: "an unavailable Run status watchdog keeps the current WebSocket usable",
+  closeLate401: "a retired transport-close authentication response cannot navigate another conversation",
+  closeLateTerminal: "a retired transport-close completion body cannot stop another conversation Run",
+  closeFocus: "a retired transport-close response cannot navigate a newer focus of the same Run",
+  closeDispose: "a disposed transport-close read cannot navigate after its response arrives",
+  closeCurrent401: "a current transport-close authentication failure retains sign-in and error feedback",
+  closeCurrentTerminal: "a current transport-close completion adopts its final messages",
+  closeCurrentActive: "a current active transport-close status reconnects the exact Run",
+  closeCurrent503: "an unavailable transport-close status retries the current disconnected Run",
+  closeMismatched: "an unmatched transport-close Run payload cannot complete the current Run",
+  closeReturnActive: "a retired transport-close read cannot reconnect over a returning Run connection",
+  closeQueuedReconnect: "a queued transport-close retry cannot replace a returning Run connection",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -81,6 +92,8 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  const closeLifetime = mode.startsWith("close");
+  const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
   const pollingLifetime = mode.startsWith("polling");
   const cancelLifetime = mode.startsWith("cancel");
@@ -123,9 +136,16 @@ async function verifySendRecovery(mode: Scenario) {
   let runReadResponses = 0, runReadSocketCount = 0, runReadClosed = 0;
   let resumeRunConnected: (() => void) | undefined;
   let sendLiveMessage: (() => void) | undefined;
+  let closeTransport: (() => void) | undefined;
+  let releaseCloseRead!: () => void;
+  const closeReadGate = new Promise<void>((yes) => { releaseCloseRead = yes; });
+  const closeReadRequests: string[] = [];
+  let closeReadDone = 0;
+  let closeParsesStarted = 0, closeParsesDone = 0;
+  let closeReadProducer = Promise.resolve();
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -140,6 +160,24 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/runs\/[^/]+\/ws$/.test(path)) {
       if (server.upgrade(request)) return;
       return new Response(null, { status: 400 });
+    }
+    if (closeLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
+      closeReadRequests.push(path);
+      if (closeStreamBody) {
+        const terminal = !["closeReturnActive", "closeQueuedReconnect"].includes(mode);
+        if (terminal && mode !== "closeMismatched") activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
+        const payload = JSON.stringify({ run: mode === "closeMismatched" ? { ...run, id: "unmatched-run", status: "completed" } : terminal ? activeRun : run });
+        let open = true;
+        return new Response(new ReadableStream({ start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+          closeReadProducer = closeReadGate.then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+        }, cancel() { open = false; } }), { headers: { "content-type": "application/json" } });
+      }
+      await closeReadGate;
+      if (mode === "closeCurrentActive") return Response.json({ run });
+      return mode === "closeCurrent503"
+        ? Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic close status unavailable" } }, { status: 503 })
+        : Response.json({ error: { code: "UNAUTHENTICATED", message: "Synthetic close status authentication failure" } }, { status: 401 });
     }
     if (runReadLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
       runReadRequests.push(path);
@@ -163,7 +201,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
-      if (runReadLifetime) {
+      if (runReadLifetime || closeLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
         body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
@@ -198,7 +236,7 @@ async function verifySendRecovery(mode: Scenario) {
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
     }
-    if (runReadLifetime && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
+    if ((runReadLifetime || closeLifetime) && request.method === "GET" && /^\/api\/threads\/thread-[ab]\/messages$/.test(path)) {
       const thread = path.split("/")[3]!;
       return Response.json({ messages: [{ id: `current-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run messages" : "Current B Run messages", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }] });
     }
@@ -264,6 +302,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (value === "ping") socket.send("pong");
     else if (JSON.parse(String(value)).type === "subscribe") {
       subscriptions++;
+      if (closeLifetime) closeTransport = () => { socket.close(1012, "Synthetic restart"); };
       if (pollingLifetime) completeRun = () => {
         activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
         socket.send(JSON.stringify({ type: "completed", data: { run: activeRun }, eventId: 1 }));
@@ -277,11 +316,11 @@ async function verifySendRecovery(mode: Scenario) {
     });
     const { document, window, Event, HTMLElement } = parseHTML("<!doctype html><html><body><div id='root'></div></body></html>");
     const storage = new Map<string, string>();
-    const location = { href: `${server.url.origin}/chat/space-a/thread-a`, origin: server.url.origin, host: server.url.host, protocol: server.url.protocol, pathname: "/chat/space-a/thread-a", search: "" };
+    const location = { href: `${server.url.origin}/chat/space-a/thread-a`, origin: server.url.origin, host: server.url.host, protocol: server.url.protocol, pathname: "/chat/space-a/thread-a", search: "", assign(next: string) { this.href = next; } };
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -290,6 +329,11 @@ async function verifySendRecovery(mode: Scenario) {
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
         if (pollingLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
         const response = await fetch(url, init);
+        if (closeLifetime && /^\/api\/runs\/[^/]+$/.test(url.pathname)) {
+          closeReadDone++;
+          const json = response.json.bind(response);
+          response.json = async () => { closeParsesStarted++; try { return await json(); } finally { closeParsesDone++; } };
+        }
         if (runReadLifetime && /^\/api\/runs\/[^/]+$/.test(url.pathname)) {
           const json = response.json.bind(response);
           const old = url.pathname.endsWith("/unrelated-run") && ++runReadResponses === 1;
@@ -320,8 +364,61 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (closeLifetime) {
+      await waitFor(() => subscriptions === 1 && closeTransport !== undefined);
+      closeTransport!(); await waitFor(() => closeReadRequests.length === 1);
+      if (closeStreamBody) await waitFor(() => closeParsesStarted === 1);
+      if (mode === "closeQueuedReconnect") {
+        releaseCloseRead(); await waitFor(() => closeParsesDone === 1); await Bun.sleep(0);
+      }
+      if (mode === "closeDispose") {
+        fixture.setMounted(false); await Bun.sleep(0); expect(document.querySelector("textarea")).toBeNull();
+        releaseCloseRead(); await waitFor(() => closeReadDone === 1); await Bun.sleep(0);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(subscriptions).toBe(1); expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (["closeCurrent401", "closeCurrentTerminal", "closeCurrentActive", "closeCurrent503", "closeMismatched"].includes(mode)) {
+        releaseCloseRead(); await waitFor(() => closeStreamBody ? closeParsesDone === 1 : closeReadDone === 1); await Bun.sleep(0);
+        if (mode === "closeCurrent401") {
+          expect(location.href).toBe("/signin?next=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(fixture.state().loading).toBe(false); expect(fixture.state().error).toBeTruthy();
+        } else if (mode === "closeCurrentTerminal") {
+          await waitFor(() => document.body.textContent!.includes("Current A Run messages"));
+          expect(fixture.state().loading).toBe(false); expect(subscriptions).toBe(1);
+        } else if (mode === "closeMismatched") {
+          expect(fixture.state().loading).toBe(true);
+          expect(document.body.textContent).toContain("Current A Run view");
+          expect(attempts.some((attempt) => attempt.path.endsWith("/messages"))).toBe(false);
+        } else {
+          await waitFor(() => subscriptions === 2);
+          expect(attempts.filter((attempt) => attempt.path.endsWith("/ws")).map((attempt) => attempt.path)).toEqual(["/api/runs/unrelated-run/ws", "/api/runs/unrelated-run/ws"]);
+          expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+        }
+        expect(closeReadRequests).toEqual(["/api/runs/unrelated-run"]);
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (mode === "closeFocus") {
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Focused A Run view") && subscriptions === 2);
+      } else {
+        fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B Run view") && subscriptions === 2);
+        if (["closeReturnActive", "closeQueuedReconnect"].includes(mode)) {
+          fixture.setThread("thread-a"); await waitFor(() => document.body.textContent!.includes("Current A Run view") && subscriptions === 3);
+        }
+      }
+      expect(fixture.state().loading).toBe(true);
+      releaseCloseRead(); await waitFor(() => closeStreamBody ? closeParsesDone === 1 : closeReadDone === 1); await Bun.sleep(0);
+      if (["closeReturnActive", "closeQueuedReconnect"].includes(mode)) { await Bun.sleep(2_050); expect(subscriptions).toBe(3); }
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/${["closeFocus", "closeReturnActive", "closeQueuedReconnect"].includes(mode) ? "thread-a" : "thread-b"}`);
+      expect(fixture.state().loading).toBe(true); expect(fixture.state().error).toBeNull();
+      expect(closeReadRequests).toEqual(["/api/runs/unrelated-run"]);
+      expect(attempts.some((attempt) => attempt.path.endsWith("/messages"))).toBe(false);
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (runReadLifetime) {
       await waitFor(() => oldRunReadStarted === 1);
       if (mode === "runReadDispose") {
@@ -721,6 +818,7 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseCloseRead();
     releaseRunRead();
     releaseMessages();
     releaseCancel();
@@ -729,6 +827,7 @@ async function verifySendRecovery(mode: Scenario) {
     releaseRun();
     await messageProducer;
     await runReadProducer;
+    await closeReadProducer;
     await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });

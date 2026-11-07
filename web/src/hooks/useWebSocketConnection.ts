@@ -116,6 +116,7 @@ export function useWebSocketConnection({
 
   // --- Connection manager sub-hook (WS with SSE fallback) ---
   const connection = useConnectionManagerWithFallback({
+    requestScope,
     t,
     isMountedRef,
     startMessagePolling,
