@@ -100,6 +100,7 @@ export function ChatView(props: ChatViewProps) {
     error,
     setError,
     retryFinalMessages,
+    retryHistory,
     attachedFiles,
     addFiles,
     handleFileSelect,
@@ -486,7 +487,7 @@ export function ChatView(props: ChatViewProps) {
               <ChatErrorBanner
                 error={err()}
                 onDismiss={() => setError(null)}
-                onRetry={retryFinalMessages() ?? undefined}
+                onRetry={retryHistory() ?? retryFinalMessages() ?? undefined}
               />
             )}
           </Show>

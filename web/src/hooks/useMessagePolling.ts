@@ -32,6 +32,8 @@ export interface UseMessagePollingResult {
   stopMessagePolling: () => void;
   abortPendingFetch: () => void;
   error: string | null;
+  errorRevision: number;
+  hasMessageReadError: boolean;
   setError: (value: string | null) => void;
 }
 
@@ -40,13 +42,20 @@ export function useMessagePolling({
   t,
 }: UseMessagePollingOptions): UseMessagePollingResult {
   const [messages, setMessages] = createSignal<Message[]>([]);
-  const [error, setError] = createSignal<string | null>(null);
+  const [error, setErrorState] = createSignal<string | null>(null);
+  const [hasMessageReadError, setHasMessageReadError] = createSignal(false);
+  // A late read must not replace feedback from a newer error or dismissal.
+  let errorRevision = 0;
+  const setError = (value: string | null) => {
+    errorRevision++;
+    setHasMessageReadError(false);
+    setErrorState(value);
+  };
   const messagesCountRef = { current: 0 as number };
   const isMountedRef = { current: true as boolean };
   let messagePollingRef: ReturnType<typeof setInterval> | null = null;
   let messageFetchAbortRef: AbortController | null = null;
   let messageFetchSeqRef = 0;
-  let messageFetchErrorVisible = false;
 
   // Keep error in a ref so fetchMessages can read the latest value without
   // needing error in its dependency array (avoids re-creating the callback on
@@ -69,6 +78,7 @@ export function useMessagePolling({
     const controller = new AbortController();
     messageFetchAbortRef = controller;
     const requestSeq = ++messageFetchSeqRef;
+    const requestErrorRevision = errorRevision;
     const isCurrent = () => !controller.signal.aborted && isMountedRef.current &&
       requestSeq === messageFetchSeqRef && threadId() === currentThreadId &&
       options.isCurrent?.() !== false;
@@ -89,18 +99,16 @@ export function useMessagePolling({
 
       if (!isCurrent()) return "retired";
       setMessages(data.messages);
-      if (messageFetchErrorVisible && errorRef) {
-        messageFetchErrorVisible = false;
-        setError(null);
-      }
+      if (hasMessageReadError() && errorRef) setError(null);
       return "adopted";
     } catch (err) {
       if ((err as Error).name === "AbortError") return "retired";
       if (!isCurrent()) return "retired";
       if (responseStatus === 401) return "authentication-required";
-      if (showError && options.isEffectCurrent?.() !== false) {
-        messageFetchErrorVisible = true;
-        setError(t("failedToLoadMessages" as TranslationKey));
+      if (showError && options.isEffectCurrent?.() !== false && errorRevision === requestErrorRevision) {
+        errorRevision++;
+        setErrorState(t("failedToLoadMessages" as TranslationKey));
+        setHasMessageReadError(true);
       }
       return "failed";
     } finally {
@@ -148,6 +156,12 @@ export function useMessagePolling({
     abortPendingFetch,
     get error() {
       return error();
+    },
+    get errorRevision() {
+      return errorRevision;
+    },
+    get hasMessageReadError() {
+      return hasMessageReadError();
     },
     setError,
   };

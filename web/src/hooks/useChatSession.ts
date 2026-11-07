@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type {
   Message,
   Run,
@@ -71,6 +72,7 @@ export interface UseChatSessionResult {
   error: Accessor<string | null>;
   setError: (value: string | null) => void;
   retryFinalMessages: Accessor<(() => Promise<void>) | null>;
+  retryHistory: Accessor<(() => Promise<void>) | null>;
   attachedFiles: Accessor<File[]>;
   addFiles: (files: File[]) => void;
   handleFileSelect: (e: Event & { currentTarget: HTMLInputElement }) => void;
@@ -96,6 +98,17 @@ export function useChatSession({
 }: UseChatSessionOptions): UseChatSessionResult {
   const { t, lang } = useI18n();
   const [input, setInput] = createSignal(initialMessage?.() ?? "");
+  const [historyRetry, setHistoryRetry] = createSignal<{
+    isCurrent: () => boolean;
+    run: () => Promise<void>;
+  } | null>(null);
+  const historyReads = createLatestRequest();
+  // A new send or recovery must retire old history even if its Run later fails.
+  const historyRecoveryIntents = createLatestRequest();
+  const retireHistoryRecovery = () => {
+    historyRecoveryIntents.next();
+    setHistoryRetry(null);
+  };
 
   // Scroll tracking refs (owned by orchestrator because the auto-scroll
   // effect depends on state from both the polling and WebSocket hooks)
@@ -116,6 +129,10 @@ export function useChatSession({
 
   // --- Sub-hooks ---
   const polling = useMessagePolling({ threadId, t });
+  const setChatError = (value: string | null) => {
+    setHistoryRetry(null);
+    polling.setError(value);
+  };
 
   const ws = useWebSocketConnection({
     requestScope: initState,
@@ -126,10 +143,10 @@ export function useChatSession({
     startMessagePolling: polling.startMessagePolling,
     stopMessagePolling: polling.stopMessagePolling,
     setMessages: polling.setMessages,
-    setError: polling.setError,
+    setError: setChatError,
   });
 
-  const files = useFileAttachment({ t, setError: polling.setError });
+  const files = useFileAttachment({ t, setError: setChatError });
 
   const modelSelection = useChatModelSelection({
     spaceId,
@@ -149,6 +166,7 @@ export function useChatSession({
     setInput,
     selectedModel: modelSelection.selectedModel,
     onUpdateTitle,
+    onRecoveryIntent: retireHistoryRecovery,
     attachedFiles: () => files.attachedFiles,
     setAttachedFiles: files.setAttachedFiles,
     isLoading: () => ws.isLoading,
@@ -162,9 +180,12 @@ export function useChatSession({
     startWebSocket: ws.startWebSocket,
     syncThreadAfterSendFailure: ws.syncThreadAfterSendFailure,
     messagesCountRef: polling.messagesCountRef,
-    abortPendingFetch: polling.abortPendingFetch,
+    abortPendingFetch: () => {
+      retireHistoryRecovery();
+      polling.abortPendingFetch();
+    },
     setMessages: polling.setMessages,
-    setError: polling.setError,
+    setError: setChatError,
     uploadChatAttachments: attachments.uploadChatAttachments,
   });
 
@@ -178,6 +199,8 @@ export function useChatSession({
     const isCurrent = () => !cancelled && polling.isMountedRef.current && threadId() === currentThreadId;
 
     polling.isMountedRef.current = true;
+    const recoveryIntent = historyRecoveryIntents.claim(isCurrent);
+    setHistoryRetry(null);
 
     ws.rootRunIdRef.current = null;
     ws.closeWebSocket();
@@ -198,7 +221,13 @@ export function useChatSession({
     autoScrollPinned = true;
     lastAutoScrollMessageCount = 0;
 
-    const init = async () => {
+    const loadHistory = async (isRetryCurrent?: () => boolean): Promise<void> => {
+      if (!recoveryIntent.won() || isRetryCurrent?.() === false) return;
+      const claim = historyReads.claim(() => recoveryIntent.won() && isRetryCurrent?.() !== false);
+      if (!claim.won()) return;
+      const previousErrorRevision = polling.errorRevision;
+      setHistoryRetry(null);
+      let responseStatus: number | undefined;
       try {
         const limit = currentFocusSequence != null ? 200 : 100;
         const offset = currentFocusSequence != null
@@ -208,6 +237,7 @@ export function useChatSession({
           param: { id: currentThreadId },
           query: { limit: String(limit), offset: String(offset) },
         });
+        responseStatus = res.status;
         const data = await rpcJson<{
           messages: Message[];
           runs: ThreadHistoryRunNode[];
@@ -219,9 +249,9 @@ export function useChatSession({
             git_mode: boolean;
           } | null;
           taskContext: ThreadHistoryTaskContext | null;
-        }>(res, { isCurrent });
+        }>(res, { isCurrent: claim.won });
 
-        if (!isCurrent()) return;
+        if (!claim.won()) return;
 
         polling.setMessages(data.messages);
         ws.applyHistorySnapshot({
@@ -241,14 +271,29 @@ export function useChatSession({
         ]);
 
         void ws.loadPendingSessionDiff(data.pendingSessionDiff);
+        if (isRetryCurrent && polling.errorRevision === previousErrorRevision) polling.setError(null);
       } catch {
-        if (!isCurrent()) return;
+        if (!claim.won() || polling.errorRevision !== previousErrorRevision) return;
         polling.setError(
           t("failedToLoadMessages" as TranslationKey),
         );
+        if (responseStatus !== 401) {
+          const rootRunId = ws.rootRunIdRef.current;
+          const currentRunId = ws.currentRunIdRef.current;
+          const ownsRetry = () => recoveryIntent.won() && ws.rootRunIdRef.current === rootRunId &&
+            ws.currentRunIdRef.current === currentRunId && !ws.isLoading;
+          const retry = {
+            isCurrent: ownsRetry,
+            run: (): Promise<void> => {
+              if (historyRetry() !== retry || !ownsRetry()) return Promise.resolve();
+              return loadHistory(ownsRetry);
+            },
+          };
+          setHistoryRetry(retry);
+        }
       }
     };
-    init();
+    void loadHistory();
 
     onCleanup(() => {
       cancelled = true;
@@ -366,9 +411,13 @@ export function useChatSession({
       return ws.handleCancel(() => initState() === currentInitState);
     },
     error,
-    setError: polling.setError,
+    setError: setChatError,
     attachedFiles,
-    retryFinalMessages: () => ws.retryFinalMessages,
+    retryFinalMessages: () => polling.hasMessageReadError ? ws.retryFinalMessages : null,
+    retryHistory: () => {
+      const retry = historyRetry();
+      return retry?.isCurrent() ? retry.run : null;
+    },
     addFiles: files.addFiles,
     handleFileSelect: files.handleFileSelect,
     removeAttachedFile: files.removeAttachedFile,
