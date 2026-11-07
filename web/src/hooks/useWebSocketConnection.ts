@@ -75,7 +75,7 @@ export interface UseWebSocketConnectionResult {
   handleMerge: () => Promise<void>;
   isCancelling: boolean;
   setIsCancelling: Setter<boolean>;
-  handleCancel: () => Promise<void>;
+  handleCancel: (isCurrent?: () => boolean) => Promise<void>;
   dismissSessionDiff: () => void;
   startWebSocket: (runId: string) => void;
   closeWebSocket: () => void;
@@ -96,7 +96,7 @@ export function useWebSocketConnection({
   setError,
 }: UseWebSocketConnectionOptions): UseWebSocketConnectionResult {
   // --- Session diff sub-hook ---
-  const sessionDiffHook = useWsSessionDiff({ t, setError });
+  const sessionDiffHook = useWsSessionDiff({ threadId, t, setError });
 
   // --- Message processor sub-hook ---
   const processor = useWsMessageProcessor({
@@ -225,10 +225,10 @@ export function useWebSocketConnection({
   };
 
   // --- Wrapped handleCancel (adapts the sub-hook's signature) ---
-  const handleCancel = async (): Promise<void> => {
+  const handleCancel = async (isCurrent?: () => boolean): Promise<void> => {
     await sessionDiffHook.handleCancel(() => {
       return processor.currentRun;
-    });
+    }, isCurrent);
   };
 
   // --- syncThreadAfterSendFailure ---

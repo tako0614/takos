@@ -31,6 +31,8 @@ function Conversation() {
     <ChatInputBar input={session.input()} onInputChange={session.setInput}
       attachedFiles={session.attachedFiles()} onFileSelect={session.handleFileSelect} onRemoveFile={session.removeAttachedFile}
       onSend={() => track(session.sendMessage())} isLoading={session.isLoading()}
+      onCancel={config?.cancel ? () => track(session.handleCancel()) : undefined}
+      isCancelling={config?.cancel ? session.isCancelling() : false}
       sendBlocked={session.sendBlocked()}
       attachLabel="Attach file" placeholder="Message" inputHint="Send a message" />
     <ConfirmDialogRenderer />
@@ -44,7 +46,7 @@ function AuthenticatedConversation() {
     <Show when={auth.authState === "authenticated"}><Conversation /></Show>
   </ChatSendRecoveryProvider>;
 }
-const config = (globalThis as typeof globalThis & { chatSendTestConfig?: { auth: boolean } }).chatSendTestConfig;
+const config = (globalThis as typeof globalThis & { chatSendTestConfig?: { auth: boolean; cancel?: boolean } }).chatSendTestConfig;
 const dispose = render(() => config?.auth
   ? <AuthProvider><AuthenticatedConversation /></AuthProvider>
   : <ChatSendRecoveryProvider principal={() => principal().id}>
@@ -52,8 +54,9 @@ const dispose = render(() => config?.auth
   </ChatSendRecoveryProvider>, document.getElementById("root")!);
 
 Object.assign(globalThis, { chatSendFixture: {
-  state: () => ({ input: session.input(), messages: session.messages(), error: session.error(), loading: session.isLoading(), model: session.selectedModel(), files: session.attachedFiles().map((file) => file.name) }),
+  state: () => ({ input: session.input(), messages: session.messages(), error: session.error(), loading: session.isLoading(), cancelling: session.isCancelling(), model: session.selectedModel(), files: session.attachedFiles().map((file) => file.name) }),
   idle: async () => { while (pending.size) await Promise.all(pending); },
+  pendingCount: () => pending.size,
   refetchIdentity: () => { if (!refetchIdentity) throw new Error("No AuthProvider in this fixture"); return refetchIdentity(); },
   setThread: (id: string) => {
     globalThis.location.pathname = `/chat/space-a/${id}`;

@@ -36,6 +36,16 @@ const scenarios = {
   historyDisposed: "an unmounted conversation ignores its late history authentication response",
   historyCurrent401: "a current history authentication failure retains login navigation and error feedback",
   historyFocus: "a newer same-thread focus keeps its history when the old body finishes",
+  cancelLate401: "a retired Cancel authentication response cannot navigate another conversation",
+  cancelLateError: "a retired Cancel failure cannot replace another conversation error or draft",
+  cancelReturn: "a Cancel response stays retired after leaving and returning to the same conversation",
+  cancelUnmount: "an unmounted conversation ignores its late Cancel authentication response",
+  cancelCurrent401: "a current Cancel authentication failure retains login and error feedback",
+  cancelCurrentOK: "a current Cancel ACK clears its pending control without inventing Run completion",
+  cancelOverlap: "an old Cancel settlement cannot unlock a newer conversation cancellation",
+  cancelOverlapAck: "an old Cancel ACK cannot unlock a newer conversation cancellation",
+  cancelFocus401: "a retired Cancel authentication response cannot navigate a newer focus in the same conversation",
+  cancelFocusError: "a retired Cancel failure cannot affect a newer focus or its next cancellation",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -57,6 +67,9 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  const cancelLifetime = mode.startsWith("cancel");
+  const cancelOverlap = mode === "cancelOverlap" || mode === "cancelOverlapAck";
+  const cancelFocus = mode === "cancelFocus401" || mode === "cancelFocusError";
   const historyLifetime = ["historyReturn", "history401", "historyError", "historyDisposed", "historyCurrent401", "historyFocus"].includes(mode);
   const [{ parseHTML }, { build }, { default: solid }, { createContext, runInContext }] = await Promise.all([
     import("linkedom"), import("vite"), import("vite-plugin-solid"), import("node:vm"),
@@ -74,8 +87,15 @@ async function verifySendRecovery(mode: Scenario) {
   const historyGate = new Promise<void>((yes) => { releaseHistory = yes; });
   let historyParsesStarted = 0, historyParsesDone = 0;
   const historyWindows: { limit: string | null; offset: string | null }[] = [];
+  let releaseCancel!: () => void;
+  const cancelGate = new Promise<void>((yes) => { releaseCancel = yes; });
+  let releaseSecondCancel!: () => void;
+  const secondCancelGate = new Promise<void>((yes) => { releaseSecondCancel = yes; });
+  let cancelParsesStarted = 0, cancelParsesDone = 0;
+  const cancelPosts: string[] = [];
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
-  let activeRun: typeof run | null = null;
+  const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
+  let activeRun: typeof run | null = cancelLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -91,10 +111,17 @@ async function verifySendRecovery(mode: Scenario) {
       if (server.upgrade(request)) return;
       return new Response(null, { status: 400 });
     }
-    if (request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) return Response.json({ run: activeRun ?? run });
+    if (request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) return Response.json({ run: cancelLifetime ? path.endsWith("/second-run") ? otherRun : run : activeRun ?? run });
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
+      if (cancelLifetime) {
+        const thread = path.split("/")[3]!;
+        body.activeRun = activeRun?.thread_id === thread ? activeRun : null;
+        if (cancelOverlap && thread === "thread-b") body.activeRun = otherRun;
+        body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A cancellation view" : "Current B cancellation view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
+        if (cancelFocus && activeRun?.id === otherRun.id) body.messages[0]!.content = "Focused A cancellation view";
+      }
       if (historyLifetime) {
         const query = new URL(request.url).searchParams;
         historyWindows.push({ limit: query.get("limit"), offset: query.get("offset") });
@@ -122,6 +149,16 @@ async function verifySendRecovery(mode: Scenario) {
       return Response.json({ message: ["attachment", "restore"].includes(mode) ? { ...message, metadata: "{}" } : message }, { status: mode === "message202" ? 202 : 201 });
     }
     if (request.method === "PATCH" && path === "/api/threads/thread-a") return Response.json({ ok: true });
+    if (cancelLifetime && request.method === "POST" && /^\/api\/runs\/[^/]+\/cancel$/.test(path)) {
+      cancelPosts.push(path);
+      const isSecond = path.includes("second-run");
+      const status = ["cancelCurrentOK", "cancelOverlapAck"].includes(mode) || isSecond ? 200 : ["cancelLateError", "cancelOverlap", "cancelFocusError"].includes(mode) ? 500 : 401;
+      const payload = JSON.stringify(status === 200 ? { success: true } : { error: { code: "SYNTHETIC_CANCEL_FAILURE", message: "Synthetic cancellation failure" } });
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+        void (isSecond ? secondCancelGate : cancelGate).then(() => { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); });
+      } }), { status, headers: { "content-type": "application/json" } });
+    }
     if (request.method === "POST" && path === "/api/threads/thread-a/runs") {
       runPosts++;
       runModels.push((await request.json() as { model: string }).model);
@@ -140,7 +177,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
   }, websocket: { message(socket, value) { if (value === "ping") socket.send("pong"); else if (JSON.parse(String(value)).type === "subscribe") subscriptions++; } } });
-  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
+  let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; cancelling: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; pendingCount: () => number; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
   try {
     await build({ configFile: false, root: resolve(import.meta.dir, "../.."), logLevel: "silent", plugins: [solid()],
       build: { outDir: output, minify: false, lib: { entry: resolve(import.meta.dir, "fixtures/chat-send-recovery/client.tsx"), formats: ["iife"], name: "ChatSendRecoveryTest", fileName: () => "client.js" } },
@@ -151,7 +188,7 @@ async function verifySendRecovery(mode: Scenario) {
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode) },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -163,14 +200,95 @@ async function verifySendRecovery(mode: Scenario) {
           const json = response.json.bind(response);
           response.json = async () => { historyParsesStarted++; try { return await json(); } finally { historyParsesDone++; } };
         }
+        if (cancelLifetime && url.pathname.endsWith("/cancel")) {
+          const json = response.json.bind(response);
+          response.json = async () => { cancelParsesStarted++; try { return await json(); } finally { cancelParsesDone++; } };
+        }
         return response;
       },
     };
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => historyReads === 1 && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (cancelLifetime) {
+      await waitFor(() => document.querySelector('button[aria-label="Cancel"]') !== null);
+      document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.click();
+      await waitFor(() => cancelParsesStarted === 1);
+      expect(cancelPosts).toEqual(["/api/runs/unrelated-run/cancel"]);
+      if (["cancelCurrent401", "cancelCurrentOK"].includes(mode)) {
+        releaseCancel(); await fixture.idle();
+        expect(cancelParsesDone).toBe(1); expect(fixture.state().cancelling).toBe(false);
+        expect(cancelPosts).toHaveLength(1);
+        if (mode === "cancelCurrent401") {
+          expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(fixture.state().error).not.toBeNull();
+        } else {
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+          expect(fixture.state().error).toBeNull(); expect(fixture.state().loading).toBe(true);
+          expect(document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.disabled).toBe(false);
+        }
+        return;
+      }
+      if (mode === "cancelUnmount") {
+        fixture.setMounted(false); await Bun.sleep(0);
+        expect(document.querySelector("textarea")).toBeNull();
+        releaseCancel(); await fixture.idle();
+        expect(cancelParsesDone).toBe(1);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(cancelPosts).toHaveLength(1);
+        return;
+      }
+      if (cancelFocus) {
+        activeRun = otherRun;
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Focused A cancellation view"));
+        releaseCancel(); await fixture.idle();
+        expect(cancelParsesDone).toBe(1);
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(fixture.state().error).toBeNull(); expect(fixture.state().cancelling).toBe(false);
+        document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.click();
+        await waitFor(() => cancelParsesStarted === 2);
+        releaseSecondCancel(); await fixture.idle();
+        expect(cancelPosts).toEqual(["/api/runs/unrelated-run/cancel", "/api/runs/second-run/cancel"]);
+        expect(fixture.state().error).toBeNull(); expect(fixture.state().cancelling).toBe(false);
+        return;
+      }
+      fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B cancellation view"));
+      if (mode === "cancelReturn") {
+        fixture.setThread("thread-a"); await waitFor(() => document.body.textContent!.includes("Current A cancellation view"));
+        releaseCancel(); await fixture.idle();
+        expect(cancelParsesDone).toBe(1); expect(fixture.state().error).toBeNull();
+        expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        expect(document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.disabled).toBe(false);
+        expect(cancelPosts).toHaveLength(1);
+        return;
+      }
+      if (cancelOverlap) {
+        await waitFor(() => document.querySelector('button[aria-label="Cancel"]') !== null);
+        document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.click();
+        await waitFor(() => cancelParsesStarted === 2);
+        expect(fixture.state().cancelling).toBe(true);
+        releaseCancel(); await waitFor(() => fixture!.pendingCount() === 1);
+        expect(cancelParsesDone).toBe(1); expect(fixture.state().cancelling).toBe(true);
+        expect(fixture.state().error).toBeNull();
+        expect(document.querySelector<HTMLButtonElement>('button[aria-label="Cancelling..."]')!.disabled).toBe(true);
+        releaseSecondCancel(); await fixture.idle();
+        expect(cancelParsesDone).toBe(2); expect(fixture.state().cancelling).toBe(false);
+        expect(cancelPosts).toEqual(["/api/runs/unrelated-run/cancel", "/api/runs/second-run/cancel"]);
+        return;
+      }
+      const currentDraft = document.querySelector<HTMLTextAreaElement>("textarea")!;
+      currentDraft.value = "A current B draft"; currentDraft.dispatchEvent(new Event("input", { bubbles: true }));
+      releaseCancel(); await fixture.idle();
+      expect(cancelParsesDone).toBe(1);
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-b`);
+      expect(fixture.state().error).toBeNull();
+      expect(cancelPosts).toEqual(["/api/runs/unrelated-run/cancel"]);
+      expect(currentDraft.value).toBe("A current B draft");
+      expect(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!.disabled).toBe(false);
+      return;
+    }
     if (historyLifetime) {
       await waitFor(() => historyParsesStarted === 1);
       if (mode === "historyCurrent401") {
@@ -408,8 +526,11 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseCancel();
+    releaseSecondCancel();
     releaseHistory();
     releaseRun();
+    await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });
   }

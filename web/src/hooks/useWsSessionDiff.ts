@@ -1,7 +1,8 @@
-import { createSignal, type Setter } from "solid-js";
+import { type Accessor, createEffect, createSignal, onCleanup, type Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import type { Run, SessionDiff } from "../types/index.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 
 export interface SessionDiffState {
   sessionId: string;
@@ -15,6 +16,7 @@ export interface PendingSessionDiffSummary {
 }
 
 export interface UseWsSessionDiffOptions {
+  threadId: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   setError: (value: string | null) => void;
 }
@@ -31,10 +33,11 @@ export interface UseWsSessionDiffResult {
   dismissSessionDiff: () => void;
   isCancelling: boolean;
   setIsCancelling: Setter<boolean>;
-  handleCancel: (currentRunGetter: () => Run | null) => Promise<void>;
+  handleCancel: (currentRunGetter: () => Run | null, isCurrent?: () => boolean) => Promise<void>;
 }
 
 export function useWsSessionDiff({
+  threadId,
   t,
   setError,
 }: UseWsSessionDiffOptions): UseWsSessionDiffResult {
@@ -43,6 +46,13 @@ export function useWsSessionDiff({
   );
   const [isMerging, setIsMerging] = createSignal(false);
   const [isCancelling, setIsCancelling] = createSignal(false);
+  const cancelRequests = createLatestRequest();
+  createEffect(() => {
+    threadId();
+    cancelRequests.next();
+    setIsCancelling(false);
+  });
+  onCleanup(() => { cancelRequests.next(); });
 
   // The control API has no public session diff/merge endpoint in the current contract.
   const fetchSessionDiff = (): Promise<void> => {
@@ -67,20 +77,23 @@ export function useWsSessionDiff({
 
   const handleCancel = async (
     currentRunGetter: () => Run | null,
+    isCurrent?: () => boolean,
   ): Promise<void> => {
     const runToCancel = currentRunGetter();
     if (!runToCancel) return;
+    const currentThreadId = threadId();
+    const claim = cancelRequests.claim(() => threadId() === currentThreadId && isCurrent?.() !== false);
 
     setIsCancelling(true);
     try {
       const res = await rpcPath(rpc, "runs", ":id", "cancel").$post({
         param: { id: runToCancel.id },
       });
-      await rpcJson(res);
+      await rpcJson(res, { isCurrent: claim.won });
     } catch {
-      setError(t("networkError"));
+      if (claim.won()) setError(t("networkError"));
     } finally {
-      setIsCancelling(false);
+      if (claim.won()) setIsCancelling(false);
     }
   };
 
