@@ -1,6 +1,7 @@
-import type { Setter } from "solid-js";
+import type { Accessor, Setter } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type { Run } from "../types/index.ts";
 import { parseTimelineEventId } from "../views/chat/timeline.ts";
 import {
@@ -106,6 +107,7 @@ export interface ConnectionProcessorDeps {
 }
 
 export interface ConnectionManagerOptions {
+  requestScope: Accessor<unknown>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
   startMessagePolling: (
@@ -225,6 +227,7 @@ export function handleTransportClose(
   savedRunId: string,
   logPrefix: string,
   deps: {
+    isCurrent: () => boolean;
     isMountedRef: MutableRefObject<boolean>;
     currentRunIdRef: MutableRefObject<string | null>;
     reconnectAttemptsRef: MutableRefObject<number>;
@@ -242,8 +245,9 @@ export function handleTransportClose(
   },
   closeInfo?: TransportCloseInfo,
 ): void {
-  if (!deps.isMountedRef.current) return;
-  if (!savedRunId || deps.currentRunIdRef.current !== savedRunId) return;
+  const isCurrent = () => deps.isMountedRef.current && !!savedRunId &&
+    deps.currentRunIdRef.current === savedRunId && deps.isCurrent();
+  if (!isCurrent()) return;
 
   // Auth-expired close: stop reconnecting and bounce to sign-in. The server
   // has already torn down the session; further reconnects will just spin.
@@ -259,10 +263,11 @@ export function handleTransportClose(
   }
 
   const attemptReconnect = () => {
+    if (!isCurrent()) return;
     deps.reconnectAttemptsRef.current++;
     if (
       deps.reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS &&
-      deps.isMountedRef.current
+      isCurrent()
     ) {
       // Exponential backoff + full jitter to avoid thundering herd on
       // gateway restart: 2^n * 1000ms + random 0-1000ms, capped at ~30s.
@@ -270,14 +275,11 @@ export function handleTransportClose(
       const jitter = Math.random() * 1000;
       const delay = Math.min(base + jitter, 30_000);
       setTimeout(() => {
-        if (
-          deps.isMountedRef.current &&
-          deps.currentRunIdRef.current === savedRunId
-        ) {
+        if (isCurrent()) {
           deps.startWebSocketRef.current(savedRunId);
         }
       }, delay);
-    } else if (deps.isMountedRef.current) {
+    } else if (isCurrent()) {
       deps.setIsLoading(false);
       deps.setCurrentRun(null);
       deps.setError(deps.t("networkError"));
@@ -289,19 +291,20 @@ export function handleTransportClose(
       const res = await rpcPath(rpc, "runs", ":id").$get({
         param: { id: savedRunId },
       });
+      if (!isCurrent()) return;
       // 401 on the status check is also an auth signal — treat the same.
       if (res.status === 401) {
         console.warn(
           `${logPrefix} run-status check returned 401; redirecting to sign-in.`,
         );
-        if (!deps.isMountedRef.current) return;
         deps.setIsLoading(false);
         deps.setCurrentRun(null);
         deps.setError(deps.t("networkError"));
         redirectToSignIn();
         return;
       }
-      const data = await rpcJson<{ run: Run }>(res);
+      const data = await rpcJson<{ run: Run }>(res, { isCurrent });
+      if (!isCurrent() || data.run?.id !== savedRunId) return;
       const status = data.run?.status;
 
       if (status && TERMINAL_RUN_STATUSES.has(status)) {
@@ -313,6 +316,7 @@ export function handleTransportClose(
         attemptReconnect();
       }
     } catch (statusErr) {
+      if (!isCurrent()) return;
       console.error(
         `Failed to check run status after ${logPrefix} close:`,
         statusErr,
@@ -458,6 +462,7 @@ export function useConnectionManagerBase(
   cleanupTransport: () => void,
 ): ConnectionManagerResult {
   const {
+    requestScope,
     t,
     isMountedRef,
     startMessagePolling,
@@ -492,8 +497,10 @@ export function useConnectionManagerBase(
   const startWebSocketRef: MutableRefObject<(runId: string) => void> = {
     current: () => {},
   };
+  const transportRequests = createLatestRequest();
 
   const closeWebSocket = (): void => {
+    transportRequests.next();
     stopMessagePolling();
     if (runStatusWatchdogRef.current) {
       clearInterval(runStatusWatchdogRef.current);
@@ -534,6 +541,9 @@ export function useConnectionManagerBase(
 
     closeWebSocket();
     currentRunIdRef.current = runId;
+    const scope = requestScope();
+    const claim = transportRequests.claim(() => isMountedRef.current &&
+      requestScope() === scope && currentRunIdRef.current === runId);
 
     // Build pre-bound helpers so transports don't need raw deps
     const onMessage = (rawData: string) => {
@@ -547,9 +557,10 @@ export function useConnectionManagerBase(
 
     const onClose = (closeInfo?: TransportCloseInfo) => {
       handleTransportClose(
-        currentRunIdRef.current || "",
+        runId,
         "Transport",
         {
+          isCurrent: claim.won,
           isMountedRef,
           currentRunIdRef,
           reconnectAttemptsRef,
