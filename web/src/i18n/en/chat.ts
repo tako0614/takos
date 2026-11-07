@@ -20,6 +20,9 @@ export const chat = {
   // Welcome
   welcomeTitle: "Hello! How can I help you today?",
   inputPlaceholder: "Ask a question or request a task",
+  welcomeChatCreated: "Chat created. Continue with this draft without creating another chat.",
+  welcomeCreationUnconfirmed: "A chat may already have been created. Check your chat list first. Creating another chat can make a duplicate; your draft is retained.",
+  welcomeCreateAnother: "Create another chat",
 
   // Chat Page
 

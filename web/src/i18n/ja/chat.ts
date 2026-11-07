@@ -20,6 +20,9 @@ export const chat = {
   // Welcome
   welcomeTitle: "こんにちは！何かお手伝いしましょうか？",
   inputPlaceholder: "タスクの依頼や質問をどうぞ",
+  welcomeChatCreated: "チャットは作成済みです。再作成せず、この下書きで続行できます。",
+  welcomeCreationUnconfirmed: "チャットがすでに作成されている可能性があります。先に会話一覧を確認してください。もう一度作成すると重複する場合があります。下書きは保持しています。",
+  welcomeCreateAnother: "別のチャットを作成",
 
   // Chat Page
 
