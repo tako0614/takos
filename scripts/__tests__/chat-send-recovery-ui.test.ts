@@ -76,6 +76,9 @@ const scenarios = {
   retryWireMessage: "a live SSE message still updates the current streaming reply",
   retryNewRun: "a new conversation resets the failed connection retry budget",
   retryTransportError: "an SSE transport error keeps the current Run active for retry",
+  authCloseCode: "an authentication WebSocket close code returns to sign-in without another Run read",
+  authCloseReason: "an authentication WebSocket close reason reaches the existing sign-in guard",
+  authClosePolicy: "the existing policy close code reaches the sign-in guard without retry",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -108,6 +111,7 @@ async function verifySendRecovery(mode: Scenario) {
     } finally { if (child.exitCode === null) child.kill(); }
     return;
   }
+  const authCloseLifetime = mode.startsWith("authClose");
   const closeLifetime = mode.startsWith("close");
   const closeStreamBody = ["closeLateTerminal", "closeCurrentTerminal", "closeMismatched", "closeReturnActive", "closeQueuedReconnect"].includes(mode);
   const runReadLifetime = mode.startsWith("runRead");
@@ -159,9 +163,11 @@ async function verifySendRecovery(mode: Scenario) {
   let closeReadDone = 0;
   let closeParsesStarted = 0, closeParsesDone = 0;
   let closeReadProducer = Promise.resolve();
+  let closeAuthSocket: (() => void) | undefined;
+  let authCloseReads = 0;
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -176,6 +182,10 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/runs\/[^/]+\/ws$/.test(path)) {
       if (server.upgrade(request)) return;
       return new Response(null, { status: 400 });
+    }
+    if (authCloseLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
+      authCloseReads++;
+      return Response.json({ error: { code: "SYNTHETIC_UNAVAILABLE", message: "Synthetic status read unavailable after auth close" } }, { status: 503 });
     }
     if (closeLifetime && request.method === "GET" && /^\/api\/runs\/[^/]+$/.test(path)) {
       closeReadRequests.push(path);
@@ -217,7 +227,7 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
-      if (runReadLifetime || closeLifetime) {
+      if (runReadLifetime || closeLifetime || authCloseLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = thread === "thread-a" ? activeRun && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null : otherRun;
         body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A Run view" : "Current B Run view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
@@ -318,6 +328,10 @@ async function verifySendRecovery(mode: Scenario) {
     if (value === "ping") socket.send("pong");
     else if (JSON.parse(String(value)).type === "subscribe") {
       subscriptions++;
+      if (authCloseLifetime) closeAuthSocket = () => {
+        socket.close(mode === "authClosePolicy" ? 1008 : mode === "authCloseReason" ? 1012 : 4401,
+          mode === "authCloseReason" ? "Synthetic unauthorized close" : "Synthetic policy gate");
+      };
       if (closeLifetime) closeTransport = () => { socket.close(1012, "Synthetic restart"); };
       if (pollingLifetime) completeRun = () => {
         activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
@@ -336,7 +350,7 @@ async function verifySendRecovery(mode: Scenario) {
     const scope: Record<string, unknown> = {
       document, Event, HTMLElement, URL, URLSearchParams, Headers, Request, Response, Blob, File, FormData, AbortController, TextEncoder, TextDecoder, WebSocket,
       console, navigator: { language: "en" }, location,
-      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime },
+      chatSendTestConfig: { auth: ["authRefresh", "authPending"].includes(mode), cancel: cancelLifetime || runReadLifetime || closeLifetime || authCloseLifetime },
       setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
       addEventListener: window.addEventListener.bind(window), removeEventListener: window.removeEventListener.bind(window),
       localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
@@ -380,8 +394,17 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime || runReadLifetime || closeLifetime || authCloseLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (authCloseLifetime) {
+      await waitFor(() => subscriptions === 1 && closeAuthSocket !== undefined);
+      closeAuthSocket!(); await waitFor(() => location.href.startsWith("/signin") || authCloseReads > 0);
+      expect(location.href).toBe("/signin?next=%2Fchat%2Fspace-a%2Fthread-a");
+      expect(fixture.state().loading).toBe(false); expect(fixture.state().error).toBeTruthy();
+      await Bun.sleep(2_050); expect(authCloseReads).toBe(0); expect(subscriptions).toBe(1);
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (closeLifetime) {
       await waitFor(() => subscriptions === 1 && closeTransport !== undefined);
       closeTransport!(); await waitFor(() => closeReadRequests.length === 1);
