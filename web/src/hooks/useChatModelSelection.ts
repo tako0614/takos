@@ -48,7 +48,7 @@ export function useChatModelSelection({
           anthropic: ModelOption[];
           google: ModelOption[];
         };
-      }>(res);
+      }>(res, { isCurrent: () => !isCancelled?.() });
 
       const modelBackend = data.model_backend || "openai";
       let raw: ModelOption[] | undefined;
