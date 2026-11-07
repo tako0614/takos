@@ -1,7 +1,8 @@
-import { type Accessor, createEffect, type Setter, untrack } from "solid-js";
+import { type Accessor, createEffect, createSignal, type Setter, untrack } from "solid-js";
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
+import type { UseMessagePollingResult } from "./useMessagePolling.ts";
 import type {
   Message,
   Run,
@@ -36,7 +37,7 @@ export interface UseWebSocketConnectionOptions {
   threadId: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
-  fetchMessages: (showError?: boolean) => Promise<void>;
+  fetchMessages: UseMessagePollingResult["fetchMessages"];
   startMessagePolling: (
     currentRunIdRef: MutableRefObject<string | null>,
   ) => void;
@@ -52,6 +53,7 @@ export interface UseWebSocketConnectionResult {
   setIsLoading: Setter<boolean>;
   streaming: ChatStreamingState;
   resetStreamingState: () => void;
+  retryFinalMessages: (() => Promise<void>) | null;
   timelineEntries: ChatTimelineEntry[];
   runMetaById: ChatRunMetaMap;
   artifactsByRunId: ChatRunArtifactMap;
@@ -140,6 +142,10 @@ export function useWebSocketConnection({
 
   // --- Wire up handleRunCompleted (needs connection.closeWebSocket) ---
   const finalMessageReads = createLatestRequest();
+  const [finalMessageRetry, setFinalMessageRetry] = createSignal<{
+    isCurrent: () => boolean;
+    run: () => Promise<void>;
+  } | null>(null);
   processor.handleRunCompletedRef.current = (
     run?: Partial<Run>,
     sessionId?: string | null,
@@ -152,6 +158,7 @@ export function useWebSocketConnection({
       connection.rootRunIdRef.current === rootRunId &&
       currentRunIdRef.current === null);
     const effectiveSessionId = sessionId ?? run?.session_id ?? undefined;
+    setFinalMessageRetry(null);
     if (effectiveSessionId) {
       sessionDiffHook.fetchSessionDiff(effectiveSessionId);
     }
@@ -166,12 +173,22 @@ export function useWebSocketConnection({
 
     // Delay clearing streaming state until messages are fetched,
     // so thinking/tool calls remain visible during the transition.
-    fetchMessages()
-      .then(() => { if (claim.won()) processor.resetStreamingState(); })
-      .catch((err) => {
+    const refreshFinalMessages = (isCurrent?: () => boolean): Promise<void> => {
+      if (!claim.won()) return Promise.resolve();
+      setFinalMessageRetry(null);
+      return fetchMessages(true, { isCurrent, isEffectCurrent: claim.won }).then((outcome) => {
+        if (!claim.won()) return;
+        if (outcome === "adopted") processor.resetStreamingState();
+        else if (outcome === "failed") {
+          setFinalMessageRetry({ isCurrent: claim.won, run: () => refreshFinalMessages(claim.won) });
+        }
+      }).catch((err) => {
         console.debug("Final message fetch failed:", err);
-        if (claim.won()) processor.resetStreamingState();
       });
+    };
+    // Preserve same-thread message adoption for the initial completion read.
+    // A manual retry additionally retires its body when the next reply starts.
+    void refreshFinalMessages();
     return Promise.resolve();
   };
 
@@ -363,6 +380,10 @@ export function useWebSocketConnection({
     setIsCancelling: sessionDiffHook.setIsCancelling,
     handleCancel,
     dismissSessionDiff: sessionDiffHook.dismissSessionDiff,
+    get retryFinalMessages() {
+      const retry = finalMessageRetry();
+      return !processor.isLoading && retry?.isCurrent() ? retry.run : null;
+    },
     startWebSocket: connection.startWebSocket,
     closeWebSocket: connection.closeWebSocket,
     currentRunIdRef,

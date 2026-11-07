@@ -5,6 +5,14 @@ import { rpcJson } from "../lib/rpc.ts";
 import type { Message } from "../types/index.ts";
 
 const ACTIVE_RUN_MESSAGE_POLL_INTERVAL_MS = 5_000;
+export type MessageFetchOutcome = "adopted" | "failed" | "retired" | "authentication-required";
+
+interface MessageFetchOptions {
+  /** Additional caller ownership for adopting the response. */
+  isCurrent?: () => boolean;
+  /** Ownership of login navigation and error feedback. */
+  isEffectCurrent?: () => boolean;
+}
 
 export interface UseMessagePollingOptions {
   threadId: Accessor<string>;
@@ -16,7 +24,10 @@ export interface UseMessagePollingResult {
   setMessages: Setter<Message[]>;
   messagesCountRef: { current: number };
   isMountedRef: { current: boolean };
-  fetchMessages: (showError?: boolean) => Promise<void>;
+  fetchMessages: (
+    showError?: boolean,
+    options?: MessageFetchOptions,
+  ) => Promise<MessageFetchOutcome>;
   startMessagePolling: (currentRunIdRef: { current: string | null }) => void;
   stopMessagePolling: () => void;
   abortPendingFetch: () => void;
@@ -49,14 +60,19 @@ export function useMessagePolling({
     messagesCountRef.current = messages().length;
   });
 
-  const fetchMessages = async (showError = false): Promise<void> => {
+  const fetchMessages = async (
+    showError = false,
+    options: MessageFetchOptions = {},
+  ): Promise<MessageFetchOutcome> => {
     const currentThreadId = threadId();
     messageFetchAbortRef?.abort();
     const controller = new AbortController();
     messageFetchAbortRef = controller;
     const requestSeq = ++messageFetchSeqRef;
     const isCurrent = () => !controller.signal.aborted && isMountedRef.current &&
-      requestSeq === messageFetchSeqRef && threadId() === currentThreadId;
+      requestSeq === messageFetchSeqRef && threadId() === currentThreadId &&
+      options.isCurrent?.() !== false;
+    let responseStatus: number | undefined;
 
     try {
       const res = await fetch(
@@ -66,21 +82,27 @@ export function useMessagePolling({
           signal: controller.signal,
         },
       );
-      const data = await rpcJson<{ messages: Message[] }>(res, { isCurrent });
+      responseStatus = res.status;
+      const data = await rpcJson<{ messages: Message[] }>(res, {
+        isCurrent: () => isCurrent() && options.isEffectCurrent?.() !== false,
+      });
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) return "retired";
       setMessages(data.messages);
       if (messageFetchErrorVisible && errorRef) {
         messageFetchErrorVisible = false;
         setError(null);
       }
+      return "adopted";
     } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      if (!isCurrent()) return;
-      if (showError) {
+      if ((err as Error).name === "AbortError") return "retired";
+      if (!isCurrent()) return "retired";
+      if (responseStatus === 401) return "authentication-required";
+      if (showError && options.isEffectCurrent?.() !== false) {
         messageFetchErrorVisible = true;
         setError(t("failedToLoadMessages" as TranslationKey));
       }
+      return "failed";
     } finally {
       if (messageFetchAbortRef === controller) {
         messageFetchAbortRef = null;

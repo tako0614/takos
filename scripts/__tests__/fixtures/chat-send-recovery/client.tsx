@@ -24,7 +24,7 @@ function Conversation() {
   session = useChatSession({ threadId: thread, spaceId: () => "space-a", focusSequence: focus, onUpdateTitle: () => {} });
   return <>
     <ul aria-label="Messages"><For each={session.messages()}>{(message) => <li>{message.content}</li>}</For></ul>
-    <Show when={session.error()}>{(error) => <ChatErrorBanner error={error()} onDismiss={() => session.setError(null)} />}</Show>
+    <Show when={session.error()}>{(error) => <ChatErrorBanner error={error()} onDismiss={() => session.setError(null)} onRetry={session.retryFinalMessages() ?? undefined} />}</Show>
     <ChatSendRecovery recovery={session.sendRecovery()} busy={session.isLoading() || session.recoveryBusy()}
       canRestore={!session.input() && session.attachedFiles().length === 0}
       onRetry={(...args) => track(session.retryReply(...args))} onCheck={(receipt) => track(session.checkSendStatus(receipt))} onRestore={session.restoreSendDraft} onDismiss={session.dismissSendRecovery} />

@@ -2,6 +2,7 @@ import { type Accessor, createEffect, createSignal, onCleanup, type Setter } fro
 import type { TranslationKey } from "../store/i18n.ts";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
+import type { UseMessagePollingResult } from "./useMessagePolling.ts";
 import type {
   Run,
   ThreadHistoryFocus,
@@ -52,7 +53,7 @@ export interface UseWsMessageProcessorOptions {
   currentRunIdRef: MutableRefObject<string | null>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
-  fetchMessages: (showError?: boolean) => Promise<void>;
+  fetchMessages: UseMessagePollingResult["fetchMessages"];
   setError: (value: string | null) => void;
   fetchSessionDiff: (sessionId: string) => Promise<void>;
 }
