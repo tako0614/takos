@@ -359,7 +359,10 @@ export function useChatSession({
     isMerging,
     handleMerge: ws.handleMerge,
     isCancelling,
-    handleCancel: ws.handleCancel,
+    handleCancel: () => {
+      const currentInitState = initState();
+      return ws.handleCancel(() => initState() === currentInitState);
+    },
     error,
     setError: polling.setError,
     attachedFiles,
