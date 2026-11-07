@@ -90,7 +90,7 @@ export interface ConnectionProcessorDeps {
   verifyRunStatus: (
     runId: string,
     refreshMessages?: boolean,
-  ) => Promise<boolean>;
+  ) => Promise<boolean | undefined>;
   upsertRunMeta: (run: Partial<Run> & { id: string }) => void;
   handleRunCompletedRef: MutableRefObject<
     (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
@@ -146,7 +146,7 @@ export function processIncomingMessage(
     verifyRunStatus: (
       runId: string,
       refreshMessages?: boolean,
-    ) => Promise<boolean>;
+    ) => Promise<boolean | undefined>;
     handleWebSocketEventRef: MutableRefObject<
       (
         eventType: string,
@@ -576,7 +576,7 @@ export function useConnectionManagerBase(
         runStatusWatchdogInFlightRef.current = true;
         verifyRunStatus(activeRunId, false)
           .then((isActive) => {
-            if (!isActive && currentRunIdRef.current === activeRunId) {
+            if (isActive === false && currentRunIdRef.current === activeRunId) {
               closeWebSocket();
             }
           })

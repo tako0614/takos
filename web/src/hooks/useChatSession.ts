@@ -105,10 +105,19 @@ export function useChatSession({
   let initialScrollPending = true;
   let autoScrollPinned = true;
 
+  const initState = createMemo((previous?: ChatSessionInitState) =>
+    nextChatSessionInitState(
+      previous,
+      threadId(),
+      focusSequence?.() ?? null,
+    )
+  );
+
   // --- Sub-hooks ---
   const polling = useMessagePolling({ threadId, t });
 
   const ws = useWebSocketConnection({
+    requestScope: initState,
     threadId,
     t,
     isMountedRef: polling.isMountedRef,
@@ -157,14 +166,6 @@ export function useChatSession({
     setError: polling.setError,
     uploadChatAttachments: attachments.uploadChatAttachments,
   });
-
-  const initState = createMemo((previous?: ChatSessionInitState) =>
-    nextChatSessionInitState(
-      previous,
-      threadId(),
-      focusSequence?.() ?? null,
-    )
-  );
 
   // --- Initialization effect ---
   createEffect(() => {
