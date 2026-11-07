@@ -55,6 +55,8 @@ export function useMessagePolling({
     const controller = new AbortController();
     messageFetchAbortRef = controller;
     const requestSeq = ++messageFetchSeqRef;
+    const isCurrent = () => !controller.signal.aborted && isMountedRef.current &&
+      requestSeq === messageFetchSeqRef && threadId() === currentThreadId;
 
     try {
       const res = await fetch(
@@ -64,12 +66,9 @@ export function useMessagePolling({
           signal: controller.signal,
         },
       );
-      const data = await rpcJson<{ messages: Message[] }>(res);
+      const data = await rpcJson<{ messages: Message[] }>(res, { isCurrent });
 
-      if (controller.signal.aborted) return;
-      if (!isMountedRef.current) return;
-      if (requestSeq !== messageFetchSeqRef) return;
-      if (threadId() !== currentThreadId) return;
+      if (!isCurrent()) return;
       setMessages(data.messages);
       if (messageFetchErrorVisible && errorRef) {
         messageFetchErrorVisible = false;
@@ -77,10 +76,7 @@ export function useMessagePolling({
       }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
-      if (controller.signal.aborted) return;
-      if (!isMountedRef.current) return;
-      if (requestSeq !== messageFetchSeqRef) return;
-      if (threadId() !== currentThreadId) return;
+      if (!isCurrent()) return;
       if (showError) {
         messageFetchErrorVisible = true;
         setError(t("failedToLoadMessages" as TranslationKey));

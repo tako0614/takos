@@ -46,6 +46,11 @@ const scenarios = {
   cancelOverlapAck: "an old Cancel ACK cannot unlock a newer conversation cancellation",
   cancelFocus401: "a retired Cancel authentication response cannot navigate a newer focus in the same conversation",
   cancelFocusError: "a retired Cancel failure cannot affect a newer focus or its next cancellation",
+  pollingAbort: "an aborted message refresh cannot navigate the new conversation after a terminal WebSocket event",
+  pollingFocus: "an aborted message refresh cannot navigate a newer focus in the same conversation",
+  pollingDispose: "a disposed message refresh cannot navigate after its body is aborted",
+  pollingCurrent401: "a current message refresh authentication failure retains login navigation",
+  pollingCurrentOK: "a current message refresh adopts the saved reply after a terminal WebSocket event",
 };
 type Scenario = keyof typeof scenarios;
 for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], async () => {
@@ -67,6 +72,7 @@ for (const mode of Object.keys(scenarios) as Scenario[]) test(scenarios[mode], a
 }, 45_000);
 
 async function verifySendRecovery(mode: Scenario) {
+  const pollingLifetime = mode.startsWith("polling");
   const cancelLifetime = mode.startsWith("cancel");
   const cancelOverlap = mode === "cancelOverlap" || mode === "cancelOverlapAck";
   const cancelFocus = mode === "cancelFocus401" || mode === "cancelFocusError";
@@ -93,9 +99,15 @@ async function verifySendRecovery(mode: Scenario) {
   const secondCancelGate = new Promise<void>((yes) => { releaseSecondCancel = yes; });
   let cancelParsesStarted = 0, cancelParsesDone = 0;
   const cancelPosts: string[] = [];
+  let releaseMessages!: () => void;
+  const messagesGate = new Promise<void>((yes) => { releaseMessages = yes; });
+  let messageProducer = Promise.resolve();
+  let messageReads = 0, messageParsesStarted = 0, messageParsesDone = 0, messageAborts = 0;
+  const messageParseErrors: string[] = [];
+  let completeRun: (() => void) | undefined;
   const run = { id: "unrelated-run", thread_id: "thread-a", space_id: "space-a", root_thread_id: "thread-a", root_run_id: "unrelated-run", parent_run_id: null, child_thread_id: null, session_id: null, agent_type: "default", model: "synthetic-model", status: "queued", input: "{}", output: null, error: null, usage: "{}", started_at: null, completed_at: null, created_at: "2026-11-07T00:00:00Z" };
   const otherRun = { ...run, id: "second-run", thread_id: cancelFocus ? "thread-a" : "thread-b", root_thread_id: cancelFocus ? "thread-a" : "thread-b", root_run_id: "second-run" };
-  let activeRun: typeof run | null = cancelLifetime ? run : null;
+  let activeRun: (Omit<typeof run, "completed_at"> & { completed_at: string | null }) | null = cancelLifetime || pollingLifetime ? run : null;
   const uploaded = { id: "attachment-1", name: "draft.txt", path: "/chat-attachments/thread-a/draft.txt", mime_type: "text/plain", size: 5 };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request, server) {
     const path = new URL(request.url).pathname;
@@ -115,6 +127,12 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "GET" && /^\/api\/threads\/thread-[ab]\/history$/.test(path)) {
       historyReads++;
       const body = { messages: messages.filter((message) => message.thread_id === path.split("/")[3]), runs: [], focus: null, activeRun, pendingSessionDiff: null, taskContext: null };
+      if (pollingLifetime) {
+        const thread = path.split("/")[3]!;
+        body.activeRun = activeRun?.thread_id === thread && ["pending", "queued", "running"].includes(activeRun.status) ? activeRun : null;
+        body.messages = [{ id: `history-${thread}`, thread_id: thread, role: "user", content: thread === "thread-a" ? "Current A refresh view" : "Current B refresh view", metadata: "{}", sequence: 1, created_at: "2026-11-07T00:00:00Z" }];
+        if (new URL(request.url).searchParams.get("offset") === "200") body.messages[0]!.content = "Focused A refresh view";
+      }
       if (cancelLifetime) {
         const thread = path.split("/")[3]!;
         body.activeRun = activeRun?.thread_id === thread ? activeRun : null;
@@ -137,6 +155,18 @@ async function verifySendRecovery(mode: Scenario) {
       }
       if (mode === "history" && runPosts > 0) return Response.json({ ...body, activeRun: undefined });
       return Response.json(body);
+    }
+    if (pollingLifetime && request.method === "GET" && path === "/api/threads/thread-a/messages") {
+      messageReads++;
+      const status = mode === "pollingCurrentOK" ? 200 : 401;
+      const payload = JSON.stringify(status === 200
+        ? { messages: [{ id: "saved-reply", thread_id: "thread-a", role: "assistant", content: "Canonical refreshed reply", metadata: "{}", sequence: 2, created_at: "2026-11-07T00:00:01Z" }] }
+        : { error: { code: "UNAUTHENTICATED", message: "Synthetic message refresh authentication failure" } });
+      let open = true;
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode(payload.slice(0, 1)));
+        messageProducer = messagesGate.then(() => { if (open) { controller.enqueue(new TextEncoder().encode(payload.slice(1))); controller.close(); open = false; } });
+      }, cancel() { open = false; } }), { status, headers: { "content-type": "application/json" } });
     }
     if (request.method === "POST" && path === "/api/threads/thread-a/messages") {
       messagePosts++;
@@ -176,7 +206,16 @@ async function verifySendRecovery(mode: Scenario) {
     if (request.method === "PUT" && path === "/synthetic-upload") { expect(await request.text()).toBe("draft"); return new Response(null, { status: 204 }); }
     if (request.method === "POST" && path === "/api/spaces/space-a/storage/confirm-upload") return Response.json({ file: uploaded });
     throw new Error(`Unexpected synthetic request: ${request.method} ${path}`);
-  }, websocket: { message(socket, value) { if (value === "ping") socket.send("pong"); else if (JSON.parse(String(value)).type === "subscribe") subscriptions++; } } });
+  }, websocket: { message(socket, value) {
+    if (value === "ping") socket.send("pong");
+    else if (JSON.parse(String(value)).type === "subscribe") {
+      subscriptions++;
+      if (pollingLifetime) completeRun = () => {
+        activeRun = { ...run, status: "completed", completed_at: "2026-11-07T00:00:01Z" };
+        socket.send(JSON.stringify({ type: "completed", data: { run: activeRun }, eventId: 1 }));
+      };
+    }
+  } } });
   let fixture: { state: () => { input: string; messages: unknown[]; error: string | null; loading: boolean; cancelling: boolean; model: string; files: string[] }; setThread: (id: string) => void; setMounted: (mounted: boolean) => void; setFocus: (sequence: number | null) => void; setPrincipal: (id: string) => void; setModel: (id: string) => void; idle: () => Promise<void>; pendingCount: () => number; refetchIdentity: () => Promise<void>; dispose: () => void } | undefined;
   try {
     await build({ configFile: false, root: resolve(import.meta.dir, "../.."), logLevel: "silent", plugins: [solid()],
@@ -195,7 +234,16 @@ async function verifySendRecovery(mode: Scenario) {
       fetch: async (input: string | URL, init?: RequestInit) => {
         const url = new URL(String(input), server.url);
         if (url.origin !== server.url.origin) throw new Error("Non-loopback fixture request refused");
+        if (pollingLifetime && url.pathname.endsWith("/messages")) init?.signal?.addEventListener("abort", () => { messageAborts++; });
         const response = await fetch(url, init);
+        if (pollingLifetime && url.pathname.endsWith("/messages")) {
+          const json = response.json.bind(response);
+          response.json = async () => {
+            messageParsesStarted++;
+            try { return await json(); } catch (error) { messageParseErrors.push((error as Error).name); throw error; }
+            finally { messageParsesDone++; }
+          };
+        }
         if (historyLifetime && url.pathname.endsWith("/history")) {
           const json = response.json.bind(response);
           response.json = async () => { historyParsesStarted++; try { return await json(); } finally { historyParsesDone++; } };
@@ -210,8 +258,43 @@ async function verifySendRecovery(mode: Scenario) {
     scope.window = scope; scope.self = scope;
     runInContext(await readFile(join(output, "client.js"), "utf8"), createContext(scope));
     fixture = scope.chatSendFixture as NonNullable<typeof fixture>;
-    await waitFor(() => (cancelLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
+    await waitFor(() => (cancelLifetime || pollingLifetime ? historyReads >= 1 : historyReads === 1) && fixture!.state().model === "synthetic-model");
     await Bun.sleep(0);
+    if (pollingLifetime) {
+      await waitFor(() => subscriptions === 1); await Bun.sleep(0);
+      expect(messageReads).toBe(0);
+      completeRun!(); await waitFor(() => messageParsesStarted === 1);
+      expect(messageReads).toBe(1);
+      if (["pollingCurrent401", "pollingCurrentOK"].includes(mode)) {
+        releaseMessages(); await waitFor(() => messageParsesDone === 1); await Bun.sleep(0);
+        expect(messageAborts).toBe(0); expect(messageParseErrors).toEqual([]);
+        if (mode === "pollingCurrent401") {
+          expect(location.href).toBe("/auth/oidc/login?return_to=%2Fchat%2Fspace-a%2Fthread-a");
+          expect(fixture.state().error).toBeNull();
+        } else {
+          expect(document.body.textContent).toContain("Canonical refreshed reply");
+          expect(document.body.textContent).not.toContain("Current A refresh view");
+          expect(fixture.state().loading).toBe(false);
+          expect(location.href).toBe(`${server.url.origin}/chat/space-a/thread-a`);
+        }
+        expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+        return;
+      }
+      if (mode === "pollingDispose") {
+        fixture.setMounted(false); await Bun.sleep(0);
+        expect(document.querySelector("textarea")).toBeNull();
+      } else if (mode === "pollingFocus") {
+        fixture.setFocus(300); await waitFor(() => document.body.textContent!.includes("Focused A refresh view"));
+      } else {
+        fixture.setThread("thread-b"); await waitFor(() => document.body.textContent!.includes("Current B refresh view"));
+      }
+      await waitFor(() => messageAborts === 1 && messageParsesDone === 1); await Bun.sleep(0);
+      expect(messageParseErrors).toEqual(["AbortError"]);
+      expect(location.href).toBe(`${server.url.origin}/chat/space-a/${mode === "pollingAbort" ? "thread-b" : "thread-a"}`);
+      expect(fixture.state().error).toBeNull();
+      expect(attempts.every((attempt) => attempt.method === "GET")).toBe(true);
+      return;
+    }
     if (cancelLifetime) {
       await waitFor(() => document.querySelector('button[aria-label="Cancel"]') !== null);
       document.querySelector<HTMLButtonElement>('button[aria-label="Cancel"]')!.click();
@@ -526,10 +609,12 @@ async function verifySendRecovery(mode: Scenario) {
     expect(textarea.value).toBe("Newer draft");
     expect(runModels).toEqual(["synthetic-model", "changed-model"]);
   } finally {
+    releaseMessages();
     releaseCancel();
     releaseSecondCancel();
     releaseHistory();
     releaseRun();
+    await messageProducer;
     await fixture?.idle();
     fixture?.dispose(); server.stop(true);
     await rm(output, { recursive: true, force: true });
