@@ -10,8 +10,8 @@
  *
  * Auth: HTTP Basic where the password is a Takos access token (username is
  * ignored, matching the GitHub PAT convention). Public repositories allow
- * anonymous read; private repositories require a token whose user has read
- * access to the owning space.
+ * anonymous read; private repositories require a token with files:read whose
+ * user has read access to the owning space.
  */
 
 import { Hono } from "hono";
@@ -137,6 +137,7 @@ async function authenticateRead(
       c,
       authDeps,
       `Bearer ${token}`,
+      { requiredScopes: repo.visibility === "public" ? [] : ["files:read"] },
     );
     if (bearer.kind === "ok") {
       userId = bearer.userId;
