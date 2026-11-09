@@ -1,5 +1,4 @@
-import type { MiddlewareHandler } from "hono";
-import { bodyLimit as honoBodyLimit } from "hono/body-limit";
+import type { Context, MiddlewareHandler } from "hono";
 
 type BodySizeLimitOptions = {
   maxSize: number;
@@ -10,39 +9,70 @@ type BodySizeLimitOptions = {
 export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
   const { maxSize, message, skipPaths } = options;
 
-  // Hono's built-in bodyLimit handles both Content-Length (fast path)
-  // and stream-level byte counting (for chunked/missing Content-Length).
-  const honoMiddleware = honoBodyLimit({
-    maxSize,
-    onError: (c) => {
-      // Match the documented common error envelope
-      // (docs/reference/api.md "エラーレスポンスの共通形式"):
-      //   { error: { code, message } }
-      return c.json(
-        {
-          error: {
-            code: "PAYLOAD_TOO_LARGE",
-            message: message || "Request body too large",
-          },
-          max_size: maxSize,
+  // Return this Response to Hono, including when no handler was reached.
+  const tooLarge = (c: Context) =>
+    c.json(
+      {
+        error: {
+          code: "PAYLOAD_TOO_LARGE",
+          message: message || "Request body too large",
         },
-        413,
-      );
-    },
-  });
+        max_size: maxSize,
+      },
+      413,
+    );
 
   return async (c, next) => {
-    if (!["POST", "PUT", "PATCH"].includes(c.req.method)) {
-      await next();
-      return;
+    const request = c.req.raw;
+    if (
+      request.body === null ||
+      skipPaths?.some((pattern) => pattern.test(c.req.path))
+    ) {
+      return next();
     }
 
-    if (skipPaths?.some((pattern) => pattern.test(c.req.path))) {
-      await next();
-      return;
+    // Content-Length can reject before reading, but it cannot replace the
+    // actual byte count. Keep the existing Transfer-Encoding precedence.
+    if (!request.headers.has("transfer-encoding")) {
+      const length = Number.parseInt(
+        request.headers.get("content-length") || "0",
+        10,
+      );
+      if (length > maxSize) return tooLarge(c);
     }
 
-    await honoMiddleware(c, next);
+    // Buffer at most the configured limit before auth/route parsing, as before.
+    // This also prevents a route's JSON-error catch from swallowing overflow.
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > maxSize) {
+          // Stop the source without letting cancellation failure hide the 413.
+          void reader.cancel().catch(() => {});
+          return tooLarge(c);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Clone the original Request so runtime metadata and request options survive.
+    c.req.raw = new Request(request, {
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(chunk);
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    return next();
   };
 }
 

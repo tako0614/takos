@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { Hono } from "hono";
+import { generalApiBodyLimit } from "../../middleware/body-size.ts";
 
 import * as schema from "../../../infra/db/schema.ts";
 import type { Env, User } from "../../../shared/types/index.ts";
@@ -248,6 +249,99 @@ test("DELETE /api/notifications/pushers removes by app id and pushkey", async ()
   const rows = await db.select().from(schema.notificationPushers);
   expect(rows).toHaveLength(0);
 });
+
+for (const declared of [false, true]) {
+  test(`DELETE pusher enforces the API byte cap without deleting data, declared=${declared}`, async () => {
+    const db = await freshDb();
+    await registerQuotaPusher(db, {
+      appId: "jp.takos.fixture",
+      pushkey: "synthetic-device",
+    });
+    await registerNotificationPusher(db, {
+      accountId: "user-2",
+      product: "takos",
+      scope: "account:user-2",
+      gatewayUrl: "https://push.example/_matrix/push/v1/notify",
+      pusher: {
+        kind: "http",
+        app_id: "jp.takos.fixture",
+        pushkey: "other-device",
+        data: { url: "https://push.example/_matrix/push/v1/notify" },
+      },
+    });
+    const app = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
+    app.use("*", generalApiBodyLimit);
+    app.route("/", createApp(envUser));
+    const payload = JSON.stringify({
+      product: "takos",
+      app_id: "jp.takos.fixture",
+      pushkey: "synthetic-device",
+    });
+    const bytes = new TextEncoder().encode(
+      payload + " ".repeat(4 * 1024 * 1024 - payload.length),
+    );
+    let sent = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent === bytes.byteLength) {
+          controller.close();
+          return;
+        }
+        const chunk = bytes.slice(sent, sent + 64 * 1024);
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    const response = await app.fetch(
+      new Request("https://takos.test/api/notifications/pushers", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(declared ? { "Content-Length": String(bytes.byteLength) } : {}),
+        },
+        body: stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+      routeEnv(db),
+    );
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "PAYLOAD_TOO_LARGE",
+        message: "Request body exceeds maximum allowed size of 1MB",
+      },
+      max_size: 1024 * 1024,
+    });
+    expect(await db.select().from(schema.notificationPushers)).toHaveLength(2);
+    expect(sent).toBeLessThan(bytes.byteLength);
+    if (declared) expect(sent).toBe(0);
+    else expect(cancelled).toBe(true);
+
+    const remove = (body: string) => app.fetch(
+      new Request("https://takos.test/api/notifications/pushers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body,
+      }),
+      routeEnv(db),
+    );
+    expect((await remove("{")).status).toBe(400);
+    const foreign = await remove(JSON.stringify({
+      product: "takos", app_id: "jp.takos.fixture", pushkey: "other-device",
+    }));
+    expect(foreign.status).toBe(200);
+    // The existing API deliberately acknowledges absent registrations too.
+    expect(await foreign.json()).toEqual({ deleted: true });
+    expect(await db.select().from(schema.notificationPushers)).toHaveLength(2);
+    const normal = await remove(payload);
+    expect(normal.status).toBe(200);
+    expect(await normal.json()).toEqual({ deleted: true });
+    expect(await db.select({ accountId: schema.notificationPushers.accountId })
+      .from(schema.notificationPushers)).toEqual([{ accountId: "user-2" }]);
+  });
+}
 
 test("POST /api/notifications/pushers rejects another product", async () => {
   const db = await freshDb();
