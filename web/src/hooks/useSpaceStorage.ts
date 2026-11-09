@@ -1,9 +1,10 @@
-import { type Accessor, createSignal } from "solid-js";
+import { type Accessor, createSignal, onCleanup } from "solid-js";
 import type { StorageFile } from "../types/index.ts";
 import type { RpcResponse } from "../lib/rpc.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { getErrorMessage } from "../lib/errors.ts";
 import { useI18n } from "../store/i18n.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
@@ -35,14 +36,15 @@ export function useSpaceStorage(
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [truncated, setTruncated] = createSignal(false);
-  // Monotonic counter to prevent stale loadFiles responses from overwriting newer ones
-  let loadVersion = 0;
+  const listRequests = createLatestRequest();
+  let disposed = false;
+  onCleanup(() => { disposed = true;listRequests.next(); });
 
   const loadFiles = async (path = "/") => {
     const currentSpaceId = spaceId();
-    if (!currentSpaceId) return;
+    if (disposed || !currentSpaceId) return;
 
-    const version = ++loadVersion;
+    const claim = listRequests.claim(() => !disposed && spaceId() === currentSpaceId);
     setLoading(true);
     setError(null);
 
@@ -52,25 +54,24 @@ export function useSpaceStorage(
         query: { path },
       });
 
-      // Discard result if a newer loadFiles was called while this was in flight
-      if (version !== loadVersion) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
 
       const data = await rpcJson<
         { files: StorageFile[]; path: string; truncated?: boolean }
-      >(res);
+      >(res, { isCurrent: claim.won });
+      // JSON decoding can outlive a folder, Workspace or component switch.
+      if (!claim.won()) return;
       setFiles(data.files || []);
       setCurrentPath(data.path || path);
       setTruncated(data.truncated ?? false);
     } catch (err) {
-      if (version !== loadVersion) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setError(getErrorMessage(err, t("failedToLoadFiles")));
       setFiles([]);
       setCurrentPath(path);
       setTruncated(false);
     } finally {
-      if (version === loadVersion && spaceId() === currentSpaceId) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
