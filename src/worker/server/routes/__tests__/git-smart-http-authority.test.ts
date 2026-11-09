@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
@@ -9,11 +9,14 @@ import { putBlob, putTree, putCommit } from "../../../application/services/takos
 import { pktLineString } from "../../../application/services/takos-git/local/core/pack-common.ts";
 import { authDeps } from "../../middleware/auth.ts";
 import gitSmartHttp from "../git-smart-http.ts";
+import { createWebWorker, webApp } from "../../../web.ts";
 
 const originalAuthDeps = { ...authDeps };
 const client = createClient({ url: ":memory:" });
 let env: Env;
 let commitSha: string;
+let authorityCalls = 0;
+let bindingReads = 0;
 
 beforeAll(async () => {
   const directory = new URL("../../../../../db/migrations-control/migrations/", import.meta.url);
@@ -46,7 +49,7 @@ beforeAll(async () => {
       args: [`commit-${repo}`, `repo-${repo}`, commitSha, tree],
     });
   }
-  env = {
+  const baseEnv = {
     DB: db,
     GIT_OBJECTS: bucket,
     PLATFORM: {
@@ -54,8 +57,15 @@ beforeAll(async () => {
       services: { sql: { binding: db } },
     },
   } as unknown as Env;
+  env = new Proxy(baseEnv, {
+    get(target, key, receiver) {
+      bindingReads += 1;
+      return Reflect.get(target, key, receiver);
+    },
+  });
 });
 
+beforeEach(() => { authorityCalls = 0; bindingReads = 0; });
 afterEach(() => Object.assign(authDeps, originalAuthDeps));
 afterAll(() => client.close());
 
@@ -65,10 +75,11 @@ function identity(scopes: string[], userId = "principal-a") {
     bio: null, picture: null, trust_tier: "normal", setup_completed: true,
     created_at: "t0", updated_at: "t0",
   } satisfies User;
-  authDeps.resolveSelfIssuedBearer = async () => ({
-    kind: "ok", user, userId, subject: "synthetic-owner", scopes,
-  });
-  authDeps.getCachedUser = async () => user;
+  authDeps.resolveSelfIssuedBearer = async () => {
+    authorityCalls += 1;
+    return { kind: "ok", user, userId, subject: "synthetic-owner", scopes };
+  };
+  authDeps.getCachedUser = async () => { authorityCalls += 1; return user; };
   return user;
 }
 
@@ -86,50 +97,111 @@ function request(endpoint: "refs" | "pack", repo = "private-repo", authenticated
     }, env);
 }
 
+async function expectQuarantined(response: Response) {
+  expect(response.status).toBe(410);
+  expect(response.headers.get("Cache-Control")).toBe("no-store");
+  expect(response.headers.get("WWW-Authenticate")).toBeNull();
+  expect(response.headers.get("Location")).toBeNull();
+  expect(await response.json()).toEqual({
+    error: "Legacy Git hosting requires repository migration to the installed takos-git source.git.smart_http Interface.",
+    code: "git_legacy_migration_required",
+  });
+  expect(authorityCalls).toBe(0);
+  expect(bindingReads).toBe(0);
+}
+
 for (const endpoint of ["refs", "pack"] as const) {
   for (const scopes of [[], ["threads:read"], ["files:write"]]) {
-    test(`private Git ${endpoint} rejects a valid owner token without files:read (${scopes.join(" ")})`, async () => {
-      const user = identity(scopes);
-      let cachedUserReads = 0;
-      authDeps.getCachedUser = async () => { cachedUserReads += 1; return user; };
-      const response = await request(endpoint);
-      expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({ error: "authentication required", code: "git_unauthorized" });
-      expect(cachedUserReads).toBe(0);
+    test("quarantine rejects " + endpoint + " without resolving scopes " + scopes.join(" "), async () => {
+      identity(scopes);
+      await expectQuarantined(await request(endpoint));
     });
   }
 }
 
-test("private Git allows files:read and existing read/write/admin aliases for the actual member", async () => {
-  for (const scopes of [["files:read"], ["read"], ["write"], ["admin"]]) {
+test("the actual Web mount quarantines legacy Git before static assets", async () => {
+  let assetCalls = 0;
+  const response = await webApp.request(
+    "https://takos.test/git/workspace-a/public-repo.git/info/refs?service=git-upload-pack",
+    {},
+    {
+      PLATFORM: {
+        source: "node", bindings: {},
+        config: { adminDomain: "takos.test", environment: "development" },
+        services: {
+          assets: { binding: { fetch: async () => {
+            assetCalls += 1;
+            return new Response("legacy-looking asset", {
+              headers: { "Content-Type": "application/x-git-upload-pack-advertisement" },
+            });
+          } } },
+        },
+      },
+    } as unknown as Env,
+  );
+  expect(response.status).toBe(410);
+  expect(assetCalls).toBe(0);
+});
+
+test("the actual Worker rejects legacy Git before runtime initialization", async () => {
+  let factoryCalls = 0;
+  const unexpected = Error("quarantined request initialized the runtime");
+  const worker = createWebWorker(async () => { factoryCalls += 1; throw unexpected; });
+  const result = await worker.fetch(
+    new Request("https://takos.test/git/workspace-a/private-repo.git/git-upload-pack", { method: "POST" }),
+    {} as Env,
+    {} as Parameters<typeof worker.fetch>[2],
+  ).catch((error: unknown) => error);
+  expect(factoryCalls).toBe(0);
+  expect(result).toBeInstanceOf(Response);
+  expect((result as Response).status).toBe(410);
+});
+
+test("ordinary Worker paths still initialize the selected runtime", async () => {
+  let factoryCalls = 0;
+  const unexpected = Error("runtime initialization probe");
+  const worker = createWebWorker(async () => { factoryCalls += 1; throw unexpected; });
+  const result = await worker.fetch(
+    new Request("https://takos.test/gitlab"),
+    {} as Env,
+    {} as Parameters<typeof worker.fetch>[2],
+  ).catch((error: unknown) => error);
+  expect(factoryCalls).toBe(1);
+  expect(result).toBe(unexpected);
+});
+
+test("read/write/admin authority does not reopen quarantined HTTP hosting", async () => {
+  for (const scopes of [["read"], ["write"], ["admin"]]) {
     identity(scopes);
-    const refs = await request("refs");
-    expect(refs.status).toBe(200);
-    expect(await refs.text()).toContain(commitSha + " HEAD");
-    const pack = await request("pack");
-    expect(pack.status).toBe(200);
-    expect(pack.headers.get("content-type")).toBe("application/x-git-upload-pack-result");
-    expect(new TextDecoder().decode(await pack.arrayBuffer())).toContain("PACK");
+    await expectQuarantined(await request("refs"));
+    await expectQuarantined(await request("pack"));
   }
 });
 
-test("file authority does not replace actual Workspace membership", async () => {
+test("non-members get the same migration response without an existence lookup", async () => {
   identity(["files:read"], "principal-b");
+  await expectQuarantined(await request("refs"));
+  await expectQuarantined(await request("pack"));
+});
+
+test("anonymous public and private reads stay quarantined", async () => {
   for (const endpoint of ["refs", "pack"] as const) {
-    expect((await request(endpoint)).status).toBe(404);
+    await expectQuarantined(await request(endpoint, "public-repo", false));
+    await expectQuarantined(await request(endpoint, "private-repo", false));
   }
 });
 
-test("anonymous public reads and private denial keep their existing behavior", async () => {
-  for (const endpoint of ["refs", "pack"] as const) {
-    expect((await request(endpoint, "public-repo", false)).status).toBe(200);
-    expect((await request(endpoint, "private-repo", false)).status).toBe(401);
-  }
+test("invalid credentials never trigger UserInfo or a new authentication challenge", async () => {
+  authDeps.resolveSelfIssuedBearer = async () => { authorityCalls += 1; return { kind: "invalid" }; };
+  await expectQuarantined(await request("refs", "public-repo"));
+  await expectQuarantined(await request("pack", "public-repo"));
 });
 
-test("a supplied invalid token cannot fall back to an anonymous public read", async () => {
-  authDeps.resolveSelfIssuedBearer = async () => ({ kind: "invalid" });
-  for (const endpoint of ["refs", "pack"] as const) {
-    expect((await request(endpoint, "public-repo")).status).toBe(401);
+for (const endpoint of ["refs", "pack"] as const) {
+  for (const repo of ["private-repo", "public-repo"]) {
+    test(`legacy Git ${endpoint}/${repo} requires migration even for a file-authorized owner`, async () => {
+      identity(["files:read"]);
+      await expectQuarantined(await request(endpoint, repo));
+    });
   }
-});
+}

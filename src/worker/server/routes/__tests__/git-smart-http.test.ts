@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@libsql/client";
@@ -14,13 +14,11 @@ import {
   putCommit,
   putTree,
 } from "../../../application/services/takos-git/local/core/object-store.ts";
-import { pktLineString } from "../../../application/services/takos-git/local/core/pack-common.ts";
+import { collectReachableObjects } from "../../../application/services/takos-git/index.ts";
+import { writePackFromShas } from "../../../application/services/takos-git/local/core/pack.ts";
+import { toGitBucket } from "../../../shared/utils/git-bucket.ts";
 import gitSmartHttp from "../git-smart-http.ts";
 
-function gitAvailable(): boolean {
-  return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
-}
-const HAS_GIT = gitAvailable();
 
 const DDL = `
 CREATE TABLE accounts (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE);
@@ -97,122 +95,128 @@ async function seedRepo() {
     args: ["c1", "repo1", commitSha, treeSha],
   });
 
-  return { db, bucket, blobSha, treeSha, commitSha };
+  return { client, db, bucket, blobSha, treeSha, commitSha };
 }
 
-describe("git smart HTTP serve route", () => {
+const expectedError = {
+  error: "Legacy Git hosting requires repository migration to the installed takos-git source.git.smart_http Interface.",
+  code: "git_legacy_migration_required",
+};
+
+describe("Worker-native Git quarantine", () => {
   let seeded: Awaited<ReturnType<typeof seedRepo>>;
   let env: { DB: SqlDatabaseBinding; GIT_OBJECTS: unknown };
-  let dir = "";
+  let bindingReads = 0;
 
   beforeAll(async () => {
     seeded = await seedRepo();
-    env = { DB: seeded.db, GIT_OBJECTS: seeded.bucket };
-    if (HAS_GIT) dir = mkdtempSync(join(tmpdir(), "takos-serve-"));
-  });
-
-  afterAll(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
-  });
-
-  test("info/refs advertises HEAD symref, branch, and capabilities", async () => {
-    const res = await gitSmartHttp.request(
-      "/git/alice/demo.git/info/refs?service=git-upload-pack",
-      {},
-      env,
-    );
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe(
-      "application/x-git-upload-pack-advertisement",
-    );
-    const text = await res.text();
-    expect(text).toContain("# service=git-upload-pack");
-    expect(text).toContain(`${seeded.commitSha} HEAD`);
-    expect(text).toContain("symref=HEAD:refs/heads/main");
-    expect(text).toContain(`${seeded.commitSha} refs/heads/main`);
-  });
-
-  test("receive-pack (push) is refused", async () => {
-    const res = await gitSmartHttp.request(
-      "/git/alice/demo.git/info/refs?service=git-receive-pack",
-      {},
-      env,
-    );
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({
-      error:
-        "push is unavailable on the Takos compatibility endpoint; use the installed takos-git source.git.smart_http Interface",
-      code: "git_push_disabled",
+    env = new Proxy({ DB: seeded.db, GIT_OBJECTS: seeded.bucket }, {
+      get(target, key, receiver) {
+        bindingReads += 1;
+        return Reflect.get(target, key, receiver);
+      },
     });
   });
+  beforeEach(() => { bindingReads = 0; });
+  afterAll(() => seeded.client.close());
 
-  test("unknown repo is 404", async () => {
-    const res = await gitSmartHttp.request(
-      "/git/alice/nope.git/info/refs?service=git-upload-pack",
-      {},
-      env,
+  async function snapshot() {
+    const tables = await Promise.all(
+      ["accounts", "repositories", "branches", "tags", "commits"].map(async (table) => ({
+        table,
+        rows: (await seeded.client.execute("SELECT * FROM " + table + " ORDER BY id"))
+          .rows.map((row) => Object.fromEntries(Object.entries(row))),
+      })),
     );
-    expect(res.status).toBe(404);
+    const listing = await seeded.bucket.list();
+    if (listing.truncated) throw Error("incomplete fixture object snapshot");
+    const objects = await Promise.all(
+      [...listing.objects].sort((a, b) => a.key.localeCompare(b.key)).map(async ({ key }) => {
+        const object = await seeded.bucket.get(key);
+        if (!object) throw Error("fixture object missing");
+        return { key, bytes: Buffer.from(await object.arrayBuffer()).toString("hex") };
+      }),
+    );
+    return { tables, objects };
+  }
+
+  for (const [method, path] of [
+    ["GET", "/git/alice/demo.git/info/refs?service=git-upload-pack"],
+    ["GET", "/git/alice/demo.git/info/refs?service=git-receive-pack"],
+    ["GET", "/git/alice/nope.git/info/refs?service=git-upload-pack"],
+    ["POST", "/git/alice/demo.git/git-upload-pack"],
+    ["POST", "/git/alice/demo.git/git-receive-pack"],
+    ["GET", "/git/alice/demo.git/info/refs"],
+    ["GET", "/git/unknown/path"],
+    ["GET", "/git"],
+    ["HEAD", "/git/alice/demo.git/info/refs?service=git-upload-pack"],
+    ["OPTIONS", "/git/alice/demo.git/git-upload-pack"],
+    ["PUT", "/git/alice/demo.git/git-upload-pack"],
+    ["PATCH", "/git/alice/demo.git/git-upload-pack"],
+    ["DELETE", "/git/alice/demo.git/git-upload-pack"],
+  ]) {
+    test(method + " " + path + " is quarantined without touching legacy data", async () => {
+      const before = await snapshot();
+      const response = await gitSmartHttp.request(path!, { method }, env);
+      expect(response.status).toBe(410);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Location")).toBeNull();
+      expect(response.headers.get("WWW-Authenticate")).toBeNull();
+      if (method === "HEAD") expect(await response.text()).toBe("");
+      else expect(await response.json()).toEqual(expectedError);
+      expect(bindingReads).toBe(0);
+      expect(await snapshot()).toEqual(before);
+    });
+  }
+
+  test("quarantine does not consume an upload-pack or receive-pack body", async () => {
+    for (const endpoint of ["git-upload-pack", "git-receive-pack"]) {
+      let pulls = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulls += 1;
+          if (pulls > 2) controller.close();
+          else controller.enqueue(new Uint8Array(64 * 1024));
+        },
+      }, { highWaterMark: 0 });
+      const response = await gitSmartHttp.request("/git/alice/demo.git/" + endpoint, {
+        method: "POST", body, duplex: "half",
+      } as RequestInit & { duplex: "half" }, env);
+      expect(response.status).toBe(410);
+      expect(pulls).toBe(0);
+      expect(bindingReads).toBe(0);
+    }
   });
 
-  test("upload-pack rejects a want that is not an advertised tip (IDOR guard)", async () => {
-    const body = pktLineString(`want ${"a".repeat(40)}\n`);
-    const res = await gitSmartHttp.request(
-      "/git/alice/demo.git/git-upload-pack",
-      { method: "POST", body: body.buffer as ArrayBuffer },
-      env,
-    );
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain("git_invalid_want");
+  test("unrelated paths remain outside the compatibility router", async () => {
+    expect((await gitSmartHttp.request("/health")).status).toBe(404);
+    expect((await gitSmartHttp.request("/gitlab")).status).toBe(404);
   });
 
-  test("upload-pack returns a valid pack that real git accepts", async () => {
-    const body = new Uint8Array([
-      ...pktLineString(`want ${seeded.commitSha}\n`),
-      ...new TextEncoder().encode("0000"),
-      ...pktLineString("done\n"),
-    ]);
-    const res = await gitSmartHttp.request(
-      "/git/alice/demo.git/git-upload-pack",
-      { method: "POST", body: body.buffer as ArrayBuffer },
-      env,
+  test("retained legacy objects remain recoverable by actual pack tooling", async () => {
+    const before = await snapshot();
+    const bucket = toGitBucket(seeded.bucket);
+    const shas = await collectReachableObjects(
+      seeded.db, bucket, "repo1", [seeded.commitSha], new Set(),
     );
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe(
-      "application/x-git-upload-pack-result",
-    );
-
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    // Strip the leading "0008NAK\n" pkt-line; the rest is the packfile.
-    expect(new TextDecoder().decode(bytes.subarray(0, 8))).toBe("0008NAK\n");
-    const pack = bytes.subarray(8);
-
-    if (!HAS_GIT) return;
-    const repo = mkdtempSync(join(tmpdir(), "takos-clone-"));
+    const { pack, missing } = await writePackFromShas(bucket, shas);
+    expect(missing).toEqual([]);
+    expect(new TextDecoder().decode(pack.subarray(0, 4))).toBe("PACK");
+    expect(spawnSync("git", ["--version"], { stdio: "ignore" }).status).toBe(0);
+    const repo = mkdtempSync(join(tmpdir(), "takos-quarantine-recovery-"));
     try {
-      spawnSync("git", ["init", "-q", repo], { stdio: "ignore" });
-      const unpack = spawnSync("git", ["-C", repo, "unpack-objects", "-q"], {
-        input: pack,
-      });
+      expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
+      const unpack = spawnSync("git", ["-C", repo, "unpack-objects", "-q"], { input: pack });
       expect(unpack.status).toBe(0);
-      const cat = spawnSync("git", [
-        "-C",
-        repo,
-        "cat-file",
-        "-p",
-        seeded.blobSha,
-      ]);
-      expect(cat.stdout.toString()).toBe("hi\n");
-      const type = spawnSync("git", [
-        "-C",
-        repo,
-        "cat-file",
-        "-t",
-        seeded.commitSha,
-      ]);
-      expect(type.stdout.toString().trim()).toBe("commit");
+      const blob = spawnSync("git", ["-C", repo, "cat-file", "-p", seeded.blobSha]);
+      expect(blob.status).toBe(0);
+      expect(blob.stdout.toString()).toBe("hi\n");
+      const commit = spawnSync("git", ["-C", repo, "cat-file", "-t", seeded.commitSha]);
+      expect(commit.status).toBe(0);
+      expect(commit.stdout.toString().trim()).toBe("commit");
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
+    expect(await snapshot()).toEqual(before);
   });
 });

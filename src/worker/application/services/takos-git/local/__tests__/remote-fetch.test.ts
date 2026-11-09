@@ -1,132 +1,118 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-
-import * as schema from "../../../../../infra/db/schema.ts";
-import type { SqlDatabaseBinding } from "../../../../../shared/types/bindings.ts";
 import { createInMemoryObjectStore } from "../../../../../local-platform/in-memory-r2.ts";
-import {
-  getRawObject,
-  putBlob,
-  putCommit,
-  putTree,
-} from "../core/object-store.ts";
-import {
-  fetchRemoteRepository,
-  ingestObjects,
-} from "../remote-fetch.ts";
-import gitSmartHttp from "../../../../../server/routes/git-smart-http.ts";
+import { getRawObject } from "../core/object-store.ts";
+import { fetchRemoteRepository, ingestObjects } from "../remote-fetch.ts";
 
-function gitAvailable(): boolean {
-  return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
+const gitEnv = {
+  ...process.env,
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_AUTHOR_DATE: "2023-11-14T22:13:20Z",
+  GIT_COMMITTER_DATE: "2023-11-14T22:13:20Z",
+};
+
+function git(args: string[]): string {
+  const result = spawnSync("git", args, { env: gitEnv, encoding: "utf8" });
+  if (result.status !== 0) throw Error("git fixture failed: " + result.stderr);
+  return result.stdout.trim();
 }
-const HAS_GIT = gitAvailable();
 
-const DDL = `
-CREATE TABLE accounts (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE);
-CREATE TABLE repositories (
-  id TEXT PRIMARY KEY, account_id TEXT NOT NULL, name TEXT NOT NULL,
-  description TEXT, visibility TEXT NOT NULL DEFAULT 'private',
-  default_branch TEXT NOT NULL DEFAULT 'main', forked_from_id TEXT,
-  remote_clone_url TEXT, remote_store_actor_url TEXT,
-  stars INTEGER NOT NULL DEFAULT 0, forks INTEGER NOT NULL DEFAULT 0,
-  git_enabled INTEGER NOT NULL DEFAULT 0, primary_language TEXT, license TEXT,
-  featured INTEGER NOT NULL DEFAULT 0, install_count INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT, updated_at TEXT
-);
-CREATE TABLE branches (
-  id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, name TEXT NOT NULL,
-  commit_sha TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0,
-  is_protected INTEGER NOT NULL DEFAULT 0, created_at TEXT, updated_at TEXT
-);
-CREATE TABLE tags (
-  id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, name TEXT NOT NULL,
-  commit_sha TEXT NOT NULL, message TEXT, tagger_name TEXT, tagger_email TEXT,
-  created_at TEXT
-);
-CREATE TABLE commits (
-  id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, sha TEXT NOT NULL,
-  tree_sha TEXT NOT NULL, parent_shas TEXT, author_name TEXT NOT NULL,
-  author_email TEXT NOT NULL, author_date TEXT NOT NULL,
-  committer_name TEXT NOT NULL, committer_email TEXT NOT NULL,
-  commit_date TEXT NOT NULL, message TEXT NOT NULL
-);
-`;
+function seedServer() {
+  const root = mkdtempSync(join(tmpdir(), "takos-remote-reference-"));
+  const seed = join(root, "seed");
+  git(["init", "-q", "-b", "main", seed]);
+  git(["-C", seed, "config", "user.name", "T"]);
+  git(["-C", seed, "config", "user.email", "t@example.invalid"]);
+  writeFileSync(join(seed, "README.md"), "remote hi\n");
+  git(["-C", seed, "add", "README.md"]);
+  git(["-C", seed, "commit", "-q", "-m", "init"]);
+  git(["clone", "--bare", "-q", seed, join(root, "demo.git")]);
+  return {
+    root,
+    commitSha: git(["-C", seed, "rev-parse", "HEAD"]),
+    treeSha: git(["-C", seed, "rev-parse", "HEAD^{tree}"]),
+    blobSha: git(["-C", seed, "rev-parse", "HEAD:README.md"]),
+  };
+}
 
-const sig = { name: "T", email: "t@e.com", timestamp: 1700000000, tzOffset: "+0000" };
-
-async function seedServer() {
-  const client = createClient({ url: ":memory:" });
-  await client.executeMultiple(DDL);
-  const db = drizzle(client, { schema }) as unknown as SqlDatabaseBinding;
-  const bucket = createInMemoryObjectStore();
-
-  const blobSha = await putBlob(bucket, new TextEncoder().encode("remote hi\n"));
-  const treeSha = await putTree(bucket, [
-    { mode: "100644", name: "README.md", sha: blobSha },
+// Exercise the actual smart-HTTP client against standard Git's CGI backend,
+// rather than reopening Takos's retired Worker-native hosting route.
+async function gitHttpBackend(request: Request, root: string): Promise<Response> {
+  const url = new URL(request.url);
+  const body = new Uint8Array(await request.arrayBuffer());
+  const proc = Bun.spawn(["git", "http-backend"], {
+    env: {
+      ...gitEnv,
+      GIT_PROJECT_ROOT: root,
+      GIT_HTTP_EXPORT_ALL: "1",
+      PATH_INFO: url.pathname,
+      QUERY_STRING: url.search.slice(1),
+      REQUEST_METHOD: request.method,
+      CONTENT_TYPE: request.headers.get("Content-Type") ?? "",
+      CONTENT_LENGTH: String(body.byteLength),
+      HTTP_GIT_PROTOCOL: request.headers.get("Git-Protocol") ?? "",
+      HTTP_CONTENT_ENCODING: request.headers.get("Content-Encoding") ?? "",
+      REMOTE_ADDR: "127.0.0.1",
+    },
+    stdin: body,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [output, stderr, code] = await Promise.all([
+    new Response(proc.stdout).arrayBuffer(),
+    new Response(proc.stderr).text(),
+    proc.exited,
   ]);
-  const commitSha = await putCommit(bucket, {
-    tree: treeSha,
-    parents: [],
-    author: sig,
-    committer: sig,
-    message: "init\n",
-  });
-
-  await client.execute({ sql: "INSERT INTO accounts (id, slug) VALUES ('a','alice')" });
-  await client.execute({
-    sql:
-      "INSERT INTO repositories (id, account_id, name, visibility, default_branch) VALUES ('r','a','demo','public','main')",
-  });
-  await client.execute({
-    sql:
-      "INSERT INTO branches (id, repo_id, name, commit_sha, is_default) VALUES ('b','r','main',?,1)",
-    args: [commitSha],
-  });
-  await client.execute({
-    sql:
-      `INSERT INTO commits (id, repo_id, sha, tree_sha, author_name, author_email,
-        author_date, committer_name, committer_email, commit_date, message)
-       VALUES ('c','r',?,?, 'T','t@e.com','2026','T','t@e.com','2026','init')`,
-    args: [commitSha, treeSha],
-  });
-
-  return { db, bucket, blobSha, treeSha, commitSha };
+  if (code !== 0) throw Error("git http-backend failed: " + stderr);
+  const bytes = Buffer.from(output);
+  const split = bytes.indexOf("\r\n\r\n");
+  if (split < 0) throw Error("git http-backend omitted CGI headers");
+  const headers = new Headers();
+  let status = 200;
+  for (const line of bytes.subarray(0, split).toString("utf8").split("\r\n")) {
+    const colon = line.indexOf(":");
+    if (colon < 0) throw Error("invalid CGI header");
+    const name = line.slice(0, colon);
+    const value = line.slice(colon + 1).trim();
+    if (name.toLowerCase() === "status") status = Number.parseInt(value, 10);
+    else headers.append(name, value);
+  }
+  return new Response(bytes.subarray(split + 4), { status, headers });
 }
 
-describe("worker-native remote fetch (loopback against the serve route)", () => {
-  let seeded: Awaited<ReturnType<typeof seedServer>>;
+describe("worker-native remote fetch (loopback against standard Git)", () => {
+  let seeded: ReturnType<typeof seedServer>;
   let server: ReturnType<typeof Bun.serve> | null = null;
   let baseUrl = "";
 
-  beforeAll(async () => {
-    seeded = await seedServer();
-    const env = { DB: seeded.db, GIT_OBJECTS: seeded.bucket };
+  beforeAll(() => {
+    seeded = seedServer();
     server = Bun.serve({
       port: 0,
       hostname: "127.0.0.1",
-      fetch: (req) => gitSmartHttp.fetch(req, env),
+      fetch: (request) => gitHttpBackend(request, seeded.root),
     });
-    baseUrl = `http://127.0.0.1:${server.port}/git/alice/demo.git`;
+    baseUrl = `http://127.0.0.1:${server.port}/demo.git`;
   });
 
   afterAll(() => {
     server?.stop(true);
+    if (seeded) rmSync(seeded.root, { recursive: true, force: true });
   });
 
-  test("real git clone over HTTP against the serve route", async () => {
-    if (!HAS_GIT) return;
+  test("real git clone over HTTP against the standard Git backend", async () => {
     const dir = mkdtempSync(join(tmpdir(), "takos-httpclone-"));
     try {
       // Use async Bun.spawn (not spawnSync): the serve route runs in THIS
       // process's event loop, so a blocking spawnSync would deadlock (git waits
       // on the server, the server can't run while the loop is blocked).
       const proc = Bun.spawn(["git", "clone", "-q", baseUrl, dir], {
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        env: gitEnv,
         stderr: "pipe",
       });
       const timer = setTimeout(() => proc.kill(), 15000);
