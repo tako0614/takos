@@ -63,7 +63,7 @@
             "label": { "ja": "ランタイムシークレット設定済み", "en": "Runtime secrets provisioned" },
             "helper": {
               "ja": "対象は 5 つの runtime secret です: ENCRYPTION_KEY、TAKOS_AGENT_START_TOKEN、TAKOS_INTERNAL_API_SECRET、PLATFORM_PRIVATE_KEY、PLATFORM_PUBLIC_KEY。前の 3 つは下の secret.generated で host が鋳造し、RSA の 2 つは operator が投入します。既定は true です。Worker Version の binding 一覧は完全な集合なので、false のまま apply すると ENCRYPTION_KEY を持たない version が出て、それで暗号化した payload は読めなくなります。false にできるのは値がまだ存在しない初回 install だけで、first_install_acknowledgement を完全一致で指定します。",
-              "en": "Covers the five runtime secrets: ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY and PLATFORM_PUBLIC_KEY. The host mints the first three through the secret.generated requirements below; the operator supplies the RSA pair. Defaults to true. A Worker Version's binding list is complete, so applying with false publishes a version without ENCRYPTION_KEY and leaves everything encrypted under it unreadable. Only a first install, before any value exists, may set false, and it must pass the exact first_install_acknowledgement."
+              "en": "Covers the five runtime secret names (ENCRYPTION_KEY, TAKOS_AGENT_START_TOKEN, TAKOS_INTERNAL_API_SECRET, PLATFORM_PRIVATE_KEY and PLATFORM_PUBLIC_KEY). The host mints the first three through the secret.generated requirements below; the operator supplies the RSA pair. Defaults to true. A Worker Version's binding list is complete, so applying with false publishes a version without ENCRYPTION_KEY and leaves everything encrypted under it unreadable. Only a first install, before any value exists, may set false, and it must pass the exact first_install_acknowledgement."
             },
             "advanced": true
           },
@@ -136,7 +136,7 @@
             "label": { "ja": "Container イメージ", "en": "Container image" },
             "helper": {
               "ja": "provider-gap bridge を使う場合だけ、Docker Hub または同一 Cloudflare account の immutable digest を指定します。GHCR はサポート対象外です。",
-              "en": "When the provider-gap bridge is enabled, provide an immutable Docker Hub digest or same-account Cloudflare registry digest. GHCR is unsupported."
+              "en": "When the provider-gap bridge is enabled, provide an immutable digest-pinned image hosted on Docker Hub or in the same-account Cloudflare registry. GHCR is unsupported."
             },
             "placeholder": "docker.io/example/agent@sha256:<64 hex>",
             "advanced": true
