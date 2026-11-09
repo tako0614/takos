@@ -163,8 +163,9 @@ export function PrivacyContent() {
         <li>保有個人データの開示請求</li>
         <li>アカウント情報の訂正・追加・削除</li>
         <li>
-          データのエクスポート（Git リポジトリはアクセストークン認証付きの
-          標準 <code>git clone</code>（読み取り）で取得可能）
+          データのエクスポート（Git リポジトリは明示的な移行後、installed
+          takos-git の正規 remote から取得します。旧 <code>/git/*</code>
+          URL は隔離されています）
         </li>
         <li>アカウントの削除（関連するすべてのデータを含む）</li>
         <li>利用目的の通知請求</li>

@@ -80,11 +80,15 @@ revision coordinator へ渡します。Source の書換え、同期、Capsule pl
 所有し、Takos は reviewable Run を受け取ってから別の `revision/apply` を呼びます。
 rollback は既存 StateVersion の rollback-plan を使います。
 
-`/git/:owner/:repo.git/*` は既存 repository の clone / fetch 用 read-only
-compatibility endpoint です。`git-receive-pack` は拒否されます。repository writes、
-pull request、review、release などの collaborative hosting API は Takos Worker に
-mount せず、installed `takos-git` の `source.git.smart_http` /
-`source.git.hosting` Interface を利用します。
+旧 `/git` / `/git/*` は隔離され、全methodで `410` /
+`git_legacy_migration_required` と `Cache-Control: no-store` を返します。
+credentialの検証、repository/refs/objectの読取、request bodyの解析は行いません。
+Web入口はstatic assets/CORSより前、Worker入口はplatform初期化/schema処理より前に拒否します。
+既存のrepository記録とobjectは保持します。明示的にrepositoryを移行し、installed
+`takos-git` が公開する正規の `source.git.smart_http` remoteへ接続してください。
+この旧経路は移行やremote URLの推測・自動redirectを行いません。clone/fetch/push、
+pull request、review、releaseはinstalled `takos-git` の `source.git.smart_http` /
+`source.git.hosting` Interfaceが所有します。
 
 ## Deploy authority
 

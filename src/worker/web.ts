@@ -11,7 +11,10 @@ import { createApiRouter } from "./server/routes/api.ts";
 import { RateLimiters } from "./shared/utils/rate-limiter.ts";
 import { authSessionRouter } from "./server/routes/auth/session.ts";
 import { authOidcRouter } from "./server/routes/auth/oidc.ts";
-import gitSmartHttp from "./server/routes/git-smart-http.ts";
+import gitSmartHttp, {
+  isLegacyGitPath,
+  legacyGitQuarantineResponse,
+} from "./server/routes/git-smart-http.ts";
 import {
   TAKOSUMI_PRODUCT_CAPABILITIES_PATH,
   TAKOSUMI_WELL_KNOWN_PATH,
@@ -84,6 +87,9 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// Retired URLs must not reach platform context, CORS preflight or static assets.
+app.route("/", gitSmartHttp);
 
 app.use("*", async (c, next) => {
   const platform = getPlatformContext(c);
@@ -285,11 +291,6 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 app.get(TAKOSUMI_WELL_KNOWN_PATH, (c) =>
   c.json(createTakosDistributionWellKnown(new URL(c.req.url).origin)),
 );
-
-// Git Smart HTTP (read-only clone/fetch) served from the R2-backed object store.
-// Mounted at the top level so `git clone https://<host>/git/<owner>/<repo>.git`
-// works; push is refused inside the router.
-app.route("/", gitSmartHttp);
 
 app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
   c.json(createTakosDistributionProductCapabilities(new URL(c.req.url).origin)),
@@ -602,10 +603,8 @@ app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;
 
   // If it's an API/auth/reserved route, return a JSON error instead of the SPA
-  // shell. `/git/` (worker-native Git Smart HTTP, read-only clone/fetch) is
-  // handled by the gitSmartHttp router above; it is listed here so that any
-  // request that does fall through is answered as a machine-readable 404
-  // rather than HTML.
+  // shell. `/git/` is quarantined by the router above; any fallthrough still
+  // receives a machine-readable 404 instead of HTML.
   if (
     path.startsWith("/api/") ||
     path.startsWith("/auth/") ||
@@ -743,6 +742,9 @@ export function createWebWorker(
       env: Env,
       ctx: PlatformExecutionContext,
     ): Promise<Response> {
+      const url = new URL(request.url);
+      if (isLegacyGitPath(url.pathname)) return legacyGitQuarantineResponse();
+
       const platform = await buildPlatform(env);
       const bindings = platform.bindings;
       const requestBindings = {
@@ -756,7 +758,6 @@ export function createWebWorker(
       const envValidationError = envGuard(bindings);
 
       // Return error for critical config issues (except health check)
-      const url = new URL(request.url);
       if (envValidationError && url.pathname !== "/health") {
         return new Response(
           JSON.stringify({

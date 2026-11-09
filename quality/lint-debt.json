@@ -1,8 +1,8 @@
 {
   "note": "Declared lint debt. `bun run check:lint` runs oxlint over src, web/src, scripts and website/src and refuses any finding that is not counted here. Counts are a countdown: they may only be lowered, and an entry that reaches zero must be deleted. Rule selection lives in .oxlintrc.json.",
   "totals": {
-    "files": 57,
-    "diagnostics": 112
+    "files": 56,
+    "diagnostics": 111
   },
   "files": {
     "scripts/build-worker-release-artifact.ts": 1,
@@ -52,7 +52,6 @@
     "src/worker/runtime/durable-objects/rate-limiter.ts": 1,
     "src/worker/runtime/queues/__tests__/queue-names.test.ts": 1,
     "src/worker/runtime/worker/egress.ts": 8,
-    "src/worker/server/routes/__tests__/git-smart-http.test.ts": 1,
     "src/worker/server/routes/api.ts": 1,
     "src/worker/server/routes/capsules.ts": 1,
     "src/worker/server/routes/repos/routes.ts": 4,
