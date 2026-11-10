@@ -1,41 +1,56 @@
-import { createSignal } from "solid-js";
+import { createSignal, onCleanup } from "solid-js";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 
 interface UseFileUploadParams {
   uploadFile: (file: File) => Promise<unknown>;
+  getScope: () => symbol | undefined;
 }
 
 interface UseFileUploadResult {
   uploading: () => boolean;
-  handleFileSelect: (files: FileList | null) => void;
+  handleFileSelect: (files: FileList | null) => Promise<void>;
 }
 
 export function useFileUpload(
-  { uploadFile }: UseFileUploadParams,
+  { uploadFile, getScope }: UseFileUploadParams,
 ): UseFileUploadResult {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [uploading, setUploading] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
 
   const handleFileSelect = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
+    if (disposed || uploading() || !fileList || fileList.length === 0) return;
+    const scope = getScope();
+    if (!scope) return;
+    const files = Array.from(fileList);
+    const isCurrent = () => !disposed && getScope() === scope;
 
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const result = await uploadFile(file);
-      if (result) {
-        successCount++;
-      } else {
-        failCount++;
+    try {
+      for (const file of files) {
+        if (!isCurrent()) return;
+        try {
+          const result = await uploadFile(file);
+          if (!isCurrent()) return;
+          if (result) successCount++;
+          else failCount++;
+        } catch {
+          if (!isCurrent()) return;
+          failCount++;
+          break;
+        }
       }
+    } finally {
+      setUploading(false);
     }
 
-    setUploading(false);
+    if (!isCurrent()) return;
 
     if (successCount > 0) {
       showToast(

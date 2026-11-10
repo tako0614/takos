@@ -43,6 +43,7 @@ export function StoragePage(props: StoragePageProps) {
     loadFiles,
     createFolder,
     uploadFile,
+    uploadScope,
     deleteItem,
     deleteItems,
     renameItem,
@@ -61,7 +62,7 @@ export function StoragePage(props: StoragePageProps) {
   );
   const [interfaceFileHandlers, setFileHandlers] = createSignal<FileHandler[]>([]);
 
-  const { uploading, handleFileSelect } = useFileUpload({ uploadFile });
+  const { uploading, handleFileSelect } = useFileUpload({ uploadFile, getScope: uploadScope });
   const [isDragOver, setIsDragOver] = createSignal(false);
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();

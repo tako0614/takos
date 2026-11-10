@@ -15,6 +15,7 @@ interface UseSpaceStorageReturn {
   loadFiles: (path?: string) => Promise<void>;
   createFolder: (name: string) => Promise<StorageFile | null>;
   uploadFile: (file: File) => Promise<StorageFile | null>;
+  uploadScope: () => symbol | undefined;
   deleteItem: (fileId: string) => Promise<boolean>;
   deleteItems: (fileIds: string[]) => Promise<boolean>;
   renameItem: (fileId: string, name: string) => Promise<StorageFile | null>;
@@ -39,11 +40,21 @@ export function useSpaceStorage(
   const listRequests = createLatestRequest();
   let disposed = false;
   onCleanup(() => { disposed = true;listRequests.next(); });
+  let uploadTarget: { spaceId: string; path: string; token: symbol } | undefined;
+  let listedTarget: typeof uploadTarget;
+  const uploadScope = () => !disposed && uploadTarget && listedTarget === uploadTarget && spaceId() === uploadTarget.spaceId
+    ? uploadTarget.token : undefined;
 
   const loadFiles = async (path = "/") => {
     const currentSpaceId = spaceId();
-    if (disposed || !currentSpaceId) return;
+    if (disposed) return;
+    if (!currentSpaceId) { uploadTarget = undefined;listedTarget = undefined;return; }
 
+    // Invalidate upload batches as soon as navigation starts, including A -> B -> A.
+    // Refreshing the same folder does not retire the rest of its selected files.
+    if (uploadTarget?.spaceId !== currentSpaceId || uploadTarget.path !== path) {
+      uploadTarget = { spaceId: currentSpaceId, path, token: Symbol("storage-upload-target") };
+    }
     const claim = listRequests.claim(() => !disposed && spaceId() === currentSpaceId);
     setLoading(true);
     setError(null);
@@ -61,6 +72,8 @@ export function useSpaceStorage(
       >(res, { isCurrent: claim.won });
       // JSON decoding can outlive a folder, Workspace or component switch.
       if (!claim.won()) return;
+      uploadTarget.path = data.path || path;
+      listedTarget = uploadTarget;
       setFiles(data.files || []);
       setCurrentPath(data.path || path);
       setTruncated(data.truncated ?? false);
@@ -98,8 +111,10 @@ export function useSpaceStorage(
   };
 
   const uploadFile = async (file: File): Promise<StorageFile | null> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return null;
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return null;
+    const isCurrent = () => scope === uploadScope() && currentPath() === parentPath;
+    let authenticationRequired = false;
     setError(null);
 
     try {
@@ -107,18 +122,21 @@ export function useSpaceStorage(
         param: { spaceId: currentSpaceId },
         json: {
           name: file.name,
-          parent_path: currentPath(),
+          parent_path: parentPath,
           size: file.size,
           mime_type: file.type || undefined,
         },
       });
+      if (!isCurrent()) return null;
+      authenticationRequired = urlRes.status === 401;
 
       const urlData = await rpcJson<{
         file_id: string;
         upload_url: string;
         r2_key: string;
         expires_at: string;
-      }>(urlRes);
+      }>(urlRes, { isCurrent });
+      if (!isCurrent()) return null;
 
       const uploadRes = await fetch(urlData.upload_url, {
         method: "PUT",
@@ -127,6 +145,7 @@ export function useSpaceStorage(
           "Content-Type": file.type || "application/octet-stream",
         },
       });
+      if (!isCurrent()) return null;
 
       if (!uploadRes.ok) {
         throw new Error(t("failedToUploadFile"));
@@ -137,12 +156,19 @@ export function useSpaceStorage(
           param: { spaceId: currentSpaceId },
           json: { file_id: urlData.file_id },
         });
+      if (!isCurrent()) return null;
+      authenticationRequired = confirmRes.status === 401;
 
-      const confirmData = await rpcJson<{ file: StorageFile }>(confirmRes);
-      await loadFiles(currentPath());
+      const confirmData = await rpcJson<{ file: StorageFile }>(confirmRes, { isCurrent });
+      if (!isCurrent()) return null;
+      await loadFiles(parentPath);
       return confirmData.file;
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToUploadFile")));
+      if (isCurrent()) {
+        setError(getErrorMessage(err, t("failedToUploadFile")));
+        // The caller must stop the remaining files while login navigation begins.
+        if (authenticationRequired) throw err;
+      }
       return null;
     }
   };
@@ -332,6 +358,7 @@ export function useSpaceStorage(
     loadFiles,
     createFolder,
     uploadFile,
+    uploadScope,
     deleteItem,
     deleteItems,
     renameItem,
