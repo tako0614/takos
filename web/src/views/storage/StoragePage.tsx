@@ -357,6 +357,7 @@ export function StoragePage(props: StoragePageProps) {
 
         <RenameModal
           isOpen={actions.showRenameModal()}
+          renaming={actions.renaming()}
           renameTarget={actions.renameTarget()}
           newName={actions.newName()}
           onNewNameChange={actions.setNewName}

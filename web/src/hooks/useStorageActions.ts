@@ -10,7 +10,7 @@ interface UseStorageActionsParams {
   getDownloadUrl: (fileId: string) => Promise<string | null>;
   downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
   deleteItem: (id: string) => Promise<boolean>;
-  renameItem: (id: string, name: string) => Promise<unknown>;
+  renameItem: (id: string, name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
   currentPath: () => string;
   setSelectedFiles: Setter<Set<string>>;
   getScope: () => symbol | undefined;
@@ -31,6 +31,7 @@ interface UseStorageActionsResult {
   handleDelete: (file: StorageFile) => Promise<void>;
   // Rename
   showRenameModal: () => boolean;
+  renaming: () => boolean;
   renameTarget: () => StorageFile | null;
   newName: () => string;
   setNewName: Setter<string>;
@@ -67,6 +68,11 @@ export function useStorageActions({
     null,
   );
   const [newName, setNewName] = createSignal("");
+  const [renameSession, setRenameSession] = createSignal<{ scope: symbol }>();
+  const [pendingRenameTargets, setPendingRenameTargets] = createSignal(new Set<string>());
+  const renameKey = (file: StorageFile) => JSON.stringify([file.space_id, file.id]);
+  const isCurrentRename = (session: { scope: symbol } | undefined) =>
+    !disposed && session !== undefined && renameSession() === session && getScope() === session.scope;
 
   // Zip download state
   const [downloadingZip, setDownloadingZip] = createSignal(false);
@@ -165,30 +171,42 @@ export function useStorageActions({
   };
 
   const openRenameModal = (file: StorageFile) => {
+    const scope = getScope();
+    if (disposed || !scope) return;
+    const oldTarget = renameTarget();
+    const draft = showRenameModal() && oldTarget && renameKey(oldTarget) === renameKey(file) ? newName() : file.name;
+    setRenameSession({ scope });
     setRenameTarget(file);
-    setNewName(file.name);
+    setNewName(draft);
     setShowRenameModal(true);
   };
 
   const closeRenameModal = () => {
+    setRenameSession(undefined);
     setShowRenameModal(false);
     setRenameTarget(null);
     setNewName("");
   };
 
   const handleRename = async () => {
-    const target = renameTarget();
-    const name = newName();
-    if (!target || !name.trim()) return;
-
-    const result = await renameItem(target.id, name.trim());
-    if (result) {
-      showToast("success", t("renamedTo").replace("{name}", name));
-      setShowRenameModal(false);
-      setRenameTarget(null);
-      setNewName("");
-    } else {
-      showToast("error", t("failedToRename"));
+    const target = renameTarget(), session = renameSession(), draft = newName(), name = draft.trim();
+    if (!target || !session || !isCurrentRename(session) || !name || name === target.name) return;
+    const key = renameKey(target);
+    if (pendingRenameTargets().has(key)) return;
+    setPendingRenameTargets(previous => new Set(previous).add(key));
+    try {
+      const result = await renameItem(target.id, name, () => isCurrentRename(session));
+      if (!isCurrentRename(session)) return;
+      if (result) {
+        showToast("success", t("renamedTo").replace("{name}", result.name));
+        // Acknowledging the submitted name must not discard edits made while saving.
+        if (newName() === draft) closeRenameModal();
+        else setRenameTarget(result);
+      } else {
+        showToast("error", t("failedToRename"));
+      }
+    } finally {
+      setPendingRenameTargets(previous => { const next = new Set(previous);next.delete(key);return next; });
     }
   };
 
@@ -202,7 +220,11 @@ export function useStorageActions({
     downloadedZipBytes,
     handleDownloadZip,
     handleDelete,
-    showRenameModal,
+    showRenameModal: () => showRenameModal() && isCurrentRename(renameSession()),
+    renaming: () => {
+      const target = renameTarget();
+      return target !== null && isCurrentRename(renameSession()) && pendingRenameTargets().has(renameKey(target));
+    },
     renameTarget,
     newName,
     setNewName,

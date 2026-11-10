@@ -22,7 +22,7 @@ interface UseSpaceStorageReturn {
   uploadScope: () => symbol | undefined;
   deleteItem: (fileId: string) => Promise<boolean>;
   deleteItems: (fileIds: string[]) => Promise<StorageBulkDeleteResult | null>;
-  renameItem: (fileId: string, name: string) => Promise<StorageFile | null>;
+  renameItem: (fileId: string, name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
   moveItem: (fileId: string, parentPath: string) => Promise<StorageFile | null>;
   bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
   bulkRenameItems: (
@@ -42,22 +42,27 @@ export function useSpaceStorage(
   const [error, setError] = createSignal<string | null>(null);
   const [truncated, setTruncated] = createSignal(false);
   const listRequests = createLatestRequest();
+  const [listedScope, setListedScope] = createSignal<symbol | undefined>();
   let disposed = false;
-  onCleanup(() => { disposed = true;listRequests.next(); });
+  onCleanup(() => { disposed = true;listRequests.next();setListedScope(undefined); });
   let uploadTarget: { spaceId: string; path: string; token: symbol } | undefined;
   let listedTarget: typeof uploadTarget;
-  const uploadScope = () => !disposed && uploadTarget && listedTarget === uploadTarget && spaceId() === uploadTarget.spaceId
-    ? uploadTarget.token : undefined;
+  const uploadScope = () => {
+    const scope = listedScope();
+    return !disposed && uploadTarget && listedTarget === uploadTarget && spaceId() === uploadTarget.spaceId && scope === uploadTarget.token
+      ? scope : undefined;
+  };
 
   const loadFiles = async (path = "/") => {
     const currentSpaceId = spaceId();
     if (disposed) return;
-    if (!currentSpaceId) { uploadTarget = undefined;listedTarget = undefined;return; }
+    if (!currentSpaceId) { uploadTarget = undefined;listedTarget = undefined;setListedScope(undefined);return; }
 
     // Invalidate upload batches as soon as navigation starts, including A -> B -> A.
     // Refreshing the same folder does not retire the rest of its selected files.
     if (uploadTarget?.spaceId !== currentSpaceId || uploadTarget.path !== path) {
       uploadTarget = { spaceId: currentSpaceId, path, token: Symbol("storage-upload-target") };
+      setListedScope(undefined);
     }
     const claim = listRequests.claim(() => !disposed && spaceId() === currentSpaceId);
     setLoading(true);
@@ -81,6 +86,7 @@ export function useSpaceStorage(
       setFiles(data.files || []);
       setCurrentPath(data.path || path);
       setTruncated(data.truncated ?? false);
+      setListedScope(uploadTarget.token);
     } catch (err) {
       if (!claim.won()) return;
       setError(getErrorMessage(err, t("failedToLoadFiles")));
@@ -234,9 +240,12 @@ export function useSpaceStorage(
   const renameItem = async (
     fileId: string,
     name: string,
+    isCurrentOperation?: () => boolean,
   ): Promise<StorageFile | null> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return null;
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return null;
+    const isCurrent = () => scope === uploadScope() && currentPath() === parentPath && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
     setError(null);
 
     try {
@@ -245,11 +254,13 @@ export function useSpaceStorage(
         json: { name },
       });
 
-      const data = await rpcJson<{ file: StorageFile }>(res);
-      await loadFiles(currentPath());
-      return data.file;
+      if (!isCurrent()) return null;
+      const data = await rpcJson<{ file: StorageFile }>(res, { isCurrent });
+      if (!isCurrent()) return null;
+      await loadFiles(parentPath);
+      return isCurrent() ? data.file : null;
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToRename")));
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToRename")));
       return null;
     }
   };
