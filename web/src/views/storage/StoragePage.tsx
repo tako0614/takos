@@ -13,7 +13,7 @@ import { StorageFileTable } from "./StorageFileTable.tsx";
 import { StorageBulkActions } from "./StorageBulkActions.tsx";
 import { StorageContextMenu } from "./StorageContextMenu.tsx";
 import { RenameModal } from "./RenameModal.tsx";
-import { CreateFolderModal } from "./CreateFolderModal.tsx";
+import { CreateFolderModal, type CreateFolderSession } from "./CreateFolderModal.tsx";
 import { BulkMoveModal } from "./BulkMoveModal.tsx";
 import { BulkRenameModal } from "./BulkRenameModal.tsx";
 import { StorageFileViewer } from "./StorageFileViewer.tsx";
@@ -56,7 +56,7 @@ export function StoragePage(props: StoragePageProps) {
   const [selectedFiles, setSelectedFiles] = createSignal<Set<string>>(
     new Set(),
   );
-  const [showCreateFolderModal, setShowCreateFolderModal] = createSignal(false);
+  const [createFolderSession, setCreateFolderSession] = createSignal<CreateFolderSession>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | null>(
     null,
   );
@@ -249,7 +249,10 @@ export function StoragePage(props: StoragePageProps) {
           downloadedZipBytes={actions.downloadedZipBytes()}
           onRefresh={() => loadFiles(currentPath())}
           onDownloadZip={actions.handleDownloadZip}
-          onNewFolder={() => setShowCreateFolderModal(true)}
+          onNewFolder={() => {
+            const scope = uploadScope();
+            if (scope) setCreateFolderSession({ scope });
+          }}
           onFileSelect={handleFileSelect}
         />
 
@@ -350,8 +353,9 @@ export function StoragePage(props: StoragePageProps) {
         </Show>
 
         <CreateFolderModal
-          isOpen={showCreateFolderModal()}
-          onClose={() => setShowCreateFolderModal(false)}
+          session={createFolderSession()}
+          getScope={uploadScope}
+          onClose={() => setCreateFolderSession(undefined)}
           createFolder={createFolder}
         />
 
