@@ -5,13 +5,14 @@ import { ConfirmDialogRenderer } from "../../../../web/src/components/common/Con
 import { useToast } from "../../../../web/src/store/toast.ts";
 
 const [space, setSpace] = createSignal("space-a");
+const [path, setPath] = createSignal("/a");
 const toast = useToast();
 const dispose = render(() => <>
-  <StoragePage spaceId={space()} spaces={[]} initialPath="/a" />
+  <StoragePage spaceId={space()} spaces={[]} initialPath={path()} />
   <ConfirmDialogRenderer />
 </>, document.getElementById("root")!);
 
 Object.assign(window, { storageDeleteFixture: {
-  setSpace, dispose, toasts: () => toast.toasts,
+  setSpace, setPath, dispose, toasts: () => toast.toasts,
   clearToasts: () => { for (const item of toast.toasts) toast.dismissToast(item.id); },
 } });

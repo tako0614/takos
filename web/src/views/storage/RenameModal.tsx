@@ -8,6 +8,7 @@ interface RenameModalProps {
   isOpen: boolean;
   renameTarget: StorageFile | null;
   newName: string;
+  renaming?: boolean;
   onNewNameChange: (value: string) => void;
   onClose: () => void;
   onRename: () => void;
@@ -30,7 +31,8 @@ export function RenameModal(props: RenameModalProps) {
           placeholder={t("newName")}
           autofocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && props.newName.trim()) {
+            if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !props.renaming &&
+              props.newName.trim() && props.newName.trim() !== props.renameTarget?.name) {
               props.onRename();
             }
           }}
@@ -42,8 +44,8 @@ export function RenameModal(props: RenameModalProps) {
           <Button
             variant="primary"
             onClick={props.onRename}
-            disabled={!props.newName.trim() ||
-              props.newName === props.renameTarget?.name}
+            disabled={props.renaming || !props.newName.trim() ||
+              props.newName.trim() === props.renameTarget?.name}
           >
             {t("rename")}
           </Button>
