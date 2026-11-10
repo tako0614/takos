@@ -9,7 +9,7 @@ import { createLatestRequest } from "../lib/createLatestRequest.ts";
 
 interface UseStorageActionsParams {
   getDownloadUrl: (fileId: string, isCurrentOperation?: () => boolean) => Promise<string | null>;
-  downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
+  downloadFolderZip: (path: string, isCurrentOperation?: () => boolean) => Promise<RpcResponse | null>;
   deleteItem: (id: string) => Promise<boolean>;
   renameItem: (id: string, name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
   currentPath: () => string;
@@ -77,8 +77,13 @@ export function useStorageActions({
     !disposed && session !== undefined && renameSession() === session && getScope() === session.scope;
 
   // Zip download state
-  const [downloadingZip, setDownloadingZip] = createSignal(false);
-  const [downloadedZipBytes, setDownloadedZipBytes] = createSignal(0);
+  const [zipDownload, setZipDownload] = createSignal<{ scope: symbol; token: symbol; pending: boolean; bytes: number }>();
+  const currentZipDownload = () => {
+    const task = zipDownload();
+    return !disposed && task && getScope() === task.scope ? task : undefined;
+  };
+  const downloadingZip = () => currentZipDownload()?.pending ?? false;
+  const downloadedZipBytes = () => currentZipDownload()?.bytes ?? 0;
 
   const handleOpenFile = async (file: StorageFile) => {
     const scope = getScope();
@@ -110,40 +115,46 @@ export function useStorageActions({
   };
 
   const handleDownloadZip = async () => {
-    if (downloadingZip()) return;
-    setDownloadingZip(true);
-    setDownloadedZipBytes(0);
+    const scope = getScope(), path = currentPath();
+    if (disposed || !scope || downloadingZip()) return;
+    const task = { scope, token: Symbol("storage-zip-download"), pending: true, bytes: 0 };
+    setZipDownload(task);
+    const isCurrent = () => !disposed && getScope() === scope && zipDownload()?.token === task.token;
+    const folderName = path === "/" ? "workspace" : path.split("/").filter(Boolean).pop() || "folder";
+    const filename = `${folderName}.zip`;
 
     try {
-      const res = await downloadFolderZip(currentPath());
+      const res = await downloadFolderZip(path, isCurrent);
+      if (!isCurrent()) return;
       if (!res) {
         showToast("error", t("failedToGetDownloadUrl"));
         return;
       }
 
-      const folderName = currentPath() === "/"
-        ? "workspace"
-        : currentPath().split("/").filter(Boolean).pop() || "folder";
-      const filename = `${folderName}.zip`;
-
       const blob = await res.blob();
-      setDownloadedZipBytes(blob.size);
+      if (!isCurrent()) return;
+      setZipDownload(current => current?.token === task.token ? { ...current, bytes: blob.size } : current);
+      if (!isCurrent()) return;
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      showToast("success", t("download"));
+      let anchor: HTMLAnchorElement | undefined;
+      try {
+        anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor?.remove();URL.revokeObjectURL(url);
+      }
+      if (isCurrent()) showToast("success", t("download"));
     } catch (err) {
-      showToast(
+      if (isCurrent()) showToast(
         "error",
         err instanceof Error ? err.message : t("failedToLoad"),
       );
     } finally {
-      setDownloadingZip(false);
+      // Settling an old task must not clear a new view's pending ZIP.
+      setZipDownload(current => current?.token === task.token ? { ...current, pending: false } : current);
     }
   };
 

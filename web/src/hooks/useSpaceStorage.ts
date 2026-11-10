@@ -29,7 +29,7 @@ interface UseSpaceStorageReturn {
     renames: Array<{ file_id: string; name: string }>,
   ) => Promise<boolean>;
   getDownloadUrl: (fileId: string, isCurrentOperation?: () => boolean) => Promise<string | null>;
-  downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
+  downloadFolderZip: (path: string, isCurrentOperation?: () => boolean) => Promise<RpcResponse | null>;
 }
 
 export function useSpaceStorage(
@@ -368,9 +368,13 @@ export function useSpaceStorage(
 
   const downloadFolderZip = async (
     path: string,
+    isCurrentOperation?: () => boolean,
   ): Promise<RpcResponse | null> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return null;
+    const currentSpaceId = spaceId(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return null;
+    const isCurrent = () => scope === uploadScope() && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
+    setError(null);
 
     try {
       const res = await rpc.spaces[":spaceId"].storage["download-zip"].$get({
@@ -378,14 +382,16 @@ export function useSpaceStorage(
         query: { path },
       });
 
+      if (!isCurrent()) return null;
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
+        if (!isCurrent()) return null;
         throw new Error(data.error || t("failedToDownloadZip"));
       }
 
       return res;
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToDownloadZip")));
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToDownloadZip")));
       return null;
     }
   };
