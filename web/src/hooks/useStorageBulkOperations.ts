@@ -4,7 +4,7 @@ import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import type { StorageFile } from "../types/index.ts";
-import type { StorageBulkDeleteResult } from "./useSpaceStorage.ts";
+import type { StorageBulkDeleteResult, StorageBulkRenameResult } from "./useSpaceStorage.ts";
 
 interface UseStorageBulkOperationsParams {
   files: () => StorageFile[];
@@ -15,7 +15,8 @@ interface UseStorageBulkOperationsParams {
   bulkMoveItems: (ids: string[], dest: string) => Promise<boolean>;
   bulkRenameItems: (
     renames: Array<{ file_id: string; name: string }>,
-  ) => Promise<boolean>;
+    isCurrentOperation?: () => boolean,
+  ) => Promise<StorageBulkRenameResult | null>;
 }
 
 function normalizePath(path: string): string {
@@ -70,7 +71,14 @@ export function useStorageBulkOperations({
   const [bulkRenames, setBulkRenames] = createSignal<
     Array<{ file_id: string; old_name: string; name: string }>
   >([]);
-  const [bulkRenaming, setBulkRenaming] = createSignal(false);
+  const [renameSession, setRenameSession] = createSignal<{ scope: symbol; keys: Map<string, string> }>();
+  const [pendingRenameKeys, setPendingRenameKeys] = createSignal(new Set<string>());
+  const isCurrentRename = (session: ReturnType<typeof renameSession>) =>
+    !disposed && session !== undefined && renameSession() === session && getScope() === session.scope;
+  const bulkRenaming = () => {
+    const session = renameSession();
+    return isCurrentRename(session) && bulkRenames().some(item => pendingRenameKeys().has(session!.keys.get(item.file_id)!));
+  };
 
   const openBulkMove = () => {
     setBulkMovePath("/");
@@ -100,36 +108,61 @@ export function useStorageBulkOperations({
   };
 
   const openBulkRename = () => {
-    const items = Array.from(selectedFiles())
+    const scope = getScope();
+    if (disposed || !scope) return;
+    const selected = Array.from(selectedFiles())
       .map((id) => files().find((f) => f.id === id))
-      .filter((f): f is StorageFile => !!f)
-      .map((f) => ({ file_id: f.id, old_name: f.name, name: f.name }));
-    setBulkRenames(items);
+      .filter((f): f is StorageFile => !!f);
+    if (selected.length === 0) return;
+    setRenameSession({ scope, keys: new Map(selected.map(file => [file.id, JSON.stringify([file.space_id, file.id])])) });
+    setBulkRenames(selected.map(f => ({ file_id: f.id, old_name: f.name, name: f.name })));
     setShowBulkRenameModal(true);
   };
 
   const closeBulkRename = () => {
+    setRenameSession(undefined);
     setShowBulkRenameModal(false);
     setBulkRenames([]);
   };
 
   const handleBulkRename = async () => {
-    const renames = bulkRenames()
+    const session = renameSession();
+    if (!isCurrentRename(session) || bulkRenaming()) return;
+    const draft = bulkRenames();
+    const renames = draft
+      .filter(r => r.name.trim() && r.name.trim() !== r.old_name)
       .map((r) => ({ file_id: r.file_id, name: r.name.trim() }))
-      .filter((r) => r.name.length > 0);
+      .filter(r => session!.keys.has(r.file_id));
 
     if (renames.length === 0) return;
 
-    setBulkRenaming(true);
-    const ok = await bulkRenameItems(renames);
-    setBulkRenaming(false);
-
-    if (ok) {
-      showToast("success", t("renamed"));
-      setSelectedFiles(new Set<string>());
-      setShowBulkRenameModal(false);
-    } else {
-      showToast("error", t("failedToRename"));
+    const keys = renames.map(item => session!.keys.get(item.file_id)!);
+    setPendingRenameKeys(previous => new Set([...previous, ...keys]));
+    try {
+      const result = await bulkRenameItems(renames, () => isCurrentRename(session));
+      // Reopening the same view may need a new baseline, never the old draft.
+      const currentSession = renameSession();
+      if (result && isCurrentRename(currentSession) && currentSession?.scope === session!.scope) {
+        setBulkRenames(previous => previous.map(item => {
+          const file = result.renamed.find(file => file.id === item.file_id);
+          if (!file) return item;
+          const submitted = draft.find(entry => entry.file_id === item.file_id);
+          return { ...item, old_name: file.name,
+            name: isCurrentRename(session) && item.name === submitted?.name ? file.name : item.name };
+        }));
+      }
+      if (!isCurrentRename(session)) return;
+      if (result) {
+        const renamedIds = new Set(result.renamed.map(file => file.id));
+        setSelectedFiles(previous => new Set([...previous].filter(id => !renamedIds.has(id))));
+        if (result.failedIds.length > 0) showToast("error", t("failedToRename"));
+        else {
+          showToast("success", t("renamed"));
+          if (bulkRenames().every(item => !item.name.trim() || item.name.trim() === item.old_name)) closeBulkRename();
+        }
+      } else showToast("error", t("failedToRename"));
+    } finally {
+      setPendingRenameKeys(previous => new Set([...previous].filter(key => !keys.includes(key))));
     }
   };
 
@@ -166,7 +199,7 @@ export function useStorageBulkOperations({
     bulkMovePath,
     setBulkMovePath,
     bulkMoving,
-    showBulkRenameModal,
+    showBulkRenameModal: () => showBulkRenameModal() && isCurrentRename(renameSession()),
     bulkRenames,
     setBulkRenames,
     bulkRenaming,
