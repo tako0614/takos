@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { Index, Show } from "solid-js";
 import type { Setter } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
@@ -40,23 +40,23 @@ export function BulkRenameModal(props: BulkRenameModalProps) {
           }
         >
           <div class="space-y-3">
-            <For each={props.bulkRenames}>
+            <Index each={props.bulkRenames}>
               {(r) => (
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2 items-center">
                   <div
                     class="text-sm text-zinc-600 dark:text-zinc-300 truncate"
-                    title={r.old_name}
+                    title={r().old_name}
                   >
-                    {r.old_name}
+                    {r().old_name}
                   </div>
                   <Input
-                    value={r.name}
+                    value={r().name}
                     onInput={(e) => {
                       const next = (e.target as HTMLInputElement).value;
                       props.onRenamesChange((prev) =>
                         prev.map((
                           x,
-                        ) => (x.file_id === r.file_id
+                        ) => (x.file_id === r().file_id
                           ? { ...x, name: next }
                           : x)
                         )
@@ -66,7 +66,7 @@ export function BulkRenameModal(props: BulkRenameModalProps) {
                   />
                 </div>
               )}
-            </For>
+            </Index>
           </div>
         </Show>
 

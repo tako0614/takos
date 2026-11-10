@@ -10,6 +10,11 @@ export interface StorageBulkDeleteResult {
   failedIds: string[];
 }
 
+export interface StorageBulkRenameResult {
+  renamed: StorageFile[];
+  failedIds: string[];
+}
+
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
   currentPath: () => string;
@@ -27,7 +32,8 @@ interface UseSpaceStorageReturn {
   bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
   bulkRenameItems: (
     renames: Array<{ file_id: string; name: string }>,
-  ) => Promise<boolean>;
+    isCurrentOperation?: () => boolean,
+  ) => Promise<StorageBulkRenameResult | null>;
   getDownloadUrl: (fileId: string, isCurrentOperation?: () => boolean) => Promise<string | null>;
   downloadFolderZip: (path: string, isCurrentOperation?: () => boolean) => Promise<RpcResponse | null>;
 }
@@ -323,9 +329,13 @@ export function useSpaceStorage(
 
   const bulkRenameItems = async (
     renames: Array<{ file_id: string; name: string }>,
-  ): Promise<boolean> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId || renames.length === 0) return false;
+    isCurrentOperation?: () => boolean,
+  ): Promise<StorageBulkRenameResult | null> => {
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope || renames.length === 0) return null;
+    const isCurrentView = () => scope === uploadScope() && currentPath() === parentPath;
+    const isCurrent = () => isCurrentView() && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
     setError(null);
 
     try {
@@ -334,13 +344,19 @@ export function useSpaceStorage(
         json: { renames },
       });
 
-      await rpcJson(res);
-
-      await loadFiles(currentPath());
-      return true;
+      if (!isCurrentView()) return null;
+      const data = await rpcJson<{ renamed: StorageFile[]; errors: { file_id: string; error: string }[] }>(res, { isCurrent });
+      if (!isCurrentView()) return null;
+      const renamed = data.renamed.filter(file => renames.some(item => item.file_id === file.id) && !data.errors.some(error => error.file_id === file.id));
+      const failedIds = renames.filter(item => !renamed.some(file => file.id === item.file_id)).map(item => item.file_id);
+      // Canceling a dialog cannot undo already acknowledged mutations.
+      await loadFiles(parentPath);
+      if (!isCurrentView()) return null;
+      if (failedIds.length > 0 && isCurrent()) setError(t("failedToRename"));
+      return { renamed, failedIds };
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToRename")));
-      return false;
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToRename")));
+      return null;
     }
   };
 
