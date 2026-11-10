@@ -17,7 +17,7 @@ interface UseSpaceStorageReturn {
   error: () => string | null;
   truncated: () => boolean;
   loadFiles: (path?: string) => Promise<void>;
-  createFolder: (name: string) => Promise<StorageFile | null>;
+  createFolder: (name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
   uploadFile: (file: File) => Promise<StorageFile | null>;
   uploadScope: () => symbol | undefined;
   deleteItem: (fileId: string) => Promise<boolean>;
@@ -100,22 +100,28 @@ export function useSpaceStorage(
     }
   };
 
-  const createFolder = async (name: string): Promise<StorageFile | null> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return null;
+  const createFolder = async (name: string, isCurrentOperation?: () => boolean): Promise<StorageFile | null> => {
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return null;
+    const isCurrentView = () => scope === uploadScope() && currentPath() === parentPath;
+    const isCurrent = () => isCurrentView() && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
     setError(null);
 
     try {
       const res = await rpc.spaces[":spaceId"].storage.folders.$post({
         param: { spaceId: currentSpaceId },
-        json: { name, parent_path: currentPath() },
+        json: { name, parent_path: parentPath },
       });
 
-      const data = await rpcJson<{ folder: StorageFile }>(res);
-      await loadFiles(currentPath());
-      return data.folder;
+      if (!isCurrentView()) return null;
+      const data = await rpcJson<{ folder: StorageFile }>(res, { isCurrent });
+      if (!isCurrentView()) return null;
+      // A successful create remains visible even if its dialog was canceled.
+      await loadFiles(parentPath);
+      return isCurrentView() ? data.folder : null;
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToCreateFolder")));
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToCreateFolder")));
       return null;
     }
   };
