@@ -82,6 +82,7 @@ export function StoragePage(props: StoragePageProps) {
   };
 
   const actions = useStorageActions({
+    getScope: uploadScope,
     getDownloadUrl,
     downloadFolderZip,
     deleteItem,
@@ -91,6 +92,7 @@ export function StoragePage(props: StoragePageProps) {
   });
 
   const bulk = useStorageBulkOperations({
+    getScope: uploadScope,
     files,
     selectedFiles,
     setSelectedFiles,
@@ -334,15 +336,15 @@ export function StoragePage(props: StoragePageProps) {
           onClear={deselectAll}
         />
 
-        <Show when={contextMenu()}>
+        <Show when={contextMenu()} keyed>
           {(menu) => (
             <StorageContextMenu
-              state={menu()}
+              state={menu}
               onClose={() => setContextMenu(null)}
-              onOpen={() => actions.handleOpenFile(menu().file)}
-              onDownload={() => actions.handleDownload(menu().file)}
-              onRename={() => actions.openRenameModal(menu().file)}
-              onDelete={() => actions.handleDelete(menu().file)}
+              onOpen={() => actions.handleOpenFile(menu.file)}
+              onDownload={() => actions.handleDownload(menu.file)}
+              onRename={() => actions.openRenameModal(menu.file)}
+              onDelete={() => actions.handleDelete(menu.file)}
             />
           )}
         </Show>

@@ -6,6 +6,10 @@ import { getErrorMessage } from "../lib/errors.ts";
 import { useI18n } from "../store/i18n.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
 
+export interface StorageBulkDeleteResult {
+  failedIds: string[];
+}
+
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
   currentPath: () => string;
@@ -17,7 +21,7 @@ interface UseSpaceStorageReturn {
   uploadFile: (file: File) => Promise<StorageFile | null>;
   uploadScope: () => symbol | undefined;
   deleteItem: (fileId: string) => Promise<boolean>;
-  deleteItems: (fileIds: string[]) => Promise<boolean>;
+  deleteItems: (fileIds: string[]) => Promise<StorageBulkDeleteResult | null>;
   renameItem: (fileId: string, name: string) => Promise<StorageFile | null>;
   moveItem: (fileId: string, parentPath: string) => Promise<StorageFile | null>;
   bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
@@ -174,8 +178,9 @@ export function useSpaceStorage(
   };
 
   const deleteItem = async (fileId: string): Promise<boolean> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return false;
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return false;
+    const isCurrent = () => scope === uploadScope() && currentPath() === parentPath;
     setError(null);
 
     try {
@@ -183,19 +188,22 @@ export function useSpaceStorage(
         param: { spaceId: currentSpaceId, fileId },
       });
 
-      await rpcJson(res);
+      if (!isCurrent()) return false;
+      await rpcJson(res, { isCurrent });
+      if (!isCurrent()) return false;
 
-      await loadFiles(currentPath());
-      return true;
+      await loadFiles(parentPath);
+      return isCurrent();
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToDelete")));
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToDelete")));
       return false;
     }
   };
 
-  const deleteItems = async (fileIds: string[]): Promise<boolean> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId || fileIds.length === 0) return false;
+  const deleteItems = async (fileIds: string[]): Promise<StorageBulkDeleteResult | null> => {
+    const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope || fileIds.length === 0) return null;
+    const isCurrent = () => scope === uploadScope() && currentPath() === parentPath;
     setError(null);
 
     try {
@@ -204,13 +212,22 @@ export function useSpaceStorage(
         json: { file_ids: fileIds },
       });
 
-      await rpcJson(res);
+      if (!isCurrent()) return null;
+      const data = await rpcJson<{ success: boolean; failed_ids: string[] }>(res, { isCurrent });
+      if (!isCurrent()) return null;
+      // HTTP 200 can acknowledge only part of the confirmed selection.
+      if (data.success !== true || !Array.isArray(data.failed_ids) ||
+        !data.failed_ids.every(id => typeof id === "string" && fileIds.includes(id))) {
+        throw new Error(t("failedToDeleteSome"));
+      }
 
-      await loadFiles(currentPath());
-      return true;
+      await loadFiles(parentPath);
+      if (!isCurrent()) return null;
+      if (data.failed_ids.length > 0) setError(t("failedToDeleteSome"));
+      return { failedIds: data.failed_ids };
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToDelete")));
-      return false;
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToDelete")));
+      return null;
     }
   };
 

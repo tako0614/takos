@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, onCleanup } from "solid-js";
 import type { Setter } from "solid-js";
 import type { RpcResponse } from "../lib/rpc.ts";
 import { useI18n } from "../store/i18n.ts";
@@ -13,6 +13,7 @@ interface UseStorageActionsParams {
   renameItem: (id: string, name: string) => Promise<unknown>;
   currentPath: () => string;
   setSelectedFiles: Setter<Set<string>>;
+  getScope: () => symbol | undefined;
 }
 
 interface UseStorageActionsResult {
@@ -45,10 +46,14 @@ export function useStorageActions({
   renameItem,
   currentPath,
   setSelectedFiles,
+  getScope,
 }: UseStorageActionsParams): UseStorageActionsResult {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
+  let disposed = false;
+  let pendingDeleteScope: symbol | undefined;
+  onCleanup(() => { disposed = true; });
 
   // File viewer state
   const [viewingFile, setViewingFile] = createSignal<StorageFile | null>(null);
@@ -127,27 +132,35 @@ export function useStorageActions({
   };
 
   const handleDelete = async (file: StorageFile) => {
-    const confirmed = await confirm({
-      title: t("deleteConfirmTitle"),
-      message: file.type === "folder"
-        ? t("deleteFolderConfirm").replace("{name}", file.name)
-        : t("deleteFileConfirm").replace("{name}", file.name),
-      confirmText: t("delete"),
-      danger: true,
-    });
-
-    if (!confirmed) return;
-
-    const result = await deleteItem(file.id);
-    if (result) {
-      showToast("success", t("itemDeleted").replace("{name}", file.name));
-      setSelectedFiles((prev) => {
-        const next = new Set(prev);
-        next.delete(file.id);
-        return next;
+    if (disposed) return;
+    const scope = getScope();
+    if (!scope || pendingDeleteScope === scope) return;
+    const isCurrent = () => !disposed && getScope() === scope;
+    pendingDeleteScope = scope;
+    try {
+      const confirmed = await confirm({
+        title: t("deleteConfirmTitle"),
+        message: file.type === "folder"
+          ? t("deleteFolderConfirm").replace("{name}", file.name)
+          : t("deleteFileConfirm").replace("{name}", file.name),
+        confirmText: t("delete"),
+        danger: true,
       });
-    } else {
-      showToast("error", t("failedToDelete"));
+      if (!confirmed || !isCurrent()) return;
+      const result = await deleteItem(file.id);
+      if (!isCurrent()) return;
+      if (result) {
+        showToast("success", t("itemDeleted").replace("{name}", file.name));
+        setSelectedFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(file.id);
+          return next;
+        });
+      } else {
+        showToast("error", t("failedToDelete"));
+      }
+    } finally {
+      if (pendingDeleteScope === scope) pendingDeleteScope = undefined;
     }
   };
 
