@@ -140,6 +140,7 @@ export function useStorageBulkOperations({
     setPendingRenameKeys(previous => new Set([...previous, ...keys]));
     try {
       const result = await bulkRenameItems(renames, () => isCurrentRename(session));
+      const hasNewerDraft = bulkRenames().some(item => item.name !== draft.find(submitted => submitted.file_id === item.file_id)?.name);
       // Reopening the same view may need a new baseline, never the old draft.
       const currentSession = renameSession();
       if (result && isCurrentRename(currentSession) && currentSession?.scope === session!.scope) {
@@ -158,7 +159,7 @@ export function useStorageBulkOperations({
         if (result.failedIds.length > 0) showToast("error", t("failedToRename"));
         else {
           showToast("success", t("renamed"));
-          if (bulkRenames().every(item => !item.name.trim() || item.name.trim() === item.old_name)) closeBulkRename();
+          if (!hasNewerDraft && bulkRenames().every(item => !item.name.trim() || item.name.trim() === item.old_name)) closeBulkRename();
         }
       } else showToast("error", t("failedToRename"));
     } finally {

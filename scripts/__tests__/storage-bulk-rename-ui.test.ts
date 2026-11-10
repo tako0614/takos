@@ -110,7 +110,9 @@ async function verifyBulkRenameUI() {
     const before = { href: location.href, reads: reads.length };releases.get(4)!();await until(() => decoded.has(4));
     expect(location.href).toBe(before.href);expect(reads).toHaveLength(before.reads);expect(fixture.toasts()).toEqual([]);
     expect(inputs()[0].value).toBe("a-fifth");expect(button(dialog()!, "Rename").disabled).toBe(true);
-    releases.get(5)!();await until(() => dialog() === null && row("a-fifth") != null);fixture.clearToasts();
+    draft(0, "");releases.get(5)!();await until(() => row("a-fifth") != null && fixture!.toasts().length === 1);
+    expect(dialog()).not.toBeNull();expect(inputs()[0].value).toBe("");expect(button(dialog()!, "Rename").disabled).toBe(true);
+    save();expect(posts).toHaveLength(5);cancel();fixture.clearToasts();
 
     select("a-fifth");open();draft(0, "canceled-success");save();await held(6);cancel();open();draft(0, "a-fifth");
     expect(button(dialog()!, "Rename").disabled).toBe(true);save();expect(posts).toHaveLength(6);

@@ -134,6 +134,16 @@ if (Bun.env.TAKOS_BULK_RENAME_TEST_CLIENT !== "1") {
       expect(f.posts[1].renames).toEqual([{ file_id: "file-b", name: "second" }]);expect(f.storage.error()).toBeNull();expect(f.toasts()).toEqual(["error", "success"]);
     }, "partial");
   });
+  for (const draft of ["", "   ", "  first  "]) {
+    test(`an ACK retains a newer raw draft ${JSON.stringify(draft)}`, async () => {
+      await fixture(async f => {
+        f.open();f.draft("first");const task = f.save();await f.held();f.draft(draft);f.release();await task;
+        expect(f.bulk.showBulkRenameModal()).toBe(true);expect(f.bulk.bulkRenames()[0]).toMatchObject({ old_name: "first", name: draft });
+        await f.save();expect(f.posts).toHaveLength(1);f.draft("second");await f.save();
+        expect(f.posts[1].renames).toEqual([{ file_id: "file-a", name: "second" }]);expect(f.bulk.showBulkRenameModal()).toBe(false);
+      });
+    });
+  }
   for (const status of [401, 503]) {
     test(`current ${status} keeps the draft and allows explicit retry`, async () => {
       await fixture(async f => {
