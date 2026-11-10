@@ -28,7 +28,7 @@ interface UseSpaceStorageReturn {
   bulkRenameItems: (
     renames: Array<{ file_id: string; name: string }>,
   ) => Promise<boolean>;
-  getDownloadUrl: (fileId: string) => Promise<string | null>;
+  getDownloadUrl: (fileId: string, isCurrentOperation?: () => boolean) => Promise<string | null>;
   downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
 }
 
@@ -344,9 +344,12 @@ export function useSpaceStorage(
     }
   };
 
-  const getDownloadUrl = async (fileId: string): Promise<string | null> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId) return null;
+  const getDownloadUrl = async (fileId: string, isCurrentOperation?: () => boolean): Promise<string | null> => {
+    const currentSpaceId = spaceId(), scope = uploadScope();
+    if (!currentSpaceId || !scope) return null;
+    const isCurrent = () => scope === uploadScope() && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
+    setError(null);
 
     try {
       const res = await rpc.spaces[":spaceId"].storage["download-url"].$get({
@@ -354,10 +357,11 @@ export function useSpaceStorage(
         query: { file_id: fileId },
       });
 
-      const data = await rpcJson<{ download_url: string }>(res);
-      return data.download_url;
+      if (!isCurrent()) return null;
+      const data = await rpcJson<{ download_url: string }>(res, { isCurrent });
+      return isCurrent() ? data.download_url : null;
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToGetDownloadUrl")));
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToGetDownloadUrl")));
       return null;
     }
   };
