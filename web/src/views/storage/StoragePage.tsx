@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useSpaceStorage } from "../../hooks/useSpaceStorage.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -104,22 +104,25 @@ export function StoragePage(props: StoragePageProps) {
   const getRequestedPath = () =>
     resolveStorageInitialPath(props.initialPath, props.initialFilePath);
 
-  const [initialPathReady, setInitialPathReady] = createSignal(false);
+  const initialRoute = createMemo(() => ({
+    spaceId: props.spaceId, path: getRequestedPath(), filePath: props.initialFilePath,
+  }), undefined, { equals: (previous, next) => previous.spaceId === next.spaceId && previous.path === next.path && previous.filePath === next.filePath });
+  const [readyInitialRoute, setReadyInitialRoute] = createSignal<ReturnType<typeof initialRoute>>();
+  const initialPathReady = () => readyInitialRoute() === initialRoute();
   let interfaceFileHandlersRequestVersion = 0;
 
   createEffect(() => {
-    const _spaceId = props.spaceId;
-    const requestedPath = getRequestedPath();
+    const route = initialRoute();
     let cancelled = false;
-    setInitialPathReady(false);
+    setReadyInitialRoute(undefined);
     setSelectedFiles(new Set<string>());
     setContextMenu(null);
     setFileHandlers([]);
-    actions.handleCloseViewer();
-    void loadFiles(requestedPath).finally(() => {
-      if (!cancelled) {
-        setInitialPathReady(true);
-      }
+    untrack(() => {
+      actions.handleCloseViewer();
+      void loadFiles(route.path).finally(() => {
+        if (!cancelled) setReadyInitialRoute(route);
+      });
     });
     onCleanup(() => {
       cancelled = true;
@@ -166,20 +169,39 @@ export function StoragePage(props: StoragePageProps) {
     }
   });
 
+  let initialFileIntent: { route: ReturnType<typeof initialRoute>; handled: boolean } | undefined;
   createEffect(() => {
-    const targetFilePath = props.initialFilePath;
-    if (!targetFilePath) return;
-    if (actions.viewingFile()?.path === targetFilePath) return;
+    const route = initialRoute(), targetFilePath = route.filePath;
+    if (!targetFilePath) { initialFileIntent = undefined;return; }
+    if (initialFileIntent?.route !== route) {
+      initialFileIntent = { route, handled: false };
+    }
+    if (initialFileIntent.handled || readyInitialRoute() !== route) return;
 
     const parentPath = getParentPath(targetFilePath);
-    if (currentPath() !== parentPath) return;
+    if (currentPath() !== parentPath || !uploadScope()) return;
 
     const targetFile = files().find((file) =>
       file.path === targetFilePath && file.type !== "folder"
     );
     if (!targetFile) return;
-    void actions.handleOpenFile(targetFile);
+    // A refresh or closing the viewer must not replay the same initial intent.
+    initialFileIntent.handled = true;
+    if (actions.viewingFile()?.path === targetFilePath && actions.viewingFile()?.space_id === route.spaceId) return;
+    untrack(() => { void actions.handleOpenFile(targetFile); });
   });
+
+  const openFileViewer = (file: StorageFile) => {
+    if (file.type === "folder" || !uploadScope()) return;
+    if (initialFileIntent?.route === initialRoute()) initialFileIntent.handled = true;
+    void actions.handleOpenFile(file);
+  };
+
+  const closeFileViewer = () => {
+    if (initialFileIntent?.route === initialRoute()) initialFileIntent.handled = true;
+    actions.handleCloseViewer();
+    if (props.initialFilePath) props.onPathChange?.(currentPath());
+  };
 
   const navigateToFolder = (folder: StorageFile) => {
     loadFiles(folder.path);
@@ -233,7 +255,7 @@ export function StoragePage(props: StoragePageProps) {
           file={actions.viewingFile()!}
           downloadUrl={actions.viewingFileDownloadUrl()}
           interfaceFileHandlers={interfaceFileHandlers()}
-          onClose={actions.handleCloseViewer}
+          onClose={closeFileViewer}
           onSave={() => loadFiles(currentPath())}
         />
       }
@@ -324,7 +346,7 @@ export function StoragePage(props: StoragePageProps) {
                 onToggleSelect={toggleFileSelection}
                 onNavigateUp={navigateUp}
                 onNavigateToFolder={navigateToFolder}
-                onOpenFile={actions.handleOpenFile}
+                onOpenFile={openFileViewer}
                 onContextMenu={setContextMenu}
               />
             </Show>
@@ -344,7 +366,7 @@ export function StoragePage(props: StoragePageProps) {
             <StorageContextMenu
               state={menu}
               onClose={() => setContextMenu(null)}
-              onOpen={() => actions.handleOpenFile(menu.file)}
+              onOpen={() => openFileViewer(menu.file)}
               onDownload={() => actions.handleDownload(menu.file)}
               onRename={() => actions.openRenameModal(menu.file)}
               onDelete={() => actions.handleDelete(menu.file)}
