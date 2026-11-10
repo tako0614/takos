@@ -5,9 +5,10 @@ import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import type { StorageFile } from "../types/index.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 
 interface UseStorageActionsParams {
-  getDownloadUrl: (fileId: string) => Promise<string | null>;
+  getDownloadUrl: (fileId: string, isCurrentOperation?: () => boolean) => Promise<string | null>;
   downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
   deleteItem: (id: string) => Promise<boolean>;
   renameItem: (id: string, name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
@@ -54,7 +55,8 @@ export function useStorageActions({
   const { confirm } = useConfirmDialog();
   let disposed = false;
   let pendingDeleteScope: symbol | undefined;
-  onCleanup(() => { disposed = true; });
+  const viewerRequests = createLatestRequest();
+  onCleanup(() => { disposed = true;viewerRequests.next(); });
 
   // File viewer state
   const [viewingFile, setViewingFile] = createSignal<StorageFile | null>(null);
@@ -79,19 +81,27 @@ export function useStorageActions({
   const [downloadedZipBytes, setDownloadedZipBytes] = createSignal(0);
 
   const handleOpenFile = async (file: StorageFile) => {
-    if (file.type === "folder") return;
-    const url = await getDownloadUrl(file.id);
+    const scope = getScope();
+    if (file.type === "folder" || disposed || !scope) return;
+    const claim = viewerRequests.claim(() => !disposed && getScope() === scope);
+    const url = await getDownloadUrl(file.id, claim.won);
+    if (!claim.won()) return;
     setViewingFileDownloadUrl(url);
     setViewingFile(file);
   };
 
   const handleCloseViewer = () => {
+    viewerRequests.next();
     setViewingFile(null);
     setViewingFileDownloadUrl(null);
   };
 
   const handleDownload = async (file: StorageFile) => {
-    const url = await getDownloadUrl(file.id);
+    const scope = getScope();
+    if (disposed || !scope) return;
+    const isCurrent = () => !disposed && getScope() === scope;
+    const url = await getDownloadUrl(file.id, isCurrent);
+    if (!isCurrent()) return;
     if (url) {
       globalThis.open(url, "_blank", "noopener,noreferrer");
     } else {
