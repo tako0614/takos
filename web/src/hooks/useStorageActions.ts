@@ -196,7 +196,13 @@ export function useStorageActions({
     setPendingRenameTargets(previous => new Set(previous).add(key));
     try {
       const result = await renameItem(target.id, name, () => isCurrentRename(session));
-      if (!isCurrentRename(session)) return;
+      if (!isCurrentRename(session)) {
+        // A reopened dialog may keep its draft, but its no-op baseline must
+        // adopt the completed save before it can explicitly restore an old name.
+        const currentTarget = renameTarget();
+        if (result && isCurrentRename(renameSession()) && currentTarget && renameKey(currentTarget) === key) setRenameTarget(result);
+        return;
+      }
       if (result) {
         showToast("success", t("renamedTo").replace("{name}", result.name));
         // Acknowledging the submitted name must not discard edits made while saving.

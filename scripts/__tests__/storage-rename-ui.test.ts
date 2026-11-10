@@ -50,7 +50,7 @@ async function verifyRenameUI() {
       const data = status === 200 ? { file: file(id, space) } : { error: "fixture_rename_unavailable" };
       // Actual production page/hooks/RPC read these real response streams;
       // only service DTOs and authenticated fixture identity are synthetic.
-      if ([1, 4, 5, 6].includes(number)) return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+      if ([1, 4, 5, 6, 8].includes(number)) return new Response(new ReadableStream<Uint8Array>({ start(controller) {
         controller.enqueue(new TextEncoder().encode(" "));
         releases.set(number, () => { controller.enqueue(new TextEncoder().encode(JSON.stringify(data)));controller.close();releases.delete(number); });
       } }), { status, headers: { "Content-Type": "application/json" } });
@@ -127,6 +127,11 @@ async function verifyRenameUI() {
     releases.get(6)!();await until(() => !button(dialog()!, "Rename").disabled);
     expect(input().value).toBe("fifth");save();await until(() => dialog() === null && row("fifth") != null);
     expect(patches).toHaveLength(7);expect(fixture.toasts().map(item => item.type)).toEqual(["success", "success"]);
+    fixture.clearToasts();await open("fifth");draft("canceled-success");save();await held(8);cancel();releases.get(8)!();
+    await until(() => row("canceled-success") != null);expect(dialog()).toBeNull();expect(fixture.toasts()).toEqual([]);
+    await open("canceled-success");expect(input().value).toBe("canceled-success");draft("fifth");save();
+    await until(() => dialog() === null && row("fifth") != null);expect(patches).toHaveLength(9);
+
   } finally {
     releaseFolder?.();for (const release of releases.values()) release();
     fixture?.clearToasts();fixture?.dispose();server?.stop(true);await rm(output, { recursive: true, force: true });

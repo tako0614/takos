@@ -244,7 +244,8 @@ export function useSpaceStorage(
   ): Promise<StorageFile | null> => {
     const currentSpaceId = spaceId(), parentPath = currentPath(), scope = uploadScope();
     if (!currentSpaceId || !scope) return null;
-    const isCurrent = () => scope === uploadScope() && currentPath() === parentPath && isCurrentOperation?.() !== false;
+    const isCurrentView = () => scope === uploadScope() && currentPath() === parentPath;
+    const isCurrent = () => isCurrentView() && isCurrentOperation?.() !== false;
     if (!isCurrent()) return null;
     setError(null);
 
@@ -254,11 +255,13 @@ export function useSpaceStorage(
         json: { name },
       });
 
-      if (!isCurrent()) return null;
+      if (!isCurrentView()) return null;
       const data = await rpcJson<{ file: StorageFile }>(res, { isCurrent });
-      if (!isCurrent()) return null;
+      if (!isCurrentView()) return null;
+      // Closing a dialog cannot undo an acknowledged mutation. Reconcile the
+      // original view while keeping dialog feedback and authentication scoped.
       await loadFiles(parentPath);
-      return isCurrent() ? data.file : null;
+      return isCurrentView() ? data.file : null;
     } catch (err) {
       if (isCurrent()) setError(getErrorMessage(err, t("failedToRename")));
       return null;

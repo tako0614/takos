@@ -118,16 +118,39 @@ if (Bun.env.TAKOS_STORAGE_RENAME_TEST_CLIENT !== "1") {
   }
 
   for (const status of [200, 401, 503]) {
-    test(`a replaced rename session rejects old ${status} effects within the same folder`, async () => {
+    test(`a replacement dialog retains its draft while old ${status} settles in the same folder`, async () => {
       await fixture(async ({ storage, actions, open, save, held, release, location, reads, toastTypes }) => {
         open();actions.setNewName("first-a");const pending = save();await held();
         actions.closeRenameModal();open("file-b");actions.setNewName("new-b");
         const before = { href: location.href, reads: reads.length };release();await pending;
         expect(actions.showRenameModal()).toBe(true);expect(actions.renameTarget()?.id).toBe("file-b");
         expect(actions.newName()).toBe("new-b");expect(location.href).toBe(before.href);
-        expect(reads).toHaveLength(before.reads);expect(storage.error()).toBeNull();expect(toastTypes()).toEqual([]);
+        expect(reads).toHaveLength(before.reads + (status === 200 ? 1 : 0));
+        expect(storage.files().find(file => file.id === "file-a")?.name).toBe(status === 200 ? "first-a" : "alpha");
+        expect(storage.error()).toBeNull();expect(toastTypes()).toEqual([]);
       }, status);
     });
+  }
+
+  for (const phase of ["headers", "body"] as const) {
+    for (const reopen of [false, true]) {
+      test(`a canceled successful ${phase} response reconciles the same view/reopened=${reopen}`, async () => {
+        await fixture(async ({ storage, actions, open, save, held, release, patches, reads, toastTypes }) => {
+          open();actions.setNewName("first");const pending = save();await held();actions.closeRenameModal();
+          if (reopen) { open();actions.setNewName("alpha"); }
+          const before = reads.length;release();await pending;
+          expect(reads).toHaveLength(before + 1);
+          expect(storage.files().find(file => file.id === "file-a")?.name).toBe("first");
+          expect(toastTypes()).toEqual([]);expect(storage.error()).toBeNull();
+          if (reopen) expect(actions.newName()).toBe("alpha");
+          else { expect(actions.showRenameModal()).toBe(false);open();actions.setNewName("alpha"); }
+          expect(actions.renameTarget()?.name).toBe("first");
+          await save();expect(patches.map(item => item.name)).toEqual(["first", "alpha"]);
+          expect(storage.files().find(file => file.id === "file-a")?.name).toBe("alpha");
+          expect(actions.showRenameModal()).toBe(false);expect(toastTypes()).toEqual(["success"]);
+        }, 200, phase);
+      });
+    }
   }
 
   test("a retired response header cannot redirect a replacement dialog", async () => {
