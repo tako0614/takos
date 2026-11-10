@@ -31,7 +31,8 @@ export function BulkMoveModal(props: BulkMoveModalProps) {
           placeholder="/path/to/folder"
           autofocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && props.bulkMovePath.trim()) {
+            if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !props.moving && props.bulkMovePath.trim()) {
+              e.preventDefault();
               props.onMove();
             }
           }}

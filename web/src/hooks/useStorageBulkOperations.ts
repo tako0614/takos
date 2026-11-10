@@ -4,7 +4,7 @@ import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import type { StorageFile } from "../types/index.ts";
-import type { StorageBulkDeleteResult, StorageBulkRenameResult } from "./useSpaceStorage.ts";
+import type { StorageBulkDeleteResult, StorageBulkMoveResult, StorageBulkRenameResult } from "./useSpaceStorage.ts";
 
 interface UseStorageBulkOperationsParams {
   files: () => StorageFile[];
@@ -12,7 +12,7 @@ interface UseStorageBulkOperationsParams {
   setSelectedFiles: Setter<Set<string>>;
   getScope: () => symbol | undefined;
   deleteItems: (ids: string[]) => Promise<StorageBulkDeleteResult | null>;
-  bulkMoveItems: (ids: string[], dest: string) => Promise<boolean>;
+  bulkMoveItems: (ids: string[], dest: string, isCurrentOperation?: () => boolean) => Promise<StorageBulkMoveResult | null>;
   bulkRenameItems: (
     renames: Array<{ file_id: string; name: string }>,
     isCurrentOperation?: () => boolean,
@@ -32,6 +32,7 @@ interface UseStorageBulkOperationsResult {
   bulkMovePath: () => string;
   setBulkMovePath: Setter<string>;
   bulkMoving: () => boolean;
+  bulkMoveCount: () => number;
   showBulkRenameModal: () => boolean;
   bulkRenames: () => Array<{ file_id: string; old_name: string; name: string }>;
   setBulkRenames: Setter<
@@ -66,7 +67,15 @@ export function useStorageBulkOperations({
 
   const [showBulkMoveModal, setShowBulkMoveModal] = createSignal(false);
   const [bulkMovePath, setBulkMovePath] = createSignal("");
-  const [bulkMoving, setBulkMoving] = createSignal(false);
+  const [moveSession, setMoveSession] = createSignal<{ scope: symbol; keys: Map<string, string> }>();
+  const [moveIds, setMoveIds] = createSignal<string[]>([]);
+  const [pendingMoveKeys, setPendingMoveKeys] = createSignal(new Set<string>());
+  const isCurrentMove = (session: ReturnType<typeof moveSession>) =>
+    !disposed && session !== undefined && moveSession() === session && getScope() === session.scope;
+  const bulkMoving = () => {
+    const session = moveSession();
+    return isCurrentMove(session) && moveIds().some(id => pendingMoveKeys().has(session!.keys.get(id)!));
+  };
   const [showBulkRenameModal, setShowBulkRenameModal] = createSignal(false);
   const [bulkRenames, setBulkRenames] = createSignal<
     Array<{ file_id: string; old_name: string; name: string }>
@@ -81,29 +90,44 @@ export function useStorageBulkOperations({
   };
 
   const openBulkMove = () => {
+    const scope = getScope();
+    if (disposed || !scope) return;
+    const selected = files().filter(file => selectedFiles().has(file.id));
+    if (selected.length === 0) return;
+    setMoveSession({ scope, keys: new Map(selected.map(file => [file.id, JSON.stringify([file.space_id, file.id])])) });
+    setMoveIds(selected.map(file => file.id));
     setBulkMovePath("/");
     setShowBulkMoveModal(true);
   };
 
   const closeBulkMove = () => {
+    setMoveSession(undefined);
+    setMoveIds([]);
     setShowBulkMoveModal(false);
     setBulkMovePath("");
   };
 
   const handleBulkMove = async () => {
-    if (selectedFiles().size === 0) return;
-    const dest = normalizePath(bulkMovePath());
-
-    setBulkMoving(true);
-    const ok = await bulkMoveItems(Array.from(selectedFiles()), dest);
-    setBulkMoving(false);
-
-    if (ok) {
-      showToast("success", t("moved"));
-      setSelectedFiles(new Set<string>());
-      setShowBulkMoveModal(false);
-    } else {
-      showToast("error", t("failedToSave"));
+    const session = moveSession(), draft = bulkMovePath(), ids = moveIds();
+    if (!isCurrentMove(session) || bulkMoving() || ids.length === 0 || !draft.trim()) return;
+    const dest = normalizePath(draft), keys = ids.map(id => session!.keys.get(id)!);
+    setPendingMoveKeys(previous => new Set([...previous, ...keys]));
+    try {
+      const result = await bulkMoveItems(ids, dest, () => isCurrentMove(session));
+      if (!isCurrentMove(session)) return;
+      if (result) {
+        const movedIds = new Set(result.moved.map(file => file.id));
+        setSelectedFiles(previous => new Set([...previous].filter(id => !movedIds.has(id))));
+        if (result.failedIds.length > 0) {
+          setMoveIds(result.failedIds);
+          showToast("error", t("failedToMove"));
+        } else {
+          showToast("success", t("moved"));
+          if (bulkMovePath() === draft) closeBulkMove();
+        }
+      } else showToast("error", t("failedToMove"));
+    } finally {
+      setPendingMoveKeys(previous => new Set([...previous].filter(key => !keys.includes(key))));
     }
   };
 
@@ -196,10 +220,11 @@ export function useStorageBulkOperations({
   };
 
   return {
-    showBulkMoveModal,
+    showBulkMoveModal: () => showBulkMoveModal() && isCurrentMove(moveSession()),
     bulkMovePath,
     setBulkMovePath,
     bulkMoving,
+    bulkMoveCount: () => isCurrentMove(moveSession()) ? moveIds().length : 0,
     showBulkRenameModal: () => showBulkRenameModal() && isCurrentRename(renameSession()),
     bulkRenames,
     setBulkRenames,

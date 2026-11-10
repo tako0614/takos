@@ -394,7 +394,7 @@ export function StoragePage(props: StoragePageProps) {
         <BulkMoveModal
           isOpen={bulk.showBulkMoveModal()}
           onClose={bulk.closeBulkMove}
-          selectedCount={selectedFiles().size}
+          selectedCount={bulk.bulkMoveCount()}
           bulkMovePath={bulk.bulkMovePath()}
           onPathChange={bulk.setBulkMovePath}
           onMove={bulk.handleBulkMove}

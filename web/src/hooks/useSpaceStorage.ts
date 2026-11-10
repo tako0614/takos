@@ -15,6 +15,11 @@ export interface StorageBulkRenameResult {
   failedIds: string[];
 }
 
+export interface StorageBulkMoveResult {
+  moved: StorageFile[];
+  failedIds: string[];
+}
+
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
   currentPath: () => string;
@@ -29,7 +34,7 @@ interface UseSpaceStorageReturn {
   deleteItems: (fileIds: string[]) => Promise<StorageBulkDeleteResult | null>;
   renameItem: (fileId: string, name: string, isCurrentOperation?: () => boolean) => Promise<StorageFile | null>;
   moveItem: (fileId: string, parentPath: string) => Promise<StorageFile | null>;
-  bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
+  bulkMoveItems: (fileIds: string[], parentPath: string, isCurrentOperation?: () => boolean) => Promise<StorageBulkMoveResult | null>;
   bulkRenameItems: (
     renames: Array<{ file_id: string; name: string }>,
     isCurrentOperation?: () => boolean,
@@ -306,9 +311,13 @@ export function useSpaceStorage(
   const bulkMoveItems = async (
     fileIds: string[],
     parentPath: string,
-  ): Promise<boolean> => {
-    const currentSpaceId = spaceId();
-    if (!currentSpaceId || fileIds.length === 0) return false;
+    isCurrentOperation?: () => boolean,
+  ): Promise<StorageBulkMoveResult | null> => {
+    const currentSpaceId = spaceId(), sourcePath = currentPath(), scope = uploadScope();
+    if (!currentSpaceId || !scope || fileIds.length === 0) return null;
+    const isCurrentView = () => scope === uploadScope() && currentPath() === sourcePath;
+    const isCurrent = () => isCurrentView() && isCurrentOperation?.() !== false;
+    if (!isCurrent()) return null;
     setError(null);
 
     try {
@@ -317,13 +326,19 @@ export function useSpaceStorage(
         json: { file_ids: fileIds, parent_path: parentPath },
       });
 
-      await rpcJson(res);
-
-      await loadFiles(currentPath());
-      return true;
+      if (!isCurrentView()) return null;
+      const data = await rpcJson<{ moved: StorageFile[]; errors: { file_id: string; error: string }[] }>(res, { isCurrent });
+      if (!isCurrentView()) return null;
+      const moved = data.moved.filter(file => fileIds.includes(file.id) && !data.errors.some(error => error.file_id === file.id));
+      const failedIds = fileIds.filter(id => !moved.some(file => file.id === id));
+      // Cancel cannot undo the acknowledged move; reconcile only its original view.
+      await loadFiles(sourcePath);
+      if (!isCurrentView()) return null;
+      if (failedIds.length > 0 && isCurrent()) setError(t("failedToMove"));
+      return { moved, failedIds };
     } catch (err) {
-      setError(getErrorMessage(err, t("failedToMove")));
-      return false;
+      if (isCurrent()) setError(getErrorMessage(err, t("failedToMove")));
+      return null;
     }
   };
 
