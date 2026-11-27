@@ -47,9 +47,9 @@ export function AppModals(props: AppModalsProps) {
         />
       </Show>
 
-      <Show when={modal.showAgentModal && navigation.selectedSpaceId}>
+      <Show when={modal.showAgentModal && resolvedSpaceId()}>
         <AgentModal
-          spaceId={navigation.selectedSpaceId!}
+          spaceId={resolvedSpaceId()!}
           onClose={() => modal.setShowAgentModal(false)}
         />
       </Show>

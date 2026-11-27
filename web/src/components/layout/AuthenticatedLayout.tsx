@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js";
-import { Show } from "solid-js";
+import { createEffect, onCleanup, Show } from "solid-js";
 import { UnifiedSidebar } from "../navigation/UnifiedSidebar.tsx";
 import {
   type SidebarCallbacks,
@@ -38,6 +38,22 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
   const auth = useAuth();
   const modal = useModals();
   const navigation = useNavigation();
+
+  createEffect(() => {
+    const root = globalThis.document?.documentElement;
+    if (!root) return;
+    if (breakpoint.isMobile) {
+      root.style.setProperty(
+        "--cookie-banner-bottom",
+        "calc(var(--nav-height-mobile) + var(--spacing-safe-bottom))",
+      );
+    } else {
+      root.style.removeProperty("--cookie-banner-bottom");
+    }
+    onCleanup(() => {
+      root.style.removeProperty("--cookie-banner-bottom");
+    });
+  });
 
   const handleLogout = async () => {
     await auth.handleLogout();

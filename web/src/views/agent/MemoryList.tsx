@@ -2,6 +2,10 @@ import { createMemo, createSignal } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import {
+  formatImportanceStars,
+  formatLocalizedDate,
+} from "../../lib/memory-format.ts";
+import {
   Badge,
   Button,
   Card,
@@ -15,6 +19,7 @@ import type { Memory } from "../../types/index.ts";
 
 export function MemoryList(props: {
   memories: Memory[];
+  hasError?: boolean;
   onDelete: (id: string) => void;
   onCreateMemory: (
     data: { content: string; type: Memory["type"]; category?: string },
@@ -25,7 +30,8 @@ export function MemoryList(props: {
   getTypeIcon: (type: Memory["type"]) => string;
   getTypeLabel: (type: Memory["type"]) => string;
 }) {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const [searchQuery, setSearchQuery] = createSignal("");
   const [activeFilter, setActiveFilter] = createSignal<
     "all" | "episode" | "semantic" | "procedural"
@@ -95,7 +101,7 @@ export function MemoryList(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
         {filteredMemories().length === 0
-          ? (
+          ? !props.hasError && (
             <div
               style={{
                 display: "flex",
@@ -137,8 +143,7 @@ export function MemoryList(props: {
                     }}
                     title={t("memoryImportance")}
                   >
-                    {"★".repeat(Math.round(memory.importance * 5))}
-                    {"☆".repeat(5 - Math.round(memory.importance * 5))}
+                    {formatImportanceStars(memory.importance)}
                   </span>
                 </div>
                 <div
@@ -174,13 +179,14 @@ export function MemoryList(props: {
                       color: "var(--color-text-tertiary)",
                     }}
                   >
-                    {new Date(memory.created_at).toLocaleDateString()}
+                    {formatLocalizedDate(memory.created_at, i18n.lang)}
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => props.onDelete(memory.id)}
                     title={t("deleteMemory")}
+                    aria-label={t("deleteMemory")}
                     style={{ color: "var(--color-text-tertiary)" }}
                   >
                     <Icons.Trash />

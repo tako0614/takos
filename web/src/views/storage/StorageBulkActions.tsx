@@ -15,11 +15,11 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
 
   return (
     <Show when={props.selectedCount > 0}>
-      <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xl z-20">
+      <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xl z-20">
         <span class="text-sm font-medium px-2">
           {t("selectedCount").replace("{count}", String(props.selectedCount))}
         </span>
-        <div class="w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
+        <div class="hidden sm:block w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
         <button
           type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
@@ -44,12 +44,13 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
           <Icons.Trash class="w-4 h-4" />
           {t("delete")}
         </button>
-        <div class="w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
+        <div class="hidden sm:block w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
         <button
           type="button"
           class="p-1.5 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onClear}
           title={t("clear")}
+          aria-label={t("clear")}
         >
           <Icons.X class="w-4 h-4" />
         </button>

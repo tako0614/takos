@@ -14,6 +14,9 @@ export function MemoryTab(props: { spaceId: string }) {
     memories,
     reminders,
     loading,
+    error,
+    fetchMemories,
+    fetchReminders,
     deleteMemory,
     deleteReminder,
     createMemory,
@@ -75,10 +78,32 @@ export function MemoryTab(props: { spaceId: string }) {
           </div>
         </div>
 
+        <Show when={error()}>
+          {(err) => (
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            >
+              <span class="min-w-0 flex-1">{err()}</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void fetchMemories();
+                  void fetchReminders();
+                }}
+              >
+                {t("retry")}
+              </Button>
+            </div>
+          )}
+        </Show>
+
         {!showReminders()
           ? (
             <MemoryList
               memories={memories()}
+              hasError={Boolean(error())}
               onDelete={deleteMemory}
               onCreateMemory={(data) =>
                 createMemory({ ...data, source: "user" })}
@@ -90,6 +115,7 @@ export function MemoryTab(props: { spaceId: string }) {
           : (
             <ReminderList
               reminders={reminders()}
+              hasError={Boolean(error())}
               onDelete={deleteReminder}
               onCreateReminder={createReminder}
               savingReminder={savingReminder()}

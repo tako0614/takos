@@ -1,6 +1,6 @@
-import { For, Show } from "solid-js";
-import type { JSX } from "solid-js";
-import { useI18n } from "../../store/i18n.ts";
+import { createMemo, For, Show } from "solid-js";
+import type { Component } from "solid-js";
+import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 
 type NavItem = "chat" | "memory";
@@ -14,23 +14,28 @@ interface MobileBottomNavProps {
   className?: string;
 }
 
+const NAV_ITEM_CONFIG: {
+  id: NavItem;
+  Icon: Component<{ class?: string }>;
+  labelKey: TranslationKey;
+}[] = [
+  {
+    id: "chat",
+    Icon: Icons.MessageSquare,
+    labelKey: "chat",
+  },
+  {
+    id: "memory",
+    Icon: Icons.Database,
+    labelKey: "memory",
+  },
+];
+
 export function MobileBottomNav(props: MobileBottomNavProps) {
   const { t } = useI18n();
 
-  const menuAriaLabel = t("openMenu");
-  const menuLabel = t("menu");
-  const navItems: { id: NavItem; icon: JSX.Element; label: string }[] = [
-    {
-      id: "chat",
-      icon: <Icons.MessageSquare class="w-5 h-5" />,
-      label: t("chat"),
-    },
-    {
-      id: "memory",
-      icon: <Icons.Database class="w-5 h-5" />,
-      label: t("memory"),
-    },
-  ];
+  const menuAriaLabel = createMemo(() => t("openMenu"));
+  const menuLabel = createMemo(() => t("menu"));
 
   return (
     <nav
@@ -43,34 +48,35 @@ export function MobileBottomNav(props: MobileBottomNavProps) {
         <Show when={props.onOpenMenu}>
           <button
             type="button"
-            class="flex flex-col items-center justify-center gap-1 flex-1 h-full min-w-[44px] min-h-[44px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            class="flex flex-col items-center justify-center gap-1 flex-1 h-full min-w-[44px] min-h-[44px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
             onClick={props.onOpenMenu}
-            aria-label={menuAriaLabel}
+            aria-label={menuAriaLabel()}
             aria-haspopup="dialog"
             aria-expanded={props.isMenuOpen ?? false}
             aria-controls={props.menuControlsId}
           >
             <Icons.Menu class="w-5 h-5" />
-            <span class="text-[10px] font-medium">{menuLabel}</span>
+            <span class="text-[10px] font-medium">{menuLabel()}</span>
           </button>
         </Show>
-        <For each={navItems}>
+        <For each={NAV_ITEM_CONFIG}>
           {(item) => {
             const isActive = () => props.activeItem === item.id;
+            const label = () => t(item.labelKey);
             return (
               <button
                 type="button"
                 class={`flex flex-col items-center justify-center gap-1 flex-1 h-full min-w-[44px] min-h-[44px] transition-colors ${
                   isActive()
                     ? "text-zinc-900 dark:text-zinc-100"
-                    : "text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 }`}
                 onClick={() => props.onNavigate(item.id)}
-                aria-label={item.label}
+                aria-label={label()}
                 aria-current={isActive() ? "page" : undefined}
               >
-                {item.icon}
-                <span class="text-[10px] font-medium">{item.label}</span>
+                <item.Icon class="w-5 h-5" />
+                <span class="text-[10px] font-medium">{label()}</span>
               </button>
             );
           }}

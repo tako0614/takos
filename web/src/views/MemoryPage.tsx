@@ -18,7 +18,7 @@ const getPriorityClasses = (pri: Reminder["priority"]) => {
     case "normal":
       return "border-l-4 border-l-accent";
     case "low":
-      return "border-l-4 border-l-text-zinc-500";
+      return "border-l-4 border-l-zinc-500";
     default:
       return "border-l-4 border-l-accent";
   }
@@ -34,6 +34,9 @@ export function MemoryPage(props: MemoryPageProps) {
     memories,
     reminders,
     loading,
+    error,
+    fetchMemories,
+    fetchReminders,
     deleteMemory,
     deleteReminder,
     memoryForm,
@@ -50,8 +53,7 @@ export function MemoryPage(props: MemoryPageProps) {
   const handleCreateMemory = async (
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
-    await baseCreateMemory(e);
-    if (memoryForm().content.trim()) {
+    if (await baseCreateMemory(e)) {
       setShowCreateMemory(false);
     }
   };
@@ -59,30 +61,36 @@ export function MemoryPage(props: MemoryPageProps) {
   const handleCreateReminder = async (
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
-    await baseCreateReminder(e);
-    if (reminderForm().content.trim() && reminderForm().triggerValue.trim()) {
+    if (await baseCreateReminder(e)) {
       setShowCreateReminder(false);
     }
   };
 
+  const handleRetry = () => {
+    void fetchMemories();
+    void fetchReminders();
+  };
+
   return (
     <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
-      <header class="flex items-center gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+      <header class="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
         <button
           type="button"
-          class="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          class="p-2 min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={props.onBack}
+          aria-label={t("goBack")}
+          title={t("goBack")}
         >
           <Icons.ArrowLeft />
         </button>
-        <h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          <Icons.HardDrive />
-          <span>{t("memories")}</span>
+        <h1 class="flex items-center gap-2 min-w-0 text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          <Icons.HardDrive class="shrink-0" />
+          <span class="min-w-0 truncate">{t("memories")}</span>
         </h1>
-        <div class="ml-auto">
+        <div class="ml-auto shrink-0">
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
+            class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
             onClick={() =>
               showReminders()
                 ? setShowCreateReminder(true)
@@ -100,6 +108,8 @@ export function MemoryPage(props: MemoryPageProps) {
         memories={memories()}
         reminders={reminders()}
         loading={loading()}
+        error={error()}
+        onRetry={handleRetry}
         showReminders={showReminders()}
         onShowRemindersChange={setShowReminders}
         onDeleteMemory={deleteMemory}

@@ -262,6 +262,7 @@ export function ChatPage(props: ChatPageProps) {
                 <>
                   <ChatHeader
                     selectedModel={modelSelection.selectedModel()}
+                    models={modelSelection.availableModels()}
                     isLoading={false}
                     onModelChange={async (model) => {
                       modelSelection.setSelectedModel(model);

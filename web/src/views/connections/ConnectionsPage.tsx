@@ -712,8 +712,18 @@ export function ConnectionsPage(props: ConnectionsPageProps) {
 
             <Show when={!loading() && error()}>
               {(message) => (
-                <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-                  {message()}
+                <div
+                  role="alert"
+                  class="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+                >
+                  <span class="min-w-0 flex-1">{message()}</span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void refresh()}
+                  >
+                    {t("retry")}
+                  </Button>
                 </div>
               )}
             </Show>

@@ -166,4 +166,11 @@ export const common = {
   reject: "Reject",
   accept: "Accept",
   new: "New",
+
+  // Cookie Consent
+  cookiePreferencesLabel: "Cookie preferences",
+  cookieConsentDescription:
+    "Takos uses essential session cookies. Preference storage keeps choices like language and theme on this device. Analytics and ad tracking are disabled.",
+  cookieEssentialOnly: "Essential only",
+  cookieAllowPreferences: "Allow preferences",
 } as const;

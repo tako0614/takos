@@ -161,15 +161,18 @@ export function WelcomeView(props: WelcomeViewProps) {
             </div>
           )}
           {error?.() && (
-            <div class="px-4 pt-2 text-xs text-red-500">{error()}</div>
+            <div role="alert" class="px-4 pt-2 text-xs text-red-600 dark:text-red-400">
+              {error()}
+            </div>
           )}
 
           {/* Textarea */}
           <textarea
             ref={textareaRef}
             disabled={submission.isSubmitting()}
-            class="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none min-h-[80px]"
+            class="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-base text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 dark:placeholder-zinc-400 focus:outline-none min-h-[80px]"
             placeholder={t("inputPlaceholder")}
+            aria-label={t("inputPlaceholder")}
             value={input()}
             onInput={handleChange}
             onPaste={handlePaste}
@@ -206,8 +209,9 @@ export function WelcomeView(props: WelcomeViewProps) {
               <button
                 type="button"
                 disabled={submission.isSubmitting()}
-                class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                class="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 title={t("attachFile")}
+                aria-label={t("attachFile")}
                 onClick={() => fileInputRef?.click()}
               >
                 <Icons.Plus class="w-4 h-4" />
@@ -215,7 +219,7 @@ export function WelcomeView(props: WelcomeViewProps) {
             </div>
             <button
               type="button"
-              class="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              class="w-10 h-10 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               onClick={handleSend}
               disabled={submission.isSubmitting() ||
                 submission.outcome()?.kind === "unconfirmed" ||

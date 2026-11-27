@@ -80,7 +80,9 @@
 
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #71717a;
+  /* zinc-400 (~5.7:1 on #27272a / ~7.0:1 on #18181b) so dark tertiary text
+     meets WCAG AA 4.5:1; zinc-500 (#71717a) sat around ~3.1:1 on dark surfaces. */
+  --color-text-tertiary: #a1a1aa;
   --color-text-inverted: #18181b;
 
   --color-border-primary: #27272a;
@@ -274,6 +276,15 @@
   }
 }
 
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes slideInBottom {
   from {
     transform: translateY(100%);
@@ -294,6 +305,10 @@
 
 .animate-slide-in-left {
   animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
 }
 
 .animate-slide-in-bottom {

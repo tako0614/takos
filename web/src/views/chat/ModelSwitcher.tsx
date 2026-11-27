@@ -5,6 +5,7 @@ import {
   type ModelSelectOption,
 } from "../../lib/modelCatalog.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ModelSwitcherProps {
   selectedModel: string;
@@ -14,6 +15,7 @@ interface ModelSwitcherProps {
 }
 
 export function ModelSwitcher(props: ModelSwitcherProps) {
+  const { t } = useI18n();
   const models = () => (props.models?.length ? props.models : MODEL_OPTIONS);
   return (
     <Show
@@ -29,7 +31,8 @@ export function ModelSwitcher(props: ModelSwitcherProps) {
           value={props.selectedModel}
           onInput={(e) => props.onModelChange!(e.currentTarget.value)}
           disabled={props.isLoading ?? false}
-          class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={t("selectModel")}
+          class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <For each={models()}>
             {(opt) => (

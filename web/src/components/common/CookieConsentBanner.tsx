@@ -2,6 +2,7 @@ import { createSignal, onMount, Show } from "solid-js";
 
 import { Button } from "../ui/Button.tsx";
 import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
 
 const CONSENT_STORAGE_KEY = "takos-cookie-consent";
 const CONSENT_VERSION = "2026-05-07";
@@ -48,6 +49,7 @@ function storeConsent(preferences: boolean): void {
 }
 
 export function CookieConsentBanner() {
+  const { t } = useI18n();
   const [visible, setVisible] = createSignal(false);
 
   onMount(() => {
@@ -63,36 +65,35 @@ export function CookieConsentBanner() {
     <Show when={visible()}>
       <div
         role="region"
-        aria-label="Cookie preferences"
-        class="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--color-border-primary)] bg-[var(--color-surface-primary)] px-4 py-3 shadow-lg"
+        aria-label={t("cookiePreferencesLabel")}
+        style={{ bottom: "var(--cookie-banner-bottom, 0px)" }}
+        class="fixed inset-x-0 z-50 border-t border-[var(--color-border-primary)] bg-[var(--color-surface-primary)] px-4 py-3 shadow-lg"
       >
         <div class="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p class="m-0 text-xs leading-5 text-[var(--color-text-secondary)] sm:max-w-2xl">
-            Takos uses essential session cookies. Preference storage keeps
-            choices like language and theme on this device. Analytics and ad
-            tracking are disabled.{" "}
+            {t("cookieConsentDescription")}{" "}
             <a
               href="/privacy"
               class="font-medium text-[var(--color-text-primary)] underline underline-offset-2"
             >
-              Privacy
+              {t("privacy")}
             </a>
           </p>
-          <div class="flex shrink-0 gap-2">
+          <div class="flex shrink-0 flex-wrap gap-2">
             <Button
               variant="secondary"
               size="sm"
               leftIcon={<Icons.X class="h-4 w-4" aria-hidden="true" />}
               onClick={() => choose(false)}
             >
-              Essential only
+              {t("cookieEssentialOnly")}
             </Button>
             <Button
               size="sm"
               leftIcon={<Icons.Check class="h-4 w-4" aria-hidden="true" />}
               onClick={() => choose(true)}
             >
-              Allow preferences
+              {t("cookieAllowPreferences")}
             </Button>
           </div>
         </div>

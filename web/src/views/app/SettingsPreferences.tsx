@@ -51,6 +51,7 @@ export function SettingsPreferences(props: {
               checked={props.userSettings.auto_update_enabled}
               onChange={(v) => updateSetting({ auto_update_enabled: v })}
               disabled={saving()}
+              ariaLabel={t("autoUpdateSettings")}
             />
           </div>
         </div>
@@ -71,6 +72,7 @@ export function SettingsPreferences(props: {
               checked={props.userSettings.private_account}
               onChange={(v) => updateSetting({ private_account: v })}
               disabled={saving()}
+              ariaLabel={t("privateAccount")}
             />
           </div>
 
