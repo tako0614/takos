@@ -33,8 +33,9 @@ export function StorageViewerShell(props: {
           <button
             type="button"
             onClick={props.onClose}
-            class="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            class="min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             title={props.t("back")}
+            aria-label={props.t("back")}
           >
             <Icons.ArrowLeft class="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
           </button>

@@ -19,9 +19,10 @@ export function ChatExportModal(props: ChatExportModalProps) {
       title={t("download")}
       size="md"
     >
-      <div class="space-y-3">
+      <div class="flex flex-col gap-2.5">
         <Button
           variant="secondary"
+          class="w-full justify-start"
           onClick={() => props.onExport("markdown")}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
@@ -29,6 +30,7 @@ export function ChatExportModal(props: ChatExportModalProps) {
         </Button>
         <Button
           variant="secondary"
+          class="w-full justify-start"
           onClick={() => props.onExport("json")}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
@@ -36,14 +38,12 @@ export function ChatExportModal(props: ChatExportModalProps) {
         </Button>
         <Button
           variant="secondary"
+          class="w-full justify-start"
           onClick={() => props.onExport("pdf")}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
           PDF
         </Button>
-        <div class="text-xs text-zinc-500 dark:text-zinc-400">
-          {t("download")}
-        </div>
       </div>
     </Modal>
   );

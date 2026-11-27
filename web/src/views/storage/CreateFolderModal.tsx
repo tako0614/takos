@@ -64,6 +64,7 @@ export function CreateFolderModal(props: CreateFolderModalProps) {
           onInput={(e) =>
             setNewFolderName((e.target as HTMLInputElement).value)}
           placeholder={t("folderName")}
+          aria-label={t("folderName")}
           autofocus
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && newFolderName().trim() && !creating()) {

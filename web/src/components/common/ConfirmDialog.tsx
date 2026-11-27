@@ -1,3 +1,4 @@
+import { createUniqueId } from "solid-js";
 import type { JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
@@ -54,6 +55,8 @@ const messageStyle: JSX.CSSProperties = {
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
   const { t } = useI18n();
+  const titleId = createUniqueId();
+  const descriptionId = createUniqueId();
 
   const iconStyle = (): JSX.CSSProperties => ({
     ...iconContainerStyle,
@@ -64,6 +67,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
     <Modal
       isOpen={props.isOpen}
       onClose={props.onCancel}
+      labelledById={titleId}
+      descriptionId={descriptionId}
       size="sm"
       showCloseButton={false}
       closeOnOverlayClick
@@ -75,8 +80,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
             style={{ width: "1.25rem", height: "1.25rem" }}
           />
         </div>
-        <h3 style={titleStyle}>{props.title}</h3>
-        <p style={messageStyle}>{props.message}</p>
+        <h3 id={titleId} style={titleStyle}>{props.title}</h3>
+        <p id={descriptionId} style={messageStyle}>{props.message}</p>
       </div>
       <ModalFooter
         style={{

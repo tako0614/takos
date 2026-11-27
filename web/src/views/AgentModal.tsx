@@ -1,14 +1,9 @@
-import {
-  createEffect,
-  createSignal,
-  createUniqueId,
-  For,
-  onCleanup,
-} from "solid-js";
+import { createSignal, createUniqueId, For } from "solid-js";
 import type { Component } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { Icons } from "../lib/Icons.tsx";
 import { useDialogLifecycle } from "../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../hooks/useFocusTrap.ts";
 import { SkillsTab } from "./agent/SkillsTab.tsx";
 import { MemoryTab } from "./agent/MemoryTab.tsx";
 import { ModelTab } from "./agent/ModelTab.tsx";
@@ -57,9 +52,10 @@ export function AgentModal(props: AgentModalProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<AgentTab>("work");
   const layerId = createUniqueId();
+  const titleId = createUniqueId();
   let dialogRef: HTMLDivElement | undefined;
 
-  useDialogLifecycle({
+  const isTopLayer = useDialogLifecycle({
     isOpen: true,
     layerId,
     get onEscape() {
@@ -69,21 +65,11 @@ export function AgentModal(props: AgentModalProps) {
     lockBodyScroll: true,
   });
 
-  createEffect(() => {
-    const container = dialogRef;
-    if (!container) return;
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    container.focus();
-    onCleanup(() => {
-      if (
-        previousFocusedElement &&
-        document.contains(previousFocusedElement)
-      ) {
-        previousFocusedElement.focus();
-      }
-    });
+  useFocusTrap({
+    isOpen: true,
+    getContainer: () => dialogRef,
+    isTopLayer,
+    respectAutofocus: true,
   });
 
   const activeTabMeta = () =>
@@ -98,7 +84,7 @@ export function AgentModal(props: AgentModalProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="agent-modal-title"
+        aria-labelledby={titleId}
         tabIndex={-1}
         class="bg-zinc-50 dark:bg-zinc-900 rounded-t-xl md:rounded-xl w-full md:max-w-4xl lg:max-w-5xl h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col focus:outline-none"
         onClick={(e) => e.stopPropagation()}
@@ -110,7 +96,7 @@ export function AgentModal(props: AgentModalProps) {
               {t("agentSettings")}
             </p>
             <h3
-              id="agent-modal-title"
+              id={titleId}
               class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
             >
               {t(activeTabMeta().labelKey)}

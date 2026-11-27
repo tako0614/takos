@@ -20,6 +20,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
   const { t } = useI18n();
   const { onOpenSettings, onLogout } = useSidebarCallbacks();
   const [showProfileMenu, setShowProfileMenu] = createSignal(false);
+  let triggerRef: HTMLButtonElement | undefined;
 
   createEffect(() => {
     if (!showProfileMenu()) return;
@@ -32,8 +33,11 @@ export function ProfileMenu(props: ProfileMenuProps) {
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
+        e.preventDefault();
         setShowProfileMenu(false);
+        triggerRef?.focus();
       }
     };
     document.addEventListener("click", handleClickOutside);
@@ -47,6 +51,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
   return (
     <div class="relative unified-profile-menu">
       <button
+        ref={triggerRef}
         type="button"
         class={ROW_DEFAULT}
         onClick={(e) => {
@@ -88,9 +93,12 @@ export function ProfileMenu(props: ProfileMenuProps) {
           role="menu"
           aria-label={t("profileMenu")}
           onKeyDown={(e) => {
+            if (e.isComposing || e.keyCode === 229) return;
             if (e.key === "Escape") {
+              e.preventDefault();
               e.stopPropagation();
               setShowProfileMenu(false);
+              triggerRef?.focus();
             }
           }}
         >

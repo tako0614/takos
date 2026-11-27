@@ -1,7 +1,8 @@
-import { createEffect, createUniqueId, onCleanup, Show } from "solid-js";
+import { createUniqueId, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../../hooks/useFocusTrap.ts";
 import { useI18n } from "../../store/i18n.ts";
 
 interface MobileDrawerProps {
@@ -11,40 +12,6 @@ interface MobileDrawerProps {
   title?: string;
   side?: "left" | "right";
   panelId?: string;
-}
-
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])',
-].join(", ");
-
-function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter(
-      (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
-    );
-}
-
-function shouldRestoreFocus(
-  previousFocusedElement: HTMLElement | null,
-  currentContainer: HTMLElement,
-): boolean {
-  if (!previousFocusedElement || !document.contains(previousFocusedElement)) {
-    return false;
-  }
-  const openDialogs = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[role="dialog"][aria-modal="true"]',
-    ),
-  ).filter((dialog) => dialog !== currentContainer);
-  if (openDialogs.length === 0) {
-    return true;
-  }
-  return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
 }
 
 export function MobileDrawer(props: MobileDrawerProps) {
@@ -62,59 +29,18 @@ export function MobileDrawer(props: MobileDrawerProps) {
       return props.isOpen;
     },
     layerId,
-    onEscape: props.onClose,
+    get onEscape() {
+      return props.onClose;
+    },
     closeOnEscape: true,
     lockBodyScroll: true,
   });
 
-  createEffect(() => {
-    if (!props.isOpen || !drawerRef) return;
-
-    const container = drawerRef;
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const focusableElements = getFocusableElements(container);
-    (focusableElements[0] ?? container).focus();
-
-    const handleTabKey = (event: KeyboardEvent) => {
-      if (!isTopLayer()) return;
-      if (event.key !== "Tab") return;
-      const currentFocusable = getFocusableElements(container);
-      if (currentFocusable.length === 0) {
-        event.preventDefault();
-        container.focus();
-        return;
-      }
-
-      const first = currentFocusable[0];
-      const last = currentFocusable[currentFocusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-
-      if (event.shiftKey) {
-        if (active === first || (active && !container.contains(active))) {
-          event.preventDefault();
-          last.focus();
-        }
-        return;
-      }
-
-      if (active === last || (active && !container.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleTabKey);
-    onCleanup(() => {
-      document.removeEventListener("keydown", handleTabKey);
-      if (
-        previousFocusedElement &&
-        shouldRestoreFocus(previousFocusedElement, container)
-      ) {
-        previousFocusedElement.focus();
-      }
-    });
+  useFocusTrap({
+    isOpen: () => props.isOpen,
+    getContainer: () => drawerRef,
+    isTopLayer,
+    respectAutofocus: false,
   });
 
   const handleTouchStart = (e: TouchEvent) => {

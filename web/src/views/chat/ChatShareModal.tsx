@@ -1,4 +1,4 @@
-import { For, onCleanup, Show } from "solid-js";
+import { createUniqueId, For, onCleanup, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
@@ -28,6 +28,9 @@ export interface ChatShareModalProps {
 export function ChatShareModal(props: ChatShareModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
+  const modeId = createUniqueId();
+  const expiresId = createUniqueId();
+  const passwordId = createUniqueId();
 
   return (
     <Modal
@@ -39,26 +42,34 @@ export function ChatShareModal(props: ChatShareModalProps) {
       <div class="space-y-5">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div class="space-y-1">
-            <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <label
+              for={modeId}
+              class="block text-xs font-medium text-zinc-600 dark:text-zinc-300"
+            >
               {t("shareMode")}
-            </div>
+            </label>
             <select
+              id={modeId}
               value={props.shareMode}
               onInput={(e) =>
                 props.onShareModeChange(
                   e.currentTarget.value === "password" ? "password" : "public",
                 )}
-              class="w-full min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+              class="w-full min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-base sm:text-sm text-zinc-900 dark:text-zinc-100"
             >
               <option value="public">{t("sharePublic")}</option>
               <option value="password">{t("sharePasswordLabel")}</option>
             </select>
           </div>
           <div class="space-y-1">
-            <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <label
+              for={expiresId}
+              class="block text-xs font-medium text-zinc-600 dark:text-zinc-300"
+            >
               {t("shareExpiresDays")}
-            </div>
+            </label>
             <Input
+              id={expiresId}
               value={props.shareExpiresInDays}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 props.onShareExpiresInDaysChange(e.currentTarget.value)}
@@ -67,10 +78,14 @@ export function ChatShareModal(props: ChatShareModalProps) {
             />
           </div>
           <div class="space-y-1">
-            <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <label
+              for={passwordId}
+              class="block text-xs font-medium text-zinc-600 dark:text-zinc-300"
+            >
               {t("sharePasswordLabel")}
-            </div>
+            </label>
             <Input
+              id={passwordId}
               type="password"
               value={props.sharePassword}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
@@ -84,7 +99,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
         </div>
 
         <Show when={props.shareError}>
-          <div class="text-sm text-red-600 dark:text-red-400">
+          <div role="alert" class="text-sm text-red-600 dark:text-red-400">
             {props.shareError}
           </div>
         </Show>
@@ -183,22 +198,24 @@ export function ChatShareModal(props: ChatShareModalProps) {
                             : ""}
                         </div>
                       </div>
-                      <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center"
+                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center disabled:opacity-40"
                           onClick={copyLink}
                           disabled={!!s.revoked_at}
                           title={t("copy")}
+                          aria-label={t("copy")}
                         >
                           <Icons.Copy class="w-4 h-4" />
                         </button>
                         <button
                           type="button"
-                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center"
+                          class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center disabled:opacity-40"
                           onClick={() => props.onRevokeShare(s.id)}
                           disabled={!!s.revoked_at}
                           title={t("revoke")}
+                          aria-label={t("revoke")}
                         >
                           <Icons.Trash class="w-4 h-4" />
                         </button>

@@ -25,23 +25,43 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
       : [];
 
   onMount(() => {
+    const previousFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    let shouldRestoreOnClose = true;
+
     // Move focus into the menu so keyboard users (who opened it via the
     // focusable trigger) can operate it and Escape returns control.
     menuItems()[0]?.focus();
 
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref && e.target instanceof Node && !ref.contains(e.target)) {
+        shouldRestoreOnClose = false;
         props.onClose();
       }
     };
     const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") props.onClose();
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        props.onClose();
+      }
     };
-    document.addEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
     document.addEventListener("keydown", keyHandler);
     onCleanup(() => {
-      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("pointerdown", handler);
       document.removeEventListener("keydown", keyHandler);
+      if (
+        shouldRestoreOnClose &&
+        previousFocusedElement &&
+        document.contains(previousFocusedElement) &&
+        (!document.activeElement ||
+          document.activeElement === document.body ||
+          ref?.contains(document.activeElement))
+      ) {
+        previousFocusedElement.focus();
+      }
     });
   });
 
@@ -87,13 +107,13 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
         <button
           type="button"
           role="menuitem"
-          class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           onClick={() => {
             props.onClose();
             props.onOpen();
           }}
         >
-          <Icons.Eye class="w-4 h-4 text-zinc-400" />
+          <Icons.Eye class="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           {t("open")}
         </button>
       </Show>
@@ -101,33 +121,33 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
         <button
           type="button"
           role="menuitem"
-          class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           onClick={() => {
             props.onClose();
             props.onDownload();
           }}
         >
-          <Icons.Download class="w-4 h-4 text-zinc-400" />
+          <Icons.Download class="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           {t("download")}
         </button>
+        <div class="h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       </Show>
-      <div class="h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       <button
         type="button"
         role="menuitem"
-        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+        class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
         onClick={() => {
           props.onClose();
           props.onRename();
         }}
       >
-        <Icons.Edit class="w-4 h-4 text-zinc-400" />
+        <Icons.Edit class="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
         {t("rename")}
       </button>
       <button
         type="button"
         role="menuitem"
-        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
         onClick={() => {
           props.onClose();
           props.onDelete();

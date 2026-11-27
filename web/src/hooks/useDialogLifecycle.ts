@@ -1,6 +1,27 @@
 import { createEffect, onCleanup } from "solid-js";
 
 const layerStack: string[] = [];
+let bodyScrollLockCount = 0;
+let savedBodyOverflow = "";
+
+export function acquireBodyScrollLock(): () => void {
+  let locked = true;
+  if (bodyScrollLockCount === 0) {
+    savedBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  bodyScrollLockCount += 1;
+
+  return () => {
+    if (!locked) return;
+    locked = false;
+    bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+    if (bodyScrollLockCount === 0) {
+      document.body.style.overflow = savedBodyOverflow;
+      savedBodyOverflow = "";
+    }
+  };
+}
 
 interface UseDialogLifecycleOptions {
   isOpen: boolean;
@@ -30,7 +51,6 @@ export function useDialogLifecycle(
   createEffect(() => {
     if (!options.isOpen) return;
 
-    const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.keyCode === 229) {
         return;
@@ -46,15 +66,13 @@ export function useDialogLifecycle(
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    if (options.lockBodyScroll ?? true) {
-      document.body.style.overflow = "hidden";
-    }
+    const releaseScrollLock = (options.lockBodyScroll ?? true)
+      ? acquireBodyScrollLock()
+      : null;
 
     onCleanup(() => {
       document.removeEventListener("keydown", handleKeyDown);
-      if (options.lockBodyScroll ?? true) {
-        document.body.style.overflow = previousOverflow;
-      }
+      releaseScrollLock?.();
     });
   });
 

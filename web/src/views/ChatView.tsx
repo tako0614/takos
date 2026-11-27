@@ -11,6 +11,7 @@ import type {
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
 import { Icons } from "../lib/Icons.tsx";
+import { getSearchShortcutParts } from "../lib/platform-shortcut.ts";
 import { ChatErrorBanner } from "./chat/ChatErrorBanner.tsx";
 import { ChatSendRecovery } from "./chat/ChatSendRecovery.tsx";
 import { ChatHeader } from "./chat/ChatHeader.tsx";
@@ -181,7 +182,13 @@ export function ChatView(props: ChatViewProps) {
     if (!props.onOpenSearch) return;
     const onOpenSearch = props.onOpenSearch;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        event.altKey ||
+        event.shiftKey
+      ) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         onOpenSearch();
@@ -276,7 +283,7 @@ export function ChatView(props: ChatViewProps) {
           isLoading={isLoading()}
           onModelChange={handleModelChange}
         />
-        <div class="ml-auto">{headerActions()}</div>
+        <div class="ml-auto">{renderHeaderActions()}</div>
       </div>,
     );
     onCleanup(() => mobileHeader.setHeaderContent(null));
@@ -304,7 +311,11 @@ export function ChatView(props: ChatViewProps) {
   const iconBtnClass =
     "min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center justify-center";
 
-  const headerActions = createMemo(() => (
+  const [searchShortcutMod, searchShortcutKey] = getSearchShortcutParts();
+
+  // Plain factory (not createMemo) so desktop ChatHeader and MobileHeader each
+  // own their own DOM subtree instead of stealing a single cached DOM node.
+  const renderHeaderActions = () => (
     <div class="flex items-center gap-1">
       <Show when={props.onOpenSearch}>
         <button
@@ -317,9 +328,12 @@ export function ChatView(props: ChatViewProps) {
         >
           <Icons.Search class="w-4 h-4" />
           <span class="hidden md:inline text-sm">{t("search")}</span>
-          <kbd class="hidden lg:flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-500">
-            <span>⌘</span>
-            <span>K</span>
+          <kbd class="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400">
+            <span>{searchShortcutMod}</span>
+            <Show when={searchShortcutMod !== "⌘"}>
+              <span aria-hidden="true">+</span>
+            </Show>
+            <span>{searchShortcutKey}</span>
           </kbd>
         </button>
       </Show>
@@ -342,7 +356,7 @@ export function ChatView(props: ChatViewProps) {
         <Icons.Download class="w-4 h-4" />
       </button>
     </div>
-  ));
+  );
 
   return (
     <div
@@ -364,7 +378,7 @@ export function ChatView(props: ChatViewProps) {
         models={availableModels()}
         isLoading={isLoading()}
         onModelChange={handleModelChange}
-        actions={headerActions()}
+        actions={renderHeaderActions()}
       />
 
       <Show when={currentTaskContext()}>

@@ -1,5 +1,8 @@
+import { createUniqueId } from "solid-js";
 import { useI18n } from "../../../store/i18n.ts";
 import { useCreateSpaceForm } from "../../../hooks/useCreateSpaceForm.ts";
+import { useDialogLifecycle } from "../../../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../../../hooks/useFocusTrap.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 import {
   MAX_WORKSPACE_DESCRIPTION_CHARACTERS,
@@ -17,6 +20,30 @@ interface CreateSpaceModalProps {
 
 export function CreateSpaceModal(props: CreateSpaceModalProps) {
   const { t } = useI18n();
+  const layerId = createUniqueId();
+  const titleId = createUniqueId();
+  const errorId = createUniqueId();
+  const nameId = createUniqueId();
+  const descriptionId = createUniqueId();
+  let dialogRef: HTMLDivElement | undefined;
+
+  const isTopLayer = useDialogLifecycle({
+    isOpen: true,
+    layerId,
+    get onEscape() {
+      return props.onClose;
+    },
+    closeOnEscape: true,
+    lockBodyScroll: true,
+  });
+
+  useFocusTrap({
+    isOpen: true,
+    getContainer: () => dialogRef,
+    isTopLayer,
+    respectAutofocus: true,
+  });
+
   const {
     name,
     setName,
@@ -36,48 +63,51 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
 
   return (
     <div
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
       onClick={props.onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-space-title"
     >
       <div
-        class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-md mx-4 shadow-lg"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-t-2xl sm:rounded-xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden shadow-lg focus:outline-none"
+        style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <h3
-            id="create-space-title"
+            id={titleId}
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
             {t("createSpace")}
           </h3>
           <button
             type="button"
-            class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
+            class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100"
             onClick={props.onClose}
             aria-label={t("close")}
           >
             <Icons.X class="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div class="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit} class="flex flex-col flex-1 min-h-0">
+          <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
             <div class="space-y-2">
               <label
-                for="space-name"
-                class="block text-sm font-medium text-zinc-500 dark:text-zinc-400"
+                for={nameId}
+                class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 {t("spaceName")}{" "}
-                <span class="text-zinc-500" aria-hidden="true">*</span>
+                <span class="text-zinc-500 dark:text-zinc-400" aria-hidden="true">*</span>
               </label>
               <input
-                id="space-name"
+                id={nameId}
                 type="text"
-                class={`w-full px-3 py-2 bg-white dark:bg-zinc-700 border rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors ${
+                class={`w-full min-h-[44px] px-3 py-2 bg-white dark:bg-zinc-700 border rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors ${
                   error() && !name().trim()
-                    ? "border-zinc-500 dark:border-zinc-400"
+                    ? "border-red-500 dark:border-red-400"
                     : "border-zinc-200 dark:border-zinc-600"
                 }`}
                 placeholder={t("spaceNamePlaceholder")}
@@ -90,22 +120,23 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
                 required
                 maxLength={MAX_WORKSPACE_NAME_CHARACTERS}
                 aria-required="true"
-                aria-invalid={error() && !name().trim() ? "true" : "false"}
+                aria-invalid={error() ? "true" : "false"}
+                aria-describedby={error() ? errorId : undefined}
               />
             </div>
             <div class="space-y-2">
               <label
-                for="space-description"
-                class="block text-sm font-medium text-zinc-500 dark:text-zinc-400"
+                for={descriptionId}
+                class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 {t("description")}{" "}
-                <span class="text-zinc-600 dark:text-zinc-500 text-xs">
+                <span class="text-zinc-500 dark:text-zinc-400 text-xs">
                   ({t("optional") || "optional"})
                 </span>
               </label>
               <textarea
-                id="space-description"
-                class="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
+                id={descriptionId}
+                class="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
                 placeholder={t("descriptionPlaceholder")}
                 value={description()}
                 onInput={(e) => setDescription(e.currentTarget.value)}
@@ -131,25 +162,26 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
             </label>
             {error() && (
               <div
-                class="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2"
+                id={errorId}
+                class="text-sm text-red-600 dark:text-red-400 flex items-center gap-2"
                 role="alert"
               >
-                <Icons.AlertTriangle class="w-4 h-4" />
-                {error()}
+                <Icons.AlertTriangle class="w-4 h-4 shrink-0" />
+                <span>{error()}</span>
               </div>
             )}
           </div>
-          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700">
+          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 shrink-0">
             <button
               type="button"
-              class="px-4 py-2 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
+              class="min-h-[44px] px-4 py-2 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
               onClick={props.onClose}
             >
               {t("cancel")}
             </button>
             <button
               type="submit"
-              class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
+              class="min-h-[44px] px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100"
               disabled={loading() || !name().trim()}
               aria-disabled={loading() || !name().trim()}
             >

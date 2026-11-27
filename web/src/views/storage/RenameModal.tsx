@@ -29,6 +29,7 @@ export function RenameModal(props: RenameModalProps) {
           onInput={(e) =>
             props.onNewNameChange((e.target as HTMLInputElement).value)}
           placeholder={t("newName")}
+          aria-label={t("newName")}
           autofocus
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !props.renaming &&
