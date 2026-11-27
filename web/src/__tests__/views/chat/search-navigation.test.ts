@@ -1,6 +1,57 @@
 import { strictEqual } from "node:assert/strict";
 import { test } from "bun:test";
-import { nextSearchResultIndex } from "../../../views/chat/search-navigation.ts";
+import {
+  isSearchListboxVisible,
+  nextSearchResultIndex,
+} from "../../../views/chat/search-navigation.ts";
+
+test("isSearchListboxVisible - gates visibility on loading, error, non-empty query, and non-empty results", () => {
+  strictEqual(
+    isSearchListboxVisible({
+      loading: false,
+      error: null,
+      query: "hello",
+      resultCount: 2,
+    }),
+    true,
+  );
+  strictEqual(
+    isSearchListboxVisible({
+      loading: true,
+      error: null,
+      query: "hello",
+      resultCount: 2,
+    }),
+    false,
+  );
+  strictEqual(
+    isSearchListboxVisible({
+      loading: false,
+      error: "network error",
+      query: "hello",
+      resultCount: 2,
+    }),
+    false,
+  );
+  strictEqual(
+    isSearchListboxVisible({
+      loading: false,
+      error: null,
+      query: "   ",
+      resultCount: 2,
+    }),
+    false,
+  );
+  strictEqual(
+    isSearchListboxVisible({
+      loading: false,
+      error: null,
+      query: "hello",
+      resultCount: 0,
+    }),
+    false,
+  );
+});
 
 test("nextSearchResultIndex - returns -1 for empty result sets", () => {
   strictEqual(nextSearchResultIndex(-1, 0, "ArrowDown"), -1);

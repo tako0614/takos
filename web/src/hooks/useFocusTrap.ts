@@ -27,6 +27,7 @@ function isInsideClosedDetails(element: HTMLElement): boolean {
 }
 
 function isHiddenOrInert(element: HTMLElement): boolean {
+  const hasComputedStyle = typeof globalThis.getComputedStyle === "function";
   let current: HTMLElement | null = element;
   while (current) {
     if (
@@ -37,25 +38,31 @@ function isHiddenOrInert(element: HTMLElement): boolean {
       return true;
     }
     if (current.tagName === "FIELDSET" && current.hasAttribute("disabled")) {
-      const firstLegend = Array.from(current.children).find(
-        (child) => child.tagName === "LEGEND",
-      );
+      const firstLegend: Element | undefined = Array.from(current.children)
+        .find((child) => child.tagName === "LEGEND");
       if (!firstLegend || !firstLegend.contains(element)) {
         return true;
       }
     }
-    current = current.parentElement;
-  }
-
-  if (typeof globalThis.getComputedStyle === "function") {
-    try {
-      const style = globalThis.getComputedStyle(element);
-      if (style.display === "none" || style.visibility === "hidden") {
-        return true;
+    if (hasComputedStyle) {
+      try {
+        const style = globalThis.getComputedStyle(current);
+        if (
+          style.display === "none" ||
+          (current === element && style.visibility === "hidden")
+        ) {
+          return true;
+        }
+      } catch {
+        // Non-browser DOM shims (e.g. linkedom) may not implement getComputedStyle fully.
       }
-    } catch {
-      // Non-browser DOM shims (e.g. linkedom) may not implement getComputedStyle fully.
+    } else if (
+      current.style?.display === "none" ||
+      (current === element && current.style?.visibility === "hidden")
+    ) {
+      return true;
     }
+    current = current.parentElement;
   }
 
   return false;
@@ -99,6 +106,46 @@ export function shouldRestoreFocus(
     return true;
   }
   return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
+}
+
+export function restoreFocusAfterDialogClose(
+  previousFocusedElement: HTMLElement | null,
+  currentContainer: HTMLElement,
+): HTMLElement | null {
+  if (
+    previousFocusedElement &&
+    shouldRestoreFocus(previousFocusedElement, currentContainer)
+  ) {
+    previousFocusedElement.focus();
+    return previousFocusedElement;
+  }
+
+  const remainingDialogs = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-modal="true"]',
+    ),
+  ).filter((dialog) => dialog !== currentContainer);
+  if (remainingDialogs.length > 0) {
+    const topDialog = remainingDialogs[remainingDialogs.length - 1];
+    if (!topDialog.hasAttribute("tabindex")) {
+      topDialog.tabIndex = -1;
+    }
+    topDialog.focus();
+    return topDialog;
+  }
+
+  const mainLandmark = document.querySelector<HTMLElement>(
+    'main, [role="main"]',
+  );
+  if (mainLandmark) {
+    if (!mainLandmark.hasAttribute("tabindex")) {
+      mainLandmark.tabIndex = -1;
+    }
+    mainLandmark.focus();
+    return mainLandmark;
+  }
+
+  return null;
 }
 
 export interface UseFocusTrapOptions {
@@ -172,12 +219,7 @@ export function useFocusTrap(options: UseFocusTrapOptions): void {
     document.addEventListener("keydown", handleTabKey);
     onCleanup(() => {
       document.removeEventListener("keydown", handleTabKey);
-      if (
-        previousFocusedElement &&
-        shouldRestoreFocus(previousFocusedElement, container)
-      ) {
-        previousFocusedElement.focus();
-      }
+      restoreFocusAfterDialogClose(previousFocusedElement, container);
     });
   });
 }

@@ -20,6 +20,7 @@ export interface MemoryCreateFormProps {
 export function MemoryCreateForm(props: MemoryCreateFormProps) {
   const { t } = useI18n();
   const layerId = createUniqueId();
+  const titleId = createUniqueId();
   const contentId = createUniqueId();
   const typeId = createUniqueId();
   const categoryId = createUniqueId();
@@ -51,7 +52,7 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="memory-page-create-modal-title"
+        aria-labelledby={titleId}
         tabIndex={-1}
         class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl focus:outline-none"
         style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
@@ -59,7 +60,7 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <h3
-            id="memory-page-create-modal-title"
+            id={titleId}
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
             {t("createMemory")}
@@ -180,6 +181,7 @@ export interface ReminderCreateFormProps {
 export function ReminderCreateForm(props: ReminderCreateFormProps) {
   const { t } = useI18n();
   const layerId = createUniqueId();
+  const titleId = createUniqueId();
   const contentId = createUniqueId();
   const triggerTypeId = createUniqueId();
   const triggerValueId = createUniqueId();
@@ -212,7 +214,7 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="memory-page-reminder-modal-title"
+        aria-labelledby={titleId}
         tabIndex={-1}
         class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl focus:outline-none"
         style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
@@ -220,7 +222,7 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <h3
-            id="memory-page-reminder-modal-title"
+            id={titleId}
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
             {t("createReminder")}

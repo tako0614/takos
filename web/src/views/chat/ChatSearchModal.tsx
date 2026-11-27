@@ -20,6 +20,7 @@ import {
   vectorSearchEnabled,
 } from "../../store/runtime-capabilities.ts";
 import {
+  isSearchListboxVisible,
   nextSearchResultIndex,
   type SearchNavigationKey,
 } from "./search-navigation.ts";
@@ -222,12 +223,22 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
   const listboxId = createUniqueId();
   const optionIdPrefix = `${listboxId}-opt`;
 
+  const listboxVisible = createMemo(() =>
+    isSearchListboxVisible({
+      loading: loading(),
+      error: error(),
+      query: query(),
+      resultCount: results().length,
+    })
+  );
+
   createEffect(() => {
     const list = results();
     setActiveIndex(list.length > 0 ? 0 : -1);
   });
 
   const activeOptionId = createMemo(() => {
+    if (!listboxVisible()) return undefined;
     const idx = activeIndex();
     if (idx < 0 || idx >= results().length) return undefined;
     return `${optionIdPrefix}-${idx}`;
@@ -237,6 +248,7 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
   ) => {
     if (event.isComposing || event.keyCode === 229) return;
+    if (!listboxVisible()) return;
     const list = results();
     if (list.length === 0) return;
     if (
@@ -316,8 +328,8 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
               role="combobox"
               aria-label={t("searchThreadsAndMessages")}
               aria-autocomplete="list"
-              aria-expanded={results().length > 0}
-              aria-controls={results().length > 0 ? listboxId : undefined}
+              aria-expanded={listboxVisible()}
+              aria-controls={listboxVisible() ? listboxId : undefined}
               aria-activedescendant={activeOptionId()}
               value={query()}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>

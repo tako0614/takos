@@ -28,13 +28,15 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
     const previousFocusedElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+    let shouldRestoreOnClose = true;
 
     // Move focus into the menu so keyboard users (who opened it via the
     // focusable trigger) can operate it and Escape returns control.
     menuItems()[0]?.focus();
 
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref && e.target instanceof Node && !ref.contains(e.target)) {
+        shouldRestoreOnClose = false;
         props.onClose();
       }
     };
@@ -45,12 +47,13 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
         props.onClose();
       }
     };
-    document.addEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
     document.addEventListener("keydown", keyHandler);
     onCleanup(() => {
-      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("pointerdown", handler);
       document.removeEventListener("keydown", keyHandler);
       if (
+        shouldRestoreOnClose &&
         previousFocusedElement &&
         document.contains(previousFocusedElement) &&
         (!document.activeElement ||

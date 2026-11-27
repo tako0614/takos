@@ -45,6 +45,14 @@ test("ChatSearchModal wires combobox/listbox keyboard navigation and ChatView av
     "ChatSearchModal input must wire aria-activedescendant",
   );
   assert(
+    searchSource.includes("aria-expanded={listboxVisible()}"),
+    "ChatSearchModal must gate aria-expanded on listboxVisible()",
+  );
+  assert(
+    searchSource.includes("if (!listboxVisible()) return;"),
+    "ChatSearchModal must block arrow/Enter handling when listbox is hidden",
+  );
+  assert(
     searchSource.includes("event.isComposing"),
     "ChatSearchModal keyboard navigation must guard IME composition",
   );
@@ -93,4 +101,18 @@ test("LoginPage preserves reactive language getter instead of destructuring lang
     !authViewsSource.includes("const { t, lang"),
     "LoginPage must not destructure reactive lang getter from useI18n()",
   );
+});
+
+test("AgentModal and MemoryForm use createUniqueId for dialog titles instead of hardcoded IDs", () => {
+  const agentModal = readWeb("src/views/AgentModal.tsx");
+  const memoryForm = readWeb("src/views/memory/MemoryForm.tsx");
+  assert(!agentModal.includes('"agent-modal-title"'));
+  assert(!memoryForm.includes('"memory-page-create-modal-title"'));
+  assert(!memoryForm.includes('"memory-page-reminder-modal-title"'));
+});
+
+test("StorageContextMenu dismisses on pointerdown without stealing focus back from clicked targets", () => {
+  const menuSource = readWeb("src/views/storage/StorageContextMenu.tsx");
+  assert(menuSource.includes('"pointerdown"'));
+  assert(menuSource.includes("shouldRestoreOnClose = false"));
 });

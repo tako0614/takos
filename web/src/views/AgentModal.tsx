@@ -52,6 +52,7 @@ export function AgentModal(props: AgentModalProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<AgentTab>("work");
   const layerId = createUniqueId();
+  const titleId = createUniqueId();
   let dialogRef: HTMLDivElement | undefined;
 
   const isTopLayer = useDialogLifecycle({
@@ -83,7 +84,7 @@ export function AgentModal(props: AgentModalProps) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="agent-modal-title"
+        aria-labelledby={titleId}
         tabIndex={-1}
         class="bg-zinc-50 dark:bg-zinc-900 rounded-t-xl md:rounded-xl w-full md:max-w-4xl lg:max-w-5xl h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col focus:outline-none"
         onClick={(e) => e.stopPropagation()}
@@ -95,7 +96,7 @@ export function AgentModal(props: AgentModalProps) {
               {t("agentSettings")}
             </p>
             <h3
-              id="agent-modal-title"
+              id={titleId}
               class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
             >
               {t(activeTabMeta().labelKey)}

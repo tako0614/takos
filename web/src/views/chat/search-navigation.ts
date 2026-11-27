@@ -1,5 +1,19 @@
 export type SearchNavigationKey = "ArrowDown" | "ArrowUp" | "Home" | "End";
 
+export function isSearchListboxVisible(state: {
+  loading: boolean;
+  error: string | null;
+  query: string;
+  resultCount: number;
+}): boolean {
+  return (
+    !state.loading &&
+    !state.error &&
+    state.query.trim().length > 0 &&
+    state.resultCount > 0
+  );
+}
+
 export function nextSearchResultIndex(
   currentIndex: number,
   count: number,
