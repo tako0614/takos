@@ -32,6 +32,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
         setShowProfileMenu(false);
       }

@@ -193,8 +193,11 @@ export function SharedThreadPage(props: { token: string }) {
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
                 placeholder={t("password")}
+                aria-label={t("password")}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") unlock();
+                  if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+                    unlock();
+                  }
                 }}
               />
               <Button
@@ -217,7 +220,7 @@ export function SharedThreadPage(props: { token: string }) {
             </div>
 
             {error() && (
-              <div class="mt-4 text-sm text-red-600 dark:text-red-400">
+              <div role="alert" class="mt-4 text-sm text-red-600 dark:text-red-400">
                 {error()}
               </div>
             )}

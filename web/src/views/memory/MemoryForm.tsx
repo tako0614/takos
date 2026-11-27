@@ -1,6 +1,7 @@
 import { createUniqueId, type Setter } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../../hooks/useFocusTrap.ts";
 import { useI18n } from "../../store/i18n.ts";
 import type { Memory, Reminder } from "../../types/index.ts";
 import type {
@@ -19,7 +20,12 @@ export interface MemoryCreateFormProps {
 export function MemoryCreateForm(props: MemoryCreateFormProps) {
   const { t } = useI18n();
   const layerId = createUniqueId();
-  useDialogLifecycle({
+  const contentId = createUniqueId();
+  const typeId = createUniqueId();
+  const categoryId = createUniqueId();
+  let dialogRef: HTMLDivElement | undefined;
+
+  const isTopLayer = useDialogLifecycle({
     isOpen: true,
     layerId,
     get onEscape() {
@@ -29,19 +35,29 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
     lockBodyScroll: true,
   });
 
+  useFocusTrap({
+    isOpen: true,
+    getContainer: () => dialogRef,
+    isTopLayer,
+    respectAutofocus: true,
+  });
+
   return (
     <div
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
       onClick={props.onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="memory-page-create-modal-title"
     >
       <div
-        class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-xl"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="memory-page-create-modal-title"
+        tabIndex={-1}
+        class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl focus:outline-none"
+        style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <h3
             id="memory-page-create-modal-title"
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
@@ -57,14 +73,18 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
             <Icons.X />
           </button>
         </div>
-        <form onSubmit={props.onSubmit}>
-          <div class="p-6 flex flex-col gap-4">
+        <form onSubmit={props.onSubmit} class="flex flex-col flex-1 min-h-0">
+          <div class="p-6 flex flex-col gap-4 overflow-y-auto flex-1">
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={contentId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("memoryContent")}
               </label>
               <textarea
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
+                id={contentId}
+                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
                 placeholder={t("memoryContentPlaceholder")}
                 value={props.memoryForm.content}
                 onInput={(e) =>
@@ -78,11 +98,15 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={typeId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("memoryType")}
               </label>
               <select
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
+                id={typeId}
+                class="w-full min-h-[44px] px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.memoryForm.type}
                 onChange={(e) =>
                   props.onFormChange((prev) => ({
@@ -102,12 +126,16 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
               </select>
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={categoryId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("memoryCategory")}
               </label>
               <input
+                id={categoryId}
                 type="text"
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
+                class="w-full min-h-[44px] px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 placeholder={t("memoryCategoryPlaceholder")}
                 value={props.memoryForm.category}
                 onInput={(e) =>
@@ -118,17 +146,17 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
               />
             </div>
           </div>
-          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700">
+          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 shrink-0">
             <button
               type="button"
-              class="px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              class="min-h-[44px] px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               onClick={props.onClose}
             >
               {t("cancel")}
             </button>
             <button
               type="submit"
-              class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              class="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={props.memoryForm.saving ||
                 !props.memoryForm.content.trim()}
             >
@@ -152,7 +180,13 @@ export interface ReminderCreateFormProps {
 export function ReminderCreateForm(props: ReminderCreateFormProps) {
   const { t } = useI18n();
   const layerId = createUniqueId();
-  useDialogLifecycle({
+  const contentId = createUniqueId();
+  const triggerTypeId = createUniqueId();
+  const triggerValueId = createUniqueId();
+  const priorityId = createUniqueId();
+  let dialogRef: HTMLDivElement | undefined;
+
+  const isTopLayer = useDialogLifecycle({
     isOpen: true,
     layerId,
     get onEscape() {
@@ -162,19 +196,29 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
     lockBodyScroll: true,
   });
 
+  useFocusTrap({
+    isOpen: true,
+    getContainer: () => dialogRef,
+    isTopLayer,
+    respectAutofocus: true,
+  });
+
   return (
     <div
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50"
       onClick={props.onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="memory-page-reminder-modal-title"
     >
       <div
-        class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-xl"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="memory-page-reminder-modal-title"
+        tabIndex={-1}
+        class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-t-2xl sm:rounded-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden shadow-xl focus:outline-none"
+        style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
           <h3
             id="memory-page-reminder-modal-title"
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
@@ -190,14 +234,18 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
             <Icons.X />
           </button>
         </div>
-        <form onSubmit={props.onSubmit}>
-          <div class="p-6 flex flex-col gap-4">
+        <form onSubmit={props.onSubmit} class="flex flex-col flex-1 min-h-0">
+          <div class="p-6 flex flex-col gap-4 overflow-y-auto flex-1">
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={contentId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("reminderContent")}
               </label>
               <textarea
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
+                id={contentId}
+                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors resize-none"
                 placeholder={t("reminderContentPlaceholder")}
                 value={props.reminderForm.content}
                 onInput={(e) =>
@@ -211,11 +259,15 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={triggerTypeId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("triggerType")}
               </label>
               <select
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
+                id={triggerTypeId}
+                class="w-full min-h-[44px] px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.reminderForm.triggerType}
                 onChange={(e) =>
                   props.onFormChange((prev) => ({
@@ -236,12 +288,16 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               </select>
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={triggerValueId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("triggerValue")}
               </label>
               <input
+                id={triggerValueId}
                 type="text"
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
+                class="w-full min-h-[44px] px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 placeholder={props.reminderForm.triggerType === "time"
                   ? t("triggerValueTimePlaceholder")
                   : t("triggerValueConditionPlaceholder")}
@@ -255,11 +311,15 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               />
             </div>
             <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <label
+                for={priorityId}
+                class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
                 {t("priority")}
               </label>
               <select
-                class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
+                id={priorityId}
+                class="w-full min-h-[44px] px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                 value={props.reminderForm.priority}
                 onChange={(e) =>
                   props.onFormChange((prev) => ({
@@ -273,17 +333,17 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
               </select>
             </div>
           </div>
-          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700">
+          <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 shrink-0">
             <button
               type="button"
-              class="px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              class="min-h-[44px] px-4 py-2 rounded-lg font-medium text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               onClick={props.onClose}
             >
               {t("cancel")}
             </button>
             <button
               type="submit"
-              class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              class="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={props.reminderForm.saving ||
                 !props.reminderForm.content.trim() ||
                 !props.reminderForm.triggerValue.trim()}

@@ -51,6 +51,7 @@ export function BulkRenameModal(props: BulkRenameModalProps) {
                   </div>
                   <Input
                     value={r().name}
+                    aria-label={`${t("newName")}: ${r().old_name}`}
                     onInput={(e) => {
                       const next = (e.target as HTMLInputElement).value;
                       props.onRenamesChange((prev) =>

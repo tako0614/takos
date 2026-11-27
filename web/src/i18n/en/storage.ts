@@ -75,4 +75,7 @@ export const storage = {
   clearDefault: "Clear default",
   included: "Included",
   moveItemsTo: "Move {count} items to",
+  selectAllItems: "Select all items",
+  selectItem: "Select {name}",
+  parentFolder: "Parent folder",
 } as const;

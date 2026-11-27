@@ -1,14 +1,9 @@
-import {
-  createEffect,
-  createSignal,
-  createUniqueId,
-  For,
-  onCleanup,
-} from "solid-js";
+import { createSignal, createUniqueId, For } from "solid-js";
 import type { Component } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { Icons } from "../lib/Icons.tsx";
 import { useDialogLifecycle } from "../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../hooks/useFocusTrap.ts";
 import { SkillsTab } from "./agent/SkillsTab.tsx";
 import { MemoryTab } from "./agent/MemoryTab.tsx";
 import { ModelTab } from "./agent/ModelTab.tsx";
@@ -59,7 +54,7 @@ export function AgentModal(props: AgentModalProps) {
   const layerId = createUniqueId();
   let dialogRef: HTMLDivElement | undefined;
 
-  useDialogLifecycle({
+  const isTopLayer = useDialogLifecycle({
     isOpen: true,
     layerId,
     get onEscape() {
@@ -69,21 +64,11 @@ export function AgentModal(props: AgentModalProps) {
     lockBodyScroll: true,
   });
 
-  createEffect(() => {
-    const container = dialogRef;
-    if (!container) return;
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    container.focus();
-    onCleanup(() => {
-      if (
-        previousFocusedElement &&
-        document.contains(previousFocusedElement)
-      ) {
-        previousFocusedElement.focus();
-      }
-    });
+  useFocusTrap({
+    isOpen: true,
+    getContainer: () => dialogRef,
+    isTopLayer,
+    respectAutofocus: true,
   });
 
   const activeTabMeta = () =>

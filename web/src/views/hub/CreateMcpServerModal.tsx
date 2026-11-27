@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, createUniqueId } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { Button } from "../../components/ui/Button.tsx";
@@ -13,6 +13,8 @@ export function CreateMcpServerModal(props: {
   ) => Promise<void>;
 }) {
   const { t } = useI18n();
+  const nameErrorId = createUniqueId();
+  const urlErrorId = createUniqueId();
   const [name, setName] = createSignal("");
   const [url, setUrl] = createSignal("");
   const [scope, setScope] = createSignal("");
@@ -70,38 +72,60 @@ export function CreateMcpServerModal(props: {
               setName(e.currentTarget.value)}
             class={`mt-2 w-full h-11 rounded-xl border ${
               nameError()
-                ? "border-red-400"
+                ? "border-red-500 dark:border-red-400"
                 : "border-zinc-200 dark:border-zinc-700"
-            } bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100`}
+            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100`}
             placeholder="github"
+            autofocus
             required
+            aria-invalid={nameError() ? "true" : "false"}
+            aria-describedby={nameError() ? nameErrorId : undefined}
           />
-          {nameError() && <p class="mt-1 text-xs text-red-500">{nameError()}
-          </p>}
+          {nameError() && (
+            <p
+              id={nameErrorId}
+              role="alert"
+              class="mt-1 text-xs text-red-600 dark:text-red-400"
+            >
+              {nameError()}
+            </p>
+          )}
         </label>
         <label class="block">
           <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
             URL
           </span>
           <input
+            type="url"
             value={url()}
             onInput={(e) =>
               setUrl(e.currentTarget.value)}
             class={`mt-2 w-full h-11 rounded-xl border ${
               urlError()
-                ? "border-red-400"
+                ? "border-red-500 dark:border-red-400"
                 : "border-zinc-200 dark:border-zinc-700"
-            } bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100`}
+            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100`}
             placeholder="https://example.com/mcp"
             required
+            aria-invalid={urlError() ? "true" : "false"}
+            aria-describedby={urlError() ? urlErrorId : undefined}
           />
-          {urlError() && <p class="mt-1 text-xs text-red-500">{urlError()}</p>}
+          {urlError() && (
+            <p
+              id={urlErrorId}
+              role="alert"
+              class="mt-1 text-xs text-red-600 dark:text-red-400"
+            >
+              {urlError()}
+            </p>
+          )}
         </label>
 
         {/* Advanced toggle */}
         <button
           type="button"
-          class="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          aria-expanded={showAdvanced()}
+          class="flex items-center gap-1 min-h-[36px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
           onClick={() =>
             setShowAdvanced(!showAdvanced())}
         >
@@ -119,7 +143,7 @@ export function CreateMcpServerModal(props: {
             <input
               value={scope()}
               onInput={(e) => setScope(e.currentTarget.value)}
-              class="mt-2 w-full h-11 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"
+              class="mt-2 w-full h-11 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100"
               placeholder="read write"
             />
           </label>

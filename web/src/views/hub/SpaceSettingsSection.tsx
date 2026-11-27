@@ -1,4 +1,10 @@
-import { createEffect, createMemo, createSignal, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  Show,
+} from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
@@ -27,6 +33,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
+  const selectSpaceId = createUniqueId();
   const selectedSpaceId = () => props.selectedSpaceId;
 
   const [spaceName, setSpaceName] = createSignal("");
@@ -141,7 +148,10 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
 
       <div class="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div class="flex items-center justify-between mb-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <label
+            for={selectSpaceId}
+            class="text-sm font-medium text-zinc-500 dark:text-zinc-400"
+          >
             {t("selectSpace")}
           </label>
           <Button
@@ -154,7 +164,8 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           </Button>
         </div>
         <select
-          class="w-full max-w-md px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
+          id={selectSpaceId}
+          class="w-full max-w-md min-h-[44px] px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
           value={selectedSpaceId() ?? ""}
           onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
         >

@@ -1,13 +1,8 @@
-import {
-  createEffect,
-  createUniqueId,
-  onCleanup,
-  Show,
-  splitProps,
-} from "solid-js";
+import { createUniqueId, Show, splitProps } from "solid-js";
 import type { JSX } from "solid-js";
 import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
 import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
+import { useFocusTrap } from "../../hooks/useFocusTrap.ts";
 import { useI18n } from "../../store/i18n.ts";
 
 type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
@@ -17,6 +12,7 @@ interface ModalProps {
   onClose: () => void;
   size?: ModalSize;
   title?: string;
+  labelledById?: string;
   descriptionId?: string;
   children: JSX.Element;
   showCloseButton?: boolean;
@@ -33,46 +29,13 @@ const sizeClasses: Record<ModalSize, string> = {
   full: "max-w-full",
 };
 
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])',
-].join(", ");
-
-function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter(
-      (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
-    );
-}
-
-function shouldRestoreFocus(
-  previousFocusedElement: HTMLElement | null,
-  currentContainer: HTMLElement,
-): boolean {
-  if (!previousFocusedElement || !document.contains(previousFocusedElement)) {
-    return false;
-  }
-  const openDialogs = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[role="dialog"][aria-modal="true"]',
-    ),
-  ).filter((dialog) => dialog !== currentContainer);
-  if (openDialogs.length === 0) {
-    return true;
-  }
-  return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
-}
-
 export function Modal(props: ModalProps) {
   const [local] = splitProps(props, [
     "isOpen",
     "onClose",
     "size",
     "title",
+    "labelledById",
     "descriptionId",
     "children",
     "showCloseButton",
@@ -109,59 +72,15 @@ export function Modal(props: ModalProps) {
     lockBodyScroll: true,
   });
 
-  createEffect(() => {
-    if (!local.isOpen || !modalRef) return;
-
-    const container = modalRef;
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-
-    const autoFocusElement = container.querySelector<HTMLElement>(
-      '[autofocus], [data-autofocus="true"]',
-    );
-    const focusableElements = getFocusableElements(container);
-    (autoFocusElement ?? focusableElements[0] ?? container).focus();
-
-    const handleTabKey = (event: KeyboardEvent) => {
-      if (!isTopLayer()) return;
-      if (event.key !== "Tab") return;
-      const currentFocusable = getFocusableElements(container);
-      if (currentFocusable.length === 0) {
-        event.preventDefault();
-        container.focus();
-        return;
-      }
-
-      const first = currentFocusable[0];
-      const last = currentFocusable[currentFocusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-
-      if (event.shiftKey) {
-        if (active === first || (active && !container.contains(active))) {
-          event.preventDefault();
-          last.focus();
-        }
-        return;
-      }
-
-      if (active === last || (active && !container.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleTabKey);
-    onCleanup(() => {
-      document.removeEventListener("keydown", handleTabKey);
-      if (
-        previousFocusedElement &&
-        shouldRestoreFocus(previousFocusedElement, container)
-      ) {
-        previousFocusedElement.focus();
-      }
-    });
+  useFocusTrap({
+    isOpen: () => local.isOpen,
+    getContainer: () => modalRef,
+    isTopLayer,
+    respectAutofocus: true,
   });
+
+  const resolvedLabelledBy = () =>
+    local.title ? titleId : local.labelledById;
 
   return (
     <Show when={local.isOpen}>
@@ -175,9 +94,9 @@ export function Modal(props: ModalProps) {
           ref={modalRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={local.title ? titleId : undefined}
+          aria-labelledby={resolvedLabelledBy()}
           aria-describedby={local.descriptionId}
-          aria-label={local.title ? undefined : t("dialog")}
+          aria-label={resolvedLabelledBy() ? undefined : t("dialog")}
           tabIndex={-1}
           class={`
             bg-[var(--color-surface-primary)] shadow-[var(--shadow-lg)] w-full flex flex-col overflow-hidden

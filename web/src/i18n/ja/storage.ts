@@ -76,4 +76,7 @@ export const storage = {
   clearDefault: "既定を解除",
   included: "同梱",
   moveItemsTo: "{count}件を移動先へ:",
+  selectAllItems: "すべての項目を選択",
+  selectItem: "{name} を選択",
+  parentFolder: "親フォルダへ移動",
 } as const;

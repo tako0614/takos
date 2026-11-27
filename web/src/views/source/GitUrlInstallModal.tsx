@@ -61,6 +61,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const [approved, setApproved] = createSignal(false);
   const [previewing, setPreviewing] = createSignal(false);
   const [installing, setInstalling] = createSignal(false);
+  const [formError, setFormError] = createSignal<string | null>(null);
   // One logical plan attempt keeps its key across network retries. Editing a
   // source starts a new logical request and therefore gets a fresh key.
   const newPlanIdempotencyKey = () => `takos-ui:${crypto.randomUUID()}`;
@@ -90,6 +91,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const resetPreview = () => {
     setPreview(null);
     setApproved(false);
+    setFormError(null);
     setIdempotencyKey(newPlanIdempotencyKey());
   };
 
@@ -111,6 +113,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       return;
     }
     setPreviewing(true);
+    setFormError(null);
     try {
       const revision = props.revision;
       const response = await fetch(
@@ -140,12 +143,11 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       setPreview(data);
       setApproved(false);
     } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error && err.message
-          ? err.message
-          : t("installPlanFailed"),
-      );
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : t("installPlanFailed");
+      setFormError(msg);
+      showToast("error", msg);
     } finally {
       setPreviewing(false);
     }
@@ -156,6 +158,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     const currentPreview = preview();
     if (!spaceId || !currentPreview) return;
     setInstalling(true);
+    setFormError(null);
     try {
       const revision = props.revision;
       const expected = currentPreview.expected;
@@ -190,10 +193,11 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       await props.onApplied?.();
       close();
     } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error && err.message ? err.message : t("installFailed"),
-      );
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : t("installFailed");
+      setFormError(msg);
+      showToast("error", msg);
     } finally {
       setInstalling(false);
     }
@@ -220,7 +224,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="https://github.com/example/app.git"
-              class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
               required
               autofocus
             />
@@ -237,7 +241,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="v1.2.3"
-              class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
               required
             />
           </label>
@@ -253,11 +257,23 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="."
-              class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
               required
             />
           </label>
         </div>
+
+        <Show when={formError()}>
+          {(err) => (
+            <div
+              role="alert"
+              class="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+            >
+              <Icons.AlertTriangle class="h-4 w-4 shrink-0" />
+              <span class="min-w-0 flex-1 break-words">{err()}</span>
+            </div>
+          )}
+        </Show>
 
         <Show when={preview()}>
           {(currentPreview) => (
@@ -291,7 +307,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           )}
         </Show>
 
-        <ModalFooter class="gap-2">
+        <ModalFooter class="-mx-6 -mb-6 mt-4 flex-wrap gap-2">
           <Button type="button" variant="secondary" onClick={close}>
             {t("cancel")}
           </Button>

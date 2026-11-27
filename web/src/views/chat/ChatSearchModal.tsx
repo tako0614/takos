@@ -1,6 +1,8 @@
 import {
   createEffect,
+  createMemo,
   createSignal,
+  createUniqueId,
   type JSX,
   onCleanup,
   onMount,
@@ -17,6 +19,10 @@ import {
   runtimeCapabilities,
   vectorSearchEnabled,
 } from "../../store/runtime-capabilities.ts";
+import {
+  nextSearchResultIndex,
+  type SearchNavigationKey,
+} from "./search-navigation.ts";
 
 type SpaceSearchResult = {
   kind: "keyword" | "semantic";
@@ -55,10 +61,14 @@ function renderSnippet(
 }
 
 function SearchResultsBody(props: {
+  listboxId: string;
+  optionIdPrefix: string;
   loading: boolean;
   error: string | null;
   query: string;
   results: SpaceSearchResult[];
+  activeIndex: number;
+  onActiveIndexChange: (index: number) => void;
   onSelectResult: (
     threadId: string,
     messageId: string,
@@ -67,6 +77,17 @@ function SearchResultsBody(props: {
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  let listboxRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    const idx = props.activeIndex;
+    if (idx < 0 || !listboxRef) return;
+    const option = listboxRef.querySelector<HTMLElement>(
+      `#${CSS.escape(`${props.optionIdPrefix}-${idx}`)}`,
+    );
+    option?.scrollIntoView?.({ block: "nearest" });
+  });
+
   return (
     <Show
       when={!props.loading}
@@ -79,7 +100,7 @@ function SearchResultsBody(props: {
       <Show
         when={!props.error}
         fallback={
-          <div class="py-4 text-sm text-red-600 dark:text-red-400">
+          <div role="alert" class="py-4 text-sm text-red-600 dark:text-red-400">
             {props.error}
           </div>
         }
@@ -100,39 +121,56 @@ function SearchResultsBody(props: {
               </div>
             }
           >
-            <div class="space-y-2">
+            <div
+              ref={listboxRef}
+              id={props.listboxId}
+              role="listbox"
+              aria-label={t("search")}
+              class="space-y-2"
+            >
               <For each={props.results}>
-                {(r) => (
-                  <button
-                    type="button"
-                    class="w-full text-left p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-700/50 transition-colors"
-                    onClick={() => {
-                      props.onSelectResult(
-                        r.thread.id,
-                        r.message.id,
-                        r.message.sequence,
-                      );
-                      props.onClose();
-                    }}
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                        {r.kind === "keyword"
-                          ? t("searchTypeKeyword")
-                          : t("searchTypeSemantic")}
-                        {typeof r.score === "number"
-                          ? ` ${r.score.toFixed(2)}`
-                          : ""}
-                      </span>
-                      <span class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                        {r.thread.title || t("untitled")}
-                      </span>
-                    </div>
-                    <div class="mt-2 text-sm text-zinc-800 dark:text-zinc-200">
-                      {renderSnippet(r.snippet, r.match)}
-                    </div>
-                  </button>
-                )}
+                {(r, index) => {
+                  const isActive = () => props.activeIndex === index();
+                  return (
+                    <button
+                      id={`${props.optionIdPrefix}-${index()}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive()}
+                      class={`w-full text-left p-3 rounded-xl border transition-colors ${
+                        isActive()
+                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100/80 dark:bg-zinc-800/80 ring-2 ring-zinc-900/20 dark:ring-zinc-100/20"
+                          : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-700/50"
+                      }`}
+                      onMouseEnter={() => props.onActiveIndexChange(index())}
+                      onClick={() => {
+                        props.onSelectResult(
+                          r.thread.id,
+                          r.message.id,
+                          r.message.sequence,
+                        );
+                        props.onClose();
+                      }}
+                    >
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="shrink-0 text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                          {r.kind === "keyword"
+                            ? t("searchTypeKeyword")
+                            : t("searchTypeSemantic")}
+                          {typeof r.score === "number"
+                            ? ` ${r.score.toFixed(2)}`
+                            : ""}
+                        </span>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                          {r.thread.title || t("untitled")}
+                        </span>
+                      </div>
+                      <div class="mt-2 text-sm text-zinc-800 dark:text-zinc-200 break-words">
+                        {renderSnippet(r.snippet, r.match)}
+                      </div>
+                    </button>
+                  );
+                }}
               </For>
             </div>
           </Show>
@@ -180,6 +218,56 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [results, setResults] = createSignal<SpaceSearchResult[]>([]);
+  const [activeIndex, setActiveIndex] = createSignal(-1);
+  const listboxId = createUniqueId();
+  const optionIdPrefix = `${listboxId}-opt`;
+
+  createEffect(() => {
+    const list = results();
+    setActiveIndex(list.length > 0 ? 0 : -1);
+  });
+
+  const activeOptionId = createMemo(() => {
+    const idx = activeIndex();
+    if (idx < 0 || idx >= results().length) return undefined;
+    return `${optionIdPrefix}-${idx}`;
+  });
+
+  const handleInputKeyDown = (
+    event: KeyboardEvent & { currentTarget: HTMLInputElement },
+  ) => {
+    if (event.isComposing || event.keyCode === 229) return;
+    const list = results();
+    if (list.length === 0) return;
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "ArrowUp" ||
+      event.key === "Home" ||
+      event.key === "End"
+    ) {
+      event.preventDefault();
+      setActiveIndex(
+        nextSearchResultIndex(
+          activeIndex(),
+          list.length,
+          event.key as SearchNavigationKey,
+        ),
+      );
+      return;
+    }
+    if (event.key === "Enter") {
+      const idx = activeIndex();
+      const selected = idx >= 0 && idx < list.length ? list[idx] : list[0];
+      if (!selected) return;
+      event.preventDefault();
+      props.onSelectResult(
+        selected.thread.id,
+        selected.message.id,
+        selected.message.sequence,
+      );
+      props.onClose();
+    }
+  };
 
   createEffect(() => {
     const q = debouncedQuery().trim();
@@ -221,20 +309,27 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
   return (
     <Modal isOpen onClose={props.onClose} title={t("search")} size="lg">
       <div class="space-y-4">
-        <div class="flex gap-2">
-          <div class="flex-1">
+        <div class="flex flex-col sm:flex-row gap-2">
+          <div class="flex-1 min-w-0">
             <Input
               autofocus={!breakpoint.isMobile}
+              role="combobox"
+              aria-label={t("searchThreadsAndMessages")}
+              aria-autocomplete="list"
+              aria-expanded={results().length > 0}
+              aria-controls={results().length > 0 ? listboxId : undefined}
+              aria-activedescendant={activeOptionId()}
               value={query()}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 setQuery(e.currentTarget.value)}
+              onKeyDown={handleInputKeyDown}
               placeholder={t("searchThreadsAndMessages")}
               leftIcon={<Icons.Search class="w-4 h-4" />}
               rightIcon={query().trim()
                 ? (
                   <button
                     type="button"
-                    class="w-5 h-5 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    class="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                     onClick={() => setQuery("")}
                     aria-label={t("clear")}
                   >
@@ -251,7 +346,7 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
               setSearchType(v === "keyword" || v === "semantic" ? v : "all");
             }}
             aria-label={t("search")}
-            class="min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100"
+            class="min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-base sm:text-sm text-zinc-900 dark:text-zinc-100 shrink-0"
           >
             <option value="all">{t("searchTypeAll")}</option>
             <option value="keyword">{t("searchTypeKeyword")}</option>
@@ -263,10 +358,14 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
 
         <div class="min-h-[200px]">
           <SearchResultsBody
+            listboxId={listboxId}
+            optionIdPrefix={optionIdPrefix}
             loading={loading()}
             error={error()}
             query={query()}
             results={results()}
+            activeIndex={activeIndex()}
+            onActiveIndexChange={setActiveIndex}
             onSelectResult={props.onSelectResult}
             onClose={props.onClose}
           />

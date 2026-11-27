@@ -1,3 +1,4 @@
+import { createUniqueId } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
@@ -29,6 +30,8 @@ export function SpaceInfoCard(props: {
 }) {
   const { t, tOr } = useI18n();
   const { showToast } = useToast();
+  const spaceNameId = createUniqueId();
+  const spaceDescId = createUniqueId();
 
   return (
     <Card>
@@ -38,10 +41,14 @@ export function SpaceInfoCard(props: {
       <CardContent>
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label
+              for={spaceNameId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               {t("spaceName")}
             </label>
             <Input
+              id={spaceNameId}
               value={props.spaceName}
               onInput={(e) => props.setSpaceName(e.currentTarget.value)}
               placeholder={t("spaceNamePlaceholder")}
@@ -56,14 +63,14 @@ export function SpaceInfoCard(props: {
           </div>
           <div>
             <label
-              for="workspace-description"
+              for={spaceDescId}
               class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
             >
               {t("description")}
             </label>
             <textarea
-              id="workspace-description"
-              class="w-full min-h-24 resize-y rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-100/10 disabled:cursor-not-allowed disabled:opacity-60"
+              id={spaceDescId}
+              class="w-full min-h-24 resize-y rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-base sm:text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:ring-zinc-100/10 disabled:cursor-not-allowed disabled:opacity-60"
               value={props.spaceDescription}
               onInput={(event) =>
                 props.setSpaceDescription(event.currentTarget.value)}
@@ -135,7 +142,7 @@ export function DangerZoneCard(props: {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
           <div>
             <h4 class="font-medium text-zinc-900 dark:text-zinc-100">
               {t("deleteSpace")}

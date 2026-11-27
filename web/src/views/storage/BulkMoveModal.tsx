@@ -29,6 +29,7 @@ export function BulkMoveModal(props: BulkMoveModalProps) {
           onInput={(e) =>
             props.onPathChange((e.target as HTMLInputElement).value)}
           placeholder="/path/to/folder"
+          aria-label={t("move")}
           autofocus
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229 && !props.moving && props.bulkMovePath.trim()) {
