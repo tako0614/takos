@@ -1,7 +1,14 @@
-import { createSignal } from "solid-js";
-import type { JSX } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+} from "solid-js";
+import type { Component } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { Icons } from "../lib/Icons.tsx";
+import { useDialogLifecycle } from "../hooks/useDialogLifecycle.ts";
 import { SkillsTab } from "./agent/SkillsTab.tsx";
 import { MemoryTab } from "./agent/MemoryTab.tsx";
 import { ModelTab } from "./agent/ModelTab.tsx";
@@ -16,31 +23,31 @@ export interface AgentModalProps {
 
 const TAB_CONFIG: {
   id: AgentTab;
-  icon: JSX.Element;
+  Icon: Component;
   labelKey: TranslationKey;
   descriptionKey: TranslationKey;
 }[] = [
   {
     id: "work",
-    icon: <Icons.Check />,
+    Icon: Icons.Check,
     labelKey: "tabWork",
     descriptionKey: "tabWorkDescription",
   },
   {
     id: "model",
-    icon: <Icons.Sparkles />,
+    Icon: Icons.Sparkles,
     labelKey: "tabModel",
     descriptionKey: "tabModelDescription",
   },
   {
     id: "skills",
-    icon: <Icons.Code />,
+    Icon: Icons.Code,
     labelKey: "tabSkills",
     descriptionKey: "tabSkillsDescription",
   },
   {
     id: "memory",
-    icon: <Icons.HardDrive />,
+    Icon: Icons.HardDrive,
     labelKey: "tabMemory",
     descriptionKey: "tabMemoryDescription",
   },
@@ -49,6 +56,36 @@ const TAB_CONFIG: {
 export function AgentModal(props: AgentModalProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<AgentTab>("work");
+  const layerId = createUniqueId();
+  let dialogRef: HTMLDivElement | undefined;
+
+  useDialogLifecycle({
+    isOpen: true,
+    layerId,
+    get onEscape() {
+      return props.onClose;
+    },
+    closeOnEscape: true,
+    lockBodyScroll: true,
+  });
+
+  createEffect(() => {
+    const container = dialogRef;
+    if (!container) return;
+    const previousFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    container.focus();
+    onCleanup(() => {
+      if (
+        previousFocusedElement &&
+        document.contains(previousFocusedElement)
+      ) {
+        previousFocusedElement.focus();
+      }
+    });
+  });
+
   const activeTabMeta = () =>
     TAB_CONFIG.find((tab) => tab.id === activeTab()) ?? TAB_CONFIG[0];
 
@@ -56,12 +93,14 @@ export function AgentModal(props: AgentModalProps) {
     <div
       class="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50"
       onClick={props.onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-modal-title"
     >
       <div
-        class="bg-zinc-50 dark:bg-zinc-900 rounded-t-xl md:rounded-xl w-full md:max-w-4xl lg:max-w-5xl h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-modal-title"
+        tabIndex={-1}
+        class="bg-zinc-50 dark:bg-zinc-900 rounded-t-xl md:rounded-xl w-full md:max-w-4xl lg:max-w-5xl h-[90vh] md:max-h-[85vh] overflow-hidden flex flex-col focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         style={{ "padding-bottom": "var(--spacing-safe-bottom)" }}
       >
@@ -82,7 +121,7 @@ export function AgentModal(props: AgentModalProps) {
           </div>
           <button
             type="button"
-            class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/10 transition-colors"
+            class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/70 dark:hover:bg-white/10 transition-colors"
             onClick={props.onClose}
             aria-label={t("close")}
           >
@@ -94,24 +133,26 @@ export function AgentModal(props: AgentModalProps) {
           role="tablist"
           aria-label={t("agentSettings")}
         >
-          {TAB_CONFIG.map(({ id, icon, labelKey }) => (
-            <button
-              id={`agent-tab-${id}`}
-              type="button"
-              class={`flex items-center gap-2 px-4 min-h-[44px] min-w-max text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab() === id
-                  ? "text-zinc-900 dark:text-zinc-100 border-b-2 border-zinc-900 dark:border-zinc-100"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-              }`}
-              onClick={() => setActiveTab(id)}
-              role="tab"
-              aria-selected={activeTab() === id}
-              aria-controls={`agent-tabpanel-${id}`}
-            >
-              {icon}
-              <span>{t(labelKey)}</span>
-            </button>
-          ))}
+          <For each={TAB_CONFIG}>
+            {(tab) => (
+              <button
+                id={`agent-tab-${tab.id}`}
+                type="button"
+                class={`flex items-center gap-2 px-4 min-h-[44px] min-w-max text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab() === tab.id
+                    ? "text-zinc-900 dark:text-zinc-100 border-b-2 border-zinc-900 dark:border-zinc-100"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+                onClick={() => setActiveTab(tab.id)}
+                role="tab"
+                aria-selected={activeTab() === tab.id}
+                aria-controls={`agent-tabpanel-${tab.id}`}
+              >
+                <tab.Icon />
+                <span>{t(tab.labelKey)}</span>
+              </button>
+            )}
+          </For>
         </div>
         <div
           class="flex-1 overflow-y-auto p-4 md:p-6"

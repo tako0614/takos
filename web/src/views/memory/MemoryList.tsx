@@ -1,5 +1,9 @@
-import { createMemo, createSignal } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
+import {
+  formatImportanceStars,
+  formatLocalizedDate,
+} from "../../lib/memory-format.ts";
 import { useI18n } from "../../store/i18n.ts";
 import type { Memory, Reminder } from "../../types/index.ts";
 
@@ -7,6 +11,8 @@ export interface MemoryListProps {
   memories: Memory[];
   reminders: Reminder[];
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   showReminders: boolean;
   onShowRemindersChange: (value: boolean) => void;
   onDeleteMemory: (id: string) => void;
@@ -18,7 +24,8 @@ export interface MemoryListProps {
 }
 
 export function MemoryList(props: MemoryListProps) {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const [searchQuery, setSearchQuery] = createSignal("");
   const [activeFilter, setActiveFilter] = createSignal<"all" | Memory["type"]>(
     "all",
@@ -38,9 +45,15 @@ export function MemoryList(props: MemoryListProps) {
 
   return (
     <div class="flex-1 overflow-y-auto p-6">
-      <div class="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-700">
+      <div
+        role="tablist"
+        aria-label={t("memories")}
+        class="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-700"
+      >
         <button
           type="button"
+          role="tab"
+          aria-selected={!props.showReminders}
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             !props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
@@ -53,6 +66,8 @@ export function MemoryList(props: MemoryListProps) {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={props.showReminders}
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
@@ -64,6 +79,27 @@ export function MemoryList(props: MemoryListProps) {
           <span>{t("reminders")} ({props.reminders.length})</span>
         </button>
       </div>
+
+      <Show when={props.error}>
+        {(err) => (
+          <div
+            role="alert"
+            class="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          >
+            <Icons.AlertTriangle class="h-4 w-4 shrink-0" />
+            <span class="min-w-0 flex-1">{err()}</span>
+            <Show when={props.onRetry}>
+              <button
+                type="button"
+                class="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                onClick={() => props.onRetry?.()}
+              >
+                {t("retry")}
+              </button>
+            </Show>
+          </div>
+        )}
+      </Show>
 
       {props.loading
         ? (
@@ -82,6 +118,7 @@ export function MemoryList(props: MemoryListProps) {
                   type="text"
                   class="w-full pl-10 pr-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-500 transition-colors"
                   placeholder={t("memorySearch")}
+                  aria-label={t("memorySearch")}
                   value={searchQuery()}
                   onInput={(e) => setSearchQuery(e.currentTarget.value)}
                 />
@@ -108,7 +145,7 @@ export function MemoryList(props: MemoryListProps) {
             </div>
 
             {filteredMemories().length === 0
-              ? (
+              ? !props.error && (
                 <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
                   <Icons.HardDrive class="w-12 h-12 mb-4" />
                   <p>{t("noMemories")}</p>
@@ -137,19 +174,17 @@ export function MemoryList(props: MemoryListProps) {
                           class="text-xs text-zinc-600 dark:text-zinc-400"
                           title={t("memoryImportance")}
                         >
-                          {"\u2605".repeat(Math.round(memory.importance * 5))}
-                          {"\u2606".repeat(
-                            5 - Math.round(memory.importance * 5),
-                          )}
+                          {formatImportanceStars(memory.importance)}
                         </span>
                         <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                          {new Date(memory.created_at).toLocaleDateString()}
+                          {formatLocalizedDate(memory.created_at, i18n.lang)}
                         </span>
                         <button
                           type="button"
                           class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => props.onDeleteMemory(memory.id)}
                           title={t("deleteMemory")}
+                          aria-label={t("deleteMemory")}
                         >
                           <Icons.Trash />
                         </button>
@@ -163,7 +198,7 @@ export function MemoryList(props: MemoryListProps) {
         : (
           <div class="flex flex-col gap-6">
             {props.reminders.length === 0
-              ? (
+              ? !props.error && (
                 <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
                   <Icons.Bell class="w-12 h-12 mb-4" />
                   <p>{t("noReminders")}</p>
@@ -212,13 +247,14 @@ export function MemoryList(props: MemoryListProps) {
                       </div>
                       <div class="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
                         <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                          {new Date(reminder.created_at).toLocaleDateString()}
+                          {formatLocalizedDate(reminder.created_at, i18n.lang)}
                         </span>
                         <button
                           type="button"
                           class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => props.onDeleteReminder(reminder.id)}
                           title={t("delete")}
+                          aria-label={t("delete")}
                         >
                           <Icons.Trash />
                         </button>

@@ -1,5 +1,6 @@
-import type { Setter } from "solid-js";
+import { createUniqueId, type Setter } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
+import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
 import { useI18n } from "../../store/i18n.ts";
 import type { Memory, Reminder } from "../../types/index.ts";
 import type {
@@ -17,6 +18,16 @@ export interface MemoryCreateFormProps {
 
 export function MemoryCreateForm(props: MemoryCreateFormProps) {
   const { t } = useI18n();
+  const layerId = createUniqueId();
+  useDialogLifecycle({
+    isOpen: true,
+    layerId,
+    get onEscape() {
+      return props.onClose;
+    },
+    closeOnEscape: true,
+    lockBodyScroll: true,
+  });
 
   return (
     <div
@@ -140,6 +151,16 @@ export interface ReminderCreateFormProps {
 
 export function ReminderCreateForm(props: ReminderCreateFormProps) {
   const { t } = useI18n();
+  const layerId = createUniqueId();
+  useDialogLifecycle({
+    isOpen: true,
+    layerId,
+    get onEscape() {
+      return props.onClose;
+    },
+    closeOnEscape: true,
+    lockBodyScroll: true,
+  });
 
   return (
     <div

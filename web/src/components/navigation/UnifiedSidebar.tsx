@@ -127,7 +127,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
               <button
                 type="button"
                 onClick={callbacks.onNavigateSpaceChat}
-                class="text-zinc-500 hover:text-zinc-300 transition-colors"
+                class="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
                 aria-label={t("newChat")}
               >
                 <Icons.Plus class="w-4 h-4" />
@@ -212,7 +212,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
           <button
             type="button"
             onClick={callbacks.onCreateSpace}
-            class="text-zinc-500 hover:text-zinc-300 transition-colors"
+            class="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
             aria-label={t("createSpace")}
           >
             <Icons.Plus class="w-4 h-4" />
@@ -246,7 +246,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                       </button>
                       <button
                         type="button"
-                        class="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
+                        class="absolute right-8 top-1/2 -translate-y-1/2 opacity-70 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-6 h-6 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleSpaceAccordion(id);
@@ -271,7 +271,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                       </button>
                       <button
                         type="button"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
+                        class="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-70 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-6 h-6 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
                           callbacks.onOpenSpaceSettings(id);

@@ -23,7 +23,7 @@ export function MobileHeader(props: MobileHeaderProps) {
       <div class="flex items-center w-full h-12 px-2 gap-1">
         <button
           type="button"
-          class="flex items-center justify-center w-9 h-9 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
+          class="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
           onClick={props.onOpenMenu}
           aria-label={props.menuAriaLabel}
           aria-haspopup="dialog"
@@ -33,7 +33,7 @@ export function MobileHeader(props: MobileHeaderProps) {
           <Icons.Menu class="w-5 h-5" />
         </button>
         <Show when={mobileHeader.headerContent()}>
-          <div class="flex items-center min-w-0">
+          <div class="flex-1 flex items-center min-w-0">
             {mobileHeader.headerContent()}
           </div>
         </Show>

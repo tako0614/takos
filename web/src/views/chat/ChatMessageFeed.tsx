@@ -14,6 +14,7 @@ import {
   buildPersistentRunActivityGroups,
   type PersistentRunActivityGroup,
 } from "./run-activity.ts";
+import { compareFeedItems } from "./feed-order.ts";
 
 type LiveToolCall = ChatStreamingState["toolCalls"][number];
 type ActivityDisplayEntry = {
@@ -253,6 +254,7 @@ interface ChatMessageFeedProps {
   timelineEntries: ChatTimelineEntry[];
   runMetaById: ChatRunMetaMap;
   isLoading: boolean;
+  hasError?: boolean;
   sessionDiff: { sessionId: string; diff: SessionDiff } | null;
   onMerge: () => void;
   isMerging: boolean;
@@ -290,6 +292,7 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
         type: "message";
         key: string;
         createdAt: number;
+        sequence?: number;
         message: Message;
       }
       | {
@@ -305,6 +308,7 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
         type: "message",
         key: `message:${message.id}`,
         createdAt: Date.parse(message.created_at),
+        sequence: message.sequence,
         message,
       });
     }
@@ -317,13 +321,7 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
       });
     }
 
-    items.sort((a, b) => {
-      const aTime = Number.isFinite(a.createdAt) ? a.createdAt : 0;
-      const bTime = Number.isFinite(b.createdAt) ? b.createdAt : 0;
-      if (aTime !== bTime) return aTime - bTime;
-      if (a.type === b.type) return a.key.localeCompare(b.key);
-      return a.type === "message" ? -1 : 1;
-    });
+    items.sort(compareFeedItems);
     return items;
   });
 
@@ -341,6 +339,7 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
   const showEmpty = () =>
     uniqueMessages().length === 0 &&
     !props.isLoading &&
+    !props.hasError &&
     !props.streaming.currentMessage &&
     !props.sessionDiff;
 

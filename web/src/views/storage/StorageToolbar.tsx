@@ -52,6 +52,7 @@ export function StorageToolbar(props: StorageToolbarProps) {
         disabled={props.loading}
         class="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-50"
         title={t("refresh")}
+        aria-label={t("refresh")}
       >
         <Icons.Refresh
           class={"w-5 h-5 " + (props.loading ? "animate-spin" : "")}
@@ -63,6 +64,7 @@ export function StorageToolbar(props: StorageToolbarProps) {
         disabled={props.downloadingZip}
         class="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors disabled:opacity-50"
         title={t("downloadZip")}
+        aria-label={t("downloadZip")}
       >
         <Show
           when={props.downloadingZip}

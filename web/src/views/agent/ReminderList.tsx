@@ -3,6 +3,7 @@ import type { JSX } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { formatLocalizedDate } from "../../lib/memory-format.ts";
 import {
   Badge,
   Button,
@@ -80,7 +81,8 @@ export function ReminderList(props: {
   }) => Promise<void>;
   savingReminder: boolean;
 }) {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const [showCreateReminder, setShowCreateReminder] = createSignal(false);
 
   const [reminderContent, setReminderContent] = createSignal("");
@@ -195,13 +197,14 @@ export function ReminderList(props: {
                       color: "var(--color-text-tertiary)",
                     }}
                   >
-                    {new Date(reminder.created_at).toLocaleDateString()}
+                    {formatLocalizedDate(reminder.created_at, i18n.lang)}
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => props.onDelete(reminder.id)}
                     title={t("delete")}
+                    aria-label={t("delete")}
                     style={{ color: "var(--color-text-tertiary)" }}
                   >
                     <Icons.Trash />

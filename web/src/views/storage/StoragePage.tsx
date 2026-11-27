@@ -306,8 +306,19 @@ export function StoragePage(props: StoragePageProps) {
           </Show>
 
           <Show when={error()}>
-            <div class="p-4 m-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
-              {error()}
+            <div
+              role="alert"
+              class="m-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+            >
+              <Icons.AlertTriangle class="h-4 w-4 shrink-0" />
+              <span class="min-w-0 flex-1">{error()}</span>
+              <button
+                type="button"
+                class="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                onClick={() => void loadFiles(currentPath())}
+              >
+                {t("retry")}
+              </button>
             </div>
           </Show>
 
@@ -322,17 +333,19 @@ export function StoragePage(props: StoragePageProps) {
             <Show
               when={files().length > 0}
               fallback={
-                <div class="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-500 select-none">
-                  <div class="w-20 h-20 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-5">
-                    <Icons.HardDrive class="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                <Show when={!error()}>
+                  <div class="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-500 select-none">
+                    <div class="w-20 h-20 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-5">
+                      <Icons.HardDrive class="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                    </div>
+                    <p class="text-base font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                      {t("noFilesYet")}
+                    </p>
+                    <p class="text-sm text-zinc-400 dark:text-zinc-500">
+                      {t("dragAndDropHint")}
+                    </p>
                   </div>
-                  <p class="text-base font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                    {t("noFilesYet")}
-                  </p>
-                  <p class="text-sm text-zinc-400 dark:text-zinc-500">
-                    {t("dragAndDropHint")}
-                  </p>
-                </div>
+                </Show>
               }
             >
               <StorageFileTable

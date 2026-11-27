@@ -124,4 +124,5 @@ export const chat = {
 
   // Chat image
   imagePreview: "Image preview",
+  selectModel: "Select AI model",
 } as const;

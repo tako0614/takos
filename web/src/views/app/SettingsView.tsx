@@ -19,7 +19,13 @@ export function SettingsView(props: {
     <div class="flex h-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900">
       {!props.embedded && (
         <header class="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <Button variant="ghost" size="sm" onClick={props.onBack}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={props.onBack}
+            aria-label={t("goBack")}
+            title={t("goBack")}
+          >
             <Icons.ArrowLeft class="h-4 w-4" />
           </Button>
           <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-50">

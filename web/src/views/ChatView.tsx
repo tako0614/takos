@@ -474,6 +474,7 @@ export function ChatView(props: ChatViewProps) {
             timelineEntries={timelineEntries()}
             runMetaById={runMetaById()}
             isLoading={isLoading()}
+            hasError={Boolean(error())}
             sessionDiff={sessionDiff()}
             onMerge={handleMerge}
             isMerging={isMerging()}

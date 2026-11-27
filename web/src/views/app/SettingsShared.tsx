@@ -3,12 +3,14 @@ export function Toggle(props: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={props.checked}
+      aria-label={props.ariaLabel}
       disabled={props.disabled}
       onClick={() => props.onChange(!props.checked)}
       class={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${

@@ -168,4 +168,11 @@ export const common = {
   reject: "拒否",
   accept: "承認",
   new: "新規",
+
+  // Cookie Consent
+  cookiePreferencesLabel: "Cookie の設定",
+  cookieConsentDescription:
+    "Takos はログイン維持のため必須のセッション Cookie を使用します。設定の保存を許可すると、言語やテーマなどの選択をこの端末に保持します。分析や広告トラッキングは無効です。",
+  cookieEssentialOnly: "必須のみ",
+  cookieAllowPreferences: "設定の保存を許可",
 } as const;

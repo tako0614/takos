@@ -48,6 +48,7 @@ export default defineConfig(({ mode }) => {
     plugins: [monacoSecureDompurifyPlugin(), solid(), tailwindcss()],
     root: resolve(__dirname),
     resolve: {
+      dedupe: ['solid-js', 'solid-js/web', 'solid-js/store', '@solidjs/router'],
       alias: {
         'takos-api-contract/shared/types': resolve(
           __dirname,
