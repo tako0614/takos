@@ -19,6 +19,7 @@ import type { Memory } from "../../types/index.ts";
 
 export function MemoryList(props: {
   memories: Memory[];
+  hasError?: boolean;
   onDelete: (id: string) => void;
   onCreateMemory: (
     data: { content: string; type: Memory["type"]; category?: string },
@@ -100,7 +101,7 @@ export function MemoryList(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
         {filteredMemories().length === 0
-          ? (
+          ? !props.hasError && (
             <div
               style={{
                 display: "flex",

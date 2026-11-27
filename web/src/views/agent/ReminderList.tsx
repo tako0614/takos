@@ -72,6 +72,7 @@ function getPriorityBorderStyle(
 
 export function ReminderList(props: {
   reminders: Reminder[];
+  hasError?: boolean;
   onDelete: (id: string) => void;
   onCreateReminder: (data: {
     content: string;
@@ -114,7 +115,7 @@ export function ReminderList(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
         {props.reminders.length === 0
-          ? (
+          ? !props.hasError && (
             <div
               style={{
                 display: "flex",

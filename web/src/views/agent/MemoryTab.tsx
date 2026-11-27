@@ -103,6 +103,7 @@ export function MemoryTab(props: { spaceId: string }) {
           ? (
             <MemoryList
               memories={memories()}
+              hasError={Boolean(error())}
               onDelete={deleteMemory}
               onCreateMemory={(data) =>
                 createMemory({ ...data, source: "user" })}
@@ -114,6 +115,7 @@ export function MemoryTab(props: { spaceId: string }) {
           : (
             <ReminderList
               reminders={reminders()}
+              hasError={Boolean(error())}
               onDelete={deleteReminder}
               onCreateReminder={createReminder}
               savingReminder={savingReminder()}

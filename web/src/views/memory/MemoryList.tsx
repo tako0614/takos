@@ -51,9 +51,11 @@ export function MemoryList(props: MemoryListProps) {
         class="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-700"
       >
         <button
+          id="memory-tab-memories"
           type="button"
           role="tab"
           aria-selected={!props.showReminders}
+          aria-controls="memory-panel-memories"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             !props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
@@ -65,9 +67,11 @@ export function MemoryList(props: MemoryListProps) {
           <span>{t("memories")} ({props.memories.length})</span>
         </button>
         <button
+          id="memory-tab-reminders"
           type="button"
           role="tab"
           aria-selected={props.showReminders}
+          aria-controls="memory-panel-reminders"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
@@ -110,7 +114,12 @@ export function MemoryList(props: MemoryListProps) {
         )
         : !props.showReminders
         ? (
-          <div class="flex flex-col gap-6">
+          <div
+            id="memory-panel-memories"
+            role="tabpanel"
+            aria-labelledby="memory-tab-memories"
+            class="flex flex-col gap-6"
+          >
             <div class="flex flex-col gap-4">
               <div class="relative flex items-center">
                 <Icons.Search class="w-5 h-5 absolute left-3 text-zinc-500 dark:text-zinc-400" />
@@ -196,7 +205,12 @@ export function MemoryList(props: MemoryListProps) {
           </div>
         )
         : (
-          <div class="flex flex-col gap-6">
+          <div
+            id="memory-panel-reminders"
+            role="tabpanel"
+            aria-labelledby="memory-tab-reminders"
+            class="flex flex-col gap-6"
+          >
             {props.reminders.length === 0
               ? !props.error && (
                 <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">

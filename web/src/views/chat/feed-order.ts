@@ -19,8 +19,12 @@ export function compareFeedItems(
     const bSeq = typeof b.sequence === "number" && Number.isFinite(b.sequence)
       ? b.sequence
       : null;
-    if (aSeq !== null && bSeq !== null && aSeq !== bSeq) {
-      return aSeq - bSeq;
+    if (aSeq !== null && bSeq !== null) {
+      if (aSeq !== bSeq) return aSeq - bSeq;
+    } else if (aSeq !== null) {
+      return -1;
+    } else if (bSeq !== null) {
+      return 1;
     }
   }
   if (a.type === b.type) return a.key.localeCompare(b.key);

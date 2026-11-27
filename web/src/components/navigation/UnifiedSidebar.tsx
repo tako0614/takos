@@ -238,7 +238,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                     <div class="group relative">
                       <button
                         type="button"
-                        class={active() ? ROW_ACTIVE : ROW_DEFAULT}
+                        class={`${active() ? ROW_ACTIVE : ROW_DEFAULT} pr-14 md:pr-3 md:group-hover:pr-14 group-focus-within:pr-14`}
                         onClick={() => callbacks.onEnterSpace(ws)}
                       >
                         <Icons.Folder class="w-4 h-4 shrink-0 opacity-70" />
