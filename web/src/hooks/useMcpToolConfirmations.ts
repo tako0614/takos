@@ -8,7 +8,8 @@ import {
 import type { McpToolConfirmation } from "../types/index.ts";
 import { getErrorMessage } from "../lib/errors.ts";
 
-const POLL_INTERVAL_MS = 2_000;
+const PENDING_POLL_INTERVAL_MS = 2_000;
+const IDLE_POLL_INTERVAL_MS = 10_000;
 
 export function useMcpToolConfirmations(spaceId: Accessor<string | null>) {
   const [confirmations, setConfirmations] = createSignal<McpToolConfirmation[]>(
@@ -16,15 +17,11 @@ export function useMcpToolConfirmations(spaceId: Accessor<string | null>) {
   );
   const [busyId, setBusyId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
   let requestGeneration = 0;
 
-  const stopTimer = () => {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-  };
-
   const refresh = async () => {
+    if (disposed) return;
     const workspaceId = spaceId()?.trim() ?? "";
     if (!workspaceId) {
       setConfirmations([]);
@@ -44,24 +41,36 @@ export function useMcpToolConfirmations(spaceId: Accessor<string | null>) {
     }
   };
 
-  const schedule = () => {
-    stopTimer();
-    timer = setTimeout(async () => {
-      await refresh().catch(() => undefined);
-      schedule();
-    }, POLL_INTERVAL_MS);
-  };
-
   createEffect(
-    on(spaceId, () => {
+    on(spaceId, (workspaceId) => {
       requestGeneration += 1;
-      stopTimer();
-      void refresh().finally(schedule);
+      if (!workspaceId?.trim()) {
+        void refresh();
+        return;
+      }
+      let retired = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      onCleanup(() => {
+        retired = true;
+        clearTimeout(timer);
+      });
+
+      const poll = async () => {
+        await refresh().catch(() => undefined);
+        if (retired) return;
+        timer = setTimeout(
+          poll,
+          confirmations().length > 0
+            ? PENDING_POLL_INTERVAL_MS
+            : IDLE_POLL_INTERVAL_MS,
+        );
+      };
+      void poll();
     }),
   );
   onCleanup(() => {
+    disposed = true;
     requestGeneration += 1;
-    stopTimer();
   });
 
   const decide = async (
