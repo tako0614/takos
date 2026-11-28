@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import { createUniqueId, type JSX } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { type JsonResponseLike, rpcJson } from "../../lib/rpc.ts";
@@ -121,7 +121,7 @@ export async function readSkillMutationResponse(
 }
 
 const selectStyle: JSX.CSSProperties = {
-  "min-height": "2.5rem",
+  "min-height": "44px",
   "border-radius": "var(--radius-md)",
   border: "1px solid var(--color-border-primary)",
   "background-color": "var(--color-bg-primary)",
@@ -135,9 +135,11 @@ function MetadataInput(props: {
   onChange: (value: string) => void;
   placeholder: string;
 }) {
+  const inputId = createUniqueId();
   return (
     <div style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}>
       <label
+        for={inputId}
         style={{
           "font-size": "0.875rem",
           "font-weight": 500,
@@ -147,6 +149,7 @@ function MetadataInput(props: {
         {props.label}
       </label>
       <Input
+        id={inputId}
         value={props.value}
         onInput={(e) =>
           props.onChange(e.currentTarget.value)}
@@ -167,6 +170,14 @@ export function SkillFormView(props: {
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const fieldPrefix = createUniqueId();
+  const nameId = `${fieldPrefix}-name`;
+  const descriptionId = `${fieldPrefix}-description`;
+  const instructionsId = `${fieldPrefix}-instructions`;
+  const triggersId = `${fieldPrefix}-triggers`;
+  const triggersHintId = `${fieldPrefix}-triggers-hint`;
+  const localeId = `${fieldPrefix}-locale`;
+  const categoryId = `${fieldPrefix}-category`;
 
   const updateField = <K extends keyof SkillFormData>(
     key: K,
@@ -188,10 +199,17 @@ export function SkillFormView(props: {
           "margin-bottom": "0.5rem",
         }}
       >
-        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
-          <Icons.ArrowLeft />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={props.onClose}
+          aria-label={t("goBack")}
+          title={t("goBack")}
+        >
+          <Icons.ArrowLeft aria-hidden="true" />
         </Button>
-        <h4
+        <h3
           style={{
             "font-size": "1rem",
             "font-weight": 600,
@@ -200,12 +218,13 @@ export function SkillFormView(props: {
           }}
         >
           {props.isEditing ? t("editSkill") : t("createSkill")}
-        </h4>
+        </h3>
       </div>
       <div
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for={nameId}
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -215,6 +234,7 @@ export function SkillFormView(props: {
           {t("skillName")}
         </label>
         <Input
+          id={nameId}
           placeholder={t("skillNamePlaceholder")}
           value={props.form.name}
           onInput={(e) => updateField("name", e.currentTarget.value)}
@@ -226,6 +246,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for={descriptionId}
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -235,6 +256,7 @@ export function SkillFormView(props: {
           {t("skillDescription")}
         </label>
         <Input
+          id={descriptionId}
           placeholder={t("skillDescriptionPlaceholder")}
           value={props.form.description}
           onInput={(e) => updateField("description", e.currentTarget.value)}
@@ -244,6 +266,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for={instructionsId}
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -253,6 +276,7 @@ export function SkillFormView(props: {
           {t("skillInstructions")}
         </label>
         <Textarea
+          id={instructionsId}
           placeholder={t("skillInstructionsPlaceholder")}
           value={props.form.instructions}
           onInput={(e) => updateField("instructions", e.currentTarget.value)}
@@ -265,6 +289,7 @@ export function SkillFormView(props: {
         style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
       >
         <label
+          for={triggersId}
           style={{
             "font-size": "0.875rem",
             "font-weight": 500,
@@ -274,14 +299,17 @@ export function SkillFormView(props: {
           {t("skillTriggers")}
         </label>
         <Input
+          id={triggersId}
           placeholder={t("skillTriggersPlaceholder")}
           value={props.form.triggers}
           onInput={(e) => updateField("triggers", e.currentTarget.value)}
+          aria-describedby={triggersHintId}
         />
         <span
+          id={triggersHintId}
           style={{
             "font-size": "0.75rem",
-            color: "var(--color-text-tertiary)",
+            color: "var(--color-text-secondary)",
           }}
         >
           {t("skillTriggersHint")}
@@ -298,6 +326,7 @@ export function SkillFormView(props: {
           style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
         >
           <label
+            for={localeId}
             style={{
               "font-size": "0.875rem",
               "font-weight": 500,
@@ -307,6 +336,7 @@ export function SkillFormView(props: {
             {t("skillLocaleLabel")}
           </label>
           <select
+            id={localeId}
             value={props.form.skillLocale}
             onChange={(e) => updateField("skillLocale", e.currentTarget.value)}
             style={selectStyle}
@@ -320,6 +350,7 @@ export function SkillFormView(props: {
           style={{ display: "flex", "flex-direction": "column", gap: "0.5rem" }}
         >
           <label
+            for={categoryId}
             style={{
               "font-size": "0.875rem",
               "font-weight": 500,
@@ -329,6 +360,7 @@ export function SkillFormView(props: {
             {t("skillCategoryLabel")}
           </label>
           <select
+            id={categoryId}
             value={props.form.category}
             onChange={(e) => updateField("category", e.currentTarget.value)}
             style={selectStyle}
@@ -389,6 +421,7 @@ export function SkillFormView(props: {
       {Object.keys(props.fieldErrors).length > 0
         ? (
           <div
+            role="alert"
             style={{
               display: "flex",
               "flex-direction": "column",
@@ -404,7 +437,10 @@ export function SkillFormView(props: {
         )
         : null}
       {props.error && (
-        <div style={{ color: "var(--color-error)", "font-size": "0.875rem" }}>
+        <div
+          role="alert"
+          style={{ color: "var(--color-error)", "font-size": "0.875rem" }}
+        >
           {props.error}
         </div>
       )}

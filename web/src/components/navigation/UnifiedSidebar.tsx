@@ -8,12 +8,12 @@ import { ProfileMenu } from "./ProfileMenu.tsx";
 import type { Space, Thread, User, View } from "../../types/index.ts";
 
 const ROW_BASE =
-  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[36px]";
+  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-[36px]";
 const ROW_DEFAULT = `${ROW_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
 const ROW_ACTIVE = `${ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
 
 const PRIMARY_ROW_BASE =
-  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors";
+  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors min-h-[44px] md:min-h-[40px]";
 const PRIMARY_ROW_DEFAULT = `${PRIMARY_ROW_BASE} text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
 const PRIMARY_ROW_ACTIVE = `${PRIMARY_ROW_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
 
@@ -76,13 +76,13 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             aria-label={t("spaceNavigation")}
           >
             {/* Header: back button + space name */}
-            <div class="px-4 py-4">
+            <div class="px-4 py-3 md:py-4">
               <button
                 type="button"
-                class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-sm font-medium"
+                class="min-h-[44px] md:min-h-0 flex items-center gap-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-sm font-medium"
                 onClick={callbacks.onExitSpace}
               >
-                <Icons.ChevronLeft class="w-4 h-4 shrink-0" />
+                <Icons.ChevronLeft class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span class="truncate">{ws().name}</span>
               </button>
             </div>
@@ -91,12 +91,13 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="px-3 pb-2">
               <button
                 type="button"
+                aria-current={isChatActive() ? "page" : undefined}
                 class={
                   isChatActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT
                 }
                 onClick={callbacks.onNavigateSpaceChat}
               >
-                <Icons.MessageSquare class="w-4 h-4 shrink-0" />
+                <Icons.MessageSquare class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span>{t("chat")}</span>
               </button>
             </div>
@@ -105,18 +106,20 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="px-3 space-y-0.5">
               <button
                 type="button"
+                aria-current={isMemoryActive() ? "page" : undefined}
                 class={isMemoryActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateMemory}
               >
-                <Icons.Database class="w-4 h-4 shrink-0" />
+                <Icons.Database class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span>{t("memory")}</span>
               </button>
               <button
                 type="button"
+                aria-current={isConnectionsActive() ? "page" : undefined}
                 class={isConnectionsActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceConnections}
               >
-                <Icons.Link class="w-4 h-4 shrink-0" />
+                <Icons.Link class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span>{t("connections")}</span>
               </button>
             </div>
@@ -127,10 +130,10 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
               <button
                 type="button"
                 onClick={callbacks.onNavigateSpaceChat}
-                class="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+                class="inline-flex min-w-[44px] min-h-[44px] md:min-w-7 md:min-h-7 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                 aria-label={t("newChat")}
               >
-                <Icons.Plus class="w-4 h-4" />
+                <Icons.Plus class="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <div class="flex-1 overflow-y-auto px-3 space-y-0.5 pb-2">
@@ -144,10 +147,11 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
               <button
                 type="button"
+                aria-current={isWsSettingsActive() ? "page" : undefined}
                 class={isWsSettingsActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceSettings}
               >
-                <Icons.Settings class="w-4 h-4 shrink-0" />
+                <Icons.Settings class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span>{t("spaceSettings")}</span>
               </button>
               <ProfileMenu user={props.user} />
@@ -164,7 +168,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
       >
         <div class="px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-semibold text-lg">
-            <img src="/logo.png" alt="takos" class="w-6 h-6 rounded" />
+            <img src="/logo.png" alt="" class="w-6 h-6 rounded" />
             <span>takos</span>
           </div>
         </div>
@@ -172,26 +176,29 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
         <div class="px-3 pb-2 space-y-1">
           <button
             type="button"
+            aria-current={isNewChatActive() ? "page" : undefined}
             class={isNewChatActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT}
             onClick={callbacks.onNewChat}
           >
-            <Icons.Edit class="w-4 h-4 shrink-0" />
+            <Icons.Edit class="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{t("newChat")}</span>
           </button>
           <button
             type="button"
+            aria-current={isMemoryActive() ? "page" : undefined}
             class={isMemoryActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateMemory}
           >
-            <Icons.Database class="w-4 h-4 shrink-0" />
+            <Icons.Database class="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{t("memory")}</span>
           </button>
           <button
             type="button"
+            aria-current={isConnectionsActive() ? "page" : undefined}
             class={isConnectionsActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateConnections}
           >
-            <Icons.Link class="w-4 h-4 shrink-0" />
+            <Icons.Link class="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{t("connections")}</span>
           </button>
         </div>
@@ -202,7 +209,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             class={ROW_DEFAULT}
             onClick={callbacks.onOpenSearch}
           >
-            <Icons.Search class="w-4 h-4 shrink-0" />
+            <Icons.Search class="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{t("search")}</span>
           </button>
         </div>
@@ -212,10 +219,10 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
           <button
             type="button"
             onClick={callbacks.onCreateSpace}
-            class="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+            class="inline-flex min-w-[44px] min-h-[44px] md:min-w-7 md:min-h-7 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             aria-label={t("createSpace")}
           >
-            <Icons.Plus class="w-4 h-4" />
+            <Icons.Plus class="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
         <div class="px-3 space-y-0.5">
@@ -238,15 +245,15 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                     <div class="group relative">
                       <button
                         type="button"
-                        class={`${active() ? ROW_ACTIVE : ROW_DEFAULT} pr-14 md:pr-3 md:group-hover:pr-14 group-focus-within:pr-14`}
+                        class={`${active() ? ROW_ACTIVE : ROW_DEFAULT} pr-24 md:pr-3 md:group-hover:pr-14 group-focus-within:pr-24 md:group-focus-within:pr-14`}
                         onClick={() => callbacks.onEnterSpace(ws)}
                       >
-                        <Icons.Folder class="w-4 h-4 shrink-0 opacity-70" />
+                        <Icons.Folder class="w-4 h-4 shrink-0 opacity-70" aria-hidden="true" />
                         <span class="flex-1 truncate text-left">{ws.name}</span>
                       </button>
                       <button
                         type="button"
-                        class="absolute right-8 top-1/2 -translate-y-1/2 opacity-70 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-6 h-6 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
+                        class="absolute right-11 md:right-8 top-1/2 -translate-y-1/2 opacity-80 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-11 h-11 md:w-6 md:h-6 flex items-center justify-center rounded text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleSpaceAccordion(id);
@@ -267,11 +274,12 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                           class={`w-3 h-3 transition-transform ${
                             isExpanded() ? "rotate-180" : ""
                           }`}
+                          aria-hidden="true"
                         />
                       </button>
                       <button
                         type="button"
-                        class="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-70 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-6 h-6 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
+                        class="absolute right-0 md:right-1.5 top-1/2 -translate-y-1/2 opacity-80 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 w-11 h-11 md:w-6 md:h-6 flex items-center justify-center rounded text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
                           callbacks.onOpenSpaceSettings(id);
@@ -279,7 +287,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                         aria-label={t("spaceSettings")}
                         title={t("spaceSettings")}
                       >
-                        <Icons.Settings class="w-3 h-3" />
+                        <Icons.Settings class="w-3 h-3" aria-hidden="true" />
                       </button>
                     </div>
                     <Show when={isExpanded()}>
@@ -296,14 +304,19 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                             {(thread) => (
                               <button
                                 type="button"
+                                aria-current={
+                                  props.selectedThreadId === thread.id
+                                    ? "page"
+                                    : undefined
+                                }
                                 class={
                                   props.selectedThreadId === thread.id
-                                    ? "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                    : "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                                    ? "min-h-[44px] md:min-h-0 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                                    : "min-h-[44px] md:min-h-0 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                                 }
                                 onClick={() => callbacks.onSelectThread(thread)}
                               >
-                                <Icons.MessageSquare class="w-3 h-3 shrink-0 opacity-70" />
+                                <Icons.MessageSquare class="w-3 h-3 shrink-0 opacity-70" aria-hidden="true" />
                                 <span class="truncate text-left">
                                   {thread.title}
                                 </span>

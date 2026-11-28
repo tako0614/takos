@@ -49,32 +49,32 @@ export function getLocalDateInputMin(date = new Date()): string {
 export function getStatusClasses(status: AgentTaskStatus): string {
   switch (status) {
     case "planned":
-      return "bg-zinc-100 text-zinc-700 border-zinc-300";
+      return "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-600";
     case "in_progress":
-      return "bg-zinc-200 text-zinc-800 border-zinc-400";
+      return "bg-zinc-200 text-zinc-800 border-zinc-400 dark:bg-zinc-700 dark:text-zinc-100 dark:border-zinc-500";
     case "blocked":
-      return "bg-zinc-300 text-zinc-700 border-zinc-400";
+      return "bg-zinc-200 text-zinc-800 border-zinc-400 dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500";
     case "completed":
-      return "bg-zinc-900 text-white border-zinc-800";
+      return "bg-zinc-900 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-200";
     case "cancelled":
-      return "bg-zinc-100 text-zinc-500 border-zinc-200";
+      return "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600";
     default:
-      return "bg-zinc-100 text-zinc-500 border-zinc-200";
+      return "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600";
   }
 }
 
 export function getPriorityClasses(priority: AgentTaskPriority): string {
   switch (priority) {
     case "low":
-      return "text-zinc-400";
+      return "text-zinc-600 dark:text-zinc-300";
     case "medium":
-      return "text-zinc-500";
+      return "text-zinc-700 dark:text-zinc-200";
     case "high":
-      return "text-zinc-700";
+      return "text-zinc-800 dark:text-zinc-100";
     case "urgent":
-      return "text-zinc-900";
+      return "text-red-700 dark:text-red-300 font-semibold";
     default:
-      return "text-zinc-500";
+      return "text-zinc-600 dark:text-zinc-300";
   }
 }
 

@@ -7,7 +7,10 @@ export type ResolvedTheme = "light" | "dark";
 const STORAGE_KEY = "takos-theme";
 
 function getSystemTheme(): ResolvedTheme {
-  if (globalThis.matchMedia("(prefers-color-scheme: dark)").matches) {
+  if (
+    typeof globalThis.matchMedia === "function" &&
+    globalThis.matchMedia("(prefers-color-scheme: dark)").matches
+  ) {
     return "dark";
   }
   return "light";

@@ -50,8 +50,8 @@ export interface UseMemoryDataReturn {
   fetchReminders: () => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
-  createMemory: (data: CreateMemoryData) => Promise<void>;
-  createReminder: (data: CreateReminderData) => Promise<void>;
+  createMemory: (data: CreateMemoryData) => Promise<boolean>;
+  createReminder: (data: CreateReminderData) => Promise<boolean>;
   savingMemory: () => boolean;
   savingReminder: () => boolean;
   memoryForm: () => MemoryFormState;
@@ -200,9 +200,9 @@ export function useMemoryData(
     }
   };
 
-  const createMemory = async (data: CreateMemoryData) => {
+  const createMemory = async (data: CreateMemoryData): Promise<boolean> => {
     const targetSpaceId = currentSpaceId();
-    if (!targetSpaceId) return;
+    if (!targetSpaceId) return false;
     setMemoryForm((prev) => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[":spaceId"].memories.$post({
@@ -217,16 +217,18 @@ export function useMemoryData(
       const result = await rpcJson<{ memory: Memory }>(res);
       setMemories((prev) => [result.memory, ...prev]);
       showToast("success", t("memoryCreated"));
+      return true;
     } catch {
       showToast("error", t("failedToCreate"));
+      return false;
     } finally {
       setMemoryForm((prev) => ({ ...prev, saving: false }));
     }
   };
 
-  const createReminder = async (data: CreateReminderData) => {
+  const createReminder = async (data: CreateReminderData): Promise<boolean> => {
     const targetSpaceId = currentSpaceId();
-    if (!targetSpaceId) return;
+    if (!targetSpaceId) return false;
     setReminderForm((prev) => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[":spaceId"].reminders.$post({
@@ -241,8 +243,10 @@ export function useMemoryData(
       const result = await rpcJson<{ reminder: Reminder }>(res);
       setReminders((prev) => [result.reminder, ...prev]);
       showToast("success", t("reminderCreated"));
+      return true;
     } catch {
       showToast("error", t("failedToCreate"));
+      return false;
     } finally {
       setReminderForm((prev) => ({ ...prev, saving: false }));
     }

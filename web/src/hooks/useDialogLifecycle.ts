@@ -52,7 +52,7 @@ export function useDialogLifecycle(
     if (!options.isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.keyCode === 229) {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) {
         return;
       }
       if ((options.closeOnEscape ?? true) && event.key === "Escape") {

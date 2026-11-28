@@ -149,7 +149,10 @@ export function AppsPage(props: AppsPageProps) {
           </div>
 
           <Show when={errorMessage()}>
-            <div class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            <div
+              role="alert"
+              class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200"
+            >
               <p class="min-w-0 flex-1">{errorMessage()}</p>
               <Button
                 variant="secondary"
@@ -193,9 +196,12 @@ export function AppsPage(props: AppsPageProps) {
           </Show>
 
           <Show when={loadingState()}>
-            <div class="pt-3">
+            <div role="status" aria-live="polite" class="pt-3">
               <div class="mb-5 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-                <div class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent dark:border-zinc-500" />
+                <div
+                  class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent dark:border-zinc-500"
+                  aria-hidden="true"
+                />
                 <span>{t("loading")}</span>
               </div>
               <div class={LAUNCHER_GRID_CLASS}>
@@ -519,16 +525,16 @@ function CapsuleCard(props: {
         <div class="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-60 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
+            class="inline-flex min-h-[44px] sm:min-h-0 sm:h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-60 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
             onClick={() => void handleUninstall()}
             disabled={uninstalling()}
             aria-busy={uninstalling()}
           >
             <Show
               when={uninstalling()}
-              fallback={<Icons.Trash class="h-4 w-4" />}
+              fallback={<Icons.Trash class="h-4 w-4" aria-hidden="true" />}
             >
-              <Icons.Loader class="h-4 w-4 animate-spin" />
+              <Icons.Loader class="h-4 w-4 animate-spin" aria-hidden="true" />
             </Show>
             {props.t("uninstall")}
           </button>
@@ -538,9 +544,9 @@ function CapsuleCard(props: {
                 href={href()}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:outline-zinc-100"
+                class="inline-flex min-h-[44px] sm:min-h-0 sm:h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:focus-visible:outline-zinc-100"
               >
-                <Icons.ExternalLink class="h-4 w-4" />
+                <Icons.ExternalLink class="h-4 w-4" aria-hidden="true" />
                 {props.t("appsCapsuleOpen")}
               </a>
             )}
@@ -574,7 +580,7 @@ function CapsuleServiceChip(props: {
           <Icon class="h-3.5 w-3.5 shrink-0" />
           <span class="truncate">{label()}</span>
           <Show when={props.service.secret_configured}>
-            <span class="shrink-0 text-zinc-400 dark:text-zinc-500">
+            <span class="shrink-0 text-zinc-600 dark:text-zinc-300">
               {props.t("appsCapsuleSecret")}
             </span>
           </Show>
@@ -595,7 +601,7 @@ function CapsuleServiceChip(props: {
           <span class="truncate">{label()}</span>
           <Show when={endpoint()}>
             {(value) => (
-              <span class="max-w-[12rem] truncate text-zinc-400 dark:text-zinc-500">
+              <span class="max-w-[12rem] truncate text-zinc-600 dark:text-zinc-300">
                 {value()}
               </span>
             )}

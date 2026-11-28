@@ -403,7 +403,10 @@ export function ConnectionsPage(props: ConnectionsPageProps) {
 
             <Show when={feedbackKey()}>
               {(key) => (
-                <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                <div
+                  role="alert"
+                  class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+                >
                   {t(key())}
                 </div>
               )}
@@ -446,15 +449,22 @@ export function ConnectionsPage(props: ConnectionsPageProps) {
             </Show>
 
             <Show when={registry.searchLoading()}>
-              <div class="flex items-center justify-center gap-3 py-10 text-sm text-zinc-500 dark:text-zinc-400">
-                <Icons.Loader class="h-5 w-5 animate-spin" />
+              <div
+                role="status"
+                aria-live="polite"
+                class="flex items-center justify-center gap-3 py-10 text-sm text-zinc-500 dark:text-zinc-400"
+              >
+                <Icons.Loader class="h-5 w-5 animate-spin" aria-hidden="true" />
                 {t("registrySearching")}
               </div>
             </Show>
 
             <Show when={!registry.searchLoading() && registry.searchError()}>
               {(message) => (
-                <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                <div
+                  role="alert"
+                  class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+                >
                   {message()}
                 </div>
               )}
@@ -704,8 +714,12 @@ export function ConnectionsPage(props: ConnectionsPageProps) {
             </div>
 
             <Show when={loading()}>
-              <div class="flex items-center justify-center gap-3 py-12 text-sm text-zinc-500 dark:text-zinc-400">
-                <Icons.Loader class="h-5 w-5 animate-spin" />
+              <div
+                role="status"
+                aria-live="polite"
+                class="flex items-center justify-center gap-3 py-12 text-sm text-zinc-500 dark:text-zinc-400"
+              >
+                <Icons.Loader class="h-5 w-5 animate-spin" aria-hidden="true" />
                 {t("loading")}
               </div>
             </Show>

@@ -4,6 +4,10 @@ export const settings = {
   email: "メールアドレス",
   name: "名前",
   language: "言語",
+  appearance: "外観",
+  themeSystem: "システム",
+  themeLight: "ライト",
+  themeDark: "ダーク",
 
   // Workspace Settings
   workspaceSlug: "スペーススラッグ",

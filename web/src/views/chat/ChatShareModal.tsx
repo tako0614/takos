@@ -179,7 +179,9 @@ export function ChatShareModal(props: ChatShareModalProps) {
                             {s.share_url}
                           </span>
                           <span class="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                            {s.mode}
+                            {s.mode === "password"
+                              ? t("sharePasswordLabel")
+                              : t("sharePublic")}
                           </span>
                           <Show when={s.revoked_at}>
                             <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">

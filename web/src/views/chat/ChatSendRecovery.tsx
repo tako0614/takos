@@ -39,7 +39,7 @@ export function ChatSendRecovery(props: Props) {
       else await props.onRetry(expected, true);
     }
   };
-  const button = "rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed";
+  const button = "min-h-[44px] sm:min-h-0 rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed";
   return <Show when={props.recovery}>{(receipt) => <div role="status" class="mx-4 mb-2 p-3 rounded-lg border border-amber-300 dark:border-amber-800 text-zinc-800 dark:text-zinc-200">
     <p class="text-sm">{t(receipt().pending ? "sendAttemptPending" : receipt().kind === "reply-rejected" ? "messageSavedReplyRejected"
       : receipt().kind === "reply-known" ? "replyCreatedReconnect"

@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { createEffect, onCleanup, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { formatDateTime, formatFileSize } from "../../lib/format.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -8,6 +8,12 @@ import type { StorageFile } from "../../types/index.ts";
 import type { ResolvedHandler } from "./storageUtils.tsx";
 import { handlerDisplayName } from "./storageUtils.tsx";
 import { StorageHandlerDropdown } from "./StorageHandlerPicker.tsx";
+import {
+  focusDropdownMenuItem,
+  handleMenuTriggerKeyDown,
+  type MenuFocusTarget,
+  shouldCloseOnFocusOut,
+} from "./storage-new-dropdown-menu.ts";
 
 export function StorageViewerShell(props: {
   file: StorageFile;
@@ -24,6 +30,59 @@ export function StorageViewerShell(props: {
   children: JSX.Element;
 }) {
   const hasAlternatives = () => props.allHandlers.length > 1;
+  let handlerContainerRef: HTMLDivElement | undefined;
+  let handlerTriggerRef: HTMLButtonElement | undefined;
+  let handlerMenuRef: HTMLDivElement | undefined;
+  let pendingFocusTarget: MenuFocusTarget | null = null;
+  let pointerDownInside = false;
+
+  const openMenuWithTarget = (target: MenuFocusTarget) => {
+    pendingFocusTarget = target;
+    props.setShowHandlerMenu(true);
+  };
+
+  createEffect(() => {
+    if (!props.showHandlerMenu) return;
+    if (pendingFocusTarget) {
+      const target = pendingFocusTarget;
+      pendingFocusTarget = null;
+      queueMicrotask(() => focusDropdownMenuItem(handlerMenuRef, target));
+    }
+    const handlePointerDown = (e: PointerEvent) => {
+      if (
+        handlerContainerRef &&
+        e.target instanceof Node &&
+        handlerContainerRef.contains(e.target)
+      ) {
+        pointerDownInside = true;
+      } else {
+        pointerDownInside = false;
+        props.setShowHandlerMenu(false);
+      }
+    };
+    const clearPointer = () => {
+      pointerDownInside = false;
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        props.setShowHandlerMenu(false);
+        handlerTriggerRef?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointerup", clearPointer);
+    document.addEventListener("pointercancel", clearPointer);
+    document.addEventListener("keydown", handleEscape);
+    onCleanup(() => {
+      pointerDownInside = false;
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointerup", clearPointer);
+      document.removeEventListener("pointercancel", clearPointer);
+      document.removeEventListener("keydown", handleEscape);
+    });
+  });
 
   return (
     <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
@@ -37,7 +96,10 @@ export function StorageViewerShell(props: {
             title={props.t("back")}
             aria-label={props.t("back")}
           >
-            <Icons.ArrowLeft class="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
+            <Icons.ArrowLeft
+              class="w-5 h-5 text-zinc-600 dark:text-zinc-400"
+              aria-hidden="true"
+            />
           </button>
           <div class="min-w-0">
             <h2 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
@@ -54,17 +116,56 @@ export function StorageViewerShell(props: {
 
           {/* Handler switcher */}
           <Show when={hasAlternatives()}>
-            <div class="relative">
+            <div
+              ref={handlerContainerRef}
+              class="relative"
+              onFocusOut={(e) => {
+                if (
+                  props.showHandlerMenu &&
+                  shouldCloseOnFocusOut(
+                    e,
+                    handlerContainerRef,
+                    pointerDownInside,
+                  )
+                ) {
+                  props.setShowHandlerMenu(false);
+                }
+              }}
+            >
               <Button
+                ref={(el) => {
+                  handlerTriggerRef = el;
+                }}
                 variant="secondary"
                 size="sm"
-                onClick={() => props.setShowHandlerMenu(!props.showHandlerMenu)}
+                aria-haspopup="menu"
+                aria-expanded={props.showHandlerMenu}
+                onClick={(e) => {
+                  if (props.showHandlerMenu) {
+                    props.setShowHandlerMenu(false);
+                  } else if (e.detail === 0) {
+                    openMenuWithTarget("first");
+                  } else {
+                    props.setShowHandlerMenu(true);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  handleMenuTriggerKeyDown(e, {
+                    isOpen: props.showHandlerMenu,
+                    getMenu: () => handlerMenuRef,
+                    openWithTarget: openMenuWithTarget,
+                  });
+                }}
               >
                 {handlerDisplayName(props.activeHandler, props.t)}
-                <Icons.ChevronDown class="w-3 h-3 ml-1" />
+                <Icons.ChevronDown class="w-3 h-3 ml-1" aria-hidden="true" />
               </Button>
               <Show when={props.showHandlerMenu}>
                 <StorageHandlerDropdown
+                  menuRef={(el) => {
+                    handlerMenuRef = el;
+                  }}
+                  getTrigger={() => handlerTriggerRef}
                   handlers={props.allHandlers}
                   activeHandler={props.activeHandler}
                   onSelect={(h) => props.onSelectHandler(h, false)}

@@ -247,25 +247,26 @@ export function StoragePage(props: StoragePageProps) {
     files().length > 0 && selectedFiles().size === files().length;
 
   return (
-    <Show
-      when={!actions.viewingFile()}
-      fallback={
-        <StorageFileViewer
-          spaceId={props.spaceId}
-          file={actions.viewingFile()!}
-          downloadUrl={actions.viewingFileDownloadUrl()}
-          interfaceFileHandlers={interfaceFileHandlers()}
-          onClose={closeFileViewer}
-          onSave={() => loadFiles(currentPath())}
-        />
-      }
-    >
-      <div
-        class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900"
-        onClick={() => contextMenu() && setContextMenu(null)}
+    <>
+      <h1 class="sr-only">{t("storageTitle")}</h1>
+      <Show
+        when={!actions.viewingFile()}
+        fallback={
+          <StorageFileViewer
+            spaceId={props.spaceId}
+            file={actions.viewingFile()!}
+            downloadUrl={actions.viewingFileDownloadUrl()}
+            interfaceFileHandlers={interfaceFileHandlers()}
+            onClose={closeFileViewer}
+            onSave={() => loadFiles(currentPath())}
+          />
+        }
       >
-        <h1 class="sr-only">{t("storageTitle")}</h1>
-        <StorageToolbar
+        <div
+          class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900"
+          onClick={() => contextMenu() && setContextMenu(null)}
+        >
+          <StorageToolbar
           loading={loading()}
           uploading={uploading()}
           downloadingZip={actions.downloadingZip()}
@@ -424,7 +425,8 @@ export function StoragePage(props: StoragePageProps) {
           onRename={bulk.handleBulkRename}
           renaming={bulk.bulkRenaming()}
         />
-      </div>
-    </Show>
+        </div>
+      </Show>
+    </>
   );
 }

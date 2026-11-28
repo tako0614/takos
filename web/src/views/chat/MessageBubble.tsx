@@ -229,7 +229,7 @@ export function MessageBubble(props: MessageBubbleProps) {
                 </div>
               </Show>
               <Show when={props.message.content}>
-                <div class="text-zinc-900 dark:text-zinc-100 whitespace-pre-wrap">
+                <div class="text-zinc-900 dark:text-zinc-100 whitespace-pre-wrap break-words">
                   {props.message.content}
                 </div>
               </Show>

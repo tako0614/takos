@@ -21,16 +21,16 @@ function isContainedBy(
 
 export function getDropdownMenuItems(
   menu: HTMLElement | undefined,
-): HTMLButtonElement[] {
+): HTMLElement[] {
   return menu
-    ? Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    ? Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
     : [];
 }
 
 export function focusDropdownMenuItem(
   menu: HTMLElement | undefined,
   target: MenuFocusTarget,
-): HTMLButtonElement | null {
+): HTMLElement | null {
   const items = getDropdownMenuItems(menu);
   if (items.length === 0) return null;
   const item = target === "last" ? items[items.length - 1] : items[0];
@@ -80,7 +80,7 @@ export function handleDropdownMenuKeyDown(
   if (!keys.includes(e.key)) return false;
   const items = getDropdownMenuItems(options.getMenu());
   if (items.length === 0) return false;
-  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  const index = items.indexOf(document.activeElement as HTMLElement);
   let next: number;
   if (e.key === "ArrowDown") {
     next = index < 0 ? 0 : (index + 1) % items.length;

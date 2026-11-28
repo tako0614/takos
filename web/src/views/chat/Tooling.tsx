@@ -47,22 +47,29 @@ export function PersistedToolCalls(props: { toolExecutions: ToolExecution[] }) {
       <div class="mb-3">
         <button
           type="button"
-          class="flex items-center gap-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-lg px-2 py-1 -ml-2 transition-colors"
+          aria-expanded={isExpanded()}
+          class="flex min-h-[44px] sm:min-h-0 items-center gap-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-lg px-2 py-1 -ml-2 transition-colors"
           onClick={() => setIsExpanded((prev) => !prev)}
         >
-          <Icons.Settings class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
-          <span class="text-sm text-zinc-500 dark:text-zinc-400">
+          <Icons.Settings
+            class="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400"
+            aria-hidden="true"
+          />
+          <span class="text-sm text-zinc-600 dark:text-zinc-300">
             {t("toolsExecuted", { count: props.toolExecutions.length })}
             <Show when={hasErrors()}>
-              <span class="text-red-500 dark:text-red-400 font-medium ml-1">
+              <span class="text-red-600 dark:text-red-400 font-medium ml-1">
                 {t("withErrors")}
               </span>
             </Show>
           </span>
-          <span class="text-xs text-zinc-400 dark:text-zinc-500">
+          <span class="text-xs text-zinc-600 dark:text-zinc-400">
             {formatDuration(totalDuration())}
           </span>
-          <span class="text-xs text-zinc-400 dark:text-zinc-500">
+          <span
+            class="text-xs text-zinc-600 dark:text-zinc-400"
+            aria-hidden="true"
+          >
             {isExpanded() ? "\u25BC" : "\u25B6"}
           </span>
         </button>
@@ -80,23 +87,29 @@ export function PersistedToolCalls(props: { toolExecutions: ToolExecution[] }) {
                       <Show
                         when={te.error}
                         fallback={
-                          <Icons.Check class="w-3 h-3 text-green-500 flex-shrink-0" />
+                          <Icons.Check
+                            class="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0"
+                            aria-hidden="true"
+                          />
                         }
                       >
-                        <Icons.AlertTriangle class="w-3 h-3 text-red-500 flex-shrink-0" />
+                        <Icons.AlertTriangle
+                          class="w-3 h-3 text-red-600 dark:text-red-400 flex-shrink-0"
+                          aria-hidden="true"
+                        />
                       </Show>
                       <span
                         class={`text-sm ${
                           te.error
                             ? "text-red-600 dark:text-red-400"
-                            : "text-zinc-600 dark:text-zinc-400"
+                            : "text-zinc-700 dark:text-zinc-300"
                         } capitalize`}
                       >
                         {formatToolName(te.name)}
                       </span>
                       <Show when={te.duration_ms}>
                         {(duration) => (
-                          <span class="text-xs text-zinc-400 dark:text-zinc-500">
+                          <span class="text-xs text-zinc-600 dark:text-zinc-400">
                             {formatDuration(duration())}
                           </span>
                         )}
@@ -104,10 +117,16 @@ export function PersistedToolCalls(props: { toolExecutions: ToolExecution[] }) {
                       <Show when={hasDetails()}>
                         <button
                           type="button"
-                          class="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                          aria-expanded={expandedTools().has(index())}
+                          aria-label={expandedTools().has(index())
+                            ? t("hideDetails")
+                            : t("showDetails")}
+                          class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 items-center justify-center rounded text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                           onClick={() => toggleToolExpanded(index())}
                         >
-                          {expandedTools().has(index()) ? "\u25BC" : "\u25B6"}
+                          <span aria-hidden="true">
+                            {expandedTools().has(index()) ? "\u25BC" : "\u25B6"}
+                          </span>
                         </button>
                       </Show>
                     </div>

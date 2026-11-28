@@ -20,6 +20,7 @@ export const common = {
   password: "Password",
   passwordRequired: "Password required",
   enterPasswordToView: "Enter the password to view this shared thread.",
+  invalidPassword: "Incorrect password. Please try again.",
   unlock: "Unlock",
   shareNotAvailable: "This share is not available.",
   noMessages: "No messages.",

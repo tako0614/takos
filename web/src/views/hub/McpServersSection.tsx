@@ -48,21 +48,21 @@ export function McpServersSection(props: McpServersSectionProps) {
         </div>
       }
     >
-      <div class="flex items-center justify-between gap-4 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {t("mcpServers")}
-          </h4>
-          <p class="text-xs text-zinc-500 dark:text-zinc-400">
+          </h2>
+          <p class="text-xs text-zinc-600 dark:text-zinc-400">
             {t("mcpServersDescription")}
           </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <select
             value={props.selectedSpaceId ?? ""}
             onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
             aria-label={t("connectionsSelectWorkspace")}
-            class="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"
+            class="min-h-[44px] sm:min-h-0 sm:h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"
           >
             {props.spaces.map((space) => (
               <option value={getSpaceIdentifier(space)}>{space.name}</option>
@@ -80,16 +80,28 @@ export function McpServersSection(props: McpServersSectionProps) {
       </div>
 
       {loading() ? (
-        <div class="flex flex-col items-center justify-center h-64 gap-4">
-          <div class="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin" />
-          <span class="text-sm text-zinc-400">{t("loading")}</span>
+        <div
+          role="status"
+          aria-live="polite"
+          class="flex flex-col items-center justify-center h-64 gap-4"
+        >
+          <div
+            class="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin"
+            aria-hidden="true"
+          />
+          <span class="text-sm text-zinc-600 dark:text-zinc-300">
+            {t("loading")}
+          </span>
         </div>
       ) : error() ? (
-        <div class="flex flex-col items-center justify-center h-64 gap-3 text-center">
-          <p class="text-sm text-red-500">{error()}</p>
+        <div
+          role="alert"
+          class="flex flex-col items-center justify-center h-64 gap-3 text-center"
+        >
+          <p class="text-sm text-red-600 dark:text-red-400">{error()}</p>
           <button
             type="button"
-            class="px-3 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+            class="min-h-[44px] sm:min-h-0 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
             onClick={() => void refresh()}
           >
             {t("retry")}
@@ -104,7 +116,7 @@ export function McpServersSection(props: McpServersSectionProps) {
             <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">
               {t("noMcpServersYet")}
             </p>
-            <p class="text-xs text-zinc-500 dark:text-zinc-500 mt-1">
+            <p class="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
               {t("managedMcpServersAutoConnected")}
             </p>
           </div>

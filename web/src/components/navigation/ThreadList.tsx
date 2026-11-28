@@ -5,14 +5,14 @@ import { useSidebarCallbacks } from "./SidebarContext.tsx";
 import type { Thread } from "../../types/index.ts";
 
 const THREAD_BASE =
-  "group flex items-center gap-1 pr-2 rounded-lg transition-colors min-h-[36px] text-sm";
+  "group flex items-center gap-1 pr-1 md:pr-2 rounded-lg transition-colors min-h-[44px] md:min-h-[36px] text-sm";
 const THREAD_DEFAULT =
   `${THREAD_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 hover:text-zinc-800 dark:hover:text-zinc-200`;
 const THREAD_ACTIVE =
   `${THREAD_BASE} bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100`;
 
 const ACTION_BTN =
-  "w-7 h-7 flex items-center justify-center rounded opacity-70 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all shrink-0";
+  "w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded opacity-80 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all shrink-0";
 
 interface ThreadListProps {
   threads: Thread[];
@@ -45,7 +45,7 @@ export function ThreadList(props: ThreadListProps) {
           >
             <button
               type="button"
-              class="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 text-left rounded-lg cursor-pointer"
+              class="flex-1 min-w-0 min-h-[44px] md:min-h-0 flex items-center gap-3 px-3 py-2 text-left rounded-lg cursor-pointer"
               onClick={() => onSelectThread(thread)}
               aria-current={props.selectedThreadId === thread.id
                 ? "page"
