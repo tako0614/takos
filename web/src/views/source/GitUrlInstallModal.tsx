@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, Show } from "solid-js";
 import { Button, Modal, ModalFooter } from "../../components/ui/index.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { rpcJson } from "../../lib/rpc.ts";
@@ -50,6 +50,11 @@ type GitUrlPreviewResponse = CapsulePlanResponse;
 export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
+  const fieldPrefix = createUniqueId();
+  const gitUrlId = `${fieldPrefix}-git-url`;
+  const refId = `${fieldPrefix}-ref`;
+  const modulePathId = `${fieldPrefix}-module-path`;
+  const approveId = `${fieldPrefix}-approve`;
   const [gitUrl, setGitUrl] = createSignal(props.initialGitUrl ?? "");
   const [ref, setRef] = createSignal(props.initialRef ?? "");
   const [modulePath, setModulePath] = createSignal(
@@ -68,6 +73,17 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   const [idempotencyKey, setIdempotencyKey] = createSignal(
     newPlanIdempotencyKey(),
   );
+
+  createEffect(() => {
+    if (!props.isOpen) return;
+    setGitUrl(props.initialGitUrl ?? "");
+    setRef(props.initialRef ?? "");
+    setModulePath(props.initialModulePath ?? ".");
+    setPreview(null);
+    setApproved(false);
+    setFormError(null);
+    setIdempotencyKey(newPlanIdempotencyKey());
+  });
 
   const previewTitle = (currentPreview: GitUrlPreviewResponse): string => {
     return (
@@ -212,11 +228,15 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     >
       <form onSubmit={planInstall} class="space-y-4">
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_9rem_12rem]">
-          <label class="block space-y-1.5">
-            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <div class="space-y-1.5">
+            <label
+              for={gitUrlId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
               {t("gitUrlLabel")}
-            </span>
+            </label>
             <input
+              id={gitUrlId}
               type="url"
               value={gitUrl()}
               onInput={(event) => {
@@ -224,16 +244,20 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="https://github.com/example/app.git"
-              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/20"
               required
               autofocus
             />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          </div>
+          <div class="space-y-1.5">
+            <label
+              for={refId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
               {t("gitRefLabel")}
-            </span>
+            </label>
             <input
+              id={refId}
               type="text"
               value={ref()}
               onInput={(event) => {
@@ -241,15 +265,19 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="v1.2.3"
-              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/20"
               required
             />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          </div>
+          <div class="space-y-1.5">
+            <label
+              for={modulePathId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
               {t("gitModulePathLabel")}
-            </span>
+            </label>
             <input
+              id={modulePathId}
               type="text"
               value={modulePath()}
               onInput={(event) => {
@@ -257,10 +285,10 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 resetPreview();
               }}
               placeholder="."
-              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100"
+              class="w-full min-h-[44px] rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base sm:text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/20"
               required
             />
-          </label>
+          </div>
         </div>
 
         <Show when={formError()}>
@@ -269,7 +297,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
               role="alert"
               class="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
             >
-              <Icons.AlertTriangle class="h-4 w-4 shrink-0" />
+              <Icons.AlertTriangle class="h-4 w-4 shrink-0" aria-hidden="true" />
               <span class="min-w-0 flex-1 break-words">{err()}</span>
             </div>
           )}
@@ -292,12 +320,16 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 </span>
               </div>
 
-              <label class="mt-4 flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+              <label
+                for={approveId}
+                class="mt-4 flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 focus-within:ring-2 focus-within:ring-zinc-900 dark:focus-within:ring-zinc-100"
+              >
                 <input
+                  id={approveId}
                   type="checkbox"
                   checked={approved()}
                   onChange={(event) => setApproved(event.currentTarget.checked)}
-                  class="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                  class="h-4 w-4 shrink-0 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:focus:ring-zinc-100"
                 />
                 <span class="text-sm text-zinc-700 dark:text-zinc-300">
                   {t("approveGitUrlPlan")}

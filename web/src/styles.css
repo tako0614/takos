@@ -41,6 +41,10 @@
      white and their matching tinted *-bg surfaces (Badge, alerts, errors). */
   --color-error: #b91c1c;
   --color-error-bg: #fef2f2;
+  /* Filled danger button surfaces guarantee >=4.5:1 contrast with white text
+     in both light (#b91c1c = 6.47:1) and dark (#dc2626 = 4.83:1) themes. */
+  --color-danger-bg: #b91c1c;
+  --color-danger-hover: #991b1b;
   --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
   --color-success: #15803d;
@@ -97,6 +101,8 @@
 
   --color-error: #f87171;
   --color-error-bg: #450a0a;
+  --color-danger-bg: #dc2626;
+  --color-danger-hover: #b91c1c;
   --color-warning: #fbbf24;
   --color-warning-bg: #451a03;
   --color-success: #4ade80;

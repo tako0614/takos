@@ -75,12 +75,12 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
       closeOnEscape
     >
       <div style={contentStyle}>
-        <div style={iconStyle()}>
+        <div style={iconStyle()} aria-hidden="true">
           <Icons.AlertTriangle
             style={{ width: "1.25rem", height: "1.25rem" }}
           />
         </div>
-        <h3 id={titleId} style={titleStyle}>{props.title}</h3>
+        <h2 id={titleId} style={titleStyle}>{props.title}</h2>
         <p id={descriptionId} style={messageStyle}>{props.message}</p>
       </div>
       <ModalFooter

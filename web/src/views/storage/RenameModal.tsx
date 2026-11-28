@@ -47,6 +47,7 @@ export function RenameModal(props: RenameModalProps) {
             onClick={props.onRename}
             disabled={props.renaming || !props.newName.trim() ||
               props.newName.trim() === props.renameTarget?.name}
+            isLoading={props.renaming}
           >
             {t("rename")}
           </Button>

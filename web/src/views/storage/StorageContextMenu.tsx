@@ -18,6 +18,9 @@ const MENU_MAX_HEIGHT = 240;
 export function StorageContextMenu(props: StorageContextMenuProps) {
   const { t } = useI18n();
   let ref: HTMLDivElement | undefined;
+  let previousFocusedElement: HTMLElement | null = null;
+  let shouldRestoreOnClose = true;
+  let pointerDownInside = false;
 
   const menuItems = () =>
     ref
@@ -25,20 +28,25 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
       : [];
 
   onMount(() => {
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
+    previousFocusedElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    let shouldRestoreOnClose = true;
 
     // Move focus into the menu so keyboard users (who opened it via the
     // focusable trigger) can operate it and Escape returns control.
     menuItems()[0]?.focus();
 
     const handler = (e: PointerEvent) => {
-      if (ref && e.target instanceof Node && !ref.contains(e.target)) {
-        shouldRestoreOnClose = false;
-        props.onClose();
+      if (ref && e.target instanceof Node && ref.contains(e.target)) {
+        pointerDownInside = true;
+        return;
       }
+      pointerDownInside = false;
+      shouldRestoreOnClose = false;
+      props.onClose();
+    };
+    const clearPointer = () => {
+      pointerDownInside = false;
     };
     const keyHandler = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
@@ -48,9 +56,14 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
       }
     };
     document.addEventListener("pointerdown", handler);
+    document.addEventListener("pointerup", clearPointer);
+    document.addEventListener("pointercancel", clearPointer);
     document.addEventListener("keydown", keyHandler);
     onCleanup(() => {
+      pointerDownInside = false;
       document.removeEventListener("pointerdown", handler);
+      document.removeEventListener("pointerup", clearPointer);
+      document.removeEventListener("pointercancel", clearPointer);
       document.removeEventListener("keydown", keyHandler);
       if (
         shouldRestoreOnClose &&
@@ -65,8 +78,24 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
     });
   });
 
-  // Roving focus across menu items with the arrow / Home / End keys.
+  // Roving focus across menu items with the arrow / Home / End keys, and
+  // dismiss when Tab leaves the menu so it never remains orphaned.
   const handleMenuKeyDown = (e: KeyboardEvent) => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === "Tab") {
+      // Close synchronously and return focus to the mounted trigger without
+      // preventing default so native Tab/Shift+Tab continues cleanly from the
+      // row trigger instead of stepping from the detached menu position.
+      shouldRestoreOnClose = false;
+      props.onClose();
+      if (
+        previousFocusedElement &&
+        document.contains(previousFocusedElement)
+      ) {
+        previousFocusedElement.focus();
+      }
+      return;
+    }
     const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
     if (!keys.includes(e.key)) return;
     const items = menuItems();
@@ -79,6 +108,14 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
     else next = items.length - 1;
     e.preventDefault();
     items[next]?.focus();
+  };
+
+  const handleFocusOut = (e: FocusEvent) => {
+    if (pointerDownInside) return;
+    const next = e.relatedTarget;
+    if (ref && next instanceof Node && ref.contains(next)) return;
+    shouldRestoreOnClose = false;
+    props.onClose();
   };
 
   // Keep the menu inside the viewport instead of overflowing off the right or
@@ -101,6 +138,7 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
       aria-label={t("moreActions")}
       style={style()}
       onKeyDown={handleMenuKeyDown}
+      onFocusOut={handleFocusOut}
       class="w-52 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-xl py-1"
     >
       <Show when={props.state.file.type === "file"}>

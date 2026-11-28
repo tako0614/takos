@@ -19,7 +19,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-[var(--color-surface-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-primary)] hover:bg-[var(--color-bg-tertiary)]",
   ghost:
     "bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]",
-  danger: "bg-[var(--color-error)] text-white hover:opacity-90",
+  danger:
+    "bg-[var(--color-danger-bg)] text-white hover:bg-[var(--color-danger-hover)]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

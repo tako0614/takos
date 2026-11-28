@@ -5,6 +5,7 @@ import { Modal } from "../../components/ui/Modal.tsx";
 import { Button } from "../../components/ui/Button.tsx";
 import { Input } from "../../components/ui/Input.tsx";
 import { Icons } from "../../lib/Icons.tsx";
+import { formatLocalizedDateTime } from "../../lib/memory-format.ts";
 import type { ThreadShare } from "../../hooks/useChatSharing.ts";
 
 export interface ChatShareModalProps {
@@ -26,7 +27,8 @@ export interface ChatShareModalProps {
 }
 
 export function ChatShareModal(props: ChatShareModalProps) {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const { showToast } = useToast();
   const modeId = createUniqueId();
   const expiresId = createUniqueId();
@@ -55,7 +57,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
                 props.onShareModeChange(
                   e.currentTarget.value === "password" ? "password" : "public",
                 )}
-              class="w-full min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-base sm:text-sm text-zinc-900 dark:text-zinc-100"
+              class="w-full min-h-[44px] px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
             >
               <option value="public">{t("sharePublic")}</option>
               <option value="password">{t("sharePasswordLabel")}</option>
@@ -191,11 +193,21 @@ export function ChatShareModal(props: ChatShareModalProps) {
                         </div>
                         <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                           {s.expires_at
-                            ? t("shareExpiresAt", { date: s.expires_at })
+                            ? t("shareExpiresAt", {
+                              date: formatLocalizedDateTime(
+                                s.expires_at,
+                                i18n.lang,
+                              ),
+                            })
                             : t("shareNoExpiry")}
                           {s.last_accessed_at
                             ? ` \u00B7 ${
-                              t("shareLastAccessed", { date: s.last_accessed_at })
+                              t("shareLastAccessed", {
+                                date: formatLocalizedDateTime(
+                                  s.last_accessed_at,
+                                  i18n.lang,
+                                ),
+                              })
                             }`
                             : ""}
                         </div>

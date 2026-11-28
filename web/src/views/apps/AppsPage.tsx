@@ -592,7 +592,7 @@ function CapsuleServiceChip(props: {
           href={safeHref()}
           target="_blank"
           rel="noopener noreferrer"
-          class={`inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${getServiceChipClass(
+          class={`inline-flex min-h-[44px] sm:min-h-0 max-w-full items-center gap-1.5 rounded-md px-2.5 sm:px-2 py-2 sm:py-1 text-xs transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${getServiceChipClass(
             props.service.status,
           )}`}
           title={props.service.endpoint ?? props.service.capability}

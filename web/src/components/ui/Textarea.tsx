@@ -40,7 +40,7 @@ export function Textarea(props: TextareaProps) {
           w-full px-3 py-2.5 text-base min-h-[5rem] font-[inherit]
           bg-[var(--color-surface-primary)] text-[var(--color-text-primary)]
           border rounded-[var(--radius-md)] outline-none transition-colors
-          focus:border-[var(--color-border-focus)]
+          focus:border-[var(--color-border-focus)] focus:ring-2 focus:ring-[var(--color-border-focus)]/20
           ${
           local.error
             ? "border-[var(--color-error)]"

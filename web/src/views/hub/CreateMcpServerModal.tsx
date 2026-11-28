@@ -13,6 +13,9 @@ export function CreateMcpServerModal(props: {
   ) => Promise<void>;
 }) {
   const { t } = useI18n();
+  const nameId = createUniqueId();
+  const urlId = createUniqueId();
+  const scopeId = createUniqueId();
   const nameErrorId = createUniqueId();
   const urlErrorId = createUniqueId();
   const [name, setName] = createSignal("");
@@ -62,11 +65,15 @@ export function CreateMcpServerModal(props: {
           }
         }}
       >
-        <label class="block">
-          <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        <div>
+          <label
+            for={nameId}
+            class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             {t("name")}
-          </span>
+          </label>
           <input
+            id={nameId}
             value={name()}
             onInput={(e) =>
               setName(e.currentTarget.value)}
@@ -74,7 +81,7 @@ export function CreateMcpServerModal(props: {
               nameError()
                 ? "border-red-500 dark:border-red-400"
                 : "border-zinc-200 dark:border-zinc-700"
-            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100`}
+            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20`}
             placeholder="github"
             autofocus
             required
@@ -90,12 +97,16 @@ export function CreateMcpServerModal(props: {
               {nameError()}
             </p>
           )}
-        </label>
-        <label class="block">
-          <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        </div>
+        <div>
+          <label
+            for={urlId}
+            class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
             URL
-          </span>
+          </label>
           <input
+            id={urlId}
             type="url"
             value={url()}
             onInput={(e) =>
@@ -104,7 +115,7 @@ export function CreateMcpServerModal(props: {
               urlError()
                 ? "border-red-500 dark:border-red-400"
                 : "border-zinc-200 dark:border-zinc-700"
-            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100`}
+            } bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20`}
             placeholder="https://example.com/mcp"
             required
             aria-invalid={urlError() ? "true" : "false"}
@@ -119,34 +130,38 @@ export function CreateMcpServerModal(props: {
               {urlError()}
             </p>
           )}
-        </label>
+        </div>
 
         {/* Advanced toggle */}
         <button
           type="button"
           aria-expanded={showAdvanced()}
-          class="flex items-center gap-1 min-h-[36px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+          class="flex items-center gap-1 min-h-[44px] sm:min-h-[36px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 rounded-md px-1"
           onClick={() =>
             setShowAdvanced(!showAdvanced())}
         >
           {showAdvanced()
-            ? <Icons.ChevronDown class="w-3 h-3" />
-            : <Icons.ChevronRight class="w-3 h-3" />}
+            ? <Icons.ChevronDown class="w-3 h-3" aria-hidden="true" />
+            : <Icons.ChevronRight class="w-3 h-3" aria-hidden="true" />}
           {t("mcpAdvanced")}
         </button>
 
         {showAdvanced() && (
-          <label class="block">
-            <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <div>
+            <label
+              for={scopeId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
               Scope
-            </span>
+            </label>
             <input
+              id={scopeId}
               value={scope()}
               onInput={(e) => setScope(e.currentTarget.value)}
-              class="mt-2 w-full h-11 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100"
+              class="mt-2 w-full h-11 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
               placeholder="read write"
             />
-          </label>
+          </div>
         )}
 
         <div class="flex justify-end gap-2">

@@ -32,6 +32,7 @@ export function SpaceInfoCard(props: {
   const { showToast } = useToast();
   const spaceNameId = createUniqueId();
   const spaceDescId = createUniqueId();
+  const spaceSlugLabelId = createUniqueId();
 
   return (
     <Card>
@@ -79,10 +80,17 @@ export function SpaceInfoCard(props: {
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <span
+              id={spaceSlugLabelId}
+              class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            >
               {tOr("spaceSlug", t("workspaceSlug"))}
-            </label>
-            <div class="flex items-center gap-2">
+            </span>
+            <div
+              role="group"
+              aria-labelledby={spaceSlugLabelId}
+              class="flex items-center gap-2"
+            >
               <code class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate">
                 {getSpaceIdentifier(props.selectedSpace)}
               </code>
@@ -148,7 +156,7 @@ export function DangerZoneCard(props: {
             <h3 class="font-medium text-zinc-900 dark:text-zinc-100">
               {t("deleteSpace")}
             </h3>
-            <p class="text-sm text-zinc-500 dark:text-zinc-400">
+            <p class="text-sm text-zinc-600 dark:text-zinc-300">
               {t("deleteSpaceHint")}
             </p>
           </div>

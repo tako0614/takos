@@ -23,8 +23,9 @@ export function ChatExportModal(props: ChatExportModalProps) {
         <Button
           variant="secondary"
           class="w-full justify-start"
+          autofocus
           onClick={() => props.onExport("markdown")}
-          leftIcon={<Icons.Download class="w-4 h-4" />}
+          leftIcon={<Icons.Download class="w-4 h-4" aria-hidden="true" />}
         >
           Markdown
         </Button>
@@ -32,7 +33,7 @@ export function ChatExportModal(props: ChatExportModalProps) {
           variant="secondary"
           class="w-full justify-start"
           onClick={() => props.onExport("json")}
-          leftIcon={<Icons.Download class="w-4 h-4" />}
+          leftIcon={<Icons.Download class="w-4 h-4" aria-hidden="true" />}
         >
           JSON
         </Button>
@@ -40,7 +41,7 @@ export function ChatExportModal(props: ChatExportModalProps) {
           variant="secondary"
           class="w-full justify-start"
           onClick={() => props.onExport("pdf")}
-          leftIcon={<Icons.Download class="w-4 h-4" />}
+          leftIcon={<Icons.Download class="w-4 h-4" aria-hidden="true" />}
         >
           PDF
         </Button>

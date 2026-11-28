@@ -1,7 +1,8 @@
-import { createSignal, createUniqueId } from "solid-js";
+import { createSignal, createUniqueId, Show } from "solid-js";
 import { useI18n } from "../../../store/i18n.ts";
 import { useDialogLifecycle } from "../../../hooks/useDialogLifecycle.ts";
 import { useFocusTrap } from "../../../hooks/useFocusTrap.ts";
+import { getErrorMessage } from "../../../lib/errors.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 
 interface CreateRepoModalProps {
@@ -10,7 +11,7 @@ interface CreateRepoModalProps {
     name: string,
     description: string,
     visibility: "public" | "private",
-  ) => void;
+  ) => void | Promise<void>;
 }
 
 export function CreateRepoModal(props: CreateRepoModalProps) {
@@ -19,6 +20,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
   const titleId = createUniqueId();
   const nameId = createUniqueId();
   const descriptionId = createUniqueId();
+  const errorId = createUniqueId();
   let dialogRef: HTMLDivElement | undefined;
 
   const [name, setName] = createSignal("");
@@ -26,6 +28,8 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
   const [visibility, setVisibility] = createSignal<"public" | "private">(
     "private",
   );
+  const [submitting, setSubmitting] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
 
   const isTopLayer = useDialogLifecycle({
     isOpen: true,
@@ -44,10 +48,18 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
     respectAutofocus: true,
   });
 
-  const handleSubmit = (e: Event & { currentTarget: HTMLFormElement }) => {
+  const handleSubmit = async (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
-    if (!name().trim()) return;
-    props.onCreate(name().trim(), description().trim(), visibility());
+    if (!name().trim() || submitting()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await props.onCreate(name().trim(), description().trim(), visibility());
+    } catch (err) {
+      setError(getErrorMessage(err, t("failedToCreate")));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -78,7 +90,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
             onClick={() => props.onClose()}
             aria-label={t("close")}
           >
-            <Icons.X class="w-5 h-5" />
+            <Icons.X class="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <form onSubmit={handleSubmit} class="flex flex-col flex-1 min-h-0">
@@ -86,31 +98,36 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
             <div class="space-y-2">
               <label
                 for={nameId}
-                class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                class="flex items-center gap-1 text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
-                {t("repositoryName")}{" "}
+                <span>{t("repositoryName")}</span>
                 <span class="text-zinc-500 dark:text-zinc-400" aria-hidden="true">*</span>
               </label>
               <input
                 id={nameId}
                 type="text"
                 value={name()}
-                onInput={(e) => setName(e.currentTarget.value)}
+                onInput={(e) => {
+                  setName(e.currentTarget.value);
+                  if (error()) setError(null);
+                }}
                 placeholder="my-awesome-project"
                 autofocus
                 required
                 class="w-full min-h-[44px] px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors"
                 aria-required="true"
+                aria-invalid={error() ? "true" : "false"}
+                aria-describedby={error() ? errorId : undefined}
               />
             </div>
             <div class="space-y-2">
               <label
                 for={descriptionId}
-                class="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                class="flex items-center gap-1 text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
-                {t("description")}{" "}
+                <span>{t("description")}</span>
                 <span class="text-zinc-500 dark:text-zinc-400 text-xs">
-                  ({t("optional")})
+                  {`(${t("optional")})`}
                 </span>
               </label>
               <textarea
@@ -142,12 +159,12 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                     onChange={() => setVisibility("public")}
                     class="sr-only"
                   />
-                  <Icons.Globe class="w-5 h-5 text-zinc-900 dark:text-zinc-100 shrink-0" />
+                  <Icons.Globe class="w-5 h-5 text-zinc-900 dark:text-zinc-100 shrink-0" aria-hidden="true" />
                   <div class="flex-1 min-w-0">
                     <strong class="block text-sm text-zinc-900 dark:text-zinc-100">
                       {t("visibilityPublic")}
                     </strong>
-                    <span class="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="text-xs text-zinc-600 dark:text-zinc-300">
                       {t("visibilityPublicDescription")}
                     </span>
                   </div>
@@ -167,18 +184,30 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                     onChange={() => setVisibility("private")}
                     class="sr-only"
                   />
-                  <Icons.Lock class="w-5 h-5 text-zinc-600 dark:text-zinc-300 shrink-0" />
+                  <Icons.Lock class="w-5 h-5 text-zinc-600 dark:text-zinc-300 shrink-0" aria-hidden="true" />
                   <div class="flex-1 min-w-0">
                     <strong class="block text-sm text-zinc-900 dark:text-zinc-100">
                       {t("visibilityPrivate")}
                     </strong>
-                    <span class="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span class="text-xs text-zinc-600 dark:text-zinc-300">
                       {t("visibilityPrivateDescription")}
                     </span>
                   </div>
                 </label>
               </div>
             </fieldset>
+            <Show when={error()}>
+              {(msg) => (
+                <div
+                  id={errorId}
+                  role="alert"
+                  class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400"
+                >
+                  <Icons.AlertTriangle class="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>{msg()}</span>
+                </div>
+              )}
+            </Show>
           </div>
           <div class="flex justify-end gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 shrink-0">
             <button
@@ -191,10 +220,11 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
             <button
               type="submit"
               class="min-h-[44px] px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100"
-              disabled={!name().trim()}
-              aria-disabled={!name().trim()}
+              disabled={submitting() || !name().trim()}
+              aria-disabled={submitting() || !name().trim()}
+              aria-busy={submitting() ? "true" : undefined}
             >
-              {t("createRepository")}
+              {submitting() ? t("creating") : t("createRepository")}
             </button>
           </div>
         </form>

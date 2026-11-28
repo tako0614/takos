@@ -53,7 +53,7 @@ function renderSnippet(
   return (
     <span>
       {snippet.slice(0, match.start)}
-      <mark class="bg-yellow-200/70 dark:bg-yellow-600/40 rounded px-0.5">
+      <mark class="bg-yellow-200/80 text-zinc-900 dark:bg-yellow-500/35 dark:text-yellow-100 rounded px-0.5">
         {snippet.slice(match.start, match.end)}
       </mark>
       {snippet.slice(match.end)}
@@ -162,7 +162,7 @@ function SearchResultsBody(props: {
                             ? ` ${r.score.toFixed(2)}`
                             : ""}
                         </span>
-                        <span class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                        <span class="text-xs text-zinc-600 dark:text-zinc-300 truncate">
                           {r.thread.title || t("untitled")}
                         </span>
                       </div>
@@ -341,11 +341,11 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
                 ? (
                   <button
                     type="button"
-                    class="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                    class="min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                     onClick={() => setQuery("")}
                     aria-label={t("clear")}
                   >
-                    <Icons.X class="w-4 h-4" />
+                    <Icons.X class="w-4 h-4" aria-hidden="true" />
                   </button>
                 )
                 : null}

@@ -74,7 +74,7 @@ export function StorageToolbar(props: StorageToolbarProps) {
         </Show>
       </button>
       <Show when={props.downloadingZip}>
-        <span class="text-xs text-zinc-400 tabular-nums">
+        <span class="text-xs text-zinc-600 dark:text-zinc-400 tabular-nums">
           {formatFileSize(props.downloadedZipBytes)}
         </span>
       </Show>

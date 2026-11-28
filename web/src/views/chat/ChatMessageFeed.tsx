@@ -161,71 +161,97 @@ function ThinkingDisclosure(props: {
 
   return (
     <div class="py-1.5 px-4">
-      <button
-        type="button"
-        class={`group inline-flex min-h-[44px] sm:min-h-0 max-w-full items-center gap-1.5 rounded-md py-1 pr-1 text-sm transition-colors ${toneClass()}`}
-        aria-expanded={expanded()}
-        onClick={() => setExpanded((value) => !value)}
+      <Show
+        when={props.entries.length > 0}
+        fallback={
+          <div
+            role={props.live ? "status" : undefined}
+            aria-live={props.live ? "polite" : undefined}
+            class={`inline-flex max-w-full items-center gap-1.5 py-1 text-sm ${toneClass()}`}
+          >
+            <span
+              aria-hidden="true"
+              class={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center ${
+                props.live ? "animate-pulse" : ""
+              }`}
+            >
+              <Icons.Sparkles class="h-3.5 w-3.5" />
+            </span>
+            <span class="min-w-0 truncate">{label()}</span>
+            <Show when={!props.live && statusLabel()}>
+              <span class="flex-shrink-0 text-xs text-zinc-600 dark:text-zinc-400">
+                {statusLabel()}
+              </span>
+            </Show>
+          </div>
+        }
       >
-        <span
-          aria-hidden="true"
-          class={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center ${
-            props.live ? "animate-pulse" : ""
-          }`}
+        <button
+          type="button"
+          class={`group inline-flex min-h-[44px] sm:min-h-0 max-w-full items-center gap-1.5 rounded-md py-1 pr-1 text-sm transition-colors ${toneClass()}`}
+          aria-expanded={expanded()}
+          onClick={() => setExpanded((value) => !value)}
         >
-          <Icons.Sparkles class="h-3.5 w-3.5" />
-        </span>
-        <span class="min-w-0 truncate">{label()}</span>
-        <Show when={!props.live && statusLabel()}>
-          <span class="flex-shrink-0 text-xs text-zinc-600 dark:text-zinc-400">
-            {statusLabel()}
+          <span
+            aria-hidden="true"
+            class={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center ${
+              props.live ? "animate-pulse" : ""
+            }`}
+          >
+            <Icons.Sparkles class="h-3.5 w-3.5" />
           </span>
-        </Show>
-        <Icons.ChevronDown
-          aria-hidden="true"
-          class={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${
-            expanded() ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+          <span class="min-w-0 truncate">{label()}</span>
+          <Show when={!props.live && statusLabel()}>
+            <span class="flex-shrink-0 text-xs text-zinc-600 dark:text-zinc-400">
+              {statusLabel()}
+            </span>
+          </Show>
+          <Icons.ChevronDown
+            aria-hidden="true"
+            class={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${
+              expanded() ? "rotate-180" : ""
+            }`}
+          />
+        </button>
 
-      <Show when={expanded() && props.entries.length > 0}>
-        <div class={`ml-2 mt-1 space-y-2 border-l pl-4 ${borderClass()}`}>
-          <For each={props.entries}>
-            {(entry) => (
-              <div class="flex min-w-0 gap-2 text-sm">
-                <span
-                  aria-hidden="true"
-                  class={`mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                    activityDotClass(entry)
-                  }`}
-                />
-                <div class="min-w-0 flex-1">
-                  <p
-                    class={`whitespace-pre-wrap break-words leading-relaxed ${
-                      entry.failed
-                        ? "text-red-700 dark:text-red-200"
-                        : "text-zinc-700 dark:text-zinc-300"
+        <Show when={expanded()}>
+          <div class={`ml-2 mt-1 space-y-2 border-l pl-4 ${borderClass()}`}>
+            <For each={props.entries}>
+              {(entry) => (
+                <div class="flex min-w-0 gap-2 text-sm">
+                  <span
+                    aria-hidden="true"
+                    class={`mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                      activityDotClass(entry)
                     }`}
-                  >
-                    {entry.message}
-                  </p>
-                  <Show when={entry.detail}>
+                  />
+                  <div class="min-w-0 flex-1">
                     <p
-                      class={`mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed ${
+                      class={`whitespace-pre-wrap break-words leading-relaxed ${
                         entry.failed
-                          ? "text-red-600 dark:text-red-300"
-                          : "text-zinc-600 dark:text-zinc-400"
+                          ? "text-red-700 dark:text-red-200"
+                          : "text-zinc-700 dark:text-zinc-300"
                       }`}
                     >
-                      {entry.detail}
+                      {entry.message}
                     </p>
-                  </Show>
+                    <Show when={entry.detail}>
+                      <p
+                        class={`mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed ${
+                          entry.failed
+                            ? "text-red-600 dark:text-red-300"
+                            : "text-zinc-600 dark:text-zinc-400"
+                        }`}
+                      >
+                        {entry.detail}
+                      </p>
+                    </Show>
+                  </div>
                 </div>
-              </div>
-            )}
-          </For>
-        </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </Show>
     </div>
   );

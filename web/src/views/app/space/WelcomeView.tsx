@@ -119,7 +119,7 @@ export function WelcomeView(props: WelcomeViewProps) {
 
         {/* Input card */}
         <div
-          class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 shadow-sm overflow-hidden"
+          class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 shadow-sm overflow-hidden transition-colors focus-within:border-zinc-900 dark:focus-within:border-zinc-100 focus-within:ring-2 focus-within:ring-zinc-900/15 dark:focus-within:ring-zinc-100/20"
           aria-busy={submission.isSubmitting()}
         >
           {/* Attached files */}
@@ -143,11 +143,11 @@ export function WelcomeView(props: WelcomeViewProps) {
                   <button
                     type="button"
                     disabled={submission.isSubmitting()}
-                    class="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 items-center justify-center p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                     onClick={() => fileAttachments.removeAttachedFile(index)}
                     aria-label={t("removeFile")}
                   >
-                    <Icons.X class="w-3 h-3" />
+                    <Icons.X class="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -158,7 +158,12 @@ export function WelcomeView(props: WelcomeViewProps) {
           {submission.outcome() && (
             <div role="status" class="px-4 pt-3 text-sm text-zinc-700 dark:text-zinc-300">
               <p>{submission.outcome()?.kind === "created" ? t("welcomeChatCreated") : t("welcomeCreationUnconfirmed")}</p>
-              <button type="button" class="mt-2 underline disabled:opacity-50" disabled={submission.isSubmitting()} onClick={createAnother}>
+              <button
+                type="button"
+                class="mt-2 inline-flex min-h-[44px] sm:min-h-0 items-center underline disabled:opacity-50"
+                disabled={submission.isSubmitting()}
+                onClick={createAnother}
+              >
                 {t("welcomeCreateAnother")}
               </button>
             </div>

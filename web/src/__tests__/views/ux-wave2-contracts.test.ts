@@ -72,7 +72,7 @@ test("ChatSearchModal wires combobox/listbox keyboard navigation and ChatView av
   );
 });
 
-test("StorageFileTable enforces fixed layout, accessible controls, and >=40px mobile touch targets", () => {
+test("StorageFileTable enforces fixed layout, accessible controls, and >=44px mobile touch targets", () => {
   const tableSource = readWeb("src/views/storage/StorageFileTable.tsx");
   assert(
     tableSource.includes("table-fixed"),
@@ -83,8 +83,8 @@ test("StorageFileTable enforces fixed layout, accessible controls, and >=40px mo
     "StorageFileTable filename button must not hardcode max-w-md wider than 375px",
   );
   assert(
-    tableSource.includes("min-w-[40px] min-h-[40px]"),
-    "StorageFileTable row actions and selection targets must meet >=40px touch target",
+    tableSource.includes("min-w-[44px] min-h-[44px]"),
+    "StorageFileTable row actions and selection targets must meet >=44px touch target",
   );
 
   for (const key of ["selectAllItems", "selectItem", "parentFolder"] as const) {

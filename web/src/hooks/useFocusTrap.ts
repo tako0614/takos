@@ -169,16 +169,15 @@ export function useFocusTrap(options: UseFocusTrapOptions): void {
       ? document.activeElement
       : null;
 
-    const autoFocusCandidate = (options.respectAutofocus ?? true)
-      ? container.querySelector<HTMLElement>(
-        '[autofocus], [data-autofocus="true"]',
-      )
-      : null;
-    const autoFocusElement =
-      autoFocusCandidate && isElementFocusable(autoFocusCandidate)
-        ? autoFocusCandidate
-        : null;
     const focusableElements = getFocusableElements(container);
+    const autoFocusElement = (options.respectAutofocus ?? true)
+      ? (focusableElements.find(
+        (el) =>
+          el.hasAttribute("autofocus") ||
+          el.getAttribute("data-autofocus") === "true" ||
+          (el as HTMLElement & { autofocus?: boolean }).autofocus === true,
+      ) ?? null)
+      : null;
     (autoFocusElement ?? focusableElements[0] ?? container).focus();
 
     const handleTabKey = (event: KeyboardEvent) => {

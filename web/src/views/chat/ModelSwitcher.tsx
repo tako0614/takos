@@ -26,13 +26,13 @@ export function ModelSwitcher(props: ModelSwitcherProps) {
         </span>
       }
     >
-      <div class="relative">
+      <div class="relative inline-flex max-w-full min-w-0 items-center">
         <select
           value={props.selectedModel}
           onInput={(e) => props.onModelChange!(e.currentTarget.value)}
           disabled={props.isLoading ?? false}
           aria-label={t("selectModel")}
-          class="appearance-none min-h-[44px] md:min-h-0 bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="appearance-none min-h-[44px] md:min-h-0 max-w-full min-w-0 truncate bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <For each={models()}>
             {(opt) => (
