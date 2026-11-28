@@ -150,19 +150,57 @@ test("StorageFileTable parent-folder row matches responsive columns instead of c
   );
 });
 
-test("StorageNewDropdown exposes menu semantics and Escape focus restoration", () => {
+test("StorageNewDropdown exposes menu semantics, keyboard/focus management, and modal focus restore", () => {
   const dropdown = readWeb("src/views/storage/StorageNewDropdown.tsx");
   assert(dropdown.includes('aria-haspopup="menu"'));
   assert(dropdown.includes("aria-expanded={open()}"));
   assert(dropdown.includes('role="menu"'));
   assert(dropdown.includes('role="menuitem"'));
   assert(dropdown.includes("e.isComposing || e.keyCode === 229"));
+  assert(dropdown.includes("focusDropdownMenuItem("));
+  assert(dropdown.includes("onKeyDown={handleTriggerKeyDown}"));
+  assert(dropdown.includes("onFocusOut={handleFocusOut}"));
+  assert(dropdown.includes("activateDropdownMenuItem("));
 });
 
-test("MemoryList supports roving tab keyboard navigation and pressed filter states", () => {
+test("MemoryList supports roving tab keyboard navigation, pressed filter states, and AA reminder badge contrast", () => {
   const list = readWeb("src/views/memory/MemoryList.tsx");
   assert(list.includes("moveTabFocus("));
   assert(list.includes("aria-pressed={activeFilter() === filter}"));
+  assert(
+    !list.includes("bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"),
+    "Reminder dismissed badge must meet WCAG AA contrast",
+  );
+  assert(
+    !list.includes(
+      'class="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2 py-1 rounded"',
+    ),
+    "Reminder trigger value pill must meet WCAG AA contrast",
+  );
+});
+
+test("CookieConsentBanner preserves Button size=sm 36px height on desktop", () => {
+  const banner = readWeb("src/components/common/CookieConsentBanner.tsx");
+  assert(!banner.includes("sm:min-h-0"));
+  assert(banner.includes("min-h-[44px] flex-1 sm:min-h-[36px] sm:flex-none"));
+});
+
+test("SpaceSettings cards use h2/h3 headings beneath the page h1 without skipping levels", () => {
+  const cards = readWeb("src/views/hub/SpaceSettingsCards.tsx");
+  assert(cards.includes('<CardTitle as="h2">{t("spaceInfo")}</CardTitle>'));
+  assert(cards.includes('<CardTitle as="h2" class="text-red-600 dark:text-red-400">'));
+  assert(!cards.includes("<h4 "));
+});
+
+test("PrivacyContent wraps inline API code paths cleanly on narrow viewports", () => {
+  const privacy = readWeb("src/views/legal/content/PrivacyContent.tsx");
+  assert(privacy.includes('<code class="break-all">/api/me/privacy/access</code>'));
+  assert(privacy.includes('<code class="break-all">/api/me/privacy/export</code>'));
+  assert(
+    privacy.includes(
+      '<code class="break-all">/api/me/privacy/deletion-requests</code>',
+    ),
+  );
 });
 
 test("unauthenticated StoreRoute renders inside a <main> landmark", () => {

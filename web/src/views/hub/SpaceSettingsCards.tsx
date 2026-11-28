@@ -36,7 +36,7 @@ export function SpaceInfoCard(props: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("spaceInfo")}</CardTitle>
+        <CardTitle as="h2">{t("spaceInfo")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="space-y-4">
@@ -138,16 +138,16 @@ export function DangerZoneCard(props: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle class="text-red-600 dark:text-red-400">
+        <CardTitle as="h2" class="text-red-600 dark:text-red-400">
           {t("dangerZone")}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div class="flex flex-wrap items-center justify-between gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
           <div>
-            <h4 class="font-medium text-zinc-900 dark:text-zinc-100">
+            <h3 class="font-medium text-zinc-900 dark:text-zinc-100">
               {t("deleteSpace")}
-            </h4>
+            </h3>
             <p class="text-sm text-zinc-500 dark:text-zinc-400">
               {t("deleteSpaceHint")}
             </p>

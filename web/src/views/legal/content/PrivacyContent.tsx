@@ -172,8 +172,9 @@ export function PrivacyContent() {
       </ul>
       <p>
         上記の請求は、本サービスの設定画面、認証済み API （
-        <code>/api/me/privacy/access</code>、<code>/api/me/privacy/export</code>
-        、<code>/api/me/privacy/deletion-requests</code>）
+        <code class="break-all">/api/me/privacy/access</code>、
+        <code class="break-all">/api/me/privacy/export</code>、
+        <code class="break-all">/api/me/privacy/deletion-requests</code>）
         または下記のお問い合わせ先から行うことができます。
       </p>
 

@@ -1,6 +1,14 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import {
+  activateDropdownMenuItem,
+  focusDropdownMenuItem,
+  handleDropdownMenuKeyDown,
+  handleMenuTriggerKeyDown,
+  type MenuFocusTarget,
+  shouldCloseOnFocusOut,
+} from "./storage-new-dropdown-menu.ts";
 
 interface StorageNewDropdownProps {
   onNewFolder: () => void;
@@ -13,18 +21,24 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
   let ref: HTMLDivElement | undefined;
   let triggerRef: HTMLButtonElement | undefined;
   let menuRef: HTMLDivElement | undefined;
-
-  const menuItems = () =>
-    menuRef
-      ? Array.from(menuRef.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      : [];
+  let pendingFocusTarget: MenuFocusTarget = "first";
+  let isPointerDownInside = false;
 
   createEffect(() => {
     if (!open()) return;
-    const handleOutside = (e: PointerEvent) => {
-      if (ref && e.target instanceof Node && !ref.contains(e.target)) {
+    focusDropdownMenuItem(menuRef, pendingFocusTarget);
+    pendingFocusTarget = "first";
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (ref && e.target instanceof Node && ref.contains(e.target)) {
+        isPointerDownInside = true;
+      } else {
+        isPointerDownInside = false;
         setOpen(false);
       }
+    };
+    const clearPointerInside = () => {
+      isPointerDownInside = false;
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
@@ -34,37 +48,57 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
         triggerRef?.focus();
       }
     };
-    document.addEventListener("pointerdown", handleOutside);
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointerup", clearPointerInside);
+    document.addEventListener("pointercancel", clearPointerInside);
     document.addEventListener("keydown", handleEscape);
     onCleanup(() => {
-      document.removeEventListener("pointerdown", handleOutside);
+      isPointerDownInside = false;
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointerup", clearPointerInside);
+      document.removeEventListener("pointercancel", clearPointerInside);
       document.removeEventListener("keydown", handleEscape);
     });
   });
 
+  const handleTriggerKeyDown = (e: KeyboardEvent) => {
+    handleMenuTriggerKeyDown(e, {
+      isOpen: open(),
+      getMenu: () => menuRef,
+      openWithTarget: (target) => {
+        pendingFocusTarget = target;
+        setOpen(true);
+      },
+    });
+  };
+
   const handleMenuKeyDown = (e: KeyboardEvent) => {
-    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
-    if (!keys.includes(e.key)) return;
-    const items = menuItems();
-    if (items.length === 0) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    let next = index;
-    if (e.key === "ArrowDown") next = (index + 1) % items.length;
-    else if (e.key === "ArrowUp") next = (index - 1 + items.length) % items.length;
-    else if (e.key === "Home") next = 0;
-    else next = items.length - 1;
-    e.preventDefault();
-    items[next]?.focus();
+    handleDropdownMenuKeyDown(e, {
+      getMenu: () => menuRef,
+      getTrigger: () => triggerRef,
+      close: () => setOpen(false),
+    });
+  };
+
+  const handleFocusOut = (e: FocusEvent) => {
+    if (!open()) return;
+    if (shouldCloseOnFocusOut(e, ref, isPointerDownInside)) {
+      setOpen(false);
+    }
   };
 
   return (
-    <div class="relative" ref={ref}>
+    <div class="relative" ref={ref} onFocusOut={handleFocusOut}>
       <button
         ref={triggerRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open()}
-        onClick={() => setOpen(!open())}
+        onClick={() => {
+          pendingFocusTarget = "first";
+          setOpen(!open());
+        }}
+        onKeyDown={handleTriggerKeyDown}
         class="flex items-center gap-2 min-h-[44px] md:min-h-0 md:h-10 pl-4 pr-5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm hover:shadow-md transition-shadow text-sm font-medium text-zinc-700 dark:text-zinc-200"
       >
         <Icons.Plus class="w-5 h-5" aria-hidden="true" />
@@ -82,10 +116,12 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
             type="button"
             role="menuitem"
             class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-            onClick={() => {
-              setOpen(false);
-              props.onNewFolder();
-            }}
+            onClick={() =>
+              activateDropdownMenuItem({
+                close: () => setOpen(false),
+                getTrigger: () => triggerRef,
+                action: props.onNewFolder,
+              })}
           >
             <Icons.FolderPlus
               class="w-4 h-4 text-zinc-500 dark:text-zinc-400"
@@ -98,10 +134,12 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
             type="button"
             role="menuitem"
             class="w-full min-h-[44px] flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-            onClick={() => {
-              setOpen(false);
-              props.onUpload();
-            }}
+            onClick={() =>
+              activateDropdownMenuItem({
+                close: () => setOpen(false),
+                getTrigger: () => triggerRef,
+                action: props.onUpload,
+              })}
           >
             <Icons.Upload
               class="w-4 h-4 text-zinc-500 dark:text-zinc-400"

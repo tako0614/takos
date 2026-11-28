@@ -254,10 +254,10 @@ export function MemoryList(props: MemoryListProps) {
                         <span
                           class={`px-2 py-0.5 rounded text-xs font-medium ${
                             reminder.status === "pending"
-                              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
                               : reminder.status === "triggered"
                               ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                              : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"
+                              : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-200"
                           }`}
                         >
                           {reminder.status === "pending"
@@ -270,7 +270,7 @@ export function MemoryList(props: MemoryListProps) {
                       <div class="flex-1 text-sm text-zinc-900 dark:text-zinc-100 leading-relaxed">
                         {reminder.content}
                       </div>
-                      <div class="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2 py-1 rounded">
+                      <div class="text-xs text-zinc-700 dark:text-zinc-200 bg-zinc-200/80 dark:bg-zinc-700 px-2 py-1 rounded">
                         {reminder.trigger_value}
                       </div>
                       <div class="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
