@@ -1,4 +1,5 @@
 import { createSignal } from "solid-js";
+import { useDocumentTitle } from "../hooks/useDocumentTitle.ts";
 import { useI18n } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 
@@ -8,6 +9,7 @@ interface SetupPageProps {
 
 export function SetupPage(props: SetupPageProps) {
   const { t } = useI18n();
+  useDocumentTitle(() => t("setupWelcome"));
   const [submitting, setSubmitting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
@@ -30,7 +32,7 @@ export function SetupPage(props: SetupPageProps) {
   };
 
   return (
-    <div class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-4">
+    <main class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-4">
       <div class="w-full max-w-sm">
         <div class="p-6">
           <div class="text-center mb-6">
@@ -44,13 +46,15 @@ export function SetupPage(props: SetupPageProps) {
 
           <form onSubmit={handleSubmit} class="space-y-4">
             {error() && (
-              <p class="text-xs text-zinc-600 dark:text-zinc-400">{error()}</p>
+              <p role="alert" class="text-sm text-red-600 dark:text-red-400">
+                {error()}
+              </p>
             )}
 
             <button
               type="submit"
               disabled={submitting()}
-              class="w-full py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm rounded transition-colors"
+              class="w-full min-h-[44px] py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm rounded transition-colors"
             >
               {submitting()
                 ? (
@@ -66,6 +70,6 @@ export function SetupPage(props: SetupPageProps) {
           </form>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

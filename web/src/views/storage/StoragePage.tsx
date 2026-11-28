@@ -264,6 +264,7 @@ export function StoragePage(props: StoragePageProps) {
         class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900"
         onClick={() => contextMenu() && setContextMenu(null)}
       >
+        <h1 class="sr-only">{t("storageTitle")}</h1>
         <StorageToolbar
           loading={loading()}
           uploading={uploading()}

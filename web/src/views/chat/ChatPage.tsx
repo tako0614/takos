@@ -35,7 +35,8 @@ interface ChatPageProps {
 }
 
 export function ChatPage(props: ChatPageProps) {
-  const { t, lang } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const { showToast } = useToast();
   const mobileHeader = useMobileHeader();
 
@@ -225,7 +226,7 @@ export function ChatPage(props: ChatPageProps) {
     createThread: async (spaceId, message) => {
       return await rpc.spaces[":spaceId"].threads.$post({
         param: { spaceId },
-        json: { title: message.slice(0, 60), locale: lang },
+        json: { title: message.slice(0, 60), locale: i18n.lang },
       });
     },
     onCreated: ({ spaceId, thread, message, files, model }) => {
@@ -246,7 +247,7 @@ export function ChatPage(props: ChatPageProps) {
 
   return (
     <div class="flex flex-1 h-full bg-white dark:bg-zinc-900">
-      <main class="flex-1 flex flex-col min-w-0 h-full">
+      <div class="flex-1 flex flex-col min-w-0 h-full">
         <Show
           when={activeChatBundle()}
           fallback={
@@ -329,7 +330,7 @@ export function ChatPage(props: ChatPageProps) {
             />
           )}
         </Show>
-      </main>
+      </div>
 
       <Show when={showSearchModal() ? selectedSpaceId() : undefined}>
         {(spaceId) => (

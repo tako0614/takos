@@ -141,9 +141,9 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
           <Icons.Settings class="w-4 h-4" />
         </div>
-        <h3 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
           {t("spaceSettings")}
-        </h3>
+        </h1>
       </div>
 
       <div class="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
@@ -157,6 +157,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           <Button
             variant="ghost"
             size="sm"
+            class="min-h-[44px] md:min-h-[36px]"
             onClick={() => setShowCreateSpace(true)}
           >
             <Icons.Plus class="w-4 h-4 mr-1" />

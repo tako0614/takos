@@ -126,6 +126,8 @@ export const common = {
   legalInfo: "規約・プライバシー",
   notFoundMessage: "ページが見つかりませんでした。",
   backToHome: "ホームに戻る",
+  skipToMainContent: "メインコンテンツへスキップ",
+  storageBreadcrumb: "フォルダの場所",
   openInNewTab: "新しいタブで開く",
 
   // Fork

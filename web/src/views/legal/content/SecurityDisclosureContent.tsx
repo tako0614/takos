@@ -2,7 +2,7 @@ export function SecurityDisclosureContent() {
   return (
     <article class="prose prose-zinc prose-sm max-w-none">
       <h1>脆弱性報告ポリシー</h1>
-      <p class="text-zinc-500">最終更新日: 2026年5月7日</p>
+      <p class="text-zinc-500 dark:text-zinc-400">最終更新日: 2026年5月7日</p>
 
       <p>
         Takos のセキュリティ上の問題を発見した場合は、公開 issue

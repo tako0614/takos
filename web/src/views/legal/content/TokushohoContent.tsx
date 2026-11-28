@@ -2,7 +2,7 @@ export function TokushohoContent() {
   return (
     <article class="prose prose-zinc prose-sm max-w-none">
       <h1>特定商取引法に基づく表記</h1>
-      <p class="text-zinc-500">最終更新日: 2026年2月14日</p>
+      <p class="text-zinc-500 dark:text-zinc-400">最終更新日: 2026年2月14日</p>
 
       <table>
         <tbody>
@@ -84,7 +84,7 @@ export function TokushohoContent() {
         </tbody>
       </table>
 
-      <p class="mt-6 text-zinc-500 text-xs">
+      <p class="mt-6 text-zinc-500 dark:text-zinc-400 text-xs">
         ※
         所在地・電話番号については、個人事業のため請求があった場合に遅滞なく開示いたします
         （特定商取引法第11条但書に基づく）。

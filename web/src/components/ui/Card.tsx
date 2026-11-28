@@ -1,5 +1,6 @@
 import { splitProps } from "solid-js";
 import type { JSX } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
 type CardVariant = "default" | "elevated" | "outlined";
 
@@ -77,11 +78,16 @@ export function CardHeader(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-export function CardTitle(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
-  const [local, rest] = splitProps(props, ["children", "class", "style"]);
+export interface CardTitleProps extends JSX.HTMLAttributes<HTMLHeadingElement> {
+  as?: "h2" | "h3" | "h4";
+}
+
+export function CardTitle(props: CardTitleProps) {
+  const [local, rest] = splitProps(props, ["as", "children", "class", "style"]);
 
   return (
-    <h3
+    <Dynamic
+      component={local.as ?? "h3"}
       class={local.class}
       style={{
         "font-size": "1rem",
@@ -93,7 +99,7 @@ export function CardTitle(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
       {...rest}
     >
       {local.children}
-    </h3>
+    </Dynamic>
   );
 }
 

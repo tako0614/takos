@@ -81,22 +81,22 @@ export function MemoryPage(props: MemoryPageProps) {
           aria-label={t("goBack")}
           title={t("goBack")}
         >
-          <Icons.ArrowLeft />
+          <Icons.ArrowLeft aria-hidden="true" />
         </button>
         <h1 class="flex items-center gap-2 min-w-0 text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          <Icons.HardDrive class="shrink-0" />
+          <Icons.Database class="h-5 w-5 shrink-0" aria-hidden="true" />
           <span class="min-w-0 truncate">{t("memories")}</span>
         </h1>
         <div class="ml-auto shrink-0">
           <button
             type="button"
-            class="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
+            class="inline-flex min-h-[44px] md:min-h-0 items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
             onClick={() =>
               showReminders()
                 ? setShowCreateReminder(true)
                 : setShowCreateMemory(true)}
           >
-            <Icons.Plus />
+            <Icons.Plus aria-hidden="true" />
             <span>
               {showReminders() ? t("createReminder") : t("createMemory")}
             </span>

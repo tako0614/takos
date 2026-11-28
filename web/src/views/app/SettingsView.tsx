@@ -22,11 +22,12 @@ export function SettingsView(props: {
           <Button
             variant="ghost"
             size="sm"
+            class="min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-0"
             onClick={props.onBack}
             aria-label={t("goBack")}
             title={t("goBack")}
           >
-            <Icons.ArrowLeft class="h-4 w-4" />
+            <Icons.ArrowLeft class="h-4 w-4" aria-hidden="true" />
           </Button>
           <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
             {t("settingsTitle")}
@@ -34,7 +35,7 @@ export function SettingsView(props: {
         </header>
       )}
 
-      <main class="flex-1 overflow-y-auto">
+      <div class="flex-1 overflow-y-auto">
         <div class="mx-auto w-full max-w-2xl space-y-3 px-4 pb-10 pt-6">
           <SettingsAccount user={props.user} />
           <SettingsLanguage />
@@ -45,7 +46,7 @@ export function SettingsView(props: {
             />
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { createMemo, createSignal, Show } from "solid-js";
+import { moveTabFocus } from "../../lib/a11y.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import {
   formatImportanceStars,
@@ -43,6 +44,12 @@ export function MemoryList(props: MemoryListProps) {
     })
   );
 
+  const handleTabKeyDown = (e: KeyboardEvent) => {
+    const nextTab = moveTabFocus(e);
+    if (nextTab === "memories") props.onShowRemindersChange(false);
+    else if (nextTab === "reminders") props.onShowRemindersChange(true);
+  };
+
   return (
     <div class="flex-1 overflow-y-auto p-6">
       <div
@@ -54,32 +61,38 @@ export function MemoryList(props: MemoryListProps) {
           id="memory-tab-memories"
           type="button"
           role="tab"
+          data-tab-id="memories"
           aria-selected={!props.showReminders}
           aria-controls="memory-panel-memories"
-          class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          tabIndex={!props.showReminders ? 0 : -1}
+          class={`flex items-center gap-2 min-h-[44px] px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             !props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
               : "text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={() => props.onShowRemindersChange(false)}
+          onKeyDown={handleTabKeyDown}
         >
-          <Icons.HardDrive />
+          <Icons.HardDrive aria-hidden="true" />
           <span>{t("memories")} ({props.memories.length})</span>
         </button>
         <button
           id="memory-tab-reminders"
           type="button"
           role="tab"
+          data-tab-id="reminders"
           aria-selected={props.showReminders}
           aria-controls="memory-panel-reminders"
-          class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          tabIndex={props.showReminders ? 0 : -1}
+          class={`flex items-center gap-2 min-h-[44px] px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             props.showReminders
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
               : "text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={() => props.onShowRemindersChange(true)}
+          onKeyDown={handleTabKeyDown}
         >
-          <Icons.Bell />
+          <Icons.Bell aria-hidden="true" />
           <span>{t("reminders")} ({props.reminders.length})</span>
         </button>
       </div>
@@ -137,10 +150,11 @@ export function MemoryList(props: MemoryListProps) {
                   (filter) => (
                     <button
                       type="button"
-                      class={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      aria-pressed={activeFilter() === filter}
+                      class={`min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                         activeFilter() === filter
                           ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100"
                       }`}
                       onClick={() => setActiveFilter(filter)}
                     >
@@ -170,7 +184,7 @@ export function MemoryList(props: MemoryListProps) {
                           {props.getTypeLabel(memory.type)}
                         </span>
                         {memory.category && (
-                          <span class="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-700 rounded text-xs text-zinc-500 dark:text-zinc-400">
+                          <span class="px-2 py-0.5 bg-zinc-200/80 dark:bg-zinc-700 rounded text-xs text-zinc-700 dark:text-zinc-200">
                             {memory.category}
                           </span>
                         )}
@@ -190,12 +204,12 @@ export function MemoryList(props: MemoryListProps) {
                         </span>
                         <button
                           type="button"
-                          class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                          class="inline-flex min-w-[44px] min-h-[44px] md:min-w-8 md:min-h-8 items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => props.onDeleteMemory(memory.id)}
                           title={t("deleteMemory")}
                           aria-label={t("deleteMemory")}
                         >
-                          <Icons.Trash />
+                          <Icons.Trash class="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -240,10 +254,10 @@ export function MemoryList(props: MemoryListProps) {
                         <span
                           class={`px-2 py-0.5 rounded text-xs font-medium ${
                             reminder.status === "pending"
-                              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200"
                               : reminder.status === "triggered"
                               ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                              : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"
+                              : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-200"
                           }`}
                         >
                           {reminder.status === "pending"
@@ -256,7 +270,7 @@ export function MemoryList(props: MemoryListProps) {
                       <div class="flex-1 text-sm text-zinc-900 dark:text-zinc-100 leading-relaxed">
                         {reminder.content}
                       </div>
-                      <div class="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 px-2 py-1 rounded">
+                      <div class="text-xs text-zinc-700 dark:text-zinc-200 bg-zinc-200/80 dark:bg-zinc-700 px-2 py-1 rounded">
                         {reminder.trigger_value}
                       </div>
                       <div class="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
@@ -265,12 +279,12 @@ export function MemoryList(props: MemoryListProps) {
                         </span>
                         <button
                           type="button"
-                          class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                          class="inline-flex min-w-[44px] min-h-[44px] md:min-w-8 md:min-h-8 items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => props.onDeleteReminder(reminder.id)}
                           title={t("delete")}
                           aria-label={t("delete")}
                         >
-                          <Icons.Trash />
+                          <Icons.Trash class="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                     </div>

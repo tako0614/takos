@@ -7,6 +7,8 @@ import { useAuth } from "./hooks/useAuth.tsx";
 import { buildPath } from "./hooks/router-state.ts";
 import { rpc } from "./lib/rpc.ts";
 import { useNavigation } from "./store/navigation.ts";
+import { useModals } from "./store/modal.tsx";
+import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useI18n } from "./store/i18n.ts";
 import type { RouteState } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
@@ -21,8 +23,9 @@ export function BootstrapErrorScreen(props: {
   onRetry: () => void;
   onLogin: () => void;
 }) {
+  useDocumentTitle(() => props.title);
   return (
-    <div class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center px-6">
+    <main class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center px-6">
       <div class="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 shadow-sm space-y-4">
         <div class="space-y-2 text-center">
           <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -39,7 +42,7 @@ export function BootstrapErrorScreen(props: {
           </Button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -54,7 +57,7 @@ export function RouteSurface(props: { children: JSX.Element }) {
 }
 
 export function SurfaceMessage(
-  props: { title: string; description?: string },
+  props: { title: string; description?: string; action?: JSX.Element },
 ) {
   return (
     <div class="flex-1 flex items-center justify-center px-6">
@@ -69,6 +72,7 @@ export function SurfaceMessage(
             </p>
           )
           : null}
+        {props.action ? <div class="pt-3">{props.action}</div> : null}
       </div>
     </div>
   );
@@ -153,21 +157,38 @@ export function ProtectedRouteLayout(props: { children?: JSX.Element }) {
 
 export function SpaceNotFoundMessage() {
   const { t } = useI18n();
+  const navigation = useNavigation();
+  useDocumentTitle(() => t("spaceNotFound"));
   return (
     <SurfaceMessage
       title={t("spaceNotFound")}
       description={t("spaceNotFoundDesc")}
+      action={
+        <Button
+          variant="secondary"
+          onClick={() => navigation.navigateToPreferredChat()}
+        >
+          {t("backToHome")}
+        </Button>
+      }
     />
   );
 }
 
 export function NoSpaceAvailableMessage() {
   const { t } = useI18n();
+  const modal = useModals();
+  useDocumentTitle(() => t("noSpaceAvailable"));
 
   return (
-    <div class="flex-1 flex items-center justify-center">
-      <p class="text-zinc-500">{t("noSpaceAvailable")}</p>
-    </div>
+    <SurfaceMessage
+      title={t("noSpaceAvailable")}
+      action={
+        <Button onClick={() => modal.setShowCreateSpace(true)}>
+          {t("createSpace")}
+        </Button>
+      }
+    />
   );
 }
 

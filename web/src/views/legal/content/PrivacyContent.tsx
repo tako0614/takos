@@ -2,7 +2,7 @@ export function PrivacyContent() {
   return (
     <article class="prose prose-zinc prose-sm max-w-none">
       <h1>プライバシーポリシー</h1>
-      <p class="text-zinc-500">最終更新日: 2026年7月29日</p>
+      <p class="text-zinc-500 dark:text-zinc-400">最終更新日: 2026年7月29日</p>
 
       <p>
         本プライバシーポリシーは、Takos（以下「本サービス」、URL:
@@ -172,8 +172,9 @@ export function PrivacyContent() {
       </ul>
       <p>
         上記の請求は、本サービスの設定画面、認証済み API （
-        <code>/api/me/privacy/access</code>、<code>/api/me/privacy/export</code>
-        、<code>/api/me/privacy/deletion-requests</code>）
+        <code class="break-all">/api/me/privacy/access</code>、
+        <code class="break-all">/api/me/privacy/export</code>、
+        <code class="break-all">/api/me/privacy/deletion-requests</code>）
         または下記のお問い合わせ先から行うことができます。
       </p>
 

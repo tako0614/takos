@@ -15,6 +15,7 @@ import { buildStorageNavigationState } from "./views/storage/storage-page-state.
 import type { RouteState, Thread, UserSettings } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
 import { isHomeEntryPath } from "./lib/home-entry-path.ts";
+import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { LoginPage } from "./views/app/AuthViews.tsx";
 import { AuthenticatedLayout } from "./components/layout/AuthenticatedLayout.tsx";
 import {
@@ -125,36 +126,44 @@ function HomeRoute() {
 
 function NotFoundPage() {
   const { t } = useI18n();
+  useDocumentTitle(() => t("notFound"));
   return (
-    <div class="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
-      <p class="text-4xl font-semibold text-[var(--color-text-primary)]">404</p>
+    <main class="flex flex-col items-center justify-center min-h-[100dvh] gap-3 text-center px-6">
+      <h1 class="text-4xl font-semibold text-[var(--color-text-primary)]">
+        <span aria-hidden="true">404</span>
+        <span class="sr-only">{t("notFound")}</span>
+      </h1>
       <p class="text-sm text-[var(--color-text-secondary)]">
         {t("notFoundMessage")}
       </p>
       <a
         href="/"
-        class="text-sm text-[var(--color-primary)] underline underline-offset-2"
+        class="inline-flex min-h-[44px] items-center px-3 text-sm text-[var(--color-primary)] underline underline-offset-2"
       >
         {t("backToHome")}
       </a>
-    </div>
+    </main>
   );
 }
 
 function StoreRoute() {
   const auth = useAuth();
   const currentPath = useCurrentPath();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("install"));
 
   return (
     <Switch
       fallback={
-        <RouteSurface>
-          <SourcePage
-            spaces={[]}
-            isAuthenticated={false}
-            onRequireLogin={() => auth.redirectToLogin(currentPath())}
-          />
-        </RouteSurface>
+        <main class="h-[100dvh]">
+          <RouteSurface>
+            <SourcePage
+              spaces={[]}
+              isAuthenticated={false}
+              onRequireLogin={() => auth.redirectToLogin(currentPath())}
+            />
+          </RouteSurface>
+        </main>
       }
     >
       <Match when={auth.authState === "loading"}>
@@ -178,7 +187,9 @@ function StoreRoute() {
 function ChatRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
   const route = createMemo(() => navigation.route);
+  useDocumentTitle(() => t("chat"));
   const guard = useSpaceRouteGuard(() => {
     if (!navigation.routeSpaceId) {
       return null;
@@ -245,6 +256,8 @@ function ChatRoute() {
 function StorageRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("storageTitle"));
   const route = createMemo(() => navigation.route);
   const storageSpaceId = createMemo(
     () => navigation.routeSpaceId ?? navigation.preferredSpaceId,
@@ -304,6 +317,8 @@ function StorageRoute() {
 function AppsRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("apps"));
   const route = createMemo(() => navigation.route);
   const appsSpaceId = createMemo(
     () => navigation.routeSpaceId ?? navigation.preferredSpaceId,
@@ -350,6 +365,8 @@ function AppsRoute() {
 function ConnectionsRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("connections"));
   const route = createMemo(() => navigation.route);
   const connectionsSpaceId = createMemo(
     () => navigation.routeSpaceId ?? navigation.preferredSpaceId,
@@ -405,6 +422,8 @@ function ConnectionsRoute() {
 function SpaceSettingsRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("spaceSettings"));
   const route = createMemo(() => navigation.route);
   const selectedSpaceId = createMemo(
     () => navigation.routeSpaceId ?? navigation.selectedSpaceId ?? null,
@@ -449,6 +468,8 @@ function SpaceSettingsRoute() {
 function SettingsRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("settingsTitle"));
 
   return (
     <RouteSurface>
@@ -467,6 +488,8 @@ function SettingsRoute() {
 function MemoryRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
+  const { t } = useI18n();
+  useDocumentTitle(() => t("memories"));
   const preferredSpaceId = createMemo(() => {
     const space = navigation.preferredSpace;
     return space ? getSpaceIdentifier(space) : undefined;

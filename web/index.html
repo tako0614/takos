@@ -42,6 +42,11 @@
            bundle re-syncs it via LangSync. */
         try {
           var storedLang = localStorage.getItem("takos-lang");
+          try {
+            storedLang = JSON.parse(storedLang);
+          } catch {
+            /* Older builds stored the bare value. */
+          }
           var lang =
             storedLang === "ja" || storedLang === "en"
               ? storedLang
