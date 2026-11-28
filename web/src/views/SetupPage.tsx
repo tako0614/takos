@@ -54,12 +54,16 @@ export function SetupPage(props: SetupPageProps) {
             <button
               type="submit"
               disabled={submitting()}
-              class="w-full min-h-[44px] py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm rounded transition-colors"
+              aria-busy={submitting() ? "true" : undefined}
+              class="w-full min-h-[44px] py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm font-medium rounded-lg transition-colors"
             >
               {submitting()
                 ? (
                   <span class="flex items-center justify-center gap-1.5">
-                    <span class="w-3 h-3 border border-white dark:border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                    <span
+                      aria-hidden="true"
+                      class="w-3 h-3 border border-white dark:border-zinc-900 border-t-transparent rounded-full animate-spin"
+                    />
                     {t("settingUp")}
                   </span>
                 )

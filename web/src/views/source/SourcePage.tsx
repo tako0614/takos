@@ -45,7 +45,11 @@ export function SourcePage(props: SourcePageProps) {
     visibility: "public" | "private",
   ) => {
     const id = spaceId();
-    if (!id) return;
+    if (!id) {
+      const msg = t("selectSpaceFirst");
+      showToast("error", msg);
+      throw new Error(msg);
+    }
     try {
       const res = await rpc.spaces[":spaceId"].repos.$post({
         param: { spaceId: id },
@@ -54,10 +58,11 @@ export function SourcePage(props: SourcePageProps) {
       await rpcJson(res);
       setShowCreateModal(false);
     } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error && err.message ? err.message : t("failedToCreate"),
-      );
+      const msg = err instanceof Error && err.message
+        ? err.message
+        : t("failedToCreate");
+      showToast("error", msg);
+      throw new Error(msg);
     }
   };
 

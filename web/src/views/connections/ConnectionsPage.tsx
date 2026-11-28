@@ -2,6 +2,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  createUniqueId,
   onCleanup,
   Show,
 } from "solid-js";
@@ -55,6 +56,7 @@ function sameEndpoint(left: string, right: string): boolean {
 export function ConnectionsPage(props: ConnectionsPageProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
+  const connectionNameId = createUniqueId();
   const {
     servers,
     loading,
@@ -654,18 +656,22 @@ export function ConnectionsPage(props: ConnectionsPageProps) {
                       )}
                     </Show>
 
-                    <label>
-                      <span class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <div>
+                      <label
+                        for={connectionNameId}
+                        class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                      >
                         {t("connectionName")}
-                      </span>
+                      </label>
                       <Input
+                        id={connectionNameId}
                         value={connectionName()}
                         onInput={(event) =>
                           setConnectionName(event.currentTarget.value)
                         }
                         error={connectionNameError()}
                       />
-                    </label>
+                    </div>
 
                     <div class="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
                       <Icons.AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />

@@ -446,18 +446,20 @@ export function SkillList(props: {
             )}
         </div>
       </div>
-      <Button
-        variant="secondary"
-        leftIcon={<Icons.Plus />}
-        onClick={props.onCreateNew}
-        style={{
-          width: "100%",
-          "margin-top": "1rem",
-          border: "2px dashed var(--color-border-primary)",
-        }}
-      >
-        {t("addSkill")}
-      </Button>
+      {props.skills.length > 0 && (
+        <Button
+          variant="secondary"
+          leftIcon={<Icons.Plus aria-hidden="true" />}
+          onClick={props.onCreateNew}
+          style={{
+            width: "100%",
+            "margin-top": "1rem",
+            border: "2px dashed var(--color-border-primary)",
+          }}
+        >
+          {t("addSkill")}
+        </Button>
+      )}
     </>
   );
 }

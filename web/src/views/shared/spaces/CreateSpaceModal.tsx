@@ -77,19 +77,19 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
-          <h3
+          <h2
             id={titleId}
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
             {t("createSpace")}
-          </h3>
+          </h2>
           <button
             type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 dark:focus-visible:ring-zinc-100"
             onClick={props.onClose}
             aria-label={t("close")}
           >
-            <Icons.X class="w-5 h-5" />
+            <Icons.X class="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <form onSubmit={handleSubmit} class="flex flex-col flex-1 min-h-0">

@@ -80,6 +80,7 @@ export function CreateFolderModal(props: CreateFolderModalProps) {
             variant="primary"
             onClick={handleCreate}
             disabled={!newFolderName().trim() || creating()}
+            isLoading={creating()}
           >
             {t("create")}
           </Button>

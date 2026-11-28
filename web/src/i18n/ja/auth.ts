@@ -1,5 +1,6 @@
 export const auth = {
   // Login
+  signIn: "ログイン",
   loginSubtitle: "AIエージェントでコードを作成・編集",
   continueWithTakosumiAccounts: "Takosumi Accountsでログイン",
   docs: "Docs",

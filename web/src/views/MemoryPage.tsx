@@ -14,13 +14,13 @@ export interface MemoryPageProps {
 const getPriorityClasses = (pri: Reminder["priority"]) => {
   switch (pri) {
     case "high":
-      return "border-l-4 border-l-danger";
+      return "border-l-4 border-l-red-600 dark:border-l-red-400";
     case "normal":
-      return "border-l-4 border-l-accent";
+      return "border-l-4 border-l-zinc-900 dark:border-l-zinc-100";
     case "low":
-      return "border-l-4 border-l-zinc-500";
+      return "border-l-4 border-l-zinc-400 dark:border-l-zinc-500";
     default:
-      return "border-l-4 border-l-accent";
+      return "border-l-4 border-l-zinc-900 dark:border-l-zinc-100";
   }
 };
 

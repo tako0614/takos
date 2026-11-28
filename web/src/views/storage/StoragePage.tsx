@@ -316,7 +316,7 @@ export function StoragePage(props: StoragePageProps) {
               <span class="min-w-0 flex-1">{error()}</span>
               <button
                 type="button"
-                class="rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                class="min-h-[44px] sm:min-h-0 rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                 onClick={() => void loadFiles(currentPath())}
               >
                 {t("retry")}
@@ -327,8 +327,16 @@ export function StoragePage(props: StoragePageProps) {
           <Show
             when={initialPathReady() && !(loading() && files().length === 0)}
             fallback={
-              <div class="flex items-center justify-center h-full">
-                <Icons.Loader class="w-8 h-8 animate-spin text-zinc-400" />
+              <div
+                role="status"
+                aria-live="polite"
+                class="flex items-center justify-center h-full"
+              >
+                <Icons.Loader
+                  class="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400"
+                  aria-hidden="true"
+                />
+                <span class="sr-only">{t("loading")}</span>
               </div>
             }
           >
@@ -336,14 +344,17 @@ export function StoragePage(props: StoragePageProps) {
               when={files().length > 0}
               fallback={
                 <Show when={!error()}>
-                  <div class="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-500 select-none">
+                  <div class="flex flex-col items-center justify-center h-full text-zinc-600 dark:text-zinc-400 select-none">
                     <div class="w-20 h-20 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-5">
-                      <Icons.HardDrive class="w-10 h-10 text-zinc-300 dark:text-zinc-600" />
+                      <Icons.HardDrive
+                        class="w-10 h-10 text-zinc-400 dark:text-zinc-500"
+                        aria-hidden="true"
+                      />
                     </div>
-                    <p class="text-base font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                    <p class="text-base font-medium text-zinc-700 dark:text-zinc-200 mb-1">
                       {t("noFilesYet")}
                     </p>
-                    <p class="text-sm text-zinc-400 dark:text-zinc-500">
+                    <p class="text-sm text-zinc-600 dark:text-zinc-400">
                       {t("dragAndDropHint")}
                     </p>
                   </div>

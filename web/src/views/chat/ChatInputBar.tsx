@@ -128,8 +128,8 @@ export function ChatInputBar(props: ChatInputBarProps) {
 
   const borderClass = () =>
     props.isDragOver
-      ? "border-blue-400 dark:border-blue-400"
-      : "border-zinc-200 dark:border-zinc-800 focus-within:border-zinc-300 dark:focus-within:border-zinc-700";
+      ? "border-blue-400 dark:border-blue-400 ring-2 ring-blue-400/20"
+      : "border-zinc-200 dark:border-zinc-800 focus-within:border-zinc-900 dark:focus-within:border-zinc-100 focus-within:ring-2 focus-within:ring-zinc-900/15 dark:focus-within:ring-zinc-100/20";
 
   return (
     <div class="bg-white dark:bg-zinc-900 px-3 py-3 md:px-6 lg:px-8 pb-[calc(0.75rem+var(--spacing-safe-bottom))] w-full max-w-3xl mx-auto">

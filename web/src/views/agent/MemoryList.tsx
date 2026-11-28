@@ -2,6 +2,7 @@ import { createMemo, createSignal, createUniqueId } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import {
+  formatImportanceRating,
   formatImportanceStars,
   formatLocalizedDate,
 } from "../../lib/memory-format.ts";
@@ -121,8 +122,26 @@ export function MemoryList(props: {
                 gap: "0.75rem",
               }}
             >
-              <Icons.HardDrive />
-              <p>{t("noMemories")}</p>
+              <Icons.HardDrive aria-hidden="true" />
+              <p>
+                {props.memories.length > 0 &&
+                    (searchQuery().trim() || activeFilter() !== "all")
+                  ? t("noResults")
+                  : t("noMemories")}
+              </p>
+              {props.memories.length > 0 &&
+                (searchQuery().trim() || activeFilter() !== "all") && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setActiveFilter("all");
+                  }}
+                >
+                  {t("clearFilters")}
+                </Button>
+              )}
             </div>
           )
           : (
@@ -149,9 +168,16 @@ export function MemoryList(props: {
                       "font-size": "0.875rem",
                       "margin-left": "auto",
                     }}
-                    title={t("memoryImportance")}
+                    title={`${t("memoryImportance")}: ${
+                      formatImportanceRating(memory.importance)
+                    }/5`}
+                    aria-label={`${t("memoryImportance")}: ${
+                      formatImportanceRating(memory.importance)
+                    }/5`}
                   >
-                    {formatImportanceStars(memory.importance)}
+                    <span aria-hidden="true">
+                      {formatImportanceStars(memory.importance)}
+                    </span>
                   </span>
                 </div>
                 <div

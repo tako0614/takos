@@ -88,7 +88,7 @@ export function TaskForm(props: TaskFormProps) {
         <input
           id={titleId}
           type="text"
-          class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+          class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
           placeholder={t("taskTitlePlaceholder")}
           value={props.title}
           onInput={(e) => props.setTitle(e.currentTarget.value)}
@@ -105,7 +105,7 @@ export function TaskForm(props: TaskFormProps) {
         </label>
         <textarea
           id={descriptionId}
-          class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 resize-y min-h-[140px]"
+          class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20 resize-y min-h-[140px]"
           placeholder={t("taskDescriptionPlaceholder")}
           value={props.description}
           onInput={(e) => props.setDescription(e.currentTarget.value)}
@@ -122,7 +122,7 @@ export function TaskForm(props: TaskFormProps) {
           </label>
           <select
             id={statusId}
-            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
             value={props.status}
             onChange={(e) =>
               props.setStatus(e.currentTarget.value as EditableAgentTaskStatus)}
@@ -143,7 +143,7 @@ export function TaskForm(props: TaskFormProps) {
           </label>
           <select
             id={priorityId}
-            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
             value={props.priority}
             onChange={(e) =>
               props.setPriority(e.currentTarget.value as AgentTaskPriority)}
@@ -166,7 +166,7 @@ export function TaskForm(props: TaskFormProps) {
           </label>
           <select
             id={agentTypeId}
-            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
             value={props.agentType}
             onChange={(e) => props.setAgentType(e.currentTarget.value)}
           >
@@ -186,7 +186,7 @@ export function TaskForm(props: TaskFormProps) {
           </label>
           <select
             id={modelId}
-            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+            class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
             value={props.model}
             onChange={(e) => props.setModel(e.currentTarget.value)}
           >
@@ -208,7 +208,7 @@ export function TaskForm(props: TaskFormProps) {
         <input
           id={dueAtId}
           type="date"
-          class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
+          class="min-h-[44px] sm:min-h-0 w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 focus:ring-2 focus:ring-zinc-900/15 dark:focus:ring-zinc-100/20"
           value={props.dueAt}
           onInput={(e) => props.setDueAt(e.currentTarget.value)}
           min={getLocalDateInputMin()}

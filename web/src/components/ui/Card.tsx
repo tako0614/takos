@@ -84,6 +84,11 @@ export interface CardTitleProps extends JSX.HTMLAttributes<HTMLHeadingElement> {
 
 export function CardTitle(props: CardTitleProps) {
   const [local, rest] = splitProps(props, ["as", "children", "class", "style"]);
+  const hasExplicitColorClass = () =>
+    typeof local.class === "string" &&
+    /\b(?:[a-z0-9-]+:)*text-(?!xs\b|sm\b|base\b|lg\b|xl\b|\dxl\b|left\b|center\b|right\b|justify\b|start\b|end\b|wrap\b|nowrap\b|balance\b|pretty\b|ellipsis\b|clip\b)/.test(
+      local.class,
+    );
 
   return (
     <Dynamic
@@ -92,7 +97,7 @@ export function CardTitle(props: CardTitleProps) {
       style={{
         "font-size": "1rem",
         "font-weight": "600",
-        color: "var(--color-text-primary)",
+        ...(hasExplicitColorClass() ? {} : { color: "var(--color-text-primary)" }),
         margin: "0",
         ...(typeof local.style === "object" ? local.style : {}),
       }}

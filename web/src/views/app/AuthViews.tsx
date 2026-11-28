@@ -1,11 +1,13 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { LoadingScreen } from "../../components/common/LoadingScreen.tsx";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle.ts";
 import { claimOidcAutoLoginAttempt } from "../../lib/oidc-auto-login.ts";
 import { useI18n } from "../../store/i18n.ts";
 
 export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
   const i18n = useI18n();
   const t = i18n.t;
+  useDocumentTitle(() => t("signIn"));
   const [autoRedirecting, setAutoRedirecting] = createSignal(false);
 
   onMount(() => {
@@ -19,7 +21,7 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
       <main class="flex items-center justify-center min-h-screen bg-white dark:bg-zinc-900 p-4">
         <div class="w-full max-w-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center">
           <div class="flex justify-center mb-6">
-            <img src="/logo.png" alt="Takos" class="w-16 h-16 rounded-xl" />
+            <img src="/logo.png" alt="" class="w-16 h-16 rounded-xl" />
           </div>
           <h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
             {t("appName")}
@@ -69,19 +71,19 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
               href="https://developers.takos.jp"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2.5 hover:text-zinc-700 dark:hover:text-zinc-200"
             >
               {t("docs")}
             </a>
             <a
               href="/terms"
-              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2.5 hover:text-zinc-700 dark:hover:text-zinc-200"
             >
               {t("terms")}
             </a>
             <a
               href="/privacy"
-              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center px-2.5 hover:text-zinc-700 dark:hover:text-zinc-200"
             >
               {t("privacy")}
             </a>

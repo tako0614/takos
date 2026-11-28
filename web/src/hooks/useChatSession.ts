@@ -254,7 +254,7 @@ export function useChatSession({
 
         if (!claim.won()) return;
 
-        polling.setMessages(data.messages);
+        polling.setMessages(data.messages || []);
         ws.applyHistorySnapshot({
           runs: data.runs || [],
           focus: data.focus,

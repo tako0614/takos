@@ -279,14 +279,16 @@ export function ChatView(props: ChatViewProps) {
     // BOTH the model switcher and the search/share/export actions into the
     // mobile header — otherwise those actions are unreachable on phones.
     mobileHeader.setHeaderContent(
-      <div class="flex items-center gap-1 w-full">
-        <ModelSwitcher
-          selectedModel={selectedModel()}
-          models={availableModels()}
-          isLoading={isLoading()}
-          onModelChange={handleModelChange}
-        />
-        <div class="ml-auto">{renderHeaderActions()}</div>
+      <div class="flex items-center gap-1 w-full min-w-0">
+        <div class="min-w-0 flex-1">
+          <ModelSwitcher
+            selectedModel={selectedModel()}
+            models={availableModels()}
+            isLoading={isLoading()}
+            onModelChange={handleModelChange}
+          />
+        </div>
+        <div class="ml-auto shrink-0">{renderHeaderActions()}</div>
       </div>,
     );
     onCleanup(() => mobileHeader.setHeaderContent(null));

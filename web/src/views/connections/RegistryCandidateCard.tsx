@@ -146,10 +146,10 @@ export function RegistryCandidateCard(props: RegistryCandidateCardProps) {
               href={repositoryHref()!}
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-1 font-medium text-sky-700 underline underline-offset-2 dark:text-sky-300"
+              class="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1 font-medium text-sky-700 underline underline-offset-2 dark:text-sky-300"
             >
               {t("registryRepository")}
-              <Icons.ExternalLink class="h-3 w-3" />
+              <Icons.ExternalLink class="h-3 w-3" aria-hidden="true" />
             </a>
           ) : null}
         </div>
