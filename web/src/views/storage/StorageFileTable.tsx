@@ -65,7 +65,7 @@ export function StorageFileTable(props: StorageFileTableProps) {
             onClick={props.onNavigateUp}
           >
             <td class="px-1 sm:px-2 py-1.5" />
-            <td class="px-2 py-1.5" colSpan={4}>
+            <td class="px-2 py-1.5 min-w-0">
               <button
                 type="button"
                 class="w-full min-h-[40px] flex items-center gap-3 text-left text-zinc-600 dark:text-zinc-300 bg-transparent border-0 p-0 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)]"
@@ -75,10 +75,13 @@ export function StorageFileTable(props: StorageFileTableProps) {
                   props.onNavigateUp();
                 }}
               >
-                <Icons.ArrowLeft class="w-4 h-4 shrink-0" />
+                <Icons.ArrowLeft class="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span class="text-sm">..</span>
               </button>
             </td>
+            <td class="hidden sm:table-cell" />
+            <td class="hidden md:table-cell" />
+            <td />
           </tr>
         </Show>
         <For each={props.files}>

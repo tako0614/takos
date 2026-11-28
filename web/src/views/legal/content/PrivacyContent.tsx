@@ -2,7 +2,7 @@ export function PrivacyContent() {
   return (
     <article class="prose prose-zinc prose-sm max-w-none">
       <h1>プライバシーポリシー</h1>
-      <p class="text-zinc-500">最終更新日: 2026年7月29日</p>
+      <p class="text-zinc-500 dark:text-zinc-400">最終更新日: 2026年7月29日</p>
 
       <p>
         本プライバシーポリシーは、Takos（以下「本サービス」、URL:

@@ -1,6 +1,7 @@
 import { createMemo, createSignal, onCleanup } from "solid-js";
 import { type TranslationKey, useI18n } from "../../../store/i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
+import { useDocumentTitle } from "../../../hooks/useDocumentTitle.ts";
 import { useFileAttachment } from "../../../hooks/useFileAttachment.ts";
 import { useWelcomeSubmission, type WelcomeSubmissionResult } from "../../../hooks/useWelcomeSubmission.ts";
 import { useConfirmDialog } from "../../../store/confirm-dialog.ts";
@@ -106,6 +107,8 @@ export function WelcomeView(props: WelcomeViewProps) {
     }
   };
 
+  useDocumentTitle(() => t("newChat"));
+
   return (
     <div class="flex-1 flex flex-col items-center justify-center p-6 overflow-auto bg-white dark:bg-zinc-900">
       <div class="w-full max-w-2xl">
@@ -209,7 +212,7 @@ export function WelcomeView(props: WelcomeViewProps) {
               <button
                 type="button"
                 disabled={submission.isSubmitting()}
-                class="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                class="w-11 h-11 md:w-10 md:h-10 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 title={t("attachFile")}
                 aria-label={t("attachFile")}
                 onClick={() => fileInputRef?.click()}
@@ -219,7 +222,7 @@ export function WelcomeView(props: WelcomeViewProps) {
             </div>
             <button
               type="button"
-              class="w-10 h-10 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              class="w-11 h-11 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               onClick={handleSend}
               disabled={submission.isSubmitting() ||
                 submission.outcome()?.kind === "unconfirmed" ||

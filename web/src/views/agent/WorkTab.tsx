@@ -56,7 +56,8 @@ function toEditableStatus(status: AgentTaskStatus): EditableAgentTaskStatus {
 }
 
 export function WorkTab(props: { spaceId: string }) {
-  const { t, lang } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const { showToast } = useToast();
   const { navigate } = useRouter();
   const { confirm } = useConfirmDialog();
@@ -293,7 +294,7 @@ export function WorkTab(props: { spaceId: string }) {
         const threadRes = await rpcPath(rpc, "spaces", ":spaceId", "threads")
           .$post({
             param: { spaceId: props.spaceId },
-            json: { title: task.title, locale: lang },
+            json: { title: task.title, locale: i18n.lang },
           });
         const threadResponse = await rpcJson<{ thread: Thread }>(threadRes);
         threadId = threadResponse.thread.id;
@@ -319,7 +320,7 @@ export function WorkTab(props: { spaceId: string }) {
         input?: Record<string, unknown>;
       } = {
         agent_type: task.agent_type || "default",
-        input: { locale: lang },
+        input: { locale: i18n.lang },
       };
       if (task.model) {
         runPayload.model = task.model;

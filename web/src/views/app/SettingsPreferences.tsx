@@ -87,6 +87,8 @@ export function SettingsPreferences(props: {
                     ? "primary"
                     : "secondary"}
                   size="sm"
+                  class="min-h-[44px] md:min-h-[36px]"
+                  aria-pressed={props.userSettings.activity_visibility === v}
                   onClick={() => updateSetting({ activity_visibility: v })}
                   disabled={saving()}
                 >

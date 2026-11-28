@@ -16,7 +16,7 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
 
   return (
     <Show when={!autoRedirecting()} fallback={<LoadingScreen />}>
-      <div class="flex items-center justify-center min-h-screen bg-white dark:bg-zinc-900 p-4">
+      <main class="flex items-center justify-center min-h-screen bg-white dark:bg-zinc-900 p-4">
         <div class="w-full max-w-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center">
           <div class="flex justify-center mb-6">
             <img src="/logo.png" alt="Takos" class="w-16 h-16 rounded-xl" />
@@ -41,7 +41,7 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
             <button
               type="button"
               aria-pressed={i18n.lang === "ja"}
-              class={`min-h-[36px] px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              class={`min-h-[44px] px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 i18n.lang === "ja"
                   ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -53,7 +53,7 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
             <button
               type="button"
               aria-pressed={i18n.lang === "en"}
-              class={`min-h-[36px] px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              class={`min-h-[44px] px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 i18n.lang === "en"
                   ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -64,30 +64,30 @@ export function LoginPage(props: { onLogin: () => void; returnTo?: string }) {
             </button>
           </div>
 
-          <div class="flex justify-center gap-3 mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+          <div class="flex justify-center gap-1 mt-2 text-xs text-zinc-500 dark:text-zinc-400">
             <a
               href="https://developers.takos.jp"
               target="_blank"
               rel="noopener noreferrer"
-              class="hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
               {t("docs")}
             </a>
             <a
               href="/terms"
-              class="hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
               {t("terms")}
             </a>
             <a
               href="/privacy"
-              class="hover:text-zinc-600 dark:hover:text-zinc-300"
+              class="inline-flex min-h-[44px] items-center px-2 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
               {t("privacy")}
             </a>
           </div>
         </div>
-      </div>
+      </main>
     </Show>
   );
 }

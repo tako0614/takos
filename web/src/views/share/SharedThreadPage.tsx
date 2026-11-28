@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { rpc } from "../../lib/rpc.ts";
 import { getErrorMessage } from "../../lib/errors.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { useDocumentTitle } from "../../hooks/useDocumentTitle.ts";
 import { useI18n } from "../../store/i18n.ts";
 import { Input } from "../../components/ui/Input.tsx";
 import { Button } from "../../components/ui/Button.tsx";
@@ -163,8 +164,16 @@ export function SharedThreadPage(props: { token: string }) {
   const renderContent = () => {
     if (loading() && !data() && !requiresPassword()) {
       return (
-        <div class="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-900">
-          <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400" />
+        <div
+          role="status"
+          aria-live="polite"
+          class="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-900"
+        >
+          <Icons.Loader
+            class="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400"
+            aria-hidden="true"
+          />
+          <span class="sr-only">{t("loading")}</span>
         </div>
       );
     }
@@ -277,7 +286,10 @@ export function SharedThreadPage(props: { token: string }) {
               </span>
             </div>
             {error() && (
-              <div class="mt-3 text-sm text-red-600 dark:text-red-400">
+              <div
+                role="alert"
+                class="mt-3 text-sm text-red-600 dark:text-red-400"
+              >
                 {error()}
               </div>
             )}
@@ -303,5 +315,12 @@ export function SharedThreadPage(props: { token: string }) {
     );
   };
 
-  return <>{renderContent()}</>;
+  useDocumentTitle(() => {
+    const shareData = data();
+    if (shareData) return shareData.thread.title || t("untitledThread");
+    if (requiresPassword()) return t("passwordRequired");
+    return loading() ? null : t("notFound");
+  });
+
+  return <main>{renderContent()}</main>;
 }

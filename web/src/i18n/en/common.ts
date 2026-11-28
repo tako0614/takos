@@ -124,6 +124,8 @@ export const common = {
   legalInfo: "Legal & Privacy",
   notFoundMessage: "We couldn't find that page.",
   backToHome: "Back to home",
+  skipToMainContent: "Skip to main content",
+  storageBreadcrumb: "Folder path",
   openInNewTab: "Open in new tab",
 
   // Fork

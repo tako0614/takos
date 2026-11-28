@@ -89,6 +89,7 @@ export function SpaceInfoCard(props: {
               <Button
                 variant="ghost"
                 size="sm"
+                class="min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-0"
                 aria-label={t("copy")}
                 onClick={async () => {
                   try {

@@ -10,6 +10,7 @@ import type {
 } from "../types/index.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle.ts";
 import { Icons } from "../lib/Icons.tsx";
 import { getSearchShortcutParts } from "../lib/platform-shortcut.ts";
 import { ChatErrorBanner } from "./chat/ChatErrorBanner.tsx";
@@ -71,6 +72,8 @@ export function ChatView(props: ChatViewProps) {
   const { showToast } = useToast();
   const mobileHeader = useMobileHeader();
   const threadId = () => props.thread.id;
+  const threadTitle = () => props.thread.title?.trim() || t("untitledThread");
+  useDocumentTitle(threadTitle);
   const spaceId = () => props.spaceId;
   const initialMessage = () => props.initialMessage;
   const initialFiles = () => props.initialFiles;
@@ -320,7 +323,7 @@ export function ChatView(props: ChatViewProps) {
       <Show when={props.onOpenSearch}>
         <button
           type="button"
-          class="min-h-[44px] px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center gap-2"
+          class="min-w-[44px] min-h-[44px] px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center justify-center gap-2"
           onClick={props.onOpenSearch}
           title={t("search")}
           aria-label={t("search")}
@@ -373,6 +376,7 @@ export function ChatView(props: ChatViewProps) {
           </div>
         </div>
       </Show>
+      <h1 class="sr-only">{threadTitle()}</h1>
       <ChatHeader
         selectedModel={selectedModel()}
         models={availableModels()}

@@ -15,16 +15,20 @@ export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
       : props.currentPath.split("/").filter(Boolean);
 
   return (
-    <div class="flex-shrink-0 flex items-center gap-1 px-5 pb-2 overflow-x-auto">
+    <nav
+      aria-label={t("storageBreadcrumb")}
+      class="flex-shrink-0 flex items-center gap-1 px-5 pb-2 overflow-x-auto"
+    >
       <button
         type="button"
+        aria-current={breadcrumbParts().length === 0 ? "page" : undefined}
         onClick={() => props.onNavigate("/")}
-        class={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors " +
+        class={"flex items-center gap-1.5 min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-lg text-sm transition-colors whitespace-nowrap " +
           (breadcrumbParts().length === 0
             ? "font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-200/60 dark:bg-zinc-800"
             : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800")}
       >
-        <Icons.HardDrive class="w-4 h-4" />
+        <Icons.HardDrive class="w-4 h-4" aria-hidden="true" />
         {t("storageTitle")}
       </button>
       <For each={breadcrumbParts()}>
@@ -32,14 +36,18 @@ export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
           const isLast = () => index() === breadcrumbParts().length - 1;
           return (
             <>
-              <Icons.ChevronRight class="w-4 h-4 text-zinc-400 flex-shrink-0" />
+              <Icons.ChevronRight
+                class="w-4 h-4 text-zinc-400 flex-shrink-0"
+                aria-hidden="true"
+              />
               <button
                 type="button"
+                aria-current={isLast() ? "page" : undefined}
                 onClick={() =>
                   props.onNavigate(
                     "/" + breadcrumbParts().slice(0, index() + 1).join("/"),
                   )}
-                class={"px-3 py-1.5 rounded-lg text-sm truncate max-w-[200px] transition-colors " +
+                class={"min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-lg text-sm truncate max-w-[200px] transition-colors " +
                   (isLast()
                     ? "font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-200/60 dark:bg-zinc-800"
                     : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800")}
@@ -50,6 +58,6 @@ export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
           );
         }}
       </For>
-    </div>
+    </nav>
   );
 }

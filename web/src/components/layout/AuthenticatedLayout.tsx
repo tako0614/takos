@@ -18,6 +18,8 @@ import { useNavigation } from "../../store/navigation.ts";
 import type { View } from "../../types/index.ts";
 import { McpToolConfirmationCenter } from "./McpToolConfirmationCenter.tsx";
 
+const MAIN_CONTENT_ID = "main-content";
+
 function getMobileActiveItem(view: View): NavItem | undefined {
   switch (view) {
     case "memory":
@@ -211,6 +213,16 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
 
   return (
     <div class="flex flex-row h-[100dvh] w-screen overflow-hidden bg-white dark:bg-zinc-900">
+      <a
+        href={`#${MAIN_CONTENT_ID}`}
+        class="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-zinc-900 focus:px-4 focus:py-3 focus:text-sm focus:font-medium focus:text-white dark:focus:bg-zinc-100 dark:focus:text-zinc-900"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById(MAIN_CONTENT_ID)?.focus();
+        }}
+      >
+        {t("skipToMainContent")}
+      </a>
       <Show when={!breakpoint.isMobile}>{sidebar}</Show>
       <Show when={breakpoint.isMobile}>
         <MobileDrawer
@@ -230,15 +242,17 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
           menuAriaLabel={t("openMenu")}
         />
       </Show>
-      <div
-        class={`flex-1 flex flex-col min-h-0 ${
+      <main
+        id={MAIN_CONTENT_ID}
+        tabIndex={-1}
+        class={`flex-1 flex flex-col min-w-0 min-h-0 focus:outline-none ${
           breakpoint.isMobile
             ? "pb-[calc(var(--nav-height-mobile)+var(--spacing-safe-bottom))] pt-[calc(48px+var(--spacing-safe-top,0px))]"
             : ""
         }`}
       >
         {props.children}
-      </div>
+      </main>
       <Show when={breakpoint.isMobile}>
         <MobileBottomNav
           activeItem={getMobileActiveItem(navigation.route.view)}

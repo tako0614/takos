@@ -16,7 +16,7 @@ export interface ChatSendSyncResult {
 
 export interface UseChatMessagesOptions {
   threadId: Accessor<string>;
-  lang: string;
+  lang: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   input: Accessor<string>;
   setInput: (value: string) => void;
@@ -115,7 +115,7 @@ export function useChatMessages({
     try {
       const response = await rpcPath(rpc, "threads", ":threadId", "runs").$post({
         param: { threadId: receipt.threadId },
-        json: { agent_type: "default", model: receipt.model, input: { locale: lang } },
+        json: { agent_type: "default", model: receipt.model, input: { locale: lang() } },
       });
       status = response.status;
       const data = await rpcJson<{ run: Run }>(response, { isCurrent });

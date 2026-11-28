@@ -96,7 +96,8 @@ export function useChatSession({
   initialModel,
   focusSequence,
 }: UseChatSessionOptions): UseChatSessionResult {
-  const { t, lang } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const [input, setInput] = createSignal(initialMessage?.() ?? "");
   const [historyRetry, setHistoryRetry] = createSignal<{
     isCurrent: () => boolean;
@@ -160,7 +161,7 @@ export function useChatSession({
 
   const messaging = useChatMessages({
     threadId,
-    lang,
+    lang: () => i18n.lang,
     t,
     input,
     setInput,

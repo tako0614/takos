@@ -190,7 +190,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
           />
           <textarea
             ref={textareaRef}
-            class="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 min-h-[44px] max-h-48 text-base"
+            class="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 min-h-[44px] max-h-48 text-base"
             placeholder={props.placeholder}
             aria-label={props.placeholder}
             value={props.input}
@@ -250,7 +250,7 @@ export function ChatInputBar(props: ChatInputBarProps) {
           </Show>
         </div>
         <div class="flex justify-center mt-3">
-          <span class="text-xs text-zinc-500 dark:text-zinc-500">
+          <span class="text-xs text-zinc-500 dark:text-zinc-400">
             {props.inputHint}
           </span>
         </div>

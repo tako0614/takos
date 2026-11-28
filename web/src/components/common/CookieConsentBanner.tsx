@@ -83,6 +83,7 @@ export function CookieConsentBanner() {
             <Button
               variant="secondary"
               size="sm"
+              class="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none"
               leftIcon={<Icons.X class="h-4 w-4" aria-hidden="true" />}
               onClick={() => choose(false)}
             >
@@ -90,6 +91,7 @@ export function CookieConsentBanner() {
             </Button>
             <Button
               size="sm"
+              class="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none"
               leftIcon={<Icons.Check class="h-4 w-4" aria-hidden="true" />}
               onClick={() => choose(true)}
             >

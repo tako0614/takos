@@ -19,8 +19,10 @@ export const LANGUAGE_STORAGE_KEY = "takos-lang";
  */
 export function detectLanguage(): Language {
   try {
-    const stored = globalThis.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored === "ja" || stored === "en") return stored;
+    const stored = parseStoredLanguage(
+      globalThis.localStorage?.getItem(LANGUAGE_STORAGE_KEY),
+    );
+    if (stored) return stored;
   } catch {
     // localStorage may be unavailable in tests or privacy-restricted contexts.
   }
@@ -29,10 +31,30 @@ export function detectLanguage(): Language {
 }
 
 /**
- * Persist the active UI language under {@link LANGUAGE_STORAGE_KEY}.
+ * The language picker persists through `createPersistedSignal`, which stores
+ * JSON (`"\"en\""`); older builds stored the bare value (`"en"`). Accept both
+ * so non-reactive readers (RPC fallback errors, pre-hydration `<html lang>`)
+ * honour the user's explicit choice instead of the browser language.
+ */
+export function parseStoredLanguage(
+  stored: string | null | undefined,
+): Language | null {
+  if (stored === "ja" || stored === "en") return stored;
+  if (typeof stored !== "string") return null;
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    return parsed === "ja" || parsed === "en" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist the active UI language under {@link LANGUAGE_STORAGE_KEY}, in the
+ * same JSON encoding the persisted language signal uses.
  */
 export function setLanguage(lang: Language): void {
-  localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, JSON.stringify(lang));
 }
 
 const LOCALE_BY_LANGUAGE: Record<Language, string> = {

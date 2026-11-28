@@ -64,10 +64,11 @@ export function SourcePage(props: SourcePageProps) {
   const tabBtn = (key: "installed" | "store", label: string) => (
     <button
       type="button"
-      class={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+      aria-pressed={tab() === key}
+      class={`min-h-[44px] md:min-h-0 px-3 py-1.5 text-sm rounded-md transition-colors ${
         tab() === key
           ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm"
-          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+          : "text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
       }`}
       onClick={() => setTab(key)}
     >
@@ -87,23 +88,23 @@ export function SourcePage(props: SourcePageProps) {
               type="button"
               title={t("installFromGitUrl")}
               aria-label={t("installFromGitUrl")}
-              class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+              class="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 transition-colors"
               onClick={() => {
                 if (requireAuth()) setShowGitUrlInstallModal(true);
               }}
             >
-              <Icons.Download class="w-4 h-4" />
+              <Icons.Download class="w-4 h-4" aria-hidden="true" />
             </button>
             <button
               type="button"
               title={t("newRepository")}
               aria-label={t("newRepository")}
-              class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+              class="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
               onClick={() => {
                 if (requireAuth()) setShowCreateModal(true);
               }}
             >
-              <Icons.Plus class="w-4 h-4" />
+              <Icons.Plus class="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -201,6 +202,7 @@ export function SourcePage(props: SourcePageProps) {
             {(id) => (
               <AppsPage
                 spaceId={id()}
+                headingLevel={2}
                 onNavigateToStore={() => setTab("store")}
               />
             )}

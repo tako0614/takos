@@ -6,6 +6,7 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { useToast } from "../../store/toast.ts";
@@ -31,6 +32,8 @@ import type { CapsuleStatus } from "../../../../src/contracts/external/takosumi-
 export interface AppsPageProps {
   spaceId: string;
   onNavigateToStore?: () => void;
+  /** Rendered inside another page that already owns the `<h1>` (Install). */
+  headingLevel?: 1 | 2;
 }
 
 /**
@@ -110,9 +113,12 @@ export function AppsPage(props: AppsPageProps) {
         <div class="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 pb-10 pt-6 sm:px-8">
           <div class="flex flex-col gap-3 pb-8 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
-              <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+              <Dynamic
+                component={props.headingLevel === 2 ? "h2" : "h1"}
+                class="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+              >
                 {t("apps")}
-              </h1>
+              </Dynamic>
               <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 <Show
                   when={hasApps() || hasCapsules()}
