@@ -157,11 +157,11 @@ export function ChatInputBar(props: ChatInputBarProps) {
                   <span class="max-w-32 truncate">{file.name}</span>
                   <button
                     type="button"
-                    class="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 items-center justify-center p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                     onClick={() => props.onRemoveFile(index())}
                     aria-label={t("removeFile")}
                   >
-                    <Icons.X />
+                    <Icons.X class="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
               )}

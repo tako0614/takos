@@ -18,7 +18,10 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
         }
         console.error("[ErrorBoundary]", err);
         return (
-          <div class="flex flex-1 items-center justify-center p-6">
+          <div
+            role="alert"
+            class="flex flex-1 items-center justify-center p-6"
+          >
             <div class="max-w-md text-center space-y-4">
               <div class="mx-auto w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                 <svg
@@ -28,6 +31,7 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
                   viewBox="0 0 24 24"
                   stroke-width={1.5}
                   stroke="currentColor"
+                  aria-hidden="true"
                 >
                   <path
                     stroke-linecap="round"
@@ -36,16 +40,16 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
                   />
                 </svg>
               </div>
-              <h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 {t("unexpectedErrorTitle")}
-              </h2>
+              </h1>
               <p class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t("unexpectedErrorDescription")}
               </p>
               <button
                 type="button"
                 onClick={reset}
-                class="inline-flex items-center px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+                class="inline-flex min-h-[44px] sm:min-h-0 items-center px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
               >
                 {t("tryAgain")}
               </button>

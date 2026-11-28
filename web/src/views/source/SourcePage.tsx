@@ -144,12 +144,12 @@ export function SourcePage(props: SourcePageProps) {
                       </div>
                       <button
                         type="button"
-                        class="mt-4 inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                        class="mt-4 inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
                         onClick={() => {
                           if (requireAuth()) setShowGitUrlInstallModal(true);
                         }}
                       >
-                        <Icons.Download class="h-4 w-4" />
+                        <Icons.Download class="h-4 w-4" aria-hidden="true" />
                         {t("installFromGitUrl")}
                       </button>
                     </div>
@@ -178,10 +178,10 @@ export function SourcePage(props: SourcePageProps) {
                       </div>
                       <button
                         type="button"
-                        class="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        class="mt-4 inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                         onClick={() => setTab("installed")}
                       >
-                        <Icons.Grid class="h-4 w-4" />
+                        <Icons.Grid class="h-4 w-4" aria-hidden="true" />
                         {ja() ? "インストール済みを見る" : "View installed"}
                       </button>
                     </div>

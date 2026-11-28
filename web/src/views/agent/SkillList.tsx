@@ -130,7 +130,7 @@ export function SkillList(props: {
           }}
         >
           <div>
-            <h4
+            <h3
               style={{
                 "font-size": "0.95rem",
                 "font-weight": 600,
@@ -139,11 +139,11 @@ export function SkillList(props: {
               }}
             >
               {t("managedSkills")}
-            </h4>
+            </h3>
             <p
               style={{
                 "font-size": "0.875rem",
-                color: "var(--color-text-tertiary)",
+                color: "var(--color-text-secondary)",
                 "margin-top": "0.25rem",
                 "margin-bottom": 0,
               }}
@@ -222,7 +222,7 @@ export function SkillList(props: {
             gap: "0.75rem",
           }}
         >
-          <h4
+          <h3
             style={{
               "font-size": "0.95rem",
               "font-weight": 600,
@@ -231,7 +231,7 @@ export function SkillList(props: {
             }}
           >
             {t("customSkills")}
-          </h4>
+          </h3>
           {props.skills.length === 0
             ? (
               <div
@@ -300,7 +300,9 @@ export function SkillList(props: {
                 {props.skills.map((skill) => (
                   <Card
                     padding="md"
-                    style={{ opacity: skill.enabled ? 1 : 0.5 }}
+                    style={skill.enabled
+                      ? undefined
+                      : { "border-style": "dashed" }}
                   >
                     <div
                       style={{
@@ -322,23 +324,37 @@ export function SkillList(props: {
                           "flex-shrink": 0,
                         }}
                       >
-                        <Icons.Code />
+                        <Icons.Code aria-hidden="true" />
                       </div>
                       <div style={{ flex: 1, "min-width": 0 }}>
-                        <h4
+                        <div
                           style={{
-                            "font-weight": 500,
-                            color: "var(--color-text-primary)",
-                            margin: 0,
+                            display: "flex",
+                            "align-items": "center",
+                            gap: "0.5rem",
+                            "flex-wrap": "wrap",
                           }}
                         >
-                          {skill.name}
-                        </h4>
+                          <h4
+                            style={{
+                              "font-weight": 500,
+                              color: "var(--color-text-primary)",
+                              margin: 0,
+                            }}
+                          >
+                            {skill.name}
+                          </h4>
+                          {!skill.enabled && (
+                            <Badge variant="default">
+                              {t("skillDisabled")}
+                            </Badge>
+                          )}
+                        </div>
                         {skill.description && (
                           <span
                             style={{
                               "font-size": "0.875rem",
-                              color: "var(--color-text-tertiary)",
+                              color: "var(--color-text-secondary)",
                               display: "-webkit-box",
                               "-webkit-line-clamp": 2,
                               "-webkit-box-orient": "vertical",
@@ -364,25 +380,35 @@ export function SkillList(props: {
                           title={skill.enabled
                             ? t("skillEnabled")
                             : t("skillDisabled")}
+                          aria-label={`${skill.name}: ${
+                            skill.enabled
+                              ? t("skillEnabled")
+                              : t("skillDisabled")
+                          }`}
+                          aria-pressed={skill.enabled}
                         >
-                          {skill.enabled ? <Icons.Check /> : <Icons.X />}
+                          {skill.enabled
+                            ? <Icons.Check aria-hidden="true" />
+                            : <Icons.X aria-hidden="true" />}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => props.onEdit(skill)}
                           title={t("edit")}
+                          aria-label={`${t("edit")}: ${skill.name}`}
                         >
-                          <Icons.Edit />
+                          <Icons.Edit aria-hidden="true" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => props.onDelete(skill)}
                           title={t("deleteSkill")}
-                          style={{ color: "var(--color-text-tertiary)" }}
+                          aria-label={`${t("deleteSkill")}: ${skill.name}`}
+                          style={{ color: "var(--color-text-secondary)" }}
                         >
-                          <Icons.Trash />
+                          <Icons.Trash aria-hidden="true" />
                         </Button>
                       </div>
                     </div>

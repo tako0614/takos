@@ -1,4 +1,4 @@
-import { splitProps } from "solid-js";
+import { createUniqueId, splitProps } from "solid-js";
 import type { JSX } from "solid-js";
 
 interface TextareaProps
@@ -19,11 +19,14 @@ const resizeClasses: Record<ResizeOption, string> = {
 
 export function Textarea(props: TextareaProps) {
   const [local, rest] = splitProps(props, ["error", "resize", "class", "ref"]);
+  const errorId = createUniqueId();
 
   return (
     <div>
       <textarea
         ref={local.ref}
+        aria-invalid={local.error ? "true" : undefined}
+        aria-describedby={local.error ? errorId : undefined}
         class={`
           w-full px-3 py-2.5 text-base min-h-[5rem] font-[inherit]
           bg-[var(--color-surface-primary)] text-[var(--color-text-primary)]
@@ -40,7 +43,7 @@ export function Textarea(props: TextareaProps) {
         {...rest}
       />
       {local.error && (
-        <p class="mt-1 text-xs text-[var(--color-error)]">
+        <p id={errorId} role="alert" class="mt-1 text-xs text-[var(--color-error)]">
           {local.error}
         </p>
       )}

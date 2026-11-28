@@ -173,9 +173,9 @@ export function ServerCard(props: {
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
               {props.server.name}
-            </h4>
+            </h3>
             <Badge>{sourceLabel()}</Badge>
             <Badge>{authLabel()}</Badge>
             <Show when={props.server.source_type === "external"}>
@@ -183,16 +183,16 @@ export function ServerCard(props: {
             </Show>
             <Show when={!toolsLoading() ? tools() : null}>
               {(loadedTools) => (
-                <span class="text-[10px] text-zinc-400 dark:text-zinc-500">
+                <span class="text-xs text-zinc-600 dark:text-zinc-400">
                   {t("mcpToolCount", { count: loadedTools().length })}
                 </span>
               )}
             </Show>
           </div>
-          <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+          <p class="text-xs text-zinc-600 dark:text-zinc-400 truncate mt-0.5">
             {props.server.url}
           </p>
-          <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+          <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
             {t("connectionEndpointDomain")}:{" "}
             {endpointHostname(props.server.url)}
             {props.server.source_type === "external"
@@ -208,15 +208,15 @@ export function ServerCard(props: {
           <button
             type="button"
             onClick={handleToggleExpand}
-            class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
+            class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 items-center justify-center rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
             title={t("mcpServerTools")}
             aria-label={t("mcpServerTools")}
             aria-expanded={expanded()}
           >
             {expanded() ? (
-              <Icons.ChevronDown class="w-4 h-4" />
+              <Icons.ChevronDown class="w-4 h-4" aria-hidden="true" />
             ) : (
-              <Icons.ChevronRight class="w-4 h-4" />
+              <Icons.ChevronRight class="w-4 h-4" aria-hidden="true" />
             )}
           </button>
 
@@ -224,15 +224,15 @@ export function ServerCard(props: {
             <button
               type="button"
               onClick={props.onToggle}
-              class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 items-center justify-center rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
               title={props.server.enabled ? t("disable") : t("enable")}
               aria-label={props.server.enabled ? t("disable") : t("enable")}
               aria-pressed={props.server.enabled}
             >
               {props.server.enabled ? (
-                <Icons.ToggleOn class="w-6 h-6 text-emerald-500" />
+                <Icons.ToggleOn class="w-6 h-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
               ) : (
-                <Icons.ToggleOff class="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                <Icons.ToggleOff class="w-6 h-6 text-zinc-400 dark:text-zinc-500" aria-hidden="true" />
               )}
             </button>
           </Show>
@@ -248,36 +248,37 @@ export function ServerCard(props: {
       {expanded() && (
         <div class="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <span class="text-xs font-medium text-zinc-600 dark:text-zinc-400">
               {t("mcpServerTools")}
             </span>
             <button
               type="button"
               onClick={handleRefreshTools}
               disabled={toolsLoading()}
-              class="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 dark:text-zinc-500 disabled:opacity-50"
+              class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-600 dark:text-zinc-400 disabled:opacity-50"
               title={t("mcpRefreshTools")}
               aria-label={t("mcpRefreshTools")}
             >
               <Icons.RefreshCw
                 class={`w-3.5 h-3.5 ${toolsLoading() ? "animate-spin" : ""}`}
+                aria-hidden="true"
               />
             </button>
           </div>
 
           {toolsLoading() && !tools() && (
-            <p class="text-xs text-zinc-400 dark:text-zinc-500 italic">
+            <p role="status" class="text-xs text-zinc-600 dark:text-zinc-400 italic">
               {t("mcpFetchingTools")}
             </p>
           )}
 
           {toolsError() && (
-            <div class="flex items-center gap-2">
-              <p class="text-xs text-red-500">{toolsError()}</p>
+            <div role="alert" class="flex flex-wrap items-center gap-2">
+              <p class="text-xs text-red-600 dark:text-red-400">{toolsError()}</p>
               <button
                 type="button"
                 onClick={handleRefreshTools}
-                class="text-xs text-blue-500 hover:underline"
+                class="min-h-[44px] sm:min-h-0 px-2 text-xs font-medium text-blue-700 dark:text-blue-400 hover:underline"
               >
                 {t("retry")}
               </button>
@@ -285,17 +286,21 @@ export function ServerCard(props: {
           )}
 
           {toolPolicyError() && (
-            <p class="mb-2 text-xs text-red-500">{toolPolicyError()}</p>
+            <p role="alert" class="mb-2 text-xs text-red-600 dark:text-red-400">
+              {toolPolicyError()}
+            </p>
           )}
 
           {(status() === "token_expired" || status() === "no_token") &&
             props.onReauthorize && (
-              <div class="flex items-center gap-2 mb-2">
-                <p class="text-xs text-amber-500">{t("mcpReauthorize")}</p>
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <p class="text-xs text-amber-700 dark:text-amber-300">
+                  {t("mcpReauthorize")}
+                </p>
                 <button
                   type="button"
                   onClick={() => props.onReauthorize?.()}
-                  class="text-xs text-blue-500 hover:underline"
+                  class="min-h-[44px] sm:min-h-0 px-2 text-xs font-medium text-blue-700 dark:text-blue-400 hover:underline"
                 >
                   {t("mcpReauthorizeAction")}
                 </button>
@@ -306,7 +311,7 @@ export function ServerCard(props: {
             {(loadedTools) => (
               <>
                 <Show when={loadedTools().length === 0 && !toolsLoading()}>
-                  <p class="text-xs text-zinc-400 dark:text-zinc-500">
+                  <p class="text-xs text-zinc-600 dark:text-zinc-400">
                     {t("mcpNoTools")}
                   </p>
                 </Show>
@@ -334,108 +339,113 @@ export function ServerCard(props: {
                   <div class="space-y-1.5 max-h-64 overflow-y-auto">
                     {loadedTools().map((tool: McpServerTool) => (
                       <div
-                        class={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${
+                        class={`flex flex-col sm:flex-row sm:items-start gap-2 rounded-lg px-2 py-1.5 ${
                           canUpdateToolPolicy(props.server, tool) &&
                           !tool.enabled
                             ? "bg-zinc-50 dark:bg-zinc-800/50"
                             : ""
                         }`}
                       >
-                        <Icons.Wrench class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 mt-0.5 flex-shrink-0" />
-                        <div class="min-w-0 flex-1">
-                          <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="text-xs font-mono font-medium text-zinc-700 dark:text-zinc-300">
-                              {tool.annotations?.title ?? tool.name}
-                            </span>
-                            <Show when={tool.annotations?.title}>
-                              <span class="text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
-                                {tool.name}
+                        <div class="flex items-start gap-2 min-w-0 flex-1">
+                          <Icons.Wrench
+                            class="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400 mt-0.5 flex-shrink-0"
+                            aria-hidden="true"
+                          />
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                              <span class="text-xs font-mono font-medium text-zinc-800 dark:text-zinc-200">
+                                {tool.annotations?.title ?? tool.name}
                               </span>
-                            </Show>
-                            <Show when={toolRiskLabel(tool)}>
-                              {(label) => (
-                                <Badge
-                                  variant={
-                                    tool.risk_level === "high"
-                                      ? "error"
-                                      : "warning"
-                                  }
-                                >
-                                  {label()}
-                                </Badge>
-                              )}
-                            </Show>
-                            <Show
-                              when={tool.annotations?.readOnlyHint === true}
-                            >
-                              <Badge variant="info">
-                                {t("connectionToolReadOnly")}
-                              </Badge>
-                            </Show>
-                            <Show
-                              when={tool.annotations?.destructiveHint === true}
-                            >
-                              <Badge variant="error">
-                                {t("connectionToolDestructive")}
-                              </Badge>
-                            </Show>
-                            <Show
-                              when={
-                                tool.side_effects === true &&
-                                tool.annotations?.destructiveHint !== true
-                              }
-                            >
-                              <Badge variant="warning">
-                                {t("connectionToolMayChangeData")}
-                              </Badge>
-                            </Show>
-                            <Show
-                              when={tool.annotations?.openWorldHint === true}
-                            >
-                              <Badge>{t("connectionToolExternalAccess")}</Badge>
-                            </Show>
-                            <Show when={!tool.supported}>
-                              <Badge variant="warning">
-                                {t("connectionToolTaskUnsupported")}
-                              </Badge>
-                            </Show>
-                            <Show
-                              when={canUpdateToolPolicy(props.server, tool)}
-                            >
-                              <Badge
-                                variant={tool.enabled ? "success" : "default"}
+                              <Show when={tool.annotations?.title}>
+                                <span class="text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                                  {tool.name}
+                                </span>
+                              </Show>
+                              <Show when={toolRiskLabel(tool)}>
+                                {(label) => (
+                                  <Badge
+                                    variant={
+                                      tool.risk_level === "high"
+                                        ? "error"
+                                        : "warning"
+                                    }
+                                  >
+                                    {label()}
+                                  </Badge>
+                                )}
+                              </Show>
+                              <Show
+                                when={tool.annotations?.readOnlyHint === true}
                               >
-                                {tool.enabled
-                                  ? t("mcpToolEnabled")
-                                  : t("mcpToolDisabled")}
-                              </Badge>
-                            </Show>
-                            <Show
-                              when={
-                                canUpdateToolPolicy(props.server, tool) &&
-                                tool.review_required
-                              }
-                            >
-                              <Badge variant="warning">
-                                {t("mcpToolReviewRequired")}
-                              </Badge>
-                            </Show>
+                                <Badge variant="info">
+                                  {t("connectionToolReadOnly")}
+                                </Badge>
+                              </Show>
+                              <Show
+                                when={tool.annotations?.destructiveHint === true}
+                              >
+                                <Badge variant="error">
+                                  {t("connectionToolDestructive")}
+                                </Badge>
+                              </Show>
+                              <Show
+                                when={
+                                  tool.side_effects === true &&
+                                  tool.annotations?.destructiveHint !== true
+                                }
+                              >
+                                <Badge variant="warning">
+                                  {t("connectionToolMayChangeData")}
+                                </Badge>
+                              </Show>
+                              <Show
+                                when={tool.annotations?.openWorldHint === true}
+                              >
+                                <Badge>{t("connectionToolExternalAccess")}</Badge>
+                              </Show>
+                              <Show when={!tool.supported}>
+                                <Badge variant="warning">
+                                  {t("connectionToolTaskUnsupported")}
+                                </Badge>
+                              </Show>
+                              <Show
+                                when={canUpdateToolPolicy(props.server, tool)}
+                              >
+                                <Badge
+                                  variant={tool.enabled ? "success" : "default"}
+                                >
+                                  {tool.enabled
+                                    ? t("mcpToolEnabled")
+                                    : t("mcpToolDisabled")}
+                                </Badge>
+                              </Show>
+                              <Show
+                                when={
+                                  canUpdateToolPolicy(props.server, tool) &&
+                                  tool.review_required
+                                }
+                              >
+                                <Badge variant="warning">
+                                  {t("mcpToolReviewRequired")}
+                                </Badge>
+                              </Show>
+                            </div>
+                            {tool.description && (
+                              <p class="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 mt-0.5">
+                                {tool.description}
+                              </p>
+                            )}
                           </div>
-                          {tool.description && (
-                            <p class="text-xs text-zinc-400 dark:text-zinc-500 line-clamp-2 mt-0.5">
-                              {tool.description}
-                            </p>
-                          )}
                         </div>
                         <Show when={canUpdateToolPolicy(props.server, tool)}>
-                          <div class="flex shrink-0 items-center gap-1">
+                          <div class="flex shrink-0 flex-wrap items-center gap-1 self-end sm:self-auto">
                             <select
                               value={tool.invocation_policy}
                               disabled={
                                 updatingToolName() !== null || !tool.enabled
                               }
                               aria-label={t("mcpToolInvocationPolicy")}
-                              class="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                              class="min-h-[44px] sm:min-h-0 sm:h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                               onChange={(event) =>
                                 void handleToolPolicyUpdate(
                                   tool,
@@ -470,7 +480,7 @@ export function ServerCard(props: {
                               onClick={() =>
                                 void handleToolPolicyUpdate(tool, !tool.enabled)
                               }
-                              class="rounded-lg bg-transparent p-1 text-zinc-400 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-500 dark:hover:bg-zinc-800"
+                              class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 items-center justify-center rounded-lg bg-transparent text-zinc-600 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
                               title={
                                 tool.enabled
                                   ? t("mcpToolDisable")
@@ -484,11 +494,11 @@ export function ServerCard(props: {
                               aria-pressed={tool.enabled}
                             >
                               {updatingToolName() === tool.name ? (
-                                <Icons.Loader class="h-4 w-4 animate-spin" />
+                                <Icons.Loader class="h-4 w-4 animate-spin" aria-hidden="true" />
                               ) : tool.enabled ? (
-                                <Icons.ToggleOn class="h-5 w-5 text-emerald-500" />
+                                <Icons.ToggleOn class="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                               ) : (
-                                <Icons.ToggleOff class="h-5 w-5 text-zinc-300 dark:text-zinc-600" />
+                                <Icons.ToggleOff class="h-5 w-5 text-zinc-400 dark:text-zinc-500" aria-hidden="true" />
                               )}
                             </button>
                           </div>

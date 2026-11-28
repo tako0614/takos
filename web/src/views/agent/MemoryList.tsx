@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from "solid-js";
+import { createMemo, createSignal, createUniqueId } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import {
@@ -23,7 +23,7 @@ export function MemoryList(props: {
   onDelete: (id: string) => void;
   onCreateMemory: (
     data: { content: string; type: Memory["type"]; category?: string },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   savingMemory: boolean;
   // Shared classification helpers from useMemoryData — same source as the
   // full-page MemoryList so the two surfaces cannot drift on type icon/label.
@@ -41,6 +41,11 @@ export function MemoryList(props: {
   const [memoryContent, setMemoryContent] = createSignal("");
   const [memoryType, setMemoryType] = createSignal<Memory["type"]>("semantic");
   const [memoryCategory, setMemoryCategory] = createSignal("");
+  const fieldPrefix = createUniqueId();
+  const contentId = `${fieldPrefix}-content`;
+  const typeLabelId = `${fieldPrefix}-type-label`;
+  const typeId = `${fieldPrefix}-type`;
+  const categoryId = `${fieldPrefix}-category`;
 
   const filteredMemories = createMemo(() =>
     props.memories.filter((m) => {
@@ -59,11 +64,12 @@ export function MemoryList(props: {
   ) => {
     e.preventDefault();
     if (!memoryContent().trim()) return;
-    await props.onCreateMemory({
+    const created = await props.onCreateMemory({
       content: memoryContent().trim(),
       type: memoryType(),
       category: memoryCategory().trim() || undefined,
     });
+    if (!created) return;
     setMemoryContent("");
     setMemoryCategory("");
     setShowCreateMemory(false);
@@ -76,6 +82,7 @@ export function MemoryList(props: {
       >
         <Input
           placeholder={t("memorySearch")}
+          aria-label={t("memorySearch")}
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
           leftIcon={<Icons.Search style={{ width: "1rem", height: "1rem" }} />}
@@ -86,6 +93,7 @@ export function MemoryList(props: {
               <Button
                 variant={activeFilter() === filter ? "primary" : "secondary"}
                 size="sm"
+                aria-pressed={activeFilter() === filter}
                 onClick={() => setActiveFilter(filter)}
               >
                 {filter === "all"
@@ -227,6 +235,7 @@ export function MemoryList(props: {
               }}
             >
               <label
+                for={contentId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -236,6 +245,7 @@ export function MemoryList(props: {
                 {t("memoryContent")}
               </label>
               <Textarea
+                id={contentId}
                 placeholder={t("memoryContentPlaceholder")}
                 value={memoryContent()}
                 onInput={(e) => setMemoryContent(e.currentTarget.value)}
@@ -252,6 +262,8 @@ export function MemoryList(props: {
               }}
             >
               <label
+                id={typeLabelId}
+                for={typeId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -261,6 +273,8 @@ export function MemoryList(props: {
                 {t("memoryType")}
               </label>
               <Select
+                id={typeId}
+                aria-labelledby={typeLabelId}
                 value={memoryType()}
                 onChange={(value) => setMemoryType(value as Memory["type"])}
                 options={[
@@ -293,6 +307,7 @@ export function MemoryList(props: {
               }}
             >
               <label
+                for={categoryId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -302,6 +317,7 @@ export function MemoryList(props: {
                 {t("memoryCategory")}
               </label>
               <Input
+                id={categoryId}
                 placeholder={t("memoryCategoryPlaceholder")}
                 value={memoryCategory()}
                 onInput={(e) => setMemoryCategory(e.currentTarget.value)}

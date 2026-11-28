@@ -2,6 +2,7 @@ import { createSignal, createUniqueId, For } from "solid-js";
 import type { Component } from "solid-js";
 import { type TranslationKey, useI18n } from "../store/i18n.ts";
 import { Icons } from "../lib/Icons.tsx";
+import { moveTabFocus } from "../lib/a11y.ts";
 import { useDialogLifecycle } from "../hooks/useDialogLifecycle.ts";
 import { useFocusTrap } from "../hooks/useFocusTrap.ts";
 import { SkillsTab } from "./agent/SkillsTab.tsx";
@@ -75,6 +76,18 @@ export function AgentModal(props: AgentModalProps) {
   const activeTabMeta = () =>
     TAB_CONFIG.find((tab) => tab.id === activeTab()) ?? TAB_CONFIG[0];
 
+  const handleTabKeyDown = (e: KeyboardEvent) => {
+    const nextTab = moveTabFocus(e);
+    if (
+      nextTab === "work" ||
+      nextTab === "model" ||
+      nextTab === "skills" ||
+      nextTab === "memory"
+    ) {
+      setActiveTab(nextTab);
+    }
+  };
+
   return (
     <div
       class="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50"
@@ -95,12 +108,12 @@ export function AgentModal(props: AgentModalProps) {
             <p class="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
               {t("agentSettings")}
             </p>
-            <h3
+            <h2
               id={titleId}
               class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
             >
               {t(activeTabMeta().labelKey)}
-            </h3>
+            </h2>
             <p class="text-sm text-zinc-500 dark:text-zinc-400">
               {t(activeTabMeta().descriptionKey)}
             </p>
@@ -124,12 +137,15 @@ export function AgentModal(props: AgentModalProps) {
               <button
                 id={`agent-tab-${tab.id}`}
                 type="button"
+                data-tab-id={tab.id}
+                tabIndex={activeTab() === tab.id ? 0 : -1}
                 class={`flex items-center gap-2 px-4 min-h-[44px] min-w-max text-sm font-medium transition-colors whitespace-nowrap ${
                   activeTab() === tab.id
                     ? "text-zinc-900 dark:text-zinc-100 border-b-2 border-zinc-900 dark:border-zinc-100"
-                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={handleTabKeyDown}
                 role="tab"
                 aria-selected={activeTab() === tab.id}
                 aria-controls={`agent-tabpanel-${tab.id}`}

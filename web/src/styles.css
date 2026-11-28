@@ -37,13 +37,15 @@
   --color-primary-hover: #27272a;
   --color-primary-active: #3f3f46;
 
-  --color-error: #dc2626;
+  /* Light-mode semantic foregrounds tuned for >=4.5:1 WCAG AA contrast on both
+     white and their matching tinted *-bg surfaces (Badge, alerts, errors). */
+  --color-error: #b91c1c;
   --color-error-bg: #fef2f2;
-  --color-warning: #d97706;
+  --color-warning: #b45309;
   --color-warning-bg: #fffbeb;
-  --color-success: #16a34a;
+  --color-success: #15803d;
   --color-success-bg: #f0fdf4;
-  --color-info: #2563eb;
+  --color-info: #1d4ed8;
   --color-info-bg: #eff6ff;
 
   /* Shadows */

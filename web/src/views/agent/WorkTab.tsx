@@ -71,6 +71,7 @@ export function WorkTab(props: { spaceId: string }) {
   const [startingTaskId, setStartingTaskId] = createSignal<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [modelSettings, setModelSettings] = createSignal<ModelSettings | null>(
     null,
   );
@@ -127,6 +128,7 @@ export function WorkTab(props: { spaceId: string }) {
   const fetchTasks = async (spaceId = props.spaceId) => {
     const seq = ++tasksSeq;
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await rpc.spaces[":spaceId"]["agent-tasks"].$get({
         param: { spaceId },
@@ -134,9 +136,10 @@ export function WorkTab(props: { spaceId: string }) {
       const data = await rpcJson<{ tasks: AgentTask[] }>(res);
       if (seq !== tasksSeq || spaceId !== props.spaceId) return;
       setTasks(data.tasks || []);
-    } catch {
+    } catch (err) {
       if (seq !== tasksSeq || spaceId !== props.spaceId) return;
       setTasks([]);
+      setLoadError(getErrorMessage(err, t("failedToLoad")));
       showToast("error", t("failedToLoad"));
     } finally {
       if (seq === tasksSeq && spaceId === props.spaceId) {
@@ -386,7 +389,8 @@ export function WorkTab(props: { spaceId: string }) {
     <Show
       when={!loading()}
       fallback={
-        <div class="flex flex-col gap-6">
+        <div role="status" aria-live="polite" class="flex flex-col gap-6">
+          <span class="sr-only">{t("loading")}</span>
           <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between">
               <div class="h-5 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded animate-pulse" />
@@ -405,12 +409,12 @@ export function WorkTab(props: { spaceId: string }) {
       <div class="flex flex-col gap-6">
         <div class="flex flex-col gap-3">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {t("taskBoard")}
-            </h4>
+            </h3>
             <button
               type="button"
-              class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              class={`min-h-[44px] sm:min-h-0 w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isCreating()
                   ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                   : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
@@ -425,6 +429,24 @@ export function WorkTab(props: { spaceId: string }) {
             onFilterChange={setActiveFilter}
           />
         </div>
+
+        <Show when={loadError()}>
+          {(err) => (
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            >
+              <span class="min-w-0 flex-1">{err()}</span>
+              <button
+                type="button"
+                class="min-h-[44px] sm:min-h-0 rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                onClick={() => void fetchTasks()}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          )}
+        </Show>
 
         {isCreating() && (
           <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
@@ -455,7 +477,7 @@ export function WorkTab(props: { spaceId: string }) {
 
         {filteredTasks().length === 0
           ? (
-            isCreating()
+            isCreating() || loadError()
               ? null
               : (
                 <div class="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
@@ -472,7 +494,7 @@ export function WorkTab(props: { spaceId: string }) {
                   </div>
                   <button
                     type="button"
-                    class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                    class="min-h-[44px] sm:min-h-0 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
                     onClick={openCreateForm}
                   >
                     <Icons.Plus class="w-4 h-4" />

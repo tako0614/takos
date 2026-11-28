@@ -4,6 +4,10 @@ export const settings = {
   email: "Email",
   name: "Name",
   language: "Language",
+  appearance: "Appearance",
+  themeSystem: "System",
+  themeLight: "Light",
+  themeDark: "Dark",
 
   // Workspace Settings
   workspaceSlug: "Space Slug",

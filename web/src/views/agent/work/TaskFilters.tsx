@@ -16,10 +16,11 @@ export function TaskFilters(props: TaskFiltersProps) {
       {["all", ...STATUS_ORDER].map((value) => (
         <button
           type="button"
-          class={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+          aria-pressed={props.activeFilter === value}
+          class={`min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
             props.activeFilter === value
               ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-              : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+              : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={() => props.onFilterChange(value as TaskFilter)}
         >

@@ -31,14 +31,15 @@ type SharedThreadPayload = {
   }>;
 };
 
-function formatIso(iso: string): string {
+function formatIso(iso: string, lang: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString(lang === "ja" ? "ja-JP" : "en-US");
 }
 
 export function SharedThreadPage(props: { token: string }) {
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const t = i18n.t;
   const [loading, setLoading] = createSignal(true);
   const [requiresPassword, setRequiresPassword] = createSignal(false);
   const [password, setPassword] = createSignal("");
@@ -130,9 +131,10 @@ export function SharedThreadPage(props: { token: string }) {
         json: { password: pw },
       });
       if (res.status === 401) {
+        const body = await res.json().catch(() => ({})) as { error?: unknown };
         if (!isCurrent()) return;
         setRequiresPassword(true);
-        setError(null);
+        setError(getErrorMessage(body.error, t("invalidPassword")));
         return;
       }
       if (!res.ok) {
@@ -271,17 +273,23 @@ export function SharedThreadPage(props: { token: string }) {
               {shareData.thread.title || t("untitledThread")}
             </h1>
             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>{t("shareLabel", { mode: shareData.share.mode })}</span>
+              <span>
+                {t("shareLabel", {
+                  mode: shareData.share.mode === "password"
+                    ? t("sharePasswordLabel")
+                    : t("sharePublic"),
+                })}
+              </span>
               {expiresAt && (
                 <span>
                   {t("expiresDate", {
-                    date: formatIso(expiresAt),
+                    date: formatIso(expiresAt, i18n.lang),
                   })}
                 </span>
               )}
               <span>
                 {t("updatedLabel", {
-                  date: formatIso(shareData.thread.updated_at),
+                  date: formatIso(shareData.thread.updated_at, i18n.lang),
                 })}
               </span>
             </div>

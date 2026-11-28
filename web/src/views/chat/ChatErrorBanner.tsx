@@ -20,7 +20,7 @@ export function ChatErrorBanner(props: ChatErrorBannerProps) {
       <Show when={props.onRetry}>
         <button
           type="button"
-          class="rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm"
+          class="min-h-[44px] sm:min-h-0 rounded-lg border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm"
           onClick={() => props.onRetry?.()}
         >
           {t("retry")}
@@ -28,12 +28,12 @@ export function ChatErrorBanner(props: ChatErrorBannerProps) {
       </Show>
       <button
         type="button"
-        class="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
+        class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 items-center justify-center p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
         onClick={props.onDismiss}
         title={t("close")}
         aria-label={t("close")}
       >
-        <Icons.X />
+        <Icons.X class="w-4 h-4" aria-hidden="true" />
       </button>
     </div>
   );

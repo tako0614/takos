@@ -209,7 +209,7 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
 
   return (
     <details class="mt-6 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/50">
-      <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+      <summary class="min-h-[44px] flex items-center cursor-pointer px-4 py-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
         {t("registrySources")}
       </summary>
       <div class="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
@@ -259,14 +259,21 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
         </Show>
 
         <Show when={props.loading}>
-          <div class="flex items-center justify-center gap-2 py-8 text-sm text-zinc-500 dark:text-zinc-400">
-            <Icons.Loader class="h-4 w-4 animate-spin" />
+          <div
+            role="status"
+            aria-live="polite"
+            class="flex items-center justify-center gap-2 py-8 text-sm text-zinc-500 dark:text-zinc-400"
+          >
+            <Icons.Loader class="h-4 w-4 animate-spin" aria-hidden="true" />
             {t("loading")}
           </div>
         </Show>
 
         <Show when={!props.loading && props.error}>
-          <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+          <div
+            role="alert"
+            class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200"
+          >
             {props.error}
           </div>
         </Show>
@@ -452,7 +459,7 @@ function SourceFields(props: {
       </label>
       {!toSourceInput(props.draft) &&
       (props.draft.name || props.draft.base_url) ? (
-        <p class="text-xs text-red-600 dark:text-red-300 sm:col-span-2">
+        <p role="alert" class="text-xs text-red-600 dark:text-red-300 sm:col-span-2">
           {t("registrySourceValidation")}
         </p>
       ) : null}

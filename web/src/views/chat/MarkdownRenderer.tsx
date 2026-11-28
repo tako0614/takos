@@ -39,9 +39,9 @@ function CodeBlock(props: { code: string; language: string }) {
   return (
     <pre class="rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden mb-4">
       <div class="flex items-center justify-between px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
-        <span class="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{props.language || 'code'}</span>
+        <span class="text-xs text-zinc-600 dark:text-zinc-300 font-mono">{props.language || 'code'}</span>
         <button
-          class="p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center gap-1"
+          class="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 p-1 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 flex items-center justify-center gap-1"
           onClick={() => copy(props.code)}
           type="button"
           aria-label={copyFailed() ? t('copyFailed') || 'Copy failed' : copied() ? t('copied') || 'Copied' : t('copyCode') || 'Copy code'}
@@ -237,9 +237,12 @@ export function MarkdownRenderer(props: { content: string }) {
     return parseMarkdownBlocks(props.content).map((block): JSX.Element => {
       switch (block.kind) {
         case "heading":
+          // Demote by one heading level (h1->h2 .. h4->h5) so assistant
+          // markdown never injects a second <h1> into pages that already own
+          // the screen's single <h1>, while preserving the visual heading scale.
           return (
             <Dynamic
-              component={`h${block.level}`}
+              component={`h${Math.min(block.level + 1, 6)}`}
               class={HEADING_CLASS[block.level]}
             >
               {inline(block.text)}
@@ -281,6 +284,7 @@ export function MarkdownRenderer(props: { content: string }) {
                   <tr>
                     {block.header.map((cell, idx) => (
                       <th
+                        scope="col"
                         class={`border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 font-semibold bg-zinc-50 dark:bg-zinc-800 ${
                           alignClass(block.align[idx] ?? null)
                         }`}
@@ -314,7 +318,7 @@ export function MarkdownRenderer(props: { content: string }) {
           return <div class="h-4" />;
         case "paragraph":
           return (
-            <p class="mb-4 text-zinc-900 dark:text-zinc-100">
+            <p class="mb-4 break-words text-zinc-900 dark:text-zinc-100">
               {inline(block.text)}
             </p>
           );

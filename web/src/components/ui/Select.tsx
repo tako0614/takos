@@ -16,6 +16,7 @@ interface SelectOption {
 }
 
 interface SelectProps {
+  id?: string;
   options: SelectOption[];
   value?: string;
   placeholder?: string;
@@ -25,6 +26,7 @@ interface SelectProps {
   class?: string;
   style?: JSX.CSSProperties;
   "aria-label"?: string;
+  "aria-labelledby"?: string;
 }
 
 export function Select(props: SelectProps) {
@@ -112,7 +114,7 @@ export function Select(props: SelectProps) {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (props.disabled) return;
+    if (props.disabled || e.isComposing || e.keyCode === 229) return;
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
@@ -158,6 +160,7 @@ export function Select(props: SelectProps) {
 
   const triggerStyle = (): JSX.CSSProperties => ({
     width: "100%",
+    "min-height": "44px",
     padding: "0.5rem 0.75rem",
     "font-size": "0.875rem",
     "background-color": "var(--color-surface-primary)",
@@ -218,6 +221,7 @@ export function Select(props: SelectProps) {
       style={{ position: "relative", ...props.style }}
     >
       <button
+        id={props.id}
         ref={triggerRef}
         type="button"
         role="combobox"
@@ -228,6 +232,7 @@ export function Select(props: SelectProps) {
           ? optionId(activeIndex())
           : undefined}
         aria-label={props["aria-label"]}
+        aria-labelledby={props["aria-labelledby"]}
         aria-invalid={props.error ? "true" : undefined}
         aria-describedby={props.error ? errorId : undefined}
         style={triggerStyle()}

@@ -29,6 +29,7 @@ export function SkillsTab(props: { spaceId: string }) {
   const [form, setForm] = createSignal<SkillFormData>(INITIAL_SKILL_FORM);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
     {},
   );
@@ -41,6 +42,7 @@ export function SkillsTab(props: { spaceId: string }) {
   const fetchSkills = async (spaceId = props.spaceId) => {
     const seq = ++skillsSeq;
     setLoading(true);
+    setLoadError(null);
     try {
       const [customRes, managedRes] = await Promise.all([
         rpcPath(rpc, "spaces", ":spaceId", "skills").$get({
@@ -57,10 +59,11 @@ export function SkillsTab(props: { spaceId: string }) {
       if (seq !== skillsSeq || spaceId !== props.spaceId) return;
       setSkills(customData.skills || []);
       setManagedSkills(managedData.skills || []);
-    } catch {
+    } catch (err) {
       if (seq !== skillsSeq || spaceId !== props.spaceId) return;
       setSkills([]);
       setManagedSkills([]);
+      setLoadError(getErrorMessage(err, t("failedToLoadSkills")));
       showToast("error", t("failedToLoadSkills"));
     } finally {
       if (seq === skillsSeq && spaceId === props.spaceId) {
@@ -228,7 +231,30 @@ export function SkillsTab(props: { spaceId: string }) {
   };
 
   return (
-    <Show when={!loading()} fallback={<SkeletonList count={3} />}>
+    <Show
+      when={!loading()}
+      fallback={
+        <div role="status" aria-live="polite">
+          <span class="sr-only">{t("loading")}</span>
+          <SkeletonList count={3} />
+        </div>
+      }
+    >
+      <Show when={loadError() && !isCreating()}>
+        <div
+          role="alert"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+        >
+          <span class="min-w-0 flex-1">{loadError()}</span>
+          <button
+            type="button"
+            class="min-h-[44px] sm:min-h-0 rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+            onClick={() => void fetchSkills()}
+          >
+            {t("retry")}
+          </button>
+        </div>
+      </Show>
       {isCreating()
         ? (
           <SkillFormView

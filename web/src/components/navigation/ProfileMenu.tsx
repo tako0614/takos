@@ -1,16 +1,24 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
+import {
+  activateDropdownMenuItem,
+  focusDropdownMenuItem,
+  handleDropdownMenuKeyDown,
+  handleMenuTriggerKeyDown,
+  type MenuFocusTarget,
+  shouldCloseOnFocusOut,
+} from "../../views/storage/storage-new-dropdown-menu.ts";
 import { useSidebarCallbacks } from "./SidebarContext.tsx";
 import type { User } from "../../types/index.ts";
 
 const ROW_BASE =
-  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[36px]";
+  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-[36px]";
 const ROW_DEFAULT =
   `${ROW_BASE} text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100`;
 
 const PROFILE_MENU_BTN =
-  "flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors min-h-[36px]";
+  "flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors min-h-[44px] md:min-h-[36px]";
 
 interface ProfileMenuProps {
   user: User | null;
@@ -20,43 +28,92 @@ export function ProfileMenu(props: ProfileMenuProps) {
   const { t } = useI18n();
   const { onOpenSettings, onLogout } = useSidebarCallbacks();
   const [showProfileMenu, setShowProfileMenu] = createSignal(false);
+  let containerRef: HTMLDivElement | undefined;
   let triggerRef: HTMLButtonElement | undefined;
+  let menuRef: HTMLDivElement | undefined;
+  let pendingFocusTarget: MenuFocusTarget | null = null;
+  let pointerDownInside = false;
+
+  const closeMenu = () => {
+    pendingFocusTarget = null;
+    setShowProfileMenu(false);
+  };
+
+  const openMenu = (focusTarget: MenuFocusTarget | null = null) => {
+    pendingFocusTarget = focusTarget;
+    setShowProfileMenu(true);
+  };
 
   createEffect(() => {
     if (!showProfileMenu()) return;
+    if (pendingFocusTarget) {
+      const target = pendingFocusTarget;
+      pendingFocusTarget = null;
+      queueMicrotask(() => focusDropdownMenuItem(menuRef, target));
+    }
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        e.target instanceof Element &&
-        !e.target.closest(".unified-profile-menu")
+        e.target instanceof Node &&
+        containerRef &&
+        !containerRef.contains(e.target)
       ) {
-        setShowProfileMenu(false);
+        closeMenu();
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        setShowProfileMenu(false);
+        closeMenu();
         triggerRef?.focus();
       }
     };
+    const clearPointer = () => {
+      pointerDownInside = false;
+    };
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
+    document.addEventListener("pointerup", clearPointer);
+    document.addEventListener("pointercancel", clearPointer);
     onCleanup(() => {
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("pointerup", clearPointer);
+      document.removeEventListener("pointercancel", clearPointer);
     });
   });
 
   return (
-    <div class="relative unified-profile-menu">
+    <div
+      ref={containerRef}
+      class="relative unified-profile-menu"
+      onPointerDown={() => {
+        pointerDownInside = true;
+      }}
+      onFocusOut={(e) => {
+        if (
+          showProfileMenu() &&
+          shouldCloseOnFocusOut(e, containerRef, pointerDownInside)
+        ) {
+          closeMenu();
+        }
+      }}
+    >
       <button
         ref={triggerRef}
         type="button"
         class={ROW_DEFAULT}
         onClick={(e) => {
           e.stopPropagation();
-          setShowProfileMenu(!showProfileMenu());
+          if (showProfileMenu()) closeMenu();
+          else openMenu(e.detail === 0 ? "first" : null);
+        }}
+        onKeyDown={(e) => {
+          handleMenuTriggerKeyDown(e, {
+            isOpen: showProfileMenu(),
+            getMenu: () => menuRef,
+            openWithTarget: (target) => openMenu(target),
+          });
         }}
         aria-label={t("profileMenu")}
         aria-expanded={showProfileMenu()}
@@ -73,8 +130,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
           {(picture) => (
             <img
               src={picture()}
-              alt={(props.user?.name || props.user?.username || "") +
-                "'s avatar"}
+              alt=""
               class="w-5 h-5 rounded-full object-cover shrink-0"
             />
           )}
@@ -88,6 +144,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
 
       <Show when={showProfileMenu()}>
         <div
+          ref={menuRef}
           class="absolute bottom-full left-0 right-0 mb-2 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50"
           onClick={(e) => e.stopPropagation()}
           role="menu"
@@ -97,9 +154,15 @@ export function ProfileMenu(props: ProfileMenuProps) {
             if (e.key === "Escape") {
               e.preventDefault();
               e.stopPropagation();
-              setShowProfileMenu(false);
+              closeMenu();
               triggerRef?.focus();
+              return;
             }
+            handleDropdownMenuKeyDown(e, {
+              getMenu: () => menuRef,
+              getTrigger: () => triggerRef,
+              close: closeMenu,
+            });
           }}
         >
           <div class="px-4 py-2 border-b border-zinc-100 dark:border-zinc-700">
@@ -125,33 +188,37 @@ export function ProfileMenu(props: ProfileMenuProps) {
             type="button"
             class={PROFILE_MENU_BTN}
             role="menuitem"
-            onClick={() => {
-              setShowProfileMenu(false);
-              onOpenSettings();
-            }}
+            onClick={() =>
+              activateDropdownMenuItem({
+                close: closeMenu,
+                getTrigger: () => triggerRef,
+                action: onOpenSettings,
+              })}
           >
-            <Icons.Settings class="w-4 h-4" />
+            <Icons.Settings class="w-4 h-4" aria-hidden="true" />
             <span>{t("accountSettings")}</span>
           </button>
           <a
             href="/terms"
             class={PROFILE_MENU_BTN}
             role="menuitem"
-            onClick={() => setShowProfileMenu(false)}
+            onClick={() => closeMenu()}
           >
-            <Icons.FileText class="w-4 h-4" />
+            <Icons.FileText class="w-4 h-4" aria-hidden="true" />
             <span>{t("legalInfo")}</span>
           </a>
           <button
             type="button"
             class={PROFILE_MENU_BTN}
             role="menuitem"
-            onClick={() => {
-              setShowProfileMenu(false);
-              onLogout();
-            }}
+            onClick={() =>
+              activateDropdownMenuItem({
+                close: closeMenu,
+                getTrigger: () => triggerRef,
+                action: onLogout,
+              })}
           >
-            <Icons.X class="w-4 h-4" />
+            <Icons.X class="w-4 h-4" aria-hidden="true" />
             <span>{t("logout")}</span>
           </button>
         </div>

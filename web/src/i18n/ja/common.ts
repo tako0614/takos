@@ -21,6 +21,7 @@ export const common = {
   passwordRequired: "パスワードが必要です",
   enterPasswordToView:
     "共有されたスレッドを表示するにはパスワードを入力してください。",
+  invalidPassword: "パスワードが正しくありません。もう一度入力してください。",
   unlock: "解除",
   shareNotAvailable: "この共有リンクは利用できません。",
   noMessages: "メッセージがありません。",

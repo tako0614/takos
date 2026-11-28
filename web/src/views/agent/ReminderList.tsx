@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, createUniqueId } from "solid-js";
 import type { JSX } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
@@ -79,7 +79,7 @@ export function ReminderList(props: {
     trigger_type: Reminder["trigger_type"];
     trigger_value: string;
     priority: Reminder["priority"];
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   savingReminder: boolean;
 }) {
   const i18n = useI18n();
@@ -92,18 +92,26 @@ export function ReminderList(props: {
   );
   const [triggerValue, setTriggerValue] = createSignal("");
   const [priority, setPriority] = createSignal<Reminder["priority"]>("normal");
+  const fieldPrefix = createUniqueId();
+  const contentId = `${fieldPrefix}-content`;
+  const triggerTypeLabelId = `${fieldPrefix}-trigger-type-label`;
+  const triggerTypeId = `${fieldPrefix}-trigger-type`;
+  const triggerValueId = `${fieldPrefix}-trigger-value`;
+  const priorityLabelId = `${fieldPrefix}-priority-label`;
+  const priorityId = `${fieldPrefix}-priority`;
 
   const handleCreateReminder = async (
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
     if (!reminderContent().trim() || !triggerValue().trim()) return;
-    await props.onCreateReminder({
+    const created = await props.onCreateReminder({
       content: reminderContent().trim(),
       trigger_type: triggerType(),
       trigger_value: triggerValue().trim(),
       priority: priority(),
     });
+    if (!created) return;
     setReminderContent("");
     setTriggerValue("");
     setShowCreateReminder(false);
@@ -173,7 +181,7 @@ export function ReminderList(props: {
                 <div
                   style={{
                     "font-size": "0.75rem",
-                    color: "var(--color-text-tertiary)",
+                    color: "var(--color-text-primary)",
                     "margin-top": "0.5rem",
                     padding: "0.25rem 0.5rem",
                     "background-color": "var(--color-bg-tertiary)",
@@ -246,6 +254,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for={contentId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -255,6 +264,7 @@ export function ReminderList(props: {
                 {t("reminderContent")}
               </label>
               <Textarea
+                id={contentId}
                 placeholder={t("reminderContentPlaceholder")}
                 value={reminderContent()}
                 onInput={(e) => setReminderContent(e.currentTarget.value)}
@@ -271,6 +281,8 @@ export function ReminderList(props: {
               }}
             >
               <label
+                id={triggerTypeLabelId}
+                for={triggerTypeId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -280,6 +292,8 @@ export function ReminderList(props: {
                 {t("triggerType")}
               </label>
               <Select
+                id={triggerTypeId}
+                aria-labelledby={triggerTypeLabelId}
                 value={triggerType()}
                 onChange={(value) =>
                   setTriggerType(value as Reminder["trigger_type"])}
@@ -311,6 +325,7 @@ export function ReminderList(props: {
               }}
             >
               <label
+                for={triggerValueId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -320,6 +335,7 @@ export function ReminderList(props: {
                 {t("triggerValue")}
               </label>
               <Input
+                id={triggerValueId}
                 placeholder={triggerType() === "time"
                   ? t("triggerValueTimePlaceholder")
                   : t("triggerValueConditionPlaceholder")}
@@ -336,6 +352,8 @@ export function ReminderList(props: {
               }}
             >
               <label
+                id={priorityLabelId}
+                for={priorityId}
                 style={{
                   "font-size": "0.875rem",
                   "font-weight": 500,
@@ -345,6 +363,8 @@ export function ReminderList(props: {
                 {t("priority")}
               </label>
               <Select
+                id={priorityId}
+                aria-labelledby={priorityLabelId}
                 value={priority()}
                 onChange={(value) => setPriority(value as Reminder["priority"])}
                 options={[

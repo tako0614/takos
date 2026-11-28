@@ -14,6 +14,7 @@ export function ModelTab(props: { spaceId: string }) {
   const { showToast } = useToast();
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [selectedModel, setSelectedModel] = createSignal(FALLBACK_MODELS[0].id);
   const [modelOptions, setModelOptions] = createSignal<ModelSelectOption[]>([
     ...FALLBACK_MODELS,
@@ -28,6 +29,7 @@ export function ModelTab(props: { spaceId: string }) {
   const fetchModelSettings = async (spaceId = props.spaceId) => {
     const seq = ++modelSettingsSeq;
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await rpc.spaces[":spaceId"].model.$get({
         param: { spaceId },
@@ -77,6 +79,9 @@ export function ModelTab(props: { spaceId: string }) {
     } catch (err) {
       if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
       console.error("Failed to fetch model settings:", err);
+      setLoadError(
+        err instanceof Error && err.message ? err.message : t("failedToLoad"),
+      );
     } finally {
       if (seq === modelSettingsSeq && spaceId === props.spaceId) {
         setLoading(false);
@@ -107,38 +112,63 @@ export function ModelTab(props: { spaceId: string }) {
     <Show
       when={!loading()}
       fallback={
-        <div class="flex flex-col items-center justify-center py-12 text-zinc-500 gap-3">
-          <Icons.Loader class="w-5 h-5 animate-spin" />
+        <div
+          role="status"
+          aria-live="polite"
+          class="flex flex-col items-center justify-center py-12 text-zinc-600 dark:text-zinc-300 gap-3"
+        >
+          <Icons.Loader class="w-5 h-5 animate-spin" aria-hidden="true" />
           <p>{t("loading")}</p>
         </div>
       }
     >
       <div class="flex flex-col gap-6">
+        <Show when={loadError()}>
+          {(err) => (
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            >
+              <span class="min-w-0 flex-1">{err()}</span>
+              <button
+                type="button"
+                class="min-h-[44px] sm:min-h-0 rounded-lg border border-red-300 dark:border-red-800 px-3 py-1.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                onClick={() => void fetchModelSettings()}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          )}
+        </Show>
+
         <div class="bg-zinc-100 dark:bg-zinc-800 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
-          <h4 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
+          <h3 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
             {t("modelBackend")}
-          </h4>
-          <div class="grid grid-cols-3 gap-3">
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {modelOptions().map((opt) => (
               <button
                 type="button"
-                class={`flex flex-col items-start gap-1 p-4 rounded-lg border transition-colors text-left ${
+                aria-pressed={selectedModel() === opt.id}
+                class={`min-h-[44px] flex flex-col items-start gap-1 p-4 rounded-lg border transition-colors text-left ${
                   selectedModel() === opt.id
-                    ? "border-zinc-900 dark:border-zinc-100 bg-white/10 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
-                    : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-900/50 dark:hover:border-zinc-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    ? "border-zinc-900 dark:border-zinc-100 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
+                    : "border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/60 hover:border-zinc-900/50 dark:hover:border-zinc-400 text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
                 onClick={() => setSelectedModel(opt.id)}
                 disabled={saving() || opt.disabled}
               >
                 <span class="text-base font-semibold">{opt.label}</span>
                 {opt.description && (
-                  <span class="text-xs opacity-70">{opt.description}</span>
+                  <span class="text-xs text-zinc-600 dark:text-zinc-300">
+                    {opt.description}
+                  </span>
                 )}
               </button>
             ))}
           </div>
           {tokenLimit() !== null && (
-            <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <p class="mt-3 text-xs text-zinc-600 dark:text-zinc-300">
               {t("tokenLimitLabel")}: {t("tokenLimitValue", {
                 count: (tokenLimit()! / 1000).toFixed(0),
               })}
@@ -148,7 +178,7 @@ export function ModelTab(props: { spaceId: string }) {
 
         <button
           type="button"
-          class="w-full py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          class="min-h-[44px] w-full py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           onClick={handleSave}
           disabled={saving()}
         >

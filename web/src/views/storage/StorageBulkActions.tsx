@@ -22,37 +22,37 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
         <div class="hidden sm:block w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
         <button
           type="button"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+          class="min-h-[44px] sm:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onMove}
         >
-          <Icons.FolderOpen class="w-4 h-4" />
+          <Icons.FolderOpen class="w-4 h-4" aria-hidden="true" />
           {t("move")}
         </button>
         <button
           type="button"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+          class="min-h-[44px] sm:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onRename}
         >
-          <Icons.Edit class="w-4 h-4" />
+          <Icons.Edit class="w-4 h-4" aria-hidden="true" />
           {t("rename")}
         </button>
         <button
           type="button"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-red-400 dark:text-red-500 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+          class="min-h-[44px] sm:min-h-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-red-400 dark:text-red-700 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onDelete}
         >
-          <Icons.Trash class="w-4 h-4" />
+          <Icons.Trash class="w-4 h-4" aria-hidden="true" />
           {t("delete")}
         </button>
         <div class="hidden sm:block w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
         <button
           type="button"
-          class="p-1.5 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+          class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 items-center justify-center rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onClear}
           title={t("clear")}
           aria-label={t("clear")}
         >
-          <Icons.X class="w-4 h-4" />
+          <Icons.X class="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </Show>

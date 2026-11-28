@@ -50,9 +50,9 @@ export function TaskCard(props: TaskCardProps) {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div class="flex flex-wrap items-center gap-2">
-            <h5 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {props.task.title}
-            </h5>
+            </h4>
             <span
               class={`text-xs font-medium px-2 py-0.5 rounded-full border ${
                 getStatusClasses(props.task.status)
@@ -69,11 +69,11 @@ export function TaskCard(props: TaskCardProps) {
             </span>
           </div>
           {props.task.description && (
-            <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-2 whitespace-pre-wrap">
+            <p class="text-sm text-zinc-600 dark:text-zinc-300 mt-2 whitespace-pre-wrap">
               {props.task.description}
             </p>
           )}
-          <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-2 flex flex-wrap gap-3">
+          <div class="text-xs text-zinc-600 dark:text-zinc-300 mt-2 flex flex-wrap gap-3">
             {dueDate() && <span>{t("taskDueLabel")}: {dueDate()}</span>}
             {props.task.agent_type && (
               <span>
@@ -90,7 +90,7 @@ export function TaskCard(props: TaskCardProps) {
           </div>
           <Show when={latestRun()}>
             {(run) => (
-              <div class="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/60 px-3 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+              <div class="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/60 px-3 py-3 text-xs text-zinc-600 dark:text-zinc-300">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium text-zinc-800 dark:text-zinc-200">
                     {t("taskLatestRun")}
@@ -120,7 +120,7 @@ export function TaskCard(props: TaskCardProps) {
             const tools = taskPlan.tools ?? [];
 
             return (
-              <div class="mt-3 text-xs text-zinc-500 dark:text-zinc-400 bg-white/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 space-y-1">
+              <div class="mt-3 text-xs text-zinc-600 dark:text-zinc-300 bg-white/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 space-y-1">
                 <div class="font-medium text-zinc-800 dark:text-zinc-200">
                   {t("taskPlan")}
                 </div>
@@ -131,7 +131,7 @@ export function TaskCard(props: TaskCardProps) {
                   <div>{t("taskPlanTools")}: {tools.join(", ")}</div>
                 )}
                 {taskPlan.reasoning && (
-                  <div class="text-zinc-500 dark:text-zinc-400">
+                  <div class="text-zinc-600 dark:text-zinc-300">
                     {taskPlan.reasoning}
                   </div>
                 )}
@@ -188,14 +188,14 @@ export function TaskCard(props: TaskCardProps) {
           )}
           <button
             type="button"
-            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => props.onEdit(props.task)}
           >
             {t("edit")}
           </button>
           <button
             type="button"
-            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+            class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
             onClick={() => props.onDelete(props.task.id)}
             disabled={props.isDeleting}
           >

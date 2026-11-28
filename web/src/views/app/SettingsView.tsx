@@ -3,6 +3,7 @@ import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/index.ts";
 import type { User, UserSettings } from "../../types/index.ts";
 import { SettingsAccount } from "./SettingsAccount.tsx";
+import { SettingsAppearance } from "./SettingsAppearance.tsx";
 import { SettingsLanguage } from "./SettingsLanguage.tsx";
 import { SettingsPreferences } from "./SettingsPreferences.tsx";
 
@@ -39,6 +40,7 @@ export function SettingsView(props: {
         <div class="mx-auto w-full max-w-2xl space-y-3 px-4 pb-10 pt-6">
           <SettingsAccount user={props.user} />
           <SettingsLanguage />
+          <SettingsAppearance />
           {props.userSettings && (
             <SettingsPreferences
               userSettings={props.userSettings}

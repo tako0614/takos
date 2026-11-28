@@ -7,6 +7,7 @@ import {
   Suspense,
 } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
+import { useTheme } from "../../store/theme.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { useToast } from "../../store/toast.ts";
 import { useFileContent } from "../../hooks/useFileContent.ts";
@@ -34,6 +35,7 @@ export function StorageTextEditor(props: {
   onSave?: () => void;
 }) {
   const { t } = useI18n();
+  const theme = useTheme();
   const { confirm } = useConfirmDialog();
 
   const handleClose = async () => {
@@ -91,6 +93,7 @@ export function StorageTextEditor(props: {
 
   createEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         handleSave();
@@ -101,8 +104,6 @@ export function StorageTextEditor(props: {
   });
 
   const language = () => detectLanguage(props.file.name);
-  const prefersDark = typeof globalThis !== "undefined" &&
-    globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches;
 
   const extraButtons = () =>
     isDirty()
@@ -136,16 +137,31 @@ export function StorageTextEditor(props: {
       <Show
         when={!loading()}
         fallback={
-          <div class="flex items-center justify-center h-full">
-            <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" />
+          <div
+            role="status"
+            aria-live="polite"
+            class="flex items-center justify-center h-full"
+          >
+            <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" aria-hidden="true" />
+            <span class="sr-only">{t("loading")}</span>
           </div>
         }
       >
         <Show
           when={!error()}
           fallback={
-            <div class="p-4 m-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
-              {error()}
+            <div
+              role="alert"
+              class="m-4 flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            >
+              <span class="min-w-0 flex-1">{error()}</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadContent(props.file.id)}
+              >
+                {t("retry")}
+              </Button>
             </div>
           }
         >
@@ -173,15 +189,20 @@ export function StorageTextEditor(props: {
           >
             <Suspense
               fallback={
-                <div class="flex items-center justify-center h-full">
-                  <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" />
+                <div
+                  role="status"
+                  aria-live="polite"
+                  class="flex items-center justify-center h-full"
+                >
+                  <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500" aria-hidden="true" />
+                  <span class="sr-only">{t("loading")}</span>
                 </div>
               }
             >
               <MonacoEditor
                 height="100%"
                 language={language()}
-                theme={prefersDark ? "vs-dark" : "vs"}
+                theme={theme.resolvedTheme === "dark" ? "vs-dark" : "vs"}
                 value={editedContent() ?? ""}
                 onChange={handleEditorChange}
                 options={{

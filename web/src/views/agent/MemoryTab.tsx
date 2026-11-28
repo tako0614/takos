@@ -32,17 +32,19 @@ export function MemoryTab(props: { spaceId: string }) {
       when={!loading()}
       fallback={
         <div
+          role="status"
+          aria-live="polite"
           style={{
             display: "flex",
             "flex-direction": "column",
             "align-items": "center",
             "justify-content": "center",
             padding: "3rem 0",
-            color: "var(--color-text-tertiary)",
+            color: "var(--color-text-secondary)",
             gap: "0.75rem",
           }}
         >
-          <Icons.Loader class="w-5 h-5 animate-spin" />
+          <Icons.Loader class="w-5 h-5 animate-spin" aria-hidden="true" />
           <p>{t("loading")}</p>
         </div>
       }
@@ -62,7 +64,8 @@ export function MemoryTab(props: { spaceId: string }) {
             <Button
               variant={!showReminders() ? "primary" : "ghost"}
               size="sm"
-              leftIcon={<Icons.HardDrive />}
+              aria-pressed={!showReminders()}
+              leftIcon={<Icons.HardDrive aria-hidden="true" />}
               onClick={() => setShowReminders(false)}
             >
               {t("memories")} ({memories().length})
@@ -70,7 +73,8 @@ export function MemoryTab(props: { spaceId: string }) {
             <Button
               variant={showReminders() ? "primary" : "ghost"}
               size="sm"
-              leftIcon={<Icons.Bell />}
+              aria-pressed={showReminders()}
+              leftIcon={<Icons.Bell aria-hidden="true" />}
               onClick={() => setShowReminders(true)}
             >
               {t("reminders")} ({reminders().length})
