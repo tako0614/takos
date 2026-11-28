@@ -218,6 +218,7 @@ export function MemoryList(props: MemoryListProps) {
                       </div>
                       <div class="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
                         <span
+                          role="img"
                           class="text-xs text-zinc-600 dark:text-zinc-400"
                           title={`${t("memoryImportance")}: ${
                             formatImportanceRating(memory.importance)

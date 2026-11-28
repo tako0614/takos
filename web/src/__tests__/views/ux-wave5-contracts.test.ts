@@ -61,6 +61,8 @@ test("dialogs use h2 titles without heading skips and avoid orphan labels or ale
   const spaceSettings = readWeb("src/views/hub/SpaceSettingsCards.tsx");
   assert(!spaceSettings.includes('<label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">\n              {tOr("spaceSlug"'));
   assert(spaceSettings.includes("spaceSlugLabelId"));
+  assert(spaceSettings.includes('role="group"'));
+  assert(!spaceSettings.includes("<code\n                aria-labelledby="));
   assert(spaceSettings.includes("text-zinc-600 dark:text-zinc-300"));
 
   const card = readWeb("src/components/ui/Card.tsx");
@@ -89,6 +91,9 @@ test("secondary install, create-repo, export, and share modals wire label associ
   const createRepo = readWeb("src/views/shared/repos/CreateRepoModal.tsx");
   assert(createRepo.includes("text-zinc-600 dark:text-zinc-300"));
   assert(createRepo.includes("aria-busy={submitting() ? \"true\" : undefined}"));
+  assert(createRepo.includes("aria-describedby={error() ? errorId : undefined}"));
+  assert(createRepo.includes("if (error()) setError(null)"));
+  assert(createRepo.includes('<Icons.X class="w-5 h-5" aria-hidden="true" />'));
   assert(createRepo.includes('role="alert"'));
 
   const sourcePage = readWeb("src/views/source/SourcePage.tsx");
@@ -173,10 +178,12 @@ test("Storage, Memory, SkillList, and ChatMessageFeed fix contrast, filter recov
   assert(memoryList.includes("min-h-[44px] pl-10"));
   assert(memoryList.includes('t("clearFilters")'));
   assert(memoryList.includes('t("noResults")'));
+  assert(memoryList.includes('role="img"'));
   assert(memoryList.includes('aria-label={`${t("memoryImportance")}:'));
 
   const agentMemoryList = readWeb("src/views/agent/MemoryList.tsx");
   assert(agentMemoryList.includes('t("clearFilters")'));
+  assert(agentMemoryList.includes('role="img"'));
   assert(agentMemoryList.includes('aria-label={`${t("memoryImportance")}:'));
 
   const skillList = readWeb("src/views/agent/SkillList.tsx");
@@ -184,7 +191,8 @@ test("Storage, Memory, SkillList, and ChatMessageFeed fix contrast, filter recov
 
   const feed = readWeb("src/views/chat/ChatMessageFeed.tsx");
   assert(feed.includes("when={props.entries.length > 0}"));
-  assert(feed.includes('role="status"'));
+  assert(feed.includes('role={props.live ? "status" : undefined}'));
+  assert(feed.includes('aria-live={props.live ? "polite" : undefined}'));
 
   const createFolder = readWeb("src/views/storage/CreateFolderModal.tsx");
   assert(createFolder.includes("isLoading={creating()}"));

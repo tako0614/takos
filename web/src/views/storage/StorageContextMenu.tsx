@@ -18,6 +18,7 @@ const MENU_MAX_HEIGHT = 240;
 export function StorageContextMenu(props: StorageContextMenuProps) {
   const { t } = useI18n();
   let ref: HTMLDivElement | undefined;
+  let previousFocusedElement: HTMLElement | null = null;
   let shouldRestoreOnClose = true;
   let pointerDownInside = false;
 
@@ -27,7 +28,7 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
       : [];
 
   onMount(() => {
-    const previousFocusedElement = document.activeElement instanceof HTMLElement
+    previousFocusedElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
 
@@ -82,8 +83,17 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
   const handleMenuKeyDown = (e: KeyboardEvent) => {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Tab") {
+      // Close synchronously and return focus to the mounted trigger without
+      // preventing default so native Tab/Shift+Tab continues cleanly from the
+      // row trigger instead of stepping from the detached menu position.
       shouldRestoreOnClose = false;
       props.onClose();
+      if (
+        previousFocusedElement &&
+        document.contains(previousFocusedElement)
+      ) {
+        previousFocusedElement.focus();
+      }
       return;
     }
     const keys = ["ArrowDown", "ArrowUp", "Home", "End"];

@@ -86,11 +86,12 @@ export function SpaceInfoCard(props: {
             >
               {tOr("spaceSlug", t("workspaceSlug"))}
             </span>
-            <div class="flex items-center gap-2">
-              <code
-                aria-labelledby={spaceSlugLabelId}
-                class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate"
-              >
+            <div
+              role="group"
+              aria-labelledby={spaceSlugLabelId}
+              class="flex items-center gap-2"
+            >
+              <code class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate">
                 {getSpaceIdentifier(props.selectedSpace)}
               </code>
               <Button

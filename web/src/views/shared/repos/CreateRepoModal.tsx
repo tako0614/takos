@@ -90,7 +90,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
             onClick={() => props.onClose()}
             aria-label={t("close")}
           >
-            <Icons.X class="w-5 h-5" />
+            <Icons.X class="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
         <form onSubmit={handleSubmit} class="flex flex-col flex-1 min-h-0">
@@ -107,12 +107,17 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                 id={nameId}
                 type="text"
                 value={name()}
-                onInput={(e) => setName(e.currentTarget.value)}
+                onInput={(e) => {
+                  setName(e.currentTarget.value);
+                  if (error()) setError(null);
+                }}
                 placeholder="my-awesome-project"
                 autofocus
                 required
                 class="w-full min-h-[44px] px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-base sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors"
                 aria-required="true"
+                aria-invalid={error() ? "true" : "false"}
+                aria-describedby={error() ? errorId : undefined}
               />
             </div>
             <div class="space-y-2">

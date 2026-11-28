@@ -165,8 +165,8 @@ function ThinkingDisclosure(props: {
         when={props.entries.length > 0}
         fallback={
           <div
-            role="status"
-            aria-live="polite"
+            role={props.live ? "status" : undefined}
+            aria-live={props.live ? "polite" : undefined}
             class={`inline-flex max-w-full items-center gap-1.5 py-1 text-sm ${toneClass()}`}
           >
             <span

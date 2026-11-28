@@ -163,6 +163,7 @@ export function MemoryList(props: {
                     <Badge variant="default">{memory.category}</Badge>
                   )}
                   <span
+                    role="img"
                     style={{
                       color: "var(--color-text-tertiary)",
                       "font-size": "0.875rem",

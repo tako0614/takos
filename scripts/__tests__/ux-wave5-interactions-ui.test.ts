@@ -180,7 +180,7 @@ async function verifyInteractions() {
 
     // 3. MemoryList search filter empty state offers Clear filters and restores items
     const memSection = document.getElementById("memory-section")!;
-    const stars = memSection.querySelector('[aria-label^="Importance:"]');
+    const stars = memSection.querySelector('[role="img"][aria-label^="Importance:"]');
     expect(stars).not.toBeNull();
     expect(stars!.getAttribute("aria-label")).toBe("Importance: 4/5");
     expect(stars!.querySelector('[aria-hidden="true"]')?.textContent).toBe("\u2605\u2605\u2605\u2605\u2606");
@@ -273,10 +273,17 @@ async function verifyInteractions() {
     rejectCreate!(new Error("Repository already exists"));
     await new Promise((r) => setTimeout(r, 0));
     expect(repoSubmitBtn.getAttribute("aria-busy")).toBeNull();
-    expect(repoDialog.querySelector('[role="alert"]')?.textContent).toContain(
-      "Repository already exists",
-    );
+    const repoAlert = repoDialog.querySelector('[role="alert"]')!;
+    expect(repoAlert.textContent).toContain("Repository already exists");
+    expect(repoNameInput.getAttribute("aria-invalid")).toBe("true");
+    expect(repoNameInput.getAttribute("aria-describedby")).toBe(repoAlert.id);
     expect(repoNameInput.value).toBe("demo-repo");
+
+    // Editing the repository name clears the error alert and aria-describedby
+    repoNameInput.value = "demo-repo-2";
+    repoNameInput.dispatchEvent(makeEvent("input"));
+    expect(repoDialog.querySelector('[role="alert"]')).toBeNull();
+    expect(repoNameInput.getAttribute("aria-describedby")).toBeNull();
     fixture.setShowRepoModal(false);
 
     // 7. ChatExportModal: useFocusTrap focuses spread autofocus button and exports selected format
@@ -307,12 +314,15 @@ async function verifyInteractions() {
     const firstItem = ctxMenu.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
     expect(document.activeElement).toBe(firstItem);
 
-    // Tab dismisses menu without restoring focus to trigger
-    firstItem.dispatchEvent(makeEvent("keydown", { key: "Tab", isComposing: false, keyCode: 9 }));
+    // Tab closes synchronously and restores focus to trigger without preventing
+    // default so native Tab/Shift+Tab continues cleanly from the row trigger
+    const tabEv = makeEvent("keydown", { key: "Tab", isComposing: false, keyCode: 9 });
+    firstItem.dispatchEvent(tabEv);
+    expect(tabEv.defaultPrevented).toBe(false);
     expect(fixture.isCtxMenuOpen()).toBe(false);
-    expect(document.activeElement).not.toBe(triggerBtn);
+    expect(document.activeElement).toBe(triggerBtn);
 
-    // focusout moving to outside element dismisses menu
+    // focusout moving to outside element dismisses menu without stealing focus back
     triggerBtn.focus();
     fixture.setShowCtxMenu(true);
     const ctxMenu2 = document.querySelector<HTMLElement>('[role="menu"]')!;

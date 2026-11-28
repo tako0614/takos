@@ -55,7 +55,7 @@ export function SetupPage(props: SetupPageProps) {
               type="submit"
               disabled={submitting()}
               aria-busy={submitting() ? "true" : undefined}
-              class="w-full min-h-[44px] py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm font-medium rounded-lg transition-colors"
+              class="w-full min-h-[44px] py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-75 disabled:hover:bg-zinc-900 dark:disabled:hover:bg-zinc-100 disabled:cursor-not-allowed text-white dark:text-zinc-900 text-sm font-medium rounded-lg transition-colors"
             >
               {submitting()
                 ? (
