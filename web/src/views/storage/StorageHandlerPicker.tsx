@@ -1,4 +1,4 @@
-import { For, onCleanup, onMount, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { formatDateTime, formatFileSize } from "../../lib/format.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/Button.tsx";
@@ -6,7 +6,10 @@ import type { TranslationKey } from "../../store/i18n.ts";
 import type { StorageFile } from "../../types/index.ts";
 import type { ResolvedHandler } from "./storageUtils.tsx";
 import { handlerDisplayName } from "./storageUtils.tsx";
-import { handleDropdownMenuKeyDown } from "./storage-new-dropdown-menu.ts";
+import {
+  activateDropdownMenuItem,
+  handleDropdownMenuKeyDown,
+} from "./storage-new-dropdown-menu.ts";
 
 // ── Handler picker (shown when no default and multiple handlers) ──
 
@@ -121,27 +124,6 @@ export function StorageHandlerDropdown(props: {
 }) {
   let menuEl: HTMLDivElement | undefined;
 
-  onMount(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-handler-dropdown]")) props.onClose();
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.isComposing || e.keyCode === 229) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        props.onClose();
-        props.getTrigger?.()?.focus();
-      }
-    };
-    document.addEventListener("click", handleOutsideClick, true);
-    document.addEventListener("keydown", handleEscape);
-    onCleanup(() => {
-      document.removeEventListener("click", handleOutsideClick, true);
-      document.removeEventListener("keydown", handleEscape);
-    });
-  });
-
   return (
     <div
       ref={(el) => {
@@ -184,7 +166,12 @@ export function StorageHandlerDropdown(props: {
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => props.onSelect(h)}
+                onClick={() =>
+                  activateDropdownMenuItem({
+                    close: props.onClose,
+                    getTrigger: () => props.getTrigger?.(),
+                    action: () => props.onSelect(h),
+                  })}
                 class={"min-h-[44px] sm:min-h-0 flex-1 text-left px-3 py-2 text-sm transition-colors " +
                   (isActive()
                     ? "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20"
@@ -200,7 +187,12 @@ export function StorageHandlerDropdown(props: {
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => props.onSetDefault(h)}
+                onClick={() =>
+                  activateDropdownMenuItem({
+                    close: props.onClose,
+                    getTrigger: () => props.getTrigger?.(),
+                    action: () => props.onSetDefault(h),
+                  })}
                 class="inline-flex min-w-[44px] min-h-[44px] sm:min-w-8 sm:min-h-8 items-center justify-center text-xs text-zinc-600 dark:text-zinc-400 hover:text-blue-700 dark:hover:text-blue-300 opacity-100 md:opacity-0 md:group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                 title={props.t("setAsDefault")}
                 aria-label={`${props.t("setAsDefault")}: ${name()}`}
@@ -215,7 +207,12 @@ export function StorageHandlerDropdown(props: {
         <button
           type="button"
           role="menuitem"
-          onClick={props.onClearDefault}
+          onClick={() =>
+            activateDropdownMenuItem({
+              close: props.onClose,
+              getTrigger: () => props.getTrigger?.(),
+              action: props.onClearDefault,
+            })}
           class="min-h-[44px] sm:min-h-0 w-full text-left px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
         >
           {props.t("clearDefault")}

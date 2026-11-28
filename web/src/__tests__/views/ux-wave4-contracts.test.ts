@@ -65,12 +65,19 @@ test("shared UI controls support 44px mobile touch targets, Select labelling/IME
 
   const textarea = readWeb("src/components/ui/Textarea.tsx");
   assert(textarea.includes("createUniqueId()"));
-  assert(textarea.includes("aria-invalid={local.error ? \"true\" : undefined}"));
+  assert(textarea.includes('aria-invalid={local.error ? "true" : local["aria-invalid"]}'));
   assert(textarea.includes('role="alert"'));
 
   const toast = readWeb("src/components/common/Toast.tsx");
   assert(toast.includes('aria-live="polite"'));
+  assert(toast.includes('aria-live="assertive"'));
   assert(toast.includes("min-w-[44px] min-h-[44px]"));
+
+  const registrySources = readWeb("src/views/connections/RegistrySourcesPanel.tsx");
+  assert(
+    !/<summary[^>]*\bflex\b/.test(registrySources),
+    "RegistrySourcesPanel <summary> must keep display: list-item so native disclosure marker stays visible",
+  );
 });
 
 test("MarkdownRenderer demotes headings to avoid duplicate <h1> and gives table headers scope=col", () => {

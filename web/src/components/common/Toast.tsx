@@ -44,15 +44,59 @@ export function ToastContainer(
     onCleanup(() => globalThis.removeEventListener("resize", checkMobile));
   });
 
-  // Keep the live-region container persistently mounted so assistive tech
-  // reliably announces newly added toasts instead of missing dynamically
-  // mounted live regions.
+  const errorToasts = () =>
+    props.toasts.filter((toast) => toast.type === "error");
+  const politeToasts = () =>
+    props.toasts.filter((toast) => toast.type !== "error");
+
+  const renderToast = (toast: Toast) => (
+    <div
+      role={toast.type === "error" ? "alert" : "status"}
+      aria-atomic="true"
+      onMouseEnter={() => props.onPause?.(toast.id)}
+      onMouseLeave={() => props.onResume?.(toast.id)}
+      onFocusIn={() => props.onPause?.(toast.id)}
+      onFocusOut={() => props.onResume?.(toast.id)}
+      class={`
+            flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]
+            border border-[var(--color-border-primary)] shadow-[var(--shadow-lg)]
+            bg-[var(--color-surface-primary)] animate-[slideUp_0.2s_ease-out]
+            pointer-events-auto
+            ${isMobile() ? "w-full" : "max-w-[400px]"}
+          `}
+    >
+      <span class={`shrink-0 ${iconClasses[toast.type]}`} aria-hidden="true">
+        <Show when={toast.type === "success"}>
+          <Icons.Check class="w-5 h-5 block" />
+        </Show>
+        <Show when={toast.type === "error"}>
+          <Icons.AlertTriangle class="w-5 h-5 block" />
+        </Show>
+        <Show when={toast.type === "info"}>
+          <Icons.Bell class="w-5 h-5 block" />
+        </Show>
+      </span>
+      <span class="flex-1 text-sm text-[var(--color-text-primary)]">
+        {toast.message}
+      </span>
+      <button
+        type="button"
+        aria-label={t("close")}
+        class="shrink-0 min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-secondary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
+        onClick={() => props.onDismiss(toast.id)}
+      >
+        <Icons.X class="w-4 h-4 block" aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  // Keep separate persistent polite and assertive live-region containers so
+  // assertive error toasts never conflict with a polite ancestor and new
+  // announcements are reliably observed without nested aria-live attributes.
   return (
     <div
-      aria-live="polite"
-      aria-relevant="additions text"
       class={`
-        fixed z-[9999] flex flex-col gap-3 pointer-events-none
+        fixed z-[9999] flex flex-col pointer-events-none
         ${
         isMobile()
           ? "bottom-[calc(var(--nav-height-mobile)+1rem+var(--spacing-safe-bottom))] left-4 right-4 items-center"
@@ -60,49 +104,26 @@ export function ToastContainer(
       }
       `}
     >
-      <For each={props.toasts}>
-        {(toast) => (
-          <div
-            role={toast.type === "error" ? "alert" : "status"}
-            aria-live={toast.type === "error" ? "assertive" : "polite"}
-            aria-atomic="true"
-            onMouseEnter={() => props.onPause?.(toast.id)}
-            onMouseLeave={() => props.onResume?.(toast.id)}
-            onFocusIn={() => props.onPause?.(toast.id)}
-            onFocusOut={() => props.onResume?.(toast.id)}
-            class={`
-            flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]
-            border border-[var(--color-border-primary)] shadow-[var(--shadow-lg)]
-            bg-[var(--color-surface-primary)] animate-[slideUp_0.2s_ease-out]
-            pointer-events-auto
-            ${isMobile() ? "w-full" : "max-w-[400px]"}
-          `}
-          >
-            <span class={`shrink-0 ${iconClasses[toast.type]}`} aria-hidden="true">
-              <Show when={toast.type === "success"}>
-                <Icons.Check class="w-5 h-5 block" />
-              </Show>
-              <Show when={toast.type === "error"}>
-                <Icons.AlertTriangle class="w-5 h-5 block" />
-              </Show>
-              <Show when={toast.type === "info"}>
-                <Icons.Bell class="w-5 h-5 block" />
-              </Show>
-            </span>
-            <span class="flex-1 text-sm text-[var(--color-text-primary)]">
-              {toast.message}
-            </span>
-            <button
-              type="button"
-              aria-label={t("close")}
-              class="shrink-0 min-w-[44px] min-h-[44px] sm:min-w-7 sm:min-h-7 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-secondary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
-              onClick={() => props.onDismiss(toast.id)}
-            >
-              <Icons.X class="w-4 h-4 block" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-      </For>
+      <div
+        aria-live="assertive"
+        aria-relevant="additions text"
+        class={`flex flex-col gap-3 ${
+          isMobile() ? "w-full items-center" : "items-end"
+        } ${
+          errorToasts().length > 0 && politeToasts().length > 0 ? "mb-3" : ""
+        }`}
+      >
+        <For each={errorToasts()}>{renderToast}</For>
+      </div>
+      <div
+        aria-live="polite"
+        aria-relevant="additions text"
+        class={`flex flex-col gap-3 ${
+          isMobile() ? "w-full items-center" : "items-end"
+        }`}
+      >
+        <For each={politeToasts()}>{renderToast}</For>
+      </div>
     </div>
   );
 }

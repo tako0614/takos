@@ -209,7 +209,7 @@ export function RegistrySourcesPanel(props: RegistrySourcesPanelProps) {
 
   return (
     <details class="mt-6 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/50">
-      <summary class="min-h-[44px] flex items-center cursor-pointer px-4 py-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+      <summary class="min-h-[44px] cursor-pointer px-4 py-3 text-sm leading-5 font-medium text-zinc-800 dark:text-zinc-200">
         {t("registrySources")}
       </summary>
       <div class="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">

@@ -48,14 +48,39 @@ export function StorageViewerShell(props: {
       pendingFocusTarget = null;
       queueMicrotask(() => focusDropdownMenuItem(handlerMenuRef, target));
     }
+    const handlePointerDown = (e: PointerEvent) => {
+      if (
+        handlerContainerRef &&
+        e.target instanceof Node &&
+        handlerContainerRef.contains(e.target)
+      ) {
+        pointerDownInside = true;
+      } else {
+        pointerDownInside = false;
+        props.setShowHandlerMenu(false);
+      }
+    };
     const clearPointer = () => {
       pointerDownInside = false;
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        props.setShowHandlerMenu(false);
+        handlerTriggerRef?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("pointerup", clearPointer);
     document.addEventListener("pointercancel", clearPointer);
+    document.addEventListener("keydown", handleEscape);
     onCleanup(() => {
+      pointerDownInside = false;
+      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("pointerup", clearPointer);
       document.removeEventListener("pointercancel", clearPointer);
+      document.removeEventListener("keydown", handleEscape);
     });
   });
 
@@ -94,9 +119,6 @@ export function StorageViewerShell(props: {
             <div
               ref={handlerContainerRef}
               class="relative"
-              onPointerDown={() => {
-                pointerDownInside = true;
-              }}
               onFocusOut={(e) => {
                 if (
                   props.showHandlerMenu &&

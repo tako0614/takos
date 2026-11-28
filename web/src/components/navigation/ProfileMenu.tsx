@@ -51,14 +51,20 @@ export function ProfileMenu(props: ProfileMenuProps) {
       pendingFocusTarget = null;
       queueMicrotask(() => focusDropdownMenuItem(menuRef, target));
     }
-    const handleClickOutside = (e: MouseEvent) => {
+    const handlePointerDown = (e: PointerEvent) => {
       if (
-        e.target instanceof Node &&
         containerRef &&
-        !containerRef.contains(e.target)
+        e.target instanceof Node &&
+        containerRef.contains(e.target)
       ) {
+        pointerDownInside = true;
+      } else {
+        pointerDownInside = false;
         closeMenu();
       }
+    };
+    const clearPointer = () => {
+      pointerDownInside = false;
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
@@ -68,18 +74,16 @@ export function ProfileMenu(props: ProfileMenuProps) {
         triggerRef?.focus();
       }
     };
-    const clearPointer = () => {
-      pointerDownInside = false;
-    };
-    document.addEventListener("click", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("pointerup", clearPointer);
     document.addEventListener("pointercancel", clearPointer);
+    document.addEventListener("keydown", handleEscape);
     onCleanup(() => {
-      document.removeEventListener("click", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
+      pointerDownInside = false;
+      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("pointerup", clearPointer);
       document.removeEventListener("pointercancel", clearPointer);
+      document.removeEventListener("keydown", handleEscape);
     });
   });
 
@@ -87,8 +91,14 @@ export function ProfileMenu(props: ProfileMenuProps) {
     <div
       ref={containerRef}
       class="relative unified-profile-menu"
-      onPointerDown={() => {
-        pointerDownInside = true;
+      onKeyDown={(e) => {
+        if (e.isComposing || e.keyCode === 229) return;
+        if (showProfileMenu() && e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          closeMenu();
+          triggerRef?.focus();
+        }
       }}
       onFocusOut={(e) => {
         if (
@@ -203,6 +213,13 @@ export function ProfileMenu(props: ProfileMenuProps) {
             class={PROFILE_MENU_BTN}
             role="menuitem"
             onClick={() => closeMenu()}
+            onKeyDown={(e) => {
+              if (e.isComposing || e.keyCode === 229) return;
+              if (e.key === " ") {
+                e.preventDefault();
+                e.currentTarget.click();
+              }
+            }}
           >
             <Icons.FileText class="w-4 h-4" aria-hidden="true" />
             <span>{t("legalInfo")}</span>

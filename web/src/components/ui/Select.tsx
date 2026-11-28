@@ -145,6 +145,7 @@ export function Select(props: SelectProps) {
       case "Escape":
         if (isOpen()) {
           e.preventDefault();
+          e.stopPropagation();
           close();
         }
         break;
@@ -199,6 +200,9 @@ export function Select(props: SelectProps) {
     isSelected: boolean,
     isActive: boolean,
   ): JSX.CSSProperties => ({
+    display: "flex",
+    "align-items": "center",
+    "min-height": "44px",
     padding: "0.5rem 0.75rem",
     "font-size": "0.875rem",
     cursor: opt.disabled ? "not-allowed" : "pointer",
@@ -237,7 +241,7 @@ export function Select(props: SelectProps) {
         aria-describedby={props.error ? errorId : undefined}
         style={triggerStyle()}
         onClick={() => !props.disabled && (isOpen() ? close() : open())}
-        onKeyDown={handleKeyDown}
+        on:keydown={handleKeyDown}
         disabled={props.disabled}
       >
         <span>
